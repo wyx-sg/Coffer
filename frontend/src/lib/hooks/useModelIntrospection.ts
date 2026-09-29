@@ -9,7 +9,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { call } from "@/lib/api/call";
 import { endpointModelsKey } from "@/lib/api/queryKeys";
-import type { ProviderModel } from "@/lib/api/providers";
+import type { components } from "@/lib/api/generated/provider-switching";
 
 export interface ProviderProbe {
   provider: string;
@@ -33,10 +33,7 @@ const post = <T>(path: string, body: unknown) => call<T>(path, { method: "POST",
  *  chat pickers") — a pre-fill for the
  *  connection's model table, never a stored fact: once an entry is curated, the
  *  modality the user left on it is the truth. */
-export interface EndpointModelsOut {
-  models: ProviderModel[];
-  message: string;
-}
+export type EndpointModelsOut = components["schemas"]["ProviderModelsOut"];
 
 /** List a provider's models. Empty list + message → the surface shows why. */
 export function useListProviderModels() {

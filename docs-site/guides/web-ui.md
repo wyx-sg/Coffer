@@ -57,15 +57,15 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed. |
 | Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
 | Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
-| System | **Secrets** | `/secrets` | The credentials stored in the vault. |
+| System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, find plaintext keys in files and move them into the vault. See [Secrets](/guides/secrets). |
 | System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **MCP calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
-| System | **Usage** | `/usage` | How much your agents use their models. |
+| System | **Usage** | `/usage` | Each subscription's quota as its agent reported it, and the tokens and estimated cost of API-key requests through Coffer's local proxy. See [Usage](/guides/usage). |
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs**, **Setup** and **Machines** tabs. See [Vault sync](/guides/vault-sync). |
 
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 
 ::: info Pages still being built
-**Custom tools**, **CLIs**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today. **Secrets** already carries one live part: while anything waits for [approval](/guides/secrets#approvals), it shows how many, with **Review** to reopen the approvals window.
+**Custom tools** and **CLIs** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today.
 :::
 
 **Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).
@@ -112,8 +112,8 @@ It has five tabs, in this order:
 
 | Tab | Address | What it holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Display preferences — **Theme**, **Default rows per page**, **Preferred editor** (the app Coffer opens managed files with) — and **Coffer's model**: the model Coffer uses for its own passes, **Speech to text** for voice messages, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
-| **Security** | `/settings/security` | **Credential encryption**: whether the master key lives in a file beside the database or in the OS keychain (a signed release keeps it in its Keychain, with nothing to move). **Secret approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. |
+| **General** | `/settings/general` | Display preferences — **Theme**, **Default rows per page**, **Preferred editor** (the app Coffer opens managed files with) — and **Coffer's model**: a provider and model for **Coffer's engine** and for **Speech to text**, each with **Test** and an inline not set / answering / failing state, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
+| **Security** | `/settings/security` | Only what belongs to this Mac. **Encryption**: where the master key lives (a signed release keeps it in its Keychain, with nothing to move) and **Back up the master key** (desktop app only). **Access**: the daemon's access token, hidden until **Show**, with **Copy** and **Rotate…**. **Approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. Stored secrets are on the [Secrets](/guides/secrets) page, not here. |
 | **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
 | **Daemon** | `/settings/daemon` | The daemon's state, port, version and when it started, and **Start at login** (macOS). |
 | **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. |
@@ -122,7 +122,7 @@ It has five tabs, in this order:
 
 **Old addresses still work.** `/settings/engine` and `/settings/embedding` open **General**; `/settings/llm-connections`, `/settings/models` and `/settings/providers` open **Model providers**; `/settings/sync` opens **Sync**.
 
-The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon and rotating its token are CLI-only (`coffer daemon stop`, `coffer daemon rotate-token`): stopping the daemon from the page would take the page down with it. Revealing or copying a secret, backing up the master key and approving a pending [approval](/guides/secrets#approvals) exist only in the [desktop app](/guides/desktop-app#presence-checks-and-approvals), because each needs a Touch ID or password check a browser cannot run; a browser tab shows **Open in Coffer app** in their place.
+The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon is CLI-only (`coffer daemon stop`): stopping it from the page would take the page down with it. Rotating the access token is on **Settings › Security** (or `coffer daemon rotate-token`); the page installs the new token and keeps working, and other open tabs and clients using the old one stop until they load the new one. Revealing or copying a secret, backing up the master key and approving a pending [approval](/guides/secrets#approvals) exist only in the [desktop app](/guides/desktop-app#presence-checks-and-approvals), because each needs a Touch ID or password check a browser cannot run; a browser tab shows **Open in Coffer app** in their place.
 
 ## Resizing split views
 

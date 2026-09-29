@@ -1,14 +1,15 @@
 // frontend/src/pages/settings/EngineSettings.test.tsx
 //
-// Settings → Coffer's model holds Coffer's own engine configs: the internal LLM
-// connection + model, the bound on ONE call to that model, and — in its own
-// card — the connection and model speech is transcribed with. It moved here off
-// the model-provider page, which is now purely the connection library agents
-// draw from — internal configuration is not a resource.
-import { beforeEach, describe, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+// The Coffer's model section of Settings › General holds Coffer's own engine
+// configs: the engine picker (connection + model) with the bound on ONE call
+// under it, the speech-to-text picker on its own connection, each with a Test
+// and a state line, and the unattended passes below. Internal configuration
+// is not a resource, so none of it sits on the Model providers page.
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import { EngineSettings } from "./EngineSettings";
 import type { InternalEngineConfig } from "@/lib/api/internalEngine";
@@ -33,6 +34,13 @@ vi.mock("@/lib/api/providers", async (orig) => {
 // The internal-engine section reads/writes its own singleton config, and the
 // model dropdown lists the chosen endpoint's models — both hit the network.
 const setBound = vi.fn();
+const setEngineModel = vi.fn();
+const setSttModel = vi.fn();
+const setUpkeep = vi.fn();
+// The Test button's probe. Each test says what the endpoint answers.
+const testMutate = vi.fn();
+// The speech-to-text Test asks the endpoint for its model list instead.
+const listMutate = vi.fn();
 
 // The engine config is a singleton the whole page reads; each test sets the one
 // it needs before rendering. Nested behind arrows so the mock factory, which
@@ -41,15 +49,22 @@ let engineConfig: Partial<InternalEngineConfig> = {};
 
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useInternalEngineConfig: () => ({ data: engineConfig }),
-  useSetInternalEngineModel: () => ({ isPending: false, mutate: vi.fn() }),
+  useSetInternalEngineModel: () => ({ isPending: false, mutate: setEngineModel }),
   useSetModelTimeout: () => ({ isPending: false, mutate: setBound }),
-  // The speech-to-text card sits on this page too; its own suite covers it.
-  useSetTranscribeModel: () => ({ isPending: false, mutate: vi.fn() }),
-  // The upkeep card sits on this page too; its own suite covers its behaviour.
-  useSetUpkeep: () => ({ isPending: false, mutate: vi.fn() }),
+  // The speech-to-text picker sits in this section too; its own suite covers it.
+  useSetTranscribeModel: () => ({ isPending: false, mutate: setSttModel }),
+  // The upkeep rows sit below; their own suite covers their behaviour.
+  useSetUpkeep: () => ({ isPending: false, mutate: setUpkeep }),
+  useSetCurationOwner: () => ({ isPending: false, mutate: vi.fn(), error: null }),
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+  useListProviderModels: () => ({ isPending: false, mutate: listMutate, data: undefined }),
+  useTestConnection: () => ({ isPending: false, mutate: testMutate }),
+}));
+// Curation's row names the machine that owns the pass; one machine, this one.
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: () => ({ data: { machines: [] }, isPending: false }),
+  useThisMachineId: () => ({ machineId: "machine-here", isPending: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
@@ -97,6 +112,9 @@ function openSelect(triggerName: RegExp) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: triggerName }), { key: "ArrowDown" });
 }
 
+/** The pickers render once the connection list has arrived. */
+const ready = () => screen.findByRole("combobox", { name: /^model provider$/i });
+
 // Mounted at its real route so the test also pins where the tab lives.
 function renderPage() {
   const qc = new QueryClient({
@@ -105,9 +123,11 @@ function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/settings/engine"]}>
       <QueryClientProvider client={qc}>
-        <Routes>
-          <Route path="/settings/engine" element={<EngineSettings />} />
-        </Routes>
+        <TooltipProvider>
+          <Routes>
+            <Route path="/settings/engine" element={<EngineSettings />} />
+          </Routes>
+        </TooltipProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -131,7 +151,8 @@ describe("EngineSettings", () => {
     async () => {
       apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
       renderPage();
-      expect(await screen.findByText("Coffer's model")).toBeInTheDocument();
+      await ready();
+      expect(screen.getByText("Coffer's model")).toBeInTheDocument();
       // The embedding card went with vector retrieval: there is no index left
       // for an embedding model to feed (ADR knowledge-is-plain-files).
       expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
@@ -188,7 +209,7 @@ describe("EngineSettings", () => {
     async () => {
       apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
       renderPage();
-      await screen.findByText("Coffer's model");
+      await ready();
 
       openSelect(/^time limit per call$/i);
       fireEvent.click(screen.getByRole("option", { name: "5 min" }));
@@ -204,7 +225,7 @@ describe("EngineSettings", () => {
       engineConfig = { ...engineConfig, model_timeout_s: 300 };
       apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
       renderPage();
-      await screen.findByText("Coffer's model");
+      await ready();
 
       openSelect(/^time limit per call$/i);
       fireEvent.click(screen.getByRole("option", { name: "Default (1 min)" }));
@@ -225,7 +246,7 @@ describe("EngineSettings", () => {
     );
 
     renderPage();
-    await screen.findByText("Coffer's model");
+    await ready();
 
     // the internal-engine section's connection dropdown sets "b" as the default
     openSelect(/^model provider$/i);
@@ -262,4 +283,185 @@ describe("EngineSettings", () => {
       await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith(uidFor("B")));
     },
   );
+
+  // Scenario (revise-web-ui-ia): "coffer's model is chosen in settings general"
+  test("the engine picker lists only the chosen provider's models and saves on selection", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({
+          name: "A",
+          internal_default: true,
+          models: [
+            { id: "a-chat", modality: "text" },
+            { id: "a-whisper", modality: "audio" },
+          ],
+        }),
+        makeProvider({ name: "B", models: [{ id: "b-chat", modality: "text" }] }),
+      ],
+    });
+    renderPage();
+    await ready();
+
+    openSelect(/^model$/i);
+    expect(screen.getByRole("option", { name: "a-chat" })).toBeInTheDocument();
+    // Not the other provider's, and not A's speech model.
+    expect(screen.queryByRole("option", { name: "b-chat" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "a-whisper" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "a-chat" }));
+
+    await waitFor(() => expect(setEngineModel).toHaveBeenCalledWith("a-chat"));
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  // Scenario (revise-web-ui-ia): "an unset picker says what coffer does without it"
+  test("an unset picker reads as not set and says what Coffer does without it", async () => {
+    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+    renderPage();
+    await ready();
+
+    const [engine, stt] = screen.getAllByTestId("model-state");
+    expect(engine).toHaveTextContent(/not set/i);
+    expect(engine).toHaveTextContent(/no internal pass runs/i);
+    expect(stt).toHaveTextContent(/not set/i);
+    expect(stt).toHaveTextContent(/reach the agent as audio files/i);
+    // Nothing to test while either half is missing.
+    for (const b of screen.getAllByRole("button", { name: /^test /i })) expect(b).toBeDisabled();
+  });
+
+  // Scenario (revise-web-ui-ia): "testing a picker shows a failing pair inline"
+  test("a failing test on the engine reads as failing with the endpoint's error", async () => {
+    engineConfig = { ...engineConfig, model: "llama3.1:8b" };
+    apiMock.list.mockResolvedValue({
+      providers: [makeProvider({ name: "A", internal_default: true })],
+    });
+    testMutate.mockImplementation((_probe, opts) =>
+      opts.onSuccess({ ok: false, message: "invalid api key" }),
+    );
+    renderPage();
+    await ready();
+    expect(screen.getAllByTestId("model-state")[0]).toHaveTextContent(/^set$/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /test coffer's engine/i }));
+
+    expect(testMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "anthropic",
+        base_url: "https://gw/anthropic",
+        credential_ref: "provider/acme/key",
+        model: "llama3.1:8b",
+      }),
+      expect.anything(),
+    );
+    const state = screen.getAllByTestId("model-state")[0];
+    expect(state).toHaveTextContent(/failing/i);
+    expect(state).toHaveTextContent(/invalid api key/i);
+    expect(state).toHaveTextContent(/distil and curation wait/i);
+    // The pair is kept as it was.
+    expect(setEngineModel).not.toHaveBeenCalled();
+    expect(apiMock.setInternalDefault).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveTextContent("llama3.1:8b");
+  });
+
+  test("a passing test reads as answering", async () => {
+    engineConfig = { ...engineConfig, model: "llama3.1:8b" };
+    apiMock.list.mockResolvedValue({
+      providers: [makeProvider({ name: "A", internal_default: true })],
+    });
+    testMutate.mockImplementation((_probe, opts) =>
+      opts.onSuccess({ ok: true, message: "connection ok" }),
+    );
+    renderPage();
+    await ready();
+
+    fireEvent.click(screen.getByRole("button", { name: /test coffer's engine/i }));
+
+    expect(screen.getAllByTestId("model-state")[0]).toHaveTextContent(/answering/i);
+  });
+
+  // Scenario (revise-web-ui-ia, internal-engine): "a failed test leaves coffer's model as it was"
+  test("a failed speech-to-text test is shown inline and writes nothing", async () => {
+    engineConfig = { ...engineConfig, transcribe_model: "whisper-1" };
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({
+          name: "B",
+          transcribe_default: true,
+          models: [{ id: "whisper-1", modality: "audio" }],
+        }),
+      ],
+    });
+    // Unreachable: the listing request itself fails.
+    listMutate.mockImplementation((_probe, opts) =>
+      opts?.onError?.(new Error("connection refused")),
+    );
+    renderPage();
+    await ready();
+
+    fireEvent.click(screen.getByRole("button", { name: /test speech to text/i }));
+
+    const state = screen.getAllByTestId("model-state")[1];
+    expect(state).toHaveTextContent(/failing/i);
+    expect(state).toHaveTextContent(/connection refused/i);
+    // A chat probe would fail on a speech model even on a healthy endpoint.
+    expect(testMutate).not.toHaveBeenCalled();
+    expect(setSttModel).not.toHaveBeenCalled();
+    expect(apiMock.setTranscribeDefault).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: /^transcription model$/i })).toHaveTextContent(
+      "whisper-1",
+    );
+  });
+
+  // Scenario (revise-web-ui-ia, internal-engine): "the general tab's coffer's model section shows and changes both halves"
+  test("the section shows the chosen pair and the three passes, and each edit saves alone", async () => {
+    engineConfig = {
+      ...engineConfig,
+      model: "a-chat",
+      upkeep: {
+        aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },
+        distil: { enabled: true, interval_s: null, default_interval_s: 21600 },
+        curate: { enabled: true, interval_s: null, default_interval_s: 21600 },
+      },
+      curate_owner_machine_id: "machine-here",
+    };
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({
+          name: "A",
+          internal_default: true,
+          models: [
+            { id: "a-chat", modality: "text" },
+            { id: "a-big", modality: "text" },
+          ],
+        }),
+      ],
+    });
+    renderPage();
+
+    await ready();
+    const section = screen.getByTestId("coffer-model-section");
+    expect(within(section).getByRole("combobox", { name: /^model provider$/i })).toHaveTextContent(
+      "A",
+    );
+    expect(within(section).getByRole("combobox", { name: /^model$/i })).toHaveTextContent("a-chat");
+    // One row per pass, the default named rather than blank.
+    expect(screen.getAllByRole("switch")).toHaveLength(3);
+    expect(screen.getByText("Default (Every 1h)")).toBeInTheDocument();
+    expect(screen.getAllByText("Default (Every 6h)")).toHaveLength(2);
+
+    openSelect(/^model$/i);
+    fireEvent.click(screen.getByRole("option", { name: "a-big" }));
+    await waitFor(() => expect(setEngineModel).toHaveBeenCalledWith("a-big"));
+
+    fireEvent.click(screen.getByRole("switch", { name: "Distil memory" }));
+    expect(setUpkeep).toHaveBeenLastCalledWith({ pass: "distil", enabled: false });
+
+    openSelect(/how often read from agents runs/i);
+    fireEvent.click(screen.getByRole("option", { name: "Every 3h" }));
+    expect(setUpkeep).toHaveBeenLastCalledWith({ pass: "aggregate", interval_s: 10800 });
+    // Only the edited values were written — nothing else moved.
+    expect(setBound).not.toHaveBeenCalled();
+    expect(setSttModel).not.toHaveBeenCalled();
+    expect(apiMock.setInternalDefault).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
 });

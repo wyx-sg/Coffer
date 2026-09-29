@@ -1,6 +1,7 @@
 // frontend/src/pages/settings/UpkeepSettings.tsx
 //
-// Settings → Coffer's model: the work Coffer does when nobody asked it to.
+// Settings › General › Coffer's model, below the pickers: the work Coffer does
+// when nobody asked it to.
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
 // the derived tree (spec memory "Aggregate on an interval and on demand"),
@@ -32,10 +33,9 @@
 // the switch persists on toggle, the interval on selection.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarClock } from "lucide-react";
 
 import { CurationOwner } from "@/components/settings/CurationOwner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingsSection } from "@/components/settings/SettingsLayout";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -88,7 +88,7 @@ function PassRow({
   const switchId = `upkeep-${pass}`;
 
   return (
-    <div className="border-t py-4 first:border-t-0 first:pt-0">
+    <div className="border-t border-border-subtle py-3 first:border-t-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <Label htmlFor={switchId} className="text-sm font-medium">
@@ -149,39 +149,30 @@ export function UpkeepSettings() {
   const setUpkeep = useSetUpkeep();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CalendarClock className="size-5 text-primary" strokeWidth={1.5} />
-          {t("settings.upkeep.title")}
-        </CardTitle>
-        <p className="mt-1 text-sm text-muted-foreground">{t("settings.upkeep.subtitle")}</p>
-      </CardHeader>
-      <CardContent>
-        {PASSES.map((pass) => {
-          // A pass the server did not report is a pass this build does not
-          // know about; skip the row rather than render a broken one.
-          const setting = config?.upkeep?.[pass];
-          return setting ? (
-            <PassRow
-              key={pass}
-              pass={pass}
-              setting={setting}
-              busy={setUpkeep.isPending}
-              onChange={(next) => setUpkeep.mutate({ pass, ...next })}
-              // Only curation names a machine, and only curation can afford
-              // to: the pass rewrites derived documents, so two machines
-              // running it fold the same sources into two documents git then
-              // merges as two perfectly good additions.
-              footer={
-                pass === "curate" ? (
-                  <CurationOwner ownerId={config?.curate_owner_machine_id ?? null} />
-                ) : undefined
-              }
-            />
-          ) : null;
-        })}
-      </CardContent>
-    </Card>
+    <SettingsSection title={t("settings.upkeep.title")} description={t("settings.upkeep.subtitle")}>
+      {PASSES.map((pass) => {
+        // A pass the server did not report is a pass this build does not
+        // know about; skip the row rather than render a broken one.
+        const setting = config?.upkeep?.[pass];
+        return setting ? (
+          <PassRow
+            key={pass}
+            pass={pass}
+            setting={setting}
+            busy={setUpkeep.isPending}
+            onChange={(next) => setUpkeep.mutate({ pass, ...next })}
+            // Only curation names a machine, and only curation can afford
+            // to: the pass rewrites derived documents, so two machines
+            // running it fold the same sources into two documents git then
+            // merges as two perfectly good additions.
+            footer={
+              pass === "curate" ? (
+                <CurationOwner ownerId={config?.curate_owner_machine_id ?? null} />
+              ) : undefined
+            }
+          />
+        ) : null;
+      })}
+    </SettingsSection>
   );
 }

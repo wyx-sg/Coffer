@@ -138,6 +138,13 @@ export const providerKey = (uid: string) => ["providers", uid] as const;
  *  `lib/hooks/useModelIntrospection.ts` until that file imports this one. */
 export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as const;
 
+/** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
+export const localRuntimesKey = (baseUrl: string | null) => ["localRuntimes", baseUrl] as const;
+// usage — GET /usage/summary per range + grouping, GET /usage/quota
+export const usageKey = ["usage"] as const;
+export const usageSummaryKey = (p: Record<string, unknown>) => ["usage", "summary", p] as const;
+export const usageQuotaKey = ["usage", "quota"] as const;
+
 // ---------------------------------------------------------------------------
 // channels — channel resources ride `resourcesKey`; only live status is here
 // ---------------------------------------------------------------------------
@@ -250,6 +257,8 @@ export const credentialsKey = ["credentials"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
+export const credentialsListKey = ["credentials", "list"] as const;
+export const credentialScanKey = ["credentials", "scan"] as const;
 
 // ---------------------------------------------------------------------------
 // settings — daemon-side settings the Settings pages edit

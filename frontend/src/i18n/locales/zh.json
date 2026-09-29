@@ -771,8 +771,6 @@
     },
     "security": {
       "masterKey": {
-        "title": "凭据加密",
-        "description": "各类密钥始终加密存储在 Coffer 本地数据库中；此处控制加密所用主密钥的存放位置。",
         "fileNote": "主密钥：数据库旁的文件（无钥匙串弹窗）。",
         "keychainNote": "主密钥：系统钥匙串（每次守护进程启动可能弹窗一次）。",
         "toggle": "将主密钥存入系统钥匙串",
@@ -785,105 +783,69 @@
           "body": "Coffer 会把主密钥重新保存到数据库旁的文件中，之后不再有钥匙串授权弹窗。"
         },
         "confirmMove": "移动主密钥",
-        "accessGroupNote": "主密钥：保存在本机钥匙串中，只有 Coffer 的签名应用可以读取。请在桌面应用的同步页面备份。"
+        "accessGroupNote": "只有 Coffer 的签名应用可以读取它，因此无需移动。",
+        "keychainTitle": "钥匙串",
+        "fileTitle": "密钥文件",
+        "keychainDescription": "守护进程启动时，Coffer 从 macOS 钥匙串读取主密钥。",
+        "fileDescription": "守护进程启动时，Coffer 从数据库旁的文件读取主密钥。",
+        "ok": "正常",
+        "developmentFile": "开发版——主密钥是一个文件，你的任何进程都能读取。",
+        "developmentKeychain": "开发版——主密钥是登录钥匙串里的一项，而不在签名应用专属的访问组中。"
       },
       "approvals": {
         "title": "密钥审批",
         "description": "密钥要发送到一个从未去过的地方——新的 MCP 服务器、改过的命令、另一个远端——必须先在 Coffer 桌面应用中由你批准。",
         "on": "已开启：新的去处需要等待你的批准。",
-        "off": "已关闭：新的去处无需询问即可获得密钥。重新开启：coffer config set secrets.require_approval on"
-      }
+        "off": "已关闭：新的去处无需询问即可获得密钥。重新开启：coffer config set secrets.require_approval on",
+        "section": "审批",
+        "onWord": "已开启",
+        "offWord": "已关闭"
+      },
+      "subtitle": "加密你的密钥所用的主密钥，以及守护这台 Mac 上守护进程的访问令牌。",
+      "encryption": {
+        "title": "加密"
+      },
+      "backup": {
+        "title": "备份主密钥",
+        "description": "没有它，保险库里的密钥在这台 Mac 或其他机器上都无法读取。请离线保存导出的文件。",
+        "export": "导出主密钥…",
+        "exportedTitle": "主密钥已导出",
+        "exportedBody": "已将 {{file}} 保存到 {{dir}} · 已记录到活动中。",
+        "exportedHint": "请把它移出这台 Mac——放进密码管理器或 U 盘——并删除这里的副本。",
+        "fingerprint": "指纹",
+        "showInFinder": "在访达中显示",
+        "done": "完成"
+      },
+      "access": {
+        "title": "访问"
+      },
+      "token": {
+        "title": "守护进程访问令牌",
+        "description": "每个发往守护进程的请求都带着它。通过 Coffer 连接的智能体会自动拿到新令牌。",
+        "none": "此页面没有令牌",
+        "show": "显示",
+        "hide": "隐藏",
+        "copy": "复制",
+        "copyFailed": "无法复制令牌",
+        "rotate": "轮换…",
+        "rotateTitle": "轮换守护进程令牌？",
+        "rotateBody": "新令牌会立即替换当前令牌。其他打开的 Coffer 标签页以及仍在使用旧令牌的客户端会失效，直到它们加载新令牌。通过 Coffer 连接的智能体会自动拿到新令牌。",
+        "tokenFile": "令牌文件",
+        "recorded": "会以 token_rotated 记录到活动中",
+        "rotateConfirm": "轮换令牌",
+        "rotating": "正在轮换…",
+        "rotated": "守护进程令牌已轮换"
+      },
+      "secretsFooter": "密钥在「密钥」页面管理。",
+      "manageInSecrets": "前往密钥页面"
     },
     "models": {
       "testConnection": "测试连接"
     },
     "connections": {
-      "title": "模型提供商",
-      "subtitle": "一个模型提供商 = 接入地址 + API Key。同一个提供商可同时供智能体和 Coffer 内部引擎使用。",
-      "add": "添加模型提供商",
-      "addTitle": "添加模型提供商",
-      "editTitle": "编辑模型提供商",
-      "empty": "暂无模型提供商。",
-      "active": "使用中",
-      "activeHint": "当前有智能体切换到了这个提供商（通过「切换」操作）。",
-      "cofferUse": {
-        "engine": "Coffer 自用 · 后台模型",
-        "engineHint": "Coffer 自己在这个提供商上跑后台任务（比如整理记忆），不是给你的智能体用的（设置 → Coffer 自用模型）。全局只有一个提供商承担这件事。",
-        "transcribe": "Coffer 自用 · 语音转写",
-        "transcribeHint": "Coffer 自己在这个提供商上把语音消息转成文字，再交给智能体（设置 → Coffer 自用模型 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。"
-      },
-      "reachHint": "此提供商对哪些智能体生效，由「生效范围」控件设置——在列表中该提供商所在行，或在它自己的详情页。",
-      "protocols": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI 兼容",
-        "ollama": "Ollama",
-        "unknown": "未知"
-      },
-      "errors": {
-        "nameRequired": "请输入名称",
-        "baseUrl": "请输入完整 URL，例如 https://api.openai.com/v1",
-        "secretRequired": "请输入 API Key"
-      },
-      "welcome": {
-        "title": "接入你自己的模型端点",
-        "body": "模型提供商 = 厂商接入地址 + API Key。添加一个后，Coffer 管理的每个智能体都能用它运行——密钥只保存一次，存在 Coffer 的凭据库里。",
-        "featureShare": {
-          "title": "一把密钥，所有智能体",
-          "body": "接入地址和密钥只保存一次；Coffer 把它投影到每个智能体各自的配置里。"
-        },
-        "featureCurate": {
-          "title": "精选模型列表",
-          "body": "选择该端点的哪些模型对外提供，以及每个模型属于哪一类。"
-        },
-        "featureEngine": {
-          "title": "也驱动 Coffer 自身",
-          "body": "同一个提供商还可以运行 Coffer 自用模型，用于整理记忆。"
-        }
-      },
-      "deleteTitle": "删除模型提供商",
-      "deleteConfirm": "删除模型提供商「{{name}}」？其保存的凭据也会一并删除。",
-      "name": "名称",
-      "provider": "厂商",
-      "renameHint": "重命名只改名称——已保存的密钥、历史记录和它驱动的智能体都保持不变。",
-      "customProvider": "自定义",
-      "wireFormat": "协议",
-      "baseUrl": "Base URL",
-      "secret": "API Key",
-      "searchPlaceholder": "搜索模型提供商…",
-      "allVendors": "全部厂商",
-      "bulkDeleteConfirm": "删除选中的 {{count}} 个模型提供商？它们保存的凭据也会一并删除。",
-      "detail": {
-        "back": "返回模型提供商",
-        "tabOverview": "概览",
-        "notFound": "未找到该模型提供商",
-        "configuration": "配置",
-        "keyStored": "已保存",
-        "keyNone": "未保存密钥",
-        "created": "创建时间",
-        "updated": "更新时间",
-        "models": "模型",
-        "modelsHint": "选择该端点的哪些模型由本提供商对外提供，以及每个模型属于哪一类。下游各处的选择器随后只会看到你勾选的、且类型对得上的模型——对话模型下拉框永远不会出现向量模型。",
-        "fetchFailed": "无法列出该接入地址的模型（{{error}}）。当前选择保持不变。",
-        "loadingModels": "正在列出该接入地址的模型…",
-        "retryFetch": "重试",
-        "noModelsYet": "该接入地址没有返回任何模型。保持选择为空，它提供的所有模型就都可用。",
-        "modelId": "模型",
-        "modelSearchPlaceholder": "搜索模型…",
-        "noModelsMatch": "没有匹配的模型。",
-        "modality": "类型",
-        "allModalities": "全部类型",
-        "modalities": {
-          "text": "文本 / 对话",
-          "embedding": "向量",
-          "image": "图片",
-          "video": "视频",
-          "audio": "音频"
-        }
-      }
+      "title": "模型提供商"
     },
     "internalEngine": {
-      "title": "Coffer 自用模型",
-      "subtitle": "Coffer 自己的后台任务（如整理记忆）所用的模型提供商与模型。",
       "connection": "使用的模型提供商",
       "connectionPlaceholder": "选择模型提供商",
       "model": "模型",
@@ -895,17 +857,11 @@
       "minutes": "{{count}} 分钟"
     },
     "transcribe": {
-      "title": "语音转文字",
-      "subtitle": "在智能体看到语音之前，Coffer 用来把它转成文字的模型提供商与模型。",
       "connection": "转写用的模型提供商",
       "connectionPlaceholder": "选择模型提供商",
       "model": "转写模型",
       "modelPlaceholder": "选择模型",
-      "modelOff": "关闭——不做转写",
-      "onTitle": "转写已开启。",
-      "onBody": "语音消息会在该提供商上转成文字，智能体拿到的是文字。",
-      "offTitle": "转写已关闭。",
-      "offBody": "在同时选好提供商和模型之前，Coffer 不做任何转写：智能体拿到的就是原始音频文件，录音不会离开这台机器。这里之所以要单独选一个提供商，是因为能跑对话补全的提供商往往根本没有转写接口。"
+      "modelOff": "关闭——不做转写"
     },
     "upkeep": {
       "title": "自动整理",
@@ -956,6 +912,35 @@
       "port": "端口",
       "version": "版本",
       "startedAt": "启动时间"
+    },
+    "cofferModel": {
+      "title": "Coffer 自用模型",
+      "subtitle": "Coffer 自己干活所用的模型。先选模型提供商，再从该提供商的列表中选模型。",
+      "engine": {
+        "title": "Coffer 引擎",
+        "description": "提炼智能体的记忆，整理知识。",
+        "notSet": "不会运行任何内部任务；提炼与整理都会等待。",
+        "failingTail": "在它恢复应答前，提炼与整理都会等待。"
+      },
+      "stt": {
+        "title": "语音转文字",
+        "description": "转写通过渠道收到的语音消息。",
+        "notSet": "渠道收到的语音消息会以音频文件交给智能体，不附文字稿。",
+        "failingTail": "在它恢复应答前，语音消息会以音频文件交给智能体。"
+      },
+      "notSet": "未设置",
+      "set": "已设置",
+      "answering": "正常应答",
+      "failing": "失败",
+      "failingDetail": "——{{error}}。{{tail}}",
+      "test": "测试",
+      "testing": "测试中…",
+      "testAria": "测试{{picker}}",
+      "notSetDetail": "——{{text}}",
+      "reachable": "可以连通",
+      "reachableDetail": "——该端点不列出自己的模型，因此无法核对所选模型。",
+      "notListed": "该端点的模型列表里没有 {{model}}",
+      "noAnswer": "该端点没有应答"
     }
   },
   "daemon": {
@@ -2864,10 +2849,300 @@
     "title": "命令行工具"
   },
   "secrets": {
-    "title": "密钥"
+    "title": "密钥",
+    "subtitle": "MCP 服务器和模型提供商使用的 API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
+    "search": "查找密钥",
+    "loadFailed": "无法加载密钥",
+    "noMatch": "没有匹配的密钥。",
+    "about": {
+      "label": "关于密钥",
+      "body": "密钥只存一份，用这台 Mac 的主密钥加密，并按名称引用。MCP 服务器、模型提供商、渠道和 skill 引用它而不是保存值本身，所以在这里替换值会同时更新所有使用处。除非在 Coffer 桌面应用中显示，本页面不会出现任何值。"
+    },
+    "empty": {
+      "title": "还没有密钥",
+      "body": "把 API 密钥和令牌放在这里，而不是写在配置文件里。服务器、提供商、skill 和渠道按名称引用它们，值始终加密。"
+    },
+    "groups": {
+      "inUse": "使用中",
+      "inUseEmpty": "还没有任何东西使用密钥。",
+      "unused": "未被使用",
+      "unusedHint": "可以安全删除"
+    },
+    "cols": {
+      "name": "名称",
+      "usedBy": "使用方",
+      "actions": "操作"
+    },
+    "row": {
+      "missing": "缺失",
+      "pending": "等待批准",
+      "localReadable": "本机进程可读",
+      "localReadableHint": "Coffer 会把这个值放进子进程的环境变量，你运行的其他进程可以读到它。"
+    },
+    "kind": {
+      "mcp_server": "MCP 服务器",
+      "custom_tool": "MCP 服务器",
+      "skill": "Skill",
+      "provider": "模型提供商",
+      "channel": "渠道",
+      "knowledge": "知识",
+      "memory": "记忆",
+      "agent": "智能体"
+    },
+    "usedBy": {
+      "nothing": "无",
+      "trigger_one": "{{name}} 被 {{count}} 处使用",
+      "trigger_other": "{{name}} 被 {{count}} 处使用",
+      "title": "{{name}} 的使用方",
+      "note": "它们都以 {{reference}} 读取。替换值会同时更新所有使用处。"
+    },
+    "menu": {
+      "label": "{{name}} 的操作",
+      "replace": "替换值…",
+      "store": "存入值…",
+      "reveal": "显示值…",
+      "revealInApp": "在 Coffer 应用中显示",
+      "copyRef": "复制引用",
+      "copied": "已复制 {{reference}}",
+      "copyFailed": "无法复制到剪贴板",
+      "activity": "在活动中查看",
+      "delete": "删除…"
+    },
+    "add": {
+      "open": "添加密钥",
+      "title": "添加密钥",
+      "name": "名称",
+      "nameHint": "字母、数字、点、下划线和连字符，最多 64 个字符。添加后不能修改。",
+      "nameInvalid": "只能使用字母、数字、点、下划线和连字符，最多 64 个字符。",
+      "nameTaken": "{{name}} 已存在——",
+      "replaceInstead": "改为替换它的值",
+      "namePlaceholder": "<名称>",
+      "value": "值",
+      "valueHint": "粘贴的值不会再显示，除非你主动显示。",
+      "encrypted": "用这台 Mac 的主密钥加密。以 {{reference}} 引用它。",
+      "submit": "添加密钥",
+      "submitting": "正在添加…",
+      "added": "已添加 {{name}}"
+    },
+    "replace": {
+      "title": "替换 {{name}} 的值",
+      "storeTitle": "为 {{name}} 存入值",
+      "secret": "密钥",
+      "value": "新值",
+      "hint": "旧值会被销毁，所有使用处都会拿到新值。",
+      "submit": "替换值",
+      "storeSubmit": "存入值",
+      "submitting": "正在保存…",
+      "replaced": "已替换 {{name}} 的值",
+      "stored": "已为 {{name}} 存入值"
+    },
+    "pending": {
+      "title": "已保存，等待批准",
+      "body": "新值已密封保存，在 Coffer 桌面应用中由本人批准后生效。"
+    },
+    "reveal": {
+      "title": "显示 {{name}} 的值？",
+      "warning": "能看到你屏幕的人都能读到它",
+      "warningBody": "值会显示 {{seconds}} 秒后自动隐藏。显示操作会记录在活动中。",
+      "submit": "显示 {{seconds}} 秒",
+      "checking": "正在等待 Touch ID…",
+      "revealedAt": "显示于 {{time}}",
+      "valueLabel": "{{name}} 的值",
+      "hide": "隐藏",
+      "copied": "已复制值",
+      "hidesIn": "{{seconds}} 秒后隐藏 · 记录为 credential_revealed"
+    },
+    "delete": {
+      "title": "删除 {{name}}？",
+      "body": "没有任何东西使用它。它的值会在这台 Mac 上销毁。此操作无法撤销。",
+      "submit": "删除密钥",
+      "submitting": "正在删除…",
+      "deleted": "已删除 {{name}}"
+    },
+    "blocked": {
+      "title": "{{name}} 正在使用中",
+      "body_one": "仍有 1 处读取 {{reference}}。请先让它改用其他密钥或移除引用，再删除。",
+      "body_other": "仍有 {{count}} 处读取 {{reference}}。请先让它们改用其他密钥或移除引用，再删除。",
+      "open": "打开"
+    },
+    "scan": {
+      "open": "查找明文密钥",
+      "scanning": "正在查找明文密钥…",
+      "failed": "无法查找明文密钥",
+      "noneTitle": "没有发现明文密钥",
+      "noneBody": "~/.coffer/secrets/ 和你的 skill 中都没有以明文保存的密钥。",
+      "foundTitle": "发现明文密钥",
+      "foundSummary_one": "在 {{files}} 个文件中发现 {{count}} 处",
+      "foundSummary_other": "在 {{files}} 个文件中发现 {{count}} 处",
+      "foundIn": "位置",
+      "key": "键",
+      "secretName": "密钥名称",
+      "line": "第 {{line}} 行",
+      "source": {
+        "secrets_file": "密钥文件",
+        "skill": "skill"
+      },
+      "tickAll": "全选",
+      "tickOne": "迁移 {{path}} 第 {{line}} 行",
+      "ticked": "已选 {{count}} / {{total}}",
+      "mentions_one": "{{count}} 个 skill 仍指向 ~/.coffer/secrets/，请手动更新：",
+      "mentions_other": "{{count}} 个 skill 仍指向 ~/.coffer/secrets/，请手动更新：",
+      "hint": "每个选中的值会移入加密存储，文件改为按名称引用它。这里不会显示任何值。",
+      "review_one": "查看 {{count}} 项改动",
+      "review_other": "查看 {{count}} 项改动",
+      "reviewing": "正在检查…",
+      "previewTitle": "查看改动",
+      "previewSummary": "新增 {{secrets}} 个密钥，修改 {{files}} 个文件",
+      "previewSecrets": "密钥",
+      "previewFiles": "文件",
+      "add": "+ 新增",
+      "modify": "~ 修改",
+      "previewNote": "应用之前不会写入任何内容。每个文件中的值会替换为 coffer://secret/<name> 引用，文件权限保持不变。",
+      "back": "返回",
+      "apply_one": "应用 {{count}} 项改动",
+      "apply_other": "应用 {{count}} 项改动",
+      "applying": "正在应用…",
+      "applied_one": "已将 {{count}} 个密钥移入密钥库",
+      "applied_other": "已将 {{count}} 个密钥移入密钥库",
+      "resultTitle_one": "已将 {{count}} 个密钥移入密钥库",
+      "resultTitle_other": "已将 {{count}} 个密钥移入密钥库",
+      "skippedSummary_one": "{{count}} 项被跳过，文件保持原样：",
+      "skippedSummary_other": "{{count}} 项被跳过，文件保持原样：",
+      "skipped": "已跳过"
+    }
   },
   "usage": {
-    "title": "用量"
+    "title": "用量",
+    "updated": "更新于 {{time}}",
+    "refresh": "刷新",
+    "more": "更多操作",
+    "exportCsv": "导出 CSV",
+    "noPrice": "无价格",
+    "editPrices": "在模型提供商中编辑价格",
+    "quota": {
+      "title": "订阅额度",
+      "subtitle": "由每个智能体为自己的登录上报 · 从不估算",
+      "helpLabel": "额度如何读取",
+      "help1": "每个智能体上报自己的额度：Codex 通过它的 app-server，Claude Code 在 Coffer 驱动的会话（对话与消息渠道）中上报。Coffer 显示厂商自己的数字，并注明读取时间——从不估算。",
+      "help2": "重置时间已过的窗口不显示数字，直到智能体再次上报。",
+      "plan": {
+        "claude_code": "Claude {{plan}} 登录",
+        "codex": "ChatGPT {{plan}} 登录",
+        "other": "{{plan}} 登录",
+        "none": "订阅登录"
+      },
+      "used": "已用 {{percent}}%",
+      "limitReached": "已达上限",
+      "noReading": "暂无当前读数",
+      "resetPassed": "上次读取后已重置",
+      "resets": "{{when}} 重置",
+      "resetsIn": "{{when}} 重置 · {{in}}后",
+      "in": {
+        "dh": "{{days}} 天 {{hours}} 小时",
+        "hm": "{{hours}} 小时 {{minutes}} 分钟",
+        "m": "{{minutes}} 分钟"
+      },
+      "asOf": "截至 {{time}}",
+      "source": {
+        "codex_app_server": "app-server",
+        "claude_rate_limit_event": "最近一次回复",
+        "claude_statusline": "状态栏"
+      },
+      "empty": {
+        "title": "还没有额度读数",
+        "body": "下一次 {{agent}} 回复后显示。"
+      },
+      "statusline": {
+        "lead": "要读取你在自己终端里的会话，把 Claude Code 的 statusLine 命令设为",
+        "helpLabel": "关于状态栏包装命令",
+        "help": "这个包装命令把 Claude Code 的额度信息转给 Coffer，再用相同的输入运行你自己的状态栏命令并打印其输出，Coffer 没在运行时也一样。Coffer 从不替你安装：需要你自己在 ~/.claude/settings.json 中设置。"
+      },
+      "refreshFailed": {
+        "title": "无法连接 Codex 的 app-server",
+        "read_failed": "codex app-server 没有应答。",
+        "codex_unavailable": "这台机器上没有可用的 Codex。",
+        "no_subscription": "Codex 没有用 ChatGPT 订阅登录。",
+        "no_windows": "app-server 的应答里没有任何额度窗口。",
+        "other": "没有读到任何内容。"
+      },
+      "lastTried": "上次尝试于 {{time}}。",
+      "tryAgain": "重试",
+      "error": "无法加载订阅额度。"
+    },
+    "providers": {
+      "title": "API 密钥提供商",
+      "subtitle": "经 Coffer 本地中转的请求的精确计数",
+      "period": "时间段",
+      "range": {
+        "today": "今天",
+        "7d": "7 天",
+        "30d": "30 天",
+        "month": "本月",
+        "custom": "自定义…"
+      },
+      "customRange": "自定义范围",
+      "from": "开始",
+      "to": "结束",
+      "detailNote": "{{date}} 之前只保留每日汇总。",
+      "apply": "应用",
+      "error": "无法加载 API 密钥用量。"
+    },
+    "tiles": {
+      "cost": "费用（估算）",
+      "requests_other": "{{n}} 次请求",
+      "unpriced": "{{n}} 次无价格",
+      "unknown": "{{n}} 次用量未知",
+      "input": "输入",
+      "inputNote": "不含缓存",
+      "output": "输出",
+      "outputNote": "含推理",
+      "cacheRead": "缓存读取",
+      "cacheWrite": "缓存写入",
+      "cacheWriteNote": "仅 Anthropic",
+      "requests_one": "{{n}} 次请求"
+    },
+    "chart": {
+      "title": "每日费用",
+      "today": "今天（截至目前）",
+      "todayShort": "今天",
+      "bar": "{{day}} · {{cost}}",
+      "todayBar": "今天截至目前 · {{cost}}",
+      "error": "无法加载每日费用。"
+    },
+    "table": {
+      "breakdown": "细分方式",
+      "by": {
+        "model": "按模型",
+        "agent": "按智能体",
+        "day": "按天"
+      },
+      "cols": {
+        "model": "模型",
+        "agent": "智能体",
+        "day": "日期",
+        "requests": "请求",
+        "input": "输入",
+        "output": "输出",
+        "cacheRead": "缓存读取",
+        "cacheWrite": "缓存写入",
+        "cost": "费用"
+      },
+      "unknownModel": "未知模型",
+      "unknownAgent": "未知智能体",
+      "noPriceTip": "此模型没有价格。可在模型提供商中设置。",
+      "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
+      "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
+      "total": "合计 · {{range}}",
+      "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
+      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。"
+    },
+    "empty": {
+      "firstTitle": "还没有 API 密钥用量",
+      "firstBody": "智能体通过 Coffer 使用 API 密钥提供商发送请求后，这里会显示 token 与费用。订阅登录不经过 Coffer，所以只显示额度。",
+      "openProviders": "打开模型提供商",
+      "rangeTitle": "此范围内没有请求",
+      "rangeBody": "选一个更长的范围，或在智能体通过 API 密钥提供商发送请求后再来看。"
+    }
   },
   "placeholder": {
     "title": "本版本内推出",
@@ -2921,6 +3196,260 @@
         "disable_protection": "关闭保护"
       },
       "review": "查看"
+    }
+  },
+  "providers": {
+    "loadFailed": "无法加载模型提供商",
+    "protocols": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI 兼容",
+      "ollama": "Ollama",
+      "unknown": "未知"
+    },
+    "runtimes": {
+      "ollama": "Ollama",
+      "lmstudio": "LM Studio",
+      "vllm": "vLLM",
+      "llama_server": "llama.cpp 服务"
+    },
+    "wires": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI"
+    },
+    "modalities": {
+      "text": "文本 / 对话",
+      "embedding": "向量",
+      "image": "图片",
+      "video": "视频",
+      "audio": "音频"
+    },
+    "cofferUse": {
+      "engine": "Coffer 自用 · 后台模型",
+      "engineHint": "Coffer 引擎在这个提供商上跑自己的后台任务（提炼、整理）。在「设置 › 通用」中更改。",
+      "transcribe": "Coffer 自用 · 语音转写",
+      "transcribeHint": "Coffer 在这个提供商上把语音消息转成文字，再交给智能体。在「设置 › 通用」中更改。"
+    },
+    "status": {
+      "checking": "检查中…",
+      "reachable": "可连接",
+      "keyRejected": "密钥被拒",
+      "unreachable": "无法连接"
+    },
+    "list": {
+      "filter": "筛选",
+      "heading": "提供商",
+      "noMatch": "没有匹配的提供商。",
+      "engineOnly": "仅供 Coffer 引擎",
+      "allModels": "全部模型",
+      "models_one": "{{count}} 个模型",
+      "models_other": "{{count}} 个模型"
+    },
+    "detail": {
+      "notFound": "未找到该模型提供商",
+      "backToList": "返回模型提供商"
+    },
+    "tabs": {
+      "overview": "概览",
+      "models": "模型"
+    },
+    "actions": {
+      "test": "测试",
+      "testConnection": "测试连接",
+      "refreshModels": "刷新模型",
+      "delete": "删除提供商",
+      "more": "{{name}} 的更多操作"
+    },
+    "fields": {
+      "name": "名称",
+      "protocol": "协议",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key"
+    },
+    "errors": {
+      "nameRequired": "请输入名称。",
+      "baseUrl": "请输入完整 URL，例如 https://api.openai.com/v1",
+      "secretRequired": "请输入 API Key。",
+      "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。"
+    },
+    "rejected": {
+      "title": "接入地址拒绝了已保存的密钥（{{status}}）",
+      "titleNoStatus": "接入地址拒绝了已保存的密钥",
+      "bodyUsed": "在更换密钥之前，{{users}} 的每个请求都会失败。",
+      "bodyUnused": "在更换密钥之前，发往这个提供商的请求都会失败。"
+    },
+    "usedBy": {
+      "title": "使用方",
+      "engine": "Coffer 引擎",
+      "transcribe": "语音转文字",
+      "runs": "正在使用这个提供商",
+      "failing": "请求失败 · 密钥被拒",
+      "changeInAgent": "在「{{agent}} › 模型」中更改",
+      "changeInSettings": "在「设置 › 通用」中更改",
+      "none": "目前没有任何东西使用这个提供商。",
+      "readOnly": "只读。智能体的提供商和模型在它自己的「模型」页切换；Coffer 引擎和语音转文字在「设置 › 通用」中切换。"
+    },
+    "endpoint": {
+      "title": "接入地址",
+      "locked": "{{agents}} 正在使用，已锁定",
+      "anAgent": "有智能体",
+      "runtime": "运行时",
+      "wires": "提供 {{wires}}"
+    },
+    "key": {
+      "secretPrefix": "密钥：",
+      "secretLabel": "API Key 对应的密钥",
+      "stored": "保存在这台 Mac 的钥匙串加密存储中。只写不读。",
+      "storedChip": "已保存",
+      "manage": "在「密钥」中管理",
+      "replace": "更换密钥",
+      "rejected": "被拒",
+      "rejectedWith": "被拒（{{status}}）",
+      "none": "无需密钥——这个提供商不需要。",
+      "pending": "等待在 Coffer 应用中批准",
+      "review": "查看"
+    },
+    "overview": {
+      "models": "模型",
+      "choose": "选择模型",
+      "all": "提供全部模型",
+      "allOfListed_one": "{{count}} 个全部提供",
+      "allOfListed_other": "{{count}} 个全部提供",
+      "nOfListed_one": "提供 {{n}} / {{count}} 个",
+      "nOfListed_other": "提供 {{n}} / {{count}} 个",
+      "n_one": "提供 {{count}} 个",
+      "n_other": "提供 {{count}} 个",
+      "unrestricted": "接入地址列出的每个模型都会提供。选择模型可缩小范围。"
+    },
+    "models": {
+      "search": "搜索模型",
+      "typeFilter": "类型",
+      "allTypes": "全部",
+      "typeOf": "类型：{{id}}",
+      "offered": "提供：{{id}}",
+      "listing": "正在列出该接入地址的模型…",
+      "listedAgo": "{{ago}}列出",
+      "refresh": "刷新",
+      "hint": "只有开启的模型才会出现在智能体、对话和消息渠道的选择器里。对话选择器只列文本模型。",
+      "failedTitle": "无法列出该接入地址的模型",
+      "failedBody": "{{reason}} 下面的选择保持不变，仍然提供。",
+      "noneTitle": "该接入地址没有列出任何模型",
+      "noneBody": "保持现状，接入地址接受的每个模型都可用——智能体会传你输入的名称。或者等网关管理员添加模型后再刷新。",
+      "noMatch": "没有匹配的模型。",
+      "showMore_one": "再显示 {{count}} 个",
+      "showMore_other": "再显示 {{count}} 个",
+      "agentDefault": "{{agent}} 默认"
+    },
+    "test": {
+      "running": "正在测试接入地址…",
+      "connected": "{{ms}} 毫秒内连接成功",
+      "rejected": "接入地址拒绝了密钥（{{status}}）",
+      "noStatus": "认证失败",
+      "failed": "无法连接接入地址",
+      "again": "重新测试",
+      "listed_one": "连接成功——接入地址列出了 {{count}} 个模型。",
+      "listed_other": "连接成功——接入地址列出了 {{count}} 个模型。",
+      "addOk_one": "接入地址接受了密钥，列出了 {{count}} 个模型。密钥只会在添加提供商时保存。",
+      "addOk_other": "接入地址接受了密钥，列出了 {{count}} 个模型。密钥只会在添加提供商时保存。",
+      "addFail": "请确认密钥属于这个接入地址且没有被吊销。没有保存任何内容。",
+      "editOk_one": "接入地址用已保存的密钥作了应答，列出了 {{count}} 个模型。",
+      "editOk_other": "接入地址用已保存的密钥作了应答，列出了 {{count}} 个模型。",
+      "editFail": "没有保存任何内容。请检查 Base URL 和协议，或更换密钥。",
+      "replaceOk_one": "新密钥可用——列出了 {{count}} 个模型。",
+      "replaceOk_other": "新密钥可用——列出了 {{count}} 个模型。",
+      "replaceOkUsed_one": "新密钥可用——列出了 {{count}} 个模型。{{users}} 会在下一个请求时使用它；它们的配置文件不变，只引用这个密钥。",
+      "replaceOkUsed_other": "新密钥可用——列出了 {{count}} 个模型。{{users}} 会在下一个请求时使用它；它们的配置文件不变，只引用这个密钥。",
+      "replaceFail": "请确认密钥属于这个接入地址。没有保存任何内容。"
+    },
+    "add": {
+      "open": "添加提供商",
+      "title": "添加模型提供商",
+      "stepEndpoint": "接入地址",
+      "stepModels": "模型",
+      "vendor": "厂商",
+      "vendorHint": "选择厂商会自动填写协议和 Base URL。网关和中转服务请选「自定义」。",
+      "custom": "自定义",
+      "keyHint": "作为新密钥保存在这台 Mac 的钥匙串加密存储中。只写不读——不会再显示。",
+      "localUrlPlaceholder": "留空则在默认端口上查找",
+      "next": "下一步：模型",
+      "back": "上一步",
+      "submit": "添加提供商",
+      "protocols": {
+        "openai": {
+          "title": "OpenAI 兼容",
+          "body": "Codex、对话和 Coffer 引擎都能用。"
+        },
+        "anthropic": {
+          "title": "Anthropic 兼容",
+          "body": "Claude Code、对话和 Coffer 引擎都能用。"
+        },
+        "ollama": {
+          "title": "Ollama API",
+          "body": "仅供 Coffer 引擎，不给任何智能体用。"
+        },
+        "unknown": {
+          "title": "未知",
+          "body": "无法判断协议。"
+        }
+      },
+      "local": {
+        "title": "这台 Mac 上的运行时",
+        "detect": "检测",
+        "looking": "正在查找这台 Mac 上的模型运行时…",
+        "none": "默认端口（Ollama 11434、LM Studio 1234、llama-server 8080）上都没有应答。请启动运行时，或输入它的地址后重新检测。",
+        "noWires": "不提供智能体协议",
+        "keyless": "无需密钥。检测只读取信息——不会拉取或加载任何模型。"
+      },
+      "models": {
+        "search_one": "搜索 {{count}} 个模型",
+        "search_other": "搜索 {{count}} 个模型",
+        "count_one": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
+        "count_other": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
+        "empty": "接入地址没有列出任何模型。直接添加，它接受的每个模型都可用。",
+        "window": "{{tokens}} tokens",
+        "noTools": "不支持工具"
+      }
+    },
+    "edit": {
+      "title": "编辑 {{name}}",
+      "renameHint": "重命名只改名称——密钥、历史记录和智能体都保持不变。",
+      "locked": "{{agents}} 正在使用，已锁定。",
+      "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
+    },
+    "replace": {
+      "title": "更换 API Key",
+      "secret": "密钥",
+      "newKey": "新密钥",
+      "hint": "只写不读。Coffer 会覆盖钥匙串加密存储中这个密钥的值，之后不再显示。",
+      "pendingBody": "这个密钥正在使用，新值要等你在 Coffer 应用中批准后才生效。在此之前旧密钥继续可用。"
+    },
+    "delete": {
+      "title": "删除 {{name}}？",
+      "confirm": "删除 {{name}}？此操作无法撤销。",
+      "confirmWithSecret": "删除 {{name}}？它的密钥 {{ref}} 也会从这台 Mac 上删除。此操作无法撤销。",
+      "blocked": "{{name}} 正在使用，暂时不能删除。请先把下面这些从它上面移走："
+    },
+    "welcome": {
+      "title": "接入你自己的模型端点",
+      "body": "接入地址和 API Key 只保存一次。Coffer 让你的智能体使用它，并让你选择它们可以用哪些模型。",
+      "anthropic": {
+        "title": "Anthropic 或兼容",
+        "body": "Claude Code、对话和 Coffer 引擎。Anthropic API、Bedrock 类网关。"
+      },
+      "openai": {
+        "title": "OpenAI 或兼容",
+        "body": "Codex、对话和 Coffer 引擎。OpenAI、Gemini、DeepSeek、OpenRouter、公司网关。"
+      },
+      "local": {
+        "title": "这台 Mac 上的本地运行时",
+        "body": "Ollama、LM Studio、vLLM 或 llama.cpp。无需密钥。"
+      },
+      "rightNow": "当前",
+      "ownLogin": {
+        "claude_code": "自身登录（Anthropic）",
+        "codex": "自身登录（ChatGPT）"
+      },
+      "engineUnset": "Coffer 自用模型尚未设置，提炼和整理已暂停。",
+      "engineLink": "Coffer 自用模型"
     }
   }
 }

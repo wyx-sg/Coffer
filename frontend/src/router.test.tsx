@@ -133,8 +133,9 @@ test("every page the shell adds resolves to a page of its own", async () => {
   for (const path of ["/custom-tools", "/clis", "/secrets", "/usage"]) {
     renderAt(path);
   }
-  // Each page is code-split, so they arrive one by one.
-  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(4), {
+  // Each page is code-split, so they arrive one by one. Secrets and Usage are
+  // built; Custom tools and CLIs are still placeholders.
+  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(2), {
     timeout: 5_000,
   });
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();

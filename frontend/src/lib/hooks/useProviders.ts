@@ -6,7 +6,13 @@ import type { AgentType } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { providersApi, type ProviderCreate, type ProviderPatch } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
-import { providerKey, providersKey } from "@/lib/api/queryKeys";
+import {
+  endpointModelsKey,
+  localRuntimesKey,
+  pendingApprovalsKey,
+  providerKey,
+  providersKey,
+} from "@/lib/api/queryKeys";
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
 function useProviderToastError() {
@@ -32,6 +38,21 @@ export function useProvider(uid: string) {
   });
 }
 
+/** Which local runtime answers at `baseUrl` (null = each default port). A
+ *  QUERY so the Add dialog shows its loading / error states; it runs only
+ *  while `enabled` (the user chose the local path) and a Test re-asks it.
+ *  `retry: false`: nothing answering is an answer. */
+export function useDetectLocalRuntimes(baseUrl: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: localRuntimesKey(baseUrl),
+    queryFn: () => providersApi.detectLocal(baseUrl),
+    enabled,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// No onError toast: the Add dialog renders the failure inline under its form.
 export function useCreateProvider() {
   const qc = useQueryClient();
   return useMutation({
@@ -62,13 +83,33 @@ export function useUpdateProvider() {
 // afterwards, while `providerKey(uid)` answers the same row before and after.
 // The detail page's URL does not change either, so nothing navigates.
 
+/** Replace a provider's key. A key already in use does not change at once: the
+ *  daemon seals the new value behind a pending `replace_value` approval, so the
+ *  pending list is refetched and the caller shows the waiting state.
+ *  No onError toast: the Replace dialog renders the failure inline. */
+export function useReplaceProviderKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { uid: string; secret: string }) =>
+      providersApi.update(vars.uid, { secret_value: vars.secret }),
+    onSuccess: async () => {
+      void qc.invalidateQueries({ queryKey: providersKey });
+      await qc.invalidateQueries({ queryKey: pendingApprovalsKey });
+    },
+  });
+}
+
 export function useDeleteProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();
   return useMutation({
     mutationFn: (uid: string) => providersApi.remove(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: providersKey });
+    // The detail and its endpoint probe go first, so a stale detail view
+    // cannot refetch a 404; then the list.
+    onSuccess: (_data, uid) => {
+      qc.removeQueries({ queryKey: providerKey(uid) });
+      qc.removeQueries({ queryKey: endpointModelsKey(uid) });
+      void qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });

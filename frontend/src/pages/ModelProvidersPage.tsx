@@ -1,94 +1,14 @@
-// pages/ModelProvidersPage.tsx — the model-provider surface (spec provider-switching).
+// src/pages/ModelProvidersPage.tsx — Model providers (spec provider-switching "Offer every connection operation on REST, CLI and web").
 //
-// A provider here is a credentialed endpoint: `{protocol, base_url,
-// credential_ref}`. Which MODEL an agent runs on is still chosen at the point of
-// use (the per-agent binding on Agent detail → Overview) — this page manages
-// vendor endpoints and their keys; the connection's own CURATED model set (which
-// of the endpoint's models are offered at all) lives on its detail page.
-//
-// It lives under RESOURCES rather than Settings because `provider` is a
-// resource kind like any other, and spec web-ui's rule is that RESOURCES holds
-// the kinds with a list UI. It was the only one of the five filed elsewhere.
-//
-// The page is now nothing but that connection library, rendered through the
-// shared DataTable like every other list surface (ConnectionsTable): the page
-// itself owns only the header + the add dialog. Editing a connection moved to
-// its detail page. Coffer's own engine (which connection + model its memory
-// organizer runs on) lives in Settings → Coffer's model: it configures Coffer itself
-// rather than being a resource served to agents.
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Boxes, Plus } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ConnectionsTable } from "@/components/settings/ConnectionsTable";
-import { ProviderForm } from "@/components/settings/ProviderForm";
-import { ProviderWelcomePanel } from "@/components/settings/ProviderWelcomePanel";
-import { useProviders, useCreateProvider } from "@/lib/hooks/useProviders";
-import { translateApiError } from "@/lib/api/errors";
+// One list + detail page: a provider is an endpoint, a protocol, the models it
+// offers and a key taken from a secret reference. At `/model-providers` the
+// list opens on its first provider; with none yet, the page is the welcome
+// panel. There are no library tabs: which agent runs on what is shown and
+// switched on each agent's Model tab, and Coffer's own model is chosen in
+// Settings › General. The layout is ProvidersSplit, shared with the detail
+// route so the list does not re-lay out between the two.
+import { ProvidersSplit } from "@/components/providers/ProvidersSplit";
 
 export function ModelProvidersPage() {
-  const { t } = useTranslation();
-  const { data: providers = [], isPending, error } = useProviders();
-  const createProvider = useCreateProvider();
-
-  const [adding, setAdding] = useState(false);
-  const hasItems = providers.length > 0;
-
-  const closeAdd = () => {
-    setAdding(false);
-    createProvider.reset();
-  };
-
-  // The header stays mounted through loading and error — the page never goes
-  // blank — and the Add action moves into the welcome panel while the library
-  // is empty, so the one obvious next step is stated exactly once.
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={Boxes}
-        title={t("settings.connections.title")}
-        subtitle={t("settings.connections.subtitle")}
-        actions={
-          hasItems ? (
-            <Button onClick={() => setAdding(true)}>
-              <Plus className="mr-1.5 size-4" />
-              {t("settings.connections.add")}
-            </Button>
-          ) : null
-        }
-      />
-
-      {error ? (
-        <Card className="border-destructive/40">
-          <CardContent className="py-6 text-sm text-destructive">
-            {translateApiError(t, error)}
-          </CardContent>
-        </Card>
-      ) : !isPending && !hasItems ? (
-        <ProviderWelcomePanel onAdd={() => setAdding(true)} />
-      ) : (
-        <ConnectionsTable providers={providers} isLoading={isPending} />
-      )}
-
-      <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("settings.connections.addTitle")}</DialogTitle>
-          </DialogHeader>
-          <ProviderForm
-            submitError={createProvider.error}
-            pending={createProvider.isPending}
-            onCancel={closeAdd}
-            onSubmit={async (values) => {
-              await createProvider.mutateAsync(values);
-              closeAdd();
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+  return <ProvidersSplit />;
 }

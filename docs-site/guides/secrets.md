@@ -1,6 +1,6 @@
 ---
 title: Secrets
-description: How Coffer keeps secrets from the agents it serves — plaintext only in the desktop app, approval before a secret goes somewhere new — and how to store standalone secrets, run commands with them through coffer run, answer approvals, list what uses a secret, move plaintext files into the store, and back up the master key.
+description: How Coffer keeps secrets from the agents it serves — plaintext only in the desktop app, approval before a secret goes somewhere new — and how to use the Secrets page, store standalone secrets, run commands with them through coffer run, answer approvals, list what uses a secret, move plaintext files into the store, and back up the master key.
 ---
 
 # Secrets
@@ -24,6 +24,33 @@ Writing a secret stays open to every surface: whoever supplies a value already h
 Coffer does not yet ship binaries signed with an Apple Developer ID. Until it does, every build is a **development build**: the master key is the file `~/.coffer/master.key`, which any program running as you can read, and with it a program can forge the desktop app's approval. The commands and approvals on this page work the same way in a development build, and the desktop app labels every prompt "Development build", but they do not stop a determined agent there. See [Security model → Development builds](/architecture/security#development-builds).
 :::
 
+## The Secrets page
+
+**Secrets** in the sidebar's System group (`/secrets`) is the one place in the web UI that lists and manages stored secrets. A secret field inside a resource's own dialog — an MCP server's token, a provider's key — stays there; this page is where you see all of them together and what each one is for.
+
+The list comes in two groups:
+
+- **In use** — every secret something cites. The **Name** column shows a standalone secret by its name with its `coffer://secret/<name>` reference beneath, and any other secret by its ref, such as `mcp_server/…/GITHUB_TOKEN`. A ref a resource cites but the store does not hold reads **Missing**: store a value for it from the row's menu. **Waiting for approval** marks a secret whose new destination or new value waits for you in the desktop app, and a terminal icon marks one that other programs running as you can read where Coffer puts it.
+- **Not used by anything** — secrets nothing cites, marked safe to delete.
+
+**Used by** shows how many things use the secret and their names. Choose it for the list, each by kind (MCP server, model provider, channel, skill, …) and current name; choosing a name opens that thing's page. **Find a secret** filters both groups by name.
+
+Each row's **⋯** menu:
+
+| Item | What it does |
+| --- | --- |
+| **Replace value…** | Takes a new value without ever showing the old one. The dialog names what uses the secret. A value something already receives, and any standalone secret's, [waits for your approval](#replacing-a-value-in-use); the dialog says so instead of claiming it took effect, with **Review** to open the approvals window. For a missing ref the item reads **Store value…**. |
+| **Reveal value…** | Only in the desktop app — see [See or copy a value](#see-or-copy-a-value). A browser shows it disabled as **Reveal in the Coffer app**. |
+| **Copy reference** | Copies what a file or config cites: `coffer://secret/<name>` for a standalone secret, the ref otherwise. |
+| **Show in Activity** | Opens the Changes tab of [Activity](/guides/activity), where every store, replace, reveal and delete is recorded. |
+| **Delete…** | For a secret nothing uses, asks once and deletes it. For one in use, it deletes nothing: the dialog lists each thing that still uses it, with **Open** to go there, and the row stays. |
+
+**Add secret** stores a new standalone secret: a name (letters, digits, `.`, `_` and `-`, at most 64, fixed once added) and a value, which is never shown back. A name that already exists is caught before anything is sent, with a link to replace that secret's value instead. The dialog shows the reference to cite.
+
+**Find plaintext keys** runs the [plaintext scan](#move-plaintext-secret-files-into-the-store) from the page. It lists each key it found by file, line, key and the secret name it would get — never the value — with every finding ticked. Untick what should stay, then **Review changes**: Coffer works out what the import would do without writing anything, and shows the secrets it would add and the files it would change. **Apply** moves them. A name that already holds a different value is skipped with its file untouched, and the dialog lists what was skipped and why. Skills that still point at `~/.coffer/secrets/` are listed too, for you to update by hand.
+
+While any change waits for approval, the top of the page says how many, with **Review** to reopen the approvals window. With no secrets at all, the page offers **Add secret** and **Find plaintext keys**.
+
 ## Standalone secrets
 
 Most secrets belong to a resource and are stored by the dialog that registers it. A **standalone secret** belongs to no resource: the database password a skill's script needs, an internal API token you use from the terminal. It lives in the same encrypted store under `secret/<name>`, and files cite it as `coffer://secret/<name>`.
@@ -40,7 +67,7 @@ printf '%s' "$ORDERS_DB_PASSWORD" | coffer credentials set secret/orders-db
 coffer credentials set secret/orders-db
 ```
 
-Storing a new name takes effect at once. Replacing the value of a standalone secret that already exists [waits for your approval](#replacing-a-value-in-use).
+On the [Secrets page](#the-secrets-page), **Add secret** does the same. Storing a new name takes effect at once. Replacing the value of a standalone secret that already exists [waits for your approval](#replacing-a-value-in-use).
 
 ### Cite it
 
@@ -90,9 +117,9 @@ What happens:
 
 ## See or copy a value
 
-Open the secret in the **desktop app** and choose reveal or copy. macOS asks for Touch ID or your login password, and the prompt names the secret. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `credential_revealed` with the ref only.
+Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **Reveal value…** on the row. A warning comes first: anyone who can see your screen can read the value. Then macOS asks for Touch ID or your login password, and the prompt names the secret. The value shows for 30 seconds, with **Copy** and **Hide**, then hides again; closing the dialog drops it at once. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `credential_revealed` with the ref only.
 
-The browser UI offers no reveal: it shows **Open in Coffer app** in its place. `coffer credentials get <ref>` only confirms that a value is stored.
+The browser UI offers no reveal: the menu item reads **Reveal in the Coffer app** and is disabled. `coffer credentials get <ref>` only confirms that a value is stored.
 
 ## Approvals
 
@@ -175,13 +202,13 @@ coffer config set secrets.require_approval on   # at once
 coffer credentials list
 ```
 
-The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<name>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: every standalone secret (it goes into a `coffer run` child) and every secret in a stdio MCP server's environment. See [Credentials → List and inspect](/guides/credentials#list-and-inspect) for the columns.
+The [Secrets page](#the-secrets-page) shows the same list, grouped into in use and not used by anything. The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<name>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: every standalone secret (it goes into a `coffer run` child) and every secret in a stdio MCP server's environment. See [Credentials → List and inspect](/guides/credentials#list-and-inspect) for the columns.
 
 Deleting a standalone secret is refused while a resource cites it or a skill's files cite its URI; the message names them.
 
 ## Move plaintext secret files into the store
 
-Earlier advice kept skill secrets in plaintext files such as `~/.coffer/secrets/<name>.env`. Any program that walks your home directory reads those — backup tools, a cloud-drive client, an agent's file search. `coffer credentials scan` finds them, and `coffer credentials import` moves them into the store:
+Earlier advice kept skill secrets in plaintext files such as `~/.coffer/secrets/<name>.env`. Any program that walks your home directory reads those — backup tools, a cloud-drive client, an agent's file search. `coffer credentials scan` finds them, and `coffer credentials import` moves them into the store. **Find plaintext keys** on the [Secrets page](#the-secrets-page) runs the same scan, dry run and import:
 
 ```sh
 coffer credentials scan
