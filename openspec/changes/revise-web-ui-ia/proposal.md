@@ -49,10 +49,13 @@ unarchived until that implementation lands.
   Model providers), **Run** (Chat, Channels), **Capabilities** (MCP servers, Custom tools,
   Skills, CLIs), **Context** (Knowledge, Memory), **System** (Secrets, Activity, Usage, Sync) —
   fifteen entries. Usage's page is specified with the change that meters use.
-- A **Custom tools** page (`/custom-tools`) lists the tools Coffer serves from a script, an HTTP
-  endpoint or an OpenAPI document, grouped by health, with one Add custom tool action (Script /
-  HTTP endpoint / OpenAPI) and a detail page carrying the definition, a test, reach, a per-tool
-  switch and calls. The MCP servers Add dialog no longer offers these types.
+- A **Custom tools** page (`/custom-tools`) manages HTTP API tools in groups: a group has a fixed
+  name agents see as the prefix (`<group>__<tool>`), a shared base URL, an auth header bound to a
+  secret that never reaches the agent, and a default reach; each tool has its own switch and an
+  optional reach override. Add custom tool imports an OpenAPI spec (picking operations, creating a
+  group that can be re-imported with a preview) or defines one request by hand in an existing or
+  new group. Script tools are deferred past 1.0. The MCP servers Add dialog offers no custom
+  tools.
 - A **CLIs** page (`/clis`) lists every command a skill requires with its version against the
   minimum, login state and the skills that need it, problems first; its detail page installs
   through Homebrew after a confirmation, shows the login command and checks again. A skill's

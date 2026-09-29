@@ -323,13 +323,20 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
 
 ### 12. Custom tools and CLIs
 
-- **Custom tools get their own entry.** They are `mcp_server` resources with a script, HTTP or
-  OpenAPI transport and share the gateway's machinery, but a user who wants to turn a script or
-  an API into a tool looks for "custom tools", and adding one (choose Script / HTTP endpoint /
-  OpenAPI, then that type's form) is unlike pasting a server from a README. The page lists them
-  grouped by health; the detail page carries the definition, a test call, reach, a per-tool
-  switch and the calls table. The MCP servers list and its Add dialog leave them out, so each
-  server has one home. *Rejected:* a transport filter on MCP servers, which hides the feature.
+- **Custom tools get their own entry.** They share the gateway's machinery, but a user who wants
+  to turn an API into a tool looks for "custom tools", and adding one is unlike pasting a server
+  from a README. The MCP servers list and its Add dialog leave them out, so each server has one
+  home. *Rejected:* a transport filter on MCP servers, which hides the feature.
+- **One type, HTTP API, managed in groups.** A group is one `mcp_server` resource: its fixed name
+  is the prefix agents see (`<group>__<tool>`, the gateway's usual naming), and it holds what the
+  tools of one API share — base URL, an auth header bound to a secret the gateway adds on each
+  call, a default reach. Each tool has its own switch and an optional reach override, because an
+  API often has one dangerous operation among many harmless ones. An OpenAPI import creates a
+  group and can be re-imported, with a preview of the operations added and removed so a changed
+  spec never silently drops a tool; a hand-made request joins an existing group or a new one.
+  *Rejected:* one resource per tool, which repeats the base URL and secret on every tool and
+  gives agents a flat, unprefixed list. **Script tools are deferred past 1.0**: running a
+  user's script is a process-sandbox question the HTTP type does not raise.
 - **CLIs get their own entry** because they have data nothing else shows — installed or not,
   version against the skills' minimum, login state — and actions nothing else offers: install
   through Homebrew after a confirmation (no other installer, so Coffer never guesses a package

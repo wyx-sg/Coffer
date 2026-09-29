@@ -80,7 +80,7 @@ on:
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
-  Custom tools     /custom-tools      — tools Coffer serves from a script, an HTTP endpoint or an OpenAPI document
+  Custom tools     /custom-tools      — HTTP APIs Coffer serves to agents as tools, in groups
   Skills           /skills            — what Coffer delivers to agents
   CLIs             /clis              — the command-line tools skills require
  CONTEXT
@@ -229,8 +229,9 @@ open the review step. The same dialog carries **Import from agents** as a link,
 which lists the direct MCP entries in the agents' own config files to adopt
 ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
 second button on the page. The dialog adds MCP servers only: it offers no
-custom tool type (Script, HTTP endpoint, OpenAPI), which is added on the Custom
-tools page (see "Manage custom tools on their own page").
+custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
+which is added on the Custom tools page (see "Manage custom tools on their own
+page").
 
 The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
@@ -298,7 +299,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **GIVEN** the MCP servers page
 - **WHEN** it renders and the user opens Add server
 - **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
-- **AND** the dialog offers no Script, HTTP endpoint or OpenAPI type
+- **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
 Input the paste box cannot read as any of the recognised forms — malformed
@@ -394,8 +395,8 @@ word a user navigates by:
   listed on the Chat page (spec [chat](../chat/spec.md) "Show every conversation on the Chat page").
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
-- **Custom tools** are `mcp_server` resources whose transport is a script, an HTTP
-  endpoint or an OpenAPI document. They share the gateway's machinery with every
+- **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
+  group of tools. They share the gateway's machinery with every
   other server but get their own entry under Capabilities, so a user looking for
   "make my own tool" finds it; the MCP servers entry lists the other servers and
   the Custom tools entry these, so each resource still appears under exactly one
@@ -872,35 +873,81 @@ daemon serves cannot replace the application.
 - **AND** it shows no Check for updates or Download and restart control
 
 ### Requirement: Manage custom tools on their own page
-The Custom tools page (`/custom-tools`, under Capabilities) MUST list every
-custom tool — an MCP server Coffer serves itself from a script, an HTTP endpoint
-or an OpenAPI document — grouped by health, the failing ones first, and MUST
-carry one **Add custom tool** action whose first step chooses **Script**, **HTTP
-endpoint** or **OpenAPI** and then opens that type's form. A custom tool's detail
-page MUST carry its **definition** (the script, the endpoint or the document and
-the tools it yields), a **Test** action that calls one of its tools with sample
-arguments and shows the result, its **reach** in the shared reach control, a
-per-tool **on/off** switch for each tool it yields, and its **calls** (the
-Activity calls table scoped to it). Custom tools are served through the same
-gateway as every other MCP server; how each type is defined and run is the
-gateway's, specified with the change that adds these transports.
+The Custom tools page (`/custom-tools`, under Capabilities) MUST manage custom
+tools, which have one type in 1.0 — **HTTP API**: a tool is one HTTP request
+Coffer makes on an agent's behalf — and MUST manage them in **groups**. A group
+is one `mcp_server` resource of the HTTP API transport, served through the same
+gateway as every other MCP server, and carries:
 
-#### Scenario: the custom tools page groups tools by health
-- **GIVEN** one custom tool whose last call failed and two healthy ones
+- a **name**, fixed once the group exists, which is the prefix every agent sees:
+  a tool reaches agents as `<group>__<tool>`, under the same name rules as any
+  MCP server ([mcp-gateway](../mcp-gateway/spec.md) "Manage MCP servers as resources");
+- a shared **base URL** its tools' paths are relative to;
+- an optional **auth header** whose value is bound to a stored secret (see
+  "Manage stored secrets on the Secrets page"): Coffer's gateway adds the header
+  when it calls the API, and neither the header's value nor the secret's
+  reference is ever part of what an agent sees or sends;
+- a default **reach**, which each tool follows unless it overrides it.
+
+Each tool in a group MUST carry its own **on/off** switch and an optional
+**reach override**. The page MUST list the groups grouped by health, the failing
+ones first, each showing its tools. It MUST carry one **Add custom tool** action
+offering two ways in:
+
+- **Import an OpenAPI spec** — from a URL or a file; the user picks which
+  operations become tools, and the import creates a new group. A group made by
+  an import MUST offer **Re-import**, which reads the spec again and shows a
+  preview of the operations it would add and remove before anything changes;
+  confirming keeps every kept tool's switch and reach override as they were.
+- **Define one request by hand** — method, path, parameters and body schema —
+  joining an existing group or a new one named in the same step.
+
+A group's detail page MUST carry its definition (base URL, auth header with the
+secret it is bound to, and each tool's request), a **Test** action that calls one
+tool with sample arguments and shows the response, the reach control with each
+tool's override, the per-tool switches, and its calls (the Activity calls table
+scoped to the group). Script tools are not offered: they are deferred past 1.0.
+How the gateway runs an HTTP API tool is specified with the change that adds the
+transport.
+
+#### Scenario: importing an OpenAPI spec creates a group with the chosen operations
+- **GIVEN** an OpenAPI document with five operations
+- **WHEN** the user chooses Add custom tool, imports the document, names the group `billing`, binds its auth header to a stored secret and picks three operations
+- **THEN** one group `billing` is created with those three tools, each on and following the group's reach
+- **AND** the group's detail page offers Re-import
+
+#### Scenario: re-importing a spec previews the operations it adds and removes
+- **GIVEN** the `billing` group imported with three operations, one of them switched off and one with a reach override
+- **WHEN** the spec now has one of those operations removed and a new one added, and the user chooses Re-import
+- **THEN** a preview lists the operation to add and the tool to remove, and nothing changes until the user confirms
+- **AND** after confirming, the kept tools keep their switch and reach override
+
+#### Scenario: a hand-made request joins an existing group
+- **GIVEN** the `billing` group
+- **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
+- **THEN** the tool is added to `billing`, using its base URL and auth header
+
+#### Scenario: a tool's reach override narrows one tool
+- **GIVEN** the `billing` group reaching Claude Code and Codex
+- **WHEN** the user overrides one tool's reach to Claude Code only
+- **THEN** Codex no longer sees that tool and still sees the group's other tools
+- **AND** Claude Code sees all of them
+
+#### Scenario: an agent sees the group name as the tool prefix
+- **GIVEN** the `billing` group with a tool named `list_invoices`, reaching Claude Code
+- **WHEN** Claude Code lists or searches the gateway's tools
+- **THEN** the tool is offered as `billing__list_invoices`
+
+#### Scenario: the secret never reaches the agent
+- **GIVEN** the `billing` group's auth header bound to a stored secret
+- **WHEN** an agent calls `billing__list_invoices`
+- **THEN** the gateway sends the request with the header's value added
+- **AND** neither the tool's description and schema nor the result returned to the agent contains the secret's value or its reference
+
+#### Scenario: the custom tools page lists groups by health
+- **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the failing tool is listed first under its health group and the two healthy ones under theirs
-- **AND** the page carries one Add custom tool action
-
-#### Scenario: adding a custom tool starts by choosing its type
-- **GIVEN** the Custom tools page
-- **WHEN** the user chooses Add custom tool
-- **THEN** the dialog offers Script, HTTP endpoint and OpenAPI, and choosing OpenAPI opens the form for an OpenAPI document
-
-#### Scenario: a custom tool's detail page tests and switches its tools
-- **GIVEN** a custom tool built from an OpenAPI document that yields three tools
-- **WHEN** the user opens its detail page, tests one tool, and switches another off
-- **THEN** the page shows the definition, the test's result, the reach control and the calls table scoped to that tool
-- **AND** the switched-off tool is no longer offered to agents while the other two are
+- **THEN** the failing group is listed first with its tools, and the page carries one Add custom tool action offering Import an OpenAPI spec and Define one request by hand, and no Script type
 
 ### Requirement: Show every CLI a skill requires on the CLIs page
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that

@@ -39,8 +39,8 @@ credential store has never had
 ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)
 makes every stored secret listable with its reference count); and **Usage**, token use metered
 at the model proxy and the official remaining quota of subscription agents, which is in 1.0;
-**Custom tools**, the tools Coffer serves itself from a script, an HTTP endpoint or an OpenAPI
-document; and **CLIs**, the command-line tools skills require. One entry leaves: **Settings**
+**Custom tools**, HTTP APIs Coffer serves to agents as tools, imported from an OpenAPI document
+or defined by hand; and **CLIs**, the command-line tools skills require. One entry leaves: **Settings**
 becomes a modal opened from the sidebar footer (argued below). That is fifteen. The roadmap
 after 1.0 already names three more entries, and several additions that must *not* become
 entries:
@@ -247,12 +247,12 @@ page underneath — the router has to carry a background location, where a page 
 per tab. A modal with no route would have been cheaper and would break every deep link, from
 the footer's link to Settings › Daemon to the palette's Settings tabs.
 
-**Custom tools and CLIs are entries of their own.** A custom tool is an MCP server whose transport
-is a script, an HTTP endpoint or an OpenAPI document, served by the same gateway machinery, so it
-could have been a filter on MCP servers. It gets its own entry for discoverability: a user who
-wants to turn a script or an API into a tool looks for "custom tools", not for a transport
-option inside a list of servers someone else wrote, and its add flow (choose Script, HTTP
-endpoint or OpenAPI) is unlike adding a server from a README. CLIs is an entry because it has
+**Custom tools and CLIs are entries of their own.** A group of custom tools is an MCP server of
+the HTTP API transport, served by the same gateway machinery, so it could have been a filter on
+MCP servers. It gets its own entry for discoverability: a user who wants to turn an API into
+tools looks for "custom tools", not for a transport option inside a list of servers someone else
+wrote, and its add flow (import an OpenAPI spec and pick operations, or define one request) is
+unlike adding a server from a README. CLIs is an entry because it has
 data of its own — whether each command a skill requires is installed, which version, whether it
 is logged in — and actions shown nowhere else: install through Homebrew after a confirmation,
 the login command, check again. Folded into Skills it would repeat per skill what is one fact
