@@ -216,3 +216,10 @@ except those under Proposed, which are drafted and not yet in effect.
 | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
+| [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
+| [`storage-is-five-classes-by-nature`](storage-is-five-classes-by-nature.md) | Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy |
+| [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
+| [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
+| [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
+| [`sync-merges-outside-the-vault-then-checks-out`](sync-merges-outside-the-vault-then-checks-out.md) | Sync Merges Outside the Vault With `git merge-tree`, Then Guards, Then Checks Out |
+| [`reach-is-a-machine-local-predicate-over-a-context`](reach-is-a-machine-local-predicate-over-a-context.md) | Reach Is a Machine-Local Predicate Over an Extensible Context |
