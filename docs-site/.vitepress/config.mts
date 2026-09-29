@@ -40,7 +40,7 @@ const guides = [
   {
     text: 'Talking to agents',
     items: [
-      { text: 'Chat', link: '/guides/chat' },
+      { text: 'Conversations', link: '/guides/chat' },
       { text: 'Channels', link: '/guides/channels' },
       { text: 'Telegram', link: '/guides/channels-telegram' },
       { text: 'SeaTalk', link: '/guides/channels-seatalk' },
@@ -104,6 +104,7 @@ const architecture = [
       { text: 'Security model', link: '/architecture/security' },
       { text: 'Observability', link: '/architecture/observability' },
       { text: 'Design system', link: '/architecture/design-system' },
+      { text: 'App shell', link: '/architecture/app-shell' },
       { text: 'Distribution and releases', link: '/architecture/distribution' },
       { text: 'Decision records', link: '/architecture/decisions' },
     ],

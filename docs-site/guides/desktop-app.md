@@ -133,7 +133,7 @@ coffer daemon stop
 
 ### Keep the daemon running
 
-Turn on **Settings → General → Coffer's daemon → Start at login** to start the daemon when you log in and restart it if it crashes, whether or not the app is open. The CLI equivalent is `coffer daemon service install`. With it on, the app attaches to an already-running daemon at launch and opens immediately.
+Turn on **Settings → Daemon → Start at login** to start the daemon when you log in and restart it if it crashes, whether or not the app is open. The CLI equivalent is `coffer daemon service install`. With it on, the app attaches to an already-running daemon at launch and opens immediately.
 
 ## Logs
 

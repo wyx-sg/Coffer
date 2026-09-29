@@ -96,7 +96,7 @@ export function UnmanagedSkillActions({
               {
                 onSuccess: (ref) => {
                   toast.success(t("agents.skillsTab.adoptSuccess", { name: ref.name }));
-                  navigate(`/skills/${encodeURIComponent(ref.uid)}`);
+                  navigate(`/skills/${encodeURIComponent(ref.name)}`);
                 },
               },
             )

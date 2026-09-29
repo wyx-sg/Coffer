@@ -36,6 +36,8 @@ function useServerStatusRead<T>(serverUid: string, select: (read: ServerStatusRe
     queryKey: mcpStatusKey(serverUid),
     queryFn: () => readServerStatus(serverUid),
     select,
+    // The detail page knows the uid only once the name has resolved.
+    enabled: serverUid.length > 0,
   });
 }
 

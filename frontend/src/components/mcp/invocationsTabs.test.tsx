@@ -6,7 +6,7 @@
 import { expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import { McpServerDetailTabs } from "./McpServerDetailTabs";
@@ -33,14 +33,22 @@ function renderAt(path: string, ui: React.ReactNode) {
 
 acceptance("web-ui", "a server's invocations tab is the Activity calls table scoped to it", () => {
   const detail = renderAt(
-    "/mcp-servers/u-1?tab=invocations",
-    <McpServerDetailTabs
-      serverUid="u-1"
-      capabilities={undefined}
-      config={{}}
-      isCapsPending={false}
-      onRefresh={vi.fn()}
-    />,
+    "/mcp-servers/srv/invocations",
+    <Routes>
+      <Route
+        path="/mcp-servers/:name/:tab?"
+        element={
+          <McpServerDetailTabs
+            serverUid="u-1"
+            basePath="/mcp-servers/srv"
+            capabilities={undefined}
+            config={{}}
+            isCapsPending={false}
+            onRefresh={vi.fn()}
+          />
+        }
+      />
+    </Routes>,
   );
   expect(mounted).toHaveBeenCalled();
   expect(mounted.mock.lastCall![0]).toEqual({ serverUid: "u-1" });

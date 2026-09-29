@@ -100,7 +100,7 @@ const makeConv = (overrides?: Partial<Conversation>): Conversation => ({
 });
 
 function renderPage(
-  initialPath = "/chat",
+  initialPath = "/conversations",
   agents?: { agent_key: string; display_name: string; available: boolean }[],
 ) {
   const qc = new QueryClient({
@@ -113,8 +113,8 @@ function renderPage(
     <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={qc}>
         <Routes>
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/chat/:id" element={<ChatPage />} />
+          <Route path="/conversations" element={<ChatPage />} />
+          <Route path="/conversations/:id" element={<ChatPage />} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -133,9 +133,9 @@ describe("ChatPage", () => {
     expect(screen.getByRole("tab", { name: /archived/i })).toBeInTheDocument();
   });
 
-  test("bare /chat shows the draft surface with a composer right away, not a modal", async () => {
+  test("bare /conversations shows the draft surface with a composer right away, not a modal", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    renderPage("/chat");
+    renderPage("/conversations");
     // No per-turn working-directory step anymore: the draft guide + composer
     // appear immediately — no "Start conversation" dialog button.
     expect(await screen.findByText(/start a new conversation/i)).toBeInTheDocument();
@@ -146,16 +146,16 @@ describe("ChatPage", () => {
 
   test("draft with no managed agent available shows the install/configure empty state", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-    renderPage("/chat", [
+    renderPage("/conversations", [
       { agent_key: "claude_code", display_name: "Claude Code", available: false },
     ]);
     expect(await screen.findByText("No managed agent available")).toBeInTheDocument();
   });
 
-  test("/chat/:id opens that conversation's thread (URL-addressable)", async () => {
+  test("/conversations/:id opens that conversation's thread (URL-addressable)", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderPage("/chat/conv-1");
+    renderPage("/conversations/conv-1");
     // The thread's empty prompt (not the draft guide) appears for a real conv.
     await waitFor(() =>
       expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument(),
@@ -166,7 +166,7 @@ describe("ChatPage", () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
-    renderPage("/chat");
+    renderPage("/conversations");
 
     // No working-directory step: just type the first message. The turn defaults
     // to the Coffer-managed workspace on the backend, so no cwd is sent.
@@ -186,7 +186,7 @@ describe("ChatPage", () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
-    renderPage("/chat");
+    renderPage("/conversations");
 
     // The model picker is a dropdown listing what the daemon offered for this agent.
     const trigger = await screen.findByRole("combobox", { name: /agent model/i });
@@ -208,7 +208,7 @@ describe("ChatPage", () => {
   test("deleting a conversation asks for confirmation first", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderPage("/chat/conv-1");
+    renderPage("/conversations/conv-1");
 
     // Reveal the row's delete control and click it.
     const delBtn = await screen.findByRole("button", { name: /delete/i });
@@ -240,7 +240,7 @@ describe("ChatPage", () => {
         },
       ],
     });
-    renderPage("/chat/conv-1");
+    renderPage("/conversations/conv-1");
 
     expect(await screen.findByText("old question")).toBeInTheDocument();
     // Read-only: no composer; a restore call-to-action instead.
@@ -255,7 +255,7 @@ describe("ChatPage", () => {
       .mockResolvedValue(makeConv({ archived_at: null }));
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.unarchiveConversation.mockResolvedValue(makeConv({ archived_at: null }));
-    renderPage("/chat/conv-1");
+    renderPage("/conversations/conv-1");
 
     fireEvent.click(await screen.findByRole("button", { name: /restore/i }));
 
@@ -271,7 +271,7 @@ describe("ChatPage", () => {
     chatApiMock.getConversation.mockRejectedValue(
       new ApiError("CONVERSATION_NOT_FOUND", "conversation not found"),
     );
-    renderPage("/chat/nope");
+    renderPage("/conversations/nope");
 
     expect(await screen.findByText("Conversation not found")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
@@ -295,7 +295,7 @@ describe("ChatPage", () => {
       chatApiMock.sendMessage.mockRejectedValueOnce(
         new ApiError("ATTACHMENT_NOT_FOUND", "attachment not found"),
       );
-      renderPage("/chat");
+      renderPage("/conversations");
 
       const draft = await screen.findByRole("textbox", { name: /message input/i });
       fireEvent.change(screen.getByTestId("composer-file-input"), {
@@ -339,7 +339,7 @@ describe("ChatPage", () => {
   test("surfaces an error when creating a conversation fails", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.createConversation.mockRejectedValue(new Error("boom"));
-    renderPage("/chat");
+    renderPage("/conversations");
 
     const composer = await screen.findByRole("textbox", { name: /message input/i });
     fireEvent.change(composer, { target: { value: "hi" } });

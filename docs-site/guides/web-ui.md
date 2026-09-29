@@ -1,11 +1,11 @@
 ---
 title: Web UI
-description: How Coffer's web UI is served and authenticated, what each page in the sidebar does, and the conventions every page shares.
+description: How Coffer's web UI is served and authenticated, how the sidebar, command palette and Settings window are laid out, and the conventions every page shares.
 ---
 
 # Web UI
 
-Coffer's web UI is where you manage everything in the vault — agents, MCP servers, skills, knowledge, memory, providers, channels — and chat with your agents. This page explains how the UI is served, tours every page in the sidebar, and lists the conventions the pages share. The [desktop app](/guides/desktop-app) hosts the same UI in a native window.
+Coffer's web UI is where you manage everything in the vault — agents, MCP servers, skills, knowledge, memory, providers, channels — and hold conversations with your agents. This page explains how the UI is served, tours the sidebar, the command palette and the Settings window, and lists the conventions the pages share. The [desktop app](/guides/desktop-app) hosts the same UI in a native window.
 
 ## Open the UI
 
@@ -42,41 +42,85 @@ The desktop app cannot receive the token this way, because it loads the UI from 
 
 ## The sidebar
 
-The sidebar groups pages by role: **Agents** are the consumers, **Resources** are what they draw on, **System** is Coffer's own tooling.
+The sidebar is grouped by what you come to Coffer to do. **Overview** sits on top under no heading, because it summarises everything below it; then five groups follow.
 
-| Group | Label | Route | What it is for |
+| Group | Entry | Route | What it is for |
 | --- | --- | --- | --- |
+| — | **Overview** | `/` | The landing page: a summary of the whole vault. |
 | Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations** and **Config files** tabs. See [Agents](/guides/agents). |
-| Agents | **Chat** | `/chat` | Conversations with Claude Code or Codex, including those started from a channel. See [Chat](/guides/chat). |
-| Resources | **MCP servers** | `/mcp-servers` | The upstream MCP servers Coffer aggregates behind one endpoint. See [MCP servers](/guides/mcp-servers). |
-| Resources | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
-| Resources | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
-| Resources | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
-| Resources | **Model providers** | `/model-providers` | Vendor endpoints and their keys. See [Model providers](/guides/providers). |
-| Resources | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM. See [Channels](/guides/channels). |
+| Agents | **Model providers** | `/model-providers` | Vendor endpoints and their keys — the models your agents run on. See [Model providers](/guides/providers). |
+| Run | **Conversations** | `/conversations` | Conversations with Claude Code or Codex, including those started from a channel. See [Chat](/guides/chat). |
+| Run | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM. See [Channels](/guides/channels). |
+| Capabilities | **MCP servers** | `/mcp-servers` | The upstream MCP servers Coffer aggregates behind one endpoint. See [MCP servers](/guides/mcp-servers). |
+| Capabilities | **Custom tools** | `/custom-tools` | Tools you define yourself for your agents. |
+| Capabilities | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
+| Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed. |
+| Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
+| Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
+| System | **Secrets** | `/secrets` | The credentials stored in the vault. |
 | System | **Activity** | `/activity` | What changed, what was called and what the daemon logged, as three tabs: **Changes**, **MCP calls** and **Daemon**. See [Activity and audit](/guides/activity). |
+| System | **Usage** | `/usage` | How much your agents use their models. |
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs**, **Setup** and **Machines** tabs. See [Vault sync](/guides/vault-sync). |
-| System | **Settings** | `/settings` | Preferences, Coffer's own model, retention, encryption and version. |
 
-**Knowledge**, **Memory** and **Sync** are experimental features. When one is switched off, its sidebar entry disappears, and following a link to its page shows a notice with **Open Settings → General** instead. See [Experimental features](/guides/experimental-features).
+In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 
-A red dot beside an entry means something there **Needs your attention** — for example a sync round waiting for you.
+::: info Pages still being built
+**Overview**, **Custom tools**, **CLIs**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today.
+:::
 
-Collapse the sidebar to an icon rail with **Collapse sidebar**; the choice is remembered across sessions.
+**Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).
+
+**Attention dots.** A small dot beside an entry means something there **Needs your attention** — today, a sync round that is held or failed and waiting for you. It is a dot, not a count, and it clears once you visit the page. The dot stays visible on the collapsed rail.
+
+**Collapsing and resizing.** Collapse the sidebar to a narrow icon rail with **Collapse sidebar**; the choice is remembered. While expanded, drag the thin line on its right edge to make it wider or narrower (see [Resizing split views](#resizing-split-views)).
+
+## Search or jump to
+
+The **Search or jump to…** control at the top of the sidebar opens the command palette; so does **⌘K** (**Ctrl+K**) from anywhere. Type a few letters, move with the arrow keys, press **Enter** to go there, **Escape** to close and return to where you were.
+
+The palette is for navigation only — it takes you somewhere and never runs an action. It lists two groups:
+
+- **Pages** — every sidebar entry and every Settings tab. Pages are always available, even while the daemon is offline.
+- **Objects** — your agents, MCP servers, skills, model providers, channels, knowledge collections and memory partitions, matched by name (and by title on the kinds that carry one). Each kind loads on its own: while one loads its group says so, and if one fails only that group shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
+
+Pages and objects of a switched-off experimental feature are left out.
+
+## The sidebar footer
+
+The bottom of the sidebar holds three things, top to bottom.
+
+- **Settings** — a labelled row with a gear. It opens the Settings window (below) and is highlighted while that window is open. On the collapsed rail it is the gear alone, with a tooltip.
+- **The daemon's state, in plain words** — **Connecting to the daemon…**, **Daemon running on port 8000**, **Daemon stopping** or **Daemon offline**. It always agrees with the offline banner: while the banner is up, the footer never reads as running. Click it to open **Settings → Daemon**.
+- **The language switcher.**
 
 ## Settings
 
-Settings has five tabs, in this order. Every field saves as you change it; there is no Save button.
+Settings opens as a large window over the page you are on, so closing it puts you back exactly where you were. Open it with the **Settings** row, with **⌘,** (**Ctrl+,**) when you are not typing in a field, or from the palette. Every field saves as you change it; there is no Save button.
 
-| Tab | Route | What it holds |
+It has five tabs, in this order:
+
+| Tab | Address | What it holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | **Preferences**: **Theme**, **Default rows per page** and **Preferred editor** (the app Coffer opens managed files with). **Coffer's daemon**: **Start at login** (macOS). **Experimental features**: switch Sync, Knowledge and Memory on or off for this machine. |
-| **Coffer's model** | `/settings/engine` | The model provider and model Coffer uses for its own passes, **Speech to text** for voice messages, and **Automatic upkeep** — the passes Coffer runs by itself and how often. |
-| **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
+| **General** | `/settings/general` | Display preferences — **Theme**, **Default rows per page**, **Preferred editor** (the app Coffer opens managed files with) — and **Coffer's model**: the model Coffer uses for its own passes, **Speech to text** for voice messages, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
 | **Security** | `/settings/security` | **Credential encryption**: whether the master key lives in a file beside the database or in the OS keychain. |
+| **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
+| **Daemon** | `/settings/daemon` | The daemon's state, port, version and when it started, and **Start at login** (macOS). |
 | **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. |
 
+**Each tab has its own address.** Opening a tab changes the URL to `/settings/<tab>`, so a bookmark or a shared link opens that tab directly. Close the window with **×**, **Escape**, a click outside it or the browser's **Back** button: you return to the page underneath, at its own address. If you load a `/settings/<tab>` address fresh, it opens over **Overview**, and closing it lands on `/`.
+
+**Old addresses still work.** `/settings/engine` and `/settings/embedding` open **General**; `/settings/llm-connections`, `/settings/models` and `/settings/providers` open **Model providers**; `/settings/sync` opens **Sync**.
+
 The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon and rotating its token are CLI-only (`coffer daemon stop`, `coffer daemon rotate-token`): stopping the daemon from the page would take the page down with it.
+
+## Resizing split views
+
+Wherever the window is split side by side — the sidebar against the page, and the conversation list against the open conversation — the two halves are divided by a thin line you can drag. The line lights up in the accent colour while you hover over or drag it.
+
+- **Drag** it to resize. **Double-click** it to go back to the default width.
+- **From the keyboard**, tab to the line and press **←** or **→** to move it in small steps.
+- **Limits keep both sides usable.** The sidebar stays between 200 and 300 pixels wide (220 by default). A list is at least 240 pixels and at most half the split, and the detail beside it keeps at least 480.
+- **Widths are remembered per page, in this browser.** It is a convenience only: another browser, the desktop app or a private window starts from the defaults, and nothing is sent to the daemon.
 
 ## Light and dark
 
@@ -88,7 +132,7 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 ## Conventions every page shares
 
-**URLs describe what you are looking at.** Every detail page is addressed by the resource's immutable uid — `/mcp-servers/<uid>`, `/skills/<uid>`, `/channels/<uid>` — so renaming a resource does not break a link to it. A page's tab is in the URL too, as `?tab=`: `/agents/<uid>?tab=conversations`, `/activity?tab=mcp`, `/sync?tab=setup`. The default tab leaves the parameter out. A refresh, a bookmark or a shared link reopens the same view. An open conversation is `/chat/<id>`.
+**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Agent pages, Activity and Sync still carry their tab as `?tab=` (`/agents/<uid>?tab=conversations`, `/activity?tab=mcp`, `/sync?tab=setup`) until they are rebuilt, and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>`.
 
 **Lists look and behave alike.** Every list page uses one table with search, filters, pagination and bulk selection, and clicking a row opens its detail page. Every row action is labelled.
 
@@ -96,13 +140,13 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 **Empty, loading and error states are explicit.** An empty list shows a welcome card with one next step, such as **Add MCP server**. A loading list keeps its header over skeleton rows. A failed request shows a readable message, never a generic error code.
 
-**Some paths redirect.** `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**; `/settings/providers` opens **Model providers**. Any other unknown path shows a page-not-found view with the sidebar intact.
+**Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a page-not-found view with the sidebar intact.
 
 File trees and previews — on the skill, knowledge, memory and agent pages — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
 ## When the daemon is not reachable
 
-If a request cannot reach the daemon while the UI is open, a banner floats at the top of the window and the sidebar stays usable:
+If a request cannot reach the daemon while the UI is open, a banner floats at the top of the window, the sidebar footer reads **Daemon offline**, and the sidebar stays usable:
 
 | Banner | When |
 | --- | --- |
@@ -116,6 +160,7 @@ The recovery the banner offers depends on the host. In a browser it shows the co
 
 - [Desktop app](/guides/desktop-app) — the same UI in a native macOS window.
 - [Running the daemon](/guides/daemon) — ports, login service and lifecycle.
+- [App shell](/architecture/app-shell) — why the sidebar is grouped the way it is, and how Settings, the palette and the footer are built.
 - [Security model](/architecture/security) — why the token lives in the page and what the host check protects.
 - [Spec: web-ui](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md)
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)

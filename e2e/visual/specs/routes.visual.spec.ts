@@ -1,6 +1,6 @@
 // e2e/visual/specs/routes.visual.spec.ts
 //
-// Visual baseline: each top-level sidebar route, in light and dark, on a fresh
+// Visual baseline: each sidebar route and the Settings modal, in light and dark, on a fresh
 // daemon, compared against the committed screenshot for this platform.
 // Pages behind an experimental gate render their gate notice — that notice is
 // the baseline for them until the feature is on by default.
@@ -21,16 +21,22 @@ interface RouteCase {
 }
 
 const ROUTES: RouteCase[] = [
+  { name: "overview", path: "/", finalPath: /\/$/ },
   { name: "agents", path: "/agents" },
-  { name: "chat", path: "/chat" },
+  { name: "model-providers", path: "/model-providers" },
+  { name: "conversations", path: "/conversations" },
+  { name: "channels", path: "/channels" },
   { name: "mcp-servers", path: "/mcp-servers" },
+  { name: "custom-tools", path: "/custom-tools" },
   { name: "skills", path: "/skills" },
+  { name: "clis", path: "/clis" },
   { name: "knowledge", path: "/knowledge" },
   { name: "memory", path: "/memory" },
-  { name: "model-providers", path: "/model-providers" },
-  { name: "channels", path: "/channels" },
-  { name: "sync", path: "/sync" },
+  { name: "secrets", path: "/secrets" },
   { name: "activity", path: "/activity" },
+  { name: "usage", path: "/usage" },
+  { name: "sync", path: "/sync" },
+  // Settings is a modal over the page underneath (Overview on a fresh load).
   { name: "settings", path: "/settings", finalPath: /\/settings\/general$/ },
 ];
 

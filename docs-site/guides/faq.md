@@ -22,7 +22,7 @@ See [Security model](/architecture/security).
 
 ## Which agents does Coffer support?
 
-Coffer manages **Claude Code** and **Codex**: it detects them, installs its MCP entry into them, delivers skills and memory, projects model providers into their configuration, and can run them from [Chat](/guides/chat) and [Channels](/guides/channels).
+Coffer manages **Claude Code** and **Codex**: it detects them, installs its MCP entry into them, delivers skills and memory, projects model providers into their configuration, and can run them from [Conversations](/guides/chat) and [Channels](/guides/channels).
 
 Any other MCP client that can launch a stdio server can still use Coffer's gateway by running `coffer-mcp-shim`. Such a session reports no agent identity, so it sees only servers whose reach is not restricted to particular agents. See [Connect a client](/guides/connect-a-client).
 
@@ -32,7 +32,7 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages, resolving a sync conflict), and they call a model provider you pick under **Settings → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), sync conflicts wait for you, and voice messages reach the agent as audio files.
+No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages, resolving a sync conflict), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), sync conflicts wait for you, and voice messages reach the agent as audio files.
 
 Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory notes with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 

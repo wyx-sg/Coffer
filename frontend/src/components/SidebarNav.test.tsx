@@ -1,11 +1,11 @@
 // frontend/src/components/SidebarNav.test.tsx
 // The sidebar's information architecture, which is a product decision and not
-// a styling one: what is a vault RESOURCE and what is something you DO.
+// a styling one: Overview, then five groups by what the user comes to do
+// (ADR sidebar-grouped-by-what-the-person-comes-to-do).
 //
-// Resources claims to list one entry per resource kind that has a list UI, so
-// that claim is what this pins down — a kind that grows a surface and never
-// reaches the rail is reachable only by typing its URL, and a row that outlives
-// its feature leads to a 404.
+// Several markers below still name the scenarios of the role-grouped sidebar
+// the change revise-web-ui-ia replaces; they move to that change's scenario
+// names (noted beside each) when it is archived (its task 7.1).
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
 import { render, waitFor, within } from "@testing-library/react";
@@ -15,7 +15,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
-import { routes } from "@/router";
+import { appRoutes } from "@/router";
 
 // The Sync entry carries an attention dot, which asks the daemon for the
 // vault's last round. Stub it; the dot's own rules live in
@@ -29,7 +29,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
 }));
 
 // Which experimental features the daemon reports on. Every one of them is on
-// unless a test says otherwise — the eleven-entry assertions below are about a
+// unless a test says otherwise — the fifteen-entry assertions below are about a
 // build with nothing switched off.
 const ALL_ON = { vault_sync: true, knowledge: true, memory: true };
 const features = vi.fn((): Record<string, boolean | undefined> => ALL_ON);
@@ -50,7 +50,7 @@ function renderNav(at = "/", collapsed = false) {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[at]}>
         <TooltipProvider>
-          <SidebarNav collapsed={collapsed} />
+          <SidebarNav collapsed={collapsed} pathname={at} />
         </TooltipProvider>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -76,39 +76,99 @@ function entryName(link: HTMLElement): string {
   return (link.textContent ?? "").replace(marker?.textContent ?? "", "");
 }
 
+/** The entries under no heading — Overview. */
+function ungrouped(): string[] {
+  const nav = document.querySelector("nav")!;
+  const first = nav.firstElementChild!;
+  return within(first as HTMLElement)
+    .getAllByRole("link")
+    .map((link) => entryName(link));
+}
+
 describe("SidebarNav", () => {
+  // revise-web-ui-ia: web-ui "each listed resource kind has one sidebar entry"
   acceptance("web-ui", "resources holds one entry per kind with a list", () => {
     renderNav();
 
-    expect(group("Resources").map(([name]) => name)).toEqual([
+    // Each listed resource kind has exactly one entry, filed by what the user
+    // does with it; there is no Resources heading any more.
+    expect(groupLabels()).not.toContain("Resources");
+    const all = Array.from(document.querySelectorAll("nav a")).map((a) =>
+      entryName(a as HTMLElement),
+    );
+    for (const name of [
       "MCP servers",
+      "Custom tools",
       "Skills",
       "Knowledge",
       "Memory",
       "Model providers",
       "Channels",
+    ]) {
+      expect(all.filter((n) => n === name)).toHaveLength(1);
+    }
+    expect(group("Capabilities").map(([name]) => name)).toEqual(
+      expect.arrayContaining(["MCP servers", "Custom tools", "Skills"]),
+    );
+    expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
+    expect(group("Agents").map(([name]) => name)).toContain("Model providers");
+    expect(group("Run").map(([name]) => name)).toContain("Channels");
+  });
+
+  test("Overview sits above the groups, under no heading", () => {
+    renderNav();
+
+    expect(ungrouped()).toEqual(["Overview"]);
+    expect(group("Agents")).toEqual([
+      ["Agents", "/agents"],
+      ["Model providers", "/model-providers"],
     ]);
   });
 
-  test("Agents holds what you DO with an agent, not vault assets", () => {
-    renderNav();
+  test("the index marks Overview only, and a detail page marks its list's entry", () => {
+    const home = renderNav("/");
+    expect(home.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+    expect(home.getByRole("link", { name: "Agents" })).not.toHaveAttribute("aria-current");
+    home.unmount();
 
-    expect(group("Agents")).toEqual([
-      ["Agents", "/agents"],
-      ["Chat", "/chat"],
-    ]);
+    const detail = renderNav("/skills/release-notes/delivery");
+    expect(detail.getByRole("link", { name: "Skills" })).toHaveAttribute("aria-current", "page");
+    expect(detail.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+  });
+
+  test("zh labels follow the glossary", async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("zh");
+    try {
+      renderNav();
+      expect(groupLabels()).toEqual(["智能体", "运行", "能力", "上下文", "系统"]);
+      expect(ungrouped()).toEqual(["总览"]);
+      expect(group("智能体").map(([name]) => name)).toEqual(["智能体", "模型提供商"]);
+      expect(group("运行").map(([name]) => name)).toEqual(["对话", "消息渠道"]);
+      expect(group("能力").map(([name]) => name)).toEqual([
+        "MCP 服务器",
+        "自定义工具",
+        "技能",
+        "命令行工具",
+      ]);
+      expect(group("上下文").map(([name]) => name)).toEqual(["知识", "记忆"]);
+      expect(group("系统").map(([name]) => name)).toEqual(["密钥", "活动", "用量", "同步"]);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });
 
 /** The leaf route a path resolves to in the app's real route table. */
 function leafRoute(path: string): string | undefined {
-  const matches = matchRoutes(routes, path) ?? [];
-  return matches[matches.length - 1]?.route.path;
+  const matches = matchRoutes(appRoutes, path) ?? [];
+  const route = matches[matches.length - 1]?.route;
+  return route?.index ? "" : route?.path;
 }
 
 /** Whether the leaf route a path resolves to only redirects somewhere else. */
 function isRedirect(path: string): boolean {
-  const matches = matchRoutes(routes, path) ?? [];
+  const matches = matchRoutes(appRoutes, path) ?? [];
   const element = matches[matches.length - 1]?.route.element;
   return isValidElement(element) && element.type === Navigate;
 }
@@ -117,25 +177,33 @@ function groupLabels(): string[] {
   return Array.from(document.querySelectorAll(".nav-group-label")).map((n) => n.textContent ?? "");
 }
 
+// revise-web-ui-ia: web-ui "the sidebar groups entries by what the user comes to do"
 acceptance("web-ui", "the sidebar groups agents, resources and system by role", () => {
   renderNav();
 
-  expect(groupLabels()).toEqual(["Agents", "Resources", "System"]);
-  expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat"]);
-  expect(group("Resources").map(([, href]) => href)).not.toContain("/agents");
-  expect(group("Resources").map(([name]) => name)).not.toContain("Agents");
-  expect(group("System").map(([name]) => name)).toEqual(["Activity", "Sync", "Settings"]);
+  expect(ungrouped()).toEqual(["Overview"]);
+  expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "Context", "System"]);
+  expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Model providers"]);
+  expect(group("Run").map(([name]) => name)).toEqual(["Conversations", "Channels"]);
+  expect(group("Capabilities").map(([name]) => name)).toEqual([
+    "MCP servers",
+    "Custom tools",
+    "Skills",
+    "CLIs",
+  ]);
+  expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
+  expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Usage", "Sync"]);
 });
 
 acceptance("web-ui", "every resource entry opens a list page of its own", () => {
   renderNav();
 
-  const hrefs = group("Resources").map(([, href]) => href!);
-  expect(hrefs).toHaveLength(6);
+  const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href")!);
+  expect(hrefs).toHaveLength(15);
   // The check below can tell a redirect apart: the retired /resources is one.
   expect(isRedirect("/resources")).toBe(true);
   const resolved = hrefs.map((href) => leafRoute(href));
-  // Each entry is its own list route — the path itself, never the catch-all.
+  // Each entry is its own route — the path itself, never the catch-all.
   resolved.forEach((route, i) => {
     expect(route).not.toBe("*");
     expect(`/${route}`).toBe(hrefs[i]);
@@ -149,13 +217,15 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
   renderNav();
 
   const links = Array.from(document.querySelectorAll("nav a"));
-  expect(links.length).toBe(11);
+  expect(links.length).toBe(15);
   for (const link of links) {
     const href = link.getAttribute("href");
     expect(href).toBeTruthy();
     expect(leafRoute(href!)).not.toBe("*");
     expect(link.textContent ?? "").not.toMatch(/soon|not yet|coming/i);
     expect(link).not.toHaveAttribute("aria-disabled", "true");
+    // Settings is a footer row, never an entry.
+    expect(href).not.toMatch(/^\/settings/);
   }
   expect(document.body.textContent ?? "").not.toMatch(/coming soon|not yet implemented/i);
 });
@@ -192,6 +262,15 @@ describe("the Sync attention dot", () => {
     syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
     const { findByTestId } = renderNav();
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
+  });
+
+  // revise-web-ui-ia: web-ui "an entry without a signal never carries a dot"
+  test("only an entry whose kind declares a signal carries the dot, with an accessible name", async () => {
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    const { findByTestId } = renderNav();
+    const dot = await findByTestId("nav-dot-sync");
+    expect(dot).toHaveAccessibleName("Needs your attention");
+    expect(document.querySelectorAll('[data-testid^="nav-dot-"]')).toHaveLength(1);
   });
 
   acceptance("vault-sync", "a held vault says so where the user already is", async () => {
@@ -231,15 +310,21 @@ describe("a switched-off experimental feature", () => {
     features.mockReturnValue({ vault_sync: false, knowledge: false, memory: true });
     renderNav();
 
-    expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat"]);
-    expect(group("Resources").map(([name]) => name)).toEqual([
-      "MCP servers",
-      "Skills",
-      "Memory",
-      "Model providers",
-      "Channels",
-    ]);
-    expect(group("System").map(([name]) => name)).toEqual(["Activity", "Settings"]);
+    expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Model providers"]);
+    expect(group("Context").map(([name]) => name)).toEqual(["Memory"]);
+    expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Usage"]);
+    const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/knowledge");
+    expect(hrefs).not.toContain("/sync");
+  });
+
+  // revise-web-ui-ia: web-ui "a group with every entry switched off leaves the sidebar"
+  test("a group with every entry switched off leaves its heading out", () => {
+    features.mockReturnValue({ vault_sync: true, knowledge: false, memory: false });
+    renderNav();
+
+    expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "System"]);
+    expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Usage", "Sync"]);
   });
 
   test("an entry whose feature is not known yet is left out rather than flashed in", () => {
@@ -250,7 +335,7 @@ describe("a switched-off experimental feature", () => {
     expect(hrefs).not.toContain("/knowledge");
     expect(hrefs).not.toContain("/memory");
     expect(hrefs).not.toContain("/sync");
-    expect(hrefs).toHaveLength(8);
+    expect(hrefs).toHaveLength(12);
   });
 
   test("switched-off sync neither polls nor raises the attention dot", () => {
@@ -276,7 +361,14 @@ describe("an experimental feature's entry", () => {
       for (const id of ["knowledge", "memory", "sync"]) {
         expect(getByTestId(`nav-experimental-${id}`)).toHaveTextContent("Experimental");
       }
-      for (const id of ["agents", "chat", "mcp-servers", "skills", "channels", "settings"]) {
+      for (const id of [
+        "overview",
+        "agents",
+        "conversations",
+        "mcp-servers",
+        "skills",
+        "channels",
+      ]) {
         expect(queryByTestId(`nav-experimental-${id}`)).toBeNull();
       }
     },

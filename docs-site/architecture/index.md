@@ -136,7 +136,7 @@ Most of Coffer's shape follows from a handful of decisions. Each one below is ar
 The same decisions rule things out, and knowing them saves proposing them:
 
 - **Not a hosted service.** There is no Coffer account and no cloud endpoint. The only remote is a git repository you own, and any one machine can rebuild it.
-- **Not an agent.** Coffer's own model calls are internal passes (curation, distillation, conflict resolution). The Chat page drives your installed agents; Coffer has no chat persona of its own.
+- **Not an agent.** Coffer's own model calls are internal passes (curation, distillation, conflict resolution). The Conversations page drives your installed agents; Coffer has no chat persona of its own.
 - **Not a retrieval engine.** Coffer embeds nothing and keeps no vector or full-text index. An import contract bans embedding libraries from the codebase.
 - **Not a policy engine.** Coffer does not approve individual tool calls. Curation happens ahead of time, through per-tool switches and reach, and a channel obeys only its paired owner.
 - **Not a plugin platform.** Kinds are wired explicitly at the composition root. A plugin contract needs several concrete implementations to design against, and a single-user tool has no ecosystem to serve.
@@ -184,7 +184,7 @@ The rest of the section is organised from the foundations outward.
 
 - [Daemon and processes](/architecture/daemon) — detect-or-spawn, the discovery file, residency, version skew.
 - [MCP gateway](/architecture/mcp-gateway) — aggregation, per-session upstreams, tiering and tool search.
-- [Chat and turns](/architecture/chat) — the turn platform shared by the Chat page and every channel.
+- [Chat and turns](/architecture/chat) — the turn platform shared by the Conversations page and every channel.
 - [The event stream](/architecture/event-stream) — one daemon-wide stream of invalidation hints that tells a page what changed, resumable across a dropped connection; growing lists page by cursor.
 - [Persistence](/architecture/persistence) — SQLite, migrations, and what lives on disk instead.
 
@@ -194,7 +194,7 @@ The rest of the section is organised from the foundations outward.
 
 **Cross-cutting** concerns apply everywhere.
 
-- [Security model](/architecture/security), [Observability](/architecture/observability), [Distribution and releases](/architecture/distribution), and the index of [decision records](/architecture/decisions).
+- [Security model](/architecture/security), [Observability](/architecture/observability), [App shell](/architecture/app-shell), [Distribution and releases](/architecture/distribution), and the index of [decision records](/architecture/decisions).
 
 ## Where it lives in the code
 

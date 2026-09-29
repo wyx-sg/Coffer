@@ -3,10 +3,13 @@
 // a back link, the skill's name and the fixed-name badge, reach + Delete as
 // actions, and two tabs — Overview and Files (a
 // tree + content viewer of the skill's master folder, read-only for a builtin
-// skill since Coffer rewrites it at every start). The open tab
-// lives in the URL (`?tab=`), so a reload lands on the same tab.
+// skill since Coffer rewrites it at every start). The page is addressed by
+// the skill's NAME (fixed at creation, unique among skills) and the open tab
+// lives in the path (`/skills/<name>/files`), so a reload lands on the same
+// tab. The REST API addresses a skill by uid, so the name is resolved against
+// the skills list; an old uid address redirects to the name address.
 import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Sparkles, Trash2 } from "lucide-react";
 
@@ -21,35 +24,51 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
-import { useRemoveSkill, useSkill } from "@/lib/hooks/useSkills";
+import { canonicalDetailPath, resolveByName, useDetailTab } from "@/lib/detailTabs";
+import { useRemoveSkill, useSkill, useSkills } from "@/lib/hooks/useSkills";
+
+const TABS = ["overview", "files"] as const;
 
 export function SkillDetailPage() {
   const { t } = useTranslation();
-  const { uid = "" } = useParams<{ uid: string }>();
+  const { name: nameParam = "", tab: pathTab } = useParams<{ name: string; tab?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   // When navigated here from an agent's Skills tab, location.state carries a
   // return target, so "← back" leads to that agent rather than the list.
-  const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
+  const backState = location.state as { backTo?: string; backLabel?: string } | null;
   const back = backState?.backTo
     ? { to: backState.backTo, label: t("common.backTo", { label: backState.backLabel ?? "" }) }
     : { to: "/skills", label: t("skills.detail.back") };
-  const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "overview";
+  const list = useSkills();
+  const match = resolveByName(list.data, nameParam);
+  const uid = match?.item.uid ?? "";
   const { data: skill, isPending, error } = useSkill(uid);
   const remove = useRemoveSkill();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const basePath = `/skills/${encodeURIComponent(nameParam)}`;
+  const [tab, setTab] = useDetailTab(TABS, "overview", basePath, {
+    enabled: !!match && !match.byUid,
+  });
 
-  const setTab = (next: string) =>
-    setParams(
-      (prev) => {
-        if (next === "overview") prev.delete("tab");
-        else prev.set("tab", next);
-        return prev;
-      },
-      { replace: true },
+  // An old uid address: go to the same tab of the name address.
+  if (match?.byUid) {
+    return (
+      <Navigate
+        replace
+        state={location.state}
+        to={canonicalDetailPath(
+          `/skills/${encodeURIComponent(match.item.name)}`,
+          pathTab,
+          location.search,
+          TABS,
+          "overview",
+        )}
+      />
     );
+  }
 
-  if (isPending) {
+  if (list.isPending || (!!uid && isPending)) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
@@ -58,12 +77,13 @@ export function SkillDetailPage() {
       </Card>
     );
   }
-  if (error || !skill) {
+  if (list.error || error || !skill) {
+    const failure = list.error ?? error;
     return (
       <EmptyState
         icon={Sparkles}
         title={t("skills.loadFailed")}
-        description={error ? translateApiError(t, error) : undefined}
+        description={failure ? translateApiError(t, failure) : undefined}
         action={
           <Button variant="outline" asChild>
             <Link to="/skills">

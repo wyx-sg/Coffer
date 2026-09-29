@@ -1,6 +1,7 @@
 // frontend/src/pages/detailTabs.test.tsx
 // Every detail page lays its tabs out the same way: one shared tab strip, the
-// open tab named in the URL (`?tab=`), and switching tab rewriting that URL.
+// open tab named in the path (`/<kind>/<id>/<tab>`, the default tab at the
+// bare `/<kind>/<id>`), and switching tab rewriting that path.
 // Checked on two detail pages of different kinds side by side.
 import { afterEach, expect, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -21,6 +22,7 @@ vi.mock("@/components/mcp/InvocationsTable", () => ({
   InvocationsTable: () => <div>invocations</div>,
 }));
 vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: vi.fn(() => ({ data: [SKILL], isPending: false, error: null })),
   useSkill: vi.fn(),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -61,9 +63,10 @@ const SKILL: SkillOut = {
   bindings: [],
 };
 
-const where = { search: "" };
+const where = { url: "" };
 function Probe() {
-  where.search = useLocation().search;
+  const loc = useLocation();
+  where.url = loc.pathname + loc.search;
   return null;
 }
 
@@ -102,12 +105,13 @@ function strip() {
 }
 
 acceptance("web-ui", "detail pages share one tab layout", () => {
-  // An MCP server's detail tabs, opened on Tools by the URL.
+  // An MCP server's detail tabs, opened on Tools by the path.
   const mcp = renderRoute(
-    "/mcp-servers/u-1?tab=tools",
-    "/mcp-servers/:uid",
+    "/mcp-servers/srv/tools",
+    "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       serverUid="u-1"
+      basePath="/mcp-servers/srv"
       capabilities={undefined}
       config={{ transport: { type: "stdio", command: "npx" } }}
       isCapsPending={false}
@@ -117,32 +121,33 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
   const mcpStrip = strip();
   expect(mcpStrip.selected).toHaveTextContent("Tools");
   fireEvent.mouseDown(within(mcpStrip.list).getByRole("tab", { name: "Prompts" }));
-  expect(where.search).toBe("?tab=prompts");
+  expect(where.url).toBe("/mcp-servers/srv/prompts");
   const mcpClass = mcpStrip.list.className;
   mcp.unmount();
 
-  // A skill's detail page, opened on Files by the URL.
+  // A skill's detail page, opened on Files by the path.
   vi.mocked(skillHooks.useSkill).mockReturnValue({
     data: SKILL,
     isPending: false,
     error: null,
   } as unknown as ReturnType<typeof skillHooks.useSkill>);
-  renderRoute("/skills/sk-1?tab=files", "/skills/:uid", <SkillDetailPage />);
+  renderRoute("/skills/hello/files", "/skills/:name/:tab?", <SkillDetailPage />);
   const skillStrip = strip();
   expect(skillStrip.selected).toHaveTextContent("Files");
   fireEvent.mouseDown(within(skillStrip.list).getByRole("tab", { name: "Overview" }));
-  // The default tab is the bare URL on both pages.
-  expect(where.search).toBe("");
+  // The default tab is the bare address on both pages.
+  expect(where.url).toBe("/skills/hello");
 
   expect(skillStrip.list.className).toBe(mcpClass);
 });
 
 acceptance("web-ui", "a server's detail page opens on its Overview", () => {
   renderRoute(
-    "/mcp-servers/u-1",
-    "/mcp-servers/:uid",
+    "/mcp-servers/srv",
+    "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       serverUid="u-1"
+      basePath="/mcp-servers/srv"
       capabilities={undefined}
       config={{ transport: { type: "stdio", command: "npx", args: ["-y", "srv"] } }}
       isCapsPending={false}

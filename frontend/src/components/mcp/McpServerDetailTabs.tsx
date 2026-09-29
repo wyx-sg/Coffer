@@ -1,5 +1,4 @@
-// frontend/src/components/mcp/McpServerDetailTabs.tsx
-import { useSearchParams } from "react-router-dom";
+// frontend/src/components/mcp/McpServerDetailTabs.tsx — the tab strip and panes of one MCP server's detail page.
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,11 +8,15 @@ import { CodeView } from "@/components/preview/CodeView";
 import { CapabilityList } from "./CapabilityList";
 import { InvocationsTable } from "./InvocationsTable";
 import type { components } from "@/lib/api/types";
+import { useDetailTab } from "@/lib/detailTabs";
+import { MCP_SERVER_TABS } from "./mcpServerTabs";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
 interface Props {
   serverUid: string;
+  /** The page's bare address (`/mcp-servers/<name>`); a tab is a segment under it. */
+  basePath: string;
   capabilities: CapabilityListOut | undefined;
   capsError?: unknown;
   config: unknown;
@@ -46,6 +49,7 @@ function extractOverview(config: unknown): OverviewFields {
 
 export function McpServerDetailTabs({
   serverUid,
+  basePath,
   capabilities,
   capsError,
   config,
@@ -54,21 +58,10 @@ export function McpServerDetailTabs({
 }: Props) {
   const { t } = useTranslation();
   const overview = extractOverview(config);
-  // The open tab lives in the URL (`?tab=`), so a reload or a shared link
-  // lands on the same tab — addressable state belongs to the router, not to
-  // component state (.agents/frontend.md).
-  const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "overview";
-  const setTab = (next: string) => {
-    setParams(
-      (prev) => {
-        if (next === "overview") prev.delete("tab");
-        else prev.set("tab", next);
-        return prev;
-      },
-      { replace: true },
-    );
-  };
+  // The open tab lives in the path (`<basePath>/tools`), so a reload or a
+  // shared link lands on the same tab — addressable state belongs to the
+  // router, not to component state (.agents/frontend.md).
+  const [tab, setTab] = useDetailTab(MCP_SERVER_TABS, "overview", basePath);
 
   return (
     <Tabs value={tab} onValueChange={setTab}>
