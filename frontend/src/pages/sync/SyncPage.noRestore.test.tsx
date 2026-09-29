@@ -2,7 +2,7 @@
 //
 // Restoring at a point in time stays a CLI operation: `--at` names a revision
 // in the remote's history, which no route exposes, so a page could only offer
-// a blind date box. This renders the real Runs and Setup tabs — a configured
+// a blind date box. This renders the real Runs, Setup and Machines tabs — a configured
 // remote, a history with an applied round — and looks for any way to restore.
 import { afterEach, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -140,12 +140,22 @@ acceptance("vault-sync", "no page offers a point-in-time restore", () => {
   assertNoRestore();
   view.unmount();
 
-  // Setup: the remote, the master key and the machines.
-  render(
+  // Setup: the remote and the master key.
+  const setup = render(
     <MemoryRouter initialEntries={["/sync?tab=setup"]}>
       <SyncPage />
     </MemoryRouter>,
   );
   expect(screen.getByDisplayValue("https://git.example.com/me/vault.git")).toBeInTheDocument();
+  assertNoRestore();
+  setup.unmount();
+
+  // Machines: the registry.
+  render(
+    <MemoryRouter initialEntries={["/sync?tab=machines"]}>
+      <SyncPage />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole("tab", { name: "Machines" })).toHaveAttribute("aria-selected", "true");
   assertNoRestore();
 });

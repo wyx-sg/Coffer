@@ -1,12 +1,11 @@
 // frontend/src/pages/sync/SyncPage.test.tsx
 //
-// Sync is a top-level page with two tabs — Runs and Setup — and it opens on
-// Runs, because what a person opens Sync to find out is whether it is working.
+// Sync is a top-level page with three tabs — Runs, Setup and Machines — and it
+// opens on Runs, because what a person opens Sync to find out is whether it is
+// working.
 //
-// There were three. Status is gone: its two banners were a conflict and a held
-// round, and neither is a state beside the history — each is the newest row OF
-// it. Machines folded into Setup because pointing at a remote, carrying the key
-// across and watching the second machine appear are one errand.
+// Status is gone: its two banners were a conflict and a held round, and neither
+// is a state beside the history — each is the newest row OF it.
 //
 // The active tab is in the URL, so a link can land on Setup and a reload comes
 // back where it was.
@@ -20,6 +19,7 @@ import { SyncPage } from "./SyncPage";
 
 vi.mock("./SyncRunsTab", () => ({ SyncRunsTab: () => <div>runs tab</div> }));
 vi.mock("./SyncSetupTab", () => ({ SyncSetupTab: () => <div>setup tab</div> }));
+vi.mock("./SyncMachinesTab", () => ({ SyncMachinesTab: () => <div>machines tab</div> }));
 
 let search = "";
 function Probe() {
@@ -37,11 +37,11 @@ function renderAt(url = "/sync") {
 }
 
 describe("SyncPage", () => {
-  test("renders Runs and Setup, opening on Runs", () => {
+  test("renders Runs, Setup and Machines, opening on Runs", () => {
     renderAt();
     const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(2);
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Runs", "Setup"]);
+    expect(tabs).toHaveLength(3);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Runs", "Setup", "Machines"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("runs tab")).toBeInTheDocument();
   });
@@ -64,30 +64,34 @@ describe("SyncPage", () => {
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Setup" }));
     await waitFor(() => expect(search).toBe("?tab=setup"));
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Machines" }));
+    await waitFor(() => expect(search).toBe("?tab=machines"));
+    expect(screen.getByText("machines tab")).toBeInTheDocument();
   });
 
   test("a link to a tab that no longer exists lands on Runs rather than nowhere", () => {
-    // `?tab=status`, `?tab=history` and `?tab=machines` are all in someone's
-    // history or a bookmark. None of them may render an empty page.
-    for (const stale of ["status", "history", "machines", "nope"]) {
+    // `?tab=status` and `?tab=history` are in someone's history or a
+    // bookmark. Neither may render an empty page.
+    for (const stale of ["status", "history", "nope"]) {
       const view = renderAt(`/sync?tab=${stale}`);
       expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
       expect(screen.getByText("runs tab")).toBeInTheDocument();
       view.unmount();
     }
   });
-  acceptance("vault-sync", "the Sync page opens on Runs beside Setup and nothing else", () => {
+  acceptance("vault-sync", "the Sync page opens on Runs beside Setup and Machines", () => {
     const view = renderAt();
     const tabs = screen.getAllByRole("tab");
-    // Exactly two tabs — no Status tab beside them.
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Runs", "Setup"]);
+    // Exactly three tabs — no Status tab beside them.
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Runs", "Setup", "Machines"]);
     expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("runs tab")).toBeInTheDocument();
     view.unmount();
 
     // A link to the retired Status tab lands on Runs.
     renderAt("/sync?tab=status");
-    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
     expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("runs tab")).toBeInTheDocument();
   });

@@ -97,6 +97,10 @@ const NAV_GROUPS: NavGroup[] = [
 function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; dot: boolean }) {
   const { t } = useTranslation();
   const label = t(item.labelKey);
+  // An experimental feature's entry says so, so nobody takes it for a
+  // finished part of the product (spec experimental-features "Mark an
+  // experimental feature's sidebar entry").
+  const experimental = item.feature !== undefined;
   // A plain Link + useMatch rather than NavLink: NavLink's className callback
   // cannot pass through TooltipTrigger's Slot (it stringifies functions).
   const isActive = useMatch({ path: item.to, end: false }) !== null;
@@ -115,6 +119,14 @@ function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; d
     >
       <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
+      {experimental && !collapsed ? (
+        <span
+          data-testid={`nav-experimental-${item.to.replace(/\//g, "")}`}
+          className="shrink-0 rounded border border-border px-1 text-[10px] font-normal leading-4 text-muted-foreground"
+        >
+          {t("nav.experimental")}
+        </span>
+      ) : null}
       {/* A dot, not a count: what is waiting is one situation to look at, and
           a number here would be the number of times the timer re-raised it.
           On a collapsed rail it rides the icon, which is all there is. */}
@@ -134,7 +146,9 @@ function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; d
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right">
+        {experimental ? t("nav.experimentalLabel", { label }) : label}
+      </TooltipContent>
     </Tooltip>
   );
 }

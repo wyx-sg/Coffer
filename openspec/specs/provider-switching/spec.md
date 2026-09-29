@@ -425,7 +425,13 @@ The web surfaces:
 - **Model providers** (route `/model-providers`, in the sidebar's RESOURCES group; the old
   `/settings/models`, `/settings/providers` and `/settings/llm-connections` routes redirect there) is
   the connection library: a table of name / vendor / base URL / reach, an Add action and Delete per
-  row. It has no per-row switch, because activation is per agent, and no internal-engine badge. The
+  row. It has no per-row switch, because activation is per agent. A row MUST say what Coffer ITSELF
+  uses the connection for: the `internal_default` connection carries a "Coffer · background model"
+  badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with a hint
+  naming where it is changed, and the connection's detail header repeats them. The labels lead with
+  Coffer because a bare "Speech to text" reads as a capability of the provider rather than a job
+  Coffer gives it; the "Active" badge is a different fact — an agent is switched to the connection —
+  and its hint says so. The
   vendor column and its filter are derived from `base_url` by matching the preset list (an unmatched
   endpoint reads as Custom); the name column keeps the user's own name, and the row links to the
   detail page by `uid`.
@@ -461,6 +467,11 @@ The web surfaces:
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,
 - **THEN** it lists both connections with their endpoints, marks the active one, and shows each connection's reach in the Reach column's own control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per-agent on the Agent Overview tab (TypeScript acceptance test).
+
+#### Scenario: the library names the connections Coffer itself uses
+- **GIVEN** connection A is the internal-engine default, connection B is the speech-to-text default, and connection C carries neither flag
+- **WHEN** the Model providers library is opened
+- **THEN** A's row carries the "Coffer · background model" badge, B's row the "Coffer · speech to text" badge, and C's row neither (TypeScript acceptance test)
 
 ### Requirement: Require a connection or a wire for the key command
 The CLI `key` subcommand MUST accept `--connection-uid <uid>` as its primary form and `--wire <wire>`

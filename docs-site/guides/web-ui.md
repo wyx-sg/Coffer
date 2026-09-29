@@ -55,7 +55,7 @@ The sidebar groups pages by role: **Agents** are the consumers, **Resources** ar
 | Resources | **Model providers** | `/model-providers` | Vendor endpoints and their keys. See [Model providers](/guides/providers). |
 | Resources | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM. See [Channels](/guides/channels). |
 | System | **Activity** | `/activity` | What changed, what was called and what the daemon logged, as three tabs: **Changes**, **MCP calls** and **Daemon**. See [Activity and audit](/guides/activity). |
-| System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs** and **Setup** tabs. See [Vault sync](/guides/vault-sync). |
+| System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs**, **Setup** and **Machines** tabs. See [Vault sync](/guides/vault-sync). |
 | System | **Settings** | `/settings` | Preferences, Coffer's own model, retention, encryption and version. |
 
 **Knowledge**, **Memory** and **Sync** are experimental features. When one is switched off, its sidebar entry disappears, and following a link to its page shows a notice with **Open Settings → General** instead. See [Experimental features](/guides/experimental-features).
