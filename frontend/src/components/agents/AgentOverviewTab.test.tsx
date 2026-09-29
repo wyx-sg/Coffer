@@ -52,6 +52,12 @@ const agent: AgentOut = {
   type: "claude_code",
   config_dir: "/home/me/.claude",
   description: null,
+  title: null,
+  model: null,
+  fast_model: null,
+  wire_api: null,
+  version: null,
+  state: "installed_active",
   created_at: "",
   updated_at: "",
 };
@@ -67,6 +73,7 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     base_url: "https://api.anthropic.com",
     credential_ref: "ref",
     is_active: true,
+    title: null,
     internal_default: false,
     transcribe_default: false,
     // No curated model set by default — the picker introspects the endpoint.

@@ -48,9 +48,7 @@ export function daemonNotReadyResponse(): Response {
 }
 
 /** The error envelope shape openapi-fetch returns on a non-2xx response. */
-type ErrorEnvelope =
-  | { error?: { code?: string; message?: string; details?: unknown } }
-  | undefined;
+type ErrorEnvelope = { error?: { code?: string; message?: string; details?: unknown } } | undefined;
 
 /**
  * Throw a typed {@link ApiError} from an openapi-fetch error envelope,

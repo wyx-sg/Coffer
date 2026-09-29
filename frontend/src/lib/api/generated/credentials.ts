@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/credentials": {
+    "/api/v1/credentials": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,48 +12,76 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List every credential ref a registered resource cites, with its presence.
-         * @description Refs are gathered from every kind's credential extractor (MCP server
-         *     headers, channel bot tokens, provider API keys, ...), sorted by ref.
-         *     Presence only — no value is decrypted, so nothing is audited.
+         * List Cited Refs
+         * @description Every credential ref a registered resource cites, with its presence.
+         *
+         *     Refs come from every kind's credential extractor (MCP server headers,
+         *     channel bot tokens, provider API keys, ...), so a vault restored without
+         *     its secrets can say which ones are missing. Presence only — no value is
+         *     decrypted, so nothing is audited.
          */
-        get: operations["listCitedCredentials"];
+        get: operations["list_cited_refs_api_v1_credentials_get"];
         put?: never;
-        /** Store a secret in the Fernet-encrypted credential store under a reference key. */
-        post: operations["setCredential"];
+        /**
+         * Set Secret
+         * @description Store `value` under `ref` in the encrypted credential store.
+         */
+        post: operations["set_secret_api_v1_credentials_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/credentials/{ref}": {
+    "/api/v1/credentials/{ref}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read a secret value from the encrypted credential store (audited). */
-        get: operations["getCredential"];
+        /**
+         * Get Secret
+         * @description Return the secret value stored under `ref`.
+         *
+         *     Reading a value out is audited (ref only — the value never reaches the
+         *     audit row), so explicit secret reads leave a trail. 404 when absent.
+         */
+        get: operations["get_secret_api_v1_credentials__ref__get"];
         put?: never;
         post?: never;
-        /** Remove a secret from the encrypted credential store. Idempotent. */
-        delete: operations["deleteCredential"];
+        /**
+         * Delete Secret
+         * @description Remove `ref` from the credential store. Idempotent — absent is fine,
+         *     and audited only when a row was actually removed.
+         *
+         *     Refuses with 409 CREDENTIAL_IN_USE when a resource config still references
+         *     this credential: deleting it would silently break that channel / model /
+         *     mcp_server, whose config only keeps the credential ref. The 409 names the
+         *     citing resources so the user knows what to detach first.
+         */
+        delete: operations["delete_secret_api_v1_credentials__ref__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/credentials/{ref}/exists": {
+    "/api/v1/credentials/{ref}/exists": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Report whether a secret is stored under a ref (no value returned). */
-        get: operations["credentialExists"];
+        /**
+         * Secret Exists
+         * @description Report whether a secret is stored under `ref`.
+         *
+         *     Presence only — the value is never decrypted or read out for this check,
+         *     so no audit event is recorded and a corrupt (undecryptable) row can't
+         *     500 the probe; it still reports present.
+         */
+        get: operations["secret_exists_api_v1_credentials__ref__exists_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -62,17 +90,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/settings/credentials": {
+    "/api/v1/settings/credentials": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Report where the credential master key is stored. */
-        get: operations["getCredentialSettings"];
-        /** Relocate the credential master key (file <-> OS keychain). */
-        put: operations["putCredentialSettings"];
+        /**
+         * Get Credential Settings
+         * @description Report where the master key currently lives.
+         */
+        get: operations["get_credential_settings_api_v1_settings_credentials_get"];
+        /**
+         * Put Credential Settings
+         * @description Relocate the master key. Idempotent; the move itself is audited.
+         *
+         *     Moving to "keychain" may trigger one OS authorisation prompt — the
+         *     keychain write runs off the event loop.
+         */
+        put: operations["put_credential_settings_api_v1_settings_credentials_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -84,96 +121,128 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        CredentialSetIn: {
-            /** @description Reference key the secret is stored under. */
-            ref: string;
-            /** @description The secret value. Persisted Fernet-encrypted; audit rows carry the ref only. */
-            value: string;
+        /**
+         * CredentialCiterOut
+         * @description A resource citing a credential ref — identity and label, never config.
+         */
+        CredentialCiterOut: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
         };
-        CredentialGetOut: {
-            /** @description The stored secret value (decrypted in memory, never logged). */
-            value: string;
-        };
+        /**
+         * CredentialExistsOut
+         * @description Presence-only response — never carries the secret value.
+         */
         CredentialExistsOut: {
-            /** @description Whether a secret is stored under the ref. */
+            /**
+             * Present
+             * @description Whether a secret is stored under the ref.
+             */
             present: boolean;
         };
+        /**
+         * CredentialGetOut
+         * @description Secret-value response for an explicit read from the credential store.
+         */
+        CredentialGetOut: {
+            /**
+             * Value
+             * @description The stored secret value.
+             */
+            value: string;
+        };
+        /**
+         * CredentialListOut
+         * @description Every ref a registered resource cites, of any kind, sorted by ref.
+         */
         CredentialListOut: {
+            /** Refs */
             refs: components["schemas"]["CredentialRefOut"][];
         };
+        /**
+         * CredentialRefOut
+         * @description One cited credential ref and whether the store holds it.
+         */
         CredentialRefOut: {
-            /** @description A credential ref cited by at least one registered resource. */
-            ref: string;
-            /** @description Whether a secret is stored under the ref. */
-            present: boolean;
+            /** Cited By */
             cited_by: components["schemas"]["CredentialCiterOut"][];
-        };
-        CredentialCiterOut: {
-            uid: string;
-            kind: string;
-            name: string;
-        };
-        CredentialSettingsOut: {
             /**
-             * @description file = master.key beside the DB (default); keychain = OS keychain entry.
+             * Present
+             * @description Whether a secret is stored under the ref.
+             */
+            present: boolean;
+            /** Ref */
+            ref: string;
+        };
+        /**
+         * CredentialSetIn
+         * @description Request body for storing a secret in the credential store.
+         *
+         *     Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+         *     persisted; audit rows carry the ref only.
+         */
+        CredentialSetIn: {
+            /**
+             * Ref
+             * @description Reference key the secret is stored under. Slash-separated segments are allowed (e.g. channel/tg/bot-token).
+             */
+            ref: string;
+            /**
+             * Value
+             * @description The secret value.
+             */
+            value: string;
+        };
+        /**
+         * CredentialSettingsIn
+         * @description Request body to relocate the master key.
+         */
+        CredentialSettingsIn: {
+            /**
+             * Master Key Storage
              * @enum {string}
              */
             master_key_storage: "file" | "keychain";
         };
-        CredentialSettingsIn: {
-            /** @enum {string} */
+        /**
+         * CredentialSettingsOut
+         * @description Where the credential-store master key currently lives.
+         */
+        CredentialSettingsOut: {
+            /**
+             * Master Key Storage
+             * @description file = ~/.coffer/master.key (default); keychain = OS keychain entry.
+             * @enum {string}
+             */
             master_key_storage: "file" | "keychain";
         };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
         ErrorResponse: {
-            error: {
-                /** @example CREDENTIAL_IN_USE */
-                code: string;
-                /** @example credential 'github-token' is referenced by: mcp_server:github */
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
+            error: components["schemas"]["ErrorDetail"];
         };
     };
-    responses: {
-        /** @description Malformed request */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Missing or invalid token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description No secret is stored under this ref */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description The credential is still cited by a registered resource */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -181,16 +250,18 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listCitedCredentials: {
+    list_cited_refs_api_v1_credentials_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Every cited ref, whether the store holds it, and who cites it. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -199,13 +270,33 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    setCredential: {
+    set_secret_api_v1_credentials_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -215,20 +306,40 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Secret stored. Ciphertext persisted in the local DB; audit row carries the ref only. */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getCredential: {
+    get_secret_api_v1_credentials__ref__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
                 ref: string;
             };
@@ -236,7 +347,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The stored secret value (decrypted in memory, never logged). */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -245,14 +356,33 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialGetOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteCredential: {
+    delete_secret_api_v1_credentials__ref__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
                 ref: string;
             };
@@ -260,21 +390,39 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Secret removed (or already absent). */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            409: components["responses"]["Conflict"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    credentialExists: {
+    secret_exists_api_v1_credentials__ref__exists_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
                 ref: string;
             };
@@ -282,7 +430,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Presence flag. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -291,19 +439,38 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialExistsOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getCredentialSettings: {
+    get_credential_settings_api_v1_settings_credentials_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -312,13 +479,33 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialSettingsOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    putCredentialSettings: {
+    put_credential_settings_api_v1_settings_credentials_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -328,7 +515,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -337,7 +524,24 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialSettingsOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
 }

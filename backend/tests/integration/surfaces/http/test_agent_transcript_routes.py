@@ -140,7 +140,7 @@ def test_lists_sessions_newest_activity_first(client: TestClient, tmp_path: path
     body = r.json()
     assert body["total"] == 3
     assert body["limit"] == 100
-    assert body["offset"] == 0
+    assert body["next_cursor"] is None
     assert [s["session_id"] for s in body["sessions"]] == ["a", "c", "b"]
     first = body["sessions"][0]
     assert first["title"] == "fix the alpha login bug"
@@ -202,14 +202,55 @@ def test_pagination_pages_against_the_matched_total(
     client: TestClient, tmp_path: pathlib.Path
 ) -> None:
     uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    params = {"sort": "started_at", "order": "asc", "limit": 1}
+    first = client.get(f"/api/v1/agents/{uid}/transcripts", params=params).json()
+    assert [s["session_id"] for s in first["sessions"]] == ["a"]
     body = client.get(
         f"/api/v1/agents/{uid}/transcripts",
-        params={"sort": "started_at", "order": "asc", "limit": 1, "offset": 1},
+        params={**params, "cursor": first["next_cursor"]},
     ).json()
     assert body["total"] == 3
     assert body["limit"] == 1
-    assert body["offset"] == 1
     assert [s["session_id"] for s in body["sessions"]] == ["b"]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="a new transcript session does not shift the next page",
+)
+def test_a_new_session_does_not_shift_the_next_page(
+    client: TestClient, tmp_path: pathlib.Path
+) -> None:
+    uid, sessions = _register_codex_with_transcripts(client, tmp_path)
+    params = {"sort": "last_activity_at", "limit": 2}
+    first = client.get(f"/api/v1/agents/{uid}/transcripts", params=params).json()
+    assert [s["session_id"] for s in first["sessions"]] == ["a", "c"]
+    # A new session, newer than all of them, lands at the head of the order.
+    _write_codex_session(
+        sessions,
+        sid="d",
+        cwd="/proj/delta",
+        ts_start="2026-05-10T00:00:00Z",
+        ts_end="2026-05-10T01:00:00Z",
+        user_text="start delta",
+    )
+    second = client.get(
+        f"/api/v1/agents/{uid}/transcripts", params={**params, "cursor": first["next_cursor"]}
+    ).json()
+    assert [s["session_id"] for s in second["sessions"]] == ["b"]
+    assert second["next_cursor"] is None
+    assert second["total"] == 4  # the new one is counted, just not on this page
+
+
+def test_a_cursor_from_another_sort_is_refused(client: TestClient, tmp_path: pathlib.Path) -> None:
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    first = client.get(f"/api/v1/agents/{uid}/transcripts", params={"limit": 1}).json()
+    r = client.get(
+        f"/api/v1/agents/{uid}/transcripts",
+        params={"limit": 1, "sort": "message_count", "cursor": first["next_cursor"]},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "CURSOR_INVALID"
 
 
 def test_agent_with_no_transcripts_lists_empty(client: TestClient, tmp_path: pathlib.Path) -> None:
@@ -219,7 +260,7 @@ def test_agent_with_no_transcripts_lists_empty(client: TestClient, tmp_path: pat
     r = client.post("/api/v1/agents", json={"type": "codex", "name": "cx"})
     assert r.status_code == 201, r.text
     body = client.get(f"/api/v1/agents/{r.json()['uid']}/transcripts").json()
-    assert body == {"sessions": [], "total": 0, "limit": 100, "offset": 0}
+    assert body == {"sessions": [], "total": 0, "limit": 100, "next_cursor": None}
 
 
 def test_unknown_agent_is_404(client: TestClient) -> None:

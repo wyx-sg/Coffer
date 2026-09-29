@@ -15,7 +15,9 @@ Coverage:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -145,6 +147,42 @@ def test_conversation_crud_roundtrip() -> None:
         assert resp.status_code == 404
         body = resp.json()
         assert body["error"]["code"] == "CONVERSATION_NOT_FOUND"
+
+    set_active_token(None)
+
+
+@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
+def test_the_conversation_list_pages_by_cursor() -> None:
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        made = [
+            client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"}).json()["id"]
+            for _ in range(3)
+        ]
+        # Pin distinct activity times so "latest activity" is unambiguous.
+        base = datetime(2026, 9, 1, tzinfo=UTC)
+        for minutes, conv_id in enumerate(made):
+            asyncio.run(chat_svc._conversations.touch(conv_id, base + timedelta(minutes=minutes)))
+
+        first = client.get("/api/v1/chat/conversations", params={"limit": 2}).json()
+        assert [c["id"] for c in first["conversations"]] == [made[2], made[1]]
+        assert first["next_cursor"]
+        rest = client.get(
+            "/api/v1/chat/conversations", params={"limit": 2, "cursor": first["next_cursor"]}
+        ).json()
+        assert [c["id"] for c in rest["conversations"]] == [made[0]]
+        assert rest["next_cursor"] is None
+
+        # A cursor from the active listing does not page the archived one.
+        refused = client.get(
+            "/api/v1/chat/conversations",
+            params={"archived": "true", "cursor": first["next_cursor"]},
+        )
+        assert refused.status_code == 400
+        assert refused.json()["error"]["code"] == "CURSOR_INVALID"
 
     set_active_token(None)
 

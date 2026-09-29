@@ -92,6 +92,8 @@ const makeConv = (overrides?: Partial<Conversation>): Conversation => ({
   id: "conv-1",
   agent_key: "claude_code",
   title: "Test Conv",
+  archived_at: null,
+  channel_binding: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   ...overrides,

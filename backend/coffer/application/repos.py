@@ -74,6 +74,7 @@ class AuditRepo(Protocol):
         event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
     ) -> list[AuditEntry]: ...
 
 

@@ -40,6 +40,9 @@ export type Conversation = Schemas["ConversationOut"];
 
 export type ConversationListOut = Schemas["ConversationListOut"];
 
+/** One page of the listing: its rows and the cursor for the next (null last). */
+type ConversationPage = ConversationListOut & { next_cursor?: string | null };
+
 export type ConversationCreate = Schemas["ConversationCreate"];
 
 export type ConversationPatch = Schemas["ConversationPatch"];
@@ -67,8 +70,22 @@ export type AgentConfigOut = Schemas["AgentConfigOut"];
 
 export const chatApi = {
   // Conversations
-  listConversations: (archived = false) =>
-    call<ConversationListOut>(`/chat/conversations?archived=${archived}`),
+  // The listing pages by cursor (spec chat "List conversations by latest
+  // activity"); the Chat page wants the whole list, so this follows
+  // `next_cursor` until the last page.
+  listConversations: async (archived = false): Promise<ConversationListOut> => {
+    const conversations: Conversation[] = [];
+    let cursor: string | null | undefined;
+    let page: ConversationPage;
+    do {
+      const sp = new URLSearchParams({ archived: String(archived), limit: "500" });
+      if (cursor) sp.set("cursor", cursor);
+      page = await call<ConversationPage>(`/chat/conversations?${sp.toString()}`);
+      conversations.push(...page.conversations);
+      cursor = page.next_cursor;
+    } while (cursor);
+    return { ...page, conversations };
+  },
 
   createConversation: (body?: ConversationCreate) =>
     call<Conversation>("/chat/conversations", { method: "POST", body: body ?? {} }),

@@ -9,6 +9,8 @@ const conv = (id: string, title: string): Conversation => ({
   id,
   agent_key: "builtin",
   title,
+  archived_at: null,
+  channel_binding: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 });
@@ -65,7 +67,9 @@ describe("ConversationList search", () => {
 
   test("hides the search box when there are no conversations at all", () => {
     renderList([]);
-    expect(screen.queryByRole("textbox", { name: /search conversations/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: /search conversations/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

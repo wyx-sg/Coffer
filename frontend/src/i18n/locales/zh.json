@@ -805,6 +805,7 @@
     "CREDENTIAL_LOCKED": "系统钥匙串已锁定——请解锁后重试",
     "CREDENTIAL_MISSING": "所需凭据在凭据库中不存在——请在该资源的编辑页重新保存",
     "CREDENTIAL_UNREADABLE": "存储的凭据无法用当前主密钥解密",
+    "CURSOR_INVALID": "该分页位置已失效，请从第一页重新加载列表。",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",

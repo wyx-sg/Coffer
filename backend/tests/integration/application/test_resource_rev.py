@@ -63,7 +63,7 @@ async def test_every_write_bumps_the_revision_and_hints_it(tmp_path: pathlib.Pat
     assert hints == [Changed("thing", r.uid, n) for n in range(1, 7)]
 
     await svc.delete(r.uid, actor="cli")
-    assert hints[-1] == Changed("thing", r.uid, 7)
+    assert hints[-1] == Changed("thing", r.uid, 7, "delete")
 
 
 async def test_reads_never_hint(tmp_path: pathlib.Path) -> None:

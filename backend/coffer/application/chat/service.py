@@ -7,8 +7,9 @@ Responsibilities:
   truncated version of the first user message text.
 - Cascade delete: messages first, then the conversation row.
 
-The ``ConversationRepo`` and ``MessageRepo`` Protocols are defined inline here
-(same pattern as ``MemoryRecordRepo`` in ``application/memory/service.py``).
+The ``MessageRepo`` Protocol is defined inline here; ``ConversationRepo`` lives
+beside the cursor pages of its listings in ``conversation_repo`` and is
+re-exported here.
 Concrete SQLAlchemy implementations live in ``infrastructure/chat/persistence.py``.
 """
 
@@ -19,11 +20,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
+from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
+from coffer.application.chat.conversation_repo import page_conversations
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound, MessageNotFound, UnknownAgent
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
+from coffer.domain.pagination import Page
 
 _TITLE_MAX_CHARS = 60
 _PLACEHOLDER_TITLE = "New conversation"
@@ -32,38 +36,6 @@ _PLACEHOLDER_TITLE = "New conversation"
 # ---------------------------------------------------------------------------
 # Repository Protocols
 # ---------------------------------------------------------------------------
-
-
-class ConversationRepo(Protocol):
-    """Persistence port for ``Conversation`` rows."""
-
-    async def create(self, conversation: Conversation) -> Conversation: ...
-
-    async def get(self, conversation_id: str) -> Conversation | None: ...
-
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
-        """Conversations newest first; active when ``archived`` is False."""
-        ...
-
-    async def rename(self, conversation_id: str, new_title: str) -> Conversation: ...
-
-    async def touch(self, conversation_id: str, updated_at: datetime) -> None:
-        """Bump ``updated_at`` for the given conversation."""
-        ...
-
-    async def get_agent_config(self, conversation_id: str) -> AgentConfig:
-        """Typed provider-owned per-conversation state (empty when unset)."""
-        ...
-
-    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None:
-        """Replace the typed provider-owned per-conversation state."""
-        ...
-
-    async def set_archived(
-        self, conversation_id: str, archived_at: datetime | None
-    ) -> Conversation: ...
-
-    async def delete(self, conversation_id: str) -> None: ...
 
 
 class MessageRepo(Protocol):
@@ -197,6 +169,14 @@ class ChatService:
     async def list_conversations(self, *, archived: bool = False) -> list[Conversation]:
         """Conversations newest first; active threads only unless ``archived``."""
         return await self._conversations.list(archived=archived)
+
+    async def page_conversations(
+        self, *, archived: bool = False, limit: int = 100, cursor: str | None = None
+    ) -> Page[Conversation]:
+        """One page of :meth:`list_conversations`, continued by ``cursor``."""
+        return await page_conversations(
+            self._conversations, archived=archived, limit=limit, cursor=cursor
+        )
 
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""

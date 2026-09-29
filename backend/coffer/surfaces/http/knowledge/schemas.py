@@ -16,6 +16,8 @@ surface no one asked for.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -141,7 +143,7 @@ class SubmissionOut(BaseModel):
     configured") — ``path`` is that document.
     """
 
-    status: str
+    status: Literal["pending", "written"]
     collection: str
     title: str
     path: str | None = None
@@ -165,7 +167,7 @@ class CurationOut(BaseModel):
     #: Every one of them is a 200: a collection with no model configured, or
     #: with nothing pending, is an ordinary state of the feature and not a
     #: fault of the request.
-    status: str
+    status: Literal["ok", "truncated", "no_model", "up_to_date", "too_large", "failed"]
     #: The collection's NAME, not its uid. The caller sent the uid and still
     #: holds it; what a pass report adds is something to render — "curated
     #: shopee" — and that is the label (spec knowledge's contract,

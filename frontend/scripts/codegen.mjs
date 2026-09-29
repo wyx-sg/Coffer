@@ -12,7 +12,7 @@
 // regenerates into a temp dir to detect drift, so the list below is the single
 // place a contract is added.
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -23,32 +23,32 @@ export const REPO_ROOT = path.resolve(FRONTEND_ROOT, "..");
 export const GENERATED_DIR = path.join(FRONTEND_ROOT, "src", "lib", "api", "generated");
 
 /**
- * Every contract the frontend consumes, by spec id. A spec id is the spec
- * directory's path under `specs/`, so it is a bare folder name for a top-level
- * spec and a slash-joined path for a nested child (`channels/telegram`). The
- * generated module mirrors it: `generated/<id>.ts`, i.e.
- * `generated/channels/telegram.ts`. Always spell an id with forward slashes —
- * `specPath()` splits on them so the same list works on Windows.
- *
- * `memory` is the one contract under `specs/` deliberately left out: its
- * client (`src/lib/api/memory.ts`) reads hand-written wire types from
- * `memoryTypes.ts`, so generating a module for it would produce an orphan
- * nothing imports. Add it the day that client switches to generated types.
+ * Every contract under `openspec/specs/`, by spec id, discovered rather than
+ * listed: each contract is generated from the backend's Pydantic models
+ * (`make contracts`), so every one of them describes routes the daemon serves
+ * and gets a generated module. A spec id is the spec directory's path under
+ * `specs/` — a bare folder name for a top-level spec, a slash-joined path for
+ * a nested child (`channels/telegram`), always with forward slashes. The
+ * generated module mirrors it: `generated/<id>.ts`.
  */
-export const CONTRACTS = [
-  "agent-registry",
-  "channels",
-  "chat",
-  "credentials",
-  "daemon",
-  "internal-engine",
-  "knowledge",
-  "mcp-gateway",
-  "provider-switching",
-  "resource-framework",
-  "skill-manager",
-  "vault-sync",
-];
+export const CONTRACTS = discoverContracts();
+
+function discoverContracts() {
+  const specsDir = path.join(REPO_ROOT, "openspec", "specs");
+  const found = [];
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const id = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const full = path.join(dir, entry.name);
+      if (entry.name === "contracts") continue;
+      if (existsSync(path.join(full, "contracts", "api.openapi.yaml"))) found.push(id);
+      walk(full, id);
+    }
+  };
+  walk(specsDir, "");
+  return found.sort();
+}
 
 /** Native-separator path segments for a spec id. */
 function specSegments(id) {
@@ -76,7 +76,11 @@ export function generate(outDir, { quiet = false } = {}) {
     // A child spec's module sits one level deeper than `outDir`, and the CLI
     // will not create that directory for us.
     mkdirSync(path.dirname(out), { recursive: true });
-    execFileSync(process.execPath, [cli, contractPath(id), "-o", out], {
+    // `--default-non-nullable=false`: a field with a default is optional to
+    // SEND, so a request body must not demand it. Response fields need no such
+    // help — the backend already marks every field of a response schema
+    // required, because the daemon always sends it.
+    execFileSync(process.execPath, [cli, contractPath(id), "-o", out, "--default-non-nullable=false"], {
       cwd: FRONTEND_ROOT,
       stdio: quiet ? ["ignore", "ignore", "inherit"] : "inherit",
     });

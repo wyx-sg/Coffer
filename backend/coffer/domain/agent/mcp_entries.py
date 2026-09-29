@@ -17,7 +17,7 @@ import json
 import re
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import tomlkit
 
@@ -59,7 +59,7 @@ class McpEntry:
 
     name: str
     source: str  # allowlist key of the file it came from
-    transport: str  # "stdio" | "http"
+    transport: Literal["stdio", "http"]
     command: str | None = None
     args: tuple[str, ...] = ()
     # repr=False: env/header values may contain secrets and must never reach logs

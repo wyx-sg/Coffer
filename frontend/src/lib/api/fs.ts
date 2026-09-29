@@ -16,7 +16,7 @@ type Schemas = components["schemas"];
 export type FsBrowseOut = Schemas["FsBrowseOut"];
 
 /** A GUI editor detected as installed (preferred-editor picker, spec web-ui/004). */
-export type EditorOption = Schemas["EditorOption"];
+export type EditorOption = Schemas["EditorOptionOut"];
 
 export const fsApi = {
   browse: (path?: string | null): Promise<FsBrowseOut> =>

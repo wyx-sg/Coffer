@@ -7,6 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { hashKey, type QueryClient } from "@tanstack/react-query";
 
 import type { AgentEvent } from "@/lib/chat/streamClient";
+import { contentBlock } from "@/lib/chat/contentBlock";
 import type { PendingEcho } from "@/lib/chat/echoes";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
@@ -29,7 +30,7 @@ function appendText(blocks: ContentBlock[], delta: string): ContentBlock[] {
   if (last?.type === "text") {
     return [...blocks.slice(0, -1), { ...last, text: (last.text ?? "") + delta }];
   }
-  return [...blocks, { type: "text", text: delta }];
+  return [...blocks, contentBlock({ type: "text", text: delta })];
 }
 
 /** Fold one content block into the live bubble, starting one if none is shown. */
@@ -119,24 +120,24 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       break;
 
     case "tool_call": {
-      const block: ContentBlock = {
+      const block = contentBlock({
         type: "tool_use",
         tool_use_id: event.data.tool_use_id,
         tool_name: event.data.tool_name,
         tool_input: event.data.tool_input,
-      };
+      });
       setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, block]));
       break;
     }
 
     case "tool_result": {
-      const resultBlock: ContentBlock = {
+      const resultBlock = contentBlock({
         type: "tool_result",
         tool_use_id: event.data.tool_use_id,
         tool_name: event.data.tool_name,
         output: event.data.output ?? null,
         error: event.data.error ?? null,
-      };
+      });
       setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, resultBlock]));
       break;
     }

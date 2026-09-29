@@ -79,6 +79,7 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
+from coffer.surfaces.http.event_wiring import build_event_stream, start_attention_watch
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
 from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
@@ -161,21 +162,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
 
-    # No resolver is injected any more. ``AuditService.record`` is handed the
-    # ``Resource`` the event is about, and every caller performing a mutation
-    # already has that row — so the id it stores is read off it rather than
-    # looked back up from a label that may since have changed.
+    # ``AuditService.record`` is handed the ``Resource`` the event is about, so
+    # the id it stores is read off that row, never looked back up by label.
     audit = AuditService(audit_repo)
     # What each kind contributes to vault convergence (spec vault-sync),
     # collected as wiring proceeds and handed to ``start_sync`` at the end.
     sync_contributions = SyncContributions()
     # The unified reconciler (ADR one-level-triggered-reconciler-compares-
-    # parameters): built first, so every resource write hints it, and so each
-    # kind below can register the targets it supplies.
+    # parameters) and the event stream: built first, so every resource write
+    # hints both, and so each kind below can register the targets it supplies.
     reconciler = build_reconciler(audit, sync_contributions)
+    events = build_event_stream(reconciler)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
-        repo=HintingResourceRepo(resource_repo, reconciler.hint),
+        repo=HintingResourceRepo(resource_repo, events.hint_sink),
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
         # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
@@ -309,9 +309,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         features=features,
         platform=platform,
     )
-    # Published for the same reason ``app.state.kinds`` is: a test that asserts
-    # the lifespan actually started a worker needs a seam to reach it through,
-    # and the alternative is asserting the wiring by reading the wiring.
+    # Published like ``app.state.kinds``: a test asserting the lifespan started
+    # a worker needs a seam to reach it through.
     app.state.background_workers = workers
     # Same seam, for the same reason. An area that forgets to register its
     # state provider does not fail — it just silently stops converging, which
@@ -325,7 +324,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The reconciler's periodic loop; hints bring a pass forward.
     reconciler_task = start_reconciler(reconciler)
     # The Overview's "needs you" list: open drift, then each kind's signals.
-    wire_attention(
+    attention = wire_attention(
         reconciler,
         features.is_enabled,
         lifespan_attention_sources(
@@ -335,6 +334,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             sync_service=workers.sync.service,
         ),
     )
+    attention_watch_task = await start_attention_watch(events, attention)
 
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its
@@ -354,6 +354,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 channel_runtime_task=channel_runtime_task,
                 reaper_task=reaper_task,
                 reconciler_task=reconciler_task,
+                attention_watch_task=attention_watch_task,
                 kinds=kinds,
                 engine=engine,
             )

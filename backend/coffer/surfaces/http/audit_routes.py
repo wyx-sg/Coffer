@@ -1,4 +1,8 @@
-"""/api/v1/audit — read-only query over the audit log."""
+"""/api/v1/audit — read-only query over the audit log.
+
+Paged newest first by an opaque cursor (spec resource-framework "Page growing
+lists by an opaque cursor"); ``since`` stays a filter.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEntry
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
-from coffer.surfaces.http.schemas import AuditEntryOut, AuditListOut
+from coffer.surfaces.http.log_schemas import AuditEntryOut, AuditListOut
 
 router = APIRouter(
     prefix="/api/v1/audit",
@@ -79,6 +83,13 @@ async def list_audit(
     event_prefix: str | None = Query(default=None),
     since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
+    cursor: str | None = Query(
+        default=None,
+        description=(
+            "The previous page's next_cursor. Bound to the filters it was "
+            "issued with; any other value is 400 CURSOR_INVALID."
+        ),
+    ),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> AuditListOut:
@@ -87,12 +98,13 @@ async def list_audit(
     # "that resource has no events" are different answers and the caller acts
     # on them differently.
     resource = await resources.get(resource_uid) if resource_uid is not None else None
-    entries = await svc.query(
+    page = await svc.page(
         resource=resource,
         kind=kind,
         event_type=event_type,
         event_prefix=event_prefix,
         since=since_dt,
         limit=limit,
+        cursor=cursor,
     )
-    return AuditListOut(entries=[_to_out(e) for e in entries])
+    return AuditListOut(entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor)

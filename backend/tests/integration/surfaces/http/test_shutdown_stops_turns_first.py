@@ -66,6 +66,7 @@ async def test_turns_are_stopped_before_the_engine_is_disposed(
             channel_runtime_task=asyncio.ensure_future(_done()),
             reaper_task=asyncio.ensure_future(_done()),
             reconciler_task=asyncio.ensure_future(_done()),
+            attention_watch_task=asyncio.ensure_future(_done()),
             kinds=kinds,
             engine=engine,
         )

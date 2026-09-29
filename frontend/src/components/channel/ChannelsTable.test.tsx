@@ -103,7 +103,9 @@ function status(
 ): ChannelStatus {
   return {
     ...ch,
+    title: null,
     channel_type: "telegram",
+    diagnostics: [],
     enabled: true,
     running: true,
     pending_pairing: false,

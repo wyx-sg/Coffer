@@ -55,6 +55,8 @@ const CURATE_SWITCH = "Merge new knowledge into documents";
 
 const CONFIG: InternalEngineConfig = {
   model: "some-model",
+  transcribe_model: null,
+  model_timeout_s: null,
   updated_at: "2026-09-16T00:00:00Z",
   upkeep: {
     aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },

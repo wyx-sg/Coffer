@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from coffer.domain import errors
 from coffer.infrastructure.logging.setup import get_trace_id
+from coffer.surfaces.http import openapi_document
 
 _logger = logging.getLogger(__name__)
 
@@ -63,6 +64,9 @@ _STATUS: dict[str, int] = {
     # whose Host header does not name this daemon's loopback authority.
     "HOST_NOT_LOOPBACK": 421,
     "BAD_REQUEST": 400,
+    # A paging cursor that does not decode, or names another list or other
+    # filters (spec resource-framework "Page growing lists by an opaque cursor").
+    "CURSOR_INVALID": 400,
     "NOT_FOUND": 404,
     "FORBIDDEN": 403,
     # spec skill-manager
@@ -252,6 +256,9 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
 
 
 def register(app: FastAPI) -> None:
+    """Answer every failure with the envelope, and say so in the OpenAPI document."""
+    openapi_document.install(app)
+
     @app.exception_handler(errors.CofferError)
     async def _handle_coffer(request: Request, exc: errors.CofferError) -> JSONResponse:
         body = _envelope(exc.code, str(exc), _details_for(exc))

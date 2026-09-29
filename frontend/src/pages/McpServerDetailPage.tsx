@@ -50,7 +50,15 @@ export function McpServerDetailPage() {
   // it into separate state: a transport failure becomes a failing result.
   const testResult: TestResult | null =
     runTest.data ??
-    (runTest.error ? { ok: false, latency_ms: 0, error_message: runTest.error.message } : null);
+    (runTest.error
+      ? {
+          ok: false,
+          latency_ms: 0,
+          error_message: runTest.error.message,
+          protocol_version: null,
+          server_capabilities: null,
+        }
+      : null);
 
   // Prefer an explicit test result; else use the persisted /status endpoint
   // (same source as the list card) so both views agree without waiting for

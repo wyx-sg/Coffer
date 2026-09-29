@@ -48,6 +48,7 @@ const skillHooks = await import("@/lib/hooks/useSkills");
 const SKILL: SkillOut = {
   uid: "sk-1",
   name: "hello",
+  title: null,
   description: "a greeting",
   source: { type: "local_import", original_path: "/tmp/hello" },
   builtin: false,

@@ -4,6 +4,7 @@
 // reducer (lib/hooks/chatTurnEvents) and useChatTurn own when these run.
 
 import type { ChatAttachment, ContentBlock, Message } from "@/lib/api/chat";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 /**
  * A prompt this client sent whose persisted user row has not been fetched yet.
@@ -73,12 +74,10 @@ export function createEcho(
 /** The echo as a user row's content: its text, then one block per file. */
 export function echoContent(echo: PendingEcho): ContentBlock[] {
   return [
-    ...(echo.text ? [{ type: "text" as const, text: echo.text }] : []),
-    ...echo.attachments.map((a) => ({
-      type: "attachment" as const,
-      filename: a.filename,
-      mime: a.mime,
-    })),
+    ...(echo.text ? [contentBlock({ type: "text", text: echo.text })] : []),
+    ...echo.attachments.map((a) =>
+      contentBlock({ type: "attachment", filename: a.filename, mime: a.mime }),
+    ),
   ];
 }
 
@@ -92,6 +91,9 @@ export function echoAsMessage(echo: PendingEcho, conversationId: string): Messag
     content: echoContent(echo),
     status: "complete",
     created_at: new Date(echo.sentAt).toISOString(),
+    model_id: null,
+    prompt_tokens: null,
+    completion_tokens: null,
   };
 }
 

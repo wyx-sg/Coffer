@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/resources": {
+    "/api/v1/attention": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,136 +12,28 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List resources
-         * @description Rows of a kind whose experimental feature is switched off on this
-         *     machine (`knowledge`, `memory`) are left out; naming such a kind in
-         *     `kind` answers 404 `FEATURE_DISABLED` (spec experimental-features
-         *     "Close every surface of a switched-off feature").
+         * Get Attention
+         * @description What needs a person now, across every kind whose feature is on — each
+         *     item with one action, the route its own page calls. Writes nothing.
          */
-        get: operations["listResources"];
-        put?: never;
-        /**
-         * Register a new resource
-         * @description Only a kind that declares itself creatable through the kind-agnostic
-         *     route is accepted here. A kind owning a creation invariant beyond
-         *     config validation — a skill's master folder, an agent's on-disk
-         *     detection — is registered through its own surface instead, which is
-         *     the only place that invariant can be held. A kind whose experimental
-         *     feature is switched off answers 404 `FEATURE_DISABLED`.
-         */
-        post: operations["registerResource"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/resources/{uid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        get: operations["getResource"];
+        get: operations["get_attention_api_v1_attention_get"];
         put?: never;
         post?: never;
-        delete: operations["deleteResource"];
-        options?: never;
-        head?: never;
-        patch: operations["updateResource"];
-        trace?: never;
-    };
-    "/resources/{uid}/enable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["enableResource"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/resources/{uid}/disable": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["disableResource"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/resources/{uid}/scope": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Read a resource's per-agent activation scope
-         * @description The framework-level reach of one resource
-         *     ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
-         *     served for EVERY kind by the kind-agnostic route rather than per kind.
-         *     `supports_scope` says whether this kind takes a scope at all — false
-         *     makes any non-null write a 422 — so a client can render the two-choice
-         *     Disabled/Enabled panel instead of the agent list without knowing the
-         *     kinds itself.
-         */
-        get: operations["getResourceScope"];
-        /**
-         * Set a resource's per-agent activation scope
-         * @description `scope: null` clears back to unscoped — active for every agent. A list
-         *     restricts to exactly those agents, and an empty list matches nothing,
-         *     so `{"agents": []}` is dormant. Deliberately NOT gated on the kind's
-         *     creation invariants: scope is orthogonal to them. A kind that declares
-         *     no scope rejects any non-null payload with 422, and so does an unknown
-         *     property — a client still sending the withdrawn `machines` axis would
-         *     otherwise have its restriction silently widened to "every agent".
-         *     Writing scope emits `resource_scope_updated` and fires the kind's
-         *     post-write reaction, so delivery and reclaim stay in step with the edit.
-         */
-        put: operations["updateResourceScope"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/audit": {
+    "/api/v1/audit": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listAuditEntries"];
+        /** List Audit */
+        get: operations["list_audit_api_v1_audit_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -150,57 +42,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/retention/policies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listRetentionPolicies"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/retention/policies/{table_name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table_name: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["updateRetentionPolicy"];
-        trace?: never;
-    };
-    "/retention/prune": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["pruneRetention"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/upkeep/runs": {
+    "/api/v1/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -208,35 +50,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * What this daemon is rewriting right now
-         * @description Every *upkeep pass* in flight: memory's `distil` over a partition,
-         *     knowledge's `curate` over a collection. Both take minutes, both rewrite
-         *     files with a model in the loop, and both can be started from a button,
-         *     the CLI or a timer — so whether one is running is a fact about the
-         *     daemon, not about whichever surface started it.
+         * Stream Events
+         * @description Every change the daemon announces, as invalidation hints, from now on
+         *     (or from after `Last-Event-ID`, replayed from a bounded buffer).
          *
-         *     One route answers for every kind rather than each kind growing its own
-         *     near-identical "is my pass running?" endpoint, because the fact is one
-         *     table (`coffer.application.upkeep_runs`), and it belongs beside this
-         *     contract's other cross-kind reads for the same reason. A caller asking
-         *     about one partition or collection filters the list; a target not named
-         *     here has no pass running.
-         *
-         *     The registry is **per-process by design**: there is no queue, no row
-         *     and no lease, so a daemon restart ends any pass it was running and this
-         *     list comes back empty. That is the truth, not a lost record.
-         *
-         *     Starting a pass is the kind's own route:
-         *     `POST /knowledge/collections/{uid}/curate` refuses a second concurrent
-         *     pass over the same collection with `UPKEEP_ALREADY_RUNNING`, and
-         *     `POST /memory/sync` skips a partition whose pass is already running and
-         *     reports it under `skipped`.
-         *     Whether a pass runs on a timer at all is spec internal-engine's.
-         *
-         *     A pass over a kind whose experimental feature is switched off is left
-         *     out of the list.
+         *     Each event's `data:` is the JSON model its `event:` name selects:
+         *     `change`, `resync` or `heartbeat`.
          */
-        get: operations["listUpkeepRuns"];
+        get: operations["stream_events_api_v1_events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -245,33 +66,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/reconcile/plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * What a reconcile pass would find and do now (dry-run)
-         * @description Every difference between what Coffer wants outside its database and
-         *     what is there — Coffer's MCP entry in each agent, delivered skill
-         *     links, provider projections, the memory delivery hook — with the
-         *     operation, the file, the safe before/after text and what the target's
-         *     direction policy says (`repair`, `report`, `blocked`). Computed on
-         *     request; writes nothing (no file, row, audit event or hint). Before and
-         *     after never carry a secret value.
-         */
-        get: operations["getReconcilePlan"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/reconcile/apply": {
+    "/api/v1/reconcile/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -281,21 +76,20 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Apply chosen drift items now, as the caller
-         * @description Runs a pass with the manual trigger over the named ids only. Each
-         *     repair is audited with the caller (`X-Coffer-Actor`) as actor; one
-         *     whose audit cannot be recorded is put back and comes back `failed`.
-         *     An item the policy still will not repair comes back `planned` with its
-         *     reason; an id that names no current difference is absent.
+         * Apply Items
+         * @description Apply the named differences now. Each repair is audited with the
+         *     caller as actor; one whose audit cannot be recorded is put back and
+         *     reported ``failed``. An id that names no current difference is absent
+         *     from the answer.
          */
-        post: operations["applyReconcileItems"];
+        post: operations["apply_items_api_v1_reconcile_apply_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/attention": {
+    "/api/v1/reconcile/plan": {
         parameters: {
             query?: never;
             header?: never;
@@ -303,15 +97,186 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * What needs a person now, across every kind
-         * @description The Overview's "needs you" list: open reconciler drift and each kind's
-         *     own signals, from every source whose experimental feature is on, sorted
-         *     by severity. Each item has exactly one action — a verb plus the REST
-         *     route (and body) the kind's own page uses; this list has no write of
-         *     its own. A source that fails is reported under `errors` beside the
-         *     others' items. Writes nothing.
+         * Get Plan
+         * @description Every difference a pass would find now, and what it would do about it.
          */
-        get: operations["getAttention"];
+        get: operations["get_plan_api_v1_reconcile_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resources */
+        get: operations["list_resources_api_v1_resources_get"];
+        put?: never;
+        /** Register Resource */
+        post: operations["register_resource_api_v1_resources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/{uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resource */
+        get: operations["get_resource_api_v1_resources__uid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Resource */
+        delete: operations["delete_resource_api_v1_resources__uid__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Resource
+         * @description Edit a resource's label, title, description or config.
+         *
+         *     ``name`` is an ordinary field here, at the same level as ``description``,
+         *     which is the whole user-facing point of the identity change: while the name
+         *     WAS the identity, moving it needed its own route, and only one kind ever
+         *     got one.
+         *
+         *     An ABSENT field leaves what is stored alone, and so does an explicit null.
+         *     ``model_fields_set``, not a value comparison: every field here is optional
+         *     and ``None`` is a legal VALUE for ``description``, so "the client did not
+         *     mention it" and "the client asked to clear it" are the same ``None`` and can
+         *     only be told apart by which keys the body carried. Comparing values instead
+         *     read a rename-only PATCH as a request to clear the description, and wiped it
+         *     — silently, with a spurious update event in the audit trail to match. For
+         *     ``config`` there is no clearing at all: a resource without a config is not a
+         *     state any kind has, so a client that wanted it emptied would say ``{}``, and
+         *     one that said null is a client that filled in a field it had no value for.
+         */
+        patch: operations["update_resource_api_v1_resources__uid__patch"];
+        trace?: never;
+    };
+    "/api/v1/resources/{uid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Resource */
+        post: operations["disable_resource_api_v1_resources__uid__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/{uid}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Resource */
+        post: operations["enable_resource_api_v1_resources__uid__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/{uid}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resource Scope */
+        get: operations["get_resource_scope_api_v1_resources__uid__scope_get"];
+        /** Update Resource Scope */
+        put: operations["update_resource_scope_api_v1_resources__uid__scope_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retention/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Policies */
+        get: operations["list_policies_api_v1_retention_policies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retention/policies/{table_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Policy */
+        patch: operations["update_policy_api_v1_retention_policies__table_name__patch"];
+        trace?: never;
+    };
+    "/api/v1/retention/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prune Now */
+        post: operations["prune_now_api_v1_retention_prune_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upkeep/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs_api_v1_upkeep_runs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -324,307 +289,540 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AttentionActionOut */
+        AttentionActionOut: {
+            /** Body */
+            body: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            /** Path */
+            path: string;
+            /** Verb */
+            verb: string;
+        };
+        /** AttentionItemOut */
+        AttentionItemOut: {
+            action: components["schemas"]["AttentionActionOut"];
+            /** Kind */
+            kind: string;
+            /** Reason */
+            reason: string;
+            /** Reason Code */
+            reason_code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning" | "info";
+            /** Since */
+            since: string | null;
+            /** Title */
+            title: string;
+            /** Uid */
+            uid: string | null;
+        };
+        /** AttentionOut */
+        AttentionOut: {
+            /** Counts By Kind */
+            counts_by_kind: {
+                [key: string]: number;
+            };
+            /** Errors */
+            errors: components["schemas"]["AttentionSourceErrorOut"][];
+            /** Items */
+            items: components["schemas"]["AttentionItemOut"][];
+        };
+        /** AttentionSourceErrorOut */
+        AttentionSourceErrorOut: {
+            /** Error */
+            error: string;
+            /** Source */
+            source: string;
+        };
+        /** AuditEntryOut */
+        AuditEntryOut: {
+            /** Actor */
+            actor: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            } | null;
+            /** Event Type */
+            event_type: string;
+            /** Id */
+            id: number;
+            /** Resource Kind */
+            resource_kind: string | null;
+            /** Resource Name */
+            resource_name: string | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp: string;
+        };
+        /**
+         * AuditListOut
+         * @description One page of the audit log, newest first.
+         */
+        AuditListOut: {
+            /** Entries */
+            entries: components["schemas"]["AuditEntryOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ChangeEventOut
+         * @description The data of a `change` event: something changed; refetch what shows it.
+         *
+         *     Sent once per resource write through the framework, and once per change in
+         *     what the attention list reports (`kind` `attention`, no `id`, no `rev`).
+         *     The event's SSE id is `seq`, so a reconnecting client resumes with
+         *     `Last-Event-ID`.
+         */
+        ChangeEventOut: {
+            /**
+             * Id
+             * @description The resource's uid; null for `attention`.
+             */
+            id: string | null;
+            /**
+             * Kind
+             * @description The resource kind, or `attention`.
+             */
+            kind: string;
+            /**
+             * Op
+             * @description `upsert`: the resource exists with new content. `delete`: it is gone.
+             * @enum {string}
+             */
+            op: "upsert" | "delete";
+            /**
+             * Rev
+             * @description The revision the write produced (a delete: the last one plus one); null for `attention`.
+             */
+            rev: number | null;
+            /**
+             * Seq
+             * @description Grows by one per event across this daemon run; the first is 1.
+             */
+            seq: number;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
         ErrorResponse: {
-            error: {
-                /** @example RESOURCE_NOT_FOUND */
-                code: string;
-                /** @example resource not found: mcp_server:filesystem */
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * EventStreamMessage
+         * @description The `data:` of one event on `GET /api/v1/events`, chosen by its SSE `event:` name.
+         *
+         *     `change` carries a ChangeEventOut, `resync` a ResyncEventOut, `heartbeat` a
+         *     HeartbeatEventOut.
+         */
+        EventStreamMessage: components["schemas"]["ChangeEventOut"] | components["schemas"]["ResyncEventOut"] | components["schemas"]["HeartbeatEventOut"];
+        /**
+         * HeartbeatEventOut
+         * @description The data of a `heartbeat` event: sent at a fixed interval while nothing changes.
+         *
+         *     A client whose last seen `seq` is below `seq` is behind and should reconnect.
+         */
+        HeartbeatEventOut: {
+            /**
+             * Seq
+             * @description The current head `seq`; 0 before the first change.
+             */
+            seq: number;
+        };
+        /**
+         * PruneRequestIn
+         * @description ``POST /retention/prune`` body; the whole body is optional.
+         */
+        PruneRequestIn: {
+            /** Table Name */
+            table_name?: string | null;
+        };
+        /** PruneResultOut */
+        PruneResultOut: {
+            /** Tables */
+            tables: {
+                [key: string]: number;
             };
         };
-        /** @description Which agents a resource is active for, on THIS machine. null means every agent; [] matches nothing, i.e. dormant. Scope is machine-local — it is set on the machine it applies to and is never synced to the others. Unknown properties are rejected (422) rather than ignored: a client still sending the withdrawn `machines` axis means "only there", and silently keeping what is left would store "every agent" — widening the restriction the request was written to make. */
+        /** ReconcileApplyIn */
+        ReconcileApplyIn: {
+            /** Ids */
+            ids: string[];
+        };
+        /** ReconcileApplyOut */
+        ReconcileApplyOut: {
+            /** Failures */
+            failures: components["schemas"]["ReconcileTargetOut"][];
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /** Items */
+            items: components["schemas"]["ReconcileItemOut"][];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+        };
+        /**
+         * ReconcileItemOut
+         * @description One difference between what Coffer wants and what is there.
+         */
+        ReconcileItemOut: {
+            /**
+             * After
+             * @description What Coffer would write; null for a removal.
+             */
+            after: string | null;
+            /**
+             * Before
+             * @description What is there now, rendered safely; null if absent.
+             */
+            before: string | null;
+            /** Changed Params */
+            changed_params: string[];
+            /**
+             * Disposition
+             * @enum {string}
+             */
+            disposition: "repair" | "report" | "blocked";
+            /** Error */
+            error: string | null;
+            /** File */
+            file: string | null;
+            /**
+             * Id
+             * @description `<target>:<key>`; what `POST /reconcile/apply` takes.
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "modify" | "remove";
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "planned" | "applied" | "failed";
+            /** Reason */
+            reason: string;
+            /** Reason Code */
+            reason_code: string;
+            /**
+             * Since
+             * @description When a writing pass first saw this difference.
+             */
+            since: string | null;
+            subject: components["schemas"]["ReconcileSubjectOut"];
+            /** Target */
+            target: string;
+        };
+        /** ReconcilePassOut */
+        ReconcilePassOut: {
+            /** Applied */
+            applied: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Failed */
+            failed: number;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /** Open */
+            open: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Trigger */
+            trigger: string;
+        };
+        /**
+         * ReconcilePlanOut
+         * @description A dry-run plan: computed on request, nothing written.
+         */
+        ReconcilePlanOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Items */
+            items: components["schemas"]["ReconcileItemOut"][];
+            last_pass: components["schemas"]["ReconcilePassOut"] | null;
+            /** Period Seconds */
+            period_seconds: number;
+            /** Targets */
+            targets: components["schemas"]["ReconcileTargetOut"][];
+            /** Trigger */
+            trigger: string;
+        };
+        /** ReconcileSubjectOut */
+        ReconcileSubjectOut: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Uid */
+            uid: string | null;
+        };
+        /** ReconcileTargetOut */
+        ReconcileTargetOut: {
+            /**
+             * Error
+             * @description Set when the target raised.
+             */
+            error: string | null;
+            /** Kinds */
+            kinds: string[];
+            /** Name */
+            name: string;
+        };
+        /** ResourceCreate */
+        ResourceCreate: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Description */
+            description?: string | null;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Title */
+            title?: string | null;
+        };
+        /** ResourceListOut */
+        ResourceListOut: {
+            /** Resources */
+            resources: components["schemas"]["ResourceOut"][];
+        };
+        /** ResourceOut */
+        ResourceOut: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["ScopeOut"] | null;
+            /** Title */
+            title: string | null;
+            /** Toggleable */
+            toggleable: boolean;
+            /**
+             * Uid
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ResourceScopeOut
+         * @description GET .../scope response: the current scope plus whether this kind
+         *     supports scope at all (False means any non-null write is a 422).
+         */
+        ResourceScopeOut: {
+            scope: components["schemas"]["ScopeOut"] | null;
+            /**
+             * Supports Scope
+             * @default false
+             */
+            supports_scope: boolean;
+        };
+        /**
+         * ResourceScopeUpdate
+         * @description PUT .../scope request body: which agents this resource is active for.
+         *
+         *     ``scope: null`` clears back to unscoped — every agent. A list restricts to
+         *     exactly those agents, and an empty list matches nothing, so
+         *     ``{"agents": []}`` is dormant.
+         *
+         *     Scope is set per machine and does not sync: every machine holding this
+         *     vault decides for itself which of its agents a resource activates for.
+         */
+        ResourceScopeUpdate: {
+            scope?: components["schemas"]["ScopeIn"] | null;
+        };
+        /** ResourceUpdate */
+        ResourceUpdate: {
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * ResyncEventOut
+         * @description The data of a `resync` event: events may have been missed; refetch everything.
+         *
+         *     Sent first on a reconnect whose `Last-Event-ID` the buffer cannot cover
+         *     (older than its oldest entry, or never issued by this daemon run), and in
+         *     place of the backlog when a client falls too far behind. Live `change`
+         *     events follow it.
+         */
+        ResyncEventOut: {
+            /**
+             * Seq
+             * @description The head `seq` when the resync was issued.
+             */
+            seq: number;
+        };
+        /** RetentionPolicyListOut */
+        RetentionPolicyListOut: {
+            /** Policies */
+            policies: components["schemas"]["RetentionPolicyOut"][];
+        };
+        /** RetentionPolicyOut */
+        RetentionPolicyOut: {
+            /** Default Retention Days */
+            default_retention_days: number | null;
+            /** Description */
+            description: string;
+            /** Display Name */
+            display_name: string;
+            /** Last Pruned At */
+            last_pruned_at: string | null;
+            /** Last Pruned Rows */
+            last_pruned_rows: number;
+            /** Retention Days */
+            retention_days: number | null;
+            /** Table Name */
+            table_name: string;
+        };
+        /** RetentionPolicyUpdate */
+        RetentionPolicyUpdate: {
+            /**
+             * Retention Days
+             * @description Null = keep forever; 1..3650 days otherwise.
+             */
+            retention_days?: number | null;
+        };
+        /**
+         * ScopeIn
+         * @description A resource's activation scope as a request writes it: one allow-list of
+         *     agents (ADR per-agent-resource-scope). ``null`` or absent means
+         *     unrestricted; ``[]`` matches nothing, i.e. dormant.
+         *
+         *     Extra keys are REFUSED rather than ignored, which is the unusual choice and
+         *     the deliberate one. This model used to carry a second axis, ``machines``,
+         *     and a client that still sends it — a browser tab left open across the
+         *     upgrade — means "only on that machine". Ignoring the key would store what
+         *     is left, ``agents: null``, and that reads as *every agent, everywhere*: the
+         *     request would silently widen the very restriction it was trying to write.
+         *     A 422 tells the caller its request was not understood, which is the only
+         *     honest answer.
+         */
+        ScopeIn: {
+            /**
+             * Agents
+             * @example [
+             *       "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
+             *     ]
+             */
+            agents?: string[] | null;
+        };
+        /**
+         * ScopeOut
+         * @description A resource's activation scope as a response carries it. ``agents`` is
+         *     always present: ``null`` means unrestricted, ``[]`` dormant.
+         */
         ScopeOut: {
             /**
-             * @description Agent resource UIDS, not names. A scope is a reference to another resource and a name is a label its owner may change; while this held names, renaming an agent silently emptied every scope naming it.
+             * Agents
              * @example [
              *       "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
              *     ]
              */
             agents: string[] | null;
-        } | null;
-        /** @description GET .../scope — the resource's current scope plus whether its kind supports one. Field names MUST match `ResourceScopeOut` in `backend/coffer/surfaces/http/schemas.py`; the frontend's scope module is hand-written, so nothing checks this at compile time. */
-        ResourceScopeOut: {
-            scope?: components["schemas"]["ScopeOut"];
-            /** @description False means this kind has no scope at all and any non-null write is a 422 (`agent` is the only such kind today). */
-            supports_scope: boolean;
         };
-        /** @description PUT .../scope body. `scope: null` clears back to unscoped — every agent. */
-        ResourceScopeUpdate: {
-            /** @description The shape of `ScopeOut`, except that `agents` may be omitted on the way in: an absent `agents` is read as null, i.e. every agent. Unknown properties are still rejected (422). */
-            scope?: {
-                /** @description Agent resource UIDs, not names. */
-                agents?: string[] | null;
-            } | null;
+        /**
+         * UpkeepRunListOut
+         * @description Every pass in flight, oldest first. Empty means nothing is running.
+         */
+        UpkeepRunListOut: {
+            /** Runs */
+            runs: components["schemas"]["UpkeepRunOut"][];
         };
-        ResourceOut: {
-            /**
-             * @description The resource's identity: immutable, opaque, and the same value on every machine holding it. Every route that addresses a resource takes this.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            kind: string;
-            /** @description A label, unique within its kind. Editable through PATCH, except on a kind whose name is fixed (`mcp_server`, `skill`). */
-            name: string;
-            /** @description Optional display text that surfaces show in place of the name; null when none is set. */
-            title?: string | null;
-            description?: string | null;
-            config: {
-                [key: string]: unknown;
-            };
-            scope?: components["schemas"]["ScopeOut"];
-            enabled: boolean;
-            /** @description Whether the kind has an enabled switch at all. False for `knowledge` and `memory`, whose resources are always enabled and refuse enable/disable with `RESOURCE_NOT_TOGGLEABLE`, so a surface can leave the switch out. */
-            toggleable: boolean;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        ResourceListOut: {
-            resources: components["schemas"]["ResourceOut"][];
-        };
-        ResourceCreate: {
-            kind: string;
-            name: string;
-            title?: string | null;
-            description?: string | null;
-            config: {
-                [key: string]: unknown;
-            };
-        };
-        ResourceUpdate: {
-            /** @description Renaming is a field, not an operation — the same level as editing a description, for every kind whose name is not fixed. Absent leaves the label alone; a label another resource of this kind already holds answers 409, and so does any change on a kind whose name is fixed (`NAME_IMMUTABLE`). */
-            name?: string;
-            /** @description Display text, editable on every kind including one whose name is fixed. Absent leaves it alone; an empty string or null clears it; longer than 80 characters is refused as a validation error. */
-            title?: string | null;
-            description?: string | null;
-            config?: {
-                [key: string]: unknown;
-            };
-        };
-        AuditEntryOut: {
-            id: number;
-            /** Format: date-time */
-            timestamp: string;
-            event_type: string;
-            resource_kind?: string | null;
-            resource_name?: string | null;
-            /** @description Who made the change: `cli`, `ui` or `api` from the `X-Coffer-Actor` header (`api` when it is absent), `system` for the daemon's own work, `sync` for a change applied from the sync remote, a named worker such as `system:memory-aggregate-worker` or `system:memory-distil-worker`, or a domain actor a kind names itself — `user`, `channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. A free string, not an enum. */
-            actor: string;
-            details?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        AuditListOut: {
-            entries: components["schemas"]["AuditEntryOut"][];
-        };
-        RetentionPolicyOut: {
-            table_name: string;
-            display_name: string;
-            description: string;
-            default_retention_days: number | null;
-            /** @description Null means keep forever; positive integer is the day count. */
-            retention_days: number | null;
-            /** Format: date-time */
-            last_pruned_at?: string | null;
-            last_pruned_rows: number;
-        };
-        RetentionPolicyListOut: {
-            policies: components["schemas"]["RetentionPolicyOut"][];
-        };
-        RetentionPolicyUpdate: {
-            /** @description Set to null to keep forever; 1..3650 days otherwise. */
-            retention_days?: number | null;
-        };
-        PruneResultOut: {
-            /**
-             * @example {
-             *       "audit_log": 0,
-             *       "mcp_invocations": 1247
-             *     }
-             */
-            tables: {
-                [key: string]: number;
-            };
-        };
+        /**
+         * UpkeepRunOut
+         * @description One pass in flight.
+         */
         UpkeepRunOut: {
             /**
+             * Kind
              * @description The kind whose pass this is: `memory` or `knowledge`.
-             * @example memory
              */
             kind: string;
             /**
+             * Name
              * @description The partition or collection being rewritten.
-             * @example coffer
              */
             name: string;
             /**
+             * Started At
              * Format: date-time
              * @description When this daemon started the pass.
              */
             started_at: string;
         };
-        ReconcileSubjectOut: {
-            kind: string;
-            uid: string | null;
-            title: string;
-        };
-        ReconcileItemOut: {
-            /** @description `<target>:<key>`; what `POST /reconcile/apply` takes. */
-            id: string;
-            /** @example mcp_entry */
-            target: string;
-            key: string;
-            /** @enum {string} */
-            op: "add" | "modify" | "remove";
-            /** @enum {string} */
-            disposition: "repair" | "report" | "blocked";
-            /** @example stale_entry */
-            reason_code: string;
-            reason: string;
-            subject: components["schemas"]["ReconcileSubjectOut"];
-            file: string | null;
-            /** @description What is there now, rendered safely; null if absent. */
-            before: string | null;
-            /** @description What Coffer would write; null for a removal. */
-            after: string | null;
-            changed_params: string[];
-            /** @enum {string} */
-            outcome: "planned" | "applied" | "failed";
-            error?: string | null;
-            /**
-             * Format: date-time
-             * @description When a writing pass first saw this difference.
-             */
-            since?: string | null;
-        };
-        ReconcileTargetOut: {
-            name: string;
-            kinds: string[];
-            /** @description Set when the target raised. */
-            error?: string | null;
-        };
-        ReconcilePassOut: {
-            trigger: string;
-            dry_run: boolean;
-            /** Format: date-time */
-            started_at: string;
-            /** Format: date-time */
-            finished_at: string;
-            applied: number;
-            failed: number;
-            open: number;
-        };
-        ReconcilePlanOut: {
-            trigger: string;
-            /** Format: date-time */
-            generated_at: string;
-            period_seconds: number;
-            targets: components["schemas"]["ReconcileTargetOut"][];
-            items: components["schemas"]["ReconcileItemOut"][];
-            last_pass: components["schemas"]["ReconcilePassOut"] | null;
-        };
-        ReconcileApplyIn: {
-            ids: string[];
-        };
-        ReconcileApplyOut: {
-            /** Format: date-time */
-            started_at: string;
-            /** Format: date-time */
-            finished_at: string;
-            items: components["schemas"]["ReconcileItemOut"][];
-            failures: components["schemas"]["ReconcileTargetOut"][];
-        };
-        AttentionActionOut: {
-            /** @example connect */
-            verb: string;
-            /** @enum {string} */
-            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-            /** @example /api/v1/agents/01J.../coffer-connection */
-            path: string;
-            body?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        AttentionItemOut: {
-            kind: string;
-            uid: string | null;
-            title: string;
-            /** @example agent_partial */
-            reason_code: string;
-            reason: string;
-            /** @enum {string} */
-            severity: "error" | "warning" | "info";
-            /** Format: date-time */
-            since: string | null;
-            action: components["schemas"]["AttentionActionOut"];
-        };
-        AttentionSourceErrorOut: {
-            source: string;
-            error: string;
-        };
-        AttentionOut: {
-            items: components["schemas"]["AttentionItemOut"][];
-            errors: components["schemas"]["AttentionSourceErrorOut"][];
-            counts_by_kind: {
-                [key: string]: number;
-            };
-        };
-        UpkeepRunListOut: {
-            /** @description Every pass in flight, oldest first. Empty means nothing is running. */
-            runs: components["schemas"]["UpkeepRunOut"][];
-        };
     };
-    responses: {
-        /** @description Malformed request */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Missing or invalid token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Resource not found (`RESOURCE_NOT_FOUND`), or its kind belongs to an experimental feature switched off on this machine (`FEATURE_DISABLED`, with `details.feature` naming the key). */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Duplicate resource */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-        /** @description Validation error */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorResponse"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -632,109 +830,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listResources: {
+    get_attention_api_v1_attention_get: {
         parameters: {
-            query?: {
-                kind?: string;
-                /** @description Filter by exact label. The ONE place a name may be used to find a resource: it is how a surface that started from what a human typed — the CLI — turns that into the uid every other route takes. */
-                name?: string;
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
             };
-            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResourceListOut"];
+                    "application/json": components["schemas"]["AttentionOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    registerResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResourceCreate"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResourceOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    deleteResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_PROTECTED` — the kind's pre-write delete guard refused before anything was torn down (spec resource-framework "Let a kind refuse a deletion before anything is torn down"); Coffer's builtin skill is the case today. */
-            409: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -744,12 +870,371 @@ export interface operations {
             };
         };
     };
-    updateResource: {
+    list_audit_api_v1_audit_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+                /** @description One resource's whole trail, including the rows written while it carried a different name. Filtering by name was removed with the identity change: it could not tell a renamed resource from a deleted one whose name was later reused, and rendered two objects' histories as one. */
+                resource_uid?: string | null;
+                event_type?: string | null;
+                event_prefix?: string | null;
+                since?: string | null;
+                limit?: number;
+                /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stream_events_api_v1_events_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The SSE id of the last `change` event seen; resume after it. */
+                "Last-Event-ID"?: string | null;
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A Server-Sent Events stream of `change`, `resync` and `heartbeat` events that stays open until the client disconnects. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_items_api_v1_reconcile_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileApplyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileApplyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plan_api_v1_reconcile_plan_get: {
+        parameters: {
+            query?: {
+                /** @description One target's plan only. */
+                target?: string | null;
+                /** @description Only items about this kind. */
+                kind?: string | null;
+                /** @description Only items about this resource. */
+                uid?: string | null;
+                trigger?: "period" | "manual";
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcilePlanOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_resources_api_v1_resources_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+                /** @description Filter by exact label. This is the ONE place a name may be used to find a resource: it is how a surface that started from what a human typed — the CLI — turns that into the uid every other route takes. */
+                name?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    register_resource_api_v1_resources_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_resource_api_v1_resources__uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The resource's immutable identity. */
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_resource_api_v1_resources__uid__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_resource_api_v1_resources__uid__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
                 uid: string;
             };
             cookie?: never;
@@ -760,7 +1245,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -769,11 +1254,8 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource of the same kind already carries (spec resource-framework "Treat a resource's name as a mutable label"). `NAME_IMMUTABLE` — a changed name on a kind whose name is fixed (`mcp_server`, `skill`), refused before any field of the request is written; the message says to delete and register the resource again and names what that resets. */
-            409: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -781,34 +1263,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    enableResource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResourceOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled switch (`knowledge`, `memory`); nothing is changed (spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface"). */
-            409: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -818,19 +1274,21 @@ export interface operations {
             };
         };
     };
-    disableResource: {
+    disable_resource_api_v1_resources__uid__disable_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -839,10 +1297,17 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled switch (`knowledge`, `memory`); nothing is changed. */
-            409: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -852,19 +1317,63 @@ export interface operations {
             };
         };
     };
-    getResourceScope: {
+    enable_resource_api_v1_resources__uid__enable_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_resource_scope_api_v1_resources__uid__scope_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -873,16 +1382,34 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceScopeOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateResourceScope: {
+    update_resource_scope_api_v1_resources__uid__scope_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
@@ -893,7 +1420,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK — the resource as it now stands, scope included */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -902,41 +1429,8 @@ export interface operations {
                     "application/json": components["schemas"]["ResourceOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    listAuditEntries: {
-        parameters: {
-            query?: {
-                kind?: string;
-                /** @description One resource's whole trail, including rows written while it carried a different name. Filtering by name was removed with the identity change: a label cannot tell a renamed resource from a deleted one whose name was later reused. */
-                resource_uid?: string;
-                event_type?: string;
-                /** @description Only events whose type starts with this prefix — `skill_` for one kind's own events, for instance. */
-                event_prefix?: string;
-                since?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditListOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description `resource_uid` names no resource — a different answer from "that resource has no events", which is an empty list. */
-            404: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -944,19 +1438,29 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listRetentionPolicies: {
+    list_policies_api_v1_retention_policies_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -965,13 +1469,33 @@ export interface operations {
                     "application/json": components["schemas"]["RetentionPolicyListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateRetentionPolicy: {
+    update_policy_api_v1_retention_policies__table_name__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
                 table_name: string;
             };
@@ -983,7 +1507,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -992,28 +1516,42 @@ export interface operations {
                     "application/json": components["schemas"]["RetentionPolicyOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    pruneRetention: {
+    prune_now_api_v1_retention_prune_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: {
             content: {
-                "application/json": {
-                    /** @description When omitted, prunes every registered table. */
-                    table_name?: string;
-                };
+                "application/json": components["schemas"]["PruneRequestIn"] | null;
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1022,19 +1560,38 @@ export interface operations {
                     "application/json": components["schemas"]["PruneResultOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listUpkeepRuns: {
+    list_runs_api_v1_upkeep_runs_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1043,86 +1600,24 @@ export interface operations {
                     "application/json": components["schemas"]["UpkeepRunListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    getReconcilePlan: {
-        parameters: {
-            query?: {
-                /** @description One target's plan only; an unknown name answers 404. */
-                target?: string | null;
-                /** @description Only the items about this resource kind. */
-                kind?: string | null;
-                /** @description Only the items about this resource. */
-                uid?: string | null;
-                /** @description `period` is what the next periodic pass would do; `manual` is what a person applying every item would get. */
-                trigger?: "period" | "manual";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReconcilePlanOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    applyReconcileItems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReconcileApplyIn"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReconcileApplyOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getAttention: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttentionOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
         };
     };
 }

@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from coffer.domain.agent.types import AgentType
 
@@ -280,7 +280,7 @@ class MemoryFileNode:
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     children: list[MemoryFileNode] = field(default_factory=list)
     truncated: bool = False

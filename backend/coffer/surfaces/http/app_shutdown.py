@@ -55,6 +55,7 @@ class Running:
     channel_runtime_task: asyncio.Task[None]
     reaper_task: asyncio.Task[Any]
     reconciler_task: asyncio.Task[None]
+    attention_watch_task: asyncio.Task[None]
     kinds: Any
     engine: AsyncEngine
 
@@ -80,6 +81,10 @@ async def shutdown(running: Running) -> None:
     running.reconciler_task.cancel()
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await running.reconciler_task
+    # Its listener next: nothing is left to change what it watches.
+    running.attention_watch_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await running.attention_watch_task
     running.workers.retention_worker.stop()
     await stop_converge_worker(running.workers.converge_worker)
     await stop_curation_worker(running.workers.curation_task)

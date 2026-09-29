@@ -93,7 +93,9 @@ describe("useChannels hooks", () => {
   test("useChannelStatus fetches /channels/{uid}/status", async () => {
     const status: ChannelStatus = {
       ...TG,
+      title: null,
       channel_type: "telegram",
+      diagnostics: [],
       enabled: true,
       running: true,
       pending_pairing: false,
@@ -112,7 +114,11 @@ describe("useChannels hooks", () => {
   });
 
   test("useIssuePairingCode POSTs and returns the code", async () => {
-    const code: PairingCode = { code: "ABCD2345", expires_at: "2026-06-12T13:00:00Z" };
+    const code: PairingCode = {
+      code: "ABCD2345",
+      expires_at: "2026-06-12T13:00:00Z",
+      pair_url: "",
+    };
     const fetchMock = stubFetch(code);
 
     const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });

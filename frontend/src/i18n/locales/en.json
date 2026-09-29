@@ -805,6 +805,7 @@
     "CREDENTIAL_LOCKED": "The OS keychain is locked — unlock it and retry",
     "CREDENTIAL_MISSING": "Required credential is missing from the credential store — store it again on the resource's edit page",
     "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
+    "CURSOR_INVALID": "The list's page position is no longer valid — reload the list from the start.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",

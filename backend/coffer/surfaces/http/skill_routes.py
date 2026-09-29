@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Response, status
 from pydantic import BaseModel, Field
@@ -15,7 +15,8 @@ from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.drift import DriftEntry
+from coffer.domain.skill.drift import DriftEntry, DriftKind
+from coffer.domain.skill.source import BuiltinSource, LocalImportSource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
@@ -59,6 +60,31 @@ class SkillBindingOut(BaseModel):
     link_mode: LinkMode | None = None
 
 
+class LocalImportSourceOut(BaseModel):
+    """A skill copied in from a folder on disk; the path is informational."""
+
+    type: Literal["local_import"]
+    original_path: str
+
+
+class BuiltinSourceOut(BaseModel):
+    """Coffer generated this skill. It carries no provenance fields at all:
+    the master folder is rewritten from the running build at every start."""
+
+    type: Literal["builtin"]
+
+
+SkillSourceOut = Annotated[LocalImportSourceOut | BuiltinSourceOut, Field(discriminator="type")]
+
+
+def _source_out(
+    source: LocalImportSource | BuiltinSource,
+) -> LocalImportSourceOut | BuiltinSourceOut:
+    if isinstance(source, LocalImportSource):
+        return LocalImportSourceOut(type="local_import", original_path=source.original_path)
+    return BuiltinSourceOut(type="builtin")
+
+
 class SkillOut(BaseModel):
     # Identity first, label second — ``/api/v1/skills/{uid}`` is what every
     # other route here takes (ADR resource-identity-is-an-immutable-uid).
@@ -70,7 +96,7 @@ class SkillOut(BaseModel):
     #: ``PATCH /api/v1/resources/{uid}``. Null = none.
     title: str | None = None
     description: str
-    source: dict[str, Any]
+    source: SkillSourceOut
     # Coffer's own: the folder is rewritten from the running build at every
     # boot, so deleting it is refused (409 RESOURCE_PROTECTED) while enabling,
     # disabling and narrowing its scope stay the owner's to decide. The surface
@@ -111,7 +137,7 @@ class DriftEntryOut(BaseModel):
 
     skill_name: str
     agent_name: str
-    kind: str
+    kind: DriftKind
     target_path: str
     suggested_remedy: str
 
@@ -161,7 +187,7 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
     return DriftEntryOut(
         skill_name=e.skill_name,
         agent_name=e.agent_name,
-        kind=e.kind.value,
+        kind=e.kind,
         target_path=e.target_path,
         suggested_remedy=e.suggested_remedy,
     )
@@ -187,7 +213,7 @@ async def _to_skill_out(
         name=r.name,
         title=r.title,
         description=cfg.skill_md_description,
-        source=cfg.source.model_dump(mode="json"),
+        source=_source_out(cfg.source),
         builtin=is_builtin(r.config),
         enabled=r.enabled,
         scope=ScopeOut.of(r.scope),

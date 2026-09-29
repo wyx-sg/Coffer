@@ -3,8 +3,10 @@
 // the agent's own local transcript sessions (title, project, counts, start +
 // last-activity times) through the shared DataTable so it matches every other
 // resource surface. The list is large and unbounded, so the table runs in
-// DataTable's server-pagination mode: each page is fetched on demand
-// (limit/offset) rather than loading every session up front. Coffer never writes
+// DataTable's server-pagination mode: each page is fetched on demand (limit +
+// the cursor the page before it returned) rather than loading every session up
+// front — a cursor, not an offset, so a session the agent writes meanwhile does
+// not shift the next page. Coffer never writes
 // these files. Clicking a row opens that conversation's own page, which renders
 // the .jsonl as a readable dialogue and carries the open-in-editor / reveal
 // actions; the table itself offers no per-row menu, because a list of a thousand
@@ -55,6 +57,9 @@ export function AgentConversationsTab({ uid }: Props) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  // cursors[p - 1] reads page p; page 1 needs none. Paging is prev/next only,
+  // so every page reached has its cursor recorded by the page before it.
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [sort, setSort] = useState<TranscriptSort>("last_activity_at");
   const [order, setOrder] = useState<SortOrder>("desc");
   const defaultPageSize = useDefaultPageSize();
@@ -62,16 +67,32 @@ export function AgentConversationsTab({ uid }: Props) {
 
   const debouncedSearch = useDebouncedValue(search);
 
-  const { data, isPending, error } = useAgentTranscripts(uid, {
+  const { data, isPending, isPlaceholderData, error } = useAgentTranscripts(uid, {
     q: debouncedSearch.trim() || undefined,
     sort,
     order,
     limit: pageSize,
-    offset: (page - 1) * pageSize,
+    cursor: cursors[page - 1],
   });
 
   const rows = data?.sessions ?? [];
   const total = data?.total ?? 0;
+  // Record the cursor this page hands the next one — but not from the previous
+  // page's answer still on screen while this one loads.
+  const nextCursor = isPlaceholderData ? undefined : (data?.next_cursor ?? undefined);
+  if (nextCursor && cursors[page] !== nextCursor) {
+    setCursors((cs) => [...cs.slice(0, page), nextCursor]);
+  }
+
+  // Back to page 1 whenever the query changes: a cursor is bound to the search
+  // and sort it was issued for.
+  const firstPage = () => {
+    setPage(1);
+    setCursors([undefined]);
+  };
+  const goToPage = (p: number) => {
+    if (p === 1 || cursors[p - 1]) setPage(p);
+  };
 
   // Toggle direction when re-clicking the active column, else sort the new
   // column descending. Reset to page 1 so the new order starts from the top.
@@ -81,7 +102,7 @@ export function AgentConversationsTab({ uid }: Props) {
       setSort(col);
       setOrder("desc");
     }
-    setPage(1);
+    firstPage();
   };
 
   const sortHeader = (col: TranscriptSort, label: string) => (
@@ -181,21 +202,21 @@ export function AgentConversationsTab({ uid }: Props) {
           search={{
             placeholder: t("agents.conversationsTab.searchPlaceholder"),
             value: search,
-            // Back to page 1 on every new query: the old offset would otherwise
-            // land past the end of a narrower result set and show an empty table.
+            // Back to page 1 on every new query: the old cursor was issued for
+            // the previous search and would be refused.
             onChange: (v) => {
               setSearch(v);
-              setPage(1);
+              firstPage();
             },
           }}
           serverPagination={{
             page,
             pageSize,
             total,
-            onPageChange: setPage,
+            onPageChange: goToPage,
             onPageSizeChange: (s) => {
               setPageSize(s);
-              setPage(1);
+              firstPage();
             },
           }}
           emptyMessage={t("agents.conversationsTab.empty")}

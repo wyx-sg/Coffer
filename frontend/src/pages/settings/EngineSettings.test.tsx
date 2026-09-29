@@ -78,6 +78,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     credential_ref: "provider/acme/key",
     compatible_agents: ["claude_code"],
     is_active: false,
+    title: null,
     internal_default: false,
     transcribe_default: false,
     models: [],
@@ -123,19 +124,23 @@ describe("EngineSettings", () => {
     };
   });
 
-  acceptance("internal-engine", "Settings → Coffer's model shows and changes both halves", async () => {
-    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
-    renderPage();
-    expect(await screen.findByText("Coffer's model")).toBeInTheDocument();
-    // The embedding card went with vector retrieval: there is no index left
-    // for an embedding model to feed (ADR knowledge-is-plain-files).
-    expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
-    // The passes Coffer runs on its own belong beside the model they run on.
-    expect(screen.getByText("Automatic upkeep")).toBeInTheDocument();
-    // Speech gets its own card: it runs on a second connection flag, and
-    // nothing falls back from it to the engine's.
-    expect(screen.getByText("Speech to text")).toBeInTheDocument();
-  });
+  acceptance(
+    "internal-engine",
+    "Settings → Coffer's model shows and changes both halves",
+    async () => {
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
+      expect(await screen.findByText("Coffer's model")).toBeInTheDocument();
+      // The embedding card went with vector retrieval: there is no index left
+      // for an embedding model to feed (ADR knowledge-is-plain-files).
+      expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
+      // The passes Coffer runs on its own belong beside the model they run on.
+      expect(screen.getByText("Automatic upkeep")).toBeInTheDocument();
+      // Speech gets its own card: it runs on a second connection flag, and
+      // nothing falls back from it to the engine's.
+      expect(screen.getByText("Speech to text")).toBeInTheDocument();
+    },
+  );
 
   acceptance(
     "internal-engine",
@@ -150,13 +155,17 @@ describe("EngineSettings", () => {
     },
   );
 
-  acceptance("internal-engine", "bound how long one call to Coffer's own model may take", async () => {
-    engineConfig = { ...engineConfig, model_timeout_s: 300 };
-    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
-    renderPage();
+  acceptance(
+    "internal-engine",
+    "bound how long one call to Coffer's own model may take",
+    async () => {
+      engineConfig = { ...engineConfig, model_timeout_s: 300 };
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
 
-    expect(await screen.findByText("5 min")).toBeInTheDocument();
-  });
+      expect(await screen.findByText("5 min")).toBeInTheDocument();
+    },
+  );
 
   acceptance(
     "internal-engine",
@@ -172,16 +181,20 @@ describe("EngineSettings", () => {
     },
   );
 
-  acceptance("internal-engine", "bound how long one call to Coffer's own model may take", async () => {
-    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
-    renderPage();
-    await screen.findByText("Coffer's model");
+  acceptance(
+    "internal-engine",
+    "bound how long one call to Coffer's own model may take",
+    async () => {
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
+      await screen.findByText("Coffer's model");
 
-    openSelect(/^time limit per call$/i);
-    fireEvent.click(screen.getByRole("option", { name: "5 min" }));
+      openSelect(/^time limit per call$/i);
+      fireEvent.click(screen.getByRole("option", { name: "5 min" }));
 
-    await waitFor(() => expect(setBound).toHaveBeenCalledWith(300));
-  });
+      await waitFor(() => expect(setBound).toHaveBeenCalledWith(300));
+    },
+  );
 
   acceptance(
     "internal-engine",

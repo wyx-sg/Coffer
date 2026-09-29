@@ -50,6 +50,7 @@ describe("KnowledgeCreateDialog", () => {
       // the name it was typed under.
       uid: "kn-9b04",
       name: "team-notes",
+      title: null,
       description: "what we know",
       document_count: 0,
       pending_count: 0,

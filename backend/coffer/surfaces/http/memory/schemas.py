@@ -18,6 +18,8 @@ makes "both sides" checkable rather than remembered.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -207,7 +209,7 @@ class FileNodeOut(BaseModel):
     path: str
     abs_path: str
     folder_abs_path: str
-    type: str
+    type: Literal["file", "dir"]
     size: int | None = None
     #: True on a directory whose descendants were clipped at the walk bound.
     truncated: bool = False

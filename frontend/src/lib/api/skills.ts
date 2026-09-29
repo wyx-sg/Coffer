@@ -5,122 +5,30 @@
 // renaming a skill moves the folder and leaves the uid alone, so the uid is the
 // only thing a request may be built from (ADR resource-identity-is-an-immutable-uid).
 //
-// Wire types are hand-written here; the skill-manager contract also generates
-// into `generated/skill-manager.ts` (`npm run codegen`, `scripts/codegen.mjs`).
-// Transport via the shared `call` (.agents/frontend.md §4).
+// Wire types are aliases of the skill-manager contract's generated schemas
+// (`generated/skill-manager.ts`). Transport via the shared `call`
+// (.agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
-import type { Scope } from "@/lib/hooks/useScope";
+import type { components as SkillManagerWire } from "@/lib/api/generated/skill-manager";
 
-interface LocalImportSource {
-  type: "local_import";
-  original_path: string;
-}
+export type SkillOut = SkillManagerWire["schemas"]["SkillOut"];
 
-/** Coffer generated this skill; it carries no provenance fields, because none
- *  of them would still be true after the next start rewrote the folder. */
-interface BuiltinSource {
-  type: "builtin";
-}
+export type SkillListOut = SkillManagerWire["schemas"]["SkillListOut"];
 
-type SkillSource = LocalImportSource | BuiltinSource;
+export type SkillImportRequest = SkillManagerWire["schemas"]["SkillImportRequest"];
 
-type LinkMode = "symlink" | "junction" | "copy_fallback";
+export type SkillFileNode = SkillManagerWire["schemas"]["SkillFileNodeOut"];
 
-/** One agent currently holding a delivered copy of this skill. Delivery
- *  bookkeeping surfaced read-only: a row here simply means "delivered". Who
- *  gets a row is decided by `SkillOut.enabled` + `SkillOut.scope`. */
-interface SkillBindingOut {
-  /** The agent holding the copy, as the identity a stored pointer has to be.
-   *  Address this. */
-  agent_uid: string;
-  /** The same agent's label, resolved at read time. Display this — a line of
-   *  UUIDs under a skill tells the reader nothing. */
-  agent_name: string;
-  last_linked_at: string | null;
-  last_link_path: string | null;
-  link_mode: LinkMode | null;
-}
-
-export interface SkillOut {
-  /** The skill Resource's immutable identity — what every route below takes. */
-  uid: string;
-  /** The master folder's name on disk and the name agents load the skill by —
-   *  fixed after registration (a rename answers 409 `NAME_IMMUTABLE`). */
-  name: string;
-  /** The display title a person chose, shown in place of the name; null when
-   *  none is set. Edited through `PATCH /resources/{uid}`. */
-  title?: string | null;
-  description: string;
-  source: SkillSource;
-  /** True for a skill Coffer generates and owns. Its master folder is rewritten
-   *  from the running build at every start, so deleting it is refused (409
-   *  `RESOURCE_PROTECTED`) — the UI disables the delete rather than offering a
-   *  no-op. Reach (enable/disable, scope) stays the owner's to decide. */
-  builtin: boolean;
-  /** The two halves of the delivery predicate: a skill reaches an agent iff
-   *  `enabled` and that agent, on this machine, falls inside `scope`
-   *  (null = everywhere; an axis given [] matches nothing). */
-  enabled: boolean;
-  scope: Scope | null;
-  version_hash: string;
-  master_path: string;
-  last_synced_from_source_at: string | null;
-  created_at: string;
-  updated_at: string;
-  bindings: SkillBindingOut[];
-}
-
-export interface SkillListOut {
-  items: SkillOut[];
-}
-
-export interface SkillImportRequest {
-  path: string;
-  overwrite?: boolean;
-}
-
-export interface SkillFileNode {
-  name: string;
-  path: string;
-  /** Absolute on-disk path of this node (file viewers hand it to FileActions). */
-  abs_path?: string;
-  type: "file" | "dir";
-  size: number | null;
-  /** True on a dir whose children were clipped at the max tree depth. */
-  truncated: boolean;
-  children: SkillFileNode[] | null;
-}
-
-export interface SkillFileTreeOut {
-  root: SkillFileNode;
-}
+export type SkillFileTreeOut = SkillManagerWire["schemas"]["SkillFileTreeOut"];
 
 /** Body of a skill-file save. `expected_fingerprint` makes the write
  *  conditional: the daemon refuses it with 409 SKILL_FILE_STALE when the file
  *  changed on disk since the read that produced the fingerprint. The master
  *  folder is also the user's own working copy, so that race is routine. */
-export interface SkillFileWrite {
-  path: string;
-  content: string;
-  expected_fingerprint?: string | null;
-}
+export type SkillFileWrite = SkillManagerWire["schemas"]["SkillFileWriteRequest"];
 
-export interface SkillFileContentOut {
-  path: string;
-  /** Absolute on-disk path of the file (handed to FileActions). */
-  abs_path?: string;
-  /** Absolute on-disk path of the file's containing folder. */
-  folder_abs_path?: string;
-  content: string;
-  truncated: boolean;
-  binary: boolean;
-  size: number;
-  /** sha256 of the file's RAW on-disk bytes — not of `content`, which is
-   *  truncated past the read cap and empty for a binary file. Echo it back on a
-   *  save to make that save conditional. */
-  fingerprint: string;
-}
+export type SkillFileContentOut = SkillManagerWire["schemas"]["SkillFileContentOut"];
 
 export const skillsApi = {
   list: () => call<SkillListOut>("/skills"),

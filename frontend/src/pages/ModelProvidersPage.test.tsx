@@ -86,6 +86,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     credential_ref: "provider/acme/key",
     compatible_agents: ["claude_code"],
     is_active: false,
+    title: null,
     internal_default: false,
     transcribe_default: false,
     models: [],

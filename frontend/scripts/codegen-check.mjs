@@ -1,9 +1,13 @@
 // frontend/scripts/codegen-check.mjs — `npm run codegen:check`.
 //
-// Regenerates every contract into a temp dir and diffs it against
-// `src/lib/api/generated/`. Exits 1 naming each file that drifted — a contract
-// edited without `npm run codegen`, or a generated file edited by hand — so
-// `npm run lint` (and therefore CI) catches it without a workflow change.
+// Two checks, one exit code, so `npm run lint` (and therefore CI) runs both:
+//
+//   1. Regenerates every contract into a temp dir and diffs it against
+//      `src/lib/api/generated/`, naming each file that drifted — a contract
+//      regenerated without `npm run codegen`, or a generated file edited by
+//      hand.
+//   2. `check-wire-types.mjs`: no wire type in `src/lib/api/` is written by
+//      hand, beyond the allow-list the UI rebuild is emptying.
 //
 // Everything here works in spec ids, which may be nested paths
 // (`channels/telegram` → `generated/channels/telegram.ts`), so the walk below
@@ -12,6 +16,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import os from "node:os";
 import path from "node:path";
 
+import { checkWireTypes } from "./check-wire-types.mjs";
 import { CONTRACTS, GENERATED_DIR, generate, generatedPath } from "./codegen.mjs";
 
 /** Every file under `dir`, at any depth, as forward-slash relative paths. */
@@ -55,9 +60,18 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 
+const wire = checkWireTypes();
+
 if (drifted.length > 0) {
   console.error("codegen:check — src/lib/api/generated/ is out of step with openspec/specs/*/contracts:");
   for (const line of drifted) console.error(`  - ${line}`);
-  process.exit(1);
 }
-console.log(`codegen:check — ${CONTRACTS.length} generated modules match their contracts.`);
+if (wire.problems.length > 0) {
+  console.error("codegen:check — hand-written wire types in src/lib/api/:");
+  for (const line of wire.problems) console.error(`  - ${line}`);
+}
+if (drifted.length > 0 || wire.problems.length > 0) process.exit(1);
+console.log(
+  `codegen:check — ${CONTRACTS.length} generated modules match their contracts; ` +
+    `no new hand-written wire type (${wire.allowed} allow-listed for the UI rebuild).`,
+);

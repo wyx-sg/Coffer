@@ -30,6 +30,7 @@ from coffer.domain.chat.message import (
     block_to_dict,
 )
 from coffer.infrastructure.chat.persistence_models import ConversationModel, MessageModel
+from coffer.infrastructure.persistence.keyset import newest_first_after
 
 
 def _tz(dt: datetime) -> datetime:
@@ -95,20 +96,37 @@ class ConversationRepo:
             row = (await session.execute(stmt)).scalar_one_or_none()
             return self._to_domain(row) if row else None
 
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
-        """The developer's OWN conversations, newest first — an owned one is
-        never listed (see ``ConversationModel.owner``). ``archived=False`` is
-        the active threads, ``archived=True`` the archived ones. Reading one by
-        id is untouched: a task's page opens the conversation it owns.
+    async def list(
+        self,
+        *,
+        archived: bool = False,
+        limit: int | None = None,
+        after: tuple[datetime, str] | None = None,
+    ) -> list[Conversation]:
+        """The developer's OWN conversations, newest activity first with the id
+        breaking ties — an owned one is never listed (see
+        ``ConversationModel.owner``). ``archived=False`` is the active threads,
+        ``archived=True`` the archived ones. ``after`` (the previous page's last
+        ``(updated_at, id)``) and ``limit`` cut one page of that order; without
+        them the whole listing comes back. Reading one by id is untouched: a
+        task's page opens the conversation it owns.
         """
         async with self._sm() as session:
-            stmt = select(ConversationModel).order_by(ConversationModel.updated_at.desc())
+            stmt = select(ConversationModel).order_by(
+                ConversationModel.updated_at.desc(), ConversationModel.id.desc()
+            )
             stmt = stmt.where(
                 ConversationModel.archived_at.isnot(None)
                 if archived
                 else ConversationModel.archived_at.is_(None)
             )
             stmt = stmt.where(ConversationModel.owner.is_(None))
+            if after is not None:
+                stmt = stmt.where(
+                    newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
+                )
+            if limit is not None:
+                stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
 

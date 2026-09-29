@@ -52,7 +52,12 @@ vi.mock("@/lib/hooks/useMemory", () => ({
 }));
 // The header's Edit dialog sets the partition's title.
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useSetResourceTitle: vi.fn(() => ({ mutate: vi.fn(), isPending: false, reset: vi.fn(), error: null })),
+  useSetResourceTitle: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    reset: vi.fn(),
+    error: null,
+  })),
 }));
 
 function renderPage() {
@@ -87,6 +92,7 @@ const PARTITION_NAME = "coffer";
 const COFFER: PartitionOut = {
   uid: PARTITION_UID,
   name: PARTITION_NAME,
+  title: null,
   repository_path: "/Users/dev/coffer",
   repository_key: "remote:github.com/wyx-sg/coffer",
   note_count: 1,

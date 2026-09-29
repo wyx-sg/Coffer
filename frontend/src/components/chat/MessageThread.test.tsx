@@ -7,6 +7,7 @@ import { MessageThread } from "./MessageThread";
 import { acceptance } from "@/test/acceptance";
 import type { Conversation, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
@@ -29,6 +30,8 @@ const BASE_CONV: Conversation = {
   id: "conv-1",
   agent_key: "claude_code",
   title: "Test",
+  archived_at: null,
+  channel_binding: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -38,8 +41,11 @@ const makeMsg = (overrides: Partial<Message>): Message => ({
   conversation_id: "conv-1",
   seq: 1,
   role: "user",
-  content: [{ type: "text", text: "Hello" }],
+  content: [contentBlock({ type: "text", text: "Hello" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -81,7 +87,9 @@ describe("MessageThread", () => {
 
   test("renders user messages right-aligned", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "Hey there" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "Hey there" })] }),
+      ],
     });
     renderThread();
     await waitFor(() => expect(screen.getByText("Hey there")).toBeInTheDocument());
@@ -94,8 +102,8 @@ describe("MessageThread", () => {
       messages: [
         makeMsg({
           content: [
-            { type: "text", text: "what is in this?" },
-            { type: "attachment", filename: "report.pdf", mime: "application/pdf" },
+            contentBlock({ type: "text", text: "what is in this?" }),
+            contentBlock({ type: "attachment", filename: "report.pdf", mime: "application/pdf" }),
           ],
         }),
       ],
@@ -130,7 +138,7 @@ describe("MessageThread", () => {
         makeMsg({
           id: "msg-2",
           role: "assistant",
-          content: [{ type: "text", text: "Hello from assistant" }],
+          content: [contentBlock({ type: "text", text: "Hello from assistant" })],
         }),
       ],
     });
@@ -141,7 +149,10 @@ describe("MessageThread", () => {
   test("renders live streaming message text", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
-      liveMessage: { blocks: [{ type: "text", text: "Streaming reply..." }], streaming: true },
+      liveMessage: {
+        blocks: [contentBlock({ type: "text", text: "Streaming reply..." })],
+        streaming: true,
+      },
     });
     await waitFor(() => expect(screen.getByText("Streaming reply...")).toBeInTheDocument());
   });
@@ -152,12 +163,12 @@ describe("MessageThread", () => {
       liveMessage: {
         streaming: true,
         blocks: [
-          {
+          contentBlock({
             type: "tool_use",
             tool_use_id: "tc-1",
             tool_name: "search",
             tool_input: { query: "test" },
-          },
+          }),
         ],
       },
     });
@@ -231,7 +242,7 @@ describe("MessageThread", () => {
     });
     renderThread({
       isStreaming: true,
-      liveMessage: { blocks: [{ type: "text", text: "live text" }], streaming: true },
+      liveMessage: { blocks: [contentBlock({ type: "text", text: "live text" })], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("live text")).toBeInTheDocument());
     // Exactly one in-progress bubble: the live one; the fetched placeholder is filtered.
@@ -248,7 +259,7 @@ describe("MessageThread", () => {
       pendingEchoes: [
         { id: "echo-1", text: "my question", attachments: [], sentAt: Date.now(), afterSeq: -1 },
       ],
-      liveMessage: { blocks: [{ type: "text", text: "replying" }], streaming: true },
+      liveMessage: { blocks: [contentBlock({ type: "text", text: "replying" })], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
     expect(screen.getByText("replying")).toBeInTheDocument();
@@ -263,12 +274,12 @@ describe("MessageThread", () => {
     // both rather than suppress the echo because its text already appears.
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
-        makeMsg({ role: "user", content: [{ type: "text", text: "again" }] }),
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "again" })] }),
         makeMsg({
           id: "msg-2",
           seq: 2,
           role: "assistant",
-          content: [{ type: "text", text: "first answer" }],
+          content: [contentBlock({ type: "text", text: "first answer" })],
         }),
       ],
     });
@@ -303,7 +314,7 @@ describe("MessageThread", () => {
     // spec chat "Open an archived conversation read-only": archived
     // conversations open read-only; restoring re-enables chat.
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ content: [{ type: "text", text: "old message" }] })],
+      messages: [makeMsg({ content: [contentBlock({ type: "text", text: "old message" })] })],
     });
     const onRestore = vi.fn();
     renderThread({ readOnly: true, onRestore });
@@ -334,7 +345,7 @@ describe("MessageThread", () => {
     // empty placeholder; with the error set, neither may keep "thinking".
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
-        makeMsg({ role: "user", content: [{ type: "text", text: "my question" }] }),
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "my question" })] }),
         makeMsg({ id: "msg-2", seq: 2, role: "assistant", status: "streaming", content: [] }),
       ],
     });
@@ -354,7 +365,9 @@ describe("MessageThread", () => {
 
   acceptance("chat", "a failed turn offers a retry in the thread", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "try again" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "try again" })] }),
+      ],
     });
     const onSend = vi.fn();
     const onResend = vi.fn();
@@ -388,7 +401,9 @@ describe("MessageThread", () => {
 
   test("a refused send offers no Retry — its message is still in the composer", async () => {
     chatApiMock.listMessages.mockResolvedValue({
-      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "older" }] })],
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "older" })] }),
+      ],
     });
     const onResend = vi.fn();
     renderThread({ turnError: new Error("refused"), retryable: false, onResend });

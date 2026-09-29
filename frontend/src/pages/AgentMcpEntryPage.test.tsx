@@ -44,6 +44,12 @@ const AGENT: AgentOut = {
   type: "claude_code",
   config_dir: "/home/u/.claude",
   description: null,
+  title: null,
+  model: null,
+  fast_model: null,
+  wire_api: null,
+  version: null,
+  state: "installed_active",
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
 };

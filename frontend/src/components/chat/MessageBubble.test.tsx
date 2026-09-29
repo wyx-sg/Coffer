@@ -4,14 +4,18 @@ import { render, screen } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
 import { acceptance } from "@/test/acceptance";
 import type { ContentBlock, Message } from "@/lib/api/chat";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 const makeAssistant = (overrides: Partial<Message>): Message => ({
   id: "m-1",
   conversation_id: "c-1",
   seq: 1,
   role: "assistant",
-  content: [{ type: "text", text: "Hello" }],
+  content: [contentBlock({ type: "text", text: "Hello" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -21,8 +25,11 @@ const makeUser = (overrides: Partial<Message>): Message => ({
   conversation_id: "c-1",
   seq: 0,
   role: "user",
-  content: [{ type: "text", text: "hi" }],
+  content: [contentBlock({ type: "text", text: "hi" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -64,8 +71,8 @@ describe("MessageBubble", () => {
       <MessageBubble
         message={makeUser({
           content: [
-            { type: "text", text: "look" },
-            { type: "attachment", filename: "photo.jpg", mime: "image/jpeg" },
+            contentBlock({ type: "text", text: "look" }),
+            contentBlock({ type: "attachment", filename: "photo.jpg", mime: "image/jpeg" }),
           ],
         })}
       />,
@@ -77,7 +84,9 @@ describe("MessageBubble", () => {
   test("an attachment without a filename gets a translated label", () => {
     render(
       <MessageBubble
-        message={makeUser({ content: [{ type: "attachment", filename: null, mime: null }] })}
+        message={makeUser({
+          content: [contentBlock({ type: "attachment", filename: null, mime: null })],
+        })}
       />,
     );
     expect(screen.getByText("Attachment")).toBeInTheDocument();
@@ -97,10 +106,20 @@ describe("MessageBubble", () => {
 
   describe("an assistant turn's text and tool calls render in the order the turn emitted them", () => {
     const orderedBlocks: ContentBlock[] = [
-      { type: "text", text: "BEFORE" },
-      { type: "tool_use", tool_use_id: "tu-1", tool_name: "read_file", tool_input: {} },
-      { type: "tool_result", tool_use_id: "tu-1", tool_name: "read_file", output: {} },
-      { type: "text", text: "AFTER" },
+      contentBlock({ type: "text", text: "BEFORE" }),
+      contentBlock({
+        type: "tool_use",
+        tool_use_id: "tu-1",
+        tool_name: "read_file",
+        tool_input: {},
+      }),
+      contentBlock({
+        type: "tool_result",
+        tool_use_id: "tu-1",
+        tool_name: "read_file",
+        output: {},
+      }),
+      contentBlock({ type: "text", text: "AFTER" }),
     ];
 
     function renderedOrder(container: HTMLElement): string[] {

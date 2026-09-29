@@ -3,14 +3,18 @@ import { describe, expect, test } from "vitest";
 
 import type { Message } from "@/lib/api/chat";
 import { retryTargetFor, textOf, visibleThreadMessages } from "./threadView";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 const msg = (over: Partial<Message>): Message => ({
   id: "m",
   conversation_id: "c",
   seq: 1,
   role: "user",
-  content: [{ type: "text", text: "hello" }],
+  content: [contentBlock({ type: "text", text: "hello" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
   created_at: "",
   ...over,
 });
@@ -23,9 +27,9 @@ describe("textOf", () => {
       textOf(
         msg({
           content: [
-            { type: "text", text: "a" },
-            { type: "attachment", filename: "f" },
-            { type: "text", text: "b" },
+            contentBlock({ type: "text", text: "a" }),
+            contentBlock({ type: "attachment", filename: "f" }),
+            contentBlock({ type: "text", text: "b" }),
           ],
         }),
       ),
@@ -40,7 +44,7 @@ describe("visibleThreadMessages", () => {
     id: "q",
     role: "assistant",
     status: "streaming",
-    content: [{ type: "text", text: "so far" }],
+    content: [contentBlock({ type: "text", text: "so far" })],
   });
 
   test("keeps everything when idle", () => {
@@ -71,9 +75,12 @@ describe("retryTargetFor", () => {
 
   test("falls back to resending the last persisted user message by id, or nothing", () => {
     const rows = [
-      msg({ id: "1", content: [{ type: "text", text: "first" }] }),
-      msg({ id: "2", role: "assistant", content: [{ type: "text", text: "reply" }] }),
-      msg({ id: "3", content: [{ type: "attachment", filename: "shot.png", mime: "image/png" }] }),
+      msg({ id: "1", content: [contentBlock({ type: "text", text: "first" })] }),
+      msg({ id: "2", role: "assistant", content: [contentBlock({ type: "text", text: "reply" })] }),
+      msg({
+        id: "3",
+        content: [contentBlock({ type: "attachment", filename: "shot.png", mime: "image/png" })],
+      }),
       msg({ id: "4", role: "assistant", status: "failed", content: [] }),
     ];
     expect(retryTargetFor(rows, undefined)).toEqual({ kind: "resend", messageId: "3" });

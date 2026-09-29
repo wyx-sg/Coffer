@@ -2,8 +2,8 @@
 // read-only agent conversation list.
 //
 // Listing pages on demand: the component owns page/pageSize/search and the hook
-// fetches exactly one page (limit/offset) per query, keyed by the full params so
-// each page caches independently. `keepPreviousData` keeps the current page
+// fetches exactly one page (limit + the previous page's cursor) per query, keyed
+// by the full params so each page caches independently. `keepPreviousData` keeps the current page
 // visible while the next one loads — no blank flash on page/search change.
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";

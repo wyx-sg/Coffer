@@ -11,7 +11,7 @@ builds the envelope explicitly with :func:`coffer.surfaces.http.errors.error_res
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
@@ -42,7 +42,7 @@ router = APIRouter(
 class McpEntryOut(BaseModel):
     name: str
     source: str
-    transport: str
+    transport: Literal["stdio", "http"]
     command: str | None
     args: list[str]
     # KEY NAMES ONLY — env/header values may carry secrets and never cross HTTP.
@@ -128,7 +128,7 @@ class MarketplaceOut(BaseModel):
     source: str | None
 
 
-class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service dataclass
+class PluginsOut(BaseModel):
     items: list[PluginOut]
     marketplaces: list[MarketplaceOut]
     parse_errors: list[ParseErrorOut]
@@ -295,13 +295,13 @@ async def adopt_mcp_entry(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{uid}/plugins", response_model=PluginsOut_)
+@router.get("/{uid}/plugins", response_model=PluginsOut)
 async def list_plugins(
     uid: str,
     svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
-) -> PluginsOut_:
+) -> PluginsOut:
     out = await svc.list_plugins(uid)
-    return PluginsOut_(
+    return PluginsOut(
         items=[_plugin_out(p) for p in out.items],
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],

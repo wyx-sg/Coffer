@@ -310,3 +310,20 @@ async def test_a_decision_count_mismatch_is_a_target_failure() -> None:
     report = await rec.run(trigger=Trigger.PERIOD)
     assert report.results == ()
     assert "decided 0 of 1" in report.failures[0].error
+
+
+async def test_pass_listeners_hear_every_writing_pass_and_never_a_dry_run() -> None:
+    rec, _ = _reconciler()
+    rec.register(_Target(wanted={"a": {"command": "new"}}))
+    heard: list[Trigger] = []
+
+    def _boom(_: object) -> None:
+        raise RuntimeError("listener gone")
+
+    rec.add_pass_listener(_boom)  # a raising listener fails neither the pass nor the next one
+    rec.add_pass_listener(lambda report: heard.append(report.trigger))
+    await rec.plan(trigger=Trigger.PERIOD)
+    assert heard == []
+    report = await rec.run(trigger=Trigger.PERIOD)
+    assert heard == [Trigger.PERIOD]
+    assert report.count(Outcome.APPLIED) == 1

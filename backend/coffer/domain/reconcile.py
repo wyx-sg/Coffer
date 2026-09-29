@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 
 class Op(StrEnum):
@@ -202,19 +202,27 @@ class PassReport:
         return sum(1 for r in self.results if r.outcome is outcome)
 
 
+#: What a write did to a resource row: it now exists with new content, or it
+#: is gone.
+ChangeOp = Literal["upsert", "delete"]
+
+
 @dataclass(frozen=True)
 class Changed:
     """An in-process hint that a resource was written.
 
-    ``rev`` is the resource's monotonic revision after the write. A hint only
-    brings the next pass forward for the targets that follow ``kind``; losing
-    one costs at most one period, never correctness, because every pass reads
-    the whole state again.
+    ``rev`` is the resource's monotonic revision after the write (a delete
+    carries the row's last revision plus one); ``op`` says whether the row
+    still exists. A hint only brings the next pass forward for the targets
+    that follow ``kind``; losing one costs at most one period, never
+    correctness, because every pass reads the whole state again. The daemon's
+    event stream turns the same hint into an invalidation envelope.
     """
 
     kind: str
     uid: str
     rev: int
+    op: ChangeOp = "upsert"
 
 
 def change_id(target: str, key: str) -> str:
@@ -259,6 +267,7 @@ def _by_key(target: str, items: Sequence[Item], side: str) -> dict[str, Item]:
 
 
 __all__ = [
+    "ChangeOp",
     "Changed",
     "Decision",
     "Difference",

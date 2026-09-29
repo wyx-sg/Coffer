@@ -4,47 +4,7 @@
  */
 
 export interface paths {
-    "/agents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List registered agents */
-        get: operations["listAgents"];
-        put?: never;
-        /** Register a new agent */
-        post: operations["registerAgent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /** Get one agent */
-        get: operations["getAgent"];
-        put?: never;
-        post?: never;
-        /** Remove an agent */
-        delete: operations["deleteAgent"];
-        options?: never;
-        head?: never;
-        /** Update an agent */
-        patch: operations["updateAgent"];
-        trace?: never;
-    };
-    "/agents/candidates": {
+    "/api/v1/agent-providers/{agent_key}/models": {
         parameters: {
             query?: never;
             header?: never;
@@ -52,17 +12,35 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Discover installed-but-unregistered agents
-         * @description Read-only discovery with two signals: for each supported type, the
-         *     program on the agent's real PATH (and its version) and the config
-         *     directory — the standard one, plus the one `CLAUDE_CONFIG_DIR` /
-         *     `CODEX_HOME` names in the daemon's environment. Every directory with
-         *     either signal that no registered agent holds is a candidate carrying
-         *     its detection state. Registers nothing — the user reviews the
-         *     candidates and chooses which to add (discovery + confirm). A removed
-         *     agent re-appears here on the next scan; there is no suppression list.
+         * List Agent Models
+         * @description The models a picker should offer for this agent.
+         *
+         *     On the agent's own built-in login this is whatever the agent itself reports:
+         *     Claude Code's tier aliases, each labelled with the model it resolves to
+         *     today; Codex's versioned ids, each carrying the reasoning-effort levels it
+         *     can run at. An effort is not part of a model NAME — Codex takes it as its
+         *     own field on a turn — so it rides beside the id instead of multiplying the
+         *     list.
+         *
+         *     With a Coffer connection ACTIVE for this agent, its curated ids are the list
+         *     instead, in the user's own order: the turns go to that endpoint and not to
+         *     the account the agent's own catalogue describes, so offering both could only
+         *     offer ids the endpoint rejects. A connection that curates nothing falls back
+         *     to the agent's catalogue — Coffer knows where the turns go, not what that
+         *     endpoint serves, and this read never asks over the network (spec
+         *     provider-switching "Serve one model list to every surface"). Reasoning
+         *     levels survive the narrowing, because
+         *     a level is a setting on the agent's own runtime rather than the endpoint's
+         *     to answer.
+         *
+         *     This is the same answer a channel's ``/model`` card gets, from the same
+         *     function. It did not use to be: this route served the agent's whole
+         *     catalogue and the web picker merged the endpoint's models into it in the
+         *     browser, so the page and the chat disagreed about one question.
+         *
+         *     An unregistered ``agent_key`` is a 404.
          */
-        get: operations["listAgentCandidates"];
+        get: operations["list_agent_models_api_v1_agent_providers__agent_key__models_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -71,27 +49,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/config-files": {
+    "/api/v1/agents": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agents */
+        get: operations["list_agents_api_v1_agents_get"];
+        put?: never;
+        /** Register Agent */
+        post: operations["register_agent_api_v1_agents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         /**
-         * List an agent's curated config files
-         * @description Returns the curated config-file allowlist for the agent's type, each
-         *     with its key, display name, resolved absolute path, containing-folder
-         *     absolute path (`folder_path`), format, and existence metadata. The set
-         *     is fixed per agent type; files that do not exist yet are listed with
-         *     `exists=false`. The `path`/`folder_path` pair backs the UI's
-         *     open-in-external-editor / reveal-in-file-manager
-         *     affordances (see "Open config files in an external editor or reveal them").
+         * List Candidates
+         * @description Discover the agents on this machine that aren't registered yet (read-only).
+         *
+         *     Each candidate carries its detection state and version (spec agent-registry
+         *     "Detect an agent by its program and its config directory"). The user
+         *     reviews these and adds the installed ones — nothing is registered
+         *     automatically (discovery + confirm).
          */
-        get: operations["listAgentConfigFiles"];
+        get: operations["list_candidates_api_v1_agents_candidates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -100,124 +92,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/config-files/{key}": {
+    "/api/v1/agents/{uid}": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-                /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
-                key: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        /**
-         * Read one config file's content
-         * @description Returns the file's text content, its resolved absolute path and
-         *     containing-folder path (`folder_path`), format, existence, and a content
-         *     fingerprint for optimistic-concurrency writes
-         *     (see "Reject stale config-file writes by fingerprint"). The in-app UI
-         *     renders this content in a viewer that becomes editable behind an
-         *     explicit Edit and saves through the PUT below; the `path`/`folder_path` pair backs the
-         *     open-in-external-editor / reveal affordances
-         *     (see "Open config files in an external editor or reveal them"). A
-         *     file that does not exist returns empty content with `exists=false` and
-         *     `fingerprint=""` and is not created. A key outside the agent type's
-         *     allowlist returns 404.
-         */
-        get: operations["readAgentConfigFile"];
-        /**
-         * Save one config file's content
-         * @description Validates the content against the file's format, then writes it
-         *     atomically (temp file + rename), keeping a `.bak` of the prior content.
-         *     Malformed `json`/`toml` content returns 422 and leaves the on-disk file
-         *     unchanged. A key outside the agent type's allowlist returns 404 and
-         *     performs no filesystem access. When `expected_fingerprint` is supplied
-         *     and the on-disk content changed since the read, the write is rejected
-         *     with 409 (`CONFIG_FILE_STALE`) and the file is left untouched
-         *     (see "Reject stale config-file writes by fingerprint").
-         *     Records an `agent_config_file_written` audit entry on success. Returns
-         *     the refreshed metadata view.
-         */
-        put: operations["writeAgentConfigFile"];
+        /** Get Agent */
+        get: operations["get_agent_api_v1_agents__uid__get"];
+        put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Agent */
+        delete: operations["delete_agent_api_v1_agents__uid__delete"];
+        options?: never;
+        head?: never;
+        /** Update Agent */
+        patch: operations["update_agent_api_v1_agents__uid__patch"];
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/coffer-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Connection Status */
+        get: operations["connection_status_api_v1_agents__uid__coffer_connection_get"];
+        put?: never;
+        /** Connect */
+        post: operations["connect_api_v1_agents__uid__coffer_connection_post"];
+        /** Disconnect */
+        delete: operations["disconnect_api_v1_agents__uid__coffer_connection_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/config-files/{key}/files/{relpath}": {
+    "/api/v1/agents/{uid}/config-files": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-                /** @description Allowlisted directory-entry key (e.g. subagents). */
-                key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
-                relpath: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        /**
-         * Read one child file of a directory config entry
-         * @description Returns the child file's text content, its resolved absolute path and
-         *     containing-folder path (`folder_path`), format, existence, and content
-         *     fingerprint, like the single-file read. The in-app UI renders this
-         *     content in a viewer that becomes editable behind an explicit Edit
-         *     (`path`/`folder_path` back open-in-editor / reveal).
-         *     A child that does not exist returns empty content
-         *     with `exists=false` and is not created.
-         */
-        get: operations["readAgentConfigDirFile"];
-        /**
-         * Save (create-on-write) one child file of a directory config entry
-         * @description Same machinery as the single-file write: format validation, atomic
-         *     write + `.bak`, optional `expected_fingerprint` (stale → 409), audited
-         *     as `agent_config_file_written`. A missing child file is created
-         *     (create-on-write), including intermediate subdirectories.
-         */
-        put: operations["writeAgentConfigDirFile"];
-        post?: never;
-        /**
-         * Delete one child file of a directory config entry
-         * @description Removes the child file from disk, preserving the prior content as
-         *     `<path>.bak`. Audited as `agent_config_file_deleted`. Deleting a child
-         *     that does not exist returns 404.
-         */
-        delete: operations["deleteAgentConfigDirFile"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/mcp-entries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List the MCP server entries in the agent's own config files
-         * @description Derived at read time from the agent's MCP-bearing config files
-         *     (claude_code: the agent's global config file — `~/.claude.json` for
-         *     the default config directory, `<config_dir>/.claude.json` for a custom
-         *     one — + `settings.json` `mcpServers`; codex: `config.toml`
-         *     `[mcp_servers.*]`) — nothing is stored (see "List the MCP entries in the agent's own
-         *     config files"). Env and
-         *     header VALUES never cross HTTP: each entry exposes key names only,
-         *     plus which keys look secret-like. A file that fails to parse degrades
-         *     to an entry in `parse_errors` instead of failing the view
-         *     (see "Degrade a facet to a parse-error state when its config file is unparseable").
-         */
-        get: operations["listAgentMcpEntries"];
+        /** List Config Files */
+        get: operations["list_config_files_api_v1_agents__uid__config_files_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -226,426 +147,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/mcp-entries/{entry}": {
+    "/api/v1/agents/{uid}/config-files/{key}": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-                /** @description MCP entry name as it appears in the agent's config file. */
-                entry: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        /**
-         * Read one MCP entry from the agent's config file in full
-         * @description Read-only, derived at read time like the listing (see "Show one direct
-         *     MCP entry's full configuration without its secrets"). Carries every
-         *     listing field plus the absolute `path` of the config file the entry
-         *     lives in, its `cwd`, and every other key it holds as `extra`. Env and
-         *     header VALUES never cross HTTP (key names only), and the value of any
-         *     other key whose name looks secret-like — or that nests one — is
-         *     withheld (`masked: true`, `value: null`). Nothing is spawned: this
-         *     reads the file, it does not start the server. Addressed like the
-         *     delete: `source` disambiguates a name several files share (422,
-         *     `MCP_ENTRY_SOURCE_AMBIGUOUS`, when omitted then); the `coffer` entry
-         *     is not addressable here (422, `MCP_ENTRY_PROTECTED`).
-         */
-        get: operations["getAgentMcpEntry"];
-        put?: never;
+        /** Read Config File */
+        get: operations["read_config_file_api_v1_agents__uid__config_files__key__get"];
+        /** Write Config File */
+        put: operations["write_config_file_api_v1_agents__uid__config_files__key__put"];
         post?: never;
-        /**
-         * Remove one MCP entry from the agent's config file
-         * @description Edits only the entry's source file with the atomic-write + `.bak`
-         *     machinery and records an `agent_mcp_entry_removed` audit entry
-         *     (see "Remove a direct MCP entry from its source file"). When the same name exists in several files (claude_code),
-         *     the `source` query parameter disambiguates; omitting it then is
-         *     rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
-         *     is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
-         *     the `/coffer-connection` operations.
-         */
-        delete: operations["deleteAgentMcpEntry"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/mcp-entries/{entry}/adopt": {
+    "/api/v1/agents/{uid}/config-files/{key}/files/{relpath}": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-                entry: string;
-            };
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Config Dir File */
+        get: operations["read_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__get"];
+        /** Write Config Dir File */
+        put: operations["write_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__put"];
+        post?: never;
+        /** Delete Config Dir File */
+        delete: operations["delete_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Hooks
+         * @description Every hook the agent's own files and enabled plugins declare, with
+         *     Coffer's own marked and its health. Writes nothing.
+         */
+        get: operations["list_agent_hooks_api_v1_agents__uid__hooks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/mcp-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mcp Entries */
+        get: operations["list_mcp_entries_api_v1_agents__uid__mcp_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/mcp-entries/{entry}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mcp Entry */
+        get: operations["get_mcp_entry_api_v1_agents__uid__mcp_entries__entry__get"];
+        put?: never;
+        post?: never;
+        /** Delete Mcp Entry */
+        delete: operations["delete_mcp_entry_api_v1_agents__uid__mcp_entries__entry__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/mcp-entries/{entry}/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /**
-         * Adopt a direct MCP entry into Coffer as a managed mcp_server resource
-         * @description Registers the entry as an `mcp_server` resource, verifies the resource
-         *     reads back, then removes the source entry — strictly in that order;
-         *     any failure rolls back a created resource and leaves the agent's
-         *     config byte-identical (see "Adopt a direct MCP entry into Coffer"). Secret-looking env/header keys MUST be
-         *     mapped to credential refs via `secrets`, or the request is rejected with
-         *     422 (`ADOPT_SECRET_UNRESOLVED`) listing the unresolved keys; mapped
-         *     values go into the credential store, never into resource config (see "Route
-         *     secret-like environment values to the credential store on adoption").
-         *     A name collision returns 409 with `details.suggested_name`. The
-         *     `coffer` entry is never adoptable. Audited as
-         *     `agent_mcp_entry_adopted`.
-         */
-        post: operations["adoptAgentMcpEntry"];
+        /** Adopt Mcp Entry */
+        post: operations["adopt_mcp_entry_api_v1_agents__uid__mcp_entries__entry__adopt_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/hooks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List every hook in the agent's native config
-         * @description Read only (spec agent-registry "List every hook in the agent's native
-         *     config"): every command hook the agent's own hook-carrying files and
-         *     its enabled plugins' hook files declare, each with its event, matcher,
-         *     command and source file. Coffer's own delivery hook is marked, and
-         *     `coffer_hook` reports its health — `current` when the installed
-         *     command is exactly the one Coffer would write now, `stale` when
-         *     Coffer's marker carries another command, `missing` when it is not
-         *     there — and the last recorded fire. Writes nothing, records no audit
-         *     event; an unparseable file is a `parse_errors` entry.
-         */
-        get: operations["listAgentHooks"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/plugins": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List the agent's installed plugins and known marketplaces
-         * @description Derived at read time, never stored (see "List an agent's installed plugins
-         *     without writing anything"). For `codex` the listing
-         *     comes from `config.toml` (`[plugins.*]`, `[marketplaces.*]`) plus
-         *     presence of the documented cache directory; for `claude_code` the
-         *     inventory is read-only from `installed_plugins.json` /
-         *     `known_marketplaces.json`, with enabled state from `settings.json`
-         *     `enabledPlugins`. Parse failures degrade to `parse_errors`
-         *     (see "Degrade a facet to a parse-error state when its config file is unparseable").
-         *     Backs the agent detail page's Plugins tab: the listing's
-         *     `can_uninstall` says whether in-app uninstall can run for this agent
-         *     right now (the capability allows it and, for CLI-strategy agents, the
-         *     agent's own plugin CLI is on PATH), so the UI shows the uninstall
-         *     affordance on capability rather than on agent type.
-         */
-        get: operations["listAgentPlugins"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/plugins/{plugin_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
-                plugin_id: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Read one of the agent's plugins in detail
-         * @description Read-only (see "Read one installed plugin's detail read-only"). Returns
-         *     the plugin's listing row, its marketplace's source, the directory its
-         *     package was read from, whether in-app uninstall can run now, and
-         *     everything the package contributes from its default locations — skills
-         *     (`skills/<name>/SKILL.md`) and commands (`commands/*.md`) and subagents
-         *     (`agents/*.md`) with their frontmatter descriptions, the hook events
-         *     `hooks/hooks.json` registers, and the MCP servers `.mcp.json` bundles.
-         *     A plugin whose cache directory is missing has `install_path: null` and
-         *     empty contents. Backs the plugin detail page reached from the agent's
-         *     Plugins tab. An id the listing does not report is 404
-         *     (`PLUGIN_NOT_FOUND`); nothing is written and nothing is audited.
-         */
-        get: operations["getAgentPlugin"];
-        put?: never;
-        post?: never;
-        /**
-         * Uninstall one of the agent's plugins
-         * @description Dispatches on the agent's plugin capability. CLI-strategy agents
-         *     (`claude_code`) delegate to the agent's own `claude plugin uninstall`
-         *     — Coffer never hand-writes that agent's internal inventory — while the
-         *     rest edit their documented config surface directly and remove the
-         *     plugin's cache directory (`codex`). Audited as
-         *     `agent_plugin_uninstalled`. Agent types whose capability does not allow
-         *     uninstall, and CLI-strategy agents whose CLI is not on PATH, are
-         *     rejected with 422 (`PLUGIN_UNINSTALL_UNSUPPORTED`); a CLI invocation
-         *     that ran and failed is 422 (`PLUGIN_UNINSTALL_FAILED`). An id that
-         *     matches no installed plugin is 404 (`PLUGIN_NOT_FOUND`).
-         */
-        delete: operations["uninstallAgentPlugin"];
-        options?: never;
-        head?: never;
-        /**
-         * Enable or disable one of the agent's plugins
-         * @description Writes the enabled flag to the agent's own documented write surface —
-         *     `settings.json` `enabledPlugins` for `claude_code` (created when
-         *     missing), `config.toml` `[plugins.*]` for `codex` — with the atomic
-         *     write + `.bak` machinery, and records an `agent_plugin_toggled` audit
-         *     entry. Agent types whose plugin capability does not allow toggling are
-         *     rejected with 422 (`PLUGIN_TOGGLE_UNSUPPORTED`); an id that matches no
-         *     installed plugin is 404 (`PLUGIN_NOT_FOUND`).
-         */
-        patch: operations["setAgentPluginEnabled"];
-        trace?: never;
-    };
-    "/agents/{uid}/coffer-connection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Whether this agent is connected to Coffer, part by part
-         * @description Reads the agent's own config files; writes nothing and records no
-         *     audit event ("Report an agent's Coffer connection part by part").
-         *     `parts` lists what applies to this agent now — the gateway MCP entry
-         *     (`mcp`) always, the memory delivery hook (`memory_hook`) while the
-         *     `memory` feature is on — and `state` is `connected` when every one
-         *     is installed, `disconnected` when none is, `partial` otherwise.
-         */
-        get: operations["getAgentCofferConnection"];
-        put?: never;
-        /**
-         * Connect this agent to Coffer
-         * @description Installs every part that applies to the agent now, the gateway MCP
-         *     entry first ("Connect an agent to Coffer in one action"). The MCP
-         *     entry is a `coffer` stdio MCP-server entry (command = absolute path
-         *     to coffer-mcp-shim, argument `--agent-uid <uid>`) written into the
-         *     agent's MCP config file (claude_code: its global config file —
-         *     `~/.claude.json` for the default config directory,
-         *     `<config_dir>/.claude.json` for a custom one; codex:
-         *     `<config_dir>/config.toml`). The shim reports that uid on every call
-         *     and the gateway matches it against each resource's `scope.agents`,
-         *     which is why the argument is the uid and not the agent's name: this
-         *     line is written once into a file Coffer does not own and then read
-         *     on every turn, so a label in it would stop matching any scope the
-         *     first time the user renamed the agent. The memory delivery hook
-         *     (while `memory` is on) is a marker-scoped entry in the agent's
-         *     settings/hooks file. Every write is atomic with a `.bak` backup and
-         *     is audited by the part that made it. Idempotent — connecting again
-         *     rewrites each entry in place. Returns 422 if the coffer-mcp-shim
-         *     binary cannot be resolved (nothing is written) or a file to edit is
-         *     not valid JSON.
-         */
-        post: operations["connectAgentToCoffer"];
-        /**
-         * Disconnect this agent from Coffer
-         * @description Removes every part Coffer wrote into the agent — only Coffer's own
-         *     marked entries, never other configuration ("Disconnect an agent from
-         *     Coffer"). A part that is absent is a no-op that writes and audits
-         *     nothing.
-         */
-        delete: operations["disconnectAgentFromCoffer"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/native-memory": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List the agent's OWN native per-project memory stores
-         * @description Read-only scan of the memory the coding agent itself writes —
-         *     `claude_code`'s `<config_dir>/projects/<slug>/memory`, `codex`'s
-         *     global `memories/MEMORY.md` sliced by routed cwd. Coffer never writes
-         *     these: the agent detail page's Memory tab only opens or reveals the
-         *     directory. Stores come back most populated first. An agent type with
-         *     no native memory layout — and one whose projects directory is absent —
-         *     returns an empty list; an unknown agent uid is 404.
-         */
-        get: operations["listAgentNativeMemory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/transcripts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List the agent's own local conversation transcripts
-         * @description Read-only browse over the `.jsonl` transcripts the agent itself wrote:
-         *     title, project, message count, start and last-activity times, plus the
-         *     source path so a row can offer open-in-editor / reveal. Nothing is
-         *     written and no message text crosses the wire. Searches title + project
-         *     path (`q`), filters to an exact `project`, and sorts by `sort`/`order`;
-         *     paged by `limit`/`offset` against the matched `total`. Backed by the
-         *     reader's mtime-aware cache, so an agent with thousands of past
-         *     sessions stays responsive. An agent type with no known transcript
-         *     layout is the caller's request going wrong and comes back as 400
-         *     (`BAD_REQUEST`).
-         */
-        get: operations["listAgentTranscripts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/native-memory/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * One native-memory store's directory, as a read-only tree
-         * @description The tree of one store the listing handed out (see "Read one native
-         *     memory store's files read-only"). `dir` MUST be a
-         *     `memory_dir` that listing returned — any other path under the agent's
-         *     config dir (its transcripts, its settings, a sibling project) is 404,
-         *     decided by the path's shape alone, so the answer cannot be used to
-         *     probe the filesystem. A store that no longer exists on disk reads as an
-         *     empty tree (200), not a 404. The walk is depth-bounded and says so on
-         *     the node it clipped rather than silently truncating. Read-only: Coffer
-         *     never writes an agent's own memory, so there is no fingerprint here and
-         *     no write to pair it with.
-         */
-        get: operations["listAgentNativeMemoryFiles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/native-memory/files/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Read one file inside a native-memory store
-         * @description One file's text, for the read-only preview (see "Read one native memory
-         *     store's files read-only"). `dir` is bounded
-         *     exactly as the tree read bounds it, and `path` must resolve inside that
-         *     store — a store that is not this agent's, a path escaping the store and
-         *     a file that does not exist are one answer, 404. Reads are size-capped
-         *     and a binary file comes back flagged with empty content rather than as
-         *     bytes. The absolute path travels alongside so the viewer can offer
-         *     open / reveal.
-         */
-        get: operations["readAgentNativeMemoryFile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/transcripts/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Read one of the agent's conversations
-         * @description The ONE place a transcript body crosses the wire (see "Read one transcript
-         *     session in bounded windows"), so every
-         *     guard is concentrated here. `path` is an absolute `source_path` the
-         *     listing gave out and must resolve inside this agent's own transcript
-         *     directory; anything else is 404 rather than a file read — the same
-         *     answer as a transcript since deleted. Bounded twice over, because one
-         *     transcript can be tens of megabytes: at most `limit` turns come back,
-         *     and each turn's text is cut at the per-turn cap with `truncated` set.
-         *     Every turn is secret-scrubbed before it leaves the parser. The whole
-         *     file's turn count comes back as `message_count` alongside the window,
-         *     so a reader is never shown 200 turns and left to assume that is all of
-         *     them. Read-only: nothing is written, nothing is retained, no audit
-         *     event. An agent type with no known transcript layout is 400
-         *     (`BAD_REQUEST`).
-         */
-        get: operations["readAgentTranscriptSession"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agent-providers/{agent_key}/models": {
+    "/api/v1/agents/{uid}/native-memory": {
         parameters: {
             query?: never;
             header?: never;
@@ -653,25 +265,140 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the models a picker should offer for an agent
-         * @description On the agent's own built-in login, what the installed agent itself
-         *     offers, in the order its own sources offer it (see "Read the model
-         *     catalogue back from the installed agent"). With a
-         *     Coffer connection projected into this agent, that connection's curated
-         *     ids are the list instead, in the user's own order — the turns go to
-         *     that endpoint, so the agent's own names would be rejected. A connection
-         *     that curates nothing narrows nothing. The read never touches the
-         *     network. Every entry — id, label, description — is
-         *     read back from the agent, never written into Coffer, because a list
-         *     written down here goes stale on the next CLI release. Each source
-         *     degrades to nothing on its own: a missing CLI, a changed bundle
-         *     layout, an unauthenticated or wedged agent costs the models that
-         *     source would have added and nothing else. Reasoning levels travel
-         *     beside the id, never inside it (see "Carry reasoning-effort levels beside
-         *     the model id"). Read-only; emits no audit
-         *     event.
+         * List Native Memory
+         * @description The agent's own native memory stores, most populated first.
          */
-        get: operations["listAgentModels"];
+        get: operations["list_native_memory_api_v1_agents__uid__native_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/native-memory/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Native Memory Files
+         * @description One native-memory store's directory, as a read-only tree.
+         */
+        get: operations["list_native_memory_files_api_v1_agents__uid__native_memory_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/native-memory/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Native Memory File
+         * @description Read one file inside a native-memory store, for the read-only preview.
+         */
+        get: operations["read_native_memory_file_api_v1_agents__uid__native_memory_files_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plugins */
+        get: operations["list_plugins_api_v1_agents__uid__plugins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plugin */
+        get: operations["get_plugin_api_v1_agents__uid__plugins__plugin_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Plugin */
+        delete: operations["delete_plugin_api_v1_agents__uid__plugins__plugin_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Plugin */
+        patch: operations["patch_plugin_api_v1_agents__uid__plugins__plugin_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/transcripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Transcripts
+         * @description List an agent's transcript sessions with search, filter, and sort.
+         *
+         *     Searches title + project path (``q``), filters by exact ``project``, and
+         *     sorts by ``sort``/``order`` with ``session_id`` as the tie-break. Backed by
+         *     the reader's mtime-aware cache, so an agent with thousands of past sessions
+         *     stays responsive. Paged by ``limit`` and the answer's ``next_cursor``
+         *     alongside the matched total — a cursor, not an offset, because the agent
+         *     keeps writing sessions while a reader pages.
+         */
+        get: operations["list_transcripts_api_v1_agents__uid__transcripts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/transcripts/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Transcript Session
+         * @description Render one of the agent's conversations: its summary and a page of turns.
+         *
+         *     Bounded twice over, because a single transcript can be tens of megabytes:
+         *     at most ``limit`` turns come back (500 ceiling), and each turn's text is cut
+         *     at the domain's per-turn cap with ``truncated`` set. Every turn is
+         *     secret-scrubbed before it leaves the parser — a prompt is where a pasted key
+         *     would be. ``path`` must resolve inside this agent's own sessions directory;
+         *     anything else is 404 rather than a file read.
+         */
+        get: operations["read_transcript_session_api_v1_agents__uid__transcripts_session_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -685,517 +412,657 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * @description Supported agent product identifiers (the capability manifest). Each value covers both the CLI and the app/IDE form of that product (shared config directory).
+         * AdoptedOut
+         * @description The resource adoption just created.
+         *
+         *     ``uid`` is here because this is the only moment the caller learns the new
+         *     resource exists, and it is the only value that will still address it after
+         *     the user renames it — a client that wants to open what it just adopted has
+         *     to hold this, not the label beside it.
+         */
+        AdoptedOut: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * AgentCandidate
+         * @description An installed-but-unregistered agent the user may choose to add.
+         */
+        AgentCandidate: {
+            /** Config Dir */
+            config_dir: string;
+            /** Default Skill Dir */
+            default_skill_dir: string;
+            /** Display Name */
+            display_name: string;
+            state: components["schemas"]["DetectionState"];
+            /** Suggested Name */
+            suggested_name: string;
+            type: components["schemas"]["AgentType"];
+            /** Version */
+            version: string | null;
+        };
+        /** AgentCandidatesOut */
+        AgentCandidatesOut: {
+            /** Candidates */
+            candidates: components["schemas"]["AgentCandidate"][];
+        };
+        /** AgentCreate */
+        AgentCreate: {
+            /** Config Dir */
+            config_dir?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            type: components["schemas"]["AgentType"];
+        };
+        /** AgentHooksOut */
+        AgentHooksOut: {
+            coffer_hook: components["schemas"]["CofferHookOut"] | null;
+            /** Items */
+            items: components["schemas"]["NativeHookOut"][];
+            /** Parse Errors */
+            parse_errors: components["schemas"]["ParseErrorOut"][];
+        };
+        /** AgentListOut */
+        AgentListOut: {
+            /** Items */
+            items: components["schemas"]["AgentOut"][];
+        };
+        /** AgentModelOut */
+        AgentModelOut: {
+            /** Default Effort */
+            default_effort: string | null;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Efforts
+             * @default []
+             */
+            efforts: string[];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /** AgentModelsOut */
+        AgentModelsOut: {
+            /** Models */
+            models: components["schemas"]["AgentModelOut"][];
+        };
+        /** AgentOut */
+        AgentOut: {
+            /** Config Dir */
+            config_dir: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Fast Model */
+            fast_model: string | null;
+            /** Model */
+            model: string | null;
+            /** Name */
+            name: string;
+            state: components["schemas"]["DetectionState"];
+            /** Title */
+            title: string | null;
+            type: components["schemas"]["AgentType"];
+            /** Uid */
+            uid: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: string | null;
+            /** Wire Api */
+            wire_api: string | null;
+        };
+        /** AgentPatch */
+        AgentPatch: {
+            /** Config Dir */
+            config_dir?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Fast Model */
+            fast_model?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Wire Api */
+            wire_api?: string | null;
+        };
+        /**
+         * AgentType
+         * @description Supported agent products.
          * @enum {string}
          */
         AgentType: "claude_code" | "codex";
-        AgentCreate: {
-            type: components["schemas"]["AgentType"];
-            /** @description Optional. When omitted the server derives a stable default from the type (underscores become hyphens, e.g. claude_code -> claude-code). */
-            name?: string;
-            /** @description Optional absolute path overriding the type's standard config directory (~/.claude, ~/.codex). Skills are delivered to <config_dir>/skills, which is auto-created at registration. */
-            config_dir?: string;
-            description?: string | null;
-        };
-        AgentPatch: {
-            config_dir?: string;
-            description?: string | null;
-            /** @description The agent's model binding (see "Carry the model binding on the agent record"); spec provider-switching projects it into the native config. Omitted = unchanged; there is no null that unbinds it. */
-            model?: string;
-            /** @description The binding's fast slot. Omitted = unchanged; explicit null clears it. */
-            fast_model?: string | null;
-            /** @description The binding's wire. Only "responses" is accepted — see agent-registry/codex "Accept only responses as Codex's wire_api". Omitted = unchanged; there is no null that unbinds it. */
-            wire_api?: string;
-        };
-        AgentOut: {
+        /** CofferConnectionOut */
+        CofferConnectionOut: {
+            /** Parts */
+            parts: components["schemas"]["CofferConnectionPartOut"][];
             /**
-             * @description The agent Resource's immutable identity, and what every route in this document addressing an agent takes. It is also the value every cross-resource reference to this agent holds — a resource `scope`'s agent list, a channel's `default_agent`, a skill binding, the `--agent-uid` Coffer writes into the agent's own MCP and hook entries — so a client can compare those against this field directly, with nothing in between.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @description A mutable label, unique among agents, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. For display. Note it is NOT `type`: `type` (`claude_code`, `codex`) is the product this agent is, fixed at registration, and the two were compared against each other for long enough to need a translation table — which the uid retires, because references now hold neither. */
-            name: string;
-            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
-            title?: string | null;
-            type: components["schemas"]["AgentType"];
-            /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
-            config_dir: string;
-            description: string | null;
-            /** @description The agent's model binding; null = unbound, so the agent runs on its own default. */
-            model: string | null;
-            fast_model: string | null;
-            wire_api: string | null;
-            state: components["schemas"]["DetectionState"];
-            /** @description The version the agent's program reports (`claude --version`, `codex --version`); null when the program is not found or did not answer in time. */
-            version: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
-        /**
-         * @description Two-signal detection: the agent's program on its real PATH, and its config directory. `installed_active` — both; `installed_never_run` — the program without its directory yet; `config_only` — the directory without the program (shown as not installed); `missing` — neither, only ever reported for a registered agent.
-         * @enum {string}
-         */
-        DetectionState: "installed_active" | "installed_never_run" | "config_only" | "missing";
-        /** @description An agent seen on this machine that is not registered, surfaced by discovery. Derived at scan time, never stored; the user confirms an `installed_active` one to register it. */
-        AgentCandidate: {
-            type: components["schemas"]["AgentType"];
-            display_name: string;
-            /** @description The config directory looked at: the type's standard one (~/.claude, ~/.codex), or the one CLAUDE_CONFIG_DIR / CODEX_HOME names in the daemon's environment. */
-            config_dir: string;
-            /** @description Where skills are delivered for this candidate: <config_dir>/skills. */
-            default_skill_dir: string;
-            /** @description Default resource name (e.g. claude-code; claude-code-<dir> for an environment-named directory). */
-            suggested_name: string;
-            state: components["schemas"]["DetectionState"];
-            /** @description The version the agent's program reports, when found. */
-            version: string | null;
-        };
-        AgentCandidatesOut: {
-            candidates: components["schemas"]["AgentCandidate"][];
-        };
-        /**
-         * @description Validation/format of a config file.
-         * @enum {string}
-         */
-        ConfigFileFormat: "json" | "toml" | "markdown";
-        /**
-         * @description Whether an allowlist entry is a single file or a directory of files (see "List directory config entries"). For directory entries, `format` describes the CHILD files.
-         * @enum {string}
-         */
-        ConfigFileKind: "file" | "directory";
-        /** @description One child file of a directory-type config entry. */
-        DirChild: {
-            /** @description POSIX path relative to the entry's directory root. */
-            relpath: string;
-            size: number;
-            /** Format: date-time */
-            modified_at: string;
-        };
-        ConfigFileInfo: {
-            /** @description Stable allowlist key (e.g. settings, global, instructions, subagents, config, hooks). */
-            key: string;
-            display_name: string;
-            /** @description Resolved absolute path of the file (or directory, for kind=directory entries). */
-            path: string;
-            /** @description Absolute path of the file's containing folder (its parent directory). The in-app viewer is editable behind an explicit Edit; the `path`/`folder_path` pair backs open-in-external-editor / reveal-in-file-manager (see "Open config files in an external editor or reveal them"). */
-            folder_path: string;
-            format: components["schemas"]["ConfigFileFormat"];
-            kind: components["schemas"]["ConfigFileKind"];
-            exists: boolean;
-            /** @description Byte size when the file exists; null otherwise. */
-            size: number | null;
-            /**
-             * Format: date-time
-             * @description Last-modified time when the file exists; null otherwise.
-             */
-            modified_at: string | null;
-            /** @description Child files for kind=directory entries (recursive `.md` listing, sorted by relpath); null for kind=file entries. A missing directory lists as exists=false with no files. */
-            files?: components["schemas"]["DirChild"][] | null;
-        };
-        ConfigFileContent: {
-            key: string;
-            /** @description Resolved absolute path of the file on disk (for a directory child, the resolved absolute path of that child). The in-app viewer is editable behind an explicit Edit; this path backs open-in-external-editor / reveal-in-file-manager. */
-            path: string;
-            /** @description Absolute path of the file's containing folder, for reveal-in-file-manager. */
-            folder_path: string;
-            format: components["schemas"]["ConfigFileFormat"];
-            exists: boolean;
-            /** @description File text; empty string when the file does not exist. */
-            content: string;
-            /** @description Content fingerprint for optimistic-concurrency writes (see "Reject stale config-file writes by fingerprint"); empty string when the file does not exist. */
-            fingerprint: string;
-        };
-        ConfigFileWrite: {
-            /** @description New file text. Validated against the file's format before writing. */
-            content: string;
-            /** @description Fingerprint from the prior read. When supplied and the on-disk content changed since, the write is rejected with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (see "Reject stale config-file writes by fingerprint"). */
-            expected_fingerprint?: string | null;
-        };
-        /** @description One agent config file that failed to parse — the facet degrades to this explicit state instead of failing the view (see "Degrade a facet to a parse-error state when its config file is unparseable"). */
-        ParseError: {
-            /** @description Allowlist key of the file. */
-            source: string;
-            /** @description Resolved absolute path. */
-            path: string;
-            /** @description Parser error message. */
-            error: string;
-        };
-        /**
-         * @description Where a hook is declared: a file in the agent's config directory, or an enabled plugin's hook file.
-         * @enum {string}
-         */
-        HookSource: "user" | "plugin";
-        /** @enum {string} */
-        HookHealth: "current" | "stale" | "missing";
-        NativeHook: {
-            event: string;
-            matcher: string | null;
-            command: string;
-            type: string;
-            timeout: number | null;
-            source: components["schemas"]["HookSource"];
-            /** @description The file that declares the hook. */
-            path: string;
-            /** @description The contributing plugin's id. */
-            plugin: string | null;
-            /** @description Whether this is Coffer's own delivery hook. */
-            coffer: boolean;
-        };
-        CofferHook: {
-            event: string;
-            path: string;
-            health: components["schemas"]["HookHealth"];
-            installed_command: string | null;
-            expected_command: string;
-            /** Format: date-time */
-            last_fired_at: string | null;
-        };
-        AgentHooksOut: {
-            items: components["schemas"]["NativeHook"][];
-            /** @description Coffer's own delivery hook; null when the agent type has none. */
-            coffer_hook: components["schemas"]["CofferHook"] | null;
-            parse_errors: components["schemas"]["ParseError"][];
-        };
-        /** @description One MCP server entry as configured in the agent's own file — derived at read time, never stored. Env/header VALUES never cross HTTP; only key names are exposed. */
-        McpEntry: {
-            name: string;
-            /** @description Allowlist key of the source file. */
-            source: string;
-            /** @enum {string} */
-            transport: "stdio" | "http";
-            command: string | null;
-            args: string[];
-            /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
-            env_keys: string[];
-            /** @description Env/header key names that look secret-like (TOKEN, SECRET, PASSWORD, PASSWD, API_KEY/APIKEY, CREDENTIAL, AUTHORIZATION patterns, case-insensitive, non-empty value). These must be mapped to credential refs on adopt. */
-            secret_keys: string[];
-            url: string | null;
-            /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
-            header_keys: string[];
-            /** @description Per-entry enabled flag where the format defines one (Codex); null for claude_code, whose format has no per-entry flag. */
-            enabled: boolean | null;
-            /** @description True for Coffer's own gateway entry (never adoptable). */
-            is_coffer: boolean;
-            /** @description Name of an equivalent registered mcp_server resource, when one exists — the user can remove the duplicate instead of adopting. */
-            matches_resource: string | null;
-        };
-        /** @description One key of an MCP entry beyond the ones the listing names, rendered as text (strings as themselves, anything else as compact JSON). */
-        McpEntryField: {
-            key: string;
-            /** @description Null when masked — a secret-looking value never crosses HTTP. */
-            value: string | null;
-            /** @description True when the key's name looks secret-like (same pattern as `secret_keys`, non-empty value) or its value nests such a key. */
-            masked: boolean;
-        };
-        /** @description One MCP entry in full: every `McpEntry` field plus the config file it came from, its working directory and its other keys. Env/header VALUES never cross HTTP; secret-looking `extra` values are masked. */
-        McpEntryDetail: {
-            name: string;
-            /** @description Allowlist key of the source file. */
-            source: string;
-            /** @enum {string} */
-            transport: "stdio" | "http";
-            command: string | null;
-            args: string[];
-            /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
-            env_keys: string[];
-            /** @description Env/header key names that look secret-like (see `McpEntry`). */
-            secret_keys: string[];
-            url: string | null;
-            /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
-            header_keys: string[];
-            enabled: boolean | null;
-            is_coffer: boolean;
-            matches_resource: string | null;
-            /** @description Resolved absolute path of the config file the entry lives in. */
-            path: string;
-            /** @description Working directory a stdio server is started in, when the entry sets one. */
-            cwd: string | null;
-            /** @description Every other key the entry carries, sorted by key. */
-            extra: components["schemas"]["McpEntryField"][];
-        };
-        McpEntriesOut: {
-            items: components["schemas"]["McpEntry"][];
-            parse_errors: components["schemas"]["ParseError"][];
-        };
-        McpEntryAdopt: {
-            /** @description Config-file key the entry lives in, when ambiguous. */
-            source?: string | null;
-            /** @description Register the resource under this name instead (e.g. after a 409). */
-            new_name?: string | null;
-            /** @description Maps secret-looking env/header KEY names to credential refs; the VALUES go into the credential store server-side, never into the resource config (see "Route secret-like environment values to the credential store on adoption"). */
-            secrets?: {
-                [key: string]: string;
-            } | null;
-        };
-        /** @description The resource adoption just created, in the three plain fields a resource has: `uid`, `kind`, `name`. All three, because the caller needs two different things from this response and they are not the same field — somewhere to go, and something to say. */
-        AdoptedResource: {
-            /**
-             * @description The new resource's immutable identity — what the caller follows to `/resources/{uid}` and its kind's routes. A name would have been enough to look it up once and wrong to keep, and this is the one moment the client learns the uid of something it did not create by name.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @example mcp_server */
-            kind: string;
-            /** @description The label it was registered under — which may not be the entry's own name, since `new_name` in the request overrides it after a collision. That is what makes it worth returning: it tells the user what the thing ended up being called. */
-            name: string;
-        };
-        /** @description One installed plugin — derived at read time, never stored. */
-        Plugin: {
-            /** @description `<name>@<marketplace>`. */
-            id: string;
-            name: string;
-            marketplace: string;
-            enabled: boolean;
-            /** @description Whether the plugin's cache directory is present on disk; false flags a configured-without-cache plugin (no repair is attempted). */
-            cache_present: boolean;
-            /** @description Installed version, when the inventory records one (Claude). */
-            version?: string | null;
-            /** @description From the plugin's `.claude-plugin/plugin.json` manifest. */
-            description?: string | null;
-            /** @description Author name from the manifest (object `name` or bare string). */
-            author?: string | null;
-            /** @description Manifest `homepage`, falling back to `repository`. */
-            homepage?: string | null;
-            /** @description Names of skills the plugin bundles (its `skills/` subfolders). */
-            skills?: string[];
-            /** @description Names of slash-commands the plugin bundles (`commands/*.md`). */
-            commands?: string[];
-            /** @description Names of MCP servers the plugin bundles (its `.mcp.json`). */
-            mcp_servers?: string[];
-        };
-        /** @description One skill, command or subagent a plugin contributes. */
-        PluginComponent: {
-            name: string;
-            /** @description From the component file's YAML frontmatter, when it has one. */
-            description?: string | null;
-        };
-        /** @description One plugin's detail page — derived at read time, never stored. */
-        PluginDetail: {
-            plugin: components["schemas"]["Plugin"];
-            marketplace_source_type: string | null;
-            /** @description Where the plugin's marketplace comes from (e.g. `owner/repo`). */
-            marketplace_source: string | null;
-            /** @description The directory the plugin's package was read from; null when no install directory is recorded or it is missing on disk. */
-            install_path: string | null;
-            /** @description Same flag as the listing's — whether in-app uninstall can run now. */
-            can_uninstall: boolean;
-            /** @description The package's `skills/<name>/` folders, described by `SKILL.md`. */
-            skills: components["schemas"]["PluginComponent"][];
-            /** @description The package's `commands/*.md` slash commands. */
-            commands: components["schemas"]["PluginComponent"][];
-            /** @description The package's `agents/*.md` subagents. */
-            agents: components["schemas"]["PluginComponent"][];
-            /** @description Hook event names `hooks/hooks.json` registers handlers for. */
-            hooks: string[];
-            /** @description MCP server names the package's `.mcp.json` bundles. */
-            mcp_servers: string[];
-        };
-        Marketplace: {
-            name: string;
-            source_type: string | null;
-            source: string | null;
-        };
-        PluginsOut: {
-            items: components["schemas"]["Plugin"][];
-            marketplaces: components["schemas"]["Marketplace"][];
-            parse_errors: components["schemas"]["ParseError"][];
-            /**
-             * @description Whether in-app uninstall is available for this agent right now — the plugin capability allows it AND, for CLI-strategy agents (`claude_code`), the agent's plugin CLI is on PATH. The UI shows the uninstall affordance on this, not on agent type.
-             * @default false
-             */
-            can_uninstall: boolean;
-        };
-        PluginPatch: {
-            /** @description Desired enabled state for the plugin. */
-            enabled: boolean;
-        };
-        /** @description One native per-project memory store the agent itself owns. `memory_dir` is the store's real identity; `project` / `path` are a best-effort label for it. */
-        NativeMemoryStore: {
-            /** @description Display label for the project — the project directory's basename when the real path is known, else decoded from the on-disk slug. */
-            project: string;
-            /** @description Absolute project directory, when it could be resolved; null when the lossy slug encoding could not be decoded to an existing dir. */
-            path: string | null;
-            /** @description Absolute path of the store's memory directory. */
-            memory_dir: string;
-            /** @description Number of memory items found in the store. */
-            item_count: number;
-        };
-        NativeMemoryListOut: {
-            /** @description Stores, most populated first. */
-            items: components["schemas"]["NativeMemoryStore"][];
-        };
-        /** @description One transcript session as the list shows it — no message text. */
-        TranscriptSession: {
-            session_id: string;
-            /** @description First-message-derived title, when the transcript records one. */
-            title?: string | null;
-            /** @description Absolute cwd the session ran in, when recorded. */
-            project_path?: string | null;
-            message_count: number;
-            /** Format: date-time */
-            started_at?: string | null;
-            /** Format: date-time */
-            last_activity_at?: string | null;
-            /** @description Absolute path of the `.jsonl` file, so the row can open/reveal it. */
-            source_path: string;
-        };
-        TranscriptSessionListOut: {
-            /** @description One page of sessions. */
-            sessions: components["schemas"]["TranscriptSession"][];
-            /** @description Sessions matching the search/filter, so the UI can page and show "N of total". */
-            total: number;
-            limit: number;
-            offset: number;
-        };
-        /** @description One entry in a native-memory store's tree. `path` is relative to the store directory. */
-        MemoryFileNode: {
-            name: string;
-            /** @description Path relative to the store directory. */
-            path: string;
-            /** @enum {string} */
-            type: "file" | "dir";
-            /** @description Bytes, for a file. */
-            size?: number | null;
-            /**
-             * @description A directory whose descendants were clipped at the walk-depth bound.
-             * @default false
-             */
-            truncated: boolean;
-            /** @description Directories before files, each group sorted by name. */
-            children?: components["schemas"]["MemoryFileNode"][];
-        };
-        MemoryFileTreeOut: {
-            root: components["schemas"]["MemoryFileNode"];
-        };
-        /** @description One file's contents. No fingerprint — this surface has no write. */
-        MemoryFileContentOut: {
-            /** @description Path relative to the store directory. */
-            path: string;
-            /** @description Absolute path on disk, so the viewer can offer open / reveal. */
-            abs_path: string;
-            /** @description Empty when `binary`. */
-            content: string;
-            /** @description True when the read hit the size cap. */
-            truncated: boolean;
-            binary: boolean;
-            size: number;
-        };
-        /** @description One conversational turn, as the session page renders it. */
-        TranscriptMessage: {
-            role: string;
-            /** @description Secret-scrubbed, and cut to the per-turn cap when `truncated` is true. */
-            text: string;
-            /** Format: date-time */
-            timestamp?: string | null;
-            /** @default false */
-            truncated: boolean;
-        };
-        /** @description One session's summary fields (the listing's, so a deep link shows the same title and project the row did) plus a window of its turns. */
-        TranscriptSessionDetailOut: {
-            session_id: string;
-            title?: string | null;
-            project_path?: string | null;
-            /** @description The WHOLE file's turn count, while `messages` is the `limit` turns from `offset`. */
-            message_count: number;
-            /** Format: date-time */
-            started_at?: string | null;
-            /** Format: date-time */
-            last_activity_at?: string | null;
-            source_path: string;
-            messages: components["schemas"]["TranscriptMessage"][];
-            limit: number;
-            offset: number;
-        };
-        CofferConnection: {
-            /**
-             * @description `connected` when every part in `parts` is installed, `disconnected` when none is, `partial` otherwise.
+             * State
              * @enum {string}
              */
             state: "connected" | "partial" | "disconnected";
-            /** @description The parts that apply to this agent now, in install order. */
-            parts: components["schemas"]["CofferConnectionPart"][];
         };
-        CofferConnectionPart: {
-            /** @description `mcp` (the gateway MCP entry) or `memory_hook` (the memory delivery hook). */
-            key: string;
-            installed: boolean;
-            /** @description What is installed, when it is — the shim command or the hook command. */
+        /** CofferConnectionPartOut */
+        CofferConnectionPartOut: {
+            /** Detail */
             detail: string | null;
+            /** Installed */
+            installed: boolean;
+            /** Key */
+            key: string;
         };
-        AgentModelOut: {
-            /** @description The id passed verbatim to the agent's CLI — whatever that agent calls the choice, which for Claude Code is a tier alias and for Codex a versioned model name. */
+        /** CofferHookOut */
+        CofferHookOut: {
+            /** Event */
+            event: string;
+            /** Expected Command */
+            expected_command: string;
+            health: components["schemas"]["HookHealth"];
+            /** Installed Command */
+            installed_command: string | null;
+            /** Last Fired At */
+            last_fired_at: string | null;
+            /** Path */
+            path: string;
+        };
+        /** ConfigFileContentOut */
+        ConfigFileContentOut: {
+            /** Content */
+            content: string;
+            /** Exists */
+            exists: boolean;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Folder Path */
+            folder_path: string;
+            format: components["schemas"]["ConfigFileFormat"];
+            /** Key */
+            key: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * ConfigFileFormat
+         * @description Format of an allowlisted config file — drives save-time validation.
+         * @enum {string}
+         */
+        ConfigFileFormat: "json" | "toml" | "markdown";
+        /** ConfigFileInfoOut */
+        ConfigFileInfoOut: {
+            /** Display Name */
+            display_name: string;
+            /** Exists */
+            exists: boolean;
+            /** Files */
+            files: components["schemas"]["DirChildOut"][] | null;
+            /** Folder Path */
+            folder_path: string;
+            format: components["schemas"]["ConfigFileFormat"];
+            /** Key */
+            key: string;
+            kind: components["schemas"]["ConfigFileKind"];
+            /** Modified At */
+            modified_at: string | null;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number | null;
+        };
+        /**
+         * ConfigFileKind
+         * @description Whether an allowlist entry is a single file or a directory of files.
+         * @enum {string}
+         */
+        ConfigFileKind: "file" | "directory";
+        /** ConfigFileListOut */
+        ConfigFileListOut: {
+            /** Items */
+            items: components["schemas"]["ConfigFileInfoOut"][];
+        };
+        /** ConfigFileWrite */
+        ConfigFileWrite: {
+            /** Content */
+            content: string;
+            /** Expected Fingerprint */
+            expected_fingerprint?: string | null;
+        };
+        /**
+         * DetectionState
+         * @enum {string}
+         */
+        DetectionState: "installed_active" | "installed_never_run" | "config_only" | "missing";
+        /** DirChildOut */
+        DirChildOut: {
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+            /** Relpath */
+            relpath: string;
+            /** Size */
+            size: number;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * HookHealth
+         * @description Coffer's own delivery hook: ``current`` is exactly the command Coffer
+         *     would write now; ``stale`` carries Coffer's marker with another command (an
+         *     older build's); ``missing`` is not there at all.
+         * @enum {string}
+         */
+        HookHealth: "current" | "stale" | "missing";
+        /**
+         * HookSource
+         * @description Where a hook was found. ``user`` is a file in the agent's config
+         *     directory; ``plugin`` is an installed, enabled plugin's hook file. A
+         *     project's own settings are not read: Coffer does not know which
+         *     repositories the agent is used in.
+         * @enum {string}
+         */
+        HookSource: "user" | "plugin";
+        /** MarketplaceOut */
+        MarketplaceOut: {
+            /** Name */
+            name: string;
+            /** Source */
+            source: string | null;
+            /** Source Type */
+            source_type: string | null;
+        };
+        /** McpEntriesOut */
+        McpEntriesOut: {
+            /** Items */
+            items: components["schemas"]["McpEntryOut"][];
+            /** Parse Errors */
+            parse_errors: components["schemas"]["ParseErrorOut"][];
+        };
+        /** McpEntryAdopt */
+        McpEntryAdopt: {
+            /** New Name */
+            new_name?: string | null;
+            /** Secrets */
+            secrets?: {
+                [key: string]: string;
+            } | null;
+            /** Source */
+            source?: string | null;
+        };
+        /**
+         * McpEntryDetailOut
+         * @description One entry in full — the listing's fields plus the file it came from, its
+         *     working directory and every other key it carries (secret-looking ones masked).
+         */
+        McpEntryDetailOut: {
+            /** Args */
+            args: string[];
+            /** Command */
+            command: string | null;
+            /** Cwd */
+            cwd: string | null;
+            /** Enabled */
+            enabled: boolean | null;
+            /** Env Keys */
+            env_keys: string[];
+            /** Extra */
+            extra: components["schemas"]["McpEntryFieldOut"][];
+            /** Header Keys */
+            header_keys: string[];
+            /** Is Coffer */
+            is_coffer: boolean;
+            /** Matches Resource */
+            matches_resource: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Secret Keys */
+            secret_keys: string[];
+            /** Source */
+            source: string;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "stdio" | "http";
+            /** Url */
+            url: string | null;
+        };
+        /** McpEntryFieldOut */
+        McpEntryFieldOut: {
+            /** Key */
+            key: string;
+            /** Masked */
+            masked: boolean;
+            /** Value */
+            value: string | null;
+        };
+        /** McpEntryOut */
+        McpEntryOut: {
+            /** Args */
+            args: string[];
+            /** Command */
+            command: string | null;
+            /** Enabled */
+            enabled: boolean | null;
+            /** Env Keys */
+            env_keys: string[];
+            /** Header Keys */
+            header_keys: string[];
+            /** Is Coffer */
+            is_coffer: boolean;
+            /** Matches Resource */
+            matches_resource: string | null;
+            /** Name */
+            name: string;
+            /** Secret Keys */
+            secret_keys: string[];
+            /** Source */
+            source: string;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "stdio" | "http";
+            /** Url */
+            url: string | null;
+        };
+        /**
+         * MemoryFileContentOut
+         * @description One file's contents. No fingerprint — this surface has no write.
+         */
+        MemoryFileContentOut: {
+            /** Abs Path */
+            abs_path: string;
+            /** Binary */
+            binary: boolean;
+            /** Content */
+            content: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
+         * MemoryFileNodeOut
+         * @description One entry in a store's tree. ``path`` is relative to the store dir.
+         */
+        MemoryFileNodeOut: {
+            /** Children */
+            children: components["schemas"]["MemoryFileNodeOut"][];
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "file" | "dir";
+        };
+        /** MemoryFileTreeOut */
+        MemoryFileTreeOut: {
+            root: components["schemas"]["MemoryFileNodeOut"];
+        };
+        /** NativeHookOut */
+        NativeHookOut: {
+            /** Coffer */
+            coffer: boolean;
+            /** Command */
+            command: string;
+            /** Event */
+            event: string;
+            /** Matcher */
+            matcher: string | null;
+            /** Path */
+            path: string;
+            /** Plugin */
+            plugin: string | null;
+            source: components["schemas"]["HookSource"];
+            /** Timeout */
+            timeout: number | null;
+            /** Type */
+            type: string;
+        };
+        /** NativeMemoryListOut */
+        NativeMemoryListOut: {
+            /** Items */
+            items: components["schemas"]["NativeMemoryStoreOut"][];
+        };
+        /** NativeMemoryStoreOut */
+        NativeMemoryStoreOut: {
+            /** Item Count */
+            item_count: number;
+            /** Memory Dir */
+            memory_dir: string;
+            /** Path */
+            path: string | null;
+            /** Project */
+            project: string;
+        };
+        /** ParseErrorOut */
+        ParseErrorOut: {
+            /** Error */
+            error: string;
+            /** Path */
+            path: string;
+            /** Source */
+            source: string;
+        };
+        /** PluginComponentOut */
+        PluginComponentOut: {
+            /** Description */
+            description: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PluginDetailOut
+         * @description One plugin's detail page (spec agent-registry "Read one installed plugin's
+         *     detail read-only"): the listing row, where it came from, and what it adds.
+         */
+        PluginDetailOut: {
+            /** Agents */
+            agents: components["schemas"]["PluginComponentOut"][];
+            /** Can Uninstall */
+            can_uninstall: boolean;
+            /** Commands */
+            commands: components["schemas"]["PluginComponentOut"][];
+            /** Hooks */
+            hooks: string[];
+            /** Install Path */
+            install_path: string | null;
+            /** Marketplace Source */
+            marketplace_source: string | null;
+            /** Marketplace Source Type */
+            marketplace_source_type: string | null;
+            /** Mcp Servers */
+            mcp_servers: string[];
+            plugin: components["schemas"]["PluginOut"];
+            /** Skills */
+            skills: components["schemas"]["PluginComponentOut"][];
+        };
+        /** PluginOut */
+        PluginOut: {
+            /** Author */
+            author: string | null;
+            /** Cache Present */
+            cache_present: boolean;
+            /** Commands */
+            commands: string[];
+            /** Description */
+            description: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Homepage */
+            homepage: string | null;
+            /** Id */
             id: string;
-            label: string;
-            description?: string;
-            /** @description The reasoning-effort levels this model runs at, in the agent's own order; empty for an agent that takes no such setting. An effort is not part of the model name — it is its own field on a turn — so it is chosen beside the model, not instead of one. */
-            efforts?: string[];
-            /** @description The level the agent itself would use when none is chosen, kept only when it is one of the offered levels. Null when the runtime publishes no machine-readable default. */
-            default_effort?: string | null;
+            /** Marketplace */
+            marketplace: string;
+            /** Mcp Servers */
+            mcp_servers: string[];
+            /** Name */
+            name: string;
+            /** Skills */
+            skills: string[];
+            /** Version */
+            version: string | null;
         };
-        AgentModelsOut: {
-            models: components["schemas"]["AgentModelOut"][];
+        /** PluginPatch */
+        PluginPatch: {
+            /** Enabled */
+            enabled: boolean;
         };
-        ErrorOut: {
-            error: {
-                /** @example RESOURCE_NOT_FOUND */
-                code: string;
-                /** @example resource not found: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920 */
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
+        /** PluginsOut */
+        PluginsOut: {
+            /**
+             * Can Uninstall
+             * @default false
+             */
+            can_uninstall: boolean;
+            /** Items */
+            items: components["schemas"]["PluginOut"][];
+            /** Marketplaces */
+            marketplaces: components["schemas"]["MarketplaceOut"][];
+            /** Parse Errors */
+            parse_errors: components["schemas"]["ParseErrorOut"][];
+        };
+        /**
+         * TranscriptMessageOut
+         * @description One conversational turn, as the session page renders it.
+         */
+        TranscriptMessageOut: {
+            /** Role */
+            role: string;
+            /** Text */
+            text: string;
+            /** Timestamp */
+            timestamp: string | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
+         * TranscriptSessionDetailResponse
+         * @description Response for GET /api/v1/agents/{uid}/transcripts/session.
+         *
+         *     The summary fields are the listing's, so a page reached by deep link shows
+         *     the same title and project the row did. ``message_count`` is the WHOLE
+         *     file's turn count while ``messages`` is the ``limit`` turns from
+         *     ``offset`` — a reader must be able to tell "200 of 812" from "all 200".
+         */
+        TranscriptSessionDetailResponse: {
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Limit */
+            limit: number;
+            /** Message Count */
+            message_count: number;
+            /** Messages */
+            messages: components["schemas"]["TranscriptMessageOut"][];
+            /** Offset */
+            offset: number;
+            /** Project Path */
+            project_path: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Source Path */
+            source_path: string;
+            /** Started At */
+            started_at: string | null;
+            /** Title */
+            title: string | null;
+        };
+        /**
+         * TranscriptSessionListResponse
+         * @description Response for GET /api/v1/agents/{uid}/transcripts.
+         *
+         *     ``sessions`` is one page; ``total`` is the number of sessions matching the
+         *     search/filter, so the UI can show "N of total". ``next_cursor`` reads the
+         *     page after this one and is null on the last page.
+         */
+        TranscriptSessionListResponse: {
+            /** Limit */
+            limit: number;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Sessions */
+            sessions: components["schemas"]["TranscriptSessionSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * TranscriptSessionSummary
+         * @description One transcript session as the list shows it.
+         */
+        TranscriptSessionSummary: {
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Message Count */
+            message_count: number;
+            /** Project Path */
+            project_path: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Source Path */
+            source_path: string;
+            /** Started At */
+            started_at: string | null;
+            /** Title */
+            title: string | null;
         };
     };
-    responses: {
-        /** @description Missing or invalid X-Coffer-Token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Malformed request */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Agent not found */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Duplicate name within the agent kind, a second agent for an already-registered config directory (`AGENT_CONFIG_DIR_REGISTERED`), or a stale config-file write (`CONFIG_FILE_STALE` — the on-disk content changed since the read) */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Validation failure (config_dir not writable, privileged path, unknown type, malformed content, protected/ambiguous MCP entry, unresolved adopt secrets, unparseable config file, ...) */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -1203,33 +1070,95 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listAgents: {
+    list_agent_models_api_v1_agent_providers__agent_key__models_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["AgentOut"][];
-                    };
+                    "application/json": components["schemas"]["AgentModelsOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    registerAgent: {
+    list_agents_api_v1_agents_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    register_agent_api_v1_agents_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1239,7 +1168,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1248,24 +1177,80 @@ export interface operations {
                     "application/json": components["schemas"]["AgentOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getAgent: {
+    list_candidates_api_v1_agents_candidates_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCandidatesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_agent_api_v1_agents__uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1274,39 +1259,75 @@ export interface operations {
                     "application/json": components["schemas"]["AgentOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteAgent: {
+    delete_agent_api_v1_agents__uid__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateAgent: {
+    update_agent_api_v1_agents__uid__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
@@ -1317,7 +1338,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1326,94 +1347,248 @@ export interface operations {
                     "application/json": components["schemas"]["AgentOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    listAgentCandidates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentCandidatesOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listAgentConfigFiles: {
+    connection_status_api_v1_agents__uid__coffer_connection_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["ConfigFileInfo"][];
-                    };
+                    "application/json": components["schemas"]["CofferConnectionOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    readAgentConfigFile: {
+    connect_api_v1_agents__uid__coffer_connection_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CofferConnectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disconnect_api_v1_agents__uid__coffer_connection_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CofferConnectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_config_files_api_v1_agents__uid__config_files_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigFileListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_config_file_api_v1_agents__uid__config_files__key__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
                 key: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigFileContent"];
+                    "application/json": components["schemas"]["ConfigFileContentOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    writeAgentConfigFile: {
+    write_config_file_api_v1_agents__uid__config_files__key__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
                 key: string;
             };
             cookie?: never;
@@ -1424,61 +1599,89 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigFileInfo"];
+                    "application/json": components["schemas"]["ConfigFileInfoOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    readAgentConfigDirFile: {
+    read_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigFileContent"];
+                    "application/json": components["schemas"]["ConfigFileContentOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    writeAgentConfigDirFile: {
+    write_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
@@ -1489,62 +1692,134 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigFileInfo"];
+                    "application/json": components["schemas"]["ConfigFileInfoOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteAgentConfigDirFile: {
+    delete_config_dir_file_api_v1_agents__uid__config_files__key__files__relpath__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listAgentMcpEntries: {
+    list_agent_hooks_api_v1_agents__uid__hooks_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHooksOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_mcp_entries_api_v1_agents__uid__mcp_entries_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1553,76 +1828,123 @@ export interface operations {
                     "application/json": components["schemas"]["McpEntriesOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getAgentMcpEntry: {
+    get_mcp_entry_api_v1_agents__uid__mcp_entries__entry__get: {
         parameters: {
             query?: {
-                /** @description Config-file key the entry lives in, when ambiguous. */
-                source?: string;
+                source?: string | null;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description MCP entry name as it appears in the agent's config file. */
                 entry: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["McpEntryDetail"];
+                    "application/json": components["schemas"]["McpEntryDetailOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteAgentMcpEntry: {
+    delete_mcp_entry_api_v1_agents__uid__mcp_entries__entry__delete: {
         parameters: {
             query?: {
-                /** @description Config-file key the entry lives in, when ambiguous. */
-                source?: string;
+                source?: string | null;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description MCP entry name as it appears in the agent's config file. */
                 entry: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    adoptAgentMcpEntry: {
+    adopt_mcp_entry_api_v1_agents__uid__mcp_entries__entry__adopt_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
                 entry: string;
             };
@@ -1634,67 +1956,183 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Adopted */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdoptedResource"];
+                    "application/json": components["schemas"]["AdoptedOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description Name collision with an existing mcp_server resource; the error envelope's `details.suggested_name` carries a suggested alternative. */
-            409: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listAgentHooks: {
+    list_native_memory_api_v1_agents__uid__native_memory_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentHooksOut"];
+                    "application/json": components["schemas"]["NativeMemoryListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listAgentPlugins: {
+    list_native_memory_files_api_v1_agents__uid__native_memory_files_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query: {
+                /** @description A memory_dir from the listing — this agent's store. */
+                dir: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileTreeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_native_memory_file_api_v1_agents__uid__native_memory_files_content_get: {
+        parameters: {
+            query: {
+                /** @description A memory_dir from the listing — this agent's store. */
+                dir: string;
+                /** @description File path relative to the store directory. */
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileContentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_plugins_api_v1_agents__uid__plugins_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1703,71 +2141,120 @@ export interface operations {
                     "application/json": components["schemas"]["PluginsOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getAgentPlugin: {
+    get_plugin_api_v1_agents__uid__plugins__plugin_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginDetail"];
+                    "application/json": components["schemas"]["PluginDetailOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    uninstallAgentPlugin: {
+    delete_plugin_api_v1_agents__uid__plugins__plugin_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    setAgentPluginEnabled: {
+    patch_plugin_api_v1_agents__uid__plugins__plugin_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
-                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
             cookie?: never;
@@ -1778,267 +2265,130 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getAgentCofferConnection: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CofferConnection"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    connectAgentToCoffer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Connected */
-            200: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CofferConnection"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
         };
     };
-    disconnectAgentFromCoffer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Disconnected (or was not connected) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CofferConnection"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    listAgentNativeMemory: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NativeMemoryListOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listAgentTranscripts: {
+    list_transcripts_api_v1_agents__uid__transcripts_get: {
         parameters: {
             query?: {
                 limit?: number;
-                offset?: number;
+                /** @description The previous page's next_cursor. Bound to the search, filter and sort it was issued with; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
                 /** @description Search title or project path. */
                 q?: string | null;
-                /** @description Filter to this exact `project_path`. */
+                /** @description Filter to this exact project_path. */
                 project?: string | null;
                 sort?: "started_at" | "last_activity_at" | "message_count";
                 order?: "asc" | "desc";
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TranscriptSessionListOut"];
+                    "application/json": components["schemas"]["TranscriptSessionListResponse"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listAgentNativeMemoryFiles: {
-        parameters: {
-            query: {
-                /** @description A `memory_dir` from the native-memory listing. */
-                dir: string;
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemoryFileTreeOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    readAgentNativeMemoryFile: {
-        parameters: {
-            query: {
-                /** @description A `memory_dir` from the native-memory listing. */
-                dir: string;
-                /** @description File path relative to the store directory. */
-                path: string;
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable identity. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemoryFileContentOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
         };
     };
-    readAgentTranscriptSession: {
+    read_transcript_session_api_v1_agents__uid__transcripts_session_get: {
         parameters: {
             query: {
-                /** @description Absolute `source_path` of a session, as the listing gave it. */
+                /** @description Absolute source_path of a session, as the listing gave it. */
                 path: string;
                 limit?: number;
                 offset?: number;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The agent Resource's immutable identity. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TranscriptSessionDetailOut"];
+                    "application/json": components["schemas"]["TranscriptSessionDetailResponse"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listAgentModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent type key (`claude_code`, `codex`). */
-                agent_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentModelsOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
 }

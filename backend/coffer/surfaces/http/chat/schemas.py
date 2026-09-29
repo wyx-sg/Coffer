@@ -1,7 +1,7 @@
-"""Pydantic schemas matching the chat paths in openspec/specs/chat/contracts/api.openapi.yaml.
+"""Pydantic schemas for the chat routes.
 
 Every request/response body the web Chat page's REST + SSE surface serves is
-modelled here. Field names, types, and nullability mirror the yaml exactly.
+modelled here; the chat contract is generated from them (``make contracts``).
 """
 
 from __future__ import annotations
@@ -12,28 +12,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from coffer.domain.chat.attachment import MAX_ATTACHMENTS_PER_MESSAGE
-
-# ---------------------------------------------------------------------------
-# Shared
-# ---------------------------------------------------------------------------
-
-
-class _ErrorDetail(BaseModel):
-    """Inner object inside the error envelope."""
-
-    code: str
-    message: str
-    details: dict[str, Any] = {}
-
-
-class ErrorOut(BaseModel):
-    """Standard error envelope — matches the global handler in errors.py.
-
-    Shape: {error: {code, message, details}}.
-    """
-
-    error: _ErrorDetail
-
 
 # ---------------------------------------------------------------------------
 # ContentBlock
@@ -141,9 +119,11 @@ class ConversationOut(BaseModel):
 
 
 class ConversationListOut(BaseModel):
-    """List of conversations, newest first."""
+    """One page of conversations, newest activity first."""
 
     conversations: list[ConversationOut]
+    #: Continues the listing after ``conversations``; null on the last page.
+    next_cursor: str | None
 
 
 # ---------------------------------------------------------------------------
