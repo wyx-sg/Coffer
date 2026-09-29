@@ -1,112 +1,58 @@
 ---
 title: Platform port
-description: How Coffer keeps the operating system out of its foundation — the one package that knows the host OS, the port the application asks through, where it is wired, the AST gate that holds the line, and how to add a new OS-dependent operation.
+description: Why Coffer keeps every operating-system difference in one place, what kinds of questions go through it, how a build gate protects the rule, and what to do when a new OS-dependent need appears.
 ---
 
 # Platform port
 
-Coffer ships for macOS only, but its foundation is not allowed to assume macOS. This page explains how that is arranged: one package in `infrastructure/` is the only code that asks which operating system Coffer runs on, the application reaches it through a small port, and a build gate fails any OS check that appears anywhere else. Read it before writing code whose behaviour differs between operating systems. The decision and the options weighed are in the ADR [Platform Differences Live Behind One Platform Port](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/platform-differences-live-behind-one-platform-port.md).
+Coffer ships for macOS only, but its foundation is not allowed to assume macOS. This page explains the idea that makes both true at once: exactly one part of the codebase knows which operating system Coffer runs on, and everything else asks it. Read it before writing anything whose behaviour would differ between operating systems. The decision itself, and the alternatives that were weighed, are recorded in the ADR [Platform Differences Live Behind One Platform Port](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/platform-differences-live-behind-one-platform-port.md).
 
-## The problem it solves
+## The problem
 
-A local tool that works with files, processes and desktop applications touches the operating system constantly. Opening a file in an editor is `open -t` on macOS, `xdg-open` on Linux and `cmd /c start` on Windows. Delivering a skill is a symlink on POSIX, but on Windows a symlink may need developer mode, so the fallback is an NTFS junction or a copy. Starting the daemon at login is a launchd agent on macOS and does not exist in that form elsewhere.
+A local tool that manages files, processes and desktop applications touches the operating system all the time, and the answers differ from one OS to the next. Opening a file in the user's editor, revealing it in the file manager and showing a native folder picker are different programs on macOS, Linux and Windows. A skill is delivered to an agent as a symbolic link on macOS and Linux, but on Windows a symbolic link may need special privileges, so the fallback there is a directory junction or, failing that, a copy. Starting the daemon at login is a launchd agent on macOS and has no direct equivalent elsewhere. Even "which directories belong to the system and must never receive a skill" depends on the OS.
 
-Left alone, those differences end up as `if sys.platform == "darwin":` wherever each one is first needed. Before this port there were such checks in ten modules, six of them in the application layer: the agent service decided which paths were privileged, the three file-action services built per-OS argv and probed for installed editors, the skill service inspected Windows reparse points itself, and the machine registry read the OS name. That has two costs:
+Left alone, each of these differences gets answered wherever it is first needed, as a small "if this is macOS" check. Coffer had accumulated such checks across both the application and the infrastructure layers. That has two costs:
 
-- **Porting becomes an archaeology project.** Supporting a second OS means finding every scattered check, and a check that is missed fails silently on the new OS, usually by doing the macOS thing.
-- **Use cases stop being testable in isolation.** A service that branches on `sys.platform` can only be tested by pretending to be each OS, and the test proves the branch, not the use case.
+- **Porting becomes archaeology.** Supporting a second operating system means finding every scattered check. A check that is missed does not fail loudly; it quietly does the macOS thing on the new OS.
+- **Use cases stop being testable on their own.** A service that branches on the OS can only be tested by pretending to be each OS, and the test ends up proving the branch rather than the use case.
 
-The rule Coffer adopted is that the release can stay macOS-only while the foundation stays portable: every OS difference lives behind one seam, so adding an OS is filling in that seam, not searching the tree.
+## The idea
 
-## The shape
+One place knows the operating system; everything else asks it.
 
-There are two halves, split along the layering rule that the application defines ports and infrastructure adapts to them.
+That place lives in the infrastructure layer, because answering OS questions is adapter work, the same kind of work as talking to the database or to an SDK. The application layer does not reach down into it. Instead, the application declares the questions it needs answered as a port, and the composition root hands it the one implementation that knows the host. This is the same shape every other adapter in Coffer follows (see [Layering and code layout](/architecture/layering)). The rest of the infrastructure layer is allowed to use the platform code directly, since it sits in the same layer.
 
-| Piece | Where | Role |
-| --- | --- | --- |
-| `PlatformPort` and `PrivilegedPaths` | [`application/platform_port.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/platform_port.py) | The `Protocol` the application asks, and the value it gets back for privileged paths. |
-| `coffer.infrastructure.platform` | [`infrastructure/platform/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/platform) | The only package that reads `sys.platform` or calls `platform.system()`. |
-| `HostPlatform` | `infrastructure/platform/adapter.py` | The adapter that implements `PlatformPort` for the running host. Stateless. |
+The questions are deliberately small and answer-shaped: "which command opens this file here?", "which paths are the system's own?". They are not "go and do it". The application still decides whether a path is valid, spawns the process and turns failures into errors a user understands. The platform part only supplies the per-OS fact. That keeps the port easy to replace with a fixed answer in a test, so a use case can be tested once, independent of any OS. The platform part is tested separately, once per operating system.
 
-Inside the package, `host.py` identifies the OS (`host_os()` returns a `HostOs` of `MACOS`, `WINDOWS`, `LINUX` or `OTHER`), and every other module in it branches on that answer. It is read on every call rather than cached, so a test that sets `sys.platform` sees the adapter follow.
+Only the macOS answers are released. Where another OS already has a known, cheap answer, such as a junction or a copy on Windows, or the usual Linux desktop tools, that answer lives in the same place and is covered by unit tests, but it is not claimed as supported.
 
-### What the application can ask
+## What goes through it
 
-The port carries only what an existing use case needs. Each method answers a question; none of them runs anything. Spawning, validation and error mapping stay in the application, which keeps the port small and lets a test replace it with a fixed answer.
+Today the platform part answers these kinds of questions:
 
-| Method | Answers | Used by |
-| --- | --- | --- |
-| `os_label()` | The OS name and release, such as `Darwin 24.6.0`. | The machine registry, which publishes it in this machine's sync descriptor. |
-| `privileged_paths()` | A `PrivilegedPaths` value: the system prefixes, the carve-outs inside them, the path separator, and the firmlink root (`/private` on macOS, none elsewhere). | The agent service and the sync import gate, which refuse a skill directory inside a system location. The matching logic stays in the application; only the data is per-OS. |
-| `open_command(target, with_app)` | The argv that opens a path in a chosen application or the default one. | `FsOpenService` |
-| `reveal_command(target)` | The argv that selects a path in the file manager (Finder, Explorer; on Linux, opening the folder). | `FsOpenService` |
-| `folder_picker_command(start)` | The argv of the native folder dialog, or `None` where the host has none. | `FsPickService` |
-| `editor_launch_value(app_bundle, command)` | The value that launches an installed editor: the bundle name on macOS if `<name>.app` exists, the command elsewhere if it is on `PATH`, else `None`. | `EditorDetectService` |
+- **Identity.** Which OS this is, how to describe it to a person (for example on a machine's sync record), and the stable machine identifier the OS itself keeps.
+- **System locations.** Which directories belong to the operating system, the exceptions inside them that are safe to use, and quirks of path comparison such as macOS reaching system folders through a hidden alias.
+- **Desktop actions.** How to open a file or folder, open it in a chosen editor, reveal it in the file manager, show a native folder picker, and tell whether a given editor is installed.
+- **Directory links.** How to link a directory with the best mechanism the OS offers (symbolic link, junction or copy), and how to recognise which kind is already on disk.
+- **Processes and services.** What an executable is called, how to start a child process that outlives its parent, and whether a login-service manager such as launchd exists.
 
-### What infrastructure uses directly
+A few OS assumptions are not behind the port yet, because they never carried an explicit check: replacing a file atomically when another program holds it open, stopping processes with signals, the links Coffer creates for its own binaries, a shell snippet Coffer writes into one agent's configuration, and the conventions for Coffer's own home directory and each agent's default configuration directory. None of them changes behaviour on macOS. Moving them is the second part of the ADR.
 
-Infrastructure modules are allowed to import infrastructure, so they call the platform package's modules without going through the port:
+## How the rule is protected
 
-| Module | Provides | Used by |
-| --- | --- | --- |
-| `links.py` | `link_directory` (symlink; on Windows symlink, then junction, then copy), `is_junction`, `remove_junction`, `infer_dir_link_kind`. Results are a kind-agnostic `DirLinkKind`. | The skill delivery engine (`infrastructure/skill/sync_engine.py`), which maps them to the skill kind's `LinkMode` and adds its own rules: never overwrite, only delete a real directory it created as a copy. |
-| `process.py` | `executable_name` (`.exe` on Windows), `detached_popen_kwargs` (a new session on POSIX, no console on Windows), `has_app_bundles`, `has_launchd`. | Daemon spawn resolution and the launchd login service. |
-| `identity.py` | `os_machine_id()`: `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux, `None` elsewhere. | Machine identity for vault sync, which hashes it and falls back to a stored id. |
-| `paths.py`, `desktop.py` | The data and argv behind the port methods above. | `HostPlatform` |
+Import rules cannot enforce this. The standard library modules that reveal the OS are imported legitimately everywhere, and the telltale sign is reading an attribute, not importing a module. So Coffer has a dedicated build gate, run as part of `make lint` and therefore of every `make verify` and every pull request.
 
-The skill kind's `SyncEnginePort` also gained `infer_link_mode`, so the skill service asks the delivery engine what kind of link is on disk instead of reading Windows file attributes itself.
+The gate reads the source code as a syntax tree instead of searching it as text. It fails the build when any code outside the platform part reads the OS name, calls one of the standard functions that identify the host, or imports those names under another name. Because it reads the syntax tree, it follows renamed imports, and it does not mistake an ordinary variable that happens to be called "platform" for the standard module. It applies to every layer, infrastructure included. Tests are exempt, because pretending to be a different OS is exactly how a test covers the per-OS answers.
 
-The whole package is fenced as kind-agnostic in the import contracts: it may not import any kind, because every kind may use it.
+When the gate fails, it names the file, the line and the expression it objected to.
 
-## Where it is wired
+## When a new OS-dependent need appears
 
-`HostPlatform` is built once, in the lifespan in [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py), and handed on explicitly, the same way every other dependency travels through the [composition root](/architecture/layering#the-composition-root):
+When new code needs an answer that differs by operating system:
 
-- to `wire_resource_kinds`, which passes it to the agent and skill wiring, where `AgentService` and `AgentImportGate` receive it;
-- to `start_background_workers`, which passes it through `start_sync` to `wire_sync`, where `MachineRegistry` receives it;
-- to `set_platform` in `surfaces/http/dependencies.py`, so the file-action routes can build `FsOpenService`, `FsPickService` and `EditorDetectService` per request with `Depends(get_platform)`.
+1. **Put the knowledge in the platform part.** Add the per-OS answer there, next to the others of its kind. Give the macOS answer exactly as the release needs it. Give Windows and Linux a real answer when one is cheap, and otherwise an explicit fallback, such as "no picker available" or "copy instead of link", that the caller can handle.
+2. **If the caller is in the application layer, ask through the port.** Add one question to the port that matches what the use case needs to know, and answer it in the host implementation. Code in the infrastructure layer uses the platform part directly and skips this step.
+3. **Receive it, never reach for it.** A service that needs the port takes it when it is constructed, and the composition root passes the one host implementation it already built.
+4. **Test both halves separately.** Test the platform answer once per operating system, and test the use case with a fixed-answer stand-in for the port.
 
-No application module imports the adapter. A test builds the service with `HostPlatform()` when it wants the real host's answers, or with a small fake when it wants to test the use case alone (`backend/tests/unit/application/fs/_fake_platform.py`).
-
-## The gate
-
-Import contracts cannot enforce this rule: `sys`, `os` and `platform` are importable everywhere, and the check is an attribute read, not an import. [`scripts/check_platform_calls.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_platform_calls.py), run by `make lint` and therefore by `make verify`, parses every module under `backend/coffer/` with Python's `ast` module and fails on any of these outside `infrastructure/platform/`:
-
-- a read of `sys.platform`, in any expression;
-- a call to an OS-identifying function of the `platform` module: `system`, `release`, `version`, `mac_ver`, `win32_ver`, `win32_edition`, `libc_ver`, `freedesktop_os_release`, `uname`, `platform`;
-- a read of `os.name`, or a call to `os.uname` or `sys.getwindowsversion`;
-- the same names imported directly, such as `from sys import platform`.
-
-It resolves module aliases (`import platform as _p` is still caught), and it does not confuse a local variable called `platform` with the module, because it only looks at names bound by an `import` statement. The failure message names the file, the line and the expression. Tests are not scanned, since setting `sys.platform` is how a test simulates a host.
-
-## Adding an OS-dependent operation
-
-When new code needs to behave differently per OS:
-
-1. **Put the OS knowledge in `infrastructure/platform/`.** Add a function to the module it belongs with (or a new module), branching on `host_os()`. Give Windows and Linux a real answer where one is cheap, and otherwise an explicit fallback (`None`, a copy instead of a link) that the caller can handle. Keep macOS behaviour exactly as the release needs it.
-2. **If the caller is in `application/`, extend the port.** Add a method to `PlatformPort` that answers the question the use case asks, implement it in `HostPlatform` by delegating to the function from step 1, and update the fake in the unit tests. If the caller is in `infrastructure/`, import the function directly and skip this step.
-3. **Hand it in, never import it.** An application service that needs the port takes it as a constructor argument; the composition root passes the one `HostPlatform` it built.
-4. **Test both halves.** Unit-test the platform function per OS by setting `sys.platform` with `monkeypatch` (see `backend/tests/unit/infrastructure/platform/`), and test the use case with a fake port.
-
-If the gate fails on code you did not intend as an OS check, the fix is still to move it: a value that depends on the OS is an OS check, whatever it is used for.
-
-## Not behind the port yet
-
-The port covers every place that *read* the platform when it was introduced. A few OS assumptions carry no check at all, so the gate cannot see them, and they still call the OS directly:
-
-- **Atomic replace.** `os.replace` is called by several writers (agent config files, the skill master store, binary deploy, the daemon discovery file). On Windows it fails while another process holds the target open, so these need one shared replace-with-retry.
-- **Process signals.** Stopping the daemon sends `SIGTERM`, and the shim installs `SIGTERM` / `SIGINT` handlers; Windows has no `SIGTERM` between processes.
-- **Symlinks outside skill delivery.** Binary deploy creates and reads the `~/.coffer/bin` symlinks with `os.symlink` / `os.readlink`.
-- **Shell syntax in a written hook.** The Codex memory guard Coffer installs is a POSIX shell command.
-
-Moving these behind the platform package, and then extending the gate to reject the raw primitives (`os.replace`, `os.symlink`, `os.kill`) above `infrastructure/`, is Part 2 of the ADR. None of them changes behaviour on macOS, which is why they did not block the port.
-
-## Where it lives in the code
-
-| Path | Contents |
-| --- | --- |
-| [`backend/coffer/application/platform_port.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/platform_port.py) | `PlatformPort`, `PrivilegedPaths`. |
-| [`backend/coffer/infrastructure/platform/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/platform) | `host`, `paths`, `desktop`, `links`, `process`, `identity`, and the `HostPlatform` adapter. |
-| [`scripts/check_platform_calls.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_platform_calls.py) | The AST gate. |
-| [`backend/tests/unit/infrastructure/platform/`](https://github.com/wyx-sg/Coffer/tree/main/backend/tests/unit/infrastructure/platform) | Per-OS tests of the platform package. |
-| [`backend/tests/integration/harness/test_platform_calls_gate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/harness/test_platform_calls_gate.py) | Tests of the gate. |
+If the gate flags code you did not think of as an OS check, move it anyway: a value that depends on the operating system is an OS check, whatever it is used for.

@@ -138,7 +138,6 @@ backend/coffer/
 │   ├── builtin_tools.py    # BuiltinTool and its registry
 │   ├── features.py         # FeatureService: pin, machine setting, channel default
 │   ├── upkeep_runs.py      # passes in flight, in process
-│   ├── platform_port.py    # PlatformPort: what the application asks the host OS
 │   ├── credentials/        # ref-to-secret resolver
 │   ├── engine/             # which model Coffer's own passes run on
 │   ├── fs/                 # browse, pick, open, editor
@@ -156,7 +155,7 @@ backend/coffer/
 │   ├── credentials/        # encrypted store, master key; the only keyring user
 │   ├── daemon/             # bootstrap, port, spawn, pid lock, daemon-config.json
 │   ├── net/                # SSRF guard
-│   ├── platform/           # the only code that knows the host OS; HostPlatform
+│   ├── platform/           # the only code that knows the host OS
 │   ├── logging/            # structlog setup, log files
 │   ├── media_retention.py  # age sweep for the two attachment media dirs
 │   ├── llm/                # LangChain models, completion, transcription
@@ -189,7 +188,7 @@ backend/coffer/
 | A route or CLI command | `surfaces/http/<kind>_routes.py` or `surfaces/cli/<kind>_cmd.py`; a kind's lifecycle verbs come from `surfaces/cli/_kind_verbs.py`, so its module adds only what is specific to it |
 | Wiring the above together | the kind's `surfaces/http/<kind>_wiring.py` |
 | Something a second kind now needs too | a kind-agnostic module at the layer root |
-| Behaviour that differs by operating system | `infrastructure/platform/`, reached from the application through `PlatformPort` ([Platform port](/architecture/platform)) |
+| Behaviour that differs by operating system | the platform part of the infrastructure layer, which the application reaches through its platform port ([Platform port](/architecture/platform)) |
 | A schema change | a new Alembic migration under `infrastructure/persistence/migrations/versions/` |
 
 ## The frontend
@@ -220,7 +219,7 @@ A structure that is only a convention erodes one convenient shortcut at a time, 
 | [`scripts/check_file_sizes.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_file_sizes.py) | File-size ceilings: backend Python and desktop Rust at most 400 lines; frontend pages 200, components 250, hooks and utilities 300. Generated files are exempt. |
 | [`scripts/check_response_models.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_response_models.py) | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and no-body responses), so no route returns an undeclared `dict`. |
 | [`scripts/check_architecture_doc.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_architecture_doc.py) | The code-layout tree on this page and the builtin-tool list across the architecture pages match the code. |
-| [`scripts/check_platform_calls.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_platform_calls.py) | No `sys.platform`, `platform.system()` or `os.name` check anywhere in `backend/coffer/` outside `infrastructure/platform/`. See [Platform port](/architecture/platform). |
+| Platform-check gate | No code outside the platform part asks which operating system it runs on. See [Platform port](/architecture/platform). |
 | `make verify-contract` | The runtime OpenAPI document matches each spec's hand-written contract. |
 | `mypy --strict` | Full static typing of `backend/coffer`, so a port and its adapter cannot silently disagree. |
 
