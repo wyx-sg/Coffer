@@ -67,6 +67,12 @@ export function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const daemonLabel = useDaemonLabel(state);
   const tone: StatusTone = state.kind === "running" && state.outOfDate ? "warn" : TONE[state.kind];
   const settingsLabel = t("nav.settings");
+  // The visible words fit the sidebar's width; the accessible name and the
+  // rail's tooltip carry the whole sentence.
+  const shortLabel =
+    state.kind === "running" && !state.outOfDate
+      ? t("nav.daemon.runningShort", { port: state.port })
+      : daemonLabel;
 
   return (
     <div className={cn("flex flex-col gap-0.5 px-2.5 pb-2", collapsed && "items-center")}>
@@ -100,7 +106,7 @@ export function SidebarFooter({ collapsed }: { collapsed: boolean }) {
         <button
           type="button"
           onClick={() => openSettings("daemon")}
-          aria-label={collapsed ? daemonLabel : undefined}
+          aria-label={daemonLabel}
           data-testid="sidebar-daemon"
           data-state={state.kind}
           className={cn(
@@ -109,7 +115,7 @@ export function SidebarFooter({ collapsed }: { collapsed: boolean }) {
           )}
         >
           <StatusDot tone={tone} />
-          {!collapsed ? <span className="min-w-0 flex-1">{daemonLabel}</span> : null}
+          {!collapsed ? <span className="min-w-0 flex-1 truncate">{shortLabel}</span> : null}
         </button>
       </RailTooltip>
     </div>

@@ -53,6 +53,7 @@ describe("SidebarFooter", () => {
     answer({});
     renderFooter();
     const state = await screen.findByRole("button", { name: "Daemon running on port 8000" });
+    expect(state).toHaveTextContent("Running on port 8000");
     fireEvent.click(state);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
   });

@@ -192,7 +192,8 @@
       "running": "守护进程运行中，端口 {{port}}",
       "outOfDate": "端口 {{port}} 上的守护进程来自另一个应用版本",
       "stopping": "守护进程正在停止",
-      "offline": "守护进程离线"
+      "offline": "守护进程离线",
+      "runningShort": "运行中，端口 {{port}}"
     }
   },
   "resources": {

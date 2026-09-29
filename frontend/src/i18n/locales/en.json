@@ -192,7 +192,8 @@
       "running": "Daemon running on port {{port}}",
       "outOfDate": "Daemon on port {{port}} is from a different app version",
       "stopping": "Daemon stopping",
-      "offline": "Daemon offline"
+      "offline": "Daemon offline",
+      "runningShort": "Running on port {{port}}"
     }
   },
   "resources": {

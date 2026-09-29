@@ -98,7 +98,7 @@ export function SidebarNav({ collapsed, pathname }: Props) {
     .filter((group) => group.entries.length > 0);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-2.5 pb-3 text-sm" aria-label={t("nav.aria.primary")}>
+    <nav className="flex-1 overflow-y-auto px-2.5 pb-1 text-sm" aria-label={t("nav.aria.primary")}>
       {groups.map((group, i) => (
         <div
           key={group.labelKey ?? "ungrouped"}
@@ -111,7 +111,7 @@ export function SidebarNav({ collapsed, pathname }: Props) {
               <div className="mx-1 my-2 border-t border-border-subtle" />
             ) : null
           ) : (
-            <div className="nav-group-label">{t(group.labelKey)}</div>
+            <div className="nav-group-label pt-3">{t(group.labelKey)}</div>
           )}
           {group.entries.map((entry) => (
             <NavRow
