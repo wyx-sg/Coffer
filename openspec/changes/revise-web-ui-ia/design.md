@@ -506,21 +506,13 @@ spec owns the Skills page.
 
 ### 17. Knowledge curation, history and memory delivery
 
-- **Curate now drains.** The manual trigger runs passes until nothing is pending, one at a time and
-  each bounded to eight writes as the sweep's are, showing *n of m* and stopping at the first
-  failure so one broken item does not hide behind a success count. The sweep keeps its global
-  interval (60 minutes by default, Settings › General), so the trigger is for "now", not for "at all".
-- **One word: Curate (整理).** "Merge" named the same act on some boards; one name per act, as for
-  surfaces. Inbox entries are items in the UI; the spec keeps *material* as its internal term.
-- **Only one quiet trigger**, in the Inbox view and in Recent changes, where waiting items are
-  visible; the header carries a status line instead of a button. Without Coffer's model material
-  is promoted on arrival, so there is nothing to curate and no control is shown.
-- **Add a document is an item.** Writing something down goes through the inbox like every other
-  entrance, so no route creates a document at a path.
-- **History is the vault's git.** The vault is always a git repository in 1.0, each pass one commit
-  naming its writer, so the History tab and whole-pass undo read and revert commits; the old
-  "nothing is kept of what a pass replaced" and "where vault sync is configured" wording goes. The
-  agent named on a curated version comes from the submission's `knowledge_written` audit event.
+- **Knowledge's backend shipped separately.** Draining Curate now, versions naming their writer,
+  whole-pass undo and the cross-collection recent-changes read are
+  [knowledge-curate-and-history](../archive/2026-09-30-knowledge-curate-and-history/)'s. This change keeps only the web surface over them: one word,
+  Curate (整理), never "merge"; inbox entries are *items* in the UI; one quiet trigger in the Inbox
+  view and in Recent changes, with a status line in the header instead of a button; Add a
+  document submitted as an item; no curation control without Coffer's model; and the History tab
+  and Recent changes pages.
 - **Memory delivery is shown on the Memory page, hook state on the agent page.** The overview lists
   each agent's deliveries, memories read and last delivery over seven days, and a partition's
   Delivered tab shows the exact session-start text each agent receives there — what memory is doing
@@ -528,8 +520,6 @@ spec owns the Skills page.
   the agent's configuration, so it lives only on the agent's Hooks tab and Overview connection
   block, and the agent's Memory tab stays the agent's own stores. Counts come from the
   delivery-fire audit events and from the note paths transcripts record reading, never their text.
-- **No disabled collection.** Every collection is served to every agent; the remaining "enabled" /
-  "disabled" wording in knowledge is removed.
 - **A partition page is its memories, plus what it delivers.** The UI calls notes *memories*
   (记忆条目) and shows them on the Memories tab as one list with a collapsed Retired group and a meta line of learned-from agents and update time.
   The agents' own memory files — native paths, their original text, `.raw/`, `MEMORY.md`,

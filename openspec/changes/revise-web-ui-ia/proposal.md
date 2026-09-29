@@ -136,12 +136,11 @@ unarchived until that implementation lands.
   commit, with Update available, a previewed diff and a conflict view when the skill was edited
   locally) — each showing what it found before anything is written. Archives are checked for
   zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
-- **Knowledge:** Curate now drains a collection pass by pass with progress, stopping at the first
-  failure; one term, Curate / Curation (整理), everywhere; an Inbox node with a count, a header
-  status line, Add a document (submitted as an item, not written as a document), a body-only editor with Reload / Compare on a
-  stale save, and no curation controls without Coffer's model. Every document has a History tab
-  and every pass can be undone as a whole from a cross-collection Recent changes view, on the
-  vault's git history. Leftover "disabled collection" wording is removed.
+- **Knowledge:** the collection page's web surface — one term, Curate / Curation (整理); an Inbox
+  node with a count and the only Curate now; a header status line; Add a document (an item); a
+  body-only editor with Reload / Compare on a stale save; no curation controls without Coffer's
+  model — and the History tab and Recent changes pages. The backend they read (draining Curate
+  now, versions naming their writer, whole-pass undo, recent changes) shipped with [knowledge-curate-and-history](../archive/2026-09-30-knowledge-curate-and-history/).
 - A **memory partition** has two tabs: Memories (the UI's word for notes, 记忆条目), with a
   collapsed Retired group and a meta line naming the agents each was learned from and no native
   paths, agent text, `.raw/`, index or retired files or file tree; and Delivered, the exact
@@ -195,9 +194,8 @@ unarchived until that implementation lands.
 - `experimental-features`: the web UI's Experimental features card is removed and the switch
   requirement no longer names a Settings page; a switched-off feature's notice says it is off, and
   its pages and objects leave the command palette.
-- `knowledge`: the manual trigger drains until nothing is pending; the web UI terms, Inbox,
-  status line, Add a document and editor; document history and whole-pass undo; no disabled
-  collection anywhere.
+- `knowledge`: the web UI's collection tree — its terms, Inbox, status line, Add a document and
+  editor (the rest shipped with [knowledge-curate-and-history](../archive/2026-09-30-knowledge-curate-and-history/)).
 - `memory`: a partition's page has Memories (with a Retired group and learned-from agents, none of
   the agents' own sources) and Delivered tabs; provenance stays in the data and CLI.
 - `chat`: the Conversations page lists every conversation with a source badge and filters,
