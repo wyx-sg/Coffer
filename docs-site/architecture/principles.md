@@ -55,6 +55,14 @@ Specifications under `openspec/specs/`, written with [OpenSpec](https://github.c
 
 This principle exists because distributed teams (and AI agents generating code) tend to drift from design intent over time. By making the spec the source of truth and requiring it to be updated before code changes, Coffer ensures that architectural intent is always recorded and verifiable.
 
+**Contract direction.** The two halves of a spec folder are written in opposite directions:
+
+1. The **behavioural spec** — requirements and their scenarios in `spec.md` — is written first, by hand, and the code is built to satisfy it.
+2. The **wire schema** — `contracts/api.openapi.yaml` in the same folder — is generated from the backend's Pydantic models and checked in, so every change to it is reviewed as a diff in the PR that causes it.
+3. The **frontend's typed client** and its wire types are generated from that schema.
+
+No wire type is hand-written on either side. The Pydantic models are the only hand-written description of the HTTP wire, because they are what the daemon actually serves. A hand-written schema beside them is a second copy that has to be kept in agreement by a gate, and a gate that compares two documents by field name cannot see a type, a nullability or a constraint that differs; generating the schema from the models removes the second copy, and generating the client from the schema lets the TypeScript compiler check every consumer's types, which no name-only gate can. The reasoning is recorded in [The wire contract is generated from the Pydantic models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md).
+
 ### III. Open-Source-Readiness from Day One
 
 License (MIT), governance, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. A change that would shorten this list — adding a closed-source dependency without an exception, omitting attribution for AI-authored content — violates this principle and requires an amendment with an explicit migration plan.

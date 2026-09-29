@@ -25,8 +25,9 @@ openspec/
   specs/<capability>/
     spec.md                      # REQUIRED. Purpose, requirements, scenarios.
     data-model.md                # Entities, fields, relationships. — when it has state
-    contracts/api.openapi.yaml   # The wire contract, hand-authored and
-                                 #   PR-reviewed; one per capability family.
+    contracts/api.openapi.yaml   # The wire contract, generated from the
+                                 #   backend's Pydantic models and reviewed as
+                                 #   a diff; one per capability family.
                                  #                                  — when it has endpoints
     <child>/spec.md              # A CHILD capability; its id is `<capability>/<child>`.
   changes/<change-id>/
@@ -124,8 +125,10 @@ When a change alters behaviour, its spec deltas **and every related doc** change
 in the same PR — before or alongside the code, never as a follow-up:
 
 - the spec deltas in the change folder, archived into `openspec/specs/`;
-- `contracts/api.openapi.yaml` — add, rename or remove endpoints and schemas
-  to match the code, then re-run frontend codegen;
+- `contracts/api.openapi.yaml` — never designed by hand: change the Pydantic
+  models, bring the contract to match them (regenerate it once the S-4
+  generator lands), then re-run frontend codegen. The behavioural `spec.md` is
+  what is written first; the wire schema follows the models;
 - `data-model.md` when an entity changes;
 - the cross-cutting docs the change touches: the relevant `docs/decisions/`
   ADR, the [`docs-site/architecture/`](../docs-site/architecture/) pages, the rest of `docs-site/`, and any

@@ -17,8 +17,10 @@ it — do not invent a parallel pattern.
 - **React 18 + TypeScript 5** (strict), **Vite** build, **React Router v6**.
 - **TanStack Query v5** for all server state. No Redux / Zustand / MobX.
 - **openapi-typescript** generates wire types from every spec's OpenAPI
-  contract; **openapi-fetch** is the typed client for the mcp-gateway paths and
-  one shared hand-written `call<T>()` covers the rest (§4).
+  contract, and that contract is itself generated from the backend's Pydantic
+  models; **openapi-fetch** is the typed client for the mcp-gateway paths and
+  one shared hand-written `call<T>()` transport helper covers the rest (§4).
+  The target is a generated client for every capability (§4, §9).
 - **shadcn/ui + Radix + Tailwind** for the design system (§6).
 - **react-hook-form + zod** for forms, **i18next** for copy, **lucide-react**
   for icons.
@@ -140,10 +142,18 @@ the chat SSE stream (below).
   `src/lib/api/call.ts` (URL building, headers, 204 → `undefined`,
   `{error:{code,message,details}}` → `ApiError`, `FormData` bodies). Every
   other `src/lib/api/x.ts` module is request functions over `call` plus its
-  wire types, which alias the generated schema where the contract matches
-  (`export type Provider = components["schemas"]["ProviderOut"]`) and stay
-  hand-written — with a comment saying why — only where the contract is
-  narrower than what the backend really sends. Do not add a second helper.
+  wire types, which are aliases of the generated schema
+  (`export type Provider = components["schemas"]["ProviderOut"]`). No wire type
+  is hand-written: when the contract is narrower than what the backend really
+  sends, the fix is in the backend model (and the contract regenerated from
+  it), not a hand-written interface. Types that exist only in the UI and never
+  cross the wire are fine. Do not add a second helper.
+- **Direction.** Pydantic models → generated `contracts/api.openapi.yaml` →
+  generated client (Principles, "II. Spec-as-Truth"; ADR
+  `docs/decisions/wire-contract-generated-from-the-pydantic-models.md`). The
+  contract generator, its freshness gate and the lint rule against
+  hand-written wire types arrive with the S-4 work; until then existing
+  hand-written types are debt (§9), migrated per domain, never extended.
 
 All errors converge on `ApiError(code, message)` (`src/lib/api/errors.ts`).
 Surface them with `translateApiError(t, error)`, which maps `errors.<CODE>`
@@ -270,6 +280,7 @@ When you work near these, migrate toward the target; don't extend the debt:
    generated schemas instead of re-deriving them.
    Same for the other hand-written wire types a contract does not match (each is
    listed in the header comment of the `src/lib/api/x.ts` that keeps one): fix
-   the contract when the backend is right, then replace the type with the alias.
+   the backend model so the contract describes what is really sent, regenerate,
+   then replace the type with the alias.
 2. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
    modes out of it if a page that needs only one mode becomes a landing page.

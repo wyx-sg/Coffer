@@ -80,9 +80,9 @@ The layering import rules, the credential-access rule, and the "extract cross-cu
 
 ### HTTP Contracts (Wire Format)
 
-The authoritative wire contract for any feature is `openspec/specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed — one file per spec, and spec folders are named, never numbered). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
+The wire contract runs **Pydantic models → generated OpenAPI → generated frontend client** (Principles, "II. Spec-as-Truth" → Contract direction; ADR `docs/decisions/wire-contract-generated-from-the-pydantic-models.md`). The backend Pydantic `BaseModel`s in `surfaces/http/` are the only hand-written description of the wire. Each spec's `openspec/specs/<short-name>/contracts/api.openapi.yaml` (one file per spec, and spec folders are named, never numbered) is generated from them and checked in, so a wire change is reviewed as a diff; never edit it by hand to describe a shape the models do not produce. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
 
-CI gate: `make verify-contract` rejects PRs where the runtime OpenAPI dump structurally differs from any spec yaml.
+**Transition.** The generator and its freshness gate arrive with the S-4 work and have not landed yet. Until then the checked-in yaml files are still maintained by hand and `make verify-contract` rejects PRs where the runtime OpenAPI dump structurally differs from any spec yaml; change the model first and bring the yaml to match it, never the other way round. Once the generator lands, the gate becomes "regenerate and fail if the checked-in files differ".
 
 ### Local Dev
 
