@@ -1099,6 +1099,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+| `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
@@ -1109,7 +1110,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 coffer channel edit [OPTIONS] NAME
 ```
 
-Change a channel's name, title, description, group gating, quiet windows or `/dir` directories.
+Change a channel's name, title, description, group gating, quiet windows, live status or `/dir` directories.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1121,6 +1122,7 @@ Change a channel's name, title, description, group gating, quiet windows or `/di
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+| `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--no-dirs` | option | flag |  | Allow no directories for `/dir` (clears the list) |
 

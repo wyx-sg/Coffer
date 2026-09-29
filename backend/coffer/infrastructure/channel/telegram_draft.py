@@ -26,6 +26,7 @@ import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from coffer.application.channel.turn_status import LIVE_SEPARATOR, split_snapshot
 from coffer.application.channel.turn_text import clip_stream_preview
 from coffer.infrastructure.channel.live_text import LIVE_KEEPALIVE_SECONDS, LiveTextSurface
 from coffer.infrastructure.channel.telegram_features import Feature
@@ -57,6 +58,18 @@ DRAFT_TEXT_LIMIT = 4096
 #: of a different platform. So: its own value, on the same order, and moved
 #: only against Telegram's own behaviour.
 _DRAFT_UPDATE_INTERVAL = 0.2
+
+
+def clip_draft(text: str, limit: int) -> str:
+    """Fit a snapshot to the draft cap, clipping the answer before the status
+    block so the header stays visible on a long reply."""
+    if len(text) <= limit:
+        return text
+    block, answer = split_snapshot(text)
+    head = f"{block}\n{LIVE_SEPARATOR}\n"
+    if answer and len(head) < limit - 1:
+        return head + clip_stream_preview(answer, limit - len(head))
+    return clip_stream_preview(text, limit)
 
 
 def new_draft_id() -> int:
@@ -110,7 +123,7 @@ class TelegramDraftLiveText(LiveTextSurface):
         params: dict[str, Any] = {
             "chat_id": int(self._chat_id),
             "draft_id": self._draft_id,
-            "text": clip_stream_preview(text, DRAFT_TEXT_LIMIT),
+            "text": clip_draft(text, DRAFT_TEXT_LIMIT),
             # Let the platform draw the stop control. Only safe to
             # advertise because the stopped_message_generation update is routed
             # to the same interrupt path /stop takes.

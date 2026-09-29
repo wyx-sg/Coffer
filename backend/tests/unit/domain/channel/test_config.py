@@ -147,6 +147,12 @@ def test_quiet_windows_default_and_are_configurable():
         parse_channel_config({**TELEGRAM_CONFIG, "wait_after_forward_seconds": 61})
 
 
+def test_steps_are_shown_unless_the_channel_hides_them():
+    """spec channels "Show a turn's working state as one status line"."""
+    assert parse_channel_config(SEATALK_CONFIG).show_steps is True
+    assert parse_channel_config({**TELEGRAM_CONFIG, "show_steps": False}).show_steps is False
+
+
 def test_raw_telegram_token_in_bot_token_ref_rejected():
     raw_token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     with pytest.raises(ValidationError, match="looks like a raw secret"):
@@ -216,6 +222,7 @@ def test_root_model_round_trips_flat_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "show_steps": True,
         "directories": [],
         "runs_on": None,
     }
@@ -232,6 +239,7 @@ def test_root_model_round_trips_seatalk_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "show_steps": True,
         "directories": [],
         "runs_on": None,
     }

@@ -272,6 +272,7 @@ class ChannelRuntime:
                 ignore_other_mentions=parsed.ignore_other_mentions,
                 wait_after_text_seconds=parsed.wait_after_text_seconds,
                 wait_after_forward_seconds=parsed.wait_after_forward_seconds,
+                show_steps=parsed.show_steps,
                 agent_scope=routing.agent_scope,
                 directories=tuple(parsed.directories),
             )

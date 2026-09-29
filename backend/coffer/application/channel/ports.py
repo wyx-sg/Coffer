@@ -238,6 +238,8 @@ class ChannelBinding:
     # Quiet windows of "Take a burst of messages as one turn", from the channel config.
     wait_after_text_seconds: float = 1.5
     wait_after_forward_seconds: float = 5.0
+    # "Show a turn's working state as one status line": list the step lines.
+    show_steps: bool = True
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here

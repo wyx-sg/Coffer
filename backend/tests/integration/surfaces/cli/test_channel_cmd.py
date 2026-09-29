@@ -434,6 +434,17 @@ def test_edit_changes_the_quiet_windows(channel_daemon: _Daemon) -> None:
     assert r.exit_code == 2
 
 
+@pytest.mark.acceptance(spec="channels", scenario="the step lines are hidden from the command line")
+def test_edit_hides_and_shows_the_step_lines(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    assert channel_daemon.channel("tg").config.get("show_steps", True) is True
+    r = runner.invoke(app, ["channel", "edit", "tg", "--hide-steps"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["show_steps"] is False
+    assert runner.invoke(app, ["channel", "edit", "tg", "--show-steps"]).exit_code == 0
+    assert channel_daemon.channel("tg").config["show_steps"] is True
+
+
 @pytest.mark.acceptance(
     spec="channels",
     scenario="the channel's directories are edited from the Channels page and the CLI",

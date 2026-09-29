@@ -292,6 +292,7 @@ class TurnDriver:
             chat_kind=item.chat_kind,
             mention_user_id=item.mention_user_id,
             mention_user_email=item.mention_user_email,
+            show_steps=binding.show_steps,
         )
         clean = False
         try:
