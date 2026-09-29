@@ -39,6 +39,11 @@ _logger = logging.getLogger("coffer.shim")
 # How long to wait for a live daemon when re-resolving after a connect failure
 # (a restart rewrites daemon.json a moment before its port starts serving).
 _RECOVER_TIMEOUT = 5  # seconds
+# Transport failures raised before the request left the shim: the daemon never
+# saw it, so resending cannot run anything twice. Any other failure (read
+# timeout, reset mid-response, protocol error) may follow a request the daemon
+# already received and acted on.
+_NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
 
 # asyncio.StreamReader defaults to a 64 KiB (2**16) line limit; readline()
 # then raises ValueError on any longer line, killing the stdin pump and
@@ -174,6 +179,13 @@ class _Bridge:
         and retry this call once before surfacing an error. Without this a
         long-lived shim stayed pinned to the dead port forever, returning
         ``All connection attempts failed`` for every request.
+
+        A ``tools/call`` is resent only when the failure provably happened
+        before the request reached the daemon (see ``_NOT_SENT_ERRORS``): the
+        old daemon may have run the tool before it died, and an upstream
+        write is not idempotent. Such a call still rebinds, so later calls
+        work, but its own reply is an error saying it may or may not have run.
+        Every other method is safe to resend.
         """
         try:
             response = await client.post("/mcp", json=envelope, headers=self._request_headers())
@@ -184,8 +196,23 @@ class _Bridge:
             )
         except Exception as e:
             _logger.warning("shim.post_failed", extra={"error": type(e).__name__})
+            may_have_run = envelope.get("method") == "tools/call" and not isinstance(
+                e, _NOT_SENT_ERRORS
+            )
             if not await self._recover(client):
                 emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
+                return
+            if may_have_run:
+                _logger.warning("shim.tools_call_not_resent", extra={"error": type(e).__name__})
+                emit_error(
+                    envelope.get("id"),
+                    code=-32603,
+                    message=(
+                        "shim: the Coffer daemon restarted during this tools/call "
+                        f"({type(e).__name__}); the call may or may not have run. "
+                        "Check its effect before calling it again."
+                    ),
+                )
                 return
             try:
                 response = await client.post("/mcp", json=envelope, headers=self._request_headers())
