@@ -15,7 +15,9 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-__all__ = ["ALLOWED_REACTIONS", "set_reaction"]
+from coffer.domain.channel.envelopes import ReactionSet
+
+__all__ = ["ALLOWED_REACTIONS", "TELEGRAM_REACTIONS", "set_reaction"]
 
 ALLOWED_REACTIONS: frozenset[str] = frozenset(
     {
@@ -93,6 +95,13 @@ ALLOWED_REACTIONS: frozenset[str] = frozenset(
         "🤷\u200d♀",
         "😡",
     }
+)
+
+
+#: 👀 received → 👨‍💻 working → 👌 done / 😢 failed / 🤷 stopped — all on the list
+#: above (a unit test pins it).
+TELEGRAM_REACTIONS = ReactionSet(
+    received="👀", working="👨‍💻", done="👌", failed="😢", stopped="🤷"
 )
 
 

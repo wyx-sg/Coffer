@@ -11,13 +11,17 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.turn_media import deliver_media
 from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.chat.events import TurnError
 
-__all__ = ["TurnEnd", "deliver_reply", "summary_line"]
+__all__ = ["TurnEnd", "TurnOutcome", "deliver_reply", "summary_line"]
+
+#: How a turn ended, in the words the reactions and the ping use.
+TurnOutcome = Literal["done", "failed", "stopped"]
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,14 @@ class TurnEnd:
     @property
     def clean(self) -> bool:
         return self.error is None and self.stop_reason == "end_turn"
+
+    @property
+    def outcome(self) -> TurnOutcome:
+        if self.error is not None or self.stop_reason == "max_iterations":
+            return "failed"
+        if self.stop_reason == "interrupted":
+            return "stopped"
+        return "done"
 
 
 def summary_line(end: TurnEnd) -> str:

@@ -43,7 +43,7 @@ from coffer.infrastructure.channel.telegram_profile import (
     probe_identity,
     register_profile,
 )
-from coffer.infrastructure.channel.telegram_reactions import set_reaction
+from coffer.infrastructure.channel.telegram_reactions import TELEGRAM_REACTIONS, set_reaction
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
@@ -126,6 +126,7 @@ class TelegramAdapter:
             supports_media=True,
             supports_groups=True,
             supports_reactions=True,
+            reactions=TELEGRAM_REACTIONS,
         )
 
     # -- lifecycle ---------------------------------------------------------

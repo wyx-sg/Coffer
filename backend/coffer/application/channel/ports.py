@@ -180,7 +180,7 @@ class ChannelAdapter(Protocol):
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         """Set an emoji reaction on ``message_id`` ("Acknowledge receipt and completion
-        by capability": 👀 on receipt, ✅ on completion). Only called when the transport
+        by capability": one of ``capabilities.reactions``). Only called when the transport
         declares ``capabilities.supports_reactions`` — others may raise; the core never
         reaches them (SeaTalk uses its typing signal for the same receipt cue).
         Best-effort at the call site: a failed reaction never breaks the turn."""

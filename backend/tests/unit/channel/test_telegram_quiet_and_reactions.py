@@ -15,7 +15,11 @@ import pytest
 
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_features import Feature
-from coffer.infrastructure.channel.telegram_reactions import ALLOWED_REACTIONS, set_reaction
+from coffer.infrastructure.channel.telegram_reactions import (
+    ALLOWED_REACTIONS,
+    TELEGRAM_REACTIONS,
+    set_reaction,
+)
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
 
 
@@ -31,8 +35,19 @@ class _Api:
         return [p for m, p in self.calls if m in ("sendMessage", "sendRichMessage")]
 
 
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="every mark is on the Bot API's reaction list"
+)
 def test_every_reaction_coffer_sets_is_on_telegrams_list() -> None:
-    for emoji in ("👀", "👨‍💻", "👌", "😢", "🤷"):
+    marks = TELEGRAM_REACTIONS
+    assert (marks.received, marks.working, marks.done, marks.failed, marks.stopped) == (
+        "👀",
+        "👨‍💻",
+        "👌",
+        "😢",
+        "🤷",
+    )
+    for emoji in (marks.received, marks.working, marks.done, marks.failed, marks.stopped):
         assert emoji in ALLOWED_REACTIONS
     assert len(ALLOWED_REACTIONS) == 73
 

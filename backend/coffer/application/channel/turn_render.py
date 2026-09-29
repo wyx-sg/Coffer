@@ -28,7 +28,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.turn_finish import TurnEnd, deliver_reply, summary_line
+from coffer.application.channel.turn_finish import (
+    TurnEnd,
+    TurnOutcome,
+    deliver_reply,
+    summary_line,
+)
 from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
 from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
@@ -82,9 +87,9 @@ class TurnRenderer:
     _reply: ReplyText = field(init=False)
     _surface: TurnSurface = field(init=False)
 
-    async def consume(self, queue: asyncio.Queue[Any]) -> bool:
-        """Render the turn; return ``True`` on a clean success (no error, a normal
-        ``end_turn``). An errored/interrupted turn returns ``False``."""
+    async def consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
+        """Render the turn; return how it ended (``done`` / ``failed`` /
+        ``stopped``), which the driver marks on the asker's message."""
         heartbeat = self._start_typing_heartbeat()
         try:
             return await self._consume(queue)
@@ -95,7 +100,7 @@ class TurnRenderer:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await heartbeat
 
-    async def _consume(self, queue: asyncio.Queue[Any]) -> bool:
+    async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         started = self.now()
         self._status = TurnStatus(started=started, show_steps=self.show_steps)
         self._reply = ReplyText()
@@ -149,7 +154,7 @@ class TurnRenderer:
         )
         if not end.clean:
             await self.send(summary_line(end))
-        return end.clean
+        return end.outcome
 
     def _close_segment(self) -> None:
         """A tool event: the text before it was narration — it moves up into

@@ -123,3 +123,45 @@ heartbeat never breaks the turn.
   progress first, then the accumulating reply — and it finishes carrying the
   final reply, so nothing is sent twice and the answer never arrives as
   fragments
+
+### Requirement: Acknowledge receipt and completion by capability
+Receipt and progress MUST be acknowledged, capability-gated (never by transport
+type). On a `supports_reactions` transport the owner's own message carries one
+reaction that follows the turn: a **received** mark the moment it arrives (a
+message queued behind a running turn keeps it), a **working** mark when its turn
+starts, and one of **done** (a clean finish, including one that ends on a
+question for the owner), **failed** (an error or the tool-iteration limit) or
+**stopped** (interrupted) when it ends. Which emoji each stage uses is the
+transport's declared `reactions` set, because a platform may accept only a fixed
+list — each child spec names its own. A reaction replaces the previous one, so
+the message shows where the turn is now. A transport without reactions uses its
+typing/working signal as the receipt-and-progress cue instead. All best-effort —
+a failed mark never breaks the turn.
+
+#### Scenario: receipt and completion are acked with reactions where supported
+- **GIVEN** a paired channel on an adapter that supports reactions
+- **WHEN** the owner sends a message that drives a clean turn
+- **THEN** the received mark is set on the owner's own message immediately on
+  receipt, the working mark when the turn starts, and the done mark on
+  completion, all targeting that inbound message id
+
+#### Scenario: a transport without reaction support attempts no reaction
+- **GIVEN** a paired channel on an adapter that does not support reactions,
+  whose receipt-and-progress cue is the typing signal
+- **WHEN** the owner sends a message that drives a turn
+- **THEN** no reaction is attempted, while the turn still runs and replies normally
+
+#### Scenario: a failed reaction never breaks the turn
+- **GIVEN** a paired channel on a reaction-supporting adapter whose set_reaction fails
+- **WHEN** the owner sends a message that drives a turn
+- **THEN** the reply is still delivered — the best-effort reaction is suppressed
+
+#### Scenario: a failed turn ends on the failed mark
+- **GIVEN** a paired channel on an adapter that supports reactions
+- **WHEN** the owner's message drives a turn that errors
+- **THEN** the message's marks are received, working, then failed — never done
+
+#### Scenario: a turn's marks follow it from receipt to its end
+- **GIVEN** a paired channel on an adapter that supports reactions
+- **WHEN** the owner's message drives a turn that is interrupted
+- **THEN** the message's marks are received, working, then stopped

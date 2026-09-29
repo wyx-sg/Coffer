@@ -85,6 +85,24 @@ class InboundMessage:
 
 
 @dataclass(frozen=True)
+class ReactionSet:
+    """The emoji a transport marks a turn's progress with on the asker's message
+    (see "Acknowledge receipt and completion by capability").
+
+    A transport fact, not a core one: a platform may accept only a fixed list
+    (Telegram's ``setMessageReaction`` does), so the adapter names emoji it knows
+    will land. ``""`` skips that stage. One reaction replaces the last, so the
+    message shows the turn's current state.
+    """
+
+    received: str = ""  # on receipt, before the turn starts (queued messages keep it)
+    working: str = ""  # when the turn starts running
+    done: str = ""  # a clean finish (a turn ending on a question for the owner too)
+    failed: str = ""  # an error, or the tool-iteration limit
+    stopped: str = ""  # interrupted
+
+
+@dataclass(frozen=True)
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
@@ -131,9 +149,10 @@ class ChannelCapabilities:
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
-    # used for the receipt (👀) + completion (✅) ack of "Acknowledge receipt
-    # and completion by capability"; transports without
-    # it fall back to the typing/working signal for the same receipt cue
+    # used for the progress marks of "Acknowledge receipt and completion by
+    # capability"; transports without it fall back to the typing/working signal
+    # for the same receipt cue
+    reactions: ReactionSet = ReactionSet()  # which emoji, per stage
     # "Mention the asker in a group answer": how this transport spells an
     # @mention, with ``{user_id}`` standing
     # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
