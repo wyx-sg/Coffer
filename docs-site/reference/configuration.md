@@ -195,7 +195,7 @@ The internal engine settings are one record, and all of them are *synced*. Each 
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer config set transcribe.provider <connection>`, `coffer config set transcribe.model <model>`, `coffer config unset transcribe.model` |
 | **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
 | **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
-| **Automatic upkeep** — curate | on, every 60 s | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
+| **Automatic upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
 | Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer config set engine.curate_owner this\|<machine id>`, `coffer config unset engine.curate_owner` |
 
 Upkeep intervals have a floor of 60 seconds; `coffer config unset engine.upkeep.<pass>.interval` returns a pass to its default. `coffer daemon status` shows the passes in flight.

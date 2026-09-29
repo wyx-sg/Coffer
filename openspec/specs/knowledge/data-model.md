@@ -379,7 +379,7 @@ The one setting the layer has is not the layer's. Three columns on the singleton
 | column | notes |
 | --- | --- |
 | `auto_curate_enabled` | the switch, **default true** — curation is what merges new material into the documents and carries a person's edit through the rest of the collection, so an installation where it never runs has material waiting in the inbox forever |
-| `curate_interval_s` | the timer; null means the built-in cadence (60 s) |
+| `curate_interval_s` | the timer; null means the built-in cadence (one hour); a stored value is kept as chosen |
 | `curate_owner_machine_id` | the one machine allowed to run the sweep. Null means a single-machine vault, where "here" is the only answer there is |
 
 The switch and the owner are read **together, on every sweep**, so the setting
