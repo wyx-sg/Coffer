@@ -297,6 +297,24 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: make verify-e2e
         run: make verify-e2e
+      # Screenshot baseline (e2e/playwright.visual.config.ts): every route, light
+      # and dark. Under CI a platform with no committed baseline yet is written
+      # rather than failed, so the artifact below is where linux baselines come
+      # from: download it, commit e2e/visual/specs/__screenshots__/linux/, and
+      # from then on this step compares against them.
+      - name: make verify-visual
+        if: ${{ !cancelled() }}
+        run: make verify-visual
+      - name: Upload visual baseline and diffs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: visual-baseline-linux
+          path: |
+            e2e/visual/**/__screenshots__/linux/**
+            e2e/visual/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
       # Without these artifacts, an e2e failure on CI shows only the
       # Playwright reporter stack — no daemon stderr, no traces. The shim
       # 500 in PR #14 was effectively undiagnosable from CI logs alone.

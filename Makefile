@@ -16,7 +16,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance openspec-validate verify-benchmark \
+	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark \
 	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
@@ -38,6 +38,8 @@ help:
 	@echo "  make verify-integration    integration tier only"
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
+	@echo "  make verify-visual         screenshot baseline: every route, light + dark (not in verify / verify-e2e)"
+	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
@@ -227,6 +229,26 @@ verify-e2e:
 		echo "verify-e2e: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
 		cd e2e && npx playwright test; \
+	fi
+
+# Visual baseline (e2e/playwright.visual.config.ts): its own fresh daemon
+# (:18100) and Vite (:5174), baselines per platform under
+# e2e/visual/specs/__screenshots__/<platform>/. Deliberately outside verify and
+# verify-e2e — see .agents/testing.md "Visual baseline".
+VISUAL_PW := npx playwright test -c playwright.visual.config.ts
+
+verify-visual:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "verify-visual: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && $(VISUAL_PW); \
+	fi
+
+visual-update:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "visual-update: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && $(VISUAL_PW) --update-snapshots; \
 	fi
 
 format:
