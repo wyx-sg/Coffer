@@ -1898,10 +1898,13 @@ components:
         path:
           title: Path
           type: string
+        trust:
+          $ref: '#/components/schemas/HookTrust'
       required:
       - event
       - path
       - health
+      - trust
       - installed_command
       - expected_command
       - last_fired_at
@@ -2108,6 +2111,24 @@ components:
       - user
       - plugin
       title: HookSource
+      type: string
+    HookTrust:
+      description: |-
+        Whether the agent will actually run Coffer's installed hook.
+
+        Codex runs a hook only after the user has reviewed it: it records trust
+        against a hash of the hook's definition, so a new or changed hook is
+        skipped — silently — until the user trusts it with ``/hooks``. Coffer never
+        writes that trust itself (spec agent-registry/codex "Leave Codex's
+        internal-state tables untouched"); it reads it and says so.
+      enum:
+      - not_required
+      - trusted
+      - untrusted
+      - modified
+      - disabled
+      - unknown
+      title: HookTrust
       type: string
     MarketplaceOut:
       properties:

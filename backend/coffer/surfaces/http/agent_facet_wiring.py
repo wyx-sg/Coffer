@@ -11,18 +11,27 @@ its own agent; this module only lists them, and never says which is which.
 
 from __future__ import annotations
 
+from coffer.application.provider.cli_path import default_coffer_cli_resolver
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS, AgentDescriptor
 from coffer.domain.agent.facets import AgentCatalog, DependencyProbe, bind_facets
 from coffer.domain.provider.agent_projection import PROVIDER_PROJECTIONS
 from coffer.infrastructure.agent.program_probe import ProgramProbe, UserPath
 from coffer.infrastructure.chat.drivers import DRIVERS
-from coffer.infrastructure.memory.delivery import DELIVERY_ADAPTERS
+from coffer.infrastructure.memory.delivery import delivery_adapters
 from coffer.infrastructure.memory.readers import MEMORY_READERS
 
 
-def build_agent_catalog(*, user_path: UserPath | None = None) -> AgentCatalog:
-    """The descriptor table with every facet bound. Built once per app."""
+def build_agent_catalog(
+    *, user_path: UserPath | None = None, coffer_cli: str | None = None
+) -> AgentCatalog:
+    """The descriptor table with every facet bound. Built once per app.
+
+    ``coffer_cli`` is the ``coffer`` CLI the memory delivery hooks run, by
+    absolute path: an agent runs its hooks under a shell that need not have
+    ``~/.coffer/bin`` on its ``PATH``. Resolved the way the provider's
+    ``apiKeyHelper`` resolves it when not given."""
     path = user_path or UserPath()
+    cli = coffer_cli or default_coffer_cli_resolver()
 
     def _probe(d: AgentDescriptor) -> DependencyProbe | None:
         return ProgramProbe(d.program, user_path=path) if d.program else None
@@ -30,7 +39,7 @@ def build_agent_catalog(*, user_path: UserPath | None = None) -> AgentCatalog:
     return bind_facets(
         AGENT_DESCRIPTORS,
         providers=PROVIDER_PROJECTIONS,
-        delivery_hooks=DELIVERY_ADAPTERS,
+        delivery_hooks=delivery_adapters(cli),
         drivers=DRIVERS,
         memory_readers=MEMORY_READERS,
         probe_for=_probe,

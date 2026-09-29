@@ -233,22 +233,35 @@ Delivery hands a session the index. `compose_context` in `application/memory/con
 2. It emits, in order: a `## Coffer memory` header, `global`'s lines under *Known about you:*, the current repository's lines, a line giving the absolute path of the `notes/` directory with the instruction to read a note as a file, and a line naming the memory root to search for a note from another repository.
 3. It names no tool. Every consumer is a local process that already reads files.
 
-The payload is bounded by a ceiling of 12,000 estimated tokens (`DEFAULT_CEILING_TOKENS`), sized for a whole index rather than a handful of lines. It rarely binds. When it does, the **current repository's lines are spent first** and `global` gets what is left. Within each section the oldest lines drop first, and a notice states how many were dropped and which directory holds them. A trim therefore still leaves every note reachable as a file. With nothing to deliver, the text is empty rather than a bare header.
+The payload has two bounds:
+
+- **A token ceiling** of 12,000 estimated tokens (`DEFAULT_CEILING_TOKENS`), sized for a whole index rather than for a handful of lines.
+- **A byte ceiling** of 9,500 UTF-8 bytes (`DELIVERY_CEILING_BYTES`) for anything an installed hook prints. Both agents cut a hook's output that is longer, and both cuts lose the lines that matter:
+  - **Claude Code** keeps a hook's output inline up to about 10,000 characters. Past that, it saves the output to a file and shows the model a ~2 KB preview, which holds the newest few `global` lines and nothing about the repository.
+  - **Codex** keeps `additionalContext` up to 2,500 tokens, counted as UTF-8 bytes / 4. Past that, it keeps the head and the tail and cuts the middle.
+
+  A text never has more characters than bytes, so one byte figure satisfies both agents. A real vault's index is 30–45 KB, so at session start this ceiling is the one that binds.
+
+When a ceiling binds, the **current repository's lines are spent first** and `global` gets what is left. Within each section the oldest lines drop first, and a notice states how many were dropped and which directory holds them. A trim therefore still leaves every note reachable as a file. With nothing to deliver, the text is empty rather than a bare header.
 
 Composing a context sends nothing anywhere. Note content leaves the machine only through the distil pass's internal connection.
 
 ### Hooks for the agents you drive yourself
 
-Delivery reaches an agent through the agent's own hook mechanism, calling Coffer's CLI:
+Delivery reaches an agent through the agent's own hook mechanism, calling Coffer's CLI **by absolute path**:
 
 ```sh
-: coffer-memory; coffer memory context --agent-uid <uid> --cwd "$PWD"
+: coffer-memory; /Users/you/.coffer/bin/coffer memory context --agent-uid <uid> --cwd "$PWD"
 ```
 
-| Agent | File | Event | Notes |
-| --- | --- | --- | --- |
-| Claude Code | `settings.json` (`settings` key) | `SessionStart`, matcher `startup\|resume\|clear\|compact` | 10 s timeout |
-| Codex | `hooks.json` (`hooks` key) | `UserPromptSubmit` | Codex has no session-start event, so the command carries a once-per-session guard: a flag file under `$TMPDIR` keyed by `$PPID` |
+The path is the one the composition root resolves, preferring the stable `~/.coffer/bin/coffer` over the version directory behind it. A bare `coffer` is not enough, because a hook runs under whatever shell the agent starts. Codex runs hooks under `/bin/zsh` without the user's rc files, so `~/.coffer/bin` is not on that shell's `PATH`. Claude Code started from the Dock does not inherit the login shell's `PATH` either.
+
+| Agent | File | Event | Output | Runs it when |
+| --- | --- | --- | --- | --- |
+| Claude Code | `settings.json` (`settings` key) | `SessionStart`, matcher `startup\|resume\|clear\|compact` | plain text | always |
+| Codex | `hooks.json` (`hooks` key) | `SessionStart`, same matcher | `--hook-event SessionStart`: JSON `hookSpecificOutput.additionalContext`, which Codex hands the model as a developer message | the user has approved it in `/hooks` |
+
+Both hooks have a 10 s timeout. Neither carries a once-per-session guard, because `SessionStart` fires once per session by definition. An earlier build put Codex's hook on `UserPromptSubmit` behind a guard keyed on `$PPID`, which failed under Codex Desktop and the IDE hosts: every session of one `codex app-server` shares that parent pid, so only the first session per app-server would have fired.
 
 The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entry by that marker, and never touches another tool's hooks on the same event. Installing is always an explicit act: the hook is one part of the agent's Coffer connection (`coffer agent connect`, or **Connect to Coffer** on the agent's page; see [Agents](/guides/agents#connect-an-agent-to-coffer)). It is idempotent, and removing the entry deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
 
@@ -262,14 +275,34 @@ sequenceDiagram
   D->>D: compose_context(cwd)
   D->>D: audit memory_delivery_fired
   D-->>C: text
-  C-->>A: print text to stdout (becomes session context)
+  C-->>A: print text, or the event's JSON (becomes session context)
 ```
 
 The CLI command is silent on every failure. If no daemon is running, or the daemon answers with an error, the command prints nothing, so a hook never breaks a session. Each real fire records a `memory_delivery_fired` audit event. A management preview leaves `record_fired` false. The connection status reports only whether the hook is installed. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
 
+### Codex's approval
+
+Codex runs a hook only after the user has reviewed it. It records the approval in `config.toml`:
+
+```toml
+[hooks.state."/Users/you/.codex/hooks.json:session_start:1:0"]
+trusted_hash = "sha256:…"
+```
+
+The key is the file, the event, the matcher group's position and the handler's position. The hash covers a normalised form of the hook's definition. A hook with no matching hash is skipped silently: no error, no event. So every change to Coffer's command, including the move to an absolute path, needs the user's approval again. Until then, Codex skips the hook.
+
+Coffer computes the hash the way Codex does and reads the record. It never writes the record:
+
+- **It is Codex's review gate.** A tool that installs a hook and then approves that hook itself removes the one point at which the user looks at what will run.
+- **A stale copy of the algorithm must fail visibly.** If Coffer wrote hashes and its copy of the algorithm went stale, Coffer would report the hook as approved while Codex skipped it, which is the failure this section exists to prevent. Reading with a stale algorithm fails the visible way instead: Coffer says "needs approval" while Codex actually runs the hook.
+
+The result is Coffer's hook's **trust**: `trusted`, `untrusted`, `modified` (approved for an earlier command), `disabled`, `unknown`, or `not_required` for Claude Code, which runs every hook in its settings. It appears in `coffer agent hooks`, `GET /api/v1/agents/{uid}/hooks`, the agent's Hooks tab, and as an attention item. The remedy is always the same: open Codex, run `/hooks`, and trust Coffer's hook.
+
 ### Keeping hooks current
 
-Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. So the hook is a target of the [reconciler](/architecture/reconciler): on every pass — at start, every minute, and soon after any agent changes — it compares each installed hook's event and whole command with what the running build would install, and rewrites the ones that differ. One unreadable settings file is reported as blocked without stopping the others.
+Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. So the hook is a target of the [reconciler](/architecture/reconciler). On every pass (at start, every minute, and soon after any agent changes), it compares each installed hook with what the running build would install: the event the hook actually sits on, and its whole command. It rewrites the hooks that differ. That comparison is also the migration: an older build's Codex entry on `UserPromptSubmit` differs in both event and command, so an ordinary pass moves it onto `SessionStart`. An install sweeps Coffer's marked entries off every event, so the old entry is not left behind. One unreadable settings file is reported as blocked without stopping the others.
+
+For Codex, the target also compares trust. A current hook that Codex has not approved differs only in trust. That difference is reported as `hook_untrusted` (or `hook_disabled`, or `hook_trust_unknown`) on the attention list, with the remedy, and is never written.
 
 The same target follows the `memory` feature switch. Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — and repairs stale commands. An ordinary pass never installs a hook: a connected agent missing it is reported, and reads as partly connected until it is connected again.
 
@@ -312,7 +345,7 @@ Both are on by default. They read the agents' files and write only the derived t
 | Reader protocol, `RawEntry`, `SourceFile` | [`domain/memory/reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/reader.py) |
 | Note, origin key, note types | [`domain/memory/note.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/note.py) |
 | Repository identity, partition slugs | [`domain/memory/repository.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/repository.py), [`domain/memory/partition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/partition.py) |
-| Hook marker and install transform | [`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
+| Hook marker, install transform and hook ceiling | [`domain/memory/hook_entries.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_entries.py), [`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
 | Aggregation pass and worker | [`application/memory/aggregate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate.py), [`aggregate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate_worker.py) |
 | Which partition an entry files into | [`application/memory/placement.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/placement.py) |
 | Distil pass (routing, plan, write, apply) and worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) and its `distil_*.py` siblings |

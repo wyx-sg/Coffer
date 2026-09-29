@@ -8,7 +8,10 @@ carries Coffer's gateway MCP entry, installed by ``AgentMcpService``.
 
 - PR #413 reproduced: a hook carrying the dropped ``--agent`` option is found
   as a MODIFY of ``command`` and rewritten, foreign hooks untouched, one audit
-  row from ``system`` (spec memory "Repair stale delivery hooks").
+  row from ``system`` (spec memory "Repair stale delivery hooks"). For Codex
+  the stale hook is an older build's on ``UserPromptSubmit``: it moves to
+  ``SessionStart``, and the rewritten hook is then reported as needing the
+  user's approval in Codex until ``config.toml`` records it.
 - An audit that cannot be recorded puts the file back as it was.
 - A dry-run writes nothing anywhere under HOME, nor any row, nor any of the
   reconciler's own bookkeeping.
@@ -36,10 +39,11 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.memory.delivery import MARKER
+from coffer.domain.memory.delivery import MARKER, DeliveryAdapter
 from coffer.domain.reconcile import Disposition, Op, Outcome, Trigger
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -47,7 +51,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
 from coffer.infrastructure.platform import HostPlatform
-from tests.support.facets import agent_catalog
+from tests.support.facets import TEST_COFFER_CLI, agent_catalog
 from tests.support.homes import FakeAgentDir, IsolatedHome, fake_agent_dir
 
 pytestmark = pytest.mark.asyncio
@@ -121,12 +125,12 @@ async def rig(isolated_home: IsolatedHome) -> AsyncIterator[_Rig]:
         await engine.dispose()
 
 
-def _old_command(new: str, uid: str) -> str:
-    """The command an older build installed: the same entry, passing the
-    ``--agent`` option ``coffer memory context`` no longer takes."""
-    stale = new.replace(f"--agent-uid {uid}", f"--agent {uid}")
-    assert stale != new
-    return stale
+def _approve_in_codex(hooks: pathlib.Path, config: pathlib.Path, adapter: DeliveryAdapter) -> None:
+    """What the user's approval in Codex's /hooks records in config.toml."""
+    hook = adapter.find(hooks.read_text())
+    assert hook is not None
+    approval = f'\n[hooks.state."{trust_key(str(hooks), hook)}"]\n'
+    config.write_text(config.read_text() + approval + f'trusted_hash = "{current_hash(hook)}"\n')
 
 
 async def _connected_agent_with_stale_hook(
@@ -142,13 +146,20 @@ async def _connected_agent_with_stale_hook(
     key = "settings" if agent_type is AgentType.CLAUDE_CODE else "hooks"
     if agent_type is AgentType.CLAUDE_CODE:
         stale = f': {MARKER}; coffer memory context --agent {agent.uid} --cwd "$PWD"'
+        stale_event = adapter.event
     else:
-        stale = _old_command(adapter.command_for(agent.uid), agent.uid)
+        # What a build before SessionStart support wrote: UserPromptSubmit,
+        # bare `coffer` (not on the hook's PATH), a `$PPID` guard.
+        stale = (
+            f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; [ -e "$f" ] || '
+            f'{{ : > "$f"; coffer memory context --agent-uid {agent.uid} --cwd "$PWD"; }}'
+        )
+        stale_event = "UserPromptSubmit"
     leaf = {"type": "command", "command": stale}
     doc = {
         "theme": "dark",
         "hooks": {
-            adapter.event: [_FOREIGN_SESSION, {"hooks": [leaf]}],
+            stale_event: [_FOREIGN_SESSION, {"hooks": [leaf]}],
             "Stop": [_FOREIGN_STOP],
         },
     }
@@ -179,7 +190,10 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     plan = await rig.reconciler.plan(targets=[TARGET], trigger=Trigger.PERIOD)
     (planned,) = plan.results
     assert planned.change.difference.op is Op.MODIFY
-    assert planned.change.difference.changed_params == ("command",)
+    expected_changes = (
+        ("command",) if agent_type is AgentType.CLAUDE_CODE else ("command", "event", "trust")
+    )
+    assert planned.change.difference.changed_params == expected_changes
     assert planned.change.decision.disposition is Disposition.REPAIR
     assert planned.change.decision.reason_code == "stale_command"
 
@@ -190,12 +204,20 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     data = json.loads(path.read_text())
     assert data["theme"] == "dark"
     assert data["hooks"]["Stop"] == [_FOREIGN_STOP]
-    groups = data["hooks"][adapter.event]
-    assert _FOREIGN_SESSION in groups
+    assert (
+        _FOREIGN_SESSION
+        in data["hooks"]["UserPromptSubmit" if agent_type is AgentType.CODEX else adapter.event]
+    )
     coffer_commands = [
-        leaf["command"] for g in groups for leaf in g["hooks"] if MARKER in leaf["command"]
+        (event, leaf["command"])
+        for event, groups in data["hooks"].items()
+        for g in groups
+        for leaf in g["hooks"]
+        if MARKER in leaf["command"]
     ]
-    assert coffer_commands == [adapter.command_for(agent.uid)]
+    assert coffer_commands == [(adapter.event, adapter.command_for(agent.uid))]
+    # By absolute path: the hook's shell need not have ~/.coffer/bin on PATH.
+    assert adapter.command_for(agent.uid).startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
     assert path.with_name(path.name + ".bak").exists()
 
     rows = await rig.audit.query(
@@ -205,6 +227,16 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     assert rows[0].actor == "system"
     assert rows[0].details["path"] == str(path)
     assert rows[0].details["reason"] == "stale_command"
+
+    if agent_type is AgentType.CODEX:
+        # The rewritten hook needs the user's approval in Codex before Codex
+        # runs it: reported every pass, never approved by Coffer.
+        (untrusted,) = (await rig.reconciler.run(trigger=Trigger.PERIOD)).results
+        assert untrusted.change.decision.reason_code == "hook_untrusted"
+        assert untrusted.outcome is Outcome.PLANNED
+        config = _dir.path("config")
+        assert "hooks.state" not in config.read_text()  # Coffer wrote no trust
+        _approve_in_codex(path, config, adapter)
 
     # Converged: the next pass finds nothing to do.
     assert (await rig.reconciler.run(trigger=Trigger.PERIOD)).results == ()

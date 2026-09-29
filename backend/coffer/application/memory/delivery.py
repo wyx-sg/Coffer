@@ -35,7 +35,8 @@ marker and the pure text transform) through the delivery-hook entry of each
 agent's projection facet — a `DeliveryAdapter` from
 `coffer.infrastructure.memory.delivery` bound at the composition root (ADR
 agent-mechanisms-are-optional-facets-on-the-descriptor): which event, which
-config key, and, for Codex, the once-per-session guard. An agent whose
+config key, which CLI path, and, for Codex, where the user's trust in the hook
+is recorded. `trust()` reads that record and never writes it. An agent whose
 projection has no delivery hook raises `DeliveryUnsupported`. `record_fired` is the other
 half of "Audit every delivery fire": it is called by whatever actually serves the context (the
 `coffer memory context` CLI), never by this service itself, so each audited
@@ -55,10 +56,12 @@ from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
+from coffer.domain.hook_trust import HookTrust
 from coffer.domain.memory.delivery import (
     DeliveryAdapter,
     DeliveryStatus,
     DeliveryUnsupported,
+    InstalledHook,
     MalformedDeliveryConfig,
 )
 from coffer.domain.resource import Resource
@@ -110,6 +113,9 @@ class HookSite:
     agent: Resource
     adapter: DeliveryAdapter
     path: pathlib.Path
+    #: Where the agent records which hooks the user trusted, or `None` when
+    #: it runs every hook it finds.
+    trust_path: pathlib.Path | None = None
 
 
 @dataclass(frozen=True)
@@ -218,16 +224,45 @@ class DeliveryService:
             adapter = self._catalog.delivery_hook(cfg.type)
             if adapter is None:
                 continue
-            out.append(HookSite(resource, adapter, self._spec(cfg, adapter).path))
+            out.append(
+                HookSite(
+                    resource,
+                    adapter,
+                    self._spec(cfg, adapter).path,
+                    self._trust_path(cfg, adapter),
+                )
+            )
         return out
+
+    @staticmethod
+    def _trust_path(cfg: AgentConfig, adapter: DeliveryAdapter) -> pathlib.Path | None:
+        key = adapter.trust_config_key
+        return spec_for(cfg.type, key, cfg.resolved_config_dir()).path if key else None
+
+    def trust(self, site: HookSite) -> HookTrust:
+        """Whether the agent will run the hook in `site`'s file, from the
+        agent's own trust record. Reads both files; writes nothing, and never
+        writes the trust record — approving a hook is the user's act in the
+        agent (`/hooks` in Codex)."""
+        if site.trust_path is None:
+            return HookTrust.NOT_REQUIRED
+        text = self._store.read_text(site.path) or ""
+        return site.adapter.trust(text, self._store.read_text(site.trust_path), str(site.path))
 
     def installed_command(self, site: HookSite) -> str | None:
         """The command Coffer's marker-scoped entry carries in `site`'s file,
         or `None` when there is none. Raises `MalformedDeliveryConfig`, with
         the path, for a file it cannot parse. Writes nothing."""
+        hook = self.installed_hook(site)
+        return hook.command if hook is not None else None
+
+    def installed_hook(self, site: HookSite) -> InstalledHook | None:
+        """Coffer's marker-scoped entry in `site`'s file — on whichever event
+        it sits, which for an older build's may not be the one this build
+        installs on — or `None`. Raises like :meth:`installed_command`."""
         text = self._store.read_text(site.path) or ""
         try:
-            return site.adapter.find_command(text)
+            return site.adapter.find(text)
         except MalformedDeliveryConfig as e:
             raise MalformedDeliveryConfig(f"{site.path}: {e}") from e
 

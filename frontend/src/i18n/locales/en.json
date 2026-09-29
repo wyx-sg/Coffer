@@ -1145,6 +1145,12 @@
           "stale": "Out of date",
           "missing": "Missing"
         },
+        "trust": {
+          "untrusted": "Needs approval in Codex",
+          "modified": "Needs re-approval in Codex",
+          "disabled": "Off in Codex",
+          "unknown": "Approval unknown"
+        },
         "lastFired": "Last fired {{time}}",
         "neverFired": "Never fired",
         "repair": "Repair",
@@ -1152,7 +1158,8 @@
         "helpLabel": "About Coffer's hook",
         "help": "Coffer delivers memory to this agent through a {{event}} hook in:",
         "expected": "The command Coffer installs:",
-        "installed": "The command installed now:"
+        "installed": "The command installed now:",
+        "trustHelp": "Codex runs a hook only after you approve it. Open Codex, run /hooks and trust Coffer's hook; every change to the command needs approving again. Coffer does not approve its own hook."
       }
     },
     "noneDetected": "No agents were detected on this machine. Add one manually below.",

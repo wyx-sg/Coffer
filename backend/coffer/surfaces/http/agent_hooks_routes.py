@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.domain.agent.hooks import HookHealth, HookSource
+from coffer.domain.hook_trust import HookTrust
 from coffer.surfaces.http.agent_workspace_routes import ParseErrorOut
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.workspace_dependencies import get_agent_hooks_service
@@ -42,6 +43,10 @@ class CofferHookOut(BaseModel):
     path: str
     #: ``current`` / ``stale`` / ``missing``.
     health: HookHealth
+    #: Whether the agent will run it. Codex skips a hook the user has not
+    #: approved in ``/hooks`` (``untrusted``, or ``modified`` once the command
+    #: changed); ``not_required`` for an agent with no review step.
+    trust: HookTrust
     installed_command: str | None
     expected_command: str
     #: The last recorded fire (audit ``memory_delivery_fired``), if any.
@@ -84,6 +89,7 @@ async def list_agent_hooks(
                 event=hook.event,
                 path=hook.path,
                 health=hook.health,
+                trust=hook.trust,
                 installed_command=hook.installed_command,
                 expected_command=hook.expected_command,
                 last_fired_at=hook.last_fired_at,

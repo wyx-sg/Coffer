@@ -156,7 +156,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Connecting the agent to Coffer. |
 | `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table whose `env_key` is `COFFER_PROVIDER_KEY`, and `model_catalog_json` pointing at the catalogue below. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
-| `hooks.json` | A `hooks.UserPromptSubmit` entry whose command begins `: coffer-memory;`, guarded to fire once per session, with a 10-second timeout. | Connecting the agent to Coffer while `memory` is on. |
+| `hooks.json` | A `hooks.SessionStart` entry whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path with `--hook-event SessionStart`, with a 10-second timeout. Coffer reads, and never writes, Codex's approval of it in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
 
 Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `provider key`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.

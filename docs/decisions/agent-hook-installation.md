@@ -20,11 +20,16 @@ The two agents differ:
   `~/.claude/settings.json` with the matcher `startup|resume|clear|compact`,
   so the context lands however the session began
   (`backend/coffer/infrastructure/memory/delivery/claude_code.py`).
-- **Codex** has no session-start event; the hook events in its binary are
-  `PreToolUse`, `PostToolUse`, `PreCompact`, `Stop` and `UserPromptSubmit`.
-  Coffer installs on `UserPromptSubmit` in `~/.codex/hooks.json`, wrapped in a
-  once-per-session guard — a lock file under `$TMPDIR` keyed by `$PPID`
+- **Codex** had no session-start event in 0.139, so Coffer first installed on
+  `UserPromptSubmit` behind a once-per-session guard keyed by `$PPID`. That
+  hook never ran (see the 2026-09-30 note below). Codex 0.155 has
+  `SessionStart`, and Coffer now installs there in `~/.codex/hooks.json` with
+  the same matcher, printing the event's JSON `additionalContext`
   (`infrastructure/memory/delivery/codex.py`).
+
+Both commands call the `coffer` CLI by absolute path. A hook runs under
+whatever shell the agent starts, and that shell need not have `~/.coffer/bin`
+on its `PATH`.
 
 These files are not Coffer's. They carry the developer's own `env`,
 `permissions` and hooks other tools wired in (on the maintainer's machine,
@@ -167,3 +172,21 @@ one this build would write.**
 - **Enforcement.** Spec memory "Install delivery hooks explicitly and
   removably", spec memory "Repair stale delivery hooks", spec memory "Audit
   every delivery fire".
+
+## 2026-09-30: the Codex hook never ran
+
+A live test on Codex 0.155.1 found three causes, and each alone was enough to
+deliver nothing:
+
+- **Codex never trusted the hook.** Codex runs a non-managed hook only after the
+  user approves its exact definition in `/hooks`. It records that approval as a
+  hash in `config.toml`'s `[hooks.state]`, and it skips an unapproved hook
+  silently.
+- **`coffer` was not on the hook's `PATH`.**
+- **The `$PPID` guard was wrong.** Every session of one `codex app-server`
+  shares that parent pid.
+
+Coffer now reads Codex's approval and reports it as the hook's trust. It never
+writes the approval, because approval is Codex's review gate and the user's act.
+The reasoning is in the change `fix-codex-memory-hook-delivery`, under
+`openspec/changes/archive/`.

@@ -309,13 +309,15 @@ The **Hooks** tab shows every hook the agent will run, grouped by event, read st
 | --- | --- | --- |
 | Agent's own files | `settings.json`, `settings.local.json` | `hooks.json` |
 | Plugins | each enabled plugin's `hooks/hooks.json` | each enabled plugin's `hooks/hooks.json`, where it has one |
-| Coffer's own hook | `SessionStart` in `settings.json` | `UserPromptSubmit` in `hooks.json` |
+| Coffer's own hook | `SessionStart` in `settings.json` | `SessionStart` in `hooks.json` |
 
 Coffer's own hook — the [memory delivery hook](/guides/memory#at-session-start-through-a-hook) — is marked, and a line above the table says how it is doing:
 
 - **Current** — installed with exactly the command this version of Coffer writes.
 - **Out of date** — Coffer's hook is there but carries a command an older version wrote. The daemon rewrites it at start-up; **Repair** does it now.
 - **Missing** — no Coffer hook. **Repair** connects the agent to Coffer again, which installs it (while the `memory` feature is on).
+
+For Codex it also says whether Codex will run the hook. Codex skips a hook you have not approved, so **Needs approval in Codex** (or **Needs re-approval in Codex**, after a Coffer update changed the command) means the hook is installed but not running. Open Codex, run `/hooks` and trust Coffer's hook. Coffer does not approve it for you.
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). "Never fired" on an agent you use every day is the sign that the agent is not running the hook.
 

@@ -377,3 +377,38 @@ def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_dae
 
     assert result.exit_code == 0, result.output
     assert result.output == ""
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a Codex hook fire prints the session-start JSON Codex reads"
+)
+def test_context_with_a_hook_event_prints_that_events_json(memory_cli_daemon, monkeypatch):
+    """What Codex's installed SessionStart hook prints: the same text, as
+    ``hookSpecificOutput.additionalContext``, the shape Codex hands to the
+    model as a developer message. The fire is recorded all the same."""
+    tmp_path = memory_cli_daemon
+    _distilled_partition(tmp_path)
+    _route_context_at_the_test_app(monkeypatch)
+    cc_uid = _agent_uid("cc")
+
+    result = _runner.invoke(
+        cli_app,
+        [
+            "memory",
+            "context",
+            "--agent-uid",
+            cc_uid,
+            "--cwd",
+            str(tmp_path / "coffer"),
+            "--hook-event",
+            "SessionStart",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    out = json.loads(result.output)
+    assert set(out) == {"hookSpecificOutput"}
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    context = out["hookSpecificOutput"]["additionalContext"]
+    assert context.startswith("## Coffer memory")
+    assert "`python-lockfile.md`" in context
+    assert _fires() == 1

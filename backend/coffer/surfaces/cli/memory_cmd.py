@@ -125,6 +125,11 @@ def context(
     ),
     cwd: str = typer.Option(..., "--cwd", help="The session's working directory"),
     ceiling_tokens: int = typer.Option(0, "--ceiling-tokens", help="0 = the server's default"),
+    hook_event: str = typer.Option(
+        "",
+        "--hook-event",
+        help="Print the text as this hook event's JSON additionalContext instead of plain",
+    ),
 ) -> None:
     """Print the composed session-start context to stdout.
 
@@ -137,9 +142,13 @@ def context(
 
     ``--agent-uid`` says who fired, and only that: the payload is the same for
     every agent, and the uid travels so the daemon can record the fire against
-    it ("Audit every delivery fire"). It is still required, because an
-    unattributed fire is a hook
-    nobody can tell is working.
+    it ("Audit every delivery fire") and so the daemon can size the payload for
+    that agent's hook output limit. It is still required, because an
+    unattributed fire is a hook nobody can tell is working.
+
+    ``--hook-event`` is what Codex's hook passes: Codex takes a session-start
+    hook's context from ``hookSpecificOutput.additionalContext``. Claude Code's
+    hook prints plain text, which it adds to the session whole.
 
     It is the **one** command in this group that does not take a name, because
     it is the one whose caller is not a person. The value arrives from a string
@@ -170,7 +179,17 @@ def context(
         if resp.status_code != 200:
             return
         text = resp.json().get("text")
-        if text:
+        if not text:
+            return
+        if hook_event:
+            typer.echo(_json.dumps(_hook_output(hook_event, text), ensure_ascii=False))
+        else:
             typer.echo(text)
     except Exception:
         return
+
+
+def _hook_output(event: str, text: str) -> dict[str, object]:
+    """The JSON a hook prints to add context: the shape Codex documents for
+    ``SessionStart`` (and Claude Code accepts too)."""
+    return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}

@@ -57,6 +57,7 @@ const COFFER_HOOK: CofferHook = {
   event: "SessionStart",
   path: SETTINGS,
   health: "current",
+  trust: "not_required",
   installed_command: COFFER_CMD,
   expected_command: COFFER_CMD,
   last_fired_at: null,
@@ -113,6 +114,19 @@ describe("AgentHooksTab", () => {
     renderTab({ items: [], coffer_hook: COFFER_HOOK, parse_errors: [] });
     expect(await screen.findByText("Current")).toBeInTheDocument();
     expect(screen.getByText(/never fired/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /repair/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/approval/i)).not.toBeInTheDocument();
+  });
+
+  test("a current hook Codex has not approved says so, and offers no Repair", async () => {
+    renderTab({
+      items: [],
+      coffer_hook: { ...COFFER_HOOK, trust: "untrusted" },
+      parse_errors: [],
+    });
+    expect(await screen.findByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Needs approval in Codex")).toBeInTheDocument();
+    // Approving is the user's act in Codex: Coffer offers nothing to click.
     expect(screen.queryByRole("button", { name: /repair/i })).not.toBeInTheDocument();
   });
 

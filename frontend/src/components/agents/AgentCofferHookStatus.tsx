@@ -2,7 +2,9 @@
 // agent-registry "List every hook in the agent's native config".
 //
 // One line above the Hooks tab's list: the health of Coffer's own delivery hook
-// (current / out of date / missing) and when it last fired. An out-of-date or
+// (current / out of date / missing), whether the agent will run it (Codex skips
+// a hook the user has not approved in /hooks, and Coffer never approves its
+// own), and when it last fired. An out-of-date or
 // missing hook offers Repair, which runs "Connect to Coffer" — connecting
 // reinstalls every part, the hook included. Which command is installed versus
 // the one Coffer would write lives behind the "?".
@@ -24,6 +26,14 @@ const HEALTH_TONE: Record<CofferHook["health"], Tone> = {
   missing: "error",
 };
 
+/** Trust states that mean the agent will not run the installed hook. */
+const TRUST_TONE: Partial<Record<CofferHook["trust"], Tone>> = {
+  untrusted: "warn",
+  modified: "warn",
+  disabled: "warn",
+  unknown: "warn",
+};
+
 interface Props {
   agentUid: string;
   hook: CofferHook;
@@ -34,6 +44,7 @@ export function AgentCofferHookStatus({ agentUid, hook }: Props) {
   const { toast } = useToast();
   const connect = useAgentConnect(agentUid);
   const needsRepair = hook.health !== "current";
+  const trustTone = hook.health === "missing" ? undefined : TRUST_TONE[hook.trust];
 
   const repair = () =>
     connect.mutate(true, {
@@ -51,6 +62,16 @@ export function AgentCofferHookStatus({ agentUid, hook }: Props) {
       >
         {t(`agents.hooksTab.cofferHook.health.${hook.health}`)}
       </span>
+      {trustTone ? (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+            toneClass(trustTone),
+          )}
+        >
+          {t(`agents.hooksTab.cofferHook.trust.${hook.trust}`)}
+        </span>
+      ) : null}
       <span className="text-muted-foreground">
         {hook.last_fired_at
           ? t("agents.hooksTab.cofferHook.lastFired", {
@@ -69,6 +90,7 @@ export function AgentCofferHookStatus({ agentUid, hook }: Props) {
             <p className="break-all font-mono">{hook.installed_command}</p>
           </>
         ) : null}
+        {hook.trust !== "not_required" ? <p>{t("agents.hooksTab.cofferHook.trustHelp")}</p> : null}
       </HelpTip>
       {needsRepair ? (
         <Button

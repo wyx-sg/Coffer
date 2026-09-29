@@ -1554,6 +1554,7 @@ The installed session-start hook runs this; you rarely need to. It prints nothin
 | `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
 | `--cwd` | option | text | required | The session's working directory |
 | `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
+| `--hook-event` | option | text | `""` | Print the text as this hook event's JSON additionalContext instead of plain |
 
 ## coffer provider
 

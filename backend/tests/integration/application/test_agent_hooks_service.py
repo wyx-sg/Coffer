@@ -19,8 +19,10 @@ from coffer.application.agent.plugin_views import PluginDetailView, PluginsOut, 
 from coffer.domain.agent.hooks import HookHealth, HookSource
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
+from coffer.domain.hook_trust import HookTrust
+from coffer.domain.memory.delivery import MARKER, DeliveryAdapter
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
+from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 from tests.integration.application.conftest import AgentTestBundle
 from tests.support.facets import agent_catalog
 from tests.support.homes import IsolatedHome, fake_agent_dir
@@ -62,6 +64,21 @@ def _hooks(event: str, command: str, matcher: str | None = None) -> str:
     return json.dumps({"hooks": {event: [group]}})
 
 
+def _adapter(agent_type: AgentType) -> DeliveryAdapter:
+    adapter = agent_catalog().delivery_hook(agent_type)
+    assert adapter is not None
+    return adapter
+
+
+#: The command a build before SessionStart support installed for Codex: on
+#: UserPromptSubmit, bare `coffer`, behind a `$PPID` guard.
+def _legacy_codex_command(uid: str) -> str:
+    return (
+        f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; '
+        f'[ -e "$f" ] || {{ : > "$f"; coffer memory context --agent-uid {uid} --cwd "$PWD"; }}'
+    )
+
+
 def _service(bundle: AgentTestBundle, plugins: _Plugins | None = None) -> AgentHooksService:
     return AgentHooksService(
         agent_service=bundle.svc,
@@ -86,7 +103,9 @@ async def test_hooks_from_settings_and_plugins_with_coffers_own_current(
     agent = await agent_bundle.svc.register(
         agent_type=AgentType.CLAUDE_CODE, name="cc", config_dir=None, actor="t"
     )
-    own = CLAUDE_CODE_ADAPTER.install(_hooks("PreToolUse", "lint.sh", "Bash"), agent.uid)
+    own = _adapter(AgentType.CLAUDE_CODE).install(
+        _hooks("PreToolUse", "lint.sh", "Bash"), agent.uid
+    )
     claude.write("settings", own)
     claude.write("settings_local", _hooks("Stop", "notify.sh"))
     plugin_root = tmp_path / "plugin-pkg"
@@ -112,6 +131,7 @@ async def test_hooks_from_settings_and_plugins_with_coffers_own_current(
     assert [h.event for h in mine] == ["SessionStart"]
     assert out.coffer_hook is not None
     assert out.coffer_hook.health is HookHealth.CURRENT
+    assert out.coffer_hook.trust is HookTrust.NOT_REQUIRED
     assert out.coffer_hook.last_fired_at is None
     # Read only: nothing written, nothing audited.
     assert claude.path("settings").read_text() == before
@@ -127,8 +147,8 @@ async def test_a_marked_hook_with_an_old_command_is_stale_and_fired_time_is_read
     agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX, name="cx", config_dir=None, actor="t"
     )
-    stale = CODEX_ADAPTER.install("", agent.uid).replace("--agent-uid", "--agent")
-    codex.write("hooks", stale)
+    legacy = {"type": "command", "command": _legacy_codex_command(agent.uid), "timeout": 10}
+    codex.write("hooks", json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [legacy]}]}}))
     await agent_bundle.audit.record(
         AuditEventType.MEMORY_DELIVERY_FIRED.value, resource=agent, actor="cx"
     )
@@ -139,6 +159,7 @@ async def test_a_marked_hook_with_an_old_command_is_stale_and_fired_time_is_read
     assert out.coffer_hook.event == "UserPromptSubmit"
     assert out.coffer_hook.health is HookHealth.STALE
     assert out.coffer_hook.installed_command != out.coffer_hook.expected_command
+    assert out.coffer_hook.trust is HookTrust.UNTRUSTED
     assert out.coffer_hook.last_fired_at is not None
     assert [(h.coffer, h.source, h.path) for h in out.items] == [
         (True, HookSource.USER, str(codex.path("hooks")))
@@ -160,3 +181,45 @@ async def test_a_missing_hook_and_an_unparseable_file_are_reported(
     assert [h.command for h in out.items] == ["notify.sh"]
     assert [e.source for e in out.parse_errors] == ["settings"]
     assert out.coffer_hook is not None and out.coffer_hook.health is HookHealth.MISSING
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex", scenario="report whether Codex trusts Coffer's hook"
+)
+async def test_codex_trust_is_read_from_config_toml_and_never_written(
+    agent_bundle: AgentTestBundle, isolated_home: IsolatedHome
+) -> None:
+    """A current Codex hook is ``untrusted`` until the user approves it, then
+    ``trusted`` for exactly that definition, and ``modified`` once Coffer's
+    command changes — read from ``[hooks.state]`` in ``config.toml``, which
+    the listing never writes."""
+    codex = fake_agent_dir(isolated_home, AgentType.CODEX)
+    agent = await agent_bundle.svc.register(
+        agent_type=AgentType.CODEX, name="cx", config_dir=None, actor="t"
+    )
+    adapter = _adapter(AgentType.CODEX)
+    hooks_path = codex.write("hooks", adapter.install("", agent.uid))
+    config = codex.write("config", 'model = "gpt-5"\n')
+
+    out = await _service(agent_bundle).list_hooks(agent.uid)
+    assert out.coffer_hook is not None
+    assert out.coffer_hook.event == "SessionStart"
+    assert out.coffer_hook.health is HookHealth.CURRENT
+    assert out.coffer_hook.trust is HookTrust.UNTRUSTED
+
+    # The user approves it in Codex's /hooks: Codex records the hash.
+    hook = adapter.find(hooks_path.read_text())
+    assert hook is not None
+    key = trust_key(str(hooks_path), hook)
+    approved = f'model = "gpt-5"\n\n[hooks.state."{key}"]\ntrusted_hash = "{current_hash(hook)}"\n'
+    config.write_text(approved)
+    out = await _service(agent_bundle).list_hooks(agent.uid)
+    assert out.coffer_hook is not None and out.coffer_hook.trust is HookTrust.TRUSTED
+
+    # A later build changes the command: the approval no longer matches.
+    hooks_path.write_text(
+        hooks_path.read_text().replace("--hook-event SessionStart", "--hook-event SessionStart ")
+    )
+    out = await _service(agent_bundle).list_hooks(agent.uid)
+    assert out.coffer_hook is not None and out.coffer_hook.trust is HookTrust.MODIFIED
+    assert config.read_text() == approved

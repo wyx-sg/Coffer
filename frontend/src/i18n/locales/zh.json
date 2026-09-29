@@ -1145,6 +1145,12 @@
           "stale": "已过期",
           "missing": "缺失"
         },
+        "trust": {
+          "untrusted": "需在 Codex 中批准",
+          "modified": "需在 Codex 中重新批准",
+          "disabled": "已在 Codex 中关闭",
+          "unknown": "批准状态未知"
+        },
         "lastFired": "上次触发于 {{time}}",
         "neverFired": "从未触发",
         "repair": "修复",
@@ -1152,7 +1158,8 @@
         "helpLabel": "关于 Coffer 的钩子",
         "help": "Coffer 通过 {{event}} 钩子向该 Agent 投递记忆，位于：",
         "expected": "Coffer 安装的命令：",
-        "installed": "当前安装的命令："
+        "installed": "当前安装的命令：",
+        "trustHelp": "Codex 只运行你批准过的钩子。打开 Codex，运行 /hooks 并信任 Coffer 的钩子；命令每次变化都需要重新批准。Coffer 不会自行批准自己的钩子。"
       }
     },
     "noneDetected": "本机没有检测到 Agent，可在下方手动添加。",

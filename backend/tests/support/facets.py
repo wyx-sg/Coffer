@@ -40,15 +40,21 @@ def installed(version: str = "1.0.0", path: str = "/usr/local/bin/agent") -> Pro
     return ProgramInfo(path=path, version=version)
 
 
+#: The ``coffer`` CLI the delivery hooks run in tests. Fixed, so an installed
+#: command never depends on what the developer's own ``PATH`` holds.
+TEST_COFFER_CLI = "/opt/coffer/bin/coffer"
+
+
 def agent_catalog(programs: Mapping[AgentType, ProgramInfo] | None = None) -> AgentCatalog:
-    """The production catalogue, each probe answering from ``programs``."""
+    """The production catalogue, each probe answering from ``programs``, and
+    the delivery hooks running :data:`TEST_COFFER_CLI`."""
     found = dict(programs or {})
     return AgentCatalog(
         {
             d.type: dataclasses.replace(
                 d, dependency_probe=FixedProbe(d.program, found.get(d.type, ProgramInfo()))
             )
-            for d in build_agent_catalog()
+            for d in build_agent_catalog(coffer_cli=TEST_COFFER_CLI)
         }
     )
 
@@ -72,4 +78,4 @@ def put_programs_on_path(
     return bin_dir
 
 
-__all__ = ["FixedProbe", "agent_catalog", "installed", "put_programs_on_path"]
+__all__ = ["TEST_COFFER_CLI", "FixedProbe", "agent_catalog", "installed", "put_programs_on_path"]

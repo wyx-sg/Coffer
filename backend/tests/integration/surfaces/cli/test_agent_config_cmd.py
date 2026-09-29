@@ -31,6 +31,7 @@ from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
+from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.connection_service import (
     AgentConnectionService,
@@ -62,12 +63,14 @@ from coffer.surfaces.http.agent_dependencies import (
     get_agent_config_file_service,
     get_agent_connection_service,
     get_agent_service,
+    get_auto_detect_service,
 )
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.facets import agent_catalog
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-config-cli"
@@ -127,6 +130,10 @@ def agent_config_cli(tmp_path, monkeypatch):
     app.dependency_overrides[get_agent_config_file_service] = lambda: config_files
     app.dependency_overrides[get_agent_connection_service] = lambda: connection
     app.dependency_overrides[get_resource_service] = lambda: resource_svc
+    # `agent show` reads detection through /agents; without its own detector
+    # this fixture leaned on a module global another test's app happened to set.
+    detect = AutoDetectService(agent_service=agent_svc, catalog=agent_catalog())
+    app.dependency_overrides[get_auto_detect_service] = lambda: detect
 
     set_active_token(_TOKEN)
     info = DaemonInfo(
