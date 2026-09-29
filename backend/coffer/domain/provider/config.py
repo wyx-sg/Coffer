@@ -35,9 +35,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
+from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
 # Same ref grammar the credential store accepts (slash-namespaced segments).
@@ -51,6 +61,28 @@ _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 #: list nor an entry is absurdly long.
 _MAX_MODELS = 200
 _MAX_MODEL_ID_LEN = 200
+
+
+#: Curated-model facts that are omitted from the document while unknown.
+_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort", "price")
+
+
+class CuratedPrice(BaseModel):
+    """What the user says this connection charges for a model, in USD per
+    million tokens (web search per thousand requests). Relays and resellers
+    price differently from the vendor, so a connection's own price wins over
+    the bundled snapshot when usage is costed (spec provider-switching "Price
+    usage from a bundled snapshot and per-connection prices"). A cache category
+    left out is charged at the input rate, so an estimate errs high."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float = Field(ge=0)
+    output: float = Field(ge=0)
+    cache_write_5m: float | None = Field(default=None, ge=0)
+    cache_write_1h: float | None = Field(default=None, ge=0)
+    cache_read: float | None = Field(default=None, ge=0)
+    web_search: float | None = Field(default=None, ge=0)
 
 
 class CuratedModel(BaseModel):
@@ -68,6 +100,32 @@ class CuratedModel(BaseModel):
 
     id: str
     modality: Modality = Modality.TEXT
+    #: The context window the endpoint serves this model with, in tokens —
+    #: read from the endpoint where it reports one (a local runtime's served
+    #: window), otherwise entered by the user. ``None`` is unknown, and an
+    #: unknown window is left out of what Coffer writes rather than guessed
+    #: (spec provider-switching "Record a context window and effort levels with
+    #: each curated model").
+    context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The reasoning-effort levels the model accepts, in order; the last is
+    #: not implied to be the default. ``None``/empty: the model takes no
+    #: effort, so Codex is sent none and the Model tab hides Effort.
+    effort_levels: list[str] | None = None
+    #: The level used when the agent's binding names none.
+    default_effort: str | None = None
+    #: This connection's own price for the model; ``None``: the bundled one.
+    price: CuratedPrice | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unknowns(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """An unrecorded fact is left out of the stored (and synced) document
+        rather than written as ``null``, so an entry that records nothing new
+        reads exactly as it did before these fields existed."""
+        data: dict[str, Any] = handler(self)
+        for key in _OPTIONAL_FACTS:
+            if data.get(key) is None:
+                data.pop(key, None)
+        return data
 
 
 class Protocol(StrEnum):
@@ -85,6 +143,20 @@ class Protocol(StrEnum):
     OPENAI = "openai"
     OLLAMA = "ollama"
     UNKNOWN = "unknown"
+
+
+def is_loopback_url(url: str) -> bool:
+    """Whether ``url`` names this machine (``localhost`` or a loopback IP)."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = (urlparse(url if "://" in url else f"http://{url}").hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def starts_dormant(protocol: str) -> bool:
@@ -144,6 +216,20 @@ class ProviderConfig(BaseModel):
     # nothing marked here means Coffer transcribes nothing and hands the agent
     # the audio file untouched.
     transcribe_default: bool = False
+    # Set when the endpoint is a model runtime on this machine (Ollama, LM
+    # Studio, vLLM, llama-server): what detection found there. Such a
+    # connection carries no key and is reached through the model proxy like
+    # any other (spec provider-switching "Configure a local model connection").
+    local_runtime: LocalRuntime | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_runtime(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """A connection that is no local runtime carries no ``local_runtime``
+        key at all, so every existing document keeps its shape."""
+        data: dict[str, Any] = handler(self)
+        if data.get("local_runtime") is None:
+            data.pop("local_runtime", None)
+        return data
 
     @field_validator("base_url")
     @classmethod
@@ -180,22 +266,35 @@ class ProviderConfig(BaseModel):
                 raise ValueError("model id must not be empty")
             if len(model) > _MAX_MODEL_ID_LEN:
                 raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, CuratedModel(id=model, modality=entry.modality))
+            levels = [lv.strip() for lv in (entry.effort_levels or []) if lv and lv.strip()]
+            default = entry.default_effort if entry.default_effort in levels else None
+            cleaned.setdefault(
+                model,
+                entry.model_copy(
+                    update={"id": model, "effort_levels": levels or None, "default_effort": default}
+                ),
+            )
         return list(cleaned.values())
 
     @model_validator(mode="after")
     def _credential_matches_protocol(self) -> ProviderConfig:
-        """anthropic/openai/unknown connections require a ``credential_ref``; an
-        ollama connection (no key) must not carry one. That it projects into no
-        agent is no longer a config rule: it is the empty SCOPE such a
-        connection is created with, and a keyless connection projects nothing
-        whatever its scope says (see ``application.provider.targets``)."""
+        """anthropic/openai/unknown connections require a ``credential_ref``
+        unless they are a local runtime, whose key is optional (LM Studio,
+        vLLM and llama-server can be started with one); an ollama-protocol
+        connection (Coffer's own engine, no key) must not carry one."""
         if self.protocol is Protocol.OLLAMA:
             if self.credential_ref is not None:
                 raise ValueError("ollama connection must not carry a credential_ref")
-        elif not self.credential_ref:
+        elif not self.credential_ref and self.local_runtime is None:
             raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
+        if self.local_runtime is not None and not is_loopback_url(self.base_url):
+            raise ValueError("a local runtime connection must point at this machine (loopback)")
         return self
+
+    @property
+    def is_local(self) -> bool:
+        """A model runtime on this machine."""
+        return self.local_runtime is not None
 
     def model_ids(self, modality: Modality | None = None) -> list[str]:
         """The curated ids, in the user's order, optionally of ONE modality.
@@ -208,6 +307,12 @@ class ProviderConfig(BaseModel):
         pickers").
         """
         return [m.id for m in self.models if modality is None or m.modality is modality]
+
+    def curated(self, model_id: str | None) -> CuratedModel | None:
+        """The curated entry for ``model_id``, or ``None``."""
+        if model_id is None:
+            return None
+        return next((m for m in self.models if m.id == model_id), None)
 
 
 @dataclass(frozen=True)

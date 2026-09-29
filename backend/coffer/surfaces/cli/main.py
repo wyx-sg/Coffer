@@ -21,10 +21,12 @@ from coffer.surfaces.cli import (
     open_cmd,
     path_cmd,
     provider_cmd,
+    proxy_cmd,
     run_cmd,
     scan_cmd,
     skill_cmd,
     sync_cmd,
+    usage_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
@@ -67,6 +69,8 @@ app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
+app.add_typer(proxy_cmd.app, name="proxy")
+app.add_typer(usage_cmd.app, name="usage")
 app.add_typer(sync_cmd.app, name="sync")
 app.add_typer(drift_cmd.app, name="drift")
 app.command("attention")(drift_cmd.attention)

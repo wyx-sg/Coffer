@@ -9,6 +9,7 @@ import tomllib
 import pytest
 
 from coffer.domain.connection import CODEX_ENV_KEY
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.projection import (
     CODEX_PROVIDER_ID,
     anthropic_api_key_helper,
@@ -39,7 +40,8 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
-        fast_model="claude-haiku-4-5",
+        effort="high",
+        tier_models={"haiku": "claude-haiku-4-5", "opus": "claude-opus-4-8"},
         api_key_helper=anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI),
     )
     d = json.loads(out)
@@ -47,29 +49,42 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-    assert d["env"]["ANTHROPIC_MODEL"] == "claude-opus-4-8"
-    assert d["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "claude-haiku-4-5"
+    # The top-level keys /model and /effort save to — never env.ANTHROPIC_MODEL,
+    # which would outrank the user's own /model choice at every launch.
+    assert d["model"] == "claude-opus-4-8"
+    assert d["effortLevel"] == "high"
+    assert "ANTHROPIC_MODEL" not in d["env"]
+    assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "claude-haiku-4-5"
+    assert d["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "claude-opus-4-8"
+    assert "ANTHROPIC_DEFAULT_SONNET_MODEL" not in d["env"]
     assert "ANTHROPIC_API_KEY" not in d["env"]  # never write the raw key
 
 
-def test_anthropic_omits_fast_model_when_none() -> None:
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="every write deletes the deprecated background-model key"
+)
+def test_every_write_deletes_the_deprecated_model_keys() -> None:
     out = apply_anthropic_settings(
-        '{"env": {"ANTHROPIC_SMALL_FAST_MODEL": "stale"}}',
+        '{"env": {"ANTHROPIC_SMALL_FAST_MODEL": "stale", "ANTHROPIC_MODEL": "old"}}',
         base_url="u",
         model="m",
-        fast_model=None,
+        tier_models={"haiku": "h"},
         api_key_helper=_HELPER,
     )
-    assert "ANTHROPIC_SMALL_FAST_MODEL" not in json.loads(out)["env"]
+    d = json.loads(out)
+    assert "ANTHROPIC_SMALL_FAST_MODEL" not in d["env"]
+    assert "ANTHROPIC_MODEL" not in d["env"]
+    assert d["model"] == "m"
+    assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "h"
 
 
 def test_anthropic_handles_empty_and_is_idempotent() -> None:
     first = apply_anthropic_settings(
-        "", base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+        "", base_url="u", model="m", tier_models={"haiku": "f"}, api_key_helper=_HELPER
     )
     assert json.loads(first)["env"]["ANTHROPIC_BASE_URL"] == "u"
     second = apply_anthropic_settings(
-        first, base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+        first, base_url="u", model="m", tier_models={"haiku": "f"}, api_key_helper=_HELPER
     )
     assert json.loads(first) == json.loads(second)
 
@@ -111,15 +126,39 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         '{"theme": "dark", "env": {"FOO": "1"}}',
         base_url="u",
         model="m",
-        fast_model="f",
+        effort="high",
+        tier_models={"opus": "m", "sonnet": "m", "haiku": "m"},
+        picker_models=("m",),
+        replace_builtin_picker=True,
+        local=True,
+        local_context_window=131072,
         api_key_helper=_HELPER,
     )
-    d = json.loads(remove_anthropic_settings(text))
+    d = json.loads(remove_anthropic_settings(text, managed_model="m", managed_effort="high"))
     assert "apiKeyHelper" not in d  # Coffer's managed helper removed
     assert d["theme"] == "dark"  # unrelated key preserved
-    assert d["env"]["FOO"] == "1"  # unrelated env preserved
-    for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"):
-        assert k not in d["env"]
+    assert d["env"] == {"FOO": "1"}  # unrelated env preserved, every Coffer key gone
+    for k in ("model", "effortLevel", "modelPicker"):
+        assert k not in d
+
+
+def test_remove_anthropic_keeps_a_model_the_user_picked_later() -> None:
+    text = apply_anthropic_settings(
+        "", base_url="u", model="m", effort="high", api_key_helper=_HELPER
+    )
+    doc = json.loads(text)
+    doc["model"] = "opus"  # the user's own /model choice since
+    d = json.loads(
+        remove_anthropic_settings(json.dumps(doc), managed_model="m", managed_effort="high")
+    )
+    assert d["model"] == "opus"
+    assert "effortLevel" not in d
+
+
+def test_remove_anthropic_keeps_a_user_owned_model_picker() -> None:
+    mine = {"options": [{"model": "opus", "label": "Opus"}], "replaceBuiltInOptions": False}
+    d = json.loads(remove_anthropic_settings(json.dumps({"modelPicker": mine})))
+    assert d["modelPicker"] == mine
 
 
 def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
@@ -135,9 +174,7 @@ def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
 def test_remove_anthropic_empty_and_idempotent() -> None:
     assert json.loads(remove_anthropic_settings("")) == {}
     once = remove_anthropic_settings(
-        apply_anthropic_settings(
-            "", base_url="u", model="m", fast_model=None, api_key_helper=_HELPER
-        )
+        apply_anthropic_settings("", base_url="u", model="m", api_key_helper=_HELPER)
     )
     twice = remove_anthropic_settings(once)
     assert json.loads(once) == json.loads(twice)
@@ -186,6 +223,29 @@ def test_remove_codex_empty_and_idempotent() -> None:
     spec="provider-switching",
     scenario="the projected key is hidden from the agent's shell commands",
 )
+def test_the_proxy_form_names_no_key_and_drops_an_earlier_exclude() -> None:
+    """Codex fetches its local proxy token through the ``auth`` command, so no
+    key rides its environment and the exclusion an earlier build added goes."""
+    earlier = '[shell_environment_policy]\nexclude = ["AWS_*", "COFFER_PROVIDER_KEY"]\n'
+    out = apply_codex_provider(
+        earlier,
+        base_url="http://127.0.0.1:8001/openai/v1",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        auth=CodexAuthCommand("/opt/coffer", ("proxy", "token", "--agent-uid", "a1")),
+    )
+    doc = tomllib.loads(out)
+    block = doc["model_providers"][CODEX_PROVIDER_ID]
+    assert "env_key" not in block
+    assert block["auth"] == {
+        "command": "/opt/coffer",
+        "args": ["proxy", "token", "--agent-uid", "a1"],
+    }
+    assert block["supports_websockets"] is False and block["requires_openai_auth"] is False
+    assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
+
+
 def test_codex_excludes_the_key_from_shell_commands() -> None:
     doc = tomllib.loads(
         apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
@@ -205,10 +265,6 @@ def test_codex_exclude_keeps_the_users_policy_and_adds_the_key_once() -> None:
     assert policy == {"inherit": "core", "exclude": ["AWS_*", CODEX_ENV_KEY]}
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="the projected key is hidden from the agent's shell commands",
-)
 def test_remove_codex_drops_only_its_own_exclude_entry() -> None:
     projected = apply_codex_provider(
         '[shell_environment_policy]\nexclude = ["AWS_*"]\n',
@@ -232,9 +288,7 @@ def test_per_connection_api_key_helper_is_written_and_removed() -> None:
     # name that no longer exists.
     helper = anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
     assert helper == f"{_CLI} provider key --connection-uid {_CONNECTION_UID}"
-    out = apply_anthropic_settings(
-        "", base_url="https://agnes", model=None, fast_model=None, api_key_helper=helper
-    )
+    out = apply_anthropic_settings("", base_url="https://agnes", model=None, api_key_helper=helper)
     assert json.loads(out)["apiKeyHelper"] == helper
     # Removal strips ANY Coffer-managed helper, so use-builtin always reverts
     # cleanly — including the forms Coffer no longer writes but did write into

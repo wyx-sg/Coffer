@@ -74,6 +74,7 @@ from coffer.surfaces.http.credential_schemas import (
 )
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.secret_boundary_wiring import (
+    approval_applied,
     approval_out,
     get_presence_grants,
     get_secret_boundary,
@@ -135,6 +136,7 @@ async def approve(
     boundary, grants = get_secret_boundary(), get_presence_grants()
     grants.redeem("approve", approval_id, grant.nonce, grant.signature)
     approved = await asyncio.to_thread(boundary.approve, approval_id, actor="desktop")
+    approval_applied()
     await audit.record(
         AuditEventType.SECRET_APPROVAL_APPROVED.value,
         actor="desktop",

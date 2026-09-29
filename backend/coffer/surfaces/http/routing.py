@@ -58,6 +58,7 @@ from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_tes
 from coffer.surfaces.http.memory import routers as memory_routers
 from coffer.surfaces.http.model_routes import router as model_router
 from coffer.surfaces.http.provider_routes import router as provider_router
+from coffer.surfaces.http.proxy_routes import router as proxy_router
 from coffer.surfaces.http.reconcile_routes import attention_router
 from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -67,6 +68,7 @@ from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
+from coffer.surfaces.http.usage_routes import router as usage_router
 
 
 def include_all_routers(app: FastAPI) -> None:
@@ -117,6 +119,8 @@ def include_all_routers(app: FastAPI) -> None:
         chat_attachment_router,  # … and the composer's file uploads
         channel_router,  # spec channels
         provider_router,  # spec provider-switching
+        proxy_router,  # spec provider-switching (the local model proxy)
+        usage_router,  # spec provider-switching (usage metering + subscription quota)
     )
     for router in routers:
         _include(app, router)

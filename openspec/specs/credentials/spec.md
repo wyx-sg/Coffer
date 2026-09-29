@@ -447,6 +447,12 @@ superseded those nothing asks for any more.
 - **THEN** the secret is withheld and a pending approval names the new command line
 - **AND** after the approval is applied with a presence grant the server receives the secret again
 
+#### Scenario: moving a provider connection's base URL asks again
+- **GIVEN** a provider connection whose key the model proxy already receives
+- **WHEN** its base URL is changed, and separately its key is replaced
+- **THEN** the key is not handed to the proxy or the engine for the new URL until the approval naming that URL is applied, and the replaced key waits sealed until its own approval is applied
+- **AND** once each is approved the proxy is refreshed with the key
+
 #### Scenario: a value supplied for its destination needs no approval
 - **GIVEN** a secret stored a moment ago under a ref nothing has ever received
 - **WHEN** a destination citing that ref first uses it

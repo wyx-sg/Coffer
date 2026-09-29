@@ -63,7 +63,6 @@ Stated plainly, so nobody over-trusts the boundary. Each is a consequence of run
 - **Computer-use agents.** An agent granted Accessibility or screen control can click an approval or type your password. The presence check holds against an agent with a shell, not one with the mouse.
 - **The signed CLI shares the key's access group.** In a signed release the `coffer` CLI could read the master key. That is acceptable because no CLI code path returns plaintext, the key or a grant, and the hardened runtime keeps other processes from attaching to or injecting into Coffer's signed binaries.
 - **Bypass modes.** An agent in `bypassPermissions`, `--yolo` or `danger-full-access` has no sandbox of its own. Nothing above depends on one; nothing above protects what such an agent reaches outside Coffer either. Coffer's own chat turns run agents this way (below).
-- **Provider keys, until the local model proxy ships.** When you switch a provider into Claude Code, Coffer writes an `apiKeyHelper` line that runs `coffer provider key`, which prints the key to whoever runs it. Codex reads its key from an environment variable of the process Coffer drives (kept out of its shell commands). A provider connection's base URL does not yet ask for approval. The planned local model proxy will hold the key itself and give each agent only a local token.
 - **Development builds.** Everything in [Development builds](#development-builds).
 
 And, as before:
@@ -146,7 +145,7 @@ A **destination** is a place Coffer sends a secret's plaintext. Each one has a *
 | A SeaTalk channel's app secret | the SeaTalk app id |
 | The sync remote's push token | the git URL |
 
-A provider connection's key, checked against its base URL, and a custom tool's authentication will go through the same check when they are built; a new destination type joins this list in the change that introduces it.
+A provider connection's key goes through the same check against its base URL: the local model proxy and Coffer's own engine receive it only for an approved URL, and replacing a key in use waits for approval too. A custom tool's authentication will join when custom tools are built; a new destination type joins this list in the change that introduces it.
 
 Every consumer asks the boundary before it resolves a secret, at the moment of use — spawning a server, starting a channel adapter, pushing a sync round. A secret approved for its current target is injected. Otherwise nothing is injected, the attempt fails with `SECRET_BINDING_PENDING`, and one pending approval is recorded per target; a newer target supersedes the approval for an older one. Because the check happens at use, a change made behind Coffer's back — a vault file edited by hand, a server another machine synced in — is caught where it matters.
 
@@ -259,7 +258,7 @@ Secrets live only as **Fernet ciphertext** in the `credentials` table of `~/.cof
 - An MCP server's config maps environment variables or headers to refs in `transport.credential_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `credential_refs`.
 - A channel's bot token or app secret, a provider's API key, and the sync remote's push credential are refs.
 - A **standalone secret** — one that belongs to no resource, such as a database password a skill needs — is a ref under `secret/<name>`, cited from files as `coffer://secret/<name>` and handed to a command by `coffer run` ([Secrets](/guides/secrets)).
-- When you switch a provider into Claude Code, Coffer writes an `apiKeyHelper` line (`<absolute path to coffer> provider key --connection-uid <uid>`) into Claude Code's settings, never the key itself. Codex is pointed at an environment variable name, also never the key.
+- When you switch an agent onto a provider, the agent is pointed at the [local model proxy](/architecture/model-proxy) on loopback and authenticates with its own local proxy token (`coffer proxy token --agent-uid <uid>`, run by Claude Code's `apiKeyHelper` and Codex's provider `auth` command). The provider's key is never written into an agent's file or environment, and no route or command returns it: the daemon decrypts it and hands it to the proxy, which injects it upstream and holds it in memory only.
 
 Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it, and only after the [secret boundary](#a-secret-goes-somewhere-new-only-with-your-approval) has approved that destination. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a credential that a resource still cites, or a standalone secret a skill cites, is refused with `409`; and deleting a resource releases any credential no remaining resource cites.
 

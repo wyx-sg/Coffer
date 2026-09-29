@@ -72,7 +72,7 @@ value, written so a person can read it in the approval:
 | Telegram channel | `token` | `telegram bot` |
 | SeaTalk channel | `secret` | `seatalk app <app_id>` |
 | Sync remote | `token` | `git <url>` |
-| Provider connection (Q4) | its key slot | its base URL — Q4 calls `SecretBoundary.require` |
+| Provider connection | `key` | `model api <base url>` — the proxy state and the engine ask before they get the key |
 | Custom tool (later) | its auth slot | its base URL — same call |
 
 `CredentialResolver.materialize(refs, destination)` asks
@@ -85,7 +85,7 @@ pending approval for the old one.
 
 **When a binding is approved without a person:**
 
-1. **Adoption.** At the first start on revision 0110 every binding in use is
+1. **Adoption.** At the first start on revision 0112 every binding in use is
    approved once, through the same enumeration that computes targets at use, and
    a marker row stops it running again. Upgrading breaks nothing that worked.
 2. **A value supplied for it.** The ADR's "a binding whose secret value was
@@ -181,7 +181,7 @@ bundle carries). The backend's SecItem calls are exercised only through an
 injected fake; the real calls return `errSecMissingEntitlement` on an unsigned
 build and were not run against the user's Keychain.
 
-## D7. Migration 0110
+## D7. Migration 0112
 
 Three tables: `secret_bindings`, `secret_approvals` (index on `status`),
 `secret_boundary_settings`. Nothing is back-filled in SQL; the adoption in D2

@@ -5,7 +5,9 @@ A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the credential-vault handling, the
 single-active-per-agent invariant, the native-config projection (the "switch",
 chosen by the agents a connection's per-agent scope reaches — not its wire), and
-the per-connection key resolution used by Claude Code's ``apiKeyHelper``.
+and the key decryption the model proxy's state is built from — no route
+returns a key; the proxy injects it (ADR api-key-providers-are-reached-through-
+a-separate-local-model-proxy).
 
 The credential store is synchronous (short-lived SQLite connections); every
 call is wrapped in ``asyncio.to_thread`` so the busy-wait never blocks the loop
@@ -30,6 +32,7 @@ from coffer.application.provider.internal_default_ops import (
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.secret_gate import ProviderSecretBoundary, require_key
 from coffer.application.provider.switch_ops import activate as _activate_op
 from coffer.application.provider.switch_ops import deactivate as _deactivate_op
 from coffer.application.provider.targets import projection_targets
@@ -47,6 +50,7 @@ from coffer.domain.credential_errors import CredentialMissing
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
 from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
+from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
 
 KIND = "provider"
@@ -81,6 +85,7 @@ class ProviderService:
         agent_catalog: AgentCatalog,
         engine: EngineNotifyPort | None = None,
         hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
+        proxy_root: Callable[[], str] | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
@@ -89,7 +94,13 @@ class ProviderService:
         # The agents' provider projection facets: what each agent's native
         # config speaks and how a connection is written into it.
         self._catalog = agent_catalog
-        self._projector = ProviderProjector(config_store, agents=agent_catalog)
+        # Where the local model proxy listens, for the base URL the agents
+        # are pointed at; the projector's default when not given.
+        self._projector = (
+            ProviderProjector(config_store, agents=agent_catalog, proxy_root=proxy_root)
+            if proxy_root is not None
+            else ProviderProjector(config_store, agents=agent_catalog)
+        )
         # Coffer's internal engine, told when the connection it runs on moves (spec
         # internal-engine "Drop the engine model when its connection moves"). The
         # engine's model is not this kind's to reason about, so what happens to it
@@ -100,6 +111,11 @@ class ProviderService:
         # the flags), and no periodic pass may judge the state in between.
         # Re-entrant inside a pass, so a repair that switches cannot deadlock.
         self._hold = hold or contextlib.nullcontext
+        # The secret boundary (``secret_gate``), set by the composition root.
+        self._boundary: ProviderSecretBoundary | None = None
+
+    def set_secret_boundary(self, boundary: ProviderSecretBoundary) -> None:
+        self._boundary = boundary
 
     # --- helpers -------------------------------------------------------------
 
@@ -144,9 +160,12 @@ class ProviderService:
         credential_ref: str | None = None,
         models: _CuratedModels | None = None,
         description: str | None = None,
+        local_runtime: LocalRuntime | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Create a connection. For anthropic/openai/unknown supply EXACTLY one
+        """Create a connection. A local runtime (``local_runtime``, what
+        detection found at a loopback endpoint) may carry a key or none.
+        Otherwise, for anthropic/openai/unknown supply EXACTLY one
         of ``secret_value`` (stored to the vault at a freshly minted opaque ref
         — see :meth:`_mint_ref`) or ``credential_ref`` (reuse an existing vault
         entry). An ``ollama``
@@ -164,6 +183,8 @@ class ProviderService:
             if secret_value is not None or credential_ref is not None:
                 raise ProviderCredentialSourceInvalid()
             ref = None
+        elif local_runtime is not None and secret_value is None and credential_ref is None:
+            ref = None
         else:
             if (secret_value is None) == (credential_ref is None):
                 raise ProviderCredentialSourceInvalid()
@@ -178,6 +199,7 @@ class ProviderService:
             credential_ref=ref,
             models=list(models or []),
             is_active=False,
+            local_runtime=local_runtime,
         )
         try:
             return await self._resources.register(
@@ -255,7 +277,7 @@ class ProviderService:
     # kind, validating the name and refusing a collision in the one place those
     # rules live.
 
-    # --- switch + key resolution --------------------------------------------
+    # --- switch ----------------------------------------------------------------
 
     async def activate(self, uid: str, *, actor: str = "api") -> ActivateResult:
         """Make this the active connection for each agent its scope reaches
@@ -281,57 +303,13 @@ class ProviderService:
         async with self._hold():
             return await _deactivate_op(self, agent_type, actor=actor)
 
-    async def resolve_connection_key(self, uid: str) -> str:
-        """The decrypted key of ONE specific connection — what Claude Code's
-        projected ``apiKeyHelper`` (``/abs/path/to/coffer provider key
-        --connection-uid <uid>``) fetches, so the agent always reads exactly the activated
-        connection's key.
-
-        By uid because that helper line is written once into a file Coffer does
-        not own and then read on every turn, for as long as the connection
-        lives: a name in it would stop resolving the moment the user renamed
-        the connection.
-
-        Raises ``NoActiveProvider`` when the connection reaches no agent — it is
-        disabled, scoped to no agent, or keyless (ollama). Reach is the same
-        effective projection the wire form reads (``projection_targets``), so a
-        live helper line stops receiving the key the moment the user switches
-        the connection off (spec provider-switching "Resolve a key for exactly
-        one connection").
-        """
-        resource = await self.get(uid)
-        cfg = self._cfg(resource)
-        if not self._compat(resource, await self._agents.list()):
-            raise NoActiveProvider(resource.name)
-        return await self._key_of(cfg, label=resource.name)
-
-    async def resolve_active_key_for_agent(self, agent_type: AgentType) -> str:
-        """The decrypted key of the connection currently active AND reaching
-        ``agent_type`` (its scope, ∩ ``enabled``) — Codex's
-        ``COFFER_PROVIDER_KEY`` injection. Raises ``NoActiveProvider`` if none."""
-        agents = await self._agents.list()
-        for r in await self.list():
-            rc = self._cfg(r)
-            if rc.is_active and agent_type in self._compat(r, agents):
-                return await self._key_of(rc, label=agent_type.value)
-        raise NoActiveProvider(agent_type.value)
-
-    async def resolve_active_key(self, wire: Protocol) -> str:
-        """Back-compat: the active key for the legacy ``--wire`` key helper
-        (``/active-key/{wire}``). Resolves through the agents whose provider
-        projection declares that wire, in agent-type order: the first one with
-        an active connection answers."""
-        for agent_type in self._catalog.agents_speaking(wire.value):
-            try:
-                return await self.resolve_active_key_for_agent(agent_type)
-            except NoActiveProvider:
-                continue
-        raise NoActiveProvider(wire.value)
-
-    async def _key_of(self, cfg: ProviderConfig, *, label: str) -> str:
+    async def _key_of(self, cfg: ProviderConfig, *, label: str, uid: str) -> str:
+        """The decrypted key of one connection, for the model proxy's state —
+        only once its base URL is an approved destination (``secret_gate``)."""
         ref = cfg.credential_ref
         if ref is None:
             raise NoActiveProvider(label)
+        await require_key(self, uid, label, cfg)
         value = await asyncio.to_thread(self._credentials.get, ref)
         if value is None:
             raise CredentialMissing(ref)

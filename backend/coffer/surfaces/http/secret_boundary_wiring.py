@@ -65,6 +65,20 @@ def register_destination_source(source: Callable[[], Awaitable[Current]]) -> Non
     _OTHER_SOURCES.append(source)
 
 
+#: What to redo once an approval is applied: a destination built from state
+#: (the model proxy's keys) is rebuilt so the newly approved secret reaches it.
+_ON_APPROVED: list[Callable[[], None]] = []
+
+
+def on_approval_applied(callback: Callable[[], None]) -> None:
+    _ON_APPROVED.append(callback)
+
+
+def approval_applied() -> None:
+    for callback in list(_ON_APPROVED):
+        callback()
+
+
 _boundary: SecretBoundary | None = None
 _grants: PresenceGrants | None = None
 
@@ -200,6 +214,7 @@ async def refresh_approvals() -> list[SecretApproval]:
 
 __all__ = [
     "adopt_existing_bindings",
+    "approval_applied",
     "approval_out",
     "boundary_resolver",
     "current_destinations",
@@ -207,6 +222,7 @@ __all__ = [
     "get_secret_boundary",
     "init_secret_boundary",
     "make_master_key_manager",
+    "on_approval_applied",
     "refresh_approvals",
     "register_destination_source",
     "register_resource_destination",

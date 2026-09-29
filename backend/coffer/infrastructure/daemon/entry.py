@@ -205,6 +205,16 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
 
 
 def main() -> None:
+    # The frozen binary's second mode: coffer-daemon proxy [--port N] runs the
+    # local model proxy instead of the daemon (ADR api-key-providers-are-reached-
+    # through-a-separate-local-model-proxy, "Distribution" — no fourth binary).
+    # Checked before anything else: the proxy takes no spawn lock, writes no
+    # daemon.json and must not scrub or rewrite anything the daemon owns.
+    if sys.argv[1:2] == ["proxy"]:
+        from coffer.infrastructure.model_proxy.entry import main as proxy_main
+
+        proxy_main(sys.argv[2:])
+        return
     # First, before anything can spawn an agent process that inherits them.
     scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()

@@ -1739,11 +1739,11 @@ components:
         display_name:
           title: Display Name
           type: string
-        fast_model:
+        effort:
           anyOf:
           - type: string
           - type: 'null'
-          title: Fast Model
+          title: Effort
         model:
           anyOf:
           - type: string
@@ -1754,6 +1754,13 @@ components:
           type: string
         state:
           $ref: '#/components/schemas/DetectionState'
+        tier_models:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Tier Models
         type:
           $ref: '#/components/schemas/AgentType'
         uid:
@@ -1780,7 +1787,8 @@ components:
       - type
       - config_dir
       - model
-      - fast_model
+      - effort
+      - tier_models
       - wire_api
       - state
       - version
@@ -1795,16 +1803,23 @@ components:
           - type: string
           - type: 'null'
           title: Config Dir
-        fast_model:
+        effort:
           anyOf:
           - type: string
           - type: 'null'
-          title: Fast Model
+          title: Effort
         model:
           anyOf:
           - type: string
           - type: 'null'
           title: Model
+        tier_models:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Tier Models
         wire_api:
           anyOf:
           - type: string

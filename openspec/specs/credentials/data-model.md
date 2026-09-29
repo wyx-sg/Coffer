@@ -64,7 +64,7 @@ intermediate state is "both copies exist" rather than "neither does".
 
 ## The secret boundary's tables
 
-Migration `0110`. Written by the credentials package's sync store
+Migration `0112`. Written by the credentials package's sync store
 (`infrastructure/credentials/boundary_store.py`, stdlib `sqlite3` like the
 ciphertext store, because the gate is consulted from the synchronous resolve
 path).

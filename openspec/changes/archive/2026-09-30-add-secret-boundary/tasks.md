@@ -2,7 +2,7 @@
 
 ## 1. Backend
 - [x] 1.1 Domain vocabulary: destinations, bindings, approvals, standalone names, masking
-- [x] 1.2 Migration 0110 and the sync store for bindings, approvals and switches
+- [x] 1.2 Migration 0112 and the sync store for bindings, approvals and switches
 - [x] 1.3 `SecretBoundary` gate, `PresenceGrants`, guarded `CredentialResolver`
 - [x] 1.4 Wire every consumer with its destination: MCP spawn and test, channel adapters and SeaTalk websockets, sync push
 - [x] 1.5 Remove `GET /credentials/{ref}` and `POST /sync/key/export`; presence routes, approvals routes, resolve route, scan and import routes, `/settings/secret-boundary`

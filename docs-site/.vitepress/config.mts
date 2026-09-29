@@ -25,6 +25,7 @@ const guides = [
       { text: 'Connect a client', link: '/guides/connect-a-client' },
       { text: 'MCP servers', link: '/guides/mcp-servers' },
       { text: 'Model providers', link: '/guides/providers' },
+      { text: 'Usage and quota', link: '/guides/usage' },
       { text: 'Credentials', link: '/guides/credentials' },
       { text: 'Secrets', link: '/guides/secrets' },
     ],
@@ -86,6 +87,7 @@ const architecture = [
     items: [
       { text: 'Daemon and processes', link: '/architecture/daemon' },
       { text: 'MCP gateway', link: '/architecture/mcp-gateway' },
+      { text: 'Model proxy', link: '/architecture/model-proxy' },
       { text: 'Chat and turns', link: '/architecture/chat' },
       { text: 'Event stream', link: '/architecture/event-stream' },
       { text: 'Persistence', link: '/architecture/persistence' },

@@ -148,8 +148,13 @@ def show(
     typer.echo(f"enabled: {'yes' if data['enabled'] else 'no'}")
     # "(unbound)" is a real state, not a missing value: an unbound agent runs
     # on its own default model.
-    for k in ("model", "fast_model", "wire_api"):
+    for k in ("model", "effort", "wire_api"):
         typer.echo(f"{k}: {data.get(k) or '(unbound)'}")
+    tiers = data.get("tier_models") or {}
+    typer.echo(
+        "tier_models: "
+        + (", ".join(f"{t}={m}" for t, m in tiers.items()) if tiers else "(unbound)")
+    )
     if conn is None:
         typer.echo("coffer_connection: " + (f"unknown ({conn_why})" if conn_why else "unknown"))
     else:
@@ -165,10 +170,14 @@ def edit(
         None, "--config-dir", help="Use a different config directory"
     ),
     model: str | None = typer.Option(None, "--model", help="Model this agent answers with"),
-    fast_model: str | None = typer.Option(
-        None, "--fast-model", help="Small/fast model slot (anthropic wire only)"
+    effort: str | None = typer.Option(None, "--effort", help="Reasoning effort level"),
+    clear_effort: bool = typer.Option(False, "--clear-effort", help="Unbind the effort"),
+    tier: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--tier",
+        help="Claude Code tier pin <tier>=<model> (opus, sonnet, haiku, fable); repeatable",
     ),
-    clear_fast_model: bool = typer.Option(False, "--clear-fast-model", help="Unbind the fast slot"),
+    clear_tiers: bool = typer.Option(False, "--clear-tiers", help="Unbind every tier pin"),
     wire_api: str | None = typer.Option(
         None, "--wire-api", help="Codex wire api; `responses` is the only value it still loads"
     ),
@@ -183,24 +192,39 @@ def edit(
     what re-projects the config.
 
     \f
-    One route, ``PATCH /agents/{uid}``. ``--clear-fast-model`` sends an
-    explicit null, which the route tells apart from an absent field.
+    One route, ``PATCH /agents/{uid}``. ``--clear-effort`` / ``--clear-tiers``
+    send an explicit null, which the route tells apart from an absent field;
+    ``--tier`` values are sent together as the whole mapping.
     """
-    if fast_model is not None and clear_fast_model:
-        typer.echo("give either --fast-model or --clear-fast-model, not both", err=True)
+    if effort is not None and clear_effort:
+        typer.echo("give either --effort or --clear-effort, not both", err=True)
         raise typer.Exit(2)
+    if tier and clear_tiers:
+        typer.echo("give either --tier or --clear-tiers, not both", err=True)
+        raise typer.Exit(2)
+    tiers: dict[str, str] = {}
+    for item in tier or []:
+        name, sep, value = item.partition("=")
+        if not sep or not name.strip() or not value.strip():
+            typer.echo(f"--tier takes <tier>=<model>, got {item!r}", err=True)
+            raise typer.Exit(2)
+        tiers[name.strip()] = value.strip()
     agent_body: dict[str, Any] = {
         k: v
         for k, v in (
             ("config_dir", config_dir),
             ("model", model),
-            ("fast_model", fast_model),
+            ("effort", effort),
             ("wire_api", wire_api),
         )
         if v is not None
     }
-    if clear_fast_model:
-        agent_body["fast_model"] = None
+    if clear_effort:
+        agent_body["effort"] = None
+    if tiers:
+        agent_body["tier_models"] = tiers
+    if clear_tiers:
+        agent_body["tier_models"] = None
     if not agent_body:
         typer.echo("nothing to change: name at least one option", err=True)
         raise typer.Exit(2)

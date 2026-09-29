@@ -399,6 +399,10 @@ How the OpenSpec change `add-secret-boundary` built this decision; its
   in the app window. The boundary holds only in a signed release
   ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](master-key-lives-in-the-macos-keychain.md),
   "Open questions").
-- **Not yet built:** per-agent tokens (rule 6), hardened-runtime signing and
-  notarisation (rule 7), and the removal of `coffer provider key`, which waits
-  for the local model proxy.
+- **Provider connections** are a destination whose target is the base URL:
+  the local model proxy and the internal engine receive a key only for an
+  approved URL (the proxy state is rebuilt when an approval is applied), and a
+  key replaced through the provider edit waits sealed like any value in use.
+  `coffer provider key` went with the proxy.
+- **Not yet built:** per-agent tokens (rule 6) and hardened-runtime signing and
+  notarisation (rule 7).

@@ -64,7 +64,7 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
         _EXISTING_SETTINGS,
         base_url="https://gw/anthropic",
         model="m-primary",
-        fast_model="m-fast",
+        tier_models={"haiku": "m-fast"},
         api_key_helper=helper,
     )
     removed_settings = projection.remove_anthropic_settings(applied_settings)
@@ -86,7 +86,7 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
     settings = json.loads(applied_settings)
     assert settings["apiKeyHelper"] == helper
     assert settings["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
-    assert settings["env"]["ANTHROPIC_MODEL"] == "m-primary"
+    assert settings["model"] == "m-primary"
     assert settings["theme"] == "dark"
     after = json.loads(removed_settings)
     assert "apiKeyHelper" not in after

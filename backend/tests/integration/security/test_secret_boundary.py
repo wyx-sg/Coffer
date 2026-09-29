@@ -424,3 +424,56 @@ def test_a_push_token_pointed_at_a_new_url_waits(daemon: BoundaryDaemon) -> None
     assert resolver.materialize({"token": "sync/push-token"}, moved) == {
         "token": "push-token-value"
     }
+
+
+# --- provider connections -----------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="credentials", scenario="moving a provider connection's base URL asks again"
+)
+def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
+    import asyncio
+
+    from coffer.domain.provider.config import ProviderConfig
+    from coffer.surfaces.http.provider_dependencies import get_provider_service
+
+    d = daemon
+    r = d.client.post(
+        "/api/v1/providers",
+        json={
+            "name": "gw",
+            "protocol": "anthropic",
+            "base_url": "https://gw.example.com/anthropic",
+            "secret_value": "sk-provider-key-1",
+        },
+    )
+    assert r.status_code == 201, r.text
+    uid = r.json()["uid"]
+    svc = get_provider_service()
+
+    def key_now() -> str:
+        row = d.client.get(f"/api/v1/resources/{uid}").json()
+        cfg = ProviderConfig.model_validate(row["config"])
+        return asyncio.run(svc._key_of(cfg, label="gw", uid=uid))
+
+    assert key_now() == "sk-provider-key-1"
+
+    moved = d.client.patch(
+        f"/api/v1/providers/{uid}", json={"base_url": "https://attacker.example.net/v1"}
+    )
+    assert moved.status_code == 200, moved.text
+    with pytest.raises(SecretBindingPending):
+        key_now()
+    [waiting] = d.pending(destination_uid=uid)
+    assert waiting["target"] == "model api https://attacker.example.net/v1"
+    d.approve(waiting["id"])
+    assert key_now() == "sk-provider-key-1"
+
+    ref = d.client.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+    rotated = d.client.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-replaced-2"})
+    assert rotated.status_code == 200, rotated.text
+    assert d.value(ref) == "sk-provider-key-1"
+    [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
+    d.approve(replace["id"])
+    assert d.value(ref) == "sk-replaced-2" and key_now() == "sk-replaced-2"

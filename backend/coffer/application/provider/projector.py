@@ -26,14 +26,20 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
+from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT, WIRE_PATHS
+from coffer.domain.model_proxy.state import proxy_root as proxy_root_at
 from coffer.domain.provider.agent_projection import (
     ProjectionPlan,
     ProviderProjection,
     ProviderProjectionRequest,
 )
+from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from coffer.domain.resource import Resource
+from coffer.domain.usage.records import Wire
 
 #: The content each file a projection wrote or removed held before it
 #: (``None``: the file did not exist) — what an undo puts back.
@@ -63,12 +69,16 @@ class ProviderProjector:
         *,
         agents: AgentCatalog,
         cli_resolver: Callable[[], str] = default_coffer_cli_resolver,
+        proxy_root: Callable[[], str] = lambda: proxy_root_at(DEFAULT_PROXY_PORT),
     ) -> None:
         self._config_store = config_store
         self._catalog = agents
         # Where the ``coffer`` CLI is, for the ``apiKeyHelper`` line: asked at
         # each projection, so a CLI installed after the daemon started is found.
         self._resolve_cli = cli_resolver
+        # Where the local model proxy listens — asked at each projection, so a
+        # port the user moved in daemon-config.json is what gets written.
+        self._proxy_root = proxy_root
 
     @staticmethod
     def agents_of_type(agents: list[Resource], agent_type: AgentType) -> list[Resource]:
@@ -122,10 +132,21 @@ class ProviderProjector:
         return reverted
 
     def request_for(
-        self, connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig
+        self, connection: Resource, cfg: ProviderConfig, agent: Resource
     ) -> ProviderProjectionRequest:
         """What a projection of ``connection`` into this agent is built from."""
-        return projection_request(connection, cfg, agent_cfg, coffer_cli=self._resolve_cli())
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        facet = self.projection_for(agent_cfg.type)
+        wire = Wire(facet.protocols[0]) if facet is not None and facet.protocols else Wire.ANTHROPIC
+        return projection_request(
+            connection,
+            cfg,
+            agent,
+            agent_cfg,
+            coffer_cli=self._resolve_cli(),
+            proxy_root=self._proxy_root(),
+            wire=wire,
+        )
 
     def project_agent(self, connection: Resource, cfg: ProviderConfig, agent: Resource) -> Priors:
         """Project ``connection`` into one agent; return the prior content of
@@ -155,7 +176,7 @@ class ProviderProjector:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        request = self.request_for(connection, cfg, agent_cfg)
+        request = self.request_for(connection, cfg, agent)
         return self._perform(spec.path, current, facet.apply(current or "", request, spec.path))
 
     def _deproject(self, agent: Resource, facet: ProviderProjection) -> Priors:
@@ -165,7 +186,8 @@ class ProviderProjector:
         text = current or ""
         if not text.strip():
             return {}  # nothing was ever projected
-        return self._perform(spec.path, current, facet.remove(text, spec.path))
+        plan = facet.remove(text, spec.path, binding_of(agent_cfg))
+        return self._perform(spec.path, current, plan)
 
     def _perform(self, path: pathlib.Path, current: str | None, plan: ProjectionPlan) -> Priors:
         priors: Priors = {}
@@ -209,27 +231,73 @@ class ProviderProjector:
             priors.setdefault(path, current)
 
 
-def projection_request(
-    connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig, *, coffer_cli: str
-) -> ProviderProjectionRequest:
-    """The one construction of a projection request — what the switch writes
-    and what the reconciler compares an agent's file against."""
-    return ProviderProjectionRequest(
-        connection_uid=connection.uid,
-        connection_name=connection.name,
-        base_url=cfg.base_url,
-        # Model comes solely from the per-agent binding (spec
-        # provider-switching "Take projected model keys from the agent's
-        # binding"); an unbound agent projects no model.
+def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
+    """The agent's model binding, as the projection reads it."""
+    return ModelBinding(
         model=agent_cfg.model,
-        fast_model=agent_cfg.fast_model,
-        wire_api=agent_cfg.wire_api,
-        # Only the `text` entries: a model catalogue is the agent's own
-        # picker (spec provider-switching "Offer only text models to chat
-        # pickers").
-        text_models=tuple(cfg.model_ids(Modality.TEXT)),
-        coffer_cli=coffer_cli,
+        effort=agent_cfg.effort,
+        tier_models=dict(agent_cfg.tier_models or {}),
     )
 
 
-__all__ = ["Priors", "ProjectionConfigStore", "ProviderProjector", "projection_request"]
+def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
+    """The connection's curated TEXT models with what it records about each —
+    a model catalogue is the agent's own picker (spec provider-switching
+    "Offer only text models to chat pickers")."""
+    return tuple(
+        ProjectedModel(
+            id=m.id,
+            context_window=m.context_window,
+            effort_levels=tuple(m.effort_levels or ()),
+            default_effort=m.default_effort,
+        )
+        for m in cfg.models
+        if m.modality is Modality.TEXT
+    )
+
+
+def projection_request(
+    connection: Resource,
+    cfg: ProviderConfig,
+    agent: Resource,
+    agent_cfg: AgentConfig,
+    *,
+    coffer_cli: str,
+    proxy_root: str,
+    wire: Wire,
+) -> ProviderProjectionRequest:
+    """The one construction of a projection request — what the switch writes
+    and what the reconciler compares an agent's file against.
+
+    The agent is pointed at the local model proxy's route for its wire, and
+    authenticates with its own local token: the connection's endpoint and key
+    stay with the proxy (ADR api-key-providers-are-reached-through-a-separate-
+    local-model-proxy), so switching between two connections moves the
+    proxy's route, not the agent's file.
+    """
+    return ProviderProjectionRequest(
+        connection_uid=connection.uid,
+        connection_name=connection.name,
+        agent_uid=agent.uid,
+        base_url=proxy_root.rstrip("/") + WIRE_PATHS[wire],
+        key_helper=proxy_token_helper(agent.uid, coffer_cli=coffer_cli),
+        codex_auth=CodexAuthCommand(coffer_cli, proxy_token_args(agent.uid)),
+        # Model comes solely from the per-agent binding (spec
+        # provider-switching "Take projected model keys from the agent's
+        # binding"); an unbound agent projects no model.
+        binding=binding_of(agent_cfg),
+        wire_api=agent_cfg.wire_api,
+        models=projected_models(cfg),
+        local=cfg.is_local,
+        loopback_proxy=True,
+    )
+
+
+__all__ = [
+    "Priors",
+    "ProjectionConfigStore",
+    "ProviderProjector",
+    "binding_of",
+    "projected_models",
+    "projection_request",
+]

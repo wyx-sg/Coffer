@@ -364,3 +364,10 @@ class InternalEngineConfigModel(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)
+
+
+# The usage-metering tables (migration 0110) live in their own module to keep
+# this one within the file-size budget; importing it here registers them on
+# ``Base.metadata`` wherever the core models are loaded (``create_all``,
+# Alembic's env.py).
+from coffer.infrastructure.persistence import usage_models as _usage_models  # noqa: E402, F401

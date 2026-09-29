@@ -108,7 +108,7 @@ def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path)
     with _daemon() as c:
         uid = _new(c, _anthropic("acme", secret="sk-before-rotation"))
         ref = c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
-        assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-before-rotation"
+        assert get_credential_store().get(ref) == "sk-before-rotation"
 
         r = c.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-after-rotation"})
         assert r.status_code == 200, r.text
@@ -118,7 +118,6 @@ def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path)
         assert c.get(f"/api/v1/providers/{uid}").json()["credential_ref"] == ref
         # No credential route returns a value; read the daemon's own store.
         assert get_credential_store().get(ref) == "sk-after-rotation"
-        assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-after-rotation"
 
 
 @pytest.mark.acceptance(

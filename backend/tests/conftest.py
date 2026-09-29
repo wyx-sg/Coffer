@@ -69,6 +69,15 @@ os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
 _TEST_AGENT_STATE_ROOT = _RUN_ROOT / "agent-state"
 os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
 
+# Nearly every integration test boots the app, and the lifespan supervises the
+# local model proxy — which would spawn a real subprocess per test. The tests
+# of the proxy and its supervisor build their own; everything else runs
+# without one (``surfaces/http/model_proxy_wiring.AUTOSTART_ENV``).
+os.environ.setdefault("COFFER_MODEL_PROXY", "off")
+# Same reason for the background Codex quota read, which spawns a short-lived
+# ``codex app-server`` (``surfaces/http/usage_wiring.QUOTA_POLL_ENV``).
+os.environ.setdefault("COFFER_QUOTA_POLL", "off")
+
 
 @pytest.fixture(autouse=True)
 def _real_home_guard(

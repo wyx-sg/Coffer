@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
-from coffer.application.chat.ports import AgentAdapter
+from coffer.application.chat.ports import AgentAdapter, QuotaObserver
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
@@ -73,6 +73,7 @@ class ClaudeSdkProvider:
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
+        observe_quota: QuotaObserver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -97,6 +98,9 @@ class ClaudeSdkProvider:
         # skills, MCP entry and settings Coffer put there. ``None`` ⇒ the
         # default dir, env untouched.
         self._resolve_home_env = resolve_home_env
+        # Where Claude Code's ``rate_limit_event`` goes (the usage kind's quota
+        # service, bound at the composition root). ``None`` ⇒ dropped.
+        self._observe_quota = observe_quota
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -174,6 +178,7 @@ class ClaudeSdkProvider:
             # agent as text rather than a vision/binary block (spec chat
             # "Extract document attachments to text").
             document_extractor=default_document_extractor(),
+            observe_quota=self._observe_quota,
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

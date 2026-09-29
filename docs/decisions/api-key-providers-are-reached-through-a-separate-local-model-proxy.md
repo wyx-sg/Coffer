@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"), research note [provider switching](../research/provider-switching.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Resolve a key for exactly one connection", spec credentials "Hold plaintext only in memory at the moment of use", PR #412, PR #464
+**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"), research note [provider switching](../research/provider-switching.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Authenticate each agent to the proxy with its own local token", spec credentials "Hold plaintext only in memory at the moment of use", PR #412, PR #464
 
 ## Context
 
@@ -322,6 +322,34 @@ Rules a future change must respect:
   a credential.
 - A projection for a subscription-mode agent never writes the proxy URL or
   helper.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **The failover pool is a set of connections, not the keys of one.** A
+  connection holds one key and one endpoint, so "several keys or endpoints of
+  one connection" has nothing to draw on. The pool is the active connection
+  first, then every other enabled connection that reaches the same agent type,
+  speaks the same protocol and lists the requested model among its curated
+  models — still the same model id and the same upstream family, as decided.
+  A local runtime has no fallback members. 401 and 403 also fail over (the
+  key is at fault, not the request) besides disabling the member.
+- **The minimum Codex version is 0.155.1**, the version the command-backed
+  `auth` table (`ModelProviderAuthInfo`) was confirmed on. Codex is always
+  given the `auth` form; the `env_key` fallback was not needed, so no
+  process's environment carries a proxy token either.
+- **Both helper lines name the CLI by absolute path** (Claude Code's
+  `apiKeyHelper` and Codex's `auth.command`), for the reason the key helper
+  already did: an agent started from the Dock gets no login `PATH`.
+- **Tokens** are Fernet ciphertext in the credential store under the
+  machine-local ref `proxy-token/<agent_uid>`, which vault sync skips; the
+  proxy receives only their SHA-256 digests.
+- **The default port is 8001** (`proxy_port` in `daemon-config.json`).
+- **Local runtimes** (Ollama, LM Studio, vLLM, llama-server) are upstreams of
+  the same routes, keyless or with an optional key, detected read-only with a
+  minimum version per wire. "No protocol translation" stands: every
+  mainstream runtime serves both wires itself.
 
 ## Consequences
 

@@ -9,7 +9,7 @@ composition asks every bound driver to build, so neither place names an agent.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -26,15 +26,16 @@ from coffer.infrastructure.chat.claude_sdk_provider import (
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 
 if TYPE_CHECKING:
-    from coffer.application.chat.ports import AgentProvider
+    from coffer.application.chat.ports import AgentProvider, QuotaObserver
     from coffer.infrastructure.chat.persistence import ConversationRepo
 
 
 @dataclass(frozen=True)
 class DriverDeps:
-    """What every driver may need. ``resolve_home_env`` and ``resolve_key`` are
-    per-agent resolvers the composition builds from the agent's own key, so a
-    driver never looks another agent up."""
+    """What every driver may need. ``resolve_home_env`` is a per-agent resolver
+    the composition builds from the agent's own key, so a driver never looks
+    another agent up. ``observe_quota`` receives the agent's official
+    subscription-quota reports (``None`` ⇒ dropped)."""
 
     conversations: ConversationRepo
     list_models: ModelLister | None
@@ -42,7 +43,7 @@ class DriverDeps:
     compose_memory_context: MemoryContextComposer | None
     resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
-    resolve_key: Callable[[str], Callable[[], Awaitable[str | None]]]
+    observe_quota: QuotaObserver | None = None
 
 
 class ClaudeSdkDriver:
@@ -52,8 +53,6 @@ class ClaudeSdkDriver:
     display_name = "Claude Code"
 
     def build(self, deps: DriverDeps) -> AgentProvider:
-        # No key resolver: Claude Code reads its key through the projected
-        # ``apiKeyHelper``, never from the spawn environment.
         return ClaudeSdkProvider(
             conversations=deps.conversations,
             list_models=deps.list_models,
@@ -61,6 +60,7 @@ class ClaudeSdkDriver:
             compose_memory_context=deps.compose_memory_context,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
+            observe_quota=deps.observe_quota,
         )
 
 
@@ -71,16 +71,14 @@ class CodexAppServerDriver:
     display_name = "Codex"
 
     def build(self, deps: DriverDeps) -> AgentProvider:
-        # Codex reads the projected key from ``COFFER_PROVIDER_KEY``, so the
-        # key active for this agent is resolved per turn into its environment.
         return CodexAppServerProvider(
             conversations=deps.conversations,
-            resolve_key=deps.resolve_key(self.agent_key),
             transcriber_factory=deps.transcriber_factory,
             list_models=deps.list_models,
             compose_memory_context=deps.compose_memory_context,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
+            observe_quota=deps.observe_quota,
         )
 
 

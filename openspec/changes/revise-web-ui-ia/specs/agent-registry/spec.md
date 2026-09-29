@@ -9,6 +9,11 @@ The agent record MUST carry the model binding the rest of Coffer reads — `mode
 - **THEN** the agent record reports the bound `model`, `effort` and `tier_models` after the first edit, and carries no `fast_model`
 - **AND** after the second edit `tier_models` is null while `model` and `effort` are unchanged
 
+#### Scenario: an earlier fast model becomes the Haiku tier
+- **GIVEN** a vault whose Claude Code agent was bound with a `fast_model`
+- **WHEN** the daemon migrates the vault
+- **THEN** the agent's `tier_models.haiku` names that model, unless a Haiku pin was already there, and no agent row carries `fast_model`
+
 
 ### Requirement: Show one direct MCP entry's full configuration without its secrets
 Users MUST be able to open one direct MCP entry and see everything the agent's own config file holds for it, read-only: its transport, its command and arguments (or its URL), its working directory, its per-entry `enabled` flag where the format has one, the names of its environment variables and HTTP headers, every other key the entry carries, which config file it lives in (the resolved absolute path, with open-in-editor and reveal-in-file-manager beside it), and `matches_resource` when an equivalent `mcp_server` resource is already registered. The read is addressed like removal and adoption — the entry's name, plus the source file where the type's entries may come from more than one — and is derived from the file at read time; Coffer stores nothing and starts nothing, so an unmanaged server is never spawned to be looked at.

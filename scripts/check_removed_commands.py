@@ -51,6 +51,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer provider internal-default", "coffer config set engine.provider <name>"),
     ("coffer provider transcribe-default", "coffer config set transcribe.provider <name>"),
     ("coffer provider use-builtin", "coffer provider builtin"),
+    ("coffer provider key", "coffer proxy token --agent-uid <uid> (a local proxy token, never a provider key)"),
     ("coffer mcp remove", "coffer mcp rm"),
     ("coffer mcp refresh", "coffer mcp test"),
     ("coffer mcp invocations", "coffer log mcp [--server <name>]"),

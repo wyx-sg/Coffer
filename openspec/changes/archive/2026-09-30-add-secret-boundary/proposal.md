@@ -84,7 +84,7 @@ moves Coffer's boundary to the secret itself; this change implements it.
   `application/credentials/{boundary,presence,resolver}.py`,
   `infrastructure/credentials/{boundary_store,master_key_backends,build_identity,plaintext_scan}.py`,
   `surfaces/http/{credential_boundary_routes,secret_boundary_wiring,credential_schemas}.py`,
-  `surfaces/cli/{run_cmd,_approvals}.py`; migration `0110` (three tables).
+  `surfaces/cli/{run_cmd,_approvals}.py`; migration `0112` (three tables).
 - Desktop shell: presence, grant, key and approval modules; four IPC commands.
 - Frontend: the desktop presence actions and approval sheet in the credential
   supplier's module; "Open in Coffer app" in the browser; generated types.

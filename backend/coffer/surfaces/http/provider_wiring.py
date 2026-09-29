@@ -21,17 +21,31 @@ from coffer.application.provider.internal_default_guard import (
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projection_reconcile import ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
+from coffer.application.provider.secret_gate import provider_destination
 from coffer.application.provider.service import ProviderService
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.resource import Resource
+from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.engine_config_composition import (
     internal_default_model_guard,
     internal_engine_connection,
 )
+from coffer.surfaces.http.model_proxy_wiring import (
+    ModelProxyWiring,
+    proxy_root_now,
+    wire_model_proxy,
+)
 from coffer.surfaces.http.provider_dependencies import set_provider_service
+from coffer.surfaces.http.secret_boundary_wiring import (
+    get_secret_boundary,
+    on_approval_applied,
+    register_resource_destination,
+)
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 
@@ -44,6 +58,8 @@ class ProviderWiring:
 
     service: ProviderService
     internal_connection: InternalEngineConnection
+    #: The supervised local model proxy every agent on a connection calls.
+    proxy: ModelProxyWiring
 
 
 def wire_provider_kind(
@@ -76,8 +92,16 @@ def wire_provider_kind(
         engine=internal_default_model_guard(),
         # A switch is several writes; no reconcile pass judges it half done.
         hold=reconciler.hold,
+        # The agents are pointed at the local model proxy, on the port
+        # daemon-config.json names at the moment of each projection.
+        proxy_root=proxy_root_now,
     )
     set_provider_service(provider_svc)
+    # A key goes only to a base URL a person approved, and a key in use is
+    # replaced only after approval (spec credentials "Hold a secret for a new
+    # destination until a person approves it").
+    provider_svc.set_secret_boundary(get_secret_boundary())
+    register_resource_destination("provider", _provider_secret_destination)
 
     # A synced document flagging a second internal default is applied with the
     # flag cleared and reported, never left to fail every round.
@@ -90,14 +114,29 @@ def wire_provider_kind(
         ProviderProjectionTarget(
             providers=provider_svc,
             agents=agent_service,
-            projector=ProviderProjector(ConfigFileStore(), agents=agent_catalog),
+            projector=ProviderProjector(
+                ConfigFileStore(), agents=agent_catalog, proxy_root=proxy_root_now
+            ),
             store=ConfigFileStore(),
             deactivate=provider_svc.deactivate,
         )
     )
+    proxy = wire_model_proxy(provider_svc, credential_store, reconciler)
+    # An approved key reaches the proxy on the next state push, not before.
+    on_approval_applied(proxy.schedule_refresh)
     return ProviderWiring(
         service=provider_svc,
+        proxy=proxy,
         # Tied here because this is where both halves exist: the engine's rule
         # (application.engine) and the kind that knows which row is flagged.
         internal_connection=internal_engine_connection(provider_svc),
     )
+
+
+def _provider_secret_destination(
+    resource: Resource,
+) -> tuple[SecretDestination, dict[str, str]] | None:
+    cfg = ProviderConfig.model_validate(resource.config)
+    if cfg.credential_ref is None:
+        return None
+    return provider_destination(resource.uid, resource.name, cfg), {"key": cfg.credential_ref}
