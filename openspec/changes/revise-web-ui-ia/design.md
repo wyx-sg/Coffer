@@ -21,8 +21,7 @@ brings auto-update into the desktop shell.
 - Let the desktop app find and install its own updates.
 - Specify the command palette and attention dots at the level the shell needs.
 
-Overview's own content is specified by a separate change, as are the Activity page's refresh
-control, the new experimental switches for providers, chat and channels, the secrets behaviour
+Overview's own content is specified by a separate change, as are the new experimental switches for providers, chat and channels, the secrets behaviour
 behind the Secrets page (uncited secrets, the migration assistant).
 
 ## Decisions
@@ -112,7 +111,7 @@ acceptance scenario "the index opens the Agents page" becomes "the index opens O
 
 ### 4. Settings: a modal, and its tab set
 
-**Settings leaves the sidebar.** A gear at the bottom of the sidebar, beside the daemon status,
+**Settings leaves the navigation.** A labelled Settings row (gear and text; the gear alone with a tooltip on the collapsed rail) at the bottom of the sidebar, above the daemon status, active only while the modal is open,
 and ⌘, (Ctrl+, elsewhere) open Settings as a large modal over the current page; the footer's
 daemon state opens it on Daemon. Settings is visited rarely and is about this machine, not about
 the vault's contents, so an entry for it sat in System beside pages used every week; desktop
@@ -382,7 +381,7 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   agent per type named by its type; the change that narrows the registry to that owns the
   backend and CLI side, and until it lands the web UI shows the first agent of each type.
 - **Relearning the sidebar.** Users of the eleven-entry sidebar find Model providers under
-  Agents, Channels under Run, and Settings behind the footer gear. The palette finds each by
+  Agents, Channels under Run, and Settings in the row at the sidebar's foot. The palette finds each by
   name, and routes are unchanged.
 - **Auto-update depends on signing.** A replaced `.app` must keep its identity for Gatekeeper
   and the keychain, so the updater is built after the release is Apple Developer ID signed;
@@ -528,3 +527,12 @@ spec owns the Skills page.
 - **The agent's own history is Sessions.** The agent detail tab that lists the agent's own CLI
   transcripts is renamed Sessions (`/agents/<type>/sessions`), so "conversation" means only a
   conversation Coffer runs.
+
+### 19. Activity streams, and exports from the menu
+
+Activity has no Pause / Resume control and no refresh button. New records stream into the visible
+tab while the user is at the top with nothing open; once they scroll down or open a record, new
+records are held behind an "N new" control so the row being read never moves, and choosing it (or
+scrolling back up) inserts them. That is the pause, without a control to forget in the paused
+state. Export of the filtered records (JSON or CSV) is an occasional act, so it sits in the page's
+overflow menu rather than in the header.

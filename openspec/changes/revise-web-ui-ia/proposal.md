@@ -32,8 +32,8 @@ Eight decisions change that architecture:
 - **Settings regrouped, and out of the sidebar.** The daemon gets its own tab, the Experimental
   features card leaves with the switches it held (every flag graduates at 1.0), and Coffer's own
   model becomes a section of General: machine-level configuration of Coffer itself. Settings
-  is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a gear in
-  the sidebar footer or with ⌘,, still addressable at `/settings/<tab>`.
+  is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a labelled Settings row at
+  the bottom of the sidebar or with ⌘,, still addressable at `/settings/<tab>`.
 - **Updates found by the app.** A desktop user learns of a new version only by downloading a new
   `.dmg`. The shell checks a signed manifest on GitHub Releases at launch and every six hours,
   and Settings › About shows the result and installs it on request.
@@ -84,7 +84,7 @@ unarchived until that implementation lands.
   "Use a different config directory…" in its menu; first run offers Add both.
 - `/` renders the Overview page in place instead of redirecting to `/agents`. Overview's content
   is specified separately.
-- **Settings** is not a sidebar entry: a gear in the sidebar footer, beside the daemon status,
+- **Settings** is not a navigation entry: a labelled Settings row (gear and text) at the bottom of the sidebar, above the daemon status,
   and ⌘, / Ctrl+, open it as a large modal over the current page. Each tab keeps its route
   (`/settings/<tab>`), so deep links, the palette and other pages' links open the modal over the
   page underneath, and closing it returns there.
@@ -152,6 +152,9 @@ unarchived until that implementation lands.
   welcome page and no web voice input. **Channels** keeps setup, status and settings and links to
   Conversations filtered by channel. The agent detail's Conversations tab is renamed **Sessions**
   (`/agents/<type>/sessions`).
+- **Activity** streams new records while the list is at the top and holds them behind an "N new"
+  control while the user reads, with no Pause / Resume; export of the filtered records (JSON / CSV)
+  is in the overflow menu.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -170,7 +173,7 @@ unarchived until that implementation lands.
 
 ### Modified Capabilities
 - `web-ui`: the sidebar entry set and its five intent groups (Overview, Secrets and Usage added,
-  Settings moved to a footer gear and a route-addressable modal), the update check on Settings ›
+  Settings moved to a labelled row at the sidebar's foot and a route-addressable modal), the update check on Settings ›
   About, one
   name per surface with the zh glossary, the Secrets page, landing on Overview, five Settings
   tabs with Security machine-level only, Coffer's model in Settings › General, the daemon footer and Settings → Daemon, the command

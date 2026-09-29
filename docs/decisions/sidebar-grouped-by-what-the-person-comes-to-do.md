@@ -249,7 +249,7 @@ product has; spending one on a page opened a few times a year puts it beside pag
 day, and with Usage in 1.0 it would fill System to five, the ceiling, before anything else
 arrives. Desktop applications have a settled convention for this: preferences open from a fixed
 control and ⌘, into a window of their own (macOS apps' Settings, VS Code, Linear), and a user
-reaching for ⌘, looks nowhere else. So Settings opens from a gear in the sidebar footer, beside
+reaching for ⌘, looks nowhere else. So Settings opens from a labelled Settings row at the bottom of the sidebar, above
 the daemon status, and from ⌘,, as a large modal over the current page (spec web-ui "Open
 Settings as a modal from the sidebar footer"). The cost is routing: the modal must stay
 addressable, so each tab keeps `/settings/<tab>`, a deep link or the command palette opens it
@@ -331,7 +331,7 @@ Rules a future change must respect:
   and Settings › Security narrows to machine-level items; the credential store's behaviour behind
   the page is specified by its own change.
 - A user of the eleven-entry sidebar finds Model providers under Agents, Chat renamed
-  Conversations (`/chat` redirects) and Channels under Run, and Settings behind the footer gear. Routes do not move, so no bookmark breaks.
+  Conversations (`/chat` redirects) and Channels under Run, and Settings in a labelled row at the sidebar's foot. Routes do not move, so no bookmark breaks.
 - The router carries a background location so the Settings modal can be opened over any page
   and closed back to it; that is the price of keeping every Settings tab linkable.
 - Three headings hold two entries each until the planned entries land; that is the accepted price

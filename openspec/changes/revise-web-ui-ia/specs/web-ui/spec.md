@@ -101,7 +101,7 @@ on:
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
 - **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
-- **AND** no sidebar entry is Settings; the sidebar footer carries the Settings gear beside the daemon status
+- **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar, above the daemon status
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** `knowledge` and `vault_sync` switched off
@@ -394,6 +394,20 @@ already has.
 - **WHEN** the route resolves
 - **THEN** the app lands on `/skills/release-notes` and no "page not found" view is shown
 
+### Requirement: Query only the visible Activity tab and isolate failures
+Only the visible tab queries. A record whose route fails MUST render its error
+inside its own tab, leaving the other two working — one failing lane must not
+take the other two down with it — and there MUST be no manual refresh control and no
+Pause / Resume control: switching tab or changing a filter refetches, and new
+records arrive on their own (see "Stream new Activity records while the list is
+at the top").
+
+#### Scenario: a failing record shows its error inside its own tab
+- **GIVEN** one of the three routes is unavailable (an older daemon that does not serve it)
+- **WHEN** the user opens `/activity`
+- **THEN** the failing record's tab renders a readable error
+- **AND** the other two tabs still render their rows
+
 ## ADDED Requirements
 
 ### Requirement: Group the sidebar by what the user comes to do
@@ -581,10 +595,9 @@ stopping (the daemon reports `draining`) or offline (it cannot be reached) — a
 while running, the port it answers on. In the desktop shell, a daemon from a
 different app version MUST read as running with a version warning. Clicking the
 state MUST open the Settings modal on its Daemon tab over the current page. The
-footer also carries the Settings gear beside the state (see "Open Settings as a
-modal from the sidebar footer"). On the collapsed icon rail the state MUST
-shrink to an icon whose tooltip carries the same words, and the gear stays an
-icon beside it. Showing the state
+labelled Settings row sits just above the state (see "Open Settings as a modal
+from the sidebar footer"). On the collapsed icon rail the state MUST shrink to
+an icon whose tooltip carries the same words, and the Settings row to its gear. Showing the state
 MUST NOT make starting the daemon the user's job: every surface that can start
 one still does so without asking.
 
@@ -842,12 +855,16 @@ an error in the sidebar.
 - **THEN** that entry carries no dot and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
-Settings MUST NOT be a sidebar entry. It MUST open as a large modal over the
-current page from three places: a gear button at the bottom of the sidebar,
-beside the daemon status (see "Show the daemon's state in the shell footer");
-the ⌘, shortcut on macOS and Ctrl+, elsewhere, from any page; and the command
-palette's Settings tabs. The gear and the shortcut open it on General; the
-footer's daemon state opens it on Daemon. Settings is machine-level
+Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
+entries and belongs to no group. It MUST open as a large modal over the current
+page from three places: a labelled **Settings** row — a gear icon and the word
+Settings, not an icon-only button — at the bottom of the sidebar, just above the
+daemon status (see "Show the daemon's state in the shell footer"); the ⌘,
+shortcut on macOS and Ctrl+, elsewhere, from any page; and the command palette's
+Settings tabs. On the collapsed icon rail the row MUST shrink to the gear icon
+with a tooltip reading Settings. The row MUST show as active only while the
+modal is open, and never mark the page underneath as not current. The row and
+the shortcut open it on General; the footer's daemon state opens it on Daemon. Settings is machine-level
 configuration a user visits rarely, so it takes no place in the sidebar
 beside the pages used every day, the convention of desktop applications' own
 preferences windows.
@@ -864,11 +881,16 @@ underneath, as on a fresh load of `/settings/daemon`, MUST render the modal over
 Overview, and closing it lands on `/`. Browser Back from an open modal MUST
 close it and return to the page underneath.
 
-#### Scenario: the gear opens Settings over the current page
+#### Scenario: the Settings row opens Settings over the current page
 - **GIVEN** the user on `/mcp-servers`
-- **WHEN** they click the Settings gear in the sidebar footer
+- **WHEN** they click the labelled Settings row at the bottom of the sidebar, above the daemon status
 - **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
-- **AND** the sidebar has no Settings entry and marks MCP servers as current
+- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fifteen navigation entries do not include Settings
+
+#### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
+- **GIVEN** the sidebar collapsed to its icon rail
+- **WHEN** the user hovers the gear icon above the daemon state and clicks it
+- **THEN** a tooltip reads Settings, and the click opens the Settings modal on General
 
 #### Scenario: the keyboard shortcut opens Settings
 - **GIVEN** the app open on any page, with focus outside a text field
@@ -1168,3 +1190,35 @@ the delivery hook's state:
 - **GIVEN** Claude Code's delivery hook stale
 - **WHEN** the user opens the Memory page and then Claude Code's detail page
 - **THEN** the Memory page shows no hook state, Claude Code's Hooks tab and Overview connection block show the hook as stale with Repair, and its Memory tab lists only its own native memory stores
+
+### Requirement: Stream new Activity records while the list is at the top
+The visible Activity tab MUST show new records as they are written, newest first, with no Pause /
+Resume control. While the user is at the top of the list and has no record open, a new record MUST
+be inserted at the top at once. While the user has scrolled down or has a record open, new records
+MUST be held rather than inserted — so the row being read does not move — and a **N new** control
+MUST appear, counting them; choosing it scrolls to the top and inserts them. Scrolling back to the
+top by hand inserts them too. New records MUST honour the tab's filters: one the filters exclude is
+neither inserted nor counted.
+
+#### Scenario: new records stream in at the top
+- **GIVEN** the MCP calls tab open at the top of its list, with no row open
+- **WHEN** the gateway proxies two calls
+- **THEN** both appear at the top of the table without any control being used, and the page has no Pause or Resume control
+
+#### Scenario: new records are held while the user reads
+- **GIVEN** the Changes tab scrolled down, or with one row expanded
+- **WHEN** three new audit entries are written
+- **THEN** the rows on screen do not move and a 3 new control appears
+- **AND** choosing it scrolls to the top and inserts the three entries
+
+### Requirement: Export the filtered Activity records from the overflow menu
+The Activity page's overflow menu MUST offer **Export as JSON** and **Export as CSV**, which save the
+records of the visible tab that match its current filters — free text, time range and the tab's own
+filter — and nothing else. The page header MUST carry no export button of its own.
+
+#### Scenario: export from the menu honours the filters
+- **GIVEN** the MCP calls tab filtered to one server and to failed calls
+- **WHEN** the user chooses Export as CSV from the page's overflow menu
+- **THEN** the file holds exactly the calls that match those filters, one per row, and the header shows no export button
+- **AND** Export as JSON saves the same records as JSON
+
