@@ -294,14 +294,22 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
         # "Take projected model keys from the agent's binding").
         rb = c.patch(
             f"/api/v1/agents/{cc}",
-            json={"model": "bound-opus", "fast_model": "bound-haiku"},
+            json={
+                "model": "bound-opus",
+                "effort": "high",
+                "tier_models": {"haiku": "bound-haiku", "opus": "bound-opus"},
+            },
         )
         assert rb.status_code == 200, rb.text
         assert rb.json()["model"] == "bound-opus"
         c.post(f"/api/v1/providers/{uid}/activate")
         data = json.loads((cfg / "settings.json").read_text())
-        assert data["env"]["ANTHROPIC_MODEL"] == "bound-opus"
-        assert data["env"]["ANTHROPIC_SMALL_FAST_MODEL"] == "bound-haiku"
+        assert data["model"] == "bound-opus"
+        assert data["effortLevel"] == "high"
+        assert data["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "bound-haiku"
+        assert data["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "bound-opus"
+        assert "ANTHROPIC_MODEL" not in data["env"]
+        assert "ANTHROPIC_SMALL_FAST_MODEL" not in data["env"]
 
 
 @pytest.mark.acceptance(
@@ -821,10 +829,11 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # Stored verbatim (opaque ids), deduped, in the order the user chose,
         # each keeping the kind it was sent as — an entry that named none is
         # ``text``, the kind every curated set held before modalities existed.
+        unknown = {"context_window": None, "effort_levels": None, "default_effort": None}
         curated_set = [
-            {"id": "opus", "modality": "text"},
-            {"id": "sonnet", "modality": "text"},
-            {"id": "embed-1", "modality": "embedding"},
+            {"id": "opus", "modality": "text", **unknown},
+            {"id": "sonnet", "modality": "text", **unknown},
+            {"id": "embed-1", "modality": "embedding", **unknown},
         ]
         assert r.json()["models"] == curated_set
         # Survives a re-read and the list route.
@@ -835,11 +844,11 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # PATCH replaces the whole set (like compatible_agents) — no merging.
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": [{"id": "haiku"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text", **unknown}]
 
         # An unrelated PATCH leaves the curated set alone.
         r = c.patch(f"/api/v1/providers/{uid}", json={"base_url": "https://gw/anthropic/v2"})
-        assert r.json()["models"] == [{"id": "haiku", "modality": "text"}]
+        assert r.json()["models"] == [{"id": "haiku", "modality": "text", **unknown}]
 
         # The change rides the resource_updated event a provider update already
         # emits — no event of its own. Asked for by uid, which is what keeps the
@@ -869,7 +878,15 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
         # Curating then clearing with [] returns it to unrestricted.
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": [{"id": "opus"}]})
         assert r.status_code == 200, r.text
-        assert r.json()["models"] == [{"id": "opus", "modality": "text"}]
+        assert r.json()["models"] == [
+            {
+                "id": "opus",
+                "modality": "text",
+                "context_window": None,
+                "effort_levels": None,
+                "default_effort": None,
+            }
+        ]
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": []})
         assert r.status_code == 200, r.text
         assert r.json()["models"] == []

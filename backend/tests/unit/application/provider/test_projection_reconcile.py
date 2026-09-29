@@ -142,7 +142,6 @@ def _projected_settings(helper: str | None = None) -> str:
         "",
         base_url=_BASE_URL,
         model=None,
-        fast_model=None,
         api_key_helper=helper or anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI),
     )
 

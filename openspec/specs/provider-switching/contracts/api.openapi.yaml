@@ -914,6 +914,25 @@ components:
         ``modality`` defaults to ``text``, the kind every curated set held before
         modalities existed.
       properties:
+        context_window:
+          anyOf:
+          - maximum: 100000000.0
+            minimum: 1024.0
+            type: integer
+          - type: 'null'
+          title: Context Window
+        default_effort:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default Effort
+        effort_levels:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Effort Levels
         id:
           maxLength: 200
           minLength: 1

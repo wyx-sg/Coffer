@@ -103,10 +103,13 @@ value object.
 Pure (I/O-free) functions that take the file's existing text and return the new
 text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
-- `apply_anthropic_settings(text, *, base_url, model, fast_model, api_key_helper) -> str`
-  and its inverse `remove_anthropic_settings(text) -> str`
-- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, provider_id, env_key, catalog_path) -> str`
-  and its inverse `remove_codex_provider(text, *, provider_id) -> str`
+- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, effort, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
+  and its inverse `remove_anthropic_settings(text, *, managed_model, managed_effort) -> str`
+- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, effort, auth, provider_id, env_key, catalog_path) -> str`
+  (in `domain/provider/codex_projection.py`) and its inverse
+  `remove_codex_provider(text, *, provider_id, managed_effort) -> str`
+- `suggest_tier_models(model, curated, *, local) -> dict` (`domain/agent/tiers.py`) —
+  the tier pins used when the agent stores none
 - `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
 - `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
@@ -139,8 +142,14 @@ is preserved, and the projection tests assert exactly this set.
 |---|---|
 | `apiKeyHelper` | `"<absolute path to coffer> provider key --connection-uid <uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — the connection's immutable uid, so the line survives a rename |
 | `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
-| `env.ANTHROPIC_MODEL` | the AGENT binding's `model` (key removed when unbound) |
-| `env.ANTHROPIC_SMALL_FAST_MODEL` | the agent binding's `fast_model` (key removed when unset) |
+| `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
+| `effortLevel` | the binding's `effort`; same rule |
+| `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
+| `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
+| `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
+
+Every write deletes `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`,
+which earlier builds wrote.
 
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
 De-projection removes an `apiKeyHelper` only when it starts with
@@ -157,6 +166,11 @@ De-projection removes an `apiKeyHelper` only when it starts with
 | `model_providers.coffer.base_url` | the connection's `base_url` |
 | `model_providers.coffer.wire_api` | the agent binding's `wire_api`, defaulting to `"responses"` |
 | `model_providers.coffer.env_key` | `"COFFER_PROVIDER_KEY"` |
+| `model_reasoning_effort` | the binding's `effort`, only when the chosen curated model records that level |
+
+Each catalogue entry carries `context_window`, `max_context_window` and
+`auto_compact_token_limit` (90%) when the curated model records a window, and
+`supported_reasoning_levels` / `default_reasoning_level` when it records levels.
 
 The catalogue file is written before `config.toml` points at it, and the
 pointer is dropped before the file is deleted, so Codex never reads a

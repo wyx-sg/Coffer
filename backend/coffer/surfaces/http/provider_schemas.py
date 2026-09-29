@@ -34,6 +34,13 @@ class ProviderModel(BaseModel):
 
     id: str = Field(min_length=1, max_length=200)
     modality: Modality = Modality.TEXT
+    #: The context window the endpoint serves the model with, in tokens;
+    #: ``None`` when unknown (never guessed).
+    context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The reasoning-effort levels the model accepts; ``None`` when it takes none.
+    effort_levels: list[str] | None = None
+    #: The level used when an agent's binding names none.
+    default_effort: str | None = None
 
 
 class ProviderCreate(BaseModel):

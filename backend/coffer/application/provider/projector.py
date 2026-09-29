@@ -31,8 +31,10 @@ from coffer.domain.provider.agent_projection import (
     ProviderProjection,
     ProviderProjectionRequest,
 )
+from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from coffer.domain.resource import Resource
 
 #: The content each file a projection wrote or removed held before it
@@ -122,10 +124,11 @@ class ProviderProjector:
         return reverted
 
     def request_for(
-        self, connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig
+        self, connection: Resource, cfg: ProviderConfig, agent: Resource
     ) -> ProviderProjectionRequest:
         """What a projection of ``connection`` into this agent is built from."""
-        return projection_request(connection, cfg, agent_cfg, coffer_cli=self._resolve_cli())
+        agent_cfg = AgentConfig.model_validate(agent.config)
+        return projection_request(connection, cfg, agent, agent_cfg, coffer_cli=self._resolve_cli())
 
     def project_agent(self, connection: Resource, cfg: ProviderConfig, agent: Resource) -> Priors:
         """Project ``connection`` into one agent; return the prior content of
@@ -155,7 +158,7 @@ class ProviderProjector:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        request = self.request_for(connection, cfg, agent_cfg)
+        request = self.request_for(connection, cfg, agent)
         return self._perform(spec.path, current, facet.apply(current or "", request, spec.path))
 
     def _deproject(self, agent: Resource, facet: ProviderProjection) -> Priors:
@@ -165,7 +168,8 @@ class ProviderProjector:
         text = current or ""
         if not text.strip():
             return {}  # nothing was ever projected
-        return self._perform(spec.path, current, facet.remove(text, spec.path))
+        plan = facet.remove(text, spec.path, binding_of(agent_cfg))
+        return self._perform(spec.path, current, plan)
 
     def _perform(self, path: pathlib.Path, current: str | None, plan: ProjectionPlan) -> Priors:
         priors: Priors = {}
@@ -209,27 +213,62 @@ class ProviderProjector:
             priors.setdefault(path, current)
 
 
+def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
+    """The agent's model binding, as the projection reads it."""
+    return ModelBinding(
+        model=agent_cfg.model,
+        effort=agent_cfg.effort,
+        tier_models=dict(agent_cfg.tier_models or {}),
+    )
+
+
+def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
+    """The connection's curated TEXT models with what it records about each —
+    a model catalogue is the agent's own picker (spec provider-switching
+    "Offer only text models to chat pickers")."""
+    return tuple(
+        ProjectedModel(
+            id=m.id,
+            context_window=m.context_window,
+            effort_levels=tuple(m.effort_levels or ()),
+            default_effort=m.default_effort,
+        )
+        for m in cfg.models
+        if m.modality is Modality.TEXT
+    )
+
+
 def projection_request(
-    connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig, *, coffer_cli: str
+    connection: Resource,
+    cfg: ProviderConfig,
+    agent: Resource,
+    agent_cfg: AgentConfig,
+    *,
+    coffer_cli: str,
 ) -> ProviderProjectionRequest:
     """The one construction of a projection request — what the switch writes
     and what the reconciler compares an agent's file against."""
     return ProviderProjectionRequest(
         connection_uid=connection.uid,
         connection_name=connection.name,
+        agent_uid=agent.uid,
         base_url=cfg.base_url,
+        key_helper=anthropic_api_key_helper(connection.uid, coffer_cli=coffer_cli),
+        codex_auth=None,
         # Model comes solely from the per-agent binding (spec
         # provider-switching "Take projected model keys from the agent's
         # binding"); an unbound agent projects no model.
-        model=agent_cfg.model,
-        fast_model=agent_cfg.fast_model,
+        binding=binding_of(agent_cfg),
         wire_api=agent_cfg.wire_api,
-        # Only the `text` entries: a model catalogue is the agent's own
-        # picker (spec provider-switching "Offer only text models to chat
-        # pickers").
-        text_models=tuple(cfg.model_ids(Modality.TEXT)),
-        coffer_cli=coffer_cli,
+        models=projected_models(cfg),
     )
 
 
-__all__ = ["Priors", "ProjectionConfigStore", "ProviderProjector", "projection_request"]
+__all__ = [
+    "Priors",
+    "ProjectionConfigStore",
+    "ProviderProjector",
+    "binding_of",
+    "projected_models",
+    "projection_request",
+]

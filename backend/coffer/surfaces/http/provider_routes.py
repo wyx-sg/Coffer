@@ -38,7 +38,16 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
     """Wire entries → the domain's curated set (``None`` leaves the set alone)."""
     if models is None:
         return None
-    return [CuratedModel(id=m.id, modality=m.modality) for m in models]
+    return [
+        CuratedModel(
+            id=m.id,
+            modality=m.modality,
+            context_window=m.context_window,
+            effort_levels=m.effort_levels,
+            default_effort=m.default_effort,
+        )
+        for m in models
+    ]
 
 
 def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
@@ -72,7 +81,16 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         # connection the user has switched off. Folding ``enabled`` in here
         # instead made those chips empty on disable, which reads as erased data.
         compatible_agents=scoped_targets(resource, cfg, agents),
-        models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
+        models=[
+            ProviderModel(
+                id=m.id,
+                modality=m.modality,
+                context_window=m.context_window,
+                effort_levels=m.effort_levels,
+                default_effort=m.default_effort,
+            )
+            for m in cfg.models
+        ],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,

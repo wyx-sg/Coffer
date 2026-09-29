@@ -417,6 +417,12 @@ export interface components {
          *     modalities existed.
          */
         ProviderModel: {
+            /** Context Window */
+            context_window?: number | null;
+            /** Default Effort */
+            default_effort?: string | null;
+            /** Effort Levels */
+            effort_levels?: string[] | null;
             /** Id */
             id: string;
             /** @default text */

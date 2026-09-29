@@ -15,21 +15,26 @@ from coffer.domain.provider.agent_projection import (
     ProjectedFile,
     ProviderProjectionRequest,
 )
+from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 
 _UID = "0123456789abcdef0123456789abcdef"
 _CFG = pathlib.Path("/home/me/.codex/config.toml")
 
 
-def _req(models: tuple[str, ...] = ()) -> ProviderProjectionRequest:
+def _req(
+    models: tuple[str, ...] = (), *, binding: ModelBinding | None = None
+) -> ProviderProjectionRequest:
     return ProviderProjectionRequest(
         connection_uid=_UID,
         connection_name="agnes",
+        agent_uid="a" * 32,
         base_url="https://gw.example/v1",
-        model="m-1",
-        fast_model=None,
+        key_helper=anthropic_api_key_helper(_UID, coffer_cli="/opt/coffer/bin/coffer"),
+        codex_auth=None,
+        binding=binding or ModelBinding(model="m-1"),
         wire_api=None,
-        text_models=models,
-        coffer_cli="/opt/coffer/bin/coffer",
+        models=tuple(ProjectedModel(id=m) for m in models),
     )
 
 
@@ -49,9 +54,14 @@ def test_claude_code_plan_is_one_file_naming_the_connection_by_uid() -> None:
     doc = json.loads(plan.text)
     assert doc["theme"] == "dark"
     assert doc["apiKeyHelper"].endswith(f"--connection-uid {_UID}")
-    assert doc["env"]["ANTHROPIC_MODEL"] == "m-1"
+    assert doc["model"] == "m-1"
+    # No tier stored: every tier is pinned to the model on a non-Claude endpoint.
+    for tier in ("OPUS", "SONNET", "HAIKU"):
+        assert doc["env"][f"ANTHROPIC_DEFAULT_{tier}_MODEL"] == "m-1"
     assert facet.is_present(plan.text)
-    removed = facet.remove(plan.text, pathlib.Path("/h/.claude/settings.json"))
+    removed = facet.remove(
+        plan.text, pathlib.Path("/h/.claude/settings.json"), ModelBinding(model="m-1")
+    )
     assert json.loads(removed.text) == {"theme": "dark", "env": {}}
     assert not facet.is_present(removed.text)
 
@@ -79,3 +89,34 @@ def test_codex_removal_drops_the_block_then_the_catalogue() -> None:
     removed = facet.remove(projected, _CFG)
     assert not facet.is_present(removed.text)
     assert removed.after == (ProjectedFile(_CFG.parent / "coffer-model-catalog.json", None),)
+
+
+def test_codex_writes_effort_only_for_a_model_with_levels() -> None:
+    facet = CodexProviderProjection()
+    leveled = ProviderProjectionRequest(
+        **{
+            **_req().__dict__,
+            "binding": ModelBinding(model="m-1", effort="high"),
+            "models": (ProjectedModel(id="m-1", effort_levels=("low", "high")),),
+        }
+    )
+    assert tomllib.loads(facet.apply("", leveled, _CFG).text)["model_reasoning_effort"] == "high"
+    bare = ProviderProjectionRequest(
+        **{**_req(("m-1",)).__dict__, "binding": ModelBinding(model="m-1", effort="high")}
+    )
+    assert "model_reasoning_effort" not in tomllib.loads(facet.apply("", bare, _CFG).text)
+
+
+def test_a_local_connection_sets_claude_codes_compatibility_keys() -> None:
+    req = ProviderProjectionRequest(
+        **{
+            **_req().__dict__,
+            "binding": ModelBinding(model="qwen"),
+            "models": (ProjectedModel(id="qwen", context_window=131072),),
+            "local": True,
+        }
+    )
+    env = json.loads(ClaudeCodeProviderProjection().apply("", req, _CFG).text)["env"]
+    assert env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
+    assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "131072"
+    assert {env[f"ANTHROPIC_DEFAULT_{t}_MODEL"] for t in ("OPUS", "SONNET", "HAIKU")} == {"qwen"}

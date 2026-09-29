@@ -68,7 +68,7 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 
 1. Open **Agents**, choose the agent, and stay on **Overview**.
 2. In the **Model provider** card, pick a **Provider**. Only enabled providers that reach this agent are offered.
-3. Pick a **Model** (and, for Claude Code, a **Fast model**). The first model the endpoint returns is pre-selected.
+3. Pick a **Model** (and, for Claude Code, the model for the **Haiku** tier, which also runs its background tasks). The first model the endpoint returns is pre-selected.
 4. Click **Test connection**. **Confirm switch** stays disabled until the test passes for the current provider and model.
 5. Click **Confirm switch**. Coffer saves the model on the agent and then activates the provider — the only step that writes the agent's config.
 
@@ -77,7 +77,7 @@ Picking **Use built-in (agent's own login)** and confirming puts the agent back 
 ### From the command line
 
 ```sh
-coffer agent edit claude-code --model sonnet --fast-model haiku
+coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
 coffer provider switch deepseek
 # switched to deepseek [openai] → claude_code, codex
 
@@ -102,11 +102,20 @@ Coffer merges only its own keys into the agent's file and leaves everything else
   "apiKeyHelper": "/Users/you/.coffer/bin/coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553",
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.deepseek.com",
-    "ANTHROPIC_MODEL": "sonnet",
-    "ANTHROPIC_SMALL_FAST_MODEL": "haiku"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-pro"
+  },
+  "model": "deepseek-pro",
+  "effortLevel": "high",
+  "modelPicker": {
+    "options": [{ "model": "deepseek-pro", "label": "deepseek-pro", "description": "via Coffer" }],
+    "replaceBuiltInOptions": true
   }
 }
 ```
+
+The model goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable — so every tier is pinned: on an endpoint that serves no Claude ids each tier is the agent's model, and on a gateway serving Claude ids each tier is the model whose name carries it. `modelPicker` puts the provider's models in `/model`. Coffer deletes the deprecated `ANTHROPIC_SMALL_FAST_MODEL` and an `ANTHROPIC_MODEL` an earlier version wrote.
 
 The key is never written. Claude Code runs the `apiKeyHelper` command to fetch it, and `coffer provider key --connection-uid <uid>` prints the decrypted key for exactly that provider. The helper cites the provider's uid, so renaming the provider does not break it. `ANTHROPIC_API_KEY` is never written, because it would override the helper. When the provider is disabled or no longer reaches any agent, the helper prints nothing and exits with code 4, so Claude Code does not keep a stale key.
 

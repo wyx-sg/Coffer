@@ -185,9 +185,17 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
-    # `model` / `fast_model` / `wire_api` the projector reads. Its config
-    # directory is the one other thing an agent's edit changes.
-    "agent edit": {"--config-dir", "--model", "--fast-model", "--clear-fast-model", "--wire-api"},
+    # `model` / `effort` / `tier_models` / `wire_api` the projector reads. Its
+    # config directory is the one other thing an agent's edit changes.
+    "agent edit": {
+        "--config-dir",
+        "--model",
+        "--effort",
+        "--clear-effort",
+        "--tier",
+        "--clear-tiers",
+        "--wire-api",
+    },
     # A connection's wire is a FIELD of the connection, corrected on the verb
     # that edits it: PATCH /api/v1/providers/{uid} carries `protocol`.
     "provider edit": {"--protocol", "--base-url", "--secret", "--title"},

@@ -803,8 +803,10 @@ An agent's name is its type and it carries no title or description, so these are
 | `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
 | `--config-dir` | option | text |  | Use a different config directory |
 | `--model` | option | text |  | Model this agent answers with |
-| `--fast-model` | option | text |  | Small/fast model slot (anthropic wire only) |
-| `--clear-fast-model` | option | flag |  | Unbind the fast slot |
+| `--effort` | option | text |  | Reasoning effort level |
+| `--clear-effort` | option | flag |  | Unbind the effort |
+| `--tier` | option | text (repeatable) |  | Claude Code tier pin &lt;tier&gt;=&lt;model&gt; (opus, sonnet, haiku, fable); repeatable |
+| `--clear-tiers` | option | flag |  | Unbind every tier pin |
 | `--wire-api` | option | text |  | Codex wire api; `responses` is the only value it still loads |
 
 ### agent rm

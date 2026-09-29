@@ -53,10 +53,12 @@ class AgentPatch(BaseModel):
     # is decided on each skill resource (`enabled` + `scope`), never here.
     config_dir: str | None = None
     # spec provider-switching "Take projected model keys from the agent's binding":
-    # per-agent model binding. Explicit null
-    # on `fast_model` clears the fast slot (distinguished via model_fields_set).
+    # per-agent model binding. An explicit null on `effort` or `tier_models`
+    # unbinds it (distinguished via model_fields_set); `tier_models` replaces
+    # the whole mapping.
     model: str | None = None
-    fast_model: str | None = None
+    effort: str | None = None
+    tier_models: dict[str, str] | None = None
     wire_api: str | None = None
 
 
@@ -80,7 +82,11 @@ class AgentOut(BaseModel):
     # carries no singular model to fall back to, so projection writes no model
     # for this agent at all.
     model: str | None
-    fast_model: str | None
+    #: The agent's reasoning effort; ``None`` = the model's own default.
+    effort: str | None
+    #: Claude Code only: the model each tier (``opus``, ``sonnet``, ``haiku``,
+    #: ``fable``) is pinned to while the agent is on a connection.
+    tier_models: dict[str, str] | None
     wire_api: str | None
     # Two-signal detection (spec agent-registry "Detect an agent by its
     # program and its config directory"): the program on the agent's real
@@ -160,7 +166,8 @@ async def _to_out(r: Resource, detect: AutoDetectService) -> AgentOut:
         type=cfg.type,
         config_dir=str(cfg.resolved_config_dir()),
         model=cfg.model,
-        fast_model=cfg.fast_model,
+        effort=cfg.effort,
+        tier_models=cfg.tier_models,
         wire_api=cfg.wire_api,
         state=detection.state,
         version=detection.version,
@@ -254,14 +261,16 @@ async def update_agent(
     r = await svc.get(uid)
     if "config_dir" in sent:
         r = await svc.update_config_dir(uid=uid, new_config_dir=body.config_dir, actor=actor)
-    if "model" in sent or "fast_model" in sent or "wire_api" in sent:
-        # Per-agent model binding. An explicit null fast_model clears the
-        # fast slot; the caller re-activates the connection to re-project.
+    if sent & {"model", "effort", "tier_models", "wire_api"}:
+        # Per-agent model binding. An explicit null effort / tier_models
+        # unbinds it; the projection reconcile target re-projects.
         r = await svc.set_model_binding(
             uid=uid,
             model=body.model if "model" in sent else None,
-            fast_model=body.fast_model if "fast_model" in sent else None,
-            clear_fast_model="fast_model" in sent and body.fast_model is None,
+            effort=body.effort if "effort" in sent else None,
+            clear_effort="effort" in sent and body.effort is None,
+            tier_models=body.tier_models if "tier_models" in sent else None,
+            clear_tiers="tier_models" in sent and body.tier_models is None,
             wire_api=body.wire_api if "wire_api" in sent else None,
             actor=actor,
         )

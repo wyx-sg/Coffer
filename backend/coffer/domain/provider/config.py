@@ -35,8 +35,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from coffer.domain.provider.modality import Modality
 
@@ -51,6 +60,10 @@ _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 #: list nor an entry is absurdly long.
 _MAX_MODELS = 200
 _MAX_MODEL_ID_LEN = 200
+
+
+#: Curated-model facts that are omitted from the document while unknown.
+_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort")
 
 
 class CuratedModel(BaseModel):
@@ -68,6 +81,30 @@ class CuratedModel(BaseModel):
 
     id: str
     modality: Modality = Modality.TEXT
+    #: The context window the endpoint serves this model with, in tokens —
+    #: read from the endpoint where it reports one (a local runtime's served
+    #: window), otherwise entered by the user. ``None`` is unknown, and an
+    #: unknown window is left out of what Coffer writes rather than guessed
+    #: (spec provider-switching "Record a context window and effort levels with
+    #: each curated model").
+    context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The reasoning-effort levels the model accepts, in order; the last is
+    #: not implied to be the default. ``None``/empty: the model takes no
+    #: effort, so Codex is sent none and the Model tab hides Effort.
+    effort_levels: list[str] | None = None
+    #: The level used when the agent's binding names none.
+    default_effort: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unknowns(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """An unrecorded fact is left out of the stored (and synced) document
+        rather than written as ``null``, so an entry that records nothing new
+        reads exactly as it did before these fields existed."""
+        data: dict[str, Any] = handler(self)
+        for key in _OPTIONAL_FACTS:
+            if data.get(key) is None:
+                data.pop(key, None)
+        return data
 
 
 class Protocol(StrEnum):
@@ -180,16 +217,21 @@ class ProviderConfig(BaseModel):
                 raise ValueError("model id must not be empty")
             if len(model) > _MAX_MODEL_ID_LEN:
                 raise ValueError(f"model id too long: at most {_MAX_MODEL_ID_LEN} characters")
-            cleaned.setdefault(model, CuratedModel(id=model, modality=entry.modality))
+            levels = [lv.strip() for lv in (entry.effort_levels or []) if lv and lv.strip()]
+            default = entry.default_effort if entry.default_effort in levels else None
+            cleaned.setdefault(
+                model,
+                entry.model_copy(
+                    update={"id": model, "effort_levels": levels or None, "default_effort": default}
+                ),
+            )
         return list(cleaned.values())
 
     @model_validator(mode="after")
     def _credential_matches_protocol(self) -> ProviderConfig:
-        """anthropic/openai/unknown connections require a ``credential_ref``; an
-        ollama connection (no key) must not carry one. That it projects into no
-        agent is no longer a config rule: it is the empty SCOPE such a
-        connection is created with, and a keyless connection projects nothing
-        whatever its scope says (see ``application.provider.targets``)."""
+        """anthropic/openai/unknown connections require a ``credential_ref``
+        ; an ollama-protocol connection (Coffer's own engine, no key) must not
+        carry one."""
         if self.protocol is Protocol.OLLAMA:
             if self.credential_ref is not None:
                 raise ValueError("ollama connection must not carry a credential_ref")
@@ -208,6 +250,12 @@ class ProviderConfig(BaseModel):
         pickers").
         """
         return [m.id for m in self.models if modality is None or m.modality is modality]
+
+    def curated(self, model_id: str | None) -> CuratedModel | None:
+        """The curated entry for ``model_id``, or ``None``."""
+        if model_id is None:
+            return None
+        return next((m for m in self.models if m.id == model_id), None)
 
 
 @dataclass(frozen=True)
