@@ -14,7 +14,7 @@ brings auto-update into the desktop shell.
 
 - Fix the final navigation: entries, order, grouping, routes and their names in both languages.
 - Give stored secrets one page, and leave Settings › Security machine-level.
-- Fix the agent detail page's tab set.
+- Fix the agent detail page's tab set and the Agents list.
 - Land on Overview.
 - Make the daemon's state visible without making starting it the user's job.
 - Regroup Settings by what each tab manages, and open it as a modal rather than a sidebar entry.
@@ -238,29 +238,43 @@ and a secrets section on each kind's page, which leaves every page blind to the 
 cite the same key. A secret field in a resource's own dialog stays: a secret is entered where the
 thing that needs it is configured.
 
-### 9. Agent detail tabs
+### 9. Agent detail tabs and the Agents list
 
-| Tab | Holds |
-| --- | --- |
-| Overview | Identity, config directory, Coffer connection |
-| Installed | Sections Skills, MCP servers, Plugins, Hooks — each row Coffer-managed or the agent's own |
-| Config files | Every allowlisted file, instructions files (`CLAUDE.md`, `AGENTS.md`) included |
-| Conversations | The agent's transcript sessions |
-| Memory | The agent's native memory stores |
-| Model | Connection and model selection (moved from Overview) |
+| Tab | Path | Holds |
+| --- | --- | --- |
+| Overview | `/agents/<type>` | Type, config directory, Coffer connection; one summary row each for Skills, MCP servers, Plugins, Hooks, opening its tab |
+| Model | `…/model` | Connection and model selection (moved from Overview); the only place an agent's provider is switched |
+| Skills | `…/skills` | Coffer's skills and the agent's own; Adopt, Remove duplicate |
+| MCP servers | `…/mcp-servers` | Coffer's servers and direct entries; Adopt, Remove duplicate |
+| Plugins | `…/plugins` | Installed plugins; enable, disable, Uninstall |
+| Hooks | `…/hooks` | Hooks the agent's configuration declares, Coffer's marked; Open file |
+| Config files | `…/config` | Every allowlisted file, instructions files (`CLAUDE.md`, `AGENTS.md`) included |
+| Memory | `…/memory` | The agent's native memory stores |
+| Conversations | `…/conversations` | The agent's transcript sessions |
 
-Seven tabs become six. Skills, MCP servers and Plugins answered one question — what is installed
-into this agent, and which of it Coffer manages — so they become sections of one tab, and Hooks
-joins them there rather than as an eighth tab. Instructions files are configuration a person
-wrote, not something installed, so they stay under Config files. The model choice leaves
-Overview for its own tab so Overview is a summary rather than a form. Detail pages opened from a
-section (a direct MCP entry, a plugin, an unmanaged skill) return to that section, so each
-section is addressable in the URL.
+Nine tabs, one per kind of thing an agent holds. Each installed-kind tab lists Coffer's entries
+and the agent's own in one table with one owner filter (All / Coffer / the agent's own), so
+"what does this agent have" and "what of it does Coffer manage" are the same table read two
+ways, and each kind keeps the actions only it has. Overview is a summary whose rows open those
+tabs, and carries no Title or Name: an agent's name is fixed to its type. Model comes second
+because it is the most common reason to open an agent. Each tab has its own path, and detail
+pages opened from a tab (a direct MCP entry, a plugin, an unmanaged skill) return to it.
+*Rejected:* one Installed tab with a section per kind, which put four tables with different
+actions on one scrolling page and hid the Hooks table below three others.
 
-The Hooks section needs a read of an agent's hooks that does not exist yet; it appears with the
-change that adds it, and until then Installed has three sections ("List only shipped surfaces in
-the sidebar" applies in spirit). *Rejected:* keeping per-kind tabs and adding Hooks and Model,
-nine tabs, more than a tab strip shows at the page's width.
+The Hooks tab needs a read of an agent's hooks that does not exist yet; it appears with the
+change that adds it, and until then the page has eight tabs ("List only shipped surfaces in the
+sidebar" applies in spirit).
+
+**The Agents list is two fixed rows** — Claude Code and Codex, the supported types — found
+automatically each time the page loads. A row is not installed (with the install command to
+copy), not added (Add), or added with its Coffer state (Connect, Repair). Add registers the agent
+under its default config directory and connects it; Add, Connect and Repair each preview every
+file they will write before writing. A different config directory is the exception, so it is a
+row-menu item. First run, with neither added, offers Add both. *Rejected:* a Detect agents button
+and an Add agent dialog with type, name and title fields — the types are fixed, detection is
+cheap enough to run on every load, and a name the user types for an agent whose type already
+names it is one more thing to get wrong.
 
 ### 10. Auto-update
 
@@ -310,11 +324,11 @@ credential-supplier module as Restart and the skew check and rendered only on Ab
 
 ## Risks
 
-- **Scenario names that name a tab.** OpenSpec cannot rename a scenario inside a MODIFIED
-  requirement, so two scenarios keep names that mention a tab which is now a section:
-  agent-registry "open a plugin's detail page from the Plugins tab" and skill-manager "open an
-  unmanaged skill's detail page from the agent's Skills tab". Their bodies say "section of the
-  Installed tab"; the names keep their acceptance markers stable.
+- **The registry still allows more than a row per type.** Agents keep a renamable name, a title
+  and, per type, any number of config directories ("Manage the agent lifecycle", "Allow one agent
+  per name and per config directory"). The Agents list and the `/agents/<type>` paths assume one
+  agent per type named by its type; the change that narrows the registry to that owns the
+  backend and CLI side, and until it lands the web UI shows the first agent of each type.
 - **Relearning the sidebar.** Users of the eleven-entry sidebar find Model providers under
   Agents, Channels under Run, and Settings behind the footer gear. The palette finds each by
   name, and routes are unchanged.

@@ -276,7 +276,8 @@ The app's index (`/`) MUST render the Overview page, the landing page, in place
 rather than redirecting elsewhere, so a visitor lands on the whole of the vault
 before any one part of it. This requirement fixes where the app lands; what the
 Overview page shows is a requirement of its own. Agents live at `/agents` (list)
-and `/agents/:uid` (detail), addressed by uid like every other detail route, and
+and `/agents/<type>` (detail, with each tab at `/agents/<type>/<tab>`), addressed
+by the agent's type because an agent's name is fixed to its type, and
 MUST NOT appear in the `/mcp-servers` kind browser.
 
 #### Scenario: the index opens Overview

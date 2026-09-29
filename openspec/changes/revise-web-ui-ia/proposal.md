@@ -3,7 +3,8 @@
 The web UI is being rebuilt in place: a new shell, a new design system and new pages for each
 domain. Before any of that lands, the information architecture it implements has to be the
 contract, because the current specs pin the old one — eleven sidebar entries in three role
-groups, an index that redirects to Agents, five Settings tabs, seven agent detail tabs, no page
+groups, an index that redirects to Agents, five Settings tabs, seven agent detail tabs, an Agents
+list built around a Detect button and an Add agent dialog, no page
 for stored secrets, and a daemon the user is never shown.
 
 Eight decisions change that architecture:
@@ -17,9 +18,11 @@ Eight decisions change that architecture:
 - **A Secrets page.** A stored secret is cited by MCP servers, providers, channels and skills at
   once, and no page lists them or says what uses each. Secrets becomes its own System entry;
   Settings › Security keeps only what is about this machine.
-- **Six agent detail tabs.** Skills, MCP servers and Plugins were three tabs answering one
-  question — what is installed into this agent — and the model choice sat on Overview. They
-  become Overview, Installed, Config files, Conversations, Memory and Model.
+- **Nine agent detail tabs and a fixed Agents list.** The model choice sat on Overview and hooks
+  had no tab. The page becomes Overview, Model, Skills, MCP servers, Plugins, Hooks, Config
+  files, Memory and Conversations, each installed-kind tab listing Coffer's entries and the
+  agent's own under one owner filter. The Agents list becomes the two supported agents, found
+  automatically, each added with a previewed Add.
 
 - **A landing page.** Opening the app should show the whole vault — what is healthy and what
   needs the user — before any one part of it. Landing on Agents shows one kind and hides the rest.
@@ -55,10 +58,18 @@ unarchived until that implementation lands.
   and carries add, replace, reveal (audited), delete (refused while cited) and the entry to the
   migration assistant. Its behaviour beyond today's credential routes is specified by a separate
   secrets change.
-- The agent detail page has six tabs: **Overview, Installed, Config files, Conversations, Memory,
-  Model**. Installed groups the agent's skills, MCP servers, plugins and hooks in sections; Config
+- The agent detail page has nine tabs, each at its own path (`/agents/<type>/<tab>`):
+  **Overview, Model, Skills, MCP servers, Plugins, Hooks, Config files, Memory, Conversations**.
+  Skills, MCP servers, Plugins and Hooks each list Coffer-managed and the agent's own entries with
+  one owner filter and the kind's own actions (adopt, remove duplicate, uninstall plugin, open
+  file); Overview's summary rows open those tabs and its details carry no Title or Name; Config
   files includes the instructions files (`CLAUDE.md`, `AGENTS.md`); Model holds the per-agent
-  connection and model choice that sat on Overview.
+  connection and model choice that sat on Overview. The Hooks tab arrives with the read of an
+  agent's hooks.
+- The **Agents list** shows exactly two rows, Claude Code and Codex, detected automatically: no
+  Detect agents button and no Add agent dialog. A row offers Add (with a change preview), Connect
+  or Repair as its state calls for, the install command when the agent is not installed, and
+  "Use a different config directory…" in its menu; first run offers Add both.
 - `/` renders the Overview page in place instead of redirecting to `/agents`. Overview's content
   is specified separately.
 - **Settings** is not a sidebar entry: a gear in the sidebar footer, beside the daemon status,
@@ -115,9 +126,11 @@ unarchived until that implementation lands.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
   text.
-- `agent-registry`: the Agents entry heads the Agents group; the agent detail page's six tabs,
-  with the Installed tab's sections and instructions files under Config files.
-- `skill-manager`: unmanaged skills are reached from the Skills section of the agent's Installed
+- `agent-registry`: the Agents entry heads the Agents group; the agent detail page's nine tabs,
+  the owner filter and per-kind actions, instructions files under Config files; the Agents list's
+  two fixed rows with automatic detection, previewed Add / Connect / Repair, Add both and the
+  row menu's config directory.
+- `skill-manager`: unmanaged skills are reached from the agent's Skills
   tab.
 - `provider-switching`: Model providers sits in the Agents group as one table with no tabs,
   per-agent connection and model selection moves to the agent's Model tab, and a provider's
