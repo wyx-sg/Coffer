@@ -107,7 +107,7 @@ async def test_get_scope_reports_kinds_without_scope(tmp_path):
     async with c:
         agent = await svc.register(
             kind="agent",
-            name="claude",
+            name="claude-code",
             config={"type": "claude_code"},
             actor="agent-service",
             allow_lifecycle_kind=True,
@@ -233,7 +233,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
     async with c:
         agent = await svc.register(
             kind="agent",
-            name="claude",
+            name="claude-code",
             config={"type": "claude_code"},
             actor="agent-service",
             allow_lifecycle_kind=True,

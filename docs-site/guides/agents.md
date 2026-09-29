@@ -25,8 +25,18 @@ Coffer supports two agent types:
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
 
+### One agent per type
+
+A machine has at most one registered agent of each type, and the agent's name **is** its type: `claude-code` or `codex`. You do not choose a name, and an agent has no title or description. Everywhere Coffer asks which agent you mean — `coffer agent …`, `coffer path agent`, `coffer scan --agent`, the `--agents` scope of a skill or MCP server, and every `/api/v1/agents/{uid}/…` route — you can give the type (`claude-code`; `claude_code` also reads) or the agent's uid.
+
+Besides its type, the only setting an agent has is its **config directory**, plus the [model binding](#models). Registering uses the type's standard directory (`~/.claude`, `~/.codex`) unless you say otherwise. Pointing Coffer at a different directory moves the one agent there; it never adds a second one. Registering a type that is already registered is refused with `409 AGENT_TYPE_REGISTERED`.
+
+::: details Upgrading from a build that allowed several agents of one type
+Earlier builds let you register several agents of one type under names you chose. On upgrade, a database migration keeps one agent per type and drops the rest. It keeps, in this order of preference, the agent that is connected to Coffer (its Coffer MCP entry carries its uid), then an enabled one, then the most recently used, then the one on the standard directory. Every reach list and every channel's default agent that named a dropped agent is re-pointed at the kept one, the kept agent is renamed to its type, and each dropped agent is logged in the daemon log as `migration.0109.agent_dropped`. A dropped agent's config directory keeps whatever Coffer had written there, such as skill links or its `coffer` MCP entry; remove those by hand if you no longer use that directory. Titles and descriptions on agents are cleared.
+:::
+
 ::: info The agent's files are the source of truth
-Coffer never copies an agent's configuration into its database. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory, an optional description and the model binding.
+Coffer never copies an agent's configuration into its database. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory and the model binding.
 :::
 
 ## Register an agent
@@ -35,68 +45,68 @@ Coffer never copies an agent's configuration into its database. Config files, MC
 
 Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
 
-Each detected agent is in one of these states:
+Coffer reports every supported type, registered or not, in one of these states:
 
 | State | Program | Config directory | What you can do |
 | --- | --- | --- | --- |
 | **Installed** | found | present | Add it. |
-| **Installed, never run** | found | not yet created | Run the agent once so it creates its directory, then add it. |
+| **Installed, never run** | found | not yet created | Add it. Registering it at its standard directory creates that directory, holding only what Coffer needs there (its `skills` folder). |
 | **Not installed** | missing | present | Nothing to add: the directory is left from an earlier install. Reinstall the agent, or ignore it. |
+| **Missing** | missing | absent | Nothing on this machine. The type is still listed, so every type always has a row. |
 
-Coffer looks at each type's default directory and, when the daemon's environment sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, at the directory it names — shown as a separate agent with a name of its own, such as `claude-code-claude-work`. It does not search the rest of your disk; register any other directory [manually](#manually-with-a-custom-config-directory). A directory that is already registered is not offered again.
+For each type Coffer looks at its standard directory and, when the daemon's environment sets the type's own variable (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex), at the directory that names. That second directory is never a second agent: when the standard one exists it is offered as **use a different config directory** for the one agent, and when only the named one exists it is the directory Add registers. Coffer does not search the rest of your disk; to use any other directory, see [Use a different config directory](#use-a-different-config-directory). A type already registered is not offered again.
 
-**Web UI:** open **Agents** and click **Add agent**. The dialog lists **Detected agents** with their version; tick the installed ones you want and click **Add selected**. An agent that is installed but never run, or not installed, is listed with that state and cannot be ticked.
+**Web UI:** open **Agents** and click **Add agent**. The dialog lists each type that is not registered yet, at most once, with its state and version. An installed type, including one that has never run, can be added; one that is not installed is listed with that state and cannot be.
 
 **CLI:**
 
 ```sh
 coffer scan
-# lists detected agents that are not registered (kind "agent"), with their type as the ref,
-# their state and version, and — for an installed one — the command that registers it
+# lists the types seen here that are not registered (kind "agent"), one row per type,
+# with its state and version and — when it can be added — the command that registers it
 
-coffer agent add codex            # register a detected agent under its suggested name
+coffer agent add codex            # register the codex agent at ~/.codex
 # registered: agent codex
 ```
 
-`--name` is optional. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
+The command `coffer scan` prints is `coffer agent add <type>`, with `--config-dir` added only when the directory it found is not the type's standard one.
 
-### Manually, with a custom config directory
+### Use a different config directory
 
-Register manually when an agent runs against a non-default directory — Claude Code through `CLAUDE_CONFIG_DIR`, Codex through `CODEX_HOME`.
-
-**Web UI:** in the **Add agent** dialog, click **Add manually**, choose the type, and pick the **Config directory (optional)** with the folder picker.
-
-**CLI:**
+Claude Code reads another directory when started with `CLAUDE_CONFIG_DIR`, Codex when started with `CODEX_HOME`. If that is how you run an agent, tell Coffer the directory. At registration:
 
 ```sh
-coffer agent add claude_code --name claude-work --config-dir ~/work/.claude
+coffer agent add claude-code --config-dir ~/work/.claude
 ```
 
-Before accepting the directory, Coffer creates `<config_dir>/skills`, then checks that the directory exists, is a directory, is writable, and is not a system location (`/etc`, `/usr`, `/var` outside `/var/folders/`, `/System`, `C:\Windows`, `C:\Program Files` and similar). A rejected registration leaves nothing behind.
-
-Only one agent may be registered per config directory, and names are unique. Two agents of the same type on different directories are allowed.
-
-When Coffer itself starts an agent for such a registration — a [chat](/guides/chat) or [channel](/guides/channels) turn, a model-list probe, a plugin uninstall — it sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to that directory, so the agent reads the skills, MCP entry and settings Coffer put there.
-
-### Edit, rename, disable and remove
+For an agent that is already registered, move it:
 
 ```sh
-coffer agent edit claude-work --config-dir ~/work2/.claude --description "Work account"
-coffer agent edit claude-work --title "Claude (work account)"
-coffer agent edit claude-work --name claude-office
-coffer agent disable claude-office
-coffer agent rm claude-office
+coffer agent edit claude-code --config-dir ~/work/.claude
 ```
 
-In the web UI, the agent's detail page has **Edit** (config directory and description) and **Delete** in its header.
+**Web UI:** the **Add agent** dialog and the agent's **Edit** dialog both take a config directory, chosen with the folder picker.
 
-- **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
-- **Rename** changes only the label. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`, so a rename breaks nothing.
+Before accepting the directory, Coffer creates `<config_dir>/skills`, then checks that the directory exists, is a directory, is writable, and is not a system location (`/etc`, `/usr`, `/var` outside `/var/folders/`, `/System`, `C:\Windows`, `C:\Program Files` and similar). A rejected registration leaves nothing behind. A directory other than the standard one must already exist; only the standard directory of an installed, never-run agent is created for you. Moving an agent re-delivers its skills to the new directory.
+
+When Coffer itself starts an agent registered on a directory other than the standard one — a [chat](/guides/chat) or [channel](/guides/channels) turn, a model-list probe, a plugin uninstall — it sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to that directory, so the agent reads the skills, MCP entry and settings Coffer put there.
+
+### Edit, disable and remove
+
+```sh
+coffer agent edit claude-code --config-dir ~/work2/.claude
+coffer agent disable claude-code
+coffer agent rm claude-code
+```
+
+In the web UI, the agent's detail page has **Edit** (config directory) and **Delete** in its header.
+
+- **Edit** changes the config directory or the [model binding](#models). The name is the type and cannot change. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`.
 - **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. This switch is on the CLI and REST API only.
 - **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its program or its config directory is there.
 
 ::: warning Removing an agent leaves Coffer's entries in place
-Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <name>` before removing, or connect again after registering the agent again.
+Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <type>` before removing, or connect again after registering the agent again.
 :::
 
 ## Connect an agent to Coffer
@@ -180,7 +190,7 @@ When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/
 
 The `--agent-uid` argument is how the gateway knows which agent a session belongs to. The shim passes it in the MCP `initialize` handshake, and the gateway uses it for the whole session to decide which servers the agent may see. A server whose [reach](/architecture/resource-framework) names only certain agents is hidden from every other session.
 
-The entry carries the uid rather than the name because Coffer writes it once into a file it does not otherwise revisit; a name would go stale on the first rename. A hand-written shim entry without `--agent-uid` still works, but its session is unidentified and sees only servers that reach every agent. See [Connect a client](/guides/connect-a-client) for the details.
+The entry carries the uid because Coffer writes it once into a file it does not otherwise revisit, and the uid is the identity every other record holds. A hand-written shim entry without `--agent-uid` still works, but its session is unidentified and sees only servers that reach every agent. See [Connect a client](/guides/connect-a-client) for the details.
 
 ## What Coffer reads and what it writes
 
@@ -236,7 +246,7 @@ coffer agent config edit claude-code subagents/reviewer.md --from-file ./reviewe
 coffer agent config rm claude-code subagents/reviewer.md
 ```
 
-To read a file, open the path `coffer path agent <name> config` prints with your own tools. Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
+To read a file, open the path `coffer path agent <type> config` prints with your own tools. Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
 
 ::: tip Concurrent edits are refused, not overwritten
 Every read returns a fingerprint of the content. The editor and `coffer agent config edit` send it back with the save, and if the file changed on disk in the meantime — the agent itself rewrote it, or you saved it elsewhere — the write is refused with `CONFIG_FILE_STALE` (exit code 5 on the CLI) and the file is left as it is. Re-open and save again.
@@ -348,7 +358,7 @@ coffer agent models claude_code
 # sonnet  Sonnet 5  efforts: low, medium, high, xhigh, max
 ```
 
-`coffer agent models` takes the agent **type**, not a name. When two agents of one type are registered, the first enabled one in name order answers. When an active [model provider](/guides/providers) curates a model list for the agent, pickers offer that list instead.
+`coffer agent models` takes the agent's type. When an active [model provider](/guides/providers) curates a model list for the agent, pickers offer that list instead.
 
 The agent record carries the model binding that provider projection writes into the agent's config:
 
@@ -394,7 +404,8 @@ The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by C
 | Status says **Connected** but the agent has no Coffer tools | The agent was not restarted, or reads a different config directory | Restart the agent. For a custom directory, start the agent with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointing at it. |
 | **Availability** shows **Not found** | The agent's CLI (`claude` or `codex`) is not on the daemon's `PATH` | Install the CLI, or make it visible to the daemon. |
 | The agent reads **Not installed** | Its program is not on your login shell's `PATH`; only its config directory is left | Reinstall the agent, or put its program on your `PATH`. |
-| Detected as **Installed, never run** | The program is installed but has never created its config directory | Start the agent once, then add it. |
+| Detected as **Installed, never run** | The program is installed but has never created its config directory | Add it anyway: registering at the standard directory creates it. |
+| Add is refused with `AGENT_TYPE_REGISTERED` | An agent of that type is already registered; there is one per type | To use another directory, run `coffer agent edit <type> --config-dir <dir>` instead. |
 | A save fails with `CONFIG_FILE_STALE` | The file changed after you opened it | Re-open the file and save again. |
 | Plugin uninstall is missing | `claude` is not on `PATH` | Run `claude plugin uninstall <id>` yourself. |
 

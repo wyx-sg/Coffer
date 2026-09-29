@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
-import { displayName } from "@/lib/resourceTitle";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
 import { useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
@@ -146,7 +145,7 @@ export function McpServerDetailPage() {
           setDeleteOpen(o);
           if (!o) del.reset();
         }}
-        title={t("mcp.server.deleteConfirmTitle", { name: displayName(resource) })}
+        title={t("mcp.server.deleteConfirmTitle", { name: resource.name })}
         description={t("mcp.server.deleteConfirmBody")}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}

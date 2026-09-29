@@ -136,7 +136,7 @@ def _register_cc_via_http() -> str:
     one that does not resolve a name (see ``memory_cmd``'s docstring)."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/agents", json={"type": "claude_code", "name": "cc"})
+        r = c.post("/agents", json={"type": "claude_code"})
         assert r.status_code == 201, r.text
     return str(r.json()["uid"])
 
@@ -349,7 +349,7 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
     tmp_path = memory_cli_daemon
     partition = _distilled_partition(tmp_path)
     _route_context_at_the_test_app(monkeypatch)
-    cc_uid = _agent_uid("cc")
+    cc_uid = _agent_uid("claude-code")
 
     assert _fires() == 0
 
@@ -389,7 +389,7 @@ def test_context_with_a_hook_event_prints_that_events_json(memory_cli_daemon, mo
     tmp_path = memory_cli_daemon
     _distilled_partition(tmp_path)
     _route_context_at_the_test_app(monkeypatch)
-    cc_uid = _agent_uid("cc")
+    cc_uid = _agent_uid("claude-code")
 
     result = _runner.invoke(
         cli_app,

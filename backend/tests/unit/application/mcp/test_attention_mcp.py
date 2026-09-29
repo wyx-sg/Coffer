@@ -50,11 +50,12 @@ def _source(
 
 
 async def test_failing_health_row_is_an_error_with_the_test_action_and_its_time() -> None:
-    srv = resource("u1", "mcp_server", STDIO, name="atlassian", title="Atlassian")
+    # A server carries no title: the item is labelled by its fixed name.
+    srv = resource("u1", "mcp_server", STDIO, name="atlassian")
     items = await _source(FakeResources([srv]), health=FakeHealth({"u1": ("failing", T0)})).items()
     assert len(items) == 1
     item = items[0]
-    assert (item.kind, item.uid, item.title) == ("mcp_server", "u1", "Atlassian")
+    assert (item.kind, item.uid, item.title) == ("mcp_server", "u1", "atlassian")
     assert item.reason_code == "mcp_failing"
     assert item.severity is Severity.ERROR
     assert item.since == T0

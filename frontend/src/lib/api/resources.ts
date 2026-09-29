@@ -56,9 +56,10 @@ export const resourcesApi = {
     });
     if (error) throwApiError(error, "INTERNAL_ERROR", "delete failed");
   },
-  /** Set or clear (null) a resource's display title — every kind, a kind
-   *  whose name is fixed included (spec resource-framework "Carry an optional
-   *  editable title on every resource"). */
+  /** Set or clear (null) a resource's display title. Titles exist only on the
+   *  kinds that carry one — not agent, mcp_server or skill, which the daemon
+   *  refuses with 422 (spec resource-framework "Carry an optional editable
+   *  title on the kinds that have one"). */
   setTitle: async (uid: string, title: string | null): Promise<ResourceOut> => {
     const { data, error } = await getApiClient().PATCH("/resources/{uid}", {
       params: { path: { uid } },

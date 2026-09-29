@@ -1,6 +1,6 @@
 // frontend/src/components/agents/AgentManualAddForm.tsx — spec agent-registry.
 // The "Add manually" disclosure + form inside the Add-agent dialog: agent type
-// + optional name + config_dir picker. The dialog owns the register mutation
+// + config_dir picker. The dialog owns the register mutation
 // and the footer's Register button (which submits this form by id, so the
 // footer stays one [Cancel][Register] row); the form collects the values,
 // hands them to `onSubmit`, and shows a rejected submit inline so the user can
@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { FolderPickerField } from "@/components/FolderPickerField";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -38,23 +37,15 @@ interface Props {
 export function AgentManualAddForm({ open, onToggle, formId, onSubmit }: Props) {
   const { t } = useTranslation();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [form, setForm] = useState<AgentCreate>({
-    type: "claude_code",
-    name: "",
-    config_dir: null,
-    description: null,
-  });
+  const [form, setForm] = useState<AgentCreate>({ type: "claude_code", config_dir: null });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    const name = (form.name ?? "").trim();
     try {
-      // Name is optional — omit it when blank so the server derives a stable
-      // per-type default (mirrors auto-detect naming).
-      await onSubmit({ ...form, name: name || null });
+      await onSubmit(form);
     } catch (err) {
-      // e.g. the AGENT_CONFIG_DIR_REGISTERED 409 — keep the form open for a retry.
+      // e.g. the AGENT_TYPE_REGISTERED 409 — keep the form open for a retry.
       setErrorMsg(translateApiError(t, err));
     }
   };
@@ -91,15 +82,6 @@ export function AgentManualAddForm({ open, onToggle, formId, onSubmit }: Props) 
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${formId}-name`}>{t("agents.name")}</Label>
-            <Input
-              id={`${formId}-name`}
-              placeholder={t("agents.namePlaceholder")}
-              value={form.name ?? ""}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
           </div>
           <div className="space-y-1.5">
             <Label>{t("agents.configDirOverride")}</Label>

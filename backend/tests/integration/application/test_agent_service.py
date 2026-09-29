@@ -16,8 +16,8 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     AgentConfigDirRegistered,
+    AgentTypeRegistered,
     PrivilegedPath,
-    ResourceAlreadyExists,
     SkillDirNotWritable,
 )
 from coffer.infrastructure.platform import HostPlatform
@@ -42,12 +42,11 @@ async def test_register_with_custom_config_dir(agent_bundle, tmp_path):
     custom.mkdir()
     r = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
-        name="codex-work",
         config_dir=str(custom),
         actor="cli",
     )
     assert r.kind == "agent"
-    assert r.name == "codex-work"
+    assert r.name == "codex"  # named by its type, never chosen
     assert r.config["type"] == "codex"
     # Registration auto-creates <config_dir>/skills.
     assert (custom / "skills").is_dir()
@@ -66,7 +65,6 @@ async def test_register_rejects_unhostable_config_dir(agent_bundle, tmp_path):
     with pytest.raises(SkillDirNotWritable):
         await agent_bundle.svc.register(
             agent_type=AgentType.CODEX,
-            name="bad",
             config_dir=str(bogus_file),
             actor="cli",
         )
@@ -81,7 +79,6 @@ async def test_register_rejects_missing_config_dir(agent_bundle, tmp_path):
     with pytest.raises(SkillDirNotWritable):
         await agent_bundle.svc.register(
             agent_type=AgentType.CODEX,
-            name="typo",
             config_dir=str(missing),
             actor="cli",
         )
@@ -90,20 +87,22 @@ async def test_register_rejects_missing_config_dir(agent_bundle, tmp_path):
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="reject duplicate agent name")
-async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
-    # Distinct config dirs so the only collision is on the name (not the
-    # one-agent-per-config-dir rule).
+async def test_register_rejects_a_second_agent_of_the_type(agent_bundle, tmp_path):
+    """The name is the type's, so a second agent of a type would duplicate it:
+    refused even on a distinct, writable directory, with nothing persisted."""
     first = tmp_path / "cfg1"
     second = tmp_path / "cfg2"
     first.mkdir()
     second.mkdir()
-    await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", config_dir=str(first), actor="cli"
+    kept = await agent_bundle.svc.register(
+        agent_type=AgentType.CODEX, config_dir=str(first), actor="cli"
     )
-    with pytest.raises(ResourceAlreadyExists):
+    with pytest.raises(AgentTypeRegistered):
         await agent_bundle.svc.register(
-            agent_type=AgentType.CLAUDE_CODE, name="a", config_dir=str(second), actor="cli"
+            agent_type=AgentType.CODEX, config_dir=str(second), actor="cli"
         )
+    assert [(a.uid, a.name) for a in await agent_bundle.svc.list()] == [(kept.uid, "codex")]
+    assert not (second / "skills").exists()
 
 
 @pytest.mark.acceptance(
@@ -113,14 +112,12 @@ async def test_register_rejects_duplicate_name(agent_bundle, tmp_path):
 async def test_register_rejects_duplicate_config_dir(agent_bundle, tmp_path):
     custom = tmp_path / "cfg"
     custom.mkdir()
-    await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="codex-one", config_dir=str(custom), actor="cli"
-    )
-    # A second Codex agent that resolves to the same config_dir is rejected even
-    # with a different name — one agent per config directory.
+    await agent_bundle.svc.register(agent_type=AgentType.CODEX, config_dir=str(custom), actor="cli")
+    # An agent of another type on the same config_dir is rejected — one agent
+    # per config directory.
     with pytest.raises(AgentConfigDirRegistered):
         await agent_bundle.svc.register(
-            agent_type=AgentType.CODEX, name="codex-two", config_dir=str(custom), actor="cli"
+            agent_type=AgentType.CLAUDE_CODE, config_dir=str(custom), actor="cli"
         )
     assert len(await agent_bundle.svc.list()) == 1
 
@@ -137,7 +134,7 @@ async def test_update_config_dir(agent_bundle, tmp_path):
     old.mkdir()
     new.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", config_dir=str(old), actor="cli"
+        agent_type=AgentType.CODEX, config_dir=str(old), actor="cli"
     )
     updated = await agent_bundle.svc.update_config_dir(
         uid=agent.uid, new_config_dir=str(new), actor="cli"
@@ -147,31 +144,6 @@ async def test_update_config_dir(agent_bundle, tmp_path):
     assert (new / "skills").is_dir()
     updates = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_UPDATED.value)
     assert len(updates) == 1
-
-
-async def test_update_config_dir_description_only(agent_bundle, tmp_path):
-    """TEST25-108: a description-only change does not mutate config_dir.
-
-    Calling `update_config_dir(uid, new_config_dir=current, description=new)`
-    is the service-layer counterpart of the HTTP PATCH-description-only route.
-    """
-    old = tmp_path / "old"
-    old.mkdir()
-    agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX,
-        name="a",
-        config_dir=str(old),
-        description="before",
-        actor="cli",
-    )
-    updated = await agent_bundle.svc.update_config_dir(
-        uid=agent.uid,
-        new_config_dir=str(old),  # unchanged
-        actor="cli",
-        description="after",
-    )
-    assert updated.config["config_dir"] == str(old)
-    assert updated.description == "after"
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +159,6 @@ async def test_remove_deletes_agent(agent_bundle, tmp_path):
     custom.mkdir()
     agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
-        name="cur",
         config_dir=str(custom),
         actor="system",
     )
@@ -223,6 +194,8 @@ async def test_discover_returns_installed_candidate(agent_bundle, tmp_path, monk
 
     candidates = await _detect(agent_bundle, {AgentType.CODEX: installed("0.155.1")}).discover()
     codex = next(c for c in candidates if c.type is AgentType.CODEX)
+    assert (codex.name, codex.display_name) == ("codex", "OpenAI Codex")
+    assert codex.config_dir == str(tmp_path / ".codex")
     assert codex.state is DetectionState.INSTALLED_ACTIVE
     assert codex.version == "0.155.1"
     assert codex.addable
@@ -247,10 +220,11 @@ async def test_an_installed_agent_without_a_config_dir_is_never_run(
     candidates = await _detect(
         agent_bundle, {AgentType.CLAUDE_CODE: installed("2.1.281")}
     ).discover()
-    assert [(c.type, c.state) for c in candidates] == [
-        (AgentType.CLAUDE_CODE, DetectionState.INSTALLED_NEVER_RUN)
+    assert [(c.type, c.state, c.config_dir) for c in candidates] == [
+        (AgentType.CLAUDE_CODE, DetectionState.INSTALLED_NEVER_RUN, str(tmp_path / ".claude"))
     ]
-    assert not candidates[0].addable
+    # Offered for adding: registering it creates the standard directory.
+    assert candidates[0].addable
 
 
 @pytest.mark.acceptance(
@@ -271,27 +245,34 @@ async def test_a_config_dir_without_its_program_is_config_only(agent_bundle, tmp
     spec="agent-registry",
     scenario="offer the directory named by the agent's environment variable",
 )
-async def test_the_env_named_dir_is_a_candidate_beside_the_default(
+async def test_the_env_named_dir_is_offered_on_the_one_candidate(
     agent_bundle, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
-    (tmp_path / ".claude").mkdir()
+    standard = tmp_path / ".claude"
+    standard.mkdir()
     work = tmp_path / ".claude-work"
     work.mkdir()
     found = {AgentType.CLAUDE_CODE: installed("2.1.281")}
+    env = {"CLAUDE_CONFIG_DIR": str(work)}
 
-    candidates = await _detect(agent_bundle, found, {"CLAUDE_CONFIG_DIR": str(work)}).discover()
+    candidates = await _detect(agent_bundle, found, env).discover()
 
-    assert [(c.config_dir, c.suggested_name) for c in candidates] == [
-        (str(tmp_path / ".claude"), "claude-code"),
-        (str(work), "claude-code-claude-work"),
+    # One candidate for the type, at the standard directory, the variable's
+    # directory offered beside it — never a second agent.
+    assert [(c.config_dir, c.other_config_dir, c.name) for c in candidates] == [
+        (str(standard), str(work), "claude-code")
     ]
-    assert all(c.state is DetectionState.INSTALLED_ACTIVE for c in candidates)
+    assert candidates[0].state is DetectionState.INSTALLED_ACTIVE
+    # Without the standard directory the variable's directory is the candidate.
+    standard.rmdir()
+    [only] = await _detect(agent_bundle, found, env).discover()
+    assert (only.config_dir, only.other_config_dir) == (str(work), None)
+    assert only.state is DetectionState.INSTALLED_ACTIVE
     # The variable naming the standard directory adds nothing.
-    same = await _detect(
-        agent_bundle, found, {"CLAUDE_CONFIG_DIR": str(tmp_path / ".claude")}
-    ).discover()
-    assert len(same) == 1
+    standard.mkdir()
+    [same] = await _detect(agent_bundle, found, {"CLAUDE_CONFIG_DIR": str(standard)}).discover()
+    assert (same.config_dir, same.other_config_dir) == (str(standard), None)
 
 
 @pytest.mark.acceptance(
@@ -303,33 +284,14 @@ async def test_discover_skips_already_registered(agent_bundle, tmp_path, monkeyp
     (tmp_path / ".codex").mkdir()
     custom = tmp_path / "cfg"
     custom.mkdir()
-    await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="codex", config_dir=None, actor="cli"
-    )
-    await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="manual-codex", config_dir=str(custom), actor="cli"
-    )
+    await agent_bundle.svc.register(agent_type=AgentType.CODEX, config_dir=None, actor="cli")
 
+    # CODEX_HOME names another existing directory: still no codex candidate,
+    # for either directory, because the type already has its agent.
     candidates = await _detect(
         agent_bundle, {AgentType.CODEX: installed()}, {"CODEX_HOME": str(custom)}
     ).discover()
     assert "codex" not in [c.type.value for c in candidates]
-
-
-async def test_a_custom_registration_leaves_the_standard_dir_offered(
-    agent_bundle, tmp_path, monkeypatch
-):
-    """Registrations are per config directory: registering a custom Codex home
-    does not hide the standard one, which is a config set of its own."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    (tmp_path / ".codex").mkdir()
-    custom = tmp_path / "cfg"
-    custom.mkdir()
-    await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="manual-codex", config_dir=str(custom), actor="cli"
-    )
-    candidates = await _detect(agent_bundle, {AgentType.CODEX: installed()}).discover()
-    assert [c.config_dir for c in candidates] == [str(tmp_path / ".codex")]
 
 
 @pytest.mark.acceptance(
@@ -342,7 +304,7 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="x", config_dir=None, actor="system"
+        agent_type=AgentType.CODEX, config_dir=None, actor="system"
     )
     detect = _detect(agent_bundle, {AgentType.CODEX: installed()})
     assert await detect.discover() == []
@@ -485,7 +447,6 @@ async def test_register_invalid_config_raises_config_validation_error(agent_bund
     with pytest.raises(ConfigValidationError):
         await agent_bundle.svc.register(
             agent_type=AgentType.CODEX,
-            name="bad",
             config_dir="   ",  # whitespace-only → rejected by AgentConfig
             actor="cli",
         )
@@ -498,7 +459,7 @@ async def test_update_config_dir_invalid_raises_config_validation_error(agent_bu
     custom = tmp_path / "cfg"
     custom.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, config_dir=str(custom), actor="cli"
     )
     with pytest.raises(ConfigValidationError):
         await agent_bundle.svc.update_config_dir(
@@ -518,7 +479,7 @@ async def test_audit_records_lifecycle_events(agent_bundle, tmp_path):
     new = tmp_path / "cfg2"
     new.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
+        agent_type=AgentType.CODEX, config_dir=str(custom), actor="cli"
     )
     # The lifecycle is create, update, remove (each via the kind-agnostic
     # resource_* events); the enable/disable toggle is audited the same way and

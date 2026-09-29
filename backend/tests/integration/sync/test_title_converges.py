@@ -9,6 +9,7 @@ without one means "no title" on the machine that applies it.
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 
 import pytest
@@ -88,3 +89,47 @@ async def test_a_document_without_a_title_registers_and_updates_with_an_empty_ti
     assert arrived.description == "now described"
     assert arrived.title is None
     assert await _title(a, "mcp_server", "wiki") is None
+
+
+async def _converge(machine: VaultMachine) -> list[object]:
+    """One round on ``machine`` (joining first if it has not), and its failures."""
+    if await machine.state.pointer() is None:
+        run = await machine.adopt()
+    else:
+        run = await machine.converge()
+    return list(run.failures)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a title on a kind without one is ignored on apply"
+)
+async def test_a_title_on_a_kind_without_one_is_ignored_on_apply(tmp_path: pathlib.Path):
+    """Machine ``a`` stands for an older build, whose ``mcp_server`` still carried
+    a title and wrote it into the document; machine ``b`` runs this build, where
+    the kind carries none (``Kind.titled=False``, as production declares it).
+    ``b`` registers and then updates the server from those documents, with no
+    title and no failure."""
+    a, b = await two_machines(tmp_path)
+    kinds = b.resources._kinds
+    kinds["mcp_server"] = dataclasses.replace(kinds["mcp_server"], titled=False)
+
+    await a.register("mcp_server", "wiki", {"value": "one"})
+    uid = await a.uid("mcp_server", "wiki")
+    await a.resources.set_title(uid, "Team wiki", "test")
+    assert await _converge(a) == []
+    doc = yaml.safe_load(await a.remote_text(await a.doc_path("mcp_server", "wiki")) or "")
+    assert doc["title"] == "Team wiki", "precondition: the older build wrote a title"
+
+    # Registered from the document, with no title and no failure.
+    assert await _converge(b) == []
+    arrived = await b.find("mcp_server", "wiki")
+    assert arrived is not None
+    assert (arrived.uid, arrived.config["value"], arrived.title) == (uid, "one", None)
+
+    # Updated from the next document — which still carries the title — the same way.
+    await a.edit_config("mcp_server", "wiki", {"value": "two"})
+    assert await _converge(a) == []
+    assert await _converge(b) == []
+    arrived = await b.find("mcp_server", "wiki")
+    assert arrived is not None
+    assert (arrived.config["value"], arrived.title) == ("two", None)

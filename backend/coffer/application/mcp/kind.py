@@ -158,10 +158,11 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         # The name prefixes every tool name an agent sees
         # (``mcp__coffer__<server>__<tool>``), and agents' permission rules and
         # skills quote those names, so a registered server's name never changes
-        # (ADR names-visible-to-agents-are-fixed). A new display goes in the
-        # title; a new name means registering the server again.
+        # (ADR names-visible-to-agents-are-fixed). A new name means
+        # registering the server again; there is no display title beside it.
         name_fixed=True,
         name_fixed_resets="its capability toggles and its reach (enabled and scope)",
+        titled=False,
         audit_redactor=_mcp_audit_redactor,
         credential_ref_extractor=_mcp_credential_ref_extractor,
         # Per-agent scope: the gateway filters a scoped server's tools by the

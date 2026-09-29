@@ -1129,11 +1129,6 @@ components:
           - $ref: '#/components/schemas/LocalImportSourceOut'
           - $ref: '#/components/schemas/BuiltinSourceOut'
           title: Source
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         uid:
           title: Uid
           type: string
@@ -1147,7 +1142,6 @@ components:
       required:
       - uid
       - name
-      - title
       - description
       - source
       - builtin

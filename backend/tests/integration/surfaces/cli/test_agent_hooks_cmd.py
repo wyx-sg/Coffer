@@ -34,14 +34,14 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
 
 
 def test_the_cli_lists_hooks_and_coffers_health(daemon: TestClient) -> None:
-    assert daemon.post("/agents", json={"type": "claude_code", "name": "cc"}).status_code == 201
+    assert daemon.post("/agents", json={"type": "claude_code"}).status_code == 201
 
-    plain = _runner.invoke(cli_app, ["agent", "hooks", "cc"], env={"COLUMNS": "250"})
+    plain = _runner.invoke(cli_app, ["agent", "hooks", "claude-code"], env={"COLUMNS": "250"})
     assert plain.exit_code == 0, plain.output
     assert "PreToolUse [Bash]  (user)  lint.sh" in plain.output
     assert "coffer hook: missing on SessionStart, last fired never" in plain.output
 
-    as_json = _runner.invoke(cli_app, ["agent", "hooks", "cc", "--json"])
+    as_json = _runner.invoke(cli_app, ["agent", "hooks", "claude-code", "--json"])
     assert as_json.exit_code == 0, as_json.output
     body = extract_json(as_json.output)
     assert [h["command"] for h in body["items"]] == ["lint.sh"]
@@ -60,7 +60,7 @@ def test_the_cli_says_when_codex_has_not_approved_coffers_hook(
     what the user does about it — Coffer never approves its own hook."""
     codex = tmp_path / ".codex"
     codex.mkdir()
-    created = daemon.post("/agents", json={"type": "codex", "name": "cx"})
+    created = daemon.post("/agents", json={"type": "codex"})
     assert created.status_code == 201, created.text
     uid = created.json()["uid"]
     expected = daemon.get(f"/agents/{uid}/hooks").json()["coffer_hook"]["expected_command"]
@@ -72,13 +72,13 @@ def test_the_cli_says_when_codex_has_not_approved_coffers_hook(
     }
     (codex / "hooks.json").write_text(json.dumps({"hooks": {"SessionStart": [entry]}}))
 
-    plain = _runner.invoke(cli_app, ["agent", "hooks", "cx"], env={"COLUMNS": "250"})
+    plain = _runner.invoke(cli_app, ["agent", "hooks", "codex"], env={"COLUMNS": "250"})
     assert plain.exit_code == 0, plain.output
     assert "coffer hook: current on SessionStart, trust untrusted, last fired never" in (
         plain.output
     )
     assert "run /hooks there and trust it" in plain.output
 
-    body = extract_json(_runner.invoke(cli_app, ["agent", "hooks", "cx", "--json"]).output)
+    body = extract_json(_runner.invoke(cli_app, ["agent", "hooks", "codex", "--json"]).output)
     assert body["coffer_hook"]["trust"] == "untrusted"
     assert not (codex / "config.toml").exists()

@@ -148,11 +148,11 @@ def test_locate_a_partitions_notes(daemon: TestClient, tmp_path: pathlib.Path) -
 def test_the_command_line_names_an_agents_files(daemon: TestClient, tmp_path: pathlib.Path) -> None:
     _distilled_partition(
         tmp_path
-    )  # registers `cc` over ~/.claude with a memory store and a session
+    )  # registers `claude-code` over ~/.claude with a memory store and a session
     (tmp_path / ".claude" / "CLAUDE.md").write_text("# me\n", encoding="utf-8")
     audited = len(daemon.get("/audit").json()["entries"])
 
-    config = _run("agent", "cc", "config", "--json")
+    config = _run("agent", "claude-code", "config", "--json")
     assert config.exit_code == 0, config.output
     listed = [
         i["path"]
@@ -164,21 +164,21 @@ def test_the_command_line_names_an_agents_files(daemon: TestClient, tmp_path: pa
         str((tmp_path / ".claude" / "CLAUDE.md").resolve()) in extract_json(config.output)["config"]
     )
 
-    memory = _lines(_run("agent", "cc", "memory").output)
+    memory = _lines(_run("agent", "claude-code", "memory").output)
     assert memory and all(pathlib.Path(p).is_dir() for p in memory)
 
-    transcripts = _lines(_run("agent", "cc", "transcripts").output)
+    transcripts = _lines(_run("agent", "claude-code", "transcripts").output)
     assert transcripts and all(any(pathlib.Path(p).glob("*.jsonl")) for p in transcripts)
 
     assert len(daemon.get("/audit").json()["entries"]) == audited
-    assert _run("agent", "cc", "plugins").exit_code == 2
+    assert _run("agent", "claude-code", "plugins").exit_code == 2
 
 
 def _uid(daemon: TestClient) -> str:
     return str(
-        daemon.get("/resources", params={"kind": "agent", "name": "cc"}).json()["resources"][0][
-            "uid"
-        ]
+        daemon.get("/resources", params={"kind": "agent", "name": "claude-code"}).json()[
+            "resources"
+        ][0]["uid"]
     )
 
 

@@ -1,8 +1,8 @@
 // src/components/resource/ResourceLabel.tsx
 // A resource's on-screen name: its title with the name beside it as secondary
-// text when a title is set, the name alone when not (spec web-ui "Show and edit
-// a title on MCP server and skill pages"). The name stays visible because it is
-// what an agent sees.
+// text when a title is set, the name alone when not — for the kinds that carry
+// a title (provider, channel, knowledge, memory). The name stays visible because
+// it is what an agent sees.
 import { cn } from "@/lib/utils";
 import { titleOf, type Titled } from "@/lib/resourceTitle";
 

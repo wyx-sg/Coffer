@@ -56,7 +56,7 @@ give the status each code is actually sent with.
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
 | `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a registered kind, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or command (for example `coffer agent add`, `coffer provider add`). |
-| `NAME_IMMUTABLE` | 409 | The resource's kind fixes its name once registered, because agents quote it: an MCP server's name prefixes its tool names, and a skill's name is its folder. The message names what a re-registration resets. | Set a title to change what is shown, or delete the resource and register it again under the new name. |
+| `NAME_IMMUTABLE` | 409 | The resource's kind fixes its name once registered, because agents quote it: an MCP server's name prefixes its tool names, and a skill's name is its folder. An agent's name is its type and cannot change at all. The message names what a re-registration resets. | Delete the MCP server or skill and register it again under the new name. |
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use the kind's `scope` command (for example `coffer skill scope <name> --agents a,b`) on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
@@ -87,7 +87,8 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `AGENT_CONFIG_DIR_REGISTERED` | 409 | An agent is already registered for this config directory. | Use the existing agent, or register a different config dir. |
+| `AGENT_TYPE_REGISTERED` | 409 | An agent of this type is already registered. A machine has one agent per type, named by it. The message names the existing agent's uid. | Use the existing agent. To point it at another directory, run `coffer agent edit <type> --config-dir <dir>`. |
+| `AGENT_CONFIG_DIR_REGISTERED` | 409 | An agent is already registered for this config directory. | Use the existing agent, or choose a different config directory. |
 | `AGENT_CONFIG_DIR_MISSING` | 409 | The agent's config directory does not exist on this machine. Raised while applying a synced agent. | Install the agent on this machine, or ignore it here. |
 | `PRIVILEGED_PATH` | 422 | The path is a system location Coffer refuses to manage. | Choose a path in your home directory. |
 | `SKILL_DIR_NOT_WRITABLE` | 422 | The agent's skills directory is missing, not a directory, or not writable. `details.reason` says which. | Create the directory or fix its permissions. |

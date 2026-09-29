@@ -110,7 +110,10 @@ def test_a_detected_agent_is_registered_with_agent_add_and_never_discarded(
     rows = [r for r in _rows() if r["kind"] == "agent"]
     codex = next(r for r in rows if r["ref"] == "codex")
     assert codex["state"] == "installed_active"
+    assert (codex["agent"], codex["addable"]) == ("codex", True)
+    assert codex["config_dir"] == codex["standard_config_dir"] == str(tmp_path / ".codex")
     assert "coffer agent add codex" in codex["detail"]
+    assert "--config-dir" not in codex["detail"]
     assert daemon.get("/resources", params={"kind": "agent"}).json()["resources"] == []
 
     import typer.main
@@ -127,7 +130,7 @@ def test_a_detected_agent_is_registered_with_agent_add_and_never_discarded(
     adopted = _run("agent", "add", "codex")
     assert adopted.exit_code == 0, adopted.output
     [agent] = daemon.get("/resources", params={"kind": "agent"}).json()["resources"]
-    assert agent["name"] == codex["suggested_name"]
+    assert agent["name"] == "codex"
     assert daemon.get(f"/agents/{agent['uid']}").json()["config_dir"] == codex["config_dir"]
     assert any(e["resource_name"] == agent["name"] for e in audit(daemon, "resource_created"))
     assert "codex" not in [r["ref"] for r in _rows() if r["kind"] == "agent"]

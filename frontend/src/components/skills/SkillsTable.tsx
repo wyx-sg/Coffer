@@ -21,8 +21,6 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
-import { displayName, searchableName } from "@/lib/resourceTitle";
 import {
   SkillRowActions,
   SkillStatusCell,
@@ -87,7 +85,7 @@ export function SkillsTable({
       header: t("skills.name"),
       cell: (s) => (
         <span className="flex items-center gap-2">
-          <ResourceLabel resource={s} />
+          <span className="font-medium">{s.name}</span>
           {s.builtin && <BuiltinBadge />}
           {s.bindings.some((b) => b.link_mode === "copy_fallback") && (
             <Badge
@@ -149,7 +147,7 @@ export function SkillsTable({
         columns={columns}
         rowKey={(s) => s.uid}
         search={{
-          accessor: (s) => `${searchableName(s)} ${s.description}`,
+          accessor: (s) => `${s.name} ${s.description}`,
           placeholder: t("skills.searchPlaceholder"),
         }}
         filters={filters}
@@ -162,7 +160,7 @@ export function SkillsTable({
         isSelectable={(s) => !s.builtin}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${displayName(s)}`,
+          ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -175,7 +173,7 @@ export function SkillsTable({
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title={t("skills.removeConfirmTitle", { name: deleting ? displayName(deleting) : "" })}
+        title={t("skills.removeConfirmTitle", { name: deleting ? deleting.name : "" })}
         description={t("skills.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}

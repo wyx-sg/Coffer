@@ -5,7 +5,7 @@ description: Keep one library of AgentSkills-standard skills in Coffer and deliv
 
 # Skills
 
-Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers importing and adopting skills, choosing which agents a skill reaches, editing skill files, names and titles, repairing drift, and Coffer's own built-in `coffer-guide` skill.
+Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers importing and adopting skills, choosing which agents a skill reaches, editing skill files, skill names, repairing drift, and Coffer's own built-in `coffer-guide` skill.
 
 ## What skills are for
 
@@ -76,7 +76,7 @@ Skills → Add skill → paste the path, or Browse… to choose the folder, unde
 
 :::
 
-Coffer reads the skill's name from its `SKILL.md` frontmatter and creates `~/.coffer/skills/release-checklist/`. Pass `--title` to give it a display name at the same time (see [Skill names and titles](#skill-names-and-titles)). A freshly imported skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
+Coffer reads the skill's name from its `SKILL.md` frontmatter and creates `~/.coffer/skills/release-checklist/`. Its name and its description both come from that file (see [Skill names and descriptions](#skill-names-and-descriptions)). A freshly imported skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
 
 Importing a folder whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, import again with `--force` (in the web UI, confirm **Replace** in the dialog that asks). The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
 
@@ -269,11 +269,11 @@ The Files tab also offers **Open in editor** and **Reveal in Finder** (your syst
 
 Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Re-read the file and apply your change again. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
 
-## Skill names and titles
+## Skill names and descriptions
 
 A skill's name comes from the `name` line of its `SKILL.md` and is fixed once the skill is registered. It is the name of the directory an agent loads the skill from and the identifier an agent invokes it by, so instructions, other skills and permission rules that quote it would break on a rename. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, remove the skill and add it again under the new name, which resets its reach and delivered links (its bindings). The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-A **title** is the optional display name for Coffer's own pages: up to 80 characters of free text, shown in the web UI and the CLI in place of the name when it is set. Agents never see it. Set it with `coffer skill add … --title`, change it with `coffer skill edit <name> --title "…"` (an empty value clears it), or edit it in the web UI.
+A skill has no separate display title: Coffer's pages and the CLI show its name. Its **description** is the `description` line of its `SKILL.md`, the text agents read to decide when to use the skill, so Coffer shows that and keeps no description of its own. Nothing on the skill's record is editable. To change the description, or anything else about the skill, edit `SKILL.md` in the master folder that `coffer path skill <name>` prints, or in the skill's **Files** tab.
 
 ## Check for drift and repair it
 
@@ -373,7 +373,7 @@ Removing an agent from Coffer also removes that agent's skill links. The master 
 
 ## How it works
 
-Each skill is a `skill` resource in Coffer's registry, identified by an immutable uid. Its name is fixed once registered (see [Skill names and titles](#skill-names-and-titles)); its title is a free label you can change at any time.
+Each skill is a `skill` resource in Coffer's registry, identified by an immutable uid. Its name is fixed once registered and its description is its `SKILL.md`'s (see [Skill names and descriptions](#skill-names-and-descriptions)).
 
 Coffer records each delivered link in internal bookkeeping (the link path, the link mode, when it was linked). The link on disk is the live truth; the record is what `verify` compares it against. Every import, delivery, removal of a link, removal of a skill and repair is written to the audit log, which you can read on the [Activity](/guides/activity) page.
 

@@ -69,10 +69,10 @@ describe("useAgents", () => {
         items: [
           {
             uid: "u-cur",
-            name: "cur",
+            name: "codex",
             type: "codex",
             config_dir: "/home/u/.codex",
-            description: null,
+            display_name: "OpenAI Codex",
             created_at: "2026-05-22T00:00:00Z",
             updated_at: "2026-05-22T00:00:00Z",
           },
@@ -84,7 +84,7 @@ describe("useAgents", () => {
     const { result } = renderHook(() => useAgents(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].name).toBe("cur");
+    expect(result.current.data?.[0].name).toBe("codex");
     const calledUrl = String(fetchMock.mock.calls[0][0]);
     expect(calledUrl).toMatch(/\/agents$/);
   });
@@ -111,10 +111,10 @@ describe("useRegisterAgent", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(201, {
         uid: "u-cur",
-        name: "cur",
+        name: "codex",
         type: "codex",
         config_dir: "/home/u/.codex",
-        description: null,
+        display_name: "OpenAI Codex",
         created_at: "2026-05-22T00:00:00Z",
         updated_at: "2026-05-22T00:00:00Z",
       }),
@@ -125,9 +125,7 @@ describe("useRegisterAgent", () => {
     });
     await result.current.mutateAsync({
       type: "codex",
-      name: "cur",
       config_dir: "/home/u/.codex",
-      description: null,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
@@ -160,10 +158,10 @@ describe("useAgent", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         uid: "u-cur",
-        name: "cur",
+        name: "codex",
         type: "codex",
         config_dir: "/home/u/.codex",
-        description: null,
+        display_name: "OpenAI Codex",
         created_at: "2026-05-22T00:00:00Z",
         updated_at: "2026-05-22T00:00:00Z",
       }),
@@ -172,7 +170,7 @@ describe("useAgent", () => {
     const { result } = renderHook(() => useAgent("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     // The request went to the uid; what came back is read by its name.
-    expect(result.current.data?.name).toBe("cur");
+    expect(result.current.data?.name).toBe("codex");
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur$/);
   });
 
@@ -191,21 +189,23 @@ describe("usePatchAgent", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         uid: "u-cur",
-        name: "cur",
+        name: "codex",
+        display_name: "OpenAI Codex",
         type: "codex",
-        config_dir: "/home/u/.codex",
-        description: "updated",
+        config_dir: "/home/u/.codex2",
         created_at: "2026-05-22T00:00:00Z",
         updated_at: "2026-05-22T00:00:00Z",
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapper() });
-    await result.current.mutateAsync({ uid: "u-cur", body: { description: "updated" } });
+    await result.current.mutateAsync({ uid: "u-cur", body: { config_dir: "/home/u/.codex2" } });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/agents\/u-cur$/);
     expect((init as RequestInit).method).toBe("PATCH");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ description: "updated" });
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      config_dir: "/home/u/.codex2",
+    });
   });
 });
 

@@ -23,7 +23,7 @@ from coffer.application.agent.auto_detect import AgentDetection
 from coffer.application.agent.connection_service import ConnectionState, ConnectionStatus
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.types import AgentType
+from coffer.domain.agent.types import AgentType, agent_display_name
 from coffer.domain.resource import Resource
 
 KIND = "agent"
@@ -79,7 +79,7 @@ class AgentAttentionSource:
         return out
 
     async def _item(self, agent: Resource) -> AttentionItem | None:
-        title = agent.title or agent.name
+        title = agent_display_name(agent.config, agent.name)
         cfg = AgentConfig.model_validate(agent.config)
         detection = await self._detect.detect(cfg.type, cfg.resolved_config_dir())
         if not detection.state.installed:

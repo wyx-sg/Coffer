@@ -789,6 +789,7 @@
   "errors": {
     "AGENT_CONFIG_DIR_MISSING": "该 agent 的配置目录在本机不存在",
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 Agent 了。",
+    "AGENT_TYPE_REGISTERED": "这种类型的 Agent 已经注册过了。请修改它的配置目录，而不是再添加一个。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该 Agent 的配置文件",
     "AGENT_CONFIG_REJECTED": "该 Agent 配置被拒绝",
     "BACKUP_REMOTE_INVALID": "无法使用该远端——请检查地址、分支，以及间隔是否为正数秒。",
@@ -848,7 +849,7 @@
     "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
-    "NAME_IMMUTABLE": "注册后名称不能再改，因为 Agent 会引用它。要换名称请删除后以新名称重新注册，或改为设置标题",
+    "NAME_IMMUTABLE": "注册后名称不能再改，因为 Agent 会引用它。要换名称请删除后以新名称重新注册",
     "NOT_FOUND": "未找到。",
     "NO_ACTIVE_PROVIDER": "当前没有启用的模型提供商——请在「模型提供商」页面添加一个",
     "ORIGIN_NOT_ALLOWED": "Coffer 不接受来自其他网站页面的请求。",

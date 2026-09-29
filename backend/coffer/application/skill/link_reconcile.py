@@ -102,7 +102,7 @@ def split_key(key: str) -> tuple[str, str]:
 
 
 def _subject(skill: Resource) -> Subject:
-    return Subject("skill", skill.uid, skill.title or skill.name)
+    return Subject("skill", skill.uid, skill.name)
 
 
 def _item(

@@ -25,6 +25,7 @@ _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
+    "AGENT_TYPE_REGISTERED": 409,
     # The agent's config dir is absent on this machine — a state of the
     # machine, not a malformed request.
     "AGENT_CONFIG_DIR_MISSING": 409,

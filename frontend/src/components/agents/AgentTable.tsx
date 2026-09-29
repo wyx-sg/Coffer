@@ -22,8 +22,6 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
-import { displayName, searchableName } from "@/lib/resourceTitle";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 // Managed coding agents only (Claude Code / Codex), keeping this table's
 // columns uniform.
@@ -79,7 +77,7 @@ export function AgentTable({
       className: "whitespace-nowrap",
       cell: (a) => (
         <span className="inline-flex items-center gap-2">
-          <ResourceLabel resource={a} />
+          <span className="font-medium">{a.name}</span>
           <AgentNotInstalledBadge state={a.state} />
         </span>
       ),
@@ -129,15 +127,6 @@ export function AgentTable({
       ),
     },
     {
-      key: "description",
-      header: t("agents.description"),
-      cell: (a) => (
-        <span className="line-clamp-1 max-w-48 text-muted-foreground">
-          {a.description || t("common.emptyValue")}
-        </span>
-      ),
-    },
-    {
       key: "coffer_skills",
       header: t("agents.cofferSkills"),
       className: "whitespace-nowrap",
@@ -155,7 +144,7 @@ export function AgentTable({
       className: "text-right",
       cell: (a) => (
         <RowDeleteButton
-          ariaLabel={t("agents.deleteAria", { name: displayName(a) })}
+          ariaLabel={t("agents.deleteAria", { name: a.name })}
           disabled={remove.isPending}
           onDelete={() => setDeleting(a)}
         />
@@ -171,13 +160,13 @@ export function AgentTable({
         columns={columns}
         rowKey={(a) => a.uid}
         search={{
-          accessor: (a) => `${searchableName(a)} ${agentTypeLabel(a.type)} ${a.config_dir}`,
+          accessor: (a) => `${a.name} ${a.display_name} ${agentTypeLabel(a.type)} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
         onRowClick={(a) => navigate(`/agents/${encodeURIComponent(a.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${displayName(a)}`,
+          ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${a.name}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -190,7 +179,7 @@ export function AgentTable({
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title={t("agents.removeConfirm", { name: deleting ? displayName(deleting) : "" })}
+        title={t("agents.removeConfirm", { name: deleting ? deleting.name : "" })}
         description={t("agents.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}

@@ -1,17 +1,17 @@
 """``coffer skill …`` — managed skills (spec skill-manager "Cover skill
 management on REST, the CLI and the web").
 
-``edit``, ``rm``, ``enable``, ``disable`` and ``scope`` are the lifecycle verbs
-every kind shares (``_kind_verbs``). ``list`` and ``show`` are the skill's own,
+``rm``, ``enable``, ``disable`` and ``scope`` are the lifecycle verbs every
+kind shares (``_kind_verbs``). ``list`` and ``show`` are the skill's own,
 because they read ``/skills``, which carries what the generic resource
 document does not — the source, the version hash, the master folder and the
 per-agent deliveries. ``add`` takes a folder, because importing one is how a
 skill comes to exist. ``verify`` reports drift.
 
 A skill's name is fixed once registered (spec skill-manager "Register each
-skill as a resource with a SKILL.md-safe name"): ``edit --name`` is kept so the
-daemon's ``NAME_IMMUTABLE`` refusal can say what a new name costs, and
-``--title`` is the label to change instead. A skill's master folder is plain
+skill as a resource with a SKILL.md-safe name") and it carries no display
+title, so there is no ``edit``: the description is SKILL.md's own, edited in
+the file like the rest of the skill. A skill's master folder is plain
 files: ``coffer path skill <name>`` names it and it is edited on disk, so this
 group has no command that lists, prints or writes a file in it. Unmanaged
 skill folders are rows of ``coffer scan``, acted on by ``coffer adopt`` and
@@ -34,8 +34,6 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import (
     KindVerbs,
-    check_title_arg,
-    label,
     register_kind_verbs,
     verbose_of,
 )
@@ -101,7 +99,7 @@ def list_cmd(
     for it in items:
         delivered = ", ".join(b["agent_name"] for b in it["bindings"])
         table.add_row(
-            label(it),
+            it["name"],
             it["source"]["type"],
             _scope_label(it, agent_names),
             delivered or "—",
@@ -129,8 +127,6 @@ def show(
         typer.echo(_json.dumps(data, indent=2))
         return
     typer.echo(f"name:        {data['name']}")
-    if data.get("title"):
-        typer.echo(f"title:       {data['title']}")
     typer.echo(f"description: {data['description']}")
     typer.echo(f"source:      {data['source']['type']}")
     typer.echo(f"master:      {data['master_path']}")
@@ -149,18 +145,13 @@ def add(
     force: bool = typer.Option(
         False, "--force", "-f", help="Replace an existing skill of the same name"
     ),
-    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
 ) -> None:
     """Import a skill from a local folder; its name comes from SKILL.md."""
     verbose = verbose_of(ctx)
-    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/skills/import", json={"path": folder, "overwrite": force})
         _cli_client.check(r, verbose=verbose)
-        if title:
-            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
-            _cli_client.check(t, verbose=verbose)
     typer.echo(f"added: skill {r.json()['name']}")
 
 
@@ -169,8 +160,9 @@ register_kind_verbs(
     KindVerbs(
         kind="skill",
         noun="skill",
-        verbs=frozenset({"edit", "rm", "enable", "disable", "scope"}),
+        verbs=frozenset({"rm", "enable", "disable", "scope"}),
         name_fixed=True,
+        titled=False,
         help={
             "rm": (
                 "Remove a skill and tear down all its agent deliveries. "

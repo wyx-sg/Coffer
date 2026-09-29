@@ -66,12 +66,13 @@ class SkillGraph:
         name: str,
         agent_type: AgentType = AgentType.CLAUDE_CODE,
     ) -> tuple[Resource, pathlib.Path]:
-        """Register an agent over ``<tmp_path>/<name>-cfg``; returns it and its
-        skills directory."""
+        """Register an agent of ``agent_type`` over ``<tmp_path>/<name>-cfg``
+        (``name`` only labels the directory: an agent is named by its type);
+        returns it and its skills directory."""
         config_dir = tmp_path / f"{name}-cfg"
         config_dir.mkdir()
         agent = await self.agents.register(
-            agent_type=agent_type, name=name, config_dir=str(config_dir), actor="cli"
+            agent_type=agent_type, config_dir=str(config_dir), actor="cli"
         )
         return agent, config_dir / "skills"
 

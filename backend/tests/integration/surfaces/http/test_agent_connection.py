@@ -61,7 +61,7 @@ def _client() -> TestClient:
 
 
 def _register(c: TestClient) -> str:
-    r = c.post("/api/v1/agents", json={"type": "claude_code", "name": "cc"})
+    r = c.post("/api/v1/agents", json={"type": "claude_code"})
     assert r.status_code == 201, r.text
     return str(r.json()["uid"])
 
@@ -312,28 +312,28 @@ def test_cli_connect_show_and_disconnect(
         uid = _register(c)
         _patch_cli(monkeypatch, c)
 
-        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
+        res = runner.invoke(cli_app, ["agent", "show", "claude-code", "--json"])
         assert res.exit_code == 0, res.output
         assert json.loads(res.output)["coffer_connection"]["state"] == "disconnected"
 
-        res = runner.invoke(cli_app, ["agent", "connect", "cc"])
+        res = runner.invoke(cli_app, ["agent", "connect", "claude-code"])
         assert res.exit_code == 0, res.output
-        assert "connected agent cc to Coffer" in res.output
+        assert "connected agent claude-code to Coffer" in res.output
         assert "gateway MCP entry: installed" in res.output
         assert "memory delivery hook: installed" in res.output
         rest = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
         assert rest["state"] == "connected"
 
-        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
+        res = runner.invoke(cli_app, ["agent", "show", "claude-code", "--json"])
         assert res.exit_code == 0, res.output
         assert json.loads(res.output)["coffer_connection"] == rest
-        res = runner.invoke(cli_app, ["agent", "show", "cc"])
+        res = runner.invoke(cli_app, ["agent", "show", "claude-code"])
         assert res.exit_code == 0, res.output
         assert "coffer_connection: connected" in res.output.splitlines()
 
-        res = runner.invoke(cli_app, ["agent", "disconnect", "cc"])
+        res = runner.invoke(cli_app, ["agent", "disconnect", "claude-code"])
         assert res.exit_code == 0, res.output
-        assert "disconnected agent cc from Coffer" in res.output
+        assert "disconnected agent claude-code from Coffer" in res.output
         assert c.get(f"/api/v1/agents/{uid}/coffer-connection").json()["state"] == "disconnected"
 
 
@@ -344,9 +344,9 @@ def test_cli_show_reads_needs_repair_for_a_partial_connection(
     with _client() as c:
         _register(c)
         _patch_cli(monkeypatch, c)
-        runner.invoke(cli_app, ["agent", "connect", "cc"])
+        runner.invoke(cli_app, ["agent", "connect", "claude-code"])
         (home / ".claude" / "settings.json").write_text("{}\n", encoding="utf-8")
-        res = runner.invoke(cli_app, ["agent", "show", "cc"])
+        res = runner.invoke(cli_app, ["agent", "show", "claude-code"])
         assert res.exit_code == 0, res.output
         assert "needs repair" in res.output
         assert "memory delivery hook: missing" in res.output

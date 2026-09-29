@@ -123,7 +123,7 @@ except those under Proposed, which are drafted and not yet in effect.
 | [`resource-framework-upfront`](resource-framework-upfront.md) | The Resource Framework Is Core Domain, Designed Before the Second Kind |
 | [`kind-plugin-contract`](kind-plugin-contract.md) | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After |
 | [`resource-identity-is-an-immutable-uid`](resource-identity-is-an-immutable-uid.md) | Resource Identity Is an Immutable `uid`, Not the Name |
-| [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title |
+| [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind |
 | [`resource-reach-is-machine-local`](resource-reach-is-machine-local.md) | Resource Reach Is Machine-Local and Never Converges |
 | [`code-layout-layer-first`](code-layout-layer-first.md) | Code Layout Is Layer-First, With One Subdirectory per Kind |
