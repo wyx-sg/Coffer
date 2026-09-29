@@ -402,12 +402,17 @@ already has.
 - **THEN** the app lands on `/skills/release-notes` and no "page not found" view is shown
 
 ### Requirement: Query only the visible Activity tab and isolate failures
-Only the visible tab queries. A record whose route fails MUST render its error
-inside its own tab, leaving the other two working — one failing lane must not
-take the other two down with it — and there MUST be no manual refresh control and no
-Pause / Resume control: switching tab or changing a filter refetches, and new
-records arrive on their own (see "Stream new Activity records while the list is
-at the top").
+Only the visible tab pages through records — Everything through all three
+logs, each other tab through its own — and the count beside every other tab
+MUST come from a read of one row (the audit and invocation answers carry their
+`total`) or of the daemon log's bounded tail, never from paging a tab that is
+not in front. A record whose route fails MUST render its error inside its own
+tab, leaving the other two working — one failing lane must not take the other
+two down with it; on Everything the failing record is named above the stream,
+which shows the other two records, and offers Retry. There MUST be no manual
+refresh control and no Pause / Resume control: switching tab or changing a
+filter refetches, and new records arrive on their own (see "Stream new Activity
+records while the list is at the top").
 
 #### Scenario: a failing record shows its error inside its own tab
 - **GIVEN** one of the three routes is unavailable (an older daemon that does not serve it)
@@ -457,6 +462,79 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **GIVEN** memory partitions with notes
 - **WHEN** the user chooses Clear in Rebuildable cache and confirms
 - **THEN** the memory tree and the transcript summary cache are cleared, and the next memory update rebuilds the partitions from the agents' own memory, with no vault or local content touched
+
+### Requirement: Scope Activity's calls table to one server on its page
+A server's **Invocations** tab MUST read the same invocation log Activity's MCP
+calls tab reads, scoped to that one server, rather than a second record that
+would have to be kept in step with the first. It lists every call the gateway
+proxied for this server, newest first, filterable by status and time range,
+each row expanding to that call's raw JSON record — the only account of what an
+agent did when the agent is the thing that is broken. Activity's MCP calls tab
+reads every server's calls and names each row's server.
+
+#### Scenario: a server's invocations tab is the Activity calls table scoped to it
+- **GIVEN** a registered MCP server
+- **WHEN** its Invocations tab and Activity's MCP calls tab each render
+- **THEN** the server's tab asks only for that server's calls and drops the server column
+- **AND** Activity's tab asks the cross-server route for every server's calls and names each row's server
+
+### Requirement: Gather the three records on one Activity page
+The three records Coffer keeps — the audit log (what changed in the vault, and
+who changed it), the MCP invocation log (every call the gateway proxied, and
+which agent's session made it) and the daemon log (what Coffer itself did,
+including what broke) — MUST reach a person through one page at `/activity`,
+under System, carrying four tabs, each with its count: **Everything**, the
+default, merging the changes, the calls and the daemon's warnings and errors
+into one newest-first stream, then one tab per record — **Changes**, **MCP
+calls**, **Daemon log** — each a newest-first table with the columns that
+record actually has: an activity line and who made it; a call's agent, server
+and tool, duration and outcome; a log record's level, logger and message. Each
+tab pages older records on request ("Load older") by the log's cursor.
+
+#### Scenario: activity gives each record its own tab
+- **GIVEN** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
+- **WHEN** the user opens `/activity` and moves through its tabs
+- **THEN** Everything shows all three newest first, and each other tab renders that record's own newest-first table with the columns that record has — an activity line and who made it; a call's agent, server and tool, duration and outcome; a log record's level, logger and message
+- **AND** a change reads as a plain-language line, not a raw event code
+
+#### Scenario: the daemon tab reads every writer in the log
+- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before [daemon](../daemon/spec.md) "Write one bounded daemon log in one format" was met, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
+- **WHEN** the user opens the Daemon tab
+- **THEN** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
+- **AND** no message renders a terminal escape sequence as text
+- **AND** the traceback rides with the record that raised it rather than becoming rows of its own
+- **AND** the severity-floor filter judges each line by its own level rather than treating every non-JSON line as an error
+
+### Requirement: Filter each Activity tab and expand any row
+Every Activity tab MUST filter by free text and time range plus the filters its
+own records afford — Everything: who (an agent, or a person, the command line
+or Coffer itself), server and kind; Changes: who and the kind of resource
+changed; MCP calls: agent, server and status; Daemon log: a severity floor and
+a logger. Selecting any row MUST open it in a detail drawer beside the list —
+a failed call's error, a change's configuration before and after as a diff, a
+daemon record's traceback — ending in its raw underlying record, pretty-printed
+in a monospace, scrollable block; the drawer steps to the previous or next
+record without closing.
+
+#### Scenario: activity row expands to its raw record
+- **GIVEN** an Activity tab has at least one row
+- **WHEN** the user clicks (or presses Enter/Space on) that row
+- **THEN** a detail drawer opens beside the list and renders its raw record — the full underlying JSON, pretty-printed in a monospace, scrollable block
+
+### Requirement: Read each Activity tab from its record owner's route
+The Activity page MUST add no route of its own: each tab reads the read-only
+route belonging to whichever capability owns that record (see Purpose) — the
+Changes tab `GET /api/v1/audit`, the MCP calls tab `GET /api/v1/mcp/invocations`
+and the Daemon tab `GET /api/v1/daemon/logs`, Everything all three — and its
+filters list agents and servers from those kinds' own list routes. An agent or
+a script that asks "what happened" reads the same three records from the
+command line (see "Keep the command-line record readers").
+
+#### Scenario: each activity tab reads its owner's route
+- **GIVEN** a running daemon that has recorded an audit entry, an MCP invocation and a daemon log record
+- **WHEN** the user opens each of the Activity tabs in turn
+- **THEN** each tab shows only its own record's rows, read from that record's owner's route
+- **AND** no tab requests a route of the Activity page's own
 
 ## ADDED Requirements
 
@@ -1327,3 +1405,54 @@ filter — and nothing else. The page header MUST carry no export button of its 
 - **THEN** the file holds exactly the calls that match those filters, one per row, and the header shows no export button
 - **AND** Export as JSON saves the same records as JSON
 
+### Requirement: Show what needs the user and each area's health on Overview
+Overview MUST answer "is everything OK, and what needs me?" at a glance, from
+the capabilities' own reads and never a route of its own. **Needs you** comes
+first: one row per item of the attention list ([resource-framework](../resource-framework/spec.md)
+"Report what needs a person across every kind"), most severe first and then
+oldest, each with its resource and kind, the reason in a sentence, since when
+where that is known, and exactly one action that opens the page — or the tab —
+where the item is dealt with. An attention source that failed MUST be named
+above the rows, saying that what it would report is missing. Rows MUST clear
+themselves as problems resolve: the page follows the daemon's event stream and
+rereads the list when an `attention` change arrives. **Health** follows: one
+tile per area whose backend exists and whose feature is switched on — Agents,
+Model providers, MCP servers, Skills, Channels, and Knowledge, Memory and Sync
+when their features are on — each with a status word drawn from that area's
+attention items, a count from its own list and a one-line summary, opening the
+area's page; an area with no backend yet has no tile. Each tile loads and fails
+on its own: a failed tile says so with Retry and a link to its page while the
+rest of the page keeps working. **Recent activity** lists the last few changes
+with a link to Activity. With nothing needing the user the list is a calm "all
+good" card rather than an empty space, and with no agent registered the page
+opens on connecting the agents Coffer found.
+
+#### Scenario: overview lists what needs the user, most severe first
+- **GIVEN** an MCP server whose last test failed a day ago, an agent not connected since an hour ago and a warning from sync
+- **WHEN** the user opens Overview
+- **THEN** Needs you lists the server first, then the sync item, then the agent, each with its reason, since when and one action opening its page
+
+#### Scenario: overview shows a calm card when nothing needs the user
+- **GIVEN** an attention list with no items and no failed source
+- **WHEN** the user opens Overview
+- **THEN** Needs you shows "Nothing needs you" with when it was checked, and the health tiles show their areas as fine
+
+#### Scenario: overview welcomes a first run with the agents to connect
+- **GIVEN** a vault with no agent registered
+- **WHEN** the user opens Overview
+- **THEN** the page offers to connect the supported agents, naming which were found on this machine, followed by the first step for what they share
+
+#### Scenario: one area failing to load leaves the rest of overview working
+- **GIVEN** the knowledge read fails while every other read answers
+- **WHEN** the user opens Overview
+- **THEN** the Knowledge tile says it could not load, with Retry and a link to Knowledge, and every other tile and the Needs you list render
+
+#### Scenario: overview hides an area whose backend or feature is off
+- **GIVEN** the knowledge feature switched off
+- **WHEN** the user opens Overview
+- **THEN** there is no Knowledge tile, and no tile for Custom tools or CLIs
+
+#### Scenario: a resolved problem leaves overview on its own
+- **GIVEN** Overview open with one item in Needs you
+- **WHEN** the problem is resolved and the daemon announces an `attention` change
+- **THEN** the page rereads the attention list and the row disappears without a reload

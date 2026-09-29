@@ -235,8 +235,17 @@ class MCPGatewaySession:
 
     @property
     def _log_ctx(self) -> dict[str, Any]:
-        """What every path that records an invocation needs to write its row."""
-        return {"invocations": self._invocations, "session_id": self.id, "clock": self._clock}
+        """What every path that records an invocation needs to write its row.
+
+        ``session_agent_uid`` is read at call time, so a row carries the uid the
+        session reported on ``initialize`` (or ``None`` when it reported none).
+        """
+        return {
+            "invocations": self._invocations,
+            "session_id": self.id,
+            "session_agent_uid": self._session_agent_uid,
+            "clock": self._clock,
+        }
 
     async def _enabled_mcp_servers(self) -> list[str]:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
@@ -346,7 +355,6 @@ class MCPGatewaySession:
             prefs=self._prefs,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            session_agent_uid=self._session_agent_uid,
             **self._log_ctx,
         )
 

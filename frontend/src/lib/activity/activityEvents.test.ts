@@ -1,4 +1,4 @@
-// frontend/src/pages/activity/activityEvents.test.ts
+// frontend/src/lib/activity/activityEvents.test.ts
 // Every audit event type the daemon can record reads as a plain-language line
 // in both locales. The set comes from the checked-in fixture that `make lint`
 // regenerates from the backend's AuditEventType and diffs, so an event added

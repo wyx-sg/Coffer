@@ -523,8 +523,8 @@ def test_mcp_list_and_log_mcp_json_are_machine_readable(mcp_daemon: Any) -> None
     _seed_invocations(_register_server())
     for argv, key, keys in (
         (["mcp", "list", "--json"], "resources", ["resources"]),
-        # The invocation log is the route's page: its rows and its next_cursor.
-        (["log", "mcp", "--json"], "invocations", ["invocations", "next_cursor"]),
+        # The invocation log is the route's page: its rows, next_cursor and total.
+        (["log", "mcp", "--json"], "invocations", ["invocations", "next_cursor", "total"]),
     ):
         result = _runner.invoke(app, argv)
         assert result.exit_code == 0, result.output

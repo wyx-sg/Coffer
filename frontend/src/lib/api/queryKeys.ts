@@ -41,6 +41,8 @@ export const resourceKey = (uid: string) => ["resources", uid] as const;
 export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 export const agentCandidatesKey = ["agents", "candidates"] as const;
+/** Every supported agent type with its detection state, registered or not. */
+export const agentTypesKey = ["agents", "types"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
@@ -115,6 +117,13 @@ export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unk
 /** The gateway-wide invocation log (every server) — the Activity page. */
 export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
   ["mcp", "invocations", "all", filters] as const;
+
+// ---------------------------------------------------------------------------
+// attention — the cross-kind "needs you" list the Overview shows
+// ---------------------------------------------------------------------------
+
+/** GET /attention. A `change` event of kind `attention` invalidates it. */
+export const attentionKey = ["attention"] as const;
 
 // ---------------------------------------------------------------------------
 // providers (connections)

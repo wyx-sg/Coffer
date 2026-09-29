@@ -99,9 +99,21 @@ class MCPInvocationRepoPort(Protocol):
         resource_uid: str | None = None,
         status: Any | None = None,
         since: datetime | None = None,
+        agent_uid: str | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
     ) -> list[MCPInvocation]: ...
+    async def count(
+        self,
+        *,
+        resource_uid: str | None = None,
+        status: Any | None = None,
+        since: datetime | None = None,
+        agent_uid: str | None = None,
+    ) -> int:
+        """How many rows :meth:`query` would page through with these filters."""
+        ...
+
     async def usage_counts(
         self,
         *,

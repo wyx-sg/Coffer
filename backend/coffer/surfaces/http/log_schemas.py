@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # --- Audit ---
 
@@ -34,12 +34,19 @@ class AuditListOut(BaseModel):
     entries: list[AuditEntryOut]
     #: Continues the list after ``entries``; null exactly on the last page.
     next_cursor: str | None
+    total: int = Field(
+        description=(
+            "How many rows match the filters, across every page; the cursor does not change it."
+        )
+    )
 
 
 # --- MCP invocations ---
 
 
 class InvocationOut(BaseModel):
+    #: The row's id in the log — stable, unique, and the tie-break of its order.
+    id: int
     timestamp: datetime
     #: Which upstream server the call went to — the value actually recorded in
     #: the log, and what to filter or link by. Required, not optional: the
@@ -65,6 +72,10 @@ class InvocationOut(BaseModel):
     status: Literal["ok", "error", "timeout", "denied"]
     error_message: str | None = None
     session_id: str | None = None
+    #: The agent whose session made the call — the uid its shim reported — or
+    #: null when the session reported none. Nullable but NOT defaulted, like
+    #: ``resource_name``: the projection sets it on every row.
+    agent_uid: str | None
 
 
 class InvocationListOut(BaseModel):
@@ -73,3 +84,8 @@ class InvocationListOut(BaseModel):
     invocations: list[InvocationOut]
     #: Continues the list after ``invocations``; null exactly on the last page.
     next_cursor: str | None
+    total: int = Field(
+        description=(
+            "How many rows match the filters, across every page; the cursor does not change it."
+        )
+    )

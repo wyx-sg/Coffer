@@ -478,38 +478,186 @@
   },
   "activity": {
     "title": "Activity",
-    "subtitle": "The three records Coffer keeps — what changed, what it proxied, and what its daemon logged — each on its own tab, newest first.",
+    "subtitle": "What changed, what agents called through Coffer, and what the daemon logged — newest first.",
+    "live": "Live",
+    "notLive": "Not live",
+    "liveHint": "New records appear as they happen.",
+    "notLiveHint": "Reconnecting to the daemon; new records still arrive every few seconds.",
+    "countFloor": "{{value}}+",
     "tabs": {
+      "everything": "Everything",
       "changes": "Changes",
       "mcp": "MCP calls",
-      "daemon": "Daemon"
+      "daemon": "Daemon log"
     },
-    "changes": {
-      "emptyState": "No matching activity.",
-      "table": {
-        "time": "Time",
-        "activity": "Activity",
-        "actor": "Actor"
-      }
+    "sources": {
+      "change": "Changes",
+      "call": "MCP calls",
+      "daemon": "Daemon log"
     },
-    "daemon": {
-      "emptyState": "No matching log records.",
-      "noMessage": "(log record with no message)",
-      "searchPlaceholder": "Search log records",
-      "table": {
-        "time": "Time",
-        "level": "Level",
-        "logger": "Logger",
-        "message": "Message"
-      },
+    "actor": {
+      "ui": "You",
+      "user": "You",
+      "cli": "CLI",
+      "api": "API",
+      "system": "Coffer",
+      "agent": "An agent",
+      "channel": "Channel"
+    },
+    "status": {
+      "ok": "OK",
+      "error": "Error",
+      "timeout": "Timeout",
+      "denied": "Denied"
+    },
+    "call": {
+      "failed": "failed",
+      "failedWith": "failed — {{message}}",
+      "timeout": "timed out",
+      "denied": "denied"
+    },
+    "filters": {
+      "any": "Any",
+      "by": "Agent",
+      "agents": "Agents",
+      "notAnAgent": "Not an agent",
+      "server": "Server",
+      "kind": "Kind",
+      "status": "Status",
+      "logger": "Logger",
+      "clear": "Clear",
+      "clearAll": "Clear filters",
       "levelLabel": "Log level",
       "level": {
-        "all": "All levels",
-        "debug": "Debug and above",
-        "info": "Info and above",
-        "warning": "Warnings and errors",
-        "error": "Errors only"
+        "all": "All",
+        "info": "Info",
+        "warning": "Warnings",
+        "error": "Errors"
+      },
+      "searchLabel": "Filter records",
+      "search": {
+        "everything": "Filter by name, tool or path",
+        "changes": "Filter changes",
+        "mcp": "Tool, server or session",
+        "daemon": "Search log records"
+      },
+      "kinds": {
+        "calls": "MCP calls",
+        "changes": "Changes",
+        "allChanges": "All changes",
+        "daemon": "Daemon records",
+        "notDaemon": "Everything except daemon records"
+      },
+      "changeKinds": {
+        "mcp_server": "MCP servers",
+        "skill": "Skills",
+        "agent": "Agents",
+        "provider": "Model providers",
+        "channel": "Channels",
+        "knowledge": "Knowledge",
+        "memory": "Memory"
       }
+    },
+    "table": {
+      "time": "Time",
+      "event": "Event",
+      "by": "By",
+      "took": "Took",
+      "agent": "Agent",
+      "serverTool": "Server · tool",
+      "status": "Status",
+      "level": "Level",
+      "logger": "Logger",
+      "message": "Message"
+    },
+    "day": {
+      "today": "Today · {{date}}",
+      "yesterday": "Yesterday · {{date}}",
+      "undated": "Undated"
+    },
+    "pending_one": "{{count}} new",
+    "pending_other": "{{count}} new",
+    "loaded_one": "{{count}} record loaded",
+    "loaded_other": "{{count}} records loaded",
+    "loadOlder": "Load older",
+    "loadingOlder": "Loading older records…",
+    "end": "That's everything in this time range.",
+    "empty": {
+      "title": "Nothing has happened yet",
+      "body": "Activity fills in as you change things in Coffer and as agents call tools through it. Connect an agent to see its first calls here.",
+      "connect": "Connect an agent",
+      "addServer": "Add an MCP server",
+      "noMatch": "No records match these filters",
+      "noMatchBody": "Widen the time range or clear the filters."
+    },
+    "failed": {
+      "title": "{{sources}} couldn't be loaded",
+      "partial": "Showing the other records only; they are complete.",
+      "retry": "Retry"
+    },
+    "menu": {
+      "label": "More",
+      "heading": "Export filtered records",
+      "json": "Export as JSON",
+      "csv": "Export as CSV",
+      "note": "Every record of this tab that matches its filters.",
+      "done_one": "Exported {{count}} record",
+      "done_other": "Exported {{count}} records"
+    },
+    "drawer": {
+      "label": "Details",
+      "previous": "Previous record",
+      "next": "Next record",
+      "close": "Close details",
+      "kinds": {
+        "change": "Change",
+        "call": "MCP call",
+        "daemon": "Daemon record"
+      },
+      "who": "Who",
+      "what": "What",
+      "kindNames": {
+        "mcp_server": "MCP server",
+        "skill": "Skill",
+        "agent": "Agent",
+        "provider": "Model provider",
+        "channel": "Channel",
+        "knowledge": "Knowledge",
+        "memory": "Memory"
+      },
+      "event": "Event",
+      "whatChanged": "What changed",
+      "noDiff": "The configuration is the same before and after.",
+      "secretNote": "Secret values are never recorded.",
+      "agent": "Agent",
+      "noAgent": "Not reported",
+      "session": "Session",
+      "server": "Server",
+      "capability": {
+        "tool": "Tool",
+        "resource": "Resource",
+        "prompt": "Prompt"
+      },
+      "took": "Took",
+      "callId": "Call id",
+      "callProblem": {
+        "error": "The call to {{server}} failed",
+        "timeout": "The call to {{server}} timed out",
+        "denied": "The call to {{server}} was denied"
+      },
+      "callNote": "Coffer records who called which tool, when and how it went. Arguments and results pass straight through and are never stored.",
+      "level": "Level",
+      "logger": "Logger",
+      "around": "Around the same time",
+      "open": "Open {{name}}",
+      "copyDetails": "Copy details",
+      "copyCallId": "Copy call id",
+      "copyRecord": "Copy record",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy to the clipboard"
+    },
+    "daemon": {
+      "noMessage": "(log record with no message)"
     }
   },
   "settings": {
@@ -1954,7 +2102,183 @@
     }
   },
   "overview": {
-    "title": "Overview"
+    "title": "Overview",
+    "subtitle": "Everything Coffer runs for your agents on this Mac, and what needs you.",
+    "retry": "Retry",
+    "live": {
+      "on": "Live",
+      "off": "Not live",
+      "checked": "checked"
+    },
+    "needsYou": {
+      "title": "Needs you",
+      "order": "Most urgent first",
+      "failing": "Failing",
+      "attention": "Needs attention",
+      "since": "Since",
+      "sinceYesterday": "Since yesterday",
+      "actionFor": "{{action}}: {{name}}",
+      "sourceFailed": "{{area}} couldn't be checked, so anything it needs from you is missing from this list.",
+      "error": "Couldn't check what needs you",
+      "empty": {
+        "title": "Nothing needs you",
+        "body": "Anything that needs you shows up here.",
+        "checked": "Checked"
+      }
+    },
+    "actions": {
+      "connect": "Connect",
+      "test": "Test again",
+      "set_secret": "Add secret",
+      "check": "Check",
+      "run": "Review",
+      "review": "Review",
+      "repair": "Repair drift",
+      "open": "Open"
+    },
+    "kinds": {
+      "agent": "Agent",
+      "provider": "Model provider",
+      "mcp_server": "MCP server",
+      "skill": "Skill",
+      "channel": "Channel",
+      "knowledge": "Knowledge",
+      "memory": "Memory",
+      "sync": "Sync",
+      "reconcile": "Agent config",
+      "cli": "CLI",
+      "custom_tool": "Custom tool",
+      "other": "Other"
+    },
+    "sources": {
+      "agent": "Agents",
+      "mcp_server": "MCP servers",
+      "channel": "Channels",
+      "sync": "Sync",
+      "reconcile": "The agent-config check"
+    },
+    "health": {
+      "title": "Health",
+      "loadFailed": "Couldn't load",
+      "open": "Open {{area}}",
+      "failing_one": "{{count}} failing",
+      "failing_other": "{{count}} failing",
+      "agents": {
+        "ok": "All connected",
+        "warn_one": "{{count}} to connect",
+        "warn_other": "{{count}} to connect",
+        "unit": "of {{total}} connected",
+        "unitRegistered_one": "registered",
+        "unitRegistered_other": "registered"
+      },
+      "providers": {
+        "ok": "Ready",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "provider",
+        "unit_other": "providers",
+        "none": "Agents use their own login"
+      },
+      "channels": {
+        "ok": "All connected",
+        "warn_one": "{{count}} reconnecting",
+        "warn_other": "{{count}} reconnecting",
+        "unit_one": "channel",
+        "unit_other": "channels",
+        "none": "No channels yet"
+      },
+      "mcpServers": {
+        "ok": "All answering",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "server",
+        "unit_other": "servers",
+        "calls": "{{calls}} calls · {{errors}} errors in the last 24 h"
+      },
+      "skills": {
+        "ok": "Up to date",
+        "warn_one": "{{count}} drifted",
+        "warn_other": "{{count}} drifted",
+        "unit_one": "skill",
+        "unit_other": "skills",
+        "delivered_one": "Delivered to {{count}} agent",
+        "delivered_other": "Delivered to {{count}} agents",
+        "notDelivered": "Not delivered to any agent yet"
+      },
+      "knowledge": {
+        "ok": "Up to date",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "document",
+        "unit_other": "documents",
+        "collections_one": "{{count}} collection",
+        "collections_other": "{{count}} collections"
+      },
+      "memory": {
+        "ok": "Up to date",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "partition",
+        "unit_other": "partitions",
+        "notes_one": "{{count}} note",
+        "notes_other": "{{count}} notes"
+      },
+      "sync": {
+        "ok": "In sync",
+        "warn_one": "{{count}} held",
+        "warn_other": "{{count}} held",
+        "notSetUp": "Not set up",
+        "noRemote": "No remote set up",
+        "round": {
+          "ok": "In sync",
+          "no_change": "In sync",
+          "conflict": "Conflict",
+          "awaiting_confirmation": "Held",
+          "push_failed": "Push failed",
+          "failed": "Failed",
+          "disabled": "Paused",
+          "awaiting_join": "Waiting to join",
+          "none": "No round yet"
+        }
+      }
+    },
+    "activity": {
+      "title": "Recent activity",
+      "open": "Open Activity",
+      "empty": "Nothing has happened yet.",
+      "by": "by {{actor}}"
+    },
+    "firstRun": {
+      "title": "Connect your coding agents",
+      "body": "Connecting an agent adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
+      "preview": "You'll see every file change before Coffer writes it.",
+      "found": "Found on this Mac",
+      "notInstalled": "Not installed",
+      "connect": "Review and connect",
+      "thenTitle": "Then add what they share",
+      "shared": {
+        "mcpServers": {
+          "body": "No servers yet",
+          "cta": "Add MCP server"
+        },
+        "skills": {
+          "body": "No skills yet",
+          "cta": "Add skill"
+        },
+        "knowledge": {
+          "body": "No collections yet",
+          "cta": "Add knowledge"
+        },
+        "providers": {
+          "body": "Agents use their own login",
+          "cta": "Add provider"
+        },
+        "channels": {
+          "body": "No channels yet",
+          "cta": "Add channel"
+        }
+      }
+    }
   },
   "customTools": {
     "title": "Custom tools"

@@ -1106,9 +1106,14 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        total:
+          description: How many rows match the filters, across every page; the cursor does not change it.
+          title: Total
+          type: integer
       required:
       - entries
       - next_cursor
+      - total
       title: AuditListOut
       type: object
     ChangeEventOut:

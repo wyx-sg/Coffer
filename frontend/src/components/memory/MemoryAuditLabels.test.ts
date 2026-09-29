@@ -11,7 +11,7 @@ import type { TFunction } from "i18next";
 import i18next from "@/i18n";
 import backendKeys from "@/i18n/backend-keys.fixture.json";
 import type { components } from "@/lib/api/types";
-import { describeActivity } from "@/pages/activity/activityText";
+import { describeActivity } from "@/lib/activity/activityText";
 import { acceptance } from "@/test/acceptance";
 
 type AuditEntry = components["schemas"]["AuditEntryOut"];

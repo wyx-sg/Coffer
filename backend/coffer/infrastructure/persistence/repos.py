@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy.exc
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
@@ -239,6 +239,44 @@ def _audit_to_domain(row: AuditLogModel) -> AuditEntry:
     )
 
 
+def _audit_filtered(
+    stmt: Select[Any],
+    *,
+    kind: str | None,
+    resource_id: int | None,
+    event_type: str | None,
+    event_prefix: str | None,
+    since: datetime | None,
+) -> Select[Any]:
+    """The one WHERE both an audit page and its count read, so they cannot disagree."""
+    if resource_id is not None:
+        # By id alone. The old query ORed in "rows carrying this kind
+        # and name", which brought back a renamed resource's earlier
+        # trail — and, in exactly the same breath, the trail of a
+        # DIFFERENT resource that had held the name before being
+        # deleted. Two objects' histories rendered as one is a worse
+        # answer than a short one, and now that every write records the
+        # row's real id there is nothing left for the fallback to
+        # rescue except rows written before migration 0067, which are
+        # still readable in the unfiltered and kind-filtered views.
+        stmt = stmt.where(AuditLogModel.resource_id == resource_id)
+    elif kind is not None:
+        stmt = stmt.where(AuditLogModel.resource_kind == kind)
+    if event_type is not None:
+        stmt = stmt.where(AuditLogModel.event_type == event_type)
+    if event_prefix is not None:
+        # A feature's whole trail, not one event of it: memory's acts
+        # span two kinds (its own partitions, and the agent config a
+        # hook install writes), so "everything memory did" cannot be
+        # expressed as a kind filter. Filtering here rather than in the
+        # caller keeps the page's log complete — a client-side filter
+        # over a fixed window silently drops whatever fell outside it.
+        stmt = stmt.where(AuditLogModel.event_type.startswith(event_prefix))
+    if since is not None:
+        stmt = stmt.where(AuditLogModel.timestamp >= since)
+    return stmt
+
+
 class SqlAlchemyAuditRepo:
     """Concrete AuditRepo against the `audit_log` table.
 
@@ -284,31 +322,35 @@ class SqlAlchemyAuditRepo:
                 stmt = stmt.where(
                     newest_first_after(AuditLogModel.timestamp, AuditLogModel.id, after)
                 )
-            if resource_id is not None:
-                # By id alone. The old query ORed in "rows carrying this kind
-                # and name", which brought back a renamed resource's earlier
-                # trail — and, in exactly the same breath, the trail of a
-                # DIFFERENT resource that had held the name before being
-                # deleted. Two objects' histories rendered as one is a worse
-                # answer than a short one, and now that every write records the
-                # row's real id there is nothing left for the fallback to
-                # rescue except rows written before migration 0067, which are
-                # still readable in the unfiltered and kind-filtered views.
-                stmt = stmt.where(AuditLogModel.resource_id == resource_id)
-            elif kind is not None:
-                stmt = stmt.where(AuditLogModel.resource_kind == kind)
-            if event_type is not None:
-                stmt = stmt.where(AuditLogModel.event_type == event_type)
-            if event_prefix is not None:
-                # A feature's whole trail, not one event of it: memory's acts
-                # span two kinds (its own partitions, and the agent config a
-                # hook install writes), so "everything memory did" cannot be
-                # expressed as a kind filter. Filtering here rather than in the
-                # caller keeps the page's log complete — a client-side filter
-                # over a fixed window silently drops whatever fell outside it.
-                stmt = stmt.where(AuditLogModel.event_type.startswith(event_prefix))
-            if since is not None:
-                stmt = stmt.where(AuditLogModel.timestamp >= since)
+            stmt = _audit_filtered(
+                stmt,
+                kind=kind,
+                resource_id=resource_id,
+                event_type=event_type,
+                event_prefix=event_prefix,
+                since=since,
+            )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [_audit_to_domain(r) for r in rows]
+
+    async def count(
+        self,
+        *,
+        kind: str | None = None,
+        resource_id: int | None = None,
+        event_type: str | None = None,
+        event_prefix: str | None = None,
+        since: datetime | None = None,
+    ) -> int:
+        """How many rows :meth:`query` would page through with these filters."""
+        async with self._sm() as session:
+            stmt = _audit_filtered(
+                select(func.count()).select_from(AuditLogModel),
+                kind=kind,
+                resource_id=resource_id,
+                event_type=event_type,
+                event_prefix=event_prefix,
+                since=since,
+            )
+            return int((await session.execute(stmt)).scalar_one())

@@ -1,4 +1,4 @@
-// frontend/src/pages/activity/activityText.test.ts
+// frontend/src/lib/activity/activityText.test.ts
 import { describe, expect, test } from "vitest";
 import i18next from "@/i18n";
 import type { TFunction } from "i18next";

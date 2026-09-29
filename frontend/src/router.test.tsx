@@ -24,6 +24,9 @@ function mockApi() {
         agents: [],
         candidates: [],
         entries: [],
+        // GET /attention — the Overview at `/` reads it.
+        items: [],
+        errors: [],
         status: "ready",
         version: "0.0.0",
         port: 1,

@@ -39,6 +39,10 @@ While nothing changes, the stream sends a `heartbeat` event at a fixed interval,
 
 The stream is gated by the same token as every other management call. A browser's built-in `EventSource` cannot send a custom header, so the page reads the stream with `fetch` and parses the events itself — the same way it already reads a chat conversation's live output. The chat stream stays separate: it carries the content of a turn, which is state, not a hint.
 
+A page that shows live state follows the stream while it is open: Overview does, so a "needs you" row disappears as soon as its problem is resolved, and Activity does. The reader lives in one place in the web UI and keeps itself connected: when a connection ends it waits a moment and reconnects with the id of the last change it saw, and it waits longer after each refused attempt, so a daemon that is down costs a request every few seconds rather than a tight loop. On each `change` it invalidates the cached lists that kind is read through; on `resync` it invalidates everything; the page's own queries then refetch through the typed endpoints.
+
+Two lists the web UI shows are not on the stream, because neither is a resource: the audit log and the MCP call log. Activity therefore re-reads the newest page of each every few seconds — a few rows, not the whole list — and also re-reads the audit log's newest page whenever a `change` arrives, since a resource write leaves an audit entry behind.
+
 ## What pages can stop doing
 
 Before this stream, each page kept itself fresh by polling on its own timer, between five seconds and a minute, so a change could take up to a minute to appear and a page that shows every kind would have had to poll every kind. With one stream, a change appears as soon as it is written, and a page refetches only what an event names.

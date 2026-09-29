@@ -159,3 +159,24 @@ class AuditService:
             filters=filters,
             key=lambda e: position_of(e.timestamp, e.id),
         )
+
+    async def count(
+        self,
+        *,
+        resource: Resource | None = None,
+        kind: str | None = None,
+        event_type: str | None = None,
+        event_prefix: str | None = None,
+        since: datetime | None = None,
+    ) -> int:
+        """How many entries match the filters :meth:`page` takes, across every
+        page (spec resource-framework "Count a log's matching rows beside each
+        page"). No cursor and no limit: the answer is the same on every page.
+        """
+        return await self._repo.count(
+            kind=kind,
+            resource_id=resource.id if resource else None,
+            event_type=event_type,
+            event_prefix=event_prefix,
+            since=since,
+        )
