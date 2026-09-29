@@ -116,9 +116,10 @@ level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which also redirects old `?tab=` links; skills and MCP
 servers are keyed by their fixed name, agents by their type, renamable kinds
-by uid. Skills, MCP servers, model providers and agents follow it; Knowledge,
-Sync and Activity still use `?tab=` until their rebuild, and the open file in a tree is always
-`?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
+by uid. Skills, MCP servers, model providers, agents, knowledge
+(`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
+(`/memory/<uid>/delivered`) follow it; Sync and Activity still use `?tab=`
+until their rebuild, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the
 query cache (same query key → same data), not through Context. The only Context

@@ -5,7 +5,7 @@
  *  so the plain `truncated` message — which promises another try — would be
  *  wrong. */
 export function curateToastKey(result: { status: string; gave_up: boolean }): string {
-  const base = "knowledge.detail.curateStatus";
+  const base = "knowledge.curate.status";
   if (result.status === "truncated" && result.gave_up) return `${base}.truncatedGaveUp`;
   return `${base}.${result.status}`;
 }

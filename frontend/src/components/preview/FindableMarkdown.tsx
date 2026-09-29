@@ -3,12 +3,12 @@
 // the shared <Markdown> renderer plus the unified <FindWidget>, driving matches
 // through the CSS Custom Highlight API (useDomFind) so finding works on the
 // rendered output without touching the DOM react-markdown owns. Used by every
-// .md preview (KB document, memory note, skill Markdown files, an agent's
+// .md preview (KB document, skill Markdown files, an agent's
 // memory store).
 //
 // A file's leading YAML frontmatter is shown as METADATA above the body — a
 // compact key / value list in small muted type — never rendered as body text
-// (spec memory "Present partitions as a table and a file tree"). Rendered raw,
+// (spec memory "Present a partition as its memories"). Rendered raw,
 // the fences became rules and `origins:` became a bullet list that read as if
 // it were part of the note. Done once here so every Markdown preview gets it.
 import { useRef } from "react";

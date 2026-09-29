@@ -11,7 +11,7 @@ import { createElement, type ReactNode } from "react";
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 
 const { listUpkeepRuns } = await import("@/lib/api/upkeep");
-const { useUpkeepRunning } = await import("./useUpkeep");
+const { useUpkeepRun, useUpkeepRunning } = await import("./useUpkeep");
 const listMock = vi.mocked(listUpkeepRuns);
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -57,5 +57,28 @@ describe("useUpkeepRunning", () => {
     const { result } = renderHook(() => useUpkeepRunning("memory", "coffer"), { wrapper });
     await waitFor(() => expect(listMock).toHaveBeenCalled());
     expect(result.current).toBe(false);
+  });
+});
+
+describe("useUpkeepRun", () => {
+  beforeEach(() => {
+    listMock.mockReset();
+  });
+
+  test("finds the run by the target's uid and carries its n of m", async () => {
+    // The daemon claims a pass under the collection's uid, never its name.
+    listMock.mockResolvedValue({
+      runs: [
+        {
+          kind: "knowledge",
+          name: "kn-8c1f",
+          started_at: "2026-09-30T00:00:00Z",
+          done: 1,
+          total: 3,
+        },
+      ],
+    });
+    const { result } = renderHook(() => useUpkeepRun("knowledge", "kn-8c1f"), { wrapper });
+    await waitFor(() => expect(result.current).toMatchObject({ done: 1, total: 3 }));
   });
 });

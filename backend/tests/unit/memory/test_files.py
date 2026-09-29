@@ -1,6 +1,6 @@
 """A partition read as a file tree, which is what the surface claims it is.
 
-"Present partitions as a table and a file tree" rests on the claim that a
+"Cover memory management on REST and the CLI" rests on the claim that a
 partition *is* a folder of derived Markdown, so Coffer's own writing —
 ``MEMORY.md``, ``notes/``, ``RETIRED.md`` — is reachable, and the hidden
 ``.raw/`` of verbatim agent input is neither listed nor readable.

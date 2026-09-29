@@ -1,57 +1,25 @@
-// frontend/src/components/memory/MemoryWelcomePanel.tsx
-// First-run card shown on /memory before any partition exists — the same
-// welcome every other list surface gives (skills, knowledge, agents, channels,
-// providers), so arriving at an empty Memory reads like arriving at an empty
-// anything else.
+// frontend/src/components/memory/MemoryWelcomePanel.tsx — "Nothing distilled yet", the first-run state of /memory.
 //
-// The one next step is UPDATE, not Add: nothing here is user-created. Coffer
-// distils what the agents already learned out of their own native memories and
-// never writes back to them, so the only thing a developer can do on an empty
-// Memory is tell it to go and look — the same Update memory button the
-// populated page carries.
+// Shown before any partition exists, in the shared EmptyState every other
+// first-run surface uses. The one next step is Update memory, not Add:
+// nothing here is user-created — Coffer distils what the agents already
+// learned out of their own memory and never writes back to it.
+import { Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { EmptyState } from "@/components/EmptyState";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
-import { Card, CardContent } from "@/components/ui/card";
 
 export function MemoryWelcomePanel() {
   const { t } = useTranslation();
   return (
-    <Card className="paper-card border-primary/20 bg-accent-soft">
-      <CardContent className="space-y-6 py-10">
-        <div className="space-y-2">
-          <h2 className="text-lg font-bold">{t("memory.welcome.title")}</h2>
-          <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
-            {t("memory.welcome.body")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <MemoryUpdateButton />
-        </div>
-        <ul className="grid gap-3 pt-2 text-sm text-foreground/70 sm:grid-cols-3">
-          <WelcomeFeature
-            title={t("memory.welcome.featureRead.title")}
-            body={t("memory.welcome.featureRead.body")}
-          />
-          <WelcomeFeature
-            title={t("memory.welcome.featureShape.title")}
-            body={t("memory.welcome.featureShape.body")}
-          />
-          <WelcomeFeature
-            title={t("memory.welcome.featureOneWay.title")}
-            body={t("memory.welcome.featureOneWay.body")}
-          />
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function WelcomeFeature({ title, body }: { title: string; body: string }) {
-  return (
-    <li className="rounded-lg border border-border-subtle bg-surface-raised p-3 leading-relaxed">
-      <div className="mb-1 font-medium text-foreground">{title}</div>
-      <div className="text-xs text-muted-foreground">{body}</div>
-    </li>
+    <div className="rounded-xl border border-border-subtle bg-surface-raised">
+      <EmptyState
+        icon={Brain}
+        title={t("memory.welcome.title")}
+        description={t("memory.welcome.body")}
+        action={<MemoryUpdateButton />}
+      />
+    </div>
   );
 }

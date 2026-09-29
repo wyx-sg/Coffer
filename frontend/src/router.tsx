@@ -39,6 +39,15 @@ function gated(feature: FeatureKey, page: JSX.Element): JSX.Element {
   return <FeatureGate feature={feature}>{page}</FeatureGate>;
 }
 
+const knowledgePage = gated(
+  "knowledge",
+  lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+);
+const memoryDetailPage = gated(
+  "memory",
+  lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+);
+
 const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "SettingsModal");
 
 // The route table, exported as data: a test that has to prove a URL lands
@@ -135,20 +144,17 @@ const pageRoutes: RouteObject[] = [
     path: "skills/:name/:tab",
     element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
   },
-  {
-    path: "knowledge",
-    element: gated(
-      "knowledge",
-      lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
-    ),
-  },
-  {
-    path: "knowledge/:uid",
-    element: gated(
-      "knowledge",
-      lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
-    ),
-  },
+  // Knowledge is ONE page (spec knowledge "Present a collection as one tree in
+  // the web UI"): the collection tree stays on the left whatever the right pane
+  // shows — Recent changes (`/knowledge`), one change (`/knowledge/changes/<version>`),
+  // a collection and its open document (`/knowledge/<uid>?file=`), the
+  // document's History (`/knowledge/<uid>/history?file=`) or the Inbox
+  // (`/knowledge/<uid>/inbox`). Every address reuses the same element, so moving
+  // between them keeps the tree's expanded folders rather than remounting it.
+  { path: "knowledge", element: knowledgePage },
+  { path: "knowledge/changes/:version", element: knowledgePage },
+  { path: "knowledge/:uid", element: knowledgePage },
+  { path: "knowledge/:uid/:tab", element: knowledgePage },
   {
     path: "memory",
     element: gated(
@@ -156,13 +162,9 @@ const pageRoutes: RouteObject[] = [
       lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
     ),
   },
-  {
-    path: "memory/:uid",
-    element: gated(
-      "memory",
-      lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
-    ),
-  },
+  // A partition's two tabs: Memories (the bare path) and Delivered.
+  { path: "memory/:uid", element: memoryDetailPage },
+  { path: "memory/:uid/:tab", element: memoryDetailPage },
   {
     path: "sync",
     element: gated(
