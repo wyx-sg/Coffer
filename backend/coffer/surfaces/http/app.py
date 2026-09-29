@@ -37,6 +37,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
@@ -54,15 +55,12 @@ from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
 from coffer.surfaces.http.agent_facet_wiring import build_agent_catalog
-from coffer.surfaces.http.agent_skill_wiring import (
-    run_claude_mcp_home_migration,
-    run_skill_drift_boot_heal,
-)
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
 )
 from coffer.surfaces.http.app_shutdown import Running, shutdown
+from coffer.surfaces.http.attention_wiring import lifespan_attention_sources
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat_wiring import wire_chat
@@ -90,10 +88,15 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 from coffer.surfaces.http.memory_wiring import (
     follow_memory_switch,
     memory_context_composer,
-    run_memory_delivery_boot_heal,
+    register_delivery_hook_target,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
+from coffer.surfaces.http.reconcile_wiring import (
+    build_reconciler,
+    run_boot_pass,
+    start_reconciler,
+    wire_attention,
+)
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
@@ -163,9 +166,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # already has that row — so the id it stores is read off it rather than
     # looked back up from a label that may since have changed.
     audit = AuditService(audit_repo)
+    # What each kind contributes to vault convergence (spec vault-sync),
+    # collected as wiring proceeds and handed to ``start_sync`` at the end.
+    sync_contributions = SyncContributions()
+    # The unified reconciler (ADR one-level-triggered-reconciler-compares-
+    # parameters): built first, so every resource write hints it, and so each
+    # kind below can register the targets it supplies.
+    reconciler = build_reconciler(audit, sync_contributions)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
-        repo=resource_repo,
+        repo=HintingResourceRepo(resource_repo, reconciler.hint),
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
         # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
@@ -176,9 +186,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # What each kind contributes to vault convergence (spec vault-sync),
-    # collected as wiring proceeds and handed to ``start_sync`` at the end.
-    sync_contributions = SyncContributions()
     # Also registers the engine-settings synced state area.
     internal_engine_config_svc = build_config_services(sm, audit, sync_contributions)
 
@@ -214,6 +221,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         sync=sync_contributions,
         platform=platform,
         agent_catalog=agent_catalog,
+        reconciler=reconciler,
     )
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
@@ -248,13 +256,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # (best-effort; see credential_composition for the mechanics).
     await run_legacy_keychain_migration(app.state.kinds, sm, credential_store, audit)
 
-    # Boot heals — best-effort, never allowed to fail startup (see
-    # provider_wiring / agent_skill_wiring for what each corrects).
-    await run_provider_projection_sweep(kinds.provider.boot_heal)
-    await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
-    await run_claude_mcp_home_migration(kinds.agent_skill.mcp_home_migration)
-    # Both follow their feature's switch from here on, and at boot already
-    # match it (spec experimental-features).
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.
     connection = wire_agent_connection(
@@ -263,15 +264,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.memory.delivery_service,
         features,
     )
-    await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)
-    follow_memory_switch(kinds.memory.delivery_service, features, connection.connected_agents)
+    register_delivery_hook_target(
+        reconciler, kinds.memory.delivery_service, features, connection.connected_agents
+    )
+    # The boot pass converges every target at once — MCP entries, skill links,
+    # provider projections, delivery hooks — before the daemon reports ready.
+    await run_boot_pass(reconciler)
+    # The delivery hook follows the ``memory`` switch from here on (spec
+    # experimental-features), through a pass with the switch's warrant.
+    follow_memory_switch(reconciler, features)
     follow_guide_features(kinds.guide, features)
-    # Coffer's own skill, re-rendered from this build and whatever the corpus
-    # holds right now, and seeded into the master store as an ordinary skill
-    # resource. Done every boot rather than only on change: it is cheap when
-    # nothing moved (two reads and a comparison), it heals a master someone
-    # edited, and it is what upgrades a vault that still holds the previous
-    # per-agent rendering.
+    # Coffer's own skill, re-rendered from this build and the corpus every boot
+    # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
 
     # Start the batched invocation writer alongside the retention
@@ -318,6 +322,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Channel adapter reconciler (spec channels): Telegram polling and the
     # SeaTalk websocket connections converge from its first tick.
     channel_runtime_task = asyncio.create_task(channel_runtime.run())
+    # The reconciler's periodic loop; hints bring a pass forward.
+    reconciler_task = start_reconciler(reconciler)
+    # The Overview's "needs you" list: open drift, then each kind's signals.
+    wire_attention(
+        reconciler,
+        features.is_enabled,
+        lifespan_attention_sources(
+            resource_svc=resource_svc,
+            credential_store=credential_store,
+            connection_service=connection,
+            sync_service=workers.sync.service,
+        ),
+    )
 
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its
@@ -336,6 +353,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 channel_runtime=channel_runtime,
                 channel_runtime_task=channel_runtime_task,
                 reaper_task=reaper_task,
+                reconciler_task=reconciler_task,
                 kinds=kinds,
                 engine=engine,
             )

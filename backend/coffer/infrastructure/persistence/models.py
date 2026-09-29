@@ -54,6 +54,9 @@ class ResourceModel(Base):
     #: Optional display text shown in place of ``name`` (migration 0106); NULL
     #: means none, and surfaces show the name.
     title: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: Monotonic revision (migration 0107): 1 at creation, bumped by every
+    #: write; the reconciler's ``Changed`` hint carries it.
+    rev: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     __table_args__ = (
         # The label is still unique within its kind — a user should not have two

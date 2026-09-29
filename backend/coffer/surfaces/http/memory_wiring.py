@@ -52,19 +52,23 @@ from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
-from coffer.application.memory.delivery_switch import (
+from coffer.application.memory.delivery_reconcile import (
+    TARGET as DELIVERY_HOOK_TARGET,
+)
+from coffer.application.memory.delivery_reconcile import (
     ConnectedAgents,
+    DeliveryHookTarget,
     memory_switch_subscriber,
-    reconcile_at_boot,
-    reconcile_on_switch,
 )
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
+from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
+from coffer.domain.reconcile import Outcome, Trigger
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory import paths as memory_paths
@@ -113,50 +117,49 @@ class MemoryWiring:
     distil: DistilRunner
 
 
-async def run_memory_delivery_boot_heal(
-    delivery: DeliveryService, features: FeatureService
+def register_delivery_hook_target(
+    reconciler: Reconciler,
+    delivery: DeliveryService,
+    features: FeatureService,
+    connected: ConnectedAgents,
 ) -> None:
-    """Boot hook: rewrite hooks whose command Coffer no longer writes.
+    """Register the memory delivery hook with the reconciler.
 
-    An installed hook is a string in somebody else's settings file, and the
-    CLI it calls ships in a binary that keeps moving; detection matches only
-    the marker, so an entry whose arguments went stale reads as installed and
-    fails at every session start. Repairing it needs no user, which is why it
-    happens here rather than behind a button.
-
-    It follows the ``memory`` switch as well (spec experimental-features
-    "Withdraw what a switched-off feature put in front of agents"): with memory
-    off it makes sure no agent still carries the hook. Switching it on later
-    installs the hook into the connected agents (:func:`follow_memory_switch`).
-
-    Best-effort, like the sweeps it sits beside: whatever it finds is logged,
-    and nothing here is allowed to fail boot.
+    Every pass — boot, period, hint, switch, a person applying from the drift
+    view — then compares each installed hook's whole command with what this
+    build would install (spec memory "Repair stale delivery hooks") and follows
+    the ``memory`` switch (spec experimental-features "Withdraw what a
+    switched-off feature put in front of agents"). ``connected`` is the agent
+    kind's answer to which agents carry Coffer's gateway entry.
     """
-    enabled = features.is_enabled("memory")
-    await _logged(reconcile_at_boot(delivery, enabled=enabled))
+    reconciler.register(
+        DeliveryHookTarget(delivery=delivery, features=features, connected=connected)
+    )
 
 
-def follow_memory_switch(
-    delivery: DeliveryService, features: FeatureService, connected: ConnectedAgents
-) -> None:
-    """Re-run the delivery reconcile whenever ``memory`` is switched, to the
-    state ``memory`` is in when it runs: off withdraws the hook everywhere, on
-    installs it into every agent ``connected`` names."""
+def follow_memory_switch(reconciler: Reconciler, features: FeatureService) -> None:
+    """Run a delivery-hook pass whenever ``memory`` is switched.
 
-    async def _reconcile(enabled: bool) -> None:
-        await _logged(reconcile_on_switch(delivery, connected, enabled=enabled))
+    The pass reads the state ``memory`` is in when it runs: off withdraws the
+    hook everywhere, on installs it into every connected agent that lacks it
+    (``Trigger.SWITCH`` is the warrant for that install) and rewrites stale
+    commands. Nothing here fails the switch: a pass that raises, or items that
+    fail, are logged.
+    """
+
+    async def _reconcile(_enabled: bool) -> None:
+        try:
+            report = await reconciler.run(targets=[DELIVERY_HOOK_TARGET], trigger=Trigger.SWITCH)
+        except Exception:
+            logger.exception("memory_delivery_switch.failed")
+            return
+        for failure in report.failures:
+            logger.warning("memory_delivery_switch %s: %s", failure.target, failure.error)
+        for result in report.results:
+            if result.outcome is Outcome.FAILED:
+                logger.warning("memory_delivery_switch %s: %s", result.change.id, result.error)
 
     features.subscribe(memory_switch_subscriber(features, _reconcile))
-
-
-async def _logged(reconcile: Awaitable[tuple[str, ...]]) -> None:
-    try:
-        notes = await reconcile
-    except Exception:
-        logger.exception("memory_delivery_reconcile.failed")
-        return
-    for note in notes:
-        logger.warning("memory_delivery_reconcile %s", note)
 
 
 def wire_memory_kind(

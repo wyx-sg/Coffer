@@ -6,8 +6,16 @@ delivery hooks explicitly and removably", "Audit every delivery fire").
 agent, moving its config dir, or aggregating memory. What calls `install()` is
 the user connecting the agent to Coffer (spec agent-registry "Connect an agent
 to Coffer in one action", which composes this hook as one of its parts), or the
-`memory` switch turning on for an agent the user already connected; every
-install/remove is audited with its actor. `status()` never writes anything.
+delivery-hook reconcile target (`delivery_reconcile.py`) repairing a stale
+command or following the `memory` switch; every install/remove is audited with
+its actor. `status()` never writes anything.
+
+There is one writer. `write_install` / `write_remove` perform the
+marker-scoped, atomic, backed-up edit and hand back a `DeliveryWrite` (the
+prior text, the new text, the path) without auditing; the public `install` /
+`remove` call them and record the audit event, and the reconcile target calls
+them and hands the event to the reconciler, which records it and runs
+`restore` if it cannot.
 
 Touches an agent's config directory the same way `AgentConfigFileService`
 does: through the allowlisted `ConfigFileSpec` from
@@ -38,6 +46,7 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
@@ -71,6 +80,11 @@ class AgentConfigWriter(Protocol):
         """Atomically write `text` to `path` (temp file + rename)."""
         ...
 
+    def delete_with_backup(self, path: pathlib.Path) -> bool:
+        """Back `path` up and remove it; `False` when it is absent. Only an
+        undo of a write that created the file calls this."""
+        ...
+
 
 # Structural type for the agent-lookup dependency — avoids a hard import of
 # AgentService (and keeps this service unit-testable with a fake), mirroring
@@ -86,6 +100,33 @@ class _AgentLookup(Protocol):
 
     async def get(self, uid: str, /) -> Resource: ...
     async def list(self) -> list[Resource]: ...
+
+
+@dataclass(frozen=True)
+class HookSite:
+    """Where one registered agent's delivery hook lives: the agent, its
+    projection's delivery-hook adapter, and the allowlisted file."""
+
+    agent: Resource
+    adapter: DeliveryAdapter
+    path: pathlib.Path
+
+
+@dataclass(frozen=True)
+class DeliveryWrite:
+    """One edit the writer made: what the file held before (`None` when the
+    write created it) and what it holds now. What an audit event describes and
+    what `DeliveryService.restore` puts back."""
+
+    agent: Resource
+    event: str
+    path: pathlib.Path
+    prior_text: str | None
+    new_text: str
+
+    @property
+    def details(self) -> dict[str, str]:
+        return {"event": self.event, "path": str(self.path)}
 
 
 class DeliveryService:
@@ -164,9 +205,36 @@ class DeliveryService:
         agent, cfg = await self._agent(agent_uid)
         return await self._status_for(agent, cfg)
 
-    async def install(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
-        """Install Coffer's hook for one agent. Idempotent: a prior install is
-        replaced in place, never duplicated. Always audited with `actor`.
+    async def sites(self) -> list[HookSite]:
+        """Every registered agent whose projection has a delivery hook, with
+        the file it lives in. Reads no config file; an agent row whose config
+        does not parse is left out."""
+        out: list[HookSite] = []
+        for resource in await self._agents.list():
+            try:
+                cfg = AgentConfig.model_validate(resource.config)
+            except Exception:
+                continue
+            adapter = self._catalog.delivery_hook(cfg.type)
+            if adapter is None:
+                continue
+            out.append(HookSite(resource, adapter, self._spec(cfg, adapter).path))
+        return out
+
+    def installed_command(self, site: HookSite) -> str | None:
+        """The command Coffer's marker-scoped entry carries in `site`'s file,
+        or `None` when there is none. Raises `MalformedDeliveryConfig`, with
+        the path, for a file it cannot parse. Writes nothing."""
+        text = self._store.read_text(site.path) or ""
+        try:
+            return site.adapter.find_command(text)
+        except MalformedDeliveryConfig as e:
+            raise MalformedDeliveryConfig(f"{site.path}: {e}") from e
+
+    async def write_install(self, agent_uid: str) -> DeliveryWrite:
+        """Write Coffer's hook for one agent, replacing a prior entry in place,
+        and return the edit. Does not audit — `install` does, and so does the
+        reconciler for a repair.
 
         The uid is what goes into the installed command, so the entry keeps
         naming this agent however the user relabels it afterwards — and a
@@ -175,104 +243,59 @@ class DeliveryService:
         agent, cfg = await self._agent(agent_uid)
         adapter = self._adapter(cfg.type)
         spec = self._spec(cfg, adapter)
-        text = self._read(spec)
-        new_text = self._with_path(spec, adapter.install, text, agent.uid)
+        prior = self._store.read_text(spec.path)
+        new_text = self._with_path(spec, adapter.install, prior or "", agent.uid)
         assert new_text is not None  # install() always returns text, never None
         self._store.write_text_atomic(spec.path, new_text)
+        return DeliveryWrite(agent, adapter.event, spec.path, prior, new_text)
+
+    async def write_remove(self, agent_uid: str) -> DeliveryWrite | None:
+        """Take only Coffer's entry out of one agent's file and return the
+        edit; `None`, with nothing written, when no entry is there. Does not
+        audit."""
+        agent, cfg = await self._agent(agent_uid)
+        adapter = self._adapter(cfg.type)
+        spec = self._spec(cfg, adapter)
+        prior = self._store.read_text(spec.path)
+        text = prior or ""
+        if self._with_path(spec, adapter.find_command, text) is None:
+            return None
+        new_text = self._with_path(spec, adapter.remove, text)
+        assert new_text is not None  # remove() always returns text, never None
+        self._store.write_text_atomic(spec.path, new_text)
+        return DeliveryWrite(agent, adapter.event, spec.path, prior, new_text)
+
+    def restore(self, write: DeliveryWrite) -> None:
+        """Put back what `write` replaced — or remove the file it created."""
+        if write.prior_text is None:
+            self._store.delete_with_backup(write.path)
+        else:
+            self._store.write_text_atomic(write.path, write.prior_text)
+
+    async def install(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
+        """Install Coffer's hook for one agent. Idempotent: a prior install is
+        replaced in place, never duplicated. Always audited with `actor`."""
+        write = await self.write_install(agent_uid)
         await self._audit.record(
             AuditEventType.MEMORY_DELIVERY_INSTALLED.value,
-            resource=agent,
+            resource=write.agent,
             actor=actor,
-            details={"event": adapter.event, "path": str(spec.path)},
+            details=write.details,
         )
-        return await self._status_for(agent, cfg)
-
-    async def heal_drift(self, *, actor: str = "system") -> tuple[str, ...]:
-        """Rewrite every installed hook whose command is no longer the one
-        Coffer would write. Returns a note per agent repaired.
-
-        An installed hook is a string sitting in somebody else's settings file
-        for months, and the CLI it invokes ships in a binary that keeps
-        moving. When `coffer memory context` dropped `--agent` for
-        `--agent-uid` (ADR resource-identity-is-an-immutable-uid), every hook
-        already on disk kept passing the option that no longer existed — so
-        the agent printed a usage error at the start of every session and
-        Coffer's memory reached it never again. Nothing noticed: detection
-        matches the marker and never reads the arguments, which is what makes
-        a reinstall able to replace an entry in place, and is also why a
-        stale entry looked perfectly installed to `status`.
-
-        So the repair is the same act as the install, decided by comparing
-        what is there with what `command_for` says now. Best-effort per agent:
-        one unreadable settings file must not stop the others from being
-        fixed.
-        """
-        notes: list[str] = []
-        for resource in await self._agents.list():
-            try:
-                cfg = AgentConfig.model_validate(resource.config)
-            except Exception:
-                continue
-            if not self.supports(cfg.type):
-                continue
-            try:
-                status = await self._status_for(resource, cfg)
-                if not status.installed:
-                    continue
-                wanted = self._adapter(cfg.type).command_for(resource.uid)
-                if status.command == wanted:
-                    continue
-                await self.install(resource.uid, actor=actor)
-            except Exception as exc:
-                notes.append(f"{resource.name}: could not repair the delivery hook ({exc!r})")
-                continue
-            notes.append(f"{resource.name}: delivery hook rewritten to the current command")
-        return tuple(notes)
-
-    async def remove_everywhere(self, *, actor: str) -> tuple[str, ...]:
-        """Remove the hook from every agent that carries one. Returns a note
-        per agent, removed or not.
-
-        Best-effort per agent, like ``heal_drift``: one malformed settings file
-        must not keep the hook in every other agent.
-        """
-        notes: list[str] = []
-        for resource in await self._agents.list():
-            try:
-                cfg = AgentConfig.model_validate(resource.config)
-            except Exception:
-                continue
-            if not self.supports(cfg.type):
-                continue
-            try:
-                if not (await self._status_for(resource, cfg)).installed:
-                    continue
-                await self.remove(resource.uid, actor=actor)
-            except Exception as exc:
-                notes.append(f"{resource.name}: could not remove the delivery hook ({exc!r})")
-                continue
-            notes.append(f"{resource.name}: delivery hook removed")
-        return tuple(notes)
+        return await self.status(agent_uid)
 
     async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Remove Coffer's hook for one agent. A clean no-op — no write, no
         audit entry — when nothing is installed."""
-        agent, cfg = await self._agent(agent_uid)
-        adapter = self._adapter(cfg.type)
-        spec = self._spec(cfg, adapter)
-        text = self._read(spec)
-        if self._with_path(spec, adapter.find_command, text) is None:
-            return await self._status_for(agent, cfg)
-        new_text = self._with_path(spec, adapter.remove, text)
-        assert new_text is not None  # remove() always returns text, never None
-        self._store.write_text_atomic(spec.path, new_text)
-        await self._audit.record(
-            AuditEventType.MEMORY_DELIVERY_REMOVED.value,
-            resource=agent,
-            actor=actor,
-            details={"event": adapter.event, "path": str(spec.path)},
-        )
-        return await self._status_for(agent, cfg)
+        write = await self.write_remove(agent_uid)
+        if write is not None:
+            await self._audit.record(
+                AuditEventType.MEMORY_DELIVERY_REMOVED.value,
+                resource=write.agent,
+                actor=actor,
+                details=write.details,
+            )
+        return await self.status(agent_uid)
 
     async def record_fired(self, agent_uid: str) -> None:
         """Record that an agent's hook just fired (spec memory "Audit every delivery fire").

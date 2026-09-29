@@ -239,7 +239,7 @@ so switches never interleave. There is no `ProviderRepo` and no
 | `ResourceDoc` / `resource_to_doc` | `backend/coffer/domain/sync/serialization.py` | serialise provider rows |
 | `SyncExporter` | `backend/coffer/application/sync/exporter.py` | step 1 of a converge round: write every kind's rows into the tree |
 | `ResourceApplier` | `backend/coffer/application/sync/appliers.py` | apply an incoming document by `(kind, name)` — identity, description and config, never the reach |
-| `ProviderProjectionReconcile` | `backend/coffer/application/provider/sync_reconcile.py` | post-converge hook: re-derive the projection from the converged rows |
+| `ProviderProjectionTarget` | `backend/coffer/application/provider/projection_reconcile.py` | the reconciler's provider-projection target; the import's pass (`Trigger.IMPORT`) re-derives the projection from the converged rows |
 
 ### Audit
 

@@ -21,6 +21,7 @@ Four rules the order encodes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -53,6 +54,7 @@ class Running:
     channel_runtime: Any
     channel_runtime_task: asyncio.Task[None]
     reaper_task: asyncio.Task[Any]
+    reconciler_task: asyncio.Task[None]
     kinds: Any
     engine: AsyncEngine
 
@@ -73,6 +75,11 @@ async def best_effort(step: str, awaitable: Any) -> None:
 async def shutdown(running: Running) -> None:
     """Stop everything, in the order above."""
     daemon_routes.set_daemon_phase("draining")
+    # The unified reconciler first: a pass writes into agents' config files
+    # and records audit rows, so it must not start while the rest goes down.
+    running.reconciler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await running.reconciler_task
     running.workers.retention_worker.stop()
     await stop_converge_worker(running.workers.converge_worker)
     await stop_curation_worker(running.workers.curation_task)

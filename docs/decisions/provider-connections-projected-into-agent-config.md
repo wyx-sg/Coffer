@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Related**: [Provider Keys Never Land in Native Config](provider-keys-never-land-in-native-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Writing Agent Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md), [Kind Plugin Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Keep at most one active connection per agent type", spec provider-switching "Activate a connection into the agents its scope reaches", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an active flag the agent's config contradicts at boot", spec provider-switching "Converge connections across machines", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
+**Related**: [Provider Keys Never Land in Native Config](provider-keys-never-land-in-native-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Writing Agent Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md), [Kind Plugin Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Keep at most one active connection per agent type", spec provider-switching "Activate a connection into the agents its scope reaches", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an active flag the agent's config contradicts", spec provider-switching "Converge connections across machines", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
 
 ## Context
 
@@ -65,12 +65,14 @@ removes Coffer's keys and clears the flag, returning the agent to its own
 login. The switch is audited as `provider_switched` with
 `{from, to, protocol, agents}`.
 
-Two reconcilers keep the flag honest against a file Coffer does not own.
-After a converge round, `application/provider/sync_reconcile.py` re-derives
-each agent type's projection from the converged rows, because writing a native
-file is a machine-local side effect no synced document can carry. At boot,
-`application/provider/boot_reconcile.py` clears `is_active` when the
-projection is no longer in the file. It never re-projects: the agent's file is
+The provider-projection target of the unified reconciler (ADR
+[one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md))
+keeps the flag honest against a file Coffer does not own. After a converge
+round, the import's pass re-derives each agent type's projection from the
+converged rows, because writing a native file is a machine-local side effect no
+synced document can carry. On every other pass it clears `is_active` when the
+projection is no longer in the file, and re-projects one whose values went
+stale. It never writes a missing projection back: the agent's file is
 the ground truth for what the agent runs on, and re-routing a user's agent on
 the strength of a stale flag would be a surprise (PR #320, after an agent ran
 on its built-in login for weeks while every surface reported a Coffer

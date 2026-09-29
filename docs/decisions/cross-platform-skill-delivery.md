@@ -106,15 +106,17 @@ of the same rule.**
   Windows footgun of `rmtree` through a junction into the master.
 - **One predicate decides delivery.** A skill is delivered to an agent exactly
   when `skill.enabled and is_active(skill.scope, agent.uid)`, and the agent is
-  enabled (`application/skill/delivery_ops.py`). There is no per-`(skill,
+  enabled (`application/skill/link_reconcile.py`). There is no per-`(skill,
   agent)` switch. Both inputs are machine-local reach. Delivery is reconciled
-  per agent on every trigger that can change the answer.
+  from state on every pass of the unified reconciler, and at once after a
+  write that can change the answer.
 - **Report, never overwrite.** A target that holds something Coffer did not
   put there is reported as a conflict and left byte-identical; the link helper
   refuses to create over an existing path.
-- **Boot repairs only what is safe to repair unattended.** At every daemon
-  start, `application/skill/boot_reconcile.py` runs the same repair a person
-  can trigger on demand, restricted to `missing_link` (recreate it) and
+- **Every pass repairs only what is safe to repair unattended.** On every pass
+  of the unified reconciler (at start, on its period, after a change — ADR
+  [one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md)),
+  the skill-link target runs the same repair a person can trigger on demand, restricted to `missing_link` (recreate it) and
   `tampered_link` (rename the foreign link aside to a uniquely suffixed backup,
   then recreate). `replaced_with_regular`, `missing_master` and
   `orphan_master` are reported, never auto-remediated. The repair is audited
@@ -149,4 +151,4 @@ of the same rule.**
   spec skill-manager "Fall back to copying where links are unavailable",
   spec skill-manager "Deliver a skill only where it is enabled and in scope",
   spec skill-manager "Report a foreign target instead of overwriting it",
-  spec skill-manager "Heal safely repairable drift at daemon boot".
+  spec skill-manager "Heal safely repairable drift on every pass".

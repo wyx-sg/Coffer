@@ -193,6 +193,40 @@ def installed_command(
     return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])
 
 
+def installed_entry(
+    fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
+) -> dict[str, Any] | None:
+    """The installed coffer entry's parameters — ``{"command": <shim>, "args":
+    [...]}`` — or ``None`` when there is no entry.
+
+    Every parameter the entry carries, not its presence: the reconciler judges
+    an entry current only when these equal what an install would write now
+    (ADR one-level-triggered-reconciler-compares-parameters), so a shim an
+    upgrade moved or a stale ``--agent-uid`` reads as drift. A missing
+    ``args`` reads as ``[]``. Raises ``ConfigFileFormatInvalid`` for text that
+    does not parse, like the other readers here.
+    """
+    ck = container_key or default_container_key(fmt)
+    if not is_installed(fmt, text, container_key=ck):
+        return None
+    if fmt is ConfigFileFormat.JSON:
+        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
+    else:
+        entry = _parse_toml(text)[ck][COFFER_SERVER_KEY]
+    args = entry.get("args") if isinstance(entry, MutableMapping) else None
+    return {
+        "command": _coffer_command(entry),
+        "args": [str(a) for a in args] if isinstance(args, (list, tuple)) else [],
+    }
+
+
+def desired_entry(shim_path: str | None, agent_uid: str) -> dict[str, Any]:
+    """What :func:`apply_install` writes for ``agent_uid``, in the shape
+    :func:`installed_entry` reads — so the two compare directly."""
+    fields = _entry_fields(shim_path or "", McpEntryStyle.COMMAND_MAP, agent_uid)
+    return {"command": shim_path, "args": list(fields.get("args", []))}
+
+
 def installed_agent_uid(
     fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
 ) -> str | None:

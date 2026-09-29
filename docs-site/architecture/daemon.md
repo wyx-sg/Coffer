@@ -124,10 +124,10 @@ sequenceDiagram
   A->>A: schema guard, backup, alembic upgrade head
   A->>A: startup sweep of orphans and stale daemons
   A->>A: credentials, services, kinds, chat, channels
-  A->>A: boot heals and guide refresh
+  A->>A: boot reconcile pass and guide refresh
   A->>J: read token and port back
   A->>A: deploy frozen sibling binaries
-  A->>A: start workers, channel runtime, session reaper
+  A->>A: start workers, channel runtime, reconciler loop, session reaper
   A-->>U: phase ready
   U->>U: listen on the socket
   U-->>E: started

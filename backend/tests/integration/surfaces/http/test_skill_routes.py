@@ -13,6 +13,7 @@ from __future__ import annotations
 import pathlib
 import re
 import textwrap
+import time
 
 import pytest
 from starlette.testclient import TestClient
@@ -349,6 +350,21 @@ def test_import_without_overwrite_still_reports_the_reservation(tmp_path, monkey
         assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
 
 
+def _wait_for_quiet_reconciler(timeout: float = 5.0) -> None:
+    """Until no hinted pass is pending or running (the daemon's loop runs in
+    the TestClient's thread)."""
+    from coffer.surfaces.http.reconcile_dependencies import get_reconciler
+
+    reconciler = get_reconciler()
+    deadline = time.monotonic() + timeout
+    quiet = 0
+    while quiet < 3:
+        assert time.monotonic() < deadline, "the reconciler never went quiet"
+        busy = bool(reconciler.pending_hints) or reconciler._lock.locked()
+        quiet = 0 if busy else quiet + 1
+        time.sleep(0.2)
+
+
 def test_skill_repair_route(tmp_path, monkeypatch):
     """POST /skills/repair re-delivers MISSING_LINK and leaves REPLACED_WITH_REGULAR intact.
 
@@ -377,21 +393,23 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]
+        src2 = tmp_path / "src2"
+        _write_skill_folder(src2, name="foreign")
+        r2 = c.post("/api/v1/skills/import", json={"path": str(src2)})
+        assert r2.status_code == 201, r2.text
 
         link = agent_config_dir / "skills" / "fix-me"
-        assert link.exists()
+        foreign_link = agent_config_dir / "skills" / "foreign"
+        assert link.exists() and foreign_link.exists()
+        # Every write asks the reconciler for a pass; drift induced while one
+        # of those is still pending would be repaired before verify reads it.
+        _wait_for_quiet_reconciler()
 
         # Introduce MISSING_LINK drift by removing the symlink.
         link.unlink()
         assert not link.exists()
 
-        # Introduce a REPLACED_WITH_REGULAR drift for another skill.
-        src2 = tmp_path / "src2"
-        _write_skill_folder(src2, name="foreign")
-        r2 = c.post("/api/v1/skills/import", json={"path": str(src2)})
-        assert r2.status_code == 201, r2.text
-        foreign_link = agent_config_dir / "skills" / "foreign"
-        # Replace the symlink with a regular directory (simulates REPLACED_WITH_REGULAR).
+        # Replace the other symlink with a regular directory (REPLACED_WITH_REGULAR).
         foreign_link.unlink()
         foreign_link.mkdir()
         (foreign_link / "file.txt").write_text("foreign content")

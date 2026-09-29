@@ -17,7 +17,6 @@ import pytest_asyncio
 
 from coffer.application.audit_service import AuditService
 from coffer.application.memory.delivery import DeliveryService
-from coffer.application.memory.delivery_switch import reconcile_at_boot, reconcile_on_switch
 from coffer.domain.agent.config_files import FileStat
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
@@ -99,8 +98,11 @@ class FakeStore:
     def list_dir(self, root: pathlib.Path):  # pragma: no cover - unused
         raise NotImplementedError
 
-    def delete_with_backup(self, path: pathlib.Path) -> bool:  # pragma: no cover - unused
-        raise NotImplementedError
+    deletes: list[pathlib.Path] = field(default_factory=list)
+
+    def delete_with_backup(self, path: pathlib.Path) -> bool:
+        self.deletes.append(path)
+        return self._files.pop(path, None) is not None
 
     def remove_tree(self, path: pathlib.Path) -> bool:  # pragma: no cover - unused
         raise NotImplementedError
@@ -327,7 +329,7 @@ async def test_remove_records_an_audit_event(svc: DeliveryService, audit: AuditS
 
 
 # ---------------------------------------------------------------------------
-# status: installed / not, per agent; remove_everywhere
+# status: installed / not, per agent
 # ---------------------------------------------------------------------------
 
 
@@ -379,16 +381,6 @@ async def test_an_agent_without_a_delivery_hook_is_unsupported() -> None:
     assert svc.supports(AgentType.CLAUDE_CODE) is False
     with pytest.raises(DeliveryUnsupported):
         await svc.status(_CC_UID)
-
-
-async def test_remove_everywhere_takes_the_hook_out_of_every_agent_carrying_one(
-    svc: DeliveryService,
-) -> None:
-    await svc.install(_CC_UID, actor="tester")
-    notes = await svc.remove_everywhere(actor="tester")
-    assert notes == ("cc: delivery hook removed",)
-    assert (await svc.status(_CC_UID)).installed is False
-    assert (await svc.status(_CODEX_UID)).installed is False
 
 
 # ---------------------------------------------------------------------------
@@ -451,116 +443,3 @@ async def test_malformed_config_fails_loudly_with_the_path(
 async def test_unknown_agent_raises_resource_not_found(svc: DeliveryService) -> None:
     with pytest.raises(ResourceNotFound):
         await svc.install("00000000000000000000000000000000", actor="tester")
-
-
-# ---------------------------------------------------------------------------
-# heal_drift: an installed hook whose command Coffer no longer writes
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a hook whose command went stale is repaired without being asked",
-)
-async def test_heal_drift_rewrites_a_hook_whose_arguments_went_stale(
-    svc: DeliveryService, store: FakeStore
-) -> None:
-    """The real one, found in the field. `coffer memory context` dropped
-    `--agent` for `--agent-uid`, and every hook already on disk kept passing
-    the option that no longer existed — so the agent printed a usage error at
-    the start of every session and Coffer's memory reached it never again.
-
-    Nothing noticed because detection matches the marker and never reads the
-    arguments: the stale entry read as perfectly installed.
-    """
-    await svc.install(_CC_UID, actor="ui")
-    fresh = json.loads(store._files[_CC_SETTINGS_PATH])
-    # Age the installed entry the way the CLI change aged it in the field.
-    entry = fresh["hooks"]["SessionStart"][0]["hooks"][0]
-    entry["command"] = f': {MARKER}; coffer memory context --agent cc --cwd "$PWD"'
-    store._files[_CC_SETTINGS_PATH] = json.dumps(fresh)
-
-    before = await svc.status(_CC_UID)
-    assert before.installed is True  # the entry that cannot work reads as installed
-
-    notes = await svc.heal_drift()
-
-    after = await svc.status(_CC_UID)
-    assert "--agent-uid" in after.command
-    assert "--agent cc" not in after.command
-    assert after.command == f': {MARKER}; coffer memory context --agent-uid {_CC_UID} --cwd "$PWD"'
-    assert any("cc" in note for note in notes)
-
-
-async def test_heal_drift_leaves_a_current_hook_alone(
-    svc: DeliveryService, store: FakeStore
-) -> None:
-    # A no-op must cost no write and no audit entry, or every boot would
-    # rewrite every agent's settings file for nothing.
-    await svc.install(_CC_UID, actor="ui")
-    before = store._files[_CC_SETTINGS_PATH]
-
-    assert await svc.heal_drift() == ()
-
-    assert store._files[_CC_SETTINGS_PATH] == before
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a hook whose command went stale is repaired without being asked",
-)
-async def test_heal_drift_installs_nothing_the_user_removed(
-    svc: DeliveryService, store: FakeStore
-) -> None:
-    """Repair, not evangelism. An agent with no hook chose not to have one,
-    and a boot that installed one would be Coffer overriding that silently."""
-    assert await svc.heal_drift() == ()
-    assert _CC_SETTINGS_PATH not in store._files
-
-
-# ---------------------------------------------------------------------------
-# The `memory` switch (spec experimental-features "Withdraw what a switched-off
-# feature put in front of agents")
-# ---------------------------------------------------------------------------
-
-
-async def test_switching_on_installs_into_the_connected_agents_only(svc: DeliveryService) -> None:
-    async def connected() -> list[str]:
-        return [_CC_UID, "ghost"]
-
-    notes = await reconcile_on_switch(svc, connected, enabled=True)
-
-    assert (await svc.status(_CC_UID)).installed is True
-    assert (await svc.status(_CODEX_UID)).installed is False
-    # One agent that cannot be read is a note, not a failure for the rest.
-    assert any(n.startswith("ghost: could not install") for n in notes)
-    assert "cc: delivery hook installed, memory is switched on" in notes
-
-
-async def test_switching_on_leaves_an_installed_hook_alone(svc: DeliveryService) -> None:
-    await svc.install(_CC_UID, actor="tester")
-
-    async def connected() -> list[str]:
-        return [_CC_UID]
-
-    assert await reconcile_on_switch(svc, connected, enabled=True) == ()
-
-
-async def test_switching_off_and_a_boot_with_memory_off_withdraw_everywhere(
-    svc: DeliveryService,
-) -> None:
-    async def connected() -> list[str]:
-        raise AssertionError("switching off never asks who is connected")
-
-    await svc.install(_CC_UID, actor="tester")
-    await reconcile_on_switch(svc, connected, enabled=False)
-    assert (await svc.status(_CC_UID)).installed is False
-
-    await svc.install(_CODEX_UID, actor="tester")
-    await reconcile_at_boot(svc, enabled=False)
-    assert (await svc.status(_CODEX_UID)).installed is False
-
-
-async def test_a_boot_with_memory_on_installs_nothing_new(svc: DeliveryService) -> None:
-    assert await reconcile_at_boot(svc, enabled=True) == ()
-    assert (await svc.status(_CC_UID)).installed is False

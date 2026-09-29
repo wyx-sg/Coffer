@@ -46,7 +46,7 @@ Projection is the facet with the most in it, because the set of things Coffer pl
 
 Each entry states the file or folder it lands in — always through the agent's config-file allowlist, which is the security boundary for what Coffer may write — a translation from Coffer's asset to the agent's native fragment, and a capability declaration. The declaration is deliberately small: only what a shipped agent actually uses. For a model provider it is the wire protocols the agent's native config speaks, which may be none. For a delivery hook it is the event the hook sits on.
 
-The registry is also the list of targets a reconciler walks: a new asset type is a new entry on the agents that can receive it, not a new service.
+The registry is also the list of targets the [reconciler](/architecture/reconciler) walks: a new asset type is a new entry on the agents that can receive it, not a new service.
 
 ### Provider projection without a protocol map
 

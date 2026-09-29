@@ -28,6 +28,7 @@ import hashlib
 import logging
 import pathlib
 from collections.abc import Callable, Sequence
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import NamedTuple
 
@@ -125,6 +126,7 @@ def wire_sync(
     import_gates: Sequence[ImportGate] = (),
     import_normalisers: Sequence[ImportNormaliser] = (),
     post_import_hooks: Sequence[PostImportHook] = (),
+    apply_guard: Callable[[], AbstractAsyncContextManager[object]] | None = None,
 ) -> SyncWiring:
     # Resolved once and shared — the fingerprint, every round's locked-ref check
     # and the key export/import all read this one — so a key kept in the
@@ -222,6 +224,7 @@ def wire_sync(
             # machine's side of it back in step (spec vault-sync
             # "Re-run post-import hooks after applying").
             post_import=hooks,
+            apply_guard=apply_guard,
         )
 
     service = ConvergeService(
@@ -296,6 +299,7 @@ def start_sync(
         import_gates=tuple(contributions.import_gates),
         import_normalisers=tuple(contributions.import_normalisers),
         post_import_hooks=tuple(contributions.post_import_hooks),
+        apply_guard=contributions.apply_guard,
     )
     # The routes hold module-level singletons, matching every other surface
     # in this package.

@@ -191,7 +191,7 @@ Coffer touches an agent's files through a short list of documented surfaces:
 | Allowlisted config files | yes | yes, when you save in the editor or CLI |
 | MCP entries in the agent's config | yes | install/uninstall of `coffer`, remove, adopt |
 | Plugins | inventory and enabled state | the enabled switch; uninstall by the type's own strategy |
-| Model provider keys | yes (boot self-check) | only when you switch a [provider](/guides/providers) |
+| Model provider keys | yes (checked on every reconcile pass) | when you switch a [provider](/guides/providers), and to bring a projection whose values went stale back in line |
 | Native memory stores | yes | never |
 | Transcripts | yes | never |
 | Codex `auth.json` | never | never |

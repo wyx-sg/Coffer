@@ -41,6 +41,7 @@ def _to_domain(row: ResourceModel) -> Resource:
         updated_at=row.updated_at,
         scope=Scope.from_json(json.loads(row.scope_json)) if row.scope_json else None,
         title=row.title,
+        rev=row.rev,
     )
 
 
@@ -114,6 +115,7 @@ class SqlAlchemyResourceRepo:
                 updated_at=resource.updated_at,
                 scope_json=_scope_json(resource.scope),
                 title=resource.title,
+                rev=1,
             )
             session.add(row)
             try:
@@ -136,6 +138,7 @@ class SqlAlchemyResourceRepo:
             row.config_json = json.dumps(config)
             row.description = description
             row.updated_at = datetime.now(tz=UTC)
+            row.rev = (row.rev or 0) + 1
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)
@@ -147,6 +150,7 @@ class SqlAlchemyResourceRepo:
                 raise ResourceNotFound(uid)
             row.enabled = enabled
             row.updated_at = datetime.now(tz=UTC)
+            row.rev = (row.rev or 0) + 1
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)
@@ -162,6 +166,7 @@ class SqlAlchemyResourceRepo:
                 return None
             row.scope_json = _scope_json(scope)
             row.updated_at = datetime.now(tz=UTC)
+            row.rev = (row.rev or 0) + 1
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)
@@ -182,6 +187,7 @@ class SqlAlchemyResourceRepo:
             kind = row.kind
             row.name = new_name
             row.updated_at = datetime.now(tz=UTC)
+            row.rev = (row.rev or 0) + 1
             try:
                 await session.commit()
             except sqlalchemy.exc.IntegrityError as e:
@@ -197,6 +203,7 @@ class SqlAlchemyResourceRepo:
                 raise ResourceNotFound(uid)
             row.title = title
             row.updated_at = datetime.now(tz=UTC)
+            row.rev = (row.rev or 0) + 1
             await session.commit()
             await session.refresh(row)
             return _to_domain(row)

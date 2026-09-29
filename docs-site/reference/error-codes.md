@@ -113,7 +113,6 @@ give the status each code is actually sent with.
 | `SKILL_INVALID` | 422 | The skill folder is not a valid skill (for example a missing or malformed `SKILL.md`). | Fix the folder and import again. |
 | `TARGET_CONFLICT` | 409 | Delivering a skill would overwrite something at the target path that Coffer did not put there. | Move the conflicting file or folder, then run `coffer skill verify --fix`. |
 | `SKILL_FILE_STALE` | 409 | A skill file changed on disk after you read it. | Reload and reapply your edit. |
-| `SKILL_OUT_OF_SCOPE` | 422 | The agent is outside the skill's reach, so the skill cannot be enabled for it. | Widen the skill's reach first. |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | No skill by that name was found in the agent's own skills folders. | Refresh the agent's skills list. |
 | `UNMANAGED_SKILL_INVALID` | 422 | An agent's own skill cannot be adopted because its folder is invalid. | Fix its `SKILL.md`, then adopt. |
 

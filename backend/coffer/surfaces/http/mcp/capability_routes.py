@@ -20,11 +20,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
-from coffer.application.mcp.runner_detect import missing_runner
+from coffer.application.mcp.runner_detect import missing_runner_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
-from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -169,7 +168,7 @@ async def get_server_status(
     resource = await require_mcp_server(uid, resource_service)
     # A stdio launcher that does not resolve on THIS machine (synced server,
     # runner not installed here) — surfaced so the cause is visible.
-    runner = await asyncio.to_thread(_missing_runner_of, resource)
+    runner = await asyncio.to_thread(missing_runner_of, resource.config)
 
     # T7: prefer the persisted health state written by POST /test. Both the
     # health record and the invocation log are keyed on the uid, so a renamed
@@ -198,16 +197,6 @@ async def get_server_status(
     else:
         state = "unknown"
     return McpServerStatusOut(status=state, missing_runner=runner)
-
-
-def _missing_runner_of(resource: Resource) -> str | None:
-    try:
-        config = MCPServerConfig.model_validate(resource.config)
-    except Exception:
-        return None
-    if config.transport.type != "stdio":
-        return None
-    return missing_runner(config.transport.command)
 
 
 async def _toggle_capability(

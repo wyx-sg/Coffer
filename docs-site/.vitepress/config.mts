@@ -77,6 +77,7 @@ const architecture = [
       { text: 'Layering and code layout', link: '/architecture/layering' },
       { text: 'Platform port', link: '/architecture/platform' },
       { text: 'Agent facets', link: '/architecture/agent-facets' },
+      { text: 'Reconciler', link: '/architecture/reconciler' },
     ],
   },
   {

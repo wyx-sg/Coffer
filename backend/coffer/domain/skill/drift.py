@@ -54,13 +54,13 @@ class DriftEntry:
 
     Carries both the labels a person reads and the uids a repair addresses.
     They are not two spellings of one thing: the names are what the report
-    SAYS, and the uids are what ``repair_drift`` re-delivers against, so a
+    SAYS, and the uids are what a repair re-delivers against, so a
     skill renamed between the verify pass and the repair pass is still the
     skill that gets repaired (ADR resource-identity-is-an-immutable-uid).
 
     Both uids are ``None`` for an ORPHAN_MASTER entry, which is a folder on
     disk that no resource row claims — there is no identity to record, and
-    nothing for a repair to address, which is why ``repair_drift`` skips that
+    nothing for a repair to address, which is why a repair skips that
     kind outright.
     """
 
@@ -75,14 +75,14 @@ class DriftEntry:
 
 @dataclass
 class DriftReport:
-    """Output of `SkillService.verify()`."""
+    """Output of `coffer skill verify` (``drift_view.verify``)."""
 
     entries: list[DriftEntry] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RepairResult:
-    """Output of `SkillService.repair_drift()`.
+    """Output of `coffer skill verify --fix` (``drift_view.repair``).
 
     ``remediated`` holds entries that were successfully re-delivered;
     ``remaining`` is the residual DriftReport after the repair pass (entries

@@ -54,6 +54,7 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `created_at`  | `datetime`       | UTC, set on insert, never updated                                          |
 | `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
 | `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable on every kind, fixed name or not, through `ResourceService.set_title`; travels in the synced resource document, as a `title` key present only when set (spec resource-framework "Carry an optional editable title on every resource") |
+| `rev`         | `int`            | monotonic revision: 1 at creation, grown by one on every write to the row (config, enabled, scope, name, title); every write emits an in-process `Changed(kind, uid, rev)` hint that brings the next reconcile pass forward (spec resource-framework "Carry a monotonic revision on every resource"). Not serialised to the synced document or the API |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its

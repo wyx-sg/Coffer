@@ -130,13 +130,12 @@ def make_skill_kind(
         # ADR per-agent-resource-scope: scope is one half of the whole delivery rule —
         # ``enabled AND scope.is_active(scope, agent_uid)``.
         supports_scope=True,
-        # A skill's scope edit re-runs delivery reconciliation for every agent
-        # (the composition root supplies the callback — the same
-        # reconciliation the sync post-import hook uses,
-        # ``apply_scope_for_agent``, per registered agent).
+        # A skill's scope edit asks for a ``skill_link`` reconcile pass (the
+        # composition root supplies the callback), which delivers to and
+        # reclaims from every agent at once.
         on_scope_changed=on_scope_changed,
         # The other half: a skill's ``enabled`` flag is a real delivery switch,
         # so disabling reclaims every delivered copy and re-enabling
-        # redelivers. Same callback, same per-agent reconciliation.
+        # redelivers. Same callback, same pass.
         on_enabled_changed=on_enabled_changed,
     )

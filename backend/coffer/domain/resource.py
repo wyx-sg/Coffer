@@ -25,10 +25,8 @@ from pydantic import BaseModel
 
 from coffer.domain.scope import Scope
 
-#: A name is still a single safe path segment. The identity no longer needs it
-#: to be — a uid addresses the row and names the synced document — but three
-#: kinds (`skill`, `knowledge`, `memory`) turn a name into a directory, so the
-#: rule survives as a property of the label rather than of the identity.
+#: A name is one safe path segment: three kinds (`skill`, `knowledge`,
+#: `memory`) turn it into a directory, so the rule survives as a label rule.
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
 
@@ -112,6 +110,9 @@ class Resource:
     #: whose name is fixed (``Kind.name_fixed``). It travels with the synced
     #: document; reach does not.
     title: str | None = None
+    #: Monotonic revision, bumped by every write to the row; carried by the
+    #: reconciler's ``Changed`` hint (ADR one-level-triggered-reconciler).
+    rev: int = 0
 
 
 @dataclass(frozen=True)

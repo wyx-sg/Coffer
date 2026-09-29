@@ -81,6 +81,9 @@ class AuditEventType(StrEnum):
     # A projection write refused because the agent's native config file changed
     # on disk between Coffer's read and its write (optimistic concurrency).
     PROVIDER_PROJECTION_REFUSED = "provider_projection_refused"
+    # The reconciler rewrote, or removed, an agent's projection whose keys no
+    # longer matched the connection the registry marks active.
+    PROVIDER_PROJECTION_REPAIRED = "provider_projection_repaired"
 
 
 @dataclass

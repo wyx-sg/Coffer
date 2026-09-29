@@ -86,7 +86,6 @@ _STATUS: dict[str, int] = {
     "PLUGIN_TOGGLE_UNSUPPORTED": 422,
     "MCP_INSTALL_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
-    "SKILL_OUT_OF_SCOPE": 422,  # activation scope (ADR per-agent-resource-scope)
     # knowledge ingestion (spec knowledge). One code for "this upload is
     # refused", with ``details.reason`` naming which refusal; the size ceiling
     # gets its own code because 413 is the honest status for it.
