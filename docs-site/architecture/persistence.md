@@ -111,7 +111,7 @@ The ORM models live in [`infrastructure/persistence/models.py`](https://github.c
 | `skill_agent_bindings` | `skill` | Bookkeeping for each delivered copy of a skill in an agent. A record, not a switch: delivery is decided by `enabled` and scope. |
 | `channel_peers` | `channel` | Paired identities per channel, including the owner. |
 | `channel_thread_conversations` | `channel` | Which chat conversation an IM thread maps to. |
-| `conversations`, `chat_messages` | chat | Conversation metadata and message history for the Chat page and every channel. Idle conversations are auto-archived after 7 days and archived ones deleted after 30, by default. |
+| `conversations`, `chat_messages` | chat | Conversation metadata and message history for the Conversations page and every channel. Idle conversations are auto-archived after 7 days and archived ones deleted after 30, by default. |
 
 ### Sync bookkeeping
 
@@ -162,7 +162,7 @@ A knowledge collection or memory partition is still a `resources` row — that i
 ├── bin/                      # frozen builds: versioned binaries and public symlinks
 ├── upstream-pids/            # PIDs of spawned upstream servers, swept at startup
 ├── channel-media/            # inbound channel attachments
-├── chat-media/               # files attached on the Chat page
+├── chat-media/               # files attached on the Conversations page
 ├── workspace/                # default working directory for chat turns
 ├── cache/agent/              # derived caches of agents' own data
 └── vendor/                   # operator-supplied SeaTalk SDK

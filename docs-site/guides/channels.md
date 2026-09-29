@@ -16,7 +16,7 @@ A channel is a registered resource of kind `channel`. It holds:
 - a **default agent** — the agent a new conversation on this channel starts on;
 - `runs_on` — the one machine whose daemon runs the channel's adapter.
 
-A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The conversation is the same one the web [Chat](/guides/chat) page lists, with a **via** badge naming the channel, so you can start a task on your phone and watch or continue it in the browser. A reply you type there is also sent to the chat it came from, and the agent's answer follows it (see [Replying to a channel's conversation](/guides/chat#replying-to-a-channel-s-conversation)).
+A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The conversation is the same one the web [Conversations](/guides/chat) page lists, with a **via** badge naming the channel, so you can start a task on your phone and watch or continue it in the browser. A reply you type there is also sent to the chat it came from, and the agent's answer follows it (see [Replying to a channel's conversation](/guides/chat#replying-to-a-channel-s-conversation)).
 
 One bot drives every managed agent. You switch between Claude Code and Codex from the chat with `/new <agent>`, and different threads of one group can run different agents at the same time.
 
@@ -125,11 +125,11 @@ Messages sent in quick succession are one question. The channel waits for a shor
 
 Both pauses are per-channel settings: on the Channels page under **Edit** → **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
-Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Chat page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
+Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
 
 ### Parallel conversations
 
-A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Chat page, and the title of `/status` inside it. `/status` in the direct chat tells you how many parallel conversations the chat has and whether each one is running, has messages waiting, or is idle.
+A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat tells you how many parallel conversations the chat has and whether each one is running, has messages waiting, or is idle.
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
@@ -347,7 +347,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 | --- | --- |
 | A photo or sticker | Claude Code sees the image. Codex gets the file path. |
 | A PDF, office document, epub or rtf | The extracted text, in a `[Document: <name>]` block. If extraction is unavailable, the file path. |
-| A voice message or audio | A transcript, when **Speech to text** is on under **Settings → Coffer's model**. Otherwise the audio file. |
+| A voice message or audio | A transcript, when **Speech to text** is on under **Settings › General → Coffer's model**. Otherwise the audio file. |
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |
 
@@ -437,7 +437,7 @@ The channel layer meets the agents only at the turn platform's seams — convers
 
 - [Telegram setup](/guides/channels-telegram)
 - [SeaTalk setup](/guides/channels-seatalk)
-- [Chat](/guides/chat) — the same conversations in the browser.
+- [Conversations](/guides/chat) — the same conversations in the browser.
 - [Credentials](/guides/credentials) — where channel secrets live.
 - [Vault sync](/guides/vault-sync) — how a channel's binding and pairing travel between machines.
 - [Security model](/architecture/security)

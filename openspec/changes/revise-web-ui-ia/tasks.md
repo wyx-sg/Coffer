@@ -1,27 +1,33 @@
+> **Progress.** The app shell (work item UI1) has landed: the tasks ticked below, plus the
+> shell parts noted on 2.0, 6.4, 6i.1, 7.9 and 8.1. Every other task belongs to a page or backend
+> work item later in the release; the change is archived (9.2) when they are done. Until then
+> the acceptance markers of the scenarios the shell replaces stay on the tests that now assert
+> the new behaviour, each with a comment naming the scenario it moves to (tasks 7.x).
+
 ## 1. Shell layout and sidebar
 
-- [ ] 1.1 Replace `components/Layout.tsx` and `components/SidebarNav.tsx` with the new shell: Overview ungrouped at the top, then Agents (Agents, Model providers), Run (Conversations, Channels), Capabilities (MCP servers, Custom tools, Skills, CLIs), Context (Knowledge, Memory), System (Secrets, Activity, Usage, Sync); no Settings entry; no flag, the old components are deleted
-- [ ] 1.2 Keep the experimental gate on Knowledge, Memory and Sync entries and the experimental marker, unchanged in behaviour; a group whose every entry is switched off renders no heading
-- [ ] 1.3 Keep the collapsible icon rail and its `localStorage` memory, and the language switcher
-- [ ] 1.4 Add the sidebar footer: connecting / running (with port) / stopping / offline from the existing status poll, desktop version warning through the credential-supplier module, click opens the Settings modal at `/settings/daemon`, icon with tooltip on the collapsed rail; a labelled Settings row (gear + text) above it, the gear with a tooltip on the rail, active only while the modal is open
-- [ ] 1.5 Generalise `useSyncAttention` into one attention-dot component and per-entry signal map; Sync keeps its seen-on-visit rule; an unreadable signal renders no dot
+- [x] 1.1 Replace `components/Layout.tsx` and `components/SidebarNav.tsx` with the new shell: Overview ungrouped at the top, then Agents (Agents, Model providers), Run (Conversations, Channels), Capabilities (MCP servers, Custom tools, Skills, CLIs), Context (Knowledge, Memory), System (Secrets, Activity, Usage, Sync); no Settings entry; no flag, the old components are deleted (shipped with the shell: `Layout.tsx` and `SidebarNav.tsx` were rewritten in place from `lib/navigation.ts`)
+- [x] 1.2 Keep the experimental gate on Knowledge, Memory and Sync entries and the experimental marker, unchanged in behaviour; a group whose every entry is switched off renders no heading
+- [x] 1.3 Keep the collapsible icon rail and its `localStorage` memory, and the language switcher
+- [x] 1.4 Add the sidebar footer: connecting / running (with port) / stopping / offline from the existing status poll, desktop version warning through the credential-supplier module, click opens the Settings modal at `/settings/daemon`, icon with tooltip on the collapsed rail; a labelled Settings row (gear + text) above it, the gear with a tooltip on the rail, active only while the modal is open
+- [x] 1.5 Generalise `useSyncAttention` into one attention-dot component and per-entry signal map; Sync keeps its seen-on-visit rule; an unreadable signal renders no dot
 
 ## 2. Routes
 
-- [ ] 2.0 One tab-address rule for every detail page: `/<kind>/<id>/<tab>`, default tab at the bare path; `<id>` = name for skills, MCP servers and custom tool groups, type for agents, command for CLIs, uid for model providers, channels, knowledge and memory; redirect every old `?tab=` address and every old uid address of a fixed-name kind (MCP server detail: Overview · Tools · Resources · Prompts · Invocations; custom tool group: one page at `/custom-tools/<group>` with a tool drawer, no tabs; provider: Overview · Models)
+- [ ] 2.0 One tab-address rule for every detail page: `/<kind>/<id>/<tab>`, default tab at the bare path; `<id>` = name for skills, MCP servers and custom tool groups, type for agents, command for CLIs, uid for model providers, channels, knowledge and memory; redirect every old `?tab=` address and every old uid address of a fixed-name kind (MCP server detail: Overview · Tools · Resources · Prompts · Invocations; custom tool group: one page at `/custom-tools/<group>` with a tool drawer, no tabs; provider: Overview · Models) — *shell part done*: path tabs, `?tab=` redirects and uid → name redirects for skills and MCP servers, path tabs for model providers (`lib/detailTabs.ts`); agents, channels, knowledge, memory and custom tool groups follow with their page items
 
-- [ ] 2.1 `router.tsx`: `/` renders the Overview page in place (no redirect to `/agents`); `/agents` unchanged
-- [ ] 2.2 Settings routes `/settings/general`, `/settings/security`, `/settings/data`, `/settings/daemon`, `/settings/about`, rendered as a modal over a background location; `/settings` opens General; a fresh load renders it over Overview; close control, Escape, outside click and Back return to the page underneath
-- [ ] 2.2a ⌘, / Ctrl+, opens the Settings modal on General from any page (not while typing in a text field)
-- [ ] 2.3 Model providers is one table with no tabs (no Coffer's model tab, no "who runs on what" view); `/settings/engine` and the existing legacy redirect `/settings/embedding` (kept only for old bookmarks; there is no embedding configuration) redirect to `/settings/general`
-- [ ] 2.4 `/secrets` route for the Secrets page
-- [ ] 2.4a `/usage` route for the Usage page; its content lands with the change that meters use
+- [x] 2.1 `router.tsx`: `/` renders the Overview page in place (no redirect to `/agents`); `/agents` unchanged
+- [x] 2.2 Settings routes `/settings/general`, `/settings/security`, `/settings/data`, `/settings/daemon`, `/settings/about`, rendered as a modal over a background location; `/settings` opens General; a fresh load renders it over Overview; close control, Escape, outside click and Back return to the page underneath
+- [x] 2.2a ⌘, / Ctrl+, opens the Settings modal on General from any page (not while typing in a text field)
+- [x] 2.3 Model providers is one table with no tabs (no Coffer's model tab, no "who runs on what" view); `/settings/engine` and the existing legacy redirect `/settings/embedding` (kept only for old bookmarks; there is no embedding configuration) redirect to `/settings/general`
+- [x] 2.4 `/secrets` route for the Secrets page (the route renders a placeholder until task 4.1 lands the page)
+- [x] 2.4a `/usage` route for the Usage page; its content lands with the change that meters use (placeholder page until its change)
 - [ ] 2.5 Agent detail routes `/agents/<type>` (Overview) and `/agents/<type>/{model,skills,mcp-servers,plugins,hooks,config,memory,conversations}`; entry, plugin and unmanaged-skill detail pages nested under their tab; the old `/agents/:uid` and `?tab=` addresses redirect to the matching path
 
 ## 3. Settings tabs
 
 - [ ] 3.1 General: default page size and preferred editor only
-- [ ] 3.2 Delete the Experimental features card (`ExperimentalFeaturesSettings`) from General; the feature notice (`FeatureGate`) says the feature is off and links to no Settings tab
+- [x] 3.2 Delete the Experimental features card (`ExperimentalFeaturesSettings`) from General; the feature notice (`FeatureGate`) says the feature is off and links to no Settings tab (the card is no longer mounted; `ExperimentalFeaturesSettings` and its test stay until archive, when task 7.12 deletes them with their marker)
 - [ ] 3.3 Daemon: status card, host-dependent restart (shell Restart control / `coffer daemon restart` to copy), editable port (1024–65535, free, refused in place otherwise; saved through `PUT /api/v1/daemon/port`, then "takes effect after restart" with Restart now or the command), Start at login card moved from General; no token row and no troubleshooting section; loading skeleton and offline state
 - [ ] 3.3a Security: access token hidden until Show, Copy, Rotate with a confirmation that closes only on success and installs the returned token
 - [ ] 3.3b About: Copy diagnostics beside the version (version, channel, host, daemon state and port, enabled features; no token or secret)
@@ -49,11 +55,11 @@
 
 ## 6. Command palette
 
-- [ ] 6.1 Palette component opened by ⌘K / Ctrl+K and by a sidebar search control; Pages group from the sidebar entries and Settings tabs; Objects group from the agent list and each listed kind's list hook, matched by title and name
-- [ ] 6.2 Navigation only — no entry that sends a mutating request; switched-off features' pages and objects left out
-- [ ] 6.3 Per-group loading and error rows, Pages-only offline state, no-results message; arrow keys, Enter, Escape with focus return
-- [ ] 6.4 en / zh strings for the palette, footer, Daemon tab, the Coffer's model section, the Secrets page and the agent detail tabs
-- [ ] 6.5 i18n glossary: `nav.*` keys for the five group headings, fifteen entries and the Settings row, zh labels 总览 · 智能体（智能体、模型提供商）· 运行（对话、消息渠道）· 能力（MCP 服务器、自定义工具、技能、命令行工具）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）, Settings 设置; replace every zh "Agent" naming an agent with 智能体 across `zh.json`; record the en/zh glossary in `.agents/frontend.md`; extend `i18n/surfaceNames.test.ts` to the new entries
+- [x] 6.1 Palette component opened by ⌘K / Ctrl+K and by a sidebar search control; Pages group from the sidebar entries and Settings tabs; Objects group from the agent list and each listed kind's list hook, matched by title and name (Objects: agents, MCP servers, skills, model providers, channels, knowledge, memory; custom tools and CLIs join with their pages, task 6c.3)
+- [x] 6.2 Navigation only — no entry that sends a mutating request; switched-off features' pages and objects left out
+- [x] 6.3 Per-group loading and error rows, Pages-only offline state, no-results message; arrow keys, Enter, Escape with focus return
+- [ ] 6.4 en / zh strings for the palette, footer, Daemon tab, the Coffer's model section, the Secrets page and the agent detail tabs — *shell part done*: palette and footer strings; the Daemon tab, Coffer's model section, Secrets page and agent-tab strings land with those items
+- [x] 6.5 i18n glossary: `nav.*` keys for the five group headings, fifteen entries and the Settings row, zh labels 总览 · 智能体（智能体、模型提供商）· 运行（对话、消息渠道）· 能力（MCP 服务器、自定义工具、技能、命令行工具）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）, Settings 设置; replace every zh "Agent" naming an agent with 智能体 across `zh.json`; record the en/zh glossary in `.agents/frontend.md`; extend `i18n/surfaceNames.test.ts` to the new entries
 
 ## 6b. Add server
 
@@ -75,7 +81,7 @@
 
 ## 6e. Resizable split views
 
-- [ ] 6e.1 One shared divider component for list/detail, file tree/file, conversation list/thread and the sidebar: drag within bounds (list ≥ 240px and ≤ half the window, detail ≥ 480px, sidebar 200–300px), double-click resets, focusable with ←/→ steps and an accessible name, width per page in `localStorage` wrapped in try/catch and clamped on read
+- [x] 6e.1 One shared divider component for list/detail, file tree/file, conversation list/thread and the sidebar: drag within bounds (list ≥ 240px and ≤ half the window, detail ≥ 480px, sidebar 200–300px), double-click resets, focusable with ←/→ steps and an accessible name, width per page in `localStorage` wrapped in try/catch and clamped on read (the shared `SplitView` / `SplitDivider` is in use on the sidebar and the Conversations list/thread; the file-tree splits adopt it when their pages are rebuilt)
 
 ## 6f. Agent Model tab and model projection
 
@@ -105,7 +111,7 @@
 
 ## 6i. Conversations, Channels and Sessions
 
-- [ ] 6i.1 Rename Chat to Conversations: `/conversations` and `/conversations/:id`, `/chat` and `/chat/:id` redirect; list every conversation with a source badge (channel or Coffer) and filters by source and agent; conversation page with the full exchange and a reply box; New conversation as a secondary action; no welcome / suggestions page and no voice input in the composer
+- [ ] 6i.1 Rename Chat to Conversations: `/conversations` and `/conversations/:id`, `/chat` and `/chat/:id` redirect; list every conversation with a source badge (channel or Coffer) and filters by source and agent; conversation page with the full exchange and a reply box; New conversation as a secondary action; no welcome / suggestions page and no voice input in the composer — *shell part done*: `/conversations` and `/conversations/:id` with `/chat` redirects, and the Conversations name; the list with source badges and filters lands with the Conversations page item
 - [ ] 6i.2 Channels page: setup, connection status and settings only; a link per channel to Conversations filtered by it
 - [ ] 6i.3 Agent detail: rename the Conversations tab to Sessions at `/agents/<type>/sessions`, the old path redirecting
 - [ ] 6i.4 chat spec: the other requirements' "Chat page" titles and bodies read Conversations page at archive; chat Purpose follows
@@ -136,7 +142,7 @@
 - [ ] 7.6 `acceptance(web-ui, …)` for "coffer's model is chosen in settings general", "an unset picker says what coffer does without it", "testing a picker shows a failing pair inline" and "the old coffer's model address opens settings general"; `acceptance(provider-switching, …)` for "the provider library has no tabs" and "a provider's used-by list is read-only"
 - [ ] 7.7 `acceptance(web-ui, …)` for the footer: "the footer shows a running daemon", "the footer says connecting before the first answer", "the footer shows an offline daemon", "the footer shows a stopping daemon", "the collapsed rail keeps the daemon state"
 - [ ] 7.8 `acceptance(web-ui, …)` for the Daemon tab: "the settings daemon tab shows the running daemon", "the settings daemon tab offers the host's restart", "saving a valid port leaves it pending until restart", "a port in use is rejected", "the daemon tab has no token row and no troubleshooting section", "rotating the token from settings security keeps the page working", "a failed rotation from settings security keeps the old token", "the token is hidden until shown", "copy diagnostics carries no secret", "the settings daemon tab keeps its layout while status loads", "the settings daemon tab with the daemon offline"
-- [ ] 7.9 `acceptance(web-ui, …)` for the palette: "the palette jumps to a page", "the palette jumps to an object", "the palette offers no actions", "the palette leaves out switched-off features", "the palette lists pages while objects load", "a failing kind leaves the rest of the palette working", "the palette with the daemon offline", "the palette says when nothing matches"; one e2e spec for page and object jumps
+- [ ] 7.9 `acceptance(web-ui, …)` for the palette: "the palette jumps to a page", "the palette jumps to an object", "the palette offers no actions", "the palette leaves out switched-off features", "the palette lists pages while objects load", "a failing kind leaves the rest of the palette working", "the palette with the daemon offline", "the palette says when nothing matches"; one e2e spec for page and object jumps — *shell part done*: the palette tests (`CommandPalette.test.tsx`) and the e2e spec (`shell_palette.spec.ts`) exist as plain tests; the markers are added at archive
 - [ ] 7.10 `acceptance(web-ui, …)` for the dots: "an entry whose kind needs attention carries a dot", "the attention dot stays on the collapsed rail", "an entry without a signal never carries a dot", "an unreadable signal leaves no dot"
 - [ ] 7.11 `acceptance(daemon, …)` for "a port set from the settings page is pending until restart" and "after a restart on a new port every agent reconnects"; `acceptance(daemon, "the status probe carries what the shell shows")` on a daemon-route integration test beside the status tests
 - [ ] 7.12 Delete the marker for experimental-features "the general tab switches a feature" with `ExperimentalFeaturesSettings.test.tsx`; `acceptance(experimental-features, "a switched-off feature's page says it is switched off")` on `FeatureGate.test.tsx`
@@ -155,20 +161,20 @@
 - [ ] 7.14k `acceptance(chat, …)` for "a channel's conversation is listed beside the web's with a badge" (new body), "a channel's conversation is continued from the page" and "the page opens on the list with no welcome page"; `acceptance(channels, "a channel links to its conversations instead of showing them")`; the agent-registry tab scenario follows Sessions
 - [ ] 7.14l `acceptance(web-ui, …)` for "new records stream in at the top", "new records are held while the user reads" and "export from the menu honours the filters"; "a failing record shows its error inside its own tab" keeps its marker
 - [ ] 7.14m `acceptance(web-ui, …)` for "the data tab shows four blocks and no this-mac block", "clear expired now removes what retention has passed" and "clearing the cache is confirmed and rebuilt"; "retention period persists across reload" keeps its marker
-- [ ] 7.15 Migrate the e2e shell specs to role and label locators for the new sidebar
+- [x] 7.15 Migrate the e2e shell specs to role and label locators for the new sidebar
 - [ ] 7.16 `acceptance(web-ui, …)` for "the security tab keeps only machine-level settings", "the secrets page lists each secret with what uses it", "a secret in use cannot be deleted from the secrets page" and "revealing a secret is an explicit, audited read"
 - [ ] 7.17 `acceptance(agent-registry, "the agent detail page carries nine tabs")` (`AgentDetailPage.test.tsx`); "open a plugin's detail page from the Plugins tab" and "open a direct MCP server's detail page from the agent" follow the tabs (`AgentPluginsTab`, `AgentPluginPage`, `AgentMcpEntryPage` tests); `acceptance(agent-registry, …)` for "the owner filter narrows an installed-kind tab", "a duplicate direct MCP entry can be removed", "the agents page shows both supported agents on first run", "an agent that is not installed shows how to install it", "a row's menu offers a different config directory", "the agents page detects candidates without a detect action", "adding an agent previews the change first", "repairing a partial connection previews the missing parts", "desktop app agents page", "pick a custom config directory with the native dialog", "an installed agent that has never run can be added", "a leftover config directory reads as config left behind", "add an agent that has never run" and "register an installed agent whose config directory is not created yet"; the tests behind "offer an installed agent that has never run" and "show a leftover config directory as not installed" follow their new bodies (the second keeps its name, since a MODIFIED requirement cannot rename a scenario, and its body now says config left behind); skill-manager "open an unmanaged skill's detail page from the agent's Skills tab" and "adopt or delete an unmanaged skill from its detail page" likewise (`AgentSkillsTab`, `UnmanagedSkillDetailPage` tests); provider-switching "the connections page lists profiles and their compatible agents" names the Model tab (`ModelProvidersPage.test.tsx`)
 
 ## 8. Docs
 
-- [ ] 8.1 `docs-site/guides/web-ui.md`: the sidebar table with its five groups, Overview, Secrets and Usage, Settings as a labelled sidebar row and ⌘, modal with its five tabs, the footer, Settings → Daemon, the command palette and attention dots; rotating the token is now in the UI, stopping stays CLI-only
+- [ ] 8.1 `docs-site/guides/web-ui.md`: the sidebar table with its five groups, Overview, Secrets and Usage, Settings as a labelled sidebar row and ⌘, modal with its five tabs, the footer, Settings → Daemon, the command palette and attention dots; rotating the token is now in the UI, stopping stays CLI-only — *shell part done*: sidebar, Settings modal, footer, palette, attention dots, split views and tab addresses; Overview / Secrets / Usage content and Settings → Daemon controls follow their items
 - [ ] 8.2 `docs-site/guides/desktop-app.md`: Restart from Settings → Daemon, the footer's version warning, Start at login under Settings → Daemon, updates checked at launch and every six hours and installed from Settings › About
 - [ ] 8.3 `docs-site/guides/daemon.md`, `experimental-features.md`, `providers.md`, `channels.md`, `knowledge.md`, `memory.md`, `vault-sync.md`, `troubleshooting.md`, `faq.md`, `start/*`, `reference/configuration.md`, `architecture/distribution.md`: Settings → General → Experimental features is removed (switching stays on the CLI); Settings → General → Coffer's daemon becomes Settings → Daemon; Settings → Coffer's model becomes Settings › General → Coffer's model
 - [ ] 8.4 `docs-site/guides/agents.md` (the two-row Agents list, Add with preview, nine detail tabs, owner filter, Model tab), `credentials.md` (the Secrets page; Settings › Security machine-level), `providers.md` (Model providers under Agents; per-agent selection on the Model tab), `channels.md` (Channels under Run)
 - [ ] 8.5 ADR [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md): on acceptance set it Accepted, mark [Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md) `Superseded by` it (or delete it if nothing it explains is inherited) and move both rows in the README index; ADR [Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md): "the Security page" lists stored secrets becomes the Secrets page; ADR [Experimental Features Instead of a Release Branch](../../../docs/decisions/experimental-features-instead-of-a-release-branch.md): follow the rename of "Leave daemon controls to the CLI"
 - [ ] 8.6 Purpose sections: `web-ui` (grouped by what the user comes to do, Overview above the five groups; drop "grouped by role"), `credentials` (its visual surfaces are the Secrets page and Settings › Security, not Security alone), `desktop-app` (Restart control and skew warning rendered in the banner and on Settings → Daemon; drop auto-update from Out of scope; the IPC command list gains the update check and install; the release publishes the updater archive and manifest), `internal-engine` (Settings › General → Coffer's model)
 - [ ] 8.7 Code comments citing removed or renamed titles follow them (the list `scripts/check_spec_citations.py` prints): `useFeatures.ts`, `DaemonResidencySettings.tsx`, `InternalEngineSettings.tsx`, `backend/coffer/application/features.py` and the daemon contract `openspec/specs/daemon/contracts/api.openapi.yaml` ("Switch a feature from the command line"); the memory files, frontend memory components and `FindableMarkdown` / `frontmatter` / `queryKeys` citing "Present partitions as a table and a file tree" follow its rename to "Present a partition as its memories"
-- [ ] 8.8 `.agents/frontend.md`: the palette, footer and attention-dot components as shell conventions, and the en/zh glossary (task 6.5)
+- [x] 8.8 `.agents/frontend.md`: the palette, footer and attention-dot components as shell conventions, and the en/zh glossary (task 6.5)
 
 ## 9. Verify and archive
 

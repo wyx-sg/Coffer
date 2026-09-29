@@ -127,7 +127,7 @@ Guide: [Model providers](/guides/providers).
 
 A **channel** is a Telegram or SeaTalk bot bound to your registered agents. You pair your own IM account with it, then chat with Claude Code or Codex from your phone and receive notifications. A channel's scope names the agents it may drive. Channels sync with the vault, but each one is bound to the single machine whose daemon runs it. The web **Chat** page is the other way to drive an agent, and it can watch and continue conversations that started in a channel.
 
-Guide: [Channels](/guides/channels), [Chat](/guides/chat). Architecture: [Chat and turns](/architecture/chat).
+Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture: [Chat and turns](/architecture/chat).
 
 ## Credential refs
 

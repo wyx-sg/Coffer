@@ -153,7 +153,7 @@ A gateway account often serves dozens of models when you use two or three. The p
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer.
 
-What a model picker offers for an agent is decided in one place and served to every surface — the Chat page, a channel's `/model` card, and `coffer agent models`:
+What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, a channel's `/model` card, and `coffer agent models`:
 
 - when the agent's active provider curates **text** models, exactly those, in your order;
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).
@@ -187,7 +187,7 @@ After a [vault sync](/guides/vault-sync) round brings in provider changes from a
 
 Some of Coffer's work runs on a model of its own: memory organisation, knowledge curation, sync conflict resolution, and voice transcription for channels. That model borrows the endpoint and key of one provider and names its own model. With nothing configured, knowledge curation and memory distillation fall back to a mechanical pass (see [Knowledge](/guides/knowledge#without-an-internal-model) and [Memory](/guides/memory#how-the-passes-run)), a sync conflict waits for you to resolve it, and a voice message reaches the agent as an audio file.
 
-**Web UI:** open **Settings → Coffer's model**. The **Coffer's model** card picks the **Model provider** and **Model**, plus the **Time limit per call**. The **Speech to text** card picks a separate **Transcription provider** and **Transcription model**; a chat gateway often has no transcription endpoint, so the two are set independently and neither falls back to the other.
+**Web UI:** open **Settings › General → Coffer's model**. The **Coffer's model** card picks the **Model provider** and **Model**, plus the **Time limit per call**. The **Speech to text** card picks a separate **Transcription provider** and **Transcription model**; a chat gateway often has no transcription endpoint, so the two are set independently and neither falls back to the other.
 
 **CLI:**
 
@@ -219,6 +219,6 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 
 - [Agents](/guides/agents) — model binding and the agent's own catalogue
 - [Credentials](/guides/credentials) — where provider keys are stored
-- [Chat](/guides/chat) and [Channels](/guides/channels) — where models are picked per conversation
+- [Conversations](/guides/chat) and [Channels](/guides/channels) — where models are picked per conversation
 - [LLM Connections Are Projected Into Each Agent's Own Config File](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md)
 - Specs: [provider-switching](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)

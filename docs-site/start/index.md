@@ -42,7 +42,7 @@ Everything Coffer manages is a **resource** of one of seven **kinds**. Every res
 | `channel` | A Telegram or SeaTalk bot you use to chat with your agents from your phone | [Channels](/guides/channels) |
 | `provider` | A model-provider profile (protocol, base URL, key) that Coffer writes into each agent's config | [Model providers](/guides/providers) |
 
-Coffer also provides some capabilities that are not resource kinds: an encrypted [credential store](/guides/credentials), a web [Chat](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
+Coffer also provides some capabilities that are not resource kinds: an encrypted [credential store](/guides/credentials), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
 
 ## Where you use it
 
@@ -59,7 +59,7 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 ## What Coffer is not
 
 - **Not a cloud service.** Coffer has no hosted backend and no account. The API binds to loopback only. Cloud services appear only as the model providers and MCP servers you choose to use. If you sync a vault between your machines, it goes through a git repository you own, and each machine keeps a complete copy.
-- **Not an agent.** Coffer does not act as an assistant you chat with. Its Chat page and channels drive *your* agents (Claude Code or Codex). Coffer's own model runs only internal background jobs: knowledge curation, memory distillation, sync conflict resolution and voice transcription.
+- **Not an agent.** Coffer does not act as an assistant you chat with. Its Conversations page and channels drive *your* agents (Claude Code or Codex). Coffer's own model runs only internal background jobs: knowledge curation, memory distillation, sync conflict resolution and voice transcription.
 - **Not an orchestrator.** Coffer does not plan work or pass tasks from one agent to another. It is the shared layer beneath your agents: the tools, files and settings they all use.
 - **Not a replacement for an agent's own configuration.** An agent's files remain the source of truth. Coffer writes only the documented entries it manages, atomically and with a `.bak` backup, and reads the rest when it needs them.
 
