@@ -69,6 +69,8 @@ _STATUS: dict[str, int] = {
     "SKILL_INVALID": 422,
     "TARGET_CONFLICT": 409,
     "RESOURCE_PROTECTED": 409,
+    # A kind with no enabled switch (knowledge, memory) asked to flip it.
+    "RESOURCE_NOT_TOGGLEABLE": 409,
     # agent workspace (specs agent-registry/skill-manager amendment)
     "MCP_ENTRY_NOT_FOUND": 404,
     "PLUGIN_NOT_FOUND": 404,
@@ -161,6 +163,10 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
+    # A save from the web UI naming a fingerprint the file no longer has (spec
+    # knowledge "Save a document edited in the web UI"): the file moved on
+    # disk since the editor read it, and is left as it is.
+    "KNOWLEDGE_FILE_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").

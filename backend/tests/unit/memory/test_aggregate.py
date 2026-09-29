@@ -743,14 +743,15 @@ async def test_a_partitions_notes_are_read_from_disk_on_every_call(tmp_path: pat
 
 
 @pytest.mark.asyncio
-async def test_a_disabled_partition_is_not_served_and_an_enabled_one_is_served_to_all() -> None:
-    """``enabled`` is the only gate, and it is not per-agent.
+async def test_every_partition_is_served_even_a_row_stored_disabled() -> None:
+    """Nothing gates what is served, per agent or otherwise.
 
     A partition used to carry the framework's reach, defaulted to the agents
     it had been aggregated from, so ``coffer`` was served to Claude Code and
-    withheld from Codex working in the same checkout. There is no agent
-    argument left to withhold anything from; switching the row off is the one
-    way to stop it being served.
+    withheld from Codex working in the same checkout; after that went, an
+    enabled switch was the one gate left. That is gone too (see "Serve every
+    partition to every agent"), so even a row a pre-migration vault stored
+    disabled is served.
     """
     resources = FakeResources()
     for name in ("coffer", "retired-project"):
@@ -763,7 +764,7 @@ async def test_a_disabled_partition_is_not_served_and_an_enabled_one_is_served_t
     resources.by_name(KIND_MEMORY, "retired-project").enabled = False
     service = memory_service(resources, {})  # type: ignore[arg-type]
 
-    assert await service.enabled_partitions() == ["coffer"]
+    assert await service.served_partitions() == ["coffer", "retired-project"]
     # The read itself is unconditional: it opens the directory it is asked for.
     assert [n.slug for n in await service.list_notes("coffer")] == ["n"]
 

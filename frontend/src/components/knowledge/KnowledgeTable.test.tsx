@@ -1,22 +1,14 @@
 // frontend/src/components/knowledge/KnowledgeTable.test.tsx
 //
-// The collections list. It had drifted from the other tables in three ways the
-// user could see: no status control in that column, a delete that was a bare
-// icon with no label, and a count header narrow enough to wrap one character
-// per line. All three are asserted here — and the count is two counts,
+// The collections list. It had drifted from the other tables in ways the user
+// could see: a delete that was a bare icon with no label, and a count header
+// narrow enough to wrap one character per line. Both are asserted here — and
+// the count is two counts,
 // documents and pending material, because one total would hide a collection
 // curation has not caught up with.
 //
-// The load-bearing assertion added since: this kind offers NO PER-AGENT REACH.
-// Every enabled collection is served to every agent, so the control must not
-// put an agent list in front of anyone — the server refuses a scope write for
-// `knowledge`, and a UI that asks anyway is a UI that asks for a 422. What it
-// must keep is the enable/disable choice, because THAT gate is real: a disabled
-// collection appears in no agent's delivered skill.
-//
-// `enabled` is not on /knowledge/collections, so the table merges it in from
-// `GET /resources?kind=knowledge` — one request for the table, never one per
-// row, which is what useKindReach is stubbed to stand in for.
+// And the list has no status column and no bulk enable / disable: every
+// collection is served to every agent, so there is nothing to switch.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +16,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 
 import { KnowledgeTable } from "./KnowledgeTable";
+import { acceptance } from "@/test/acceptance";
 import type { CollectionOut } from "@/lib/api/knowledgeTypes";
 
 const navigateMock = vi.fn();
@@ -32,38 +25,13 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-// The reach merge is keyed on the UID both lists carry, not on the name: keyed
-// on the name it would depend on the two reads happening at the same instant,
-// and a rename between them would report every row as enabled.
-vi.mock("@/lib/hooks/useResources", () => ({
-  useKindReach: vi.fn(
-    () =>
-      new Map([
-        ["kn-8c1f", { enabled: true, scope: null }],
-        // A scope left over from when the kind was scoped. The table must not
-        // report it: with no scope declared, `enabled` is the whole answer.
-        ["kn-3e70", { enabled: false, scope: { agents: ["u-claude"], machines: null } }],
-      ]),
-  ),
-}));
-vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: undefined })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ uid: "u-claude", name: "claude" }] })),
-}));
 const deleteMutate = vi.fn();
-const disableMutate = vi.fn();
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useDisableResource: vi.fn(() => ({ mutate: disableMutate, isPending: false })),
   useDeleteResource: vi.fn(() => ({ mutate: deleteMutate, isPending: false })),
 }));
 vi.mock("@/lib/api/resources", () => ({
-  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
+  resourcesApi: { remove: vi.fn() },
 }));
-vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,8 +42,7 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-// A collection carries both identities: the uid the row links to and the reach
-// merge is keyed on, and the name the cell prints — which is ALSO the
+// A collection carries both identities: the uid the row links to, and the name the cell prints — which is ALSO the
 // collection's directory name, and so what the file routes take.
 const ITEMS: CollectionOut[] = [
   {
@@ -90,12 +57,6 @@ const ITEMS: CollectionOut[] = [
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
 
-/** The row's ONE status button — its text is whether the collection is served.
- *  (It used to be three buttons per row; it is one whose label is the answer,
- *  opening a panel where the states are the choices.) */
-const reachIn = (name: string) =>
-  within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
-
 describe("KnowledgeTable", () => {
   afterEach(() => vi.clearAllMocks());
 
@@ -107,50 +68,13 @@ describe("KnowledgeTable", () => {
     expect(screen.getByText("internal notes")).toBeInTheDocument();
   });
 
-  test("the status column reports the enable gate, and nothing about agents", () => {
+  acceptance("web-ui", "a kind that cannot be disabled shows no status control", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    expect(screen.getAllByTestId("scope-control")).toHaveLength(ITEMS.length);
-
-    // One button per row, and its label is the whole answer this kind has:
-    // served, or not. Not "Every agent" — that name only means something
-    // beside a narrower one, and there is no narrower one here.
-    expect(reachIn("shopee")).toHaveTextContent(/^enabled$/i);
-    // Even though this row still carries a stored scope naming one agent.
-    expect(reachIn("personal")).toHaveTextContent(/^disabled$/i);
-  });
-
-  test("no per-agent reach is offered for a collection", () => {
-    // Every enabled collection is served to every agent (the `knowledge` kind
-    // declares no scope and the server refuses a scope write), so the panel
-    // must not offer an agent list at all.
-    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    fireEvent.click(reachIn("shopee"));
-
-    expect(screen.queryByRole("radio", { name: /only selected agents/i })).toBeNull();
-    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: /claude/i })).toBeNull();
-    // Two choices, both of them about the gate that is real.
-    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
-  });
-
-  test("the enable gate still writes — it is the one control this column has", () => {
-    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    fireEvent.click(reachIn("shopee"));
-    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "knowledge", uid: "kn-8c1f" });
-  });
-
-  test("the column and its filter are headed Status, not Reach", () => {
-    // Renaming the header is the honest half of withdrawing reach: the column
-    // reports one thing now. (Which two options the filter offers is pinned in
-    // `lib/reachFilter.test.ts` — a Radix Select's list is not in the DOM
-    // until it opens.)
-    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    expect(screen.getByRole("columnheader", { name: /^status$/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /^status$/i })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: /^reach$/i })).toBeNull();
-    expect(screen.getByRole("combobox", { name: /^status$/i })).toBeInTheDocument();
+    // No status filter either: there is nothing to filter on.
+    expect(screen.queryByRole("combobox", { name: /^status$/i })).toBeNull();
   });
 
   test("documents and pending material are counted in their own columns", () => {
@@ -186,18 +110,10 @@ describe("KnowledgeTable", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  test("selecting rows reveals the bulk status control and a bulk delete", () => {
+  test("selecting rows offers a bulk delete and no bulk status control", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
-
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    // The same one-button control the rows carry; it names the action rather
-    // than a state, because a mixed selection has no single answer. For this
-    // kind the action is "set status" and not "set reach": a collection has no
-    // per-agent reach, so the panel behind the button offers only on and off.
-    const bar = within(screen.getByTestId("bulk-reach-control"));
-    expect(bar.getByRole("button")).toHaveTextContent(/set status/i);
-    expect(bar.getByRole("button")).not.toHaveTextContent(/reach/i);
+    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 """``/api/v1/knowledge/*`` — the human's side of the directory.
 
-See "Cover collection management on REST and the CLI" and "Present a collection as
+See "Cover knowledge management on REST and the CLI" and "Present a collection as
 one tree in the web UI".
 
 These routes serve the person and the web page, never an agent: the agent reads the
@@ -15,16 +15,19 @@ knowledge never arrives as a file write: ``POST /material`` submits it to the
 collection's hidden inbox, and with no internal model configured — the state of the
 app booted here — it is promoted to a document on the spot ("Submit every entrance's
 input as material", "Promote material directly when no model is configured").
-``DELETE`` reaches any document; ``GET`` reads any document. The README and the
-inbox are not documents, and each of those refusals is one assertion below, driven
-through the route rather than the service, because the route is where a handler
-could forget the rule.
+``DELETE`` reaches any document; ``GET`` reads any document and any inbox item;
+``PUT`` saves an edited body over an existing document. The README and the inbox are
+not documents, and each of those refusals is one assertion below, driven through the
+route rather than the service, because the route is where a handler could forget the
+rule.
 
 ``client``, ``_create_collection``, ``_submit`` and ``_hold_material`` live in
 ``conftest.py``.
 """
 
 from __future__ import annotations
+
+import os
 
 import pytest
 from starlette.testclient import TestClient
@@ -36,8 +39,9 @@ from .conftest import _create_collection, _hold_material, _submit
 
 def _document(client: TestClient, collection: str, title: str, body: str = "b") -> str:
     """A document written straight into the tree — what a person's editor or a
-    curation pass leaves there. No route writes a document, which is the point
-    ("Submit every entrance's input as material")."""
+    curation pass leaves there. New knowledge reaches a collection as material
+    ("Submit every entrance's input as material"); the one route that writes a
+    document only replaces the body of one that exists."""
     return fs.write_file(
         directory=collection, title=title, description="written", body=body, curated=True
     ).path
@@ -106,13 +110,13 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
 # ----- the tree ------------------------------------------------------------
 
 
-def test_the_tree_lists_documents_but_not_the_readme_or_the_inbox(  # type: ignore[no-untyped-def]
+def test_the_tree_lists_documents_and_the_inbox_but_not_the_readme(  # type: ignore[no-untyped-def]
     client, monkeypatch
 ) -> None:
     """One tree per collection ("Present a collection as one tree in the web UI").
-    The README describes it rather than being content in it, and the inbox is not
-    knowledge yet ("Hide dot-prefixed entries except the inbox", "Keep the
-    collection README out of the corpus")."""
+    The README describes it rather than being content in it, and the inbox is a
+    folder of its own, marked so the page shows it read-only ("Hide dot-prefixed
+    entries except the inbox", "Keep the collection README out of the corpus")."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
     _hold_material(monkeypatch)
@@ -123,8 +127,10 @@ def test_the_tree_lists_documents_but_not_the_readme_or_the_inbox(  # type: igno
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert level.status_code == 200, level.text
-    assert [f["path"] for f in level.json()["files"]] == [document]
-    assert level.json()["directories"] == []
+    assert [(f["path"], f["inbox"]) for f in level.json()["files"]] == [(document, False)]
+    assert level.json()["directories"] == [
+        {"path": "shopee/.inbox", "name": ".inbox", "file_count": 1, "inbox": True}
+    ]
 
 
 def test_a_folder_in_the_collection_is_a_directory_the_tree_offers(client) -> None:  # type: ignore[no-untyped-def]
@@ -150,14 +156,64 @@ def test_a_path_escaping_the_root_is_refused(client) -> None:  # type: ignore[no
     assert resp.status_code in (400, 404), resp.text
 
 
-def test_the_inbox_is_not_addressable(client) -> None:  # type: ignore[no-untyped-def]
-    """Hidden entries are refused by the path guard, so no route can list or
-    read material before a pass has merged it ("Hide dot-prefixed entries except the
-    inbox", "Guard every path through one module")."""
+def test_the_inbox_can_be_listed_and_read_but_nothing_else_hidden(  # type: ignore[no-untyped-def]
+    client, monkeypatch, tmp_path
+) -> None:
+    """A person can see what waits to be merged; nothing else hidden is reachable
+    ("Hide dot-prefixed entries except the inbox", "Guard every path through one
+    module")."""
     _create_collection(client, "shopee")
-    resp = client.get("/api/v1/knowledge/tree", params={"path": "shopee/.inbox"})
-    assert resp.status_code == 400, resp.text
-    assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
+    _hold_material(monkeypatch)
+    client.post(
+        "/api/v1/knowledge/material",
+        json={"collection": "shopee", "title": "Waiting", "description": "w", "body": "later"},
+    )
+    (tmp_path / "knowledge" / "shopee" / ".scratch").mkdir()
+    (tmp_path / "knowledge" / "shopee" / ".scratch" / "x.md").write_text("x", encoding="utf-8")
+
+    inbox = client.get("/api/v1/knowledge/tree", params={"path": "shopee/.inbox"})
+    assert inbox.status_code == 200, inbox.text
+    assert inbox.json()["directories"] == []
+    [item] = inbox.json()["files"]
+    assert (item["path"], item["title"], item["inbox"]) == (
+        "shopee/.inbox/waiting.md",
+        "Waiting",
+        True,
+    )
+
+    read = client.get("/api/v1/knowledge/file", params={"path": item["path"]})
+    assert read.status_code == 200, read.text
+    assert (read.json()["body"].strip(), read.json()["inbox"]) == ("later", True)
+
+    for path in ("shopee/.scratch", "shopee/.scratch/x.md"):
+        for route in ("tree", "file"):
+            resp = client.get(f"/api/v1/knowledge/{route}", params={"path": path})
+            assert resp.status_code == 400, (route, path, resp.text)
+            assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
+
+
+def test_an_inbox_item_cannot_be_deleted_or_saved(client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The inbox is read-only on every surface: no route writes or deletes an
+    item ("Hide dot-prefixed entries except the inbox")."""
+    _create_collection(client, "shopee")
+    _hold_material(monkeypatch)
+    client.post(
+        "/api/v1/knowledge/material",
+        json={"collection": "shopee", "title": "Waiting", "description": "w", "body": "b"},
+    )
+    path = "shopee/.inbox/waiting.md"
+    fingerprint = client.get("/api/v1/knowledge/file", params={"path": path}).json()["fingerprint"]
+
+    deleted = client.delete("/api/v1/knowledge/file", params={"path": path})
+    saved = client.put(
+        "/api/v1/knowledge/file",
+        json={"path": path, "body": "edited", "expected_fingerprint": fingerprint},
+    )
+    for resp in (deleted, saved):
+        assert resp.status_code == 400, resp.text
+        assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
+    read = client.get("/api/v1/knowledge/file", params={"path": path})
+    assert read.json()["body"].strip() == "b"
 
 
 # ----- reading a document --------------------------------------------------
@@ -293,15 +349,50 @@ def test_material_with_no_description_is_refused(client) -> None:  # type: ignor
     assert resp.status_code == 422, resp.text
 
 
-def test_there_is_no_route_that_writes_a_document(client) -> None:  # type: ignore[no-untyped-def]
-    """A person edits a document in their own editor; the old write route is
-    gone rather than kept as a second way in ("Submit every entrance's input as material")."""
+def test_saving_keeps_the_frontmatter_and_audits_the_edit(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """``PUT /file`` replaces the body only ("Save a document edited in the web UI"):
+    every frontmatter key — the curation stamp and a person's own included — is
+    kept byte for byte, and the file's mtime moves so the sweep sees an edit."""
+    _create_collection(client, "shopee")
+    head = (
+        "---\ntitle: Cache\ndescription: How the cache works\ntags:\n- infra\n"
+        "coffer_curated_at: '2026-01-01T00:00:00+00:00'\n---"
+    )
+    on_disk = tmp_path / "knowledge" / "shopee" / "cache.md"
+    on_disk.write_text(f"{head}\n\nold body\n", encoding="utf-8")
+    stamp = 1767225600.0  # 2026-01-01T00:00:00Z, the stamp above
+    os.utime(on_disk, (stamp, stamp))
+    path = "shopee/cache.md"
+    assert fs.edited_documents("shopee") == ()
+    fingerprint = client.get("/api/v1/knowledge/file", params={"path": path}).json()["fingerprint"]
+
+    resp = client.put(
+        "/api/v1/knowledge/file",
+        json={"path": path, "body": "new body", "expected_fingerprint": fingerprint},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["body"].strip() == "new body"
+    assert resp.json()["fingerprint"] != fingerprint
+    assert on_disk.read_text(encoding="utf-8") == f"{head}\n\nnew body\n"
+    assert fs.edited_documents("shopee") == (path,)
+
+    audit = client.get("/api/v1/audit", params={"event_type": "knowledge_edited"})
+    assert audit.status_code == 200, audit.text
+    assert [e["details"]["path"] for e in audit.json()["entries"]] == [path]
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["shopee", "shopee/README.md", "shopee/../outside.md", "shopee/missing.md"],
+)
+def test_saving_refuses_anything_but_an_existing_document(client, path: str) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     resp = client.put(
         "/api/v1/knowledge/file",
-        json={"title": "t", "description": "d", "body": "b", "collection": "shopee"},
+        json={"path": path, "body": "b", "expected_fingerprint": "0" * 64},
     )
-    assert resp.status_code == 405, resp.text
+    assert resp.status_code in (400, 404), resp.text
+    assert resp.json()["error"]["code"] in ("KNOWLEDGE_PATH_UNSAFE", "KNOWLEDGE_FILE_NOT_FOUND")
 
 
 # ----- deleting a document -------------------------------------------------

@@ -300,6 +300,8 @@ export interface components {
             };
             scope?: components["schemas"]["ScopeOut"];
             enabled: boolean;
+            /** @description Whether the kind has an enabled switch at all. False for `knowledge` and `memory`, whose resources are always enabled and refuse enable/disable with `RESOURCE_NOT_TOGGLEABLE`, so a surface can leave the switch out. */
+            toggleable: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -623,6 +625,15 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled switch (`knowledge`, `memory`); nothing is changed (spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     disableResource: {
@@ -648,6 +659,15 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled switch (`knowledge`, `memory`); nothing is changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getResourceScope: {

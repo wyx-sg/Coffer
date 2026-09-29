@@ -95,7 +95,7 @@ async def cmd_save(
         return
     # Asked once, and the same question either way: `/save <name>` checks the
     # name against it, and a `/save` with no usable name offers it as a card.
-    known = await commands._collections.enabled_collections()
+    known = await commands._collections.collection_names()
     parts = text.split(maxsplit=1)
     named = parts[1].strip() if len(parts) > 1 else ""
     if named:

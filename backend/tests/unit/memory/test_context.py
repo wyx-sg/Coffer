@@ -17,10 +17,10 @@ this module was rewritten:
 * It named a tool as the way to reach a body, and in three weeks no agent ever
   called it. The payload now names a path.
 
-``MemoryPort`` is faked: composing needs the enabled partitions and their
+``MemoryPort`` is faked: composing needs the served partitions and their
 notes, never a database. There is no calling agent in any of this — every
-enabled partition is composed for every agent — so the only gate the fake
-models is ``enabled``. The port's own promise — ``list_notes`` answers from
+partition is composed for every agent — so the only input the fake models is
+which partitions it serves. The port's own promise — ``list_notes`` answers from
 ``notes/``, so a retired note is not there to filter — is exercised for real
 in ``tests/integration/memory/test_distil_lifecycle.py``.
 """
@@ -64,7 +64,7 @@ class _FakeMemory:
         self._partitions = list(partitions)
         self._enabled = list(enabled) if enabled is not None else [p.name for p in partitions]
 
-    async def enabled_partitions(self) -> list[str]:
+    async def served_partitions(self) -> list[str]:
         return list(self._enabled)
 
     async def list_notes(self, partition: str) -> list[Note]:
@@ -191,13 +191,13 @@ async def test_nothing_to_deliver_is_an_empty_payload_not_a_bare_header() -> Non
 
 
 @pytest.mark.asyncio
-async def test_a_disabled_partition_contributes_nothing() -> None:
-    """``enabled`` is the only gate on the payload.
+async def test_a_partition_the_port_does_not_serve_contributes_nothing() -> None:
+    """The payload is composed from what the port serves and nothing else.
 
-    It used to be one of two: a partition also carried a per-agent reach,
-    defaulted to the agents it had been aggregated from, so a repository's own
-    memory could be withheld from an agent working in that repository. Nothing
-    is withheld by caller any more — only by the switch the developer sets.
+    A partition used to be gated twice: a per-agent reach, defaulted to the
+    agents it had been aggregated from, and an enabled switch. Both are gone —
+    the service serves every registered partition — so this only pins that
+    composing does not reach past the port.
     """
     memory = _FakeMemory(
         {"coffer": [_note("p", "coffer")], "global": [_note("g", "global", type=TYPE_USER)]},

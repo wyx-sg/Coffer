@@ -1,12 +1,15 @@
 """``coffer memory …`` — the memory layer from the terminal (spec memory
 "Cover memory management on REST and the CLI").
 
-``show``, ``edit``, ``rm``, ``enable`` and ``disable`` are the lifecycle verbs
-every kind shares (``_kind_verbs``); there is no ``add``, because partitions
-are provisioned only by aggregation ("Provision partitions only from
-aggregation"). ``list`` is the kind's own: it reads ``/memory/partitions``,
-which counts each partition's notes and names the repository it is keyed on.
-``sync`` runs aggregation, ``distil`` a distil pass, and ``delivery on|off``
+``show``, ``edit`` and ``rm`` are the lifecycle verbs every kind shares
+(``_kind_verbs``); there is no ``add``, because partitions are provisioned
+only by aggregation ("Provision partitions only from aggregation"), and no
+``enable`` or ``disable``, because every partition is served to every agent
+("Serve every partition to every agent"). ``list`` is the kind's own: it reads
+``/memory/partitions``, which counts each partition's notes and names the
+repository it is keyed on. ``sync`` updates memory — aggregation, then a
+distil pass over every partition that gained entries ("Update memory in one
+action") — ``distil`` runs one pass over one partition, and ``delivery on|off``
 installs or removes the session-start hook in an agent's own settings file.
 A partition's notes, index, retirement record and file tree are plain files,
 so this group has no command that lists or prints one: ``coffer path memory
@@ -99,21 +102,17 @@ def list_partitions(
 
 register_kind_verbs(
     app,
-    KindVerbs(
-        kind=_KIND_MEMORY,
-        noun="partition",
-        verbs=frozenset({"show", "edit", "rm", "enable", "disable"}),
-        help={
-            "enable": "Enable a partition: its notes are delivered to every agent.",
-            "disable": "Disable a partition: its notes are no longer delivered.",
-        },
-    ),
+    KindVerbs(kind=_KIND_MEMORY, noun="partition", verbs=frozenset({"show", "edit", "rm"})),
 )
 
 
 @app.command("sync")
 def sync(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) -> None:
-    """Run aggregation: read every registered agent's native memory."""
+    """Update memory: read every registered agent's native memory, then distil.
+
+    Every partition left holding undistilled entries is distilled in the same
+    call; one whose distil pass is already running is reported as skipped.
+    """
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/memory/sync")

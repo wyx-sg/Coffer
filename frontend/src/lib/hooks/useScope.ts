@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { agentsKey, ownListKeyForKind, resourceScopeKey, resourcesKey } from "@/lib/api/queryKeys";
-import { scopeApi, type ResourceScope, type Scope } from "@/lib/api/scope";
+import { scopeApi, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
 
 /**
@@ -17,7 +17,7 @@ import { useToast } from "@/components/ui/toast";
  * `ScopeOut`, and re-exported here so components keep importing their scope
  * types from the hook module.
  */
-export type { ResourceScope, Scope };
+export type { Scope };
 
 /**
  * Current activation scope for one resource, plus whether its kind supports

@@ -62,11 +62,6 @@ export interface MemoryFileNode {
   /** Absolute on-disk path of the containing folder. */
   folder_abs_path?: string;
   type: "file" | "dir";
-  /** True for `.raw/` and everything under it: the verbatim entries
-   *  aggregation read out of the agents, not Coffer's own writing. The server
-   *  decides — the path convention is only a fallback for a node that predates
-   *  the field. */
-  derived: boolean;
   size: number | null;
   /** True on a dir whose children were clipped at the max tree depth. */
   truncated: boolean;
@@ -101,19 +96,12 @@ export interface AggregationResultOut {
    *  and in isolation") — the other agent's
    *  aggregation still completed. */
   failures: string[];
-}
-
-/** What one distil pass did to a partition: the four actions its routing stage
- *  is confined to. A note it rewrote is `merged`, a note it wrote fresh is
- *  `opened`, a note it took out of `notes/` and recorded in `RETIRED.md` is
- *  `retired`, and an entry it judged not worth a note is `dropped`. */
-export interface DistilResultOut {
-  partition: string;
-  merged: number;
-  opened: number;
-  retired: number;
-  dropped: number;
-  model_used: boolean;
+  /** Partitions (by name) the same request then distilled into notes (see
+   *  "Update memory in one action"). */
+  distilled: string[];
+  /** Partitions (by name) left alone because a distil pass over them was
+   *  already running — reported, not failed. */
+  skipped: string[];
 }
 
 /** Per-agent delivery state — whether Coffer's hook is written into that

@@ -333,6 +333,23 @@ class ResourceProtected(CofferError):  # noqa: N818
         self.reason = reason
 
 
+class ResourceNotToggleable(CofferError):  # noqa: N818
+    """Enabling or disabling a resource whose kind has no enabled switch.
+
+    A kind that declares ``toggleable=False`` serves every one of its resources
+    (spec resource-framework "Address every resource by an immutable uid
+    through one kind-agnostic surface"), so the switch is refused rather than
+    stored as a flag nothing reads. Maps to 409.
+    """
+
+    code = "RESOURCE_NOT_TOGGLEABLE"
+
+    def __init__(self, kind: str, uid: str) -> None:
+        super().__init__(f"{kind} resources cannot be enabled or disabled: {uid}")
+        self.kind = kind
+        self.uid = uid
+
+
 class DatabaseSchemaTooNew(CofferError):  # noqa: N818
     """The on-disk DB was migrated by a newer/divergent Coffer build.
 

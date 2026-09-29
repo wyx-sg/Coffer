@@ -185,6 +185,8 @@ export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
 export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
+/** Every directory level of every collection — the prefix a save invalidates. */
+export const knowledgeTreeRootKey = ["knowledge", "tree"] as const;
 /** One directory level; `path` is relative to the knowledge root. */
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;

@@ -51,7 +51,7 @@ class ResourceModel(Base):
     # agent UIDS; NULL means unscoped. Added by migration 0046; rewritten from
     # names to uids by migration 0096.
     scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Optional display text shown in place of ``name`` (migration 0105); NULL
+    #: Optional display text shown in place of ``name`` (migration 0106); NULL
     #: means none, and surfaces show the name.
     title: Mapped[str | None] = mapped_column(String(80), nullable=True)
 

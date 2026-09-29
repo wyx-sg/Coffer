@@ -20,7 +20,7 @@ import time
 import pytest
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
 
 
@@ -93,7 +93,7 @@ def test_traversal_and_hidden_entries_are_refused(bad: str) -> None:
 def test_collections_count_documents_and_pending_material_apart(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     _document(title="One")
     _document(title="Two")
-    fs.submit_material("shopee", title="Waiting", description="d", body="b")
+    inbox.submit_material("shopee", title="Waiting", description="d", body="b")
     entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
     assert (entry.document_count, entry.pending_count) == (2, 1)
 
@@ -109,30 +109,38 @@ def test_readme_stays_out_of_the_documents_and_the_counts(knowledge_root) -> Non
 def test_walk_files_returns_the_whole_tree_and_never_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     fs.write_file(directory="shopee", title="Top", description="d", body="b")
     fs.write_file(directory="shopee/account", title="Nested", description="d", body="b")
-    fs.submit_material("shopee", title="Waiting", description="d", body="b")
+    inbox.submit_material("shopee", title="Waiting", description="d", body="b")
     found = catalogue.walk_files(paths.collection_dir("shopee"))
     assert [f.path for f in found] == ["shopee/account/nested.md", "shopee/top.md"]
-    # A person browsing the collection does not see the inbox either.
+    # A person browsing the collection sees the inbox as a folder of its own,
+    # marked so it is shown read-only — never its items mixed into the tree.
     level = catalogue.list_level("shopee")
-    assert [d.name for d in level.directories] == ["account"]
+    assert [(d.name, d.file_count, d.inbox) for d in level.directories] == [
+        (".inbox", 1, True),
+        ("account", 1, False),
+    ]
     assert [f.path for f in level.files] == ["shopee/top.md"]
+    listed = catalogue.list_inbox("shopee")
+    assert [(f.path, f.title, f.inbox) for f in listed.files] == [
+        ("shopee/.inbox/waiting.md", "Waiting", True)
+    ]
 
 
 # ----- the inbox -----------------------------------------------------------
 
 
 def test_material_waits_in_a_hidden_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    name = fs.submit_material("shopee", title="Gateway", description="d", body="b")
+    name = inbox.submit_material("shopee", title="Gateway", description="d", body="b")
     assert name == "gateway.md"
     assert (knowledge_root / "shopee" / ".inbox" / "gateway.md").is_file()
     # Two submissions of one title are two pieces of material.
-    assert fs.submit_material("shopee", title="Gateway", description="d", body="c") != name
-    assert len(fs.inbox_items("shopee")) == 2
+    assert inbox.submit_material("shopee", title="Gateway", description="d", body="c") != name
+    assert len(inbox.inbox_items("shopee")) == 2
 
 
 def test_promoting_material_makes_it_a_stamped_document(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    name = fs.submit_material("shopee", title="Gateway", description="what it does", body="b")
-    promoted = fs.promote("shopee", name)
+    name = inbox.submit_material("shopee", title="Gateway", description="what it does", body="b")
+    promoted = inbox.promote("shopee", name)
     assert promoted.path == "shopee/gateway.md"
     assert (promoted.title, promoted.description, promoted.body.strip()) == (
         "Gateway",
@@ -140,14 +148,14 @@ def test_promoting_material_makes_it_a_stamped_document(knowledge_root) -> None:
         "b",
     )
     assert promoted.curated_at != ""
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     assert fs.edited_documents("shopee") == ()
 
 
 @pytest.mark.parametrize("bad", ["../x.md", ".hidden.md", "a/b.md"])
 def test_an_inbox_item_is_named_by_its_file_name_alone(bad: str) -> None:
     with pytest.raises(UnsafeKnowledgePath):
-        fs.read_material("shopee", bad)
+        inbox.read_material("shopee", bad)
 
 
 # ----- the curation stamp ---------------------------------------------------

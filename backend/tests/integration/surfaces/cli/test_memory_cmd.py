@@ -199,6 +199,9 @@ def test_sync_list_distil_and_the_note_on_disk(memory_cli_daemon):
     result = json.loads(_extract_json(synced.output))
     assert result["entries_written"] == 2
     assert result["failures"] == []
+    # "Update memory in one action": the same call distilled what it read.
+    assert sorted(result["distilled"]) == ["coffer", "global"]
+    assert result["skipped"] == []
 
     listed = _runner.invoke(cli_app, ["memory", "list", "--json"])
     assert listed.exit_code == 0, listed.output
@@ -208,9 +211,11 @@ def test_sync_list_distil_and_the_note_on_disk(memory_cli_daemon):
     assert project["repository_path"] == str(repository.resolve())
     assert project["unresolvable"] is False
 
+    # A second, hand-started pass finds nothing new: the update already opened
+    # the note.
     distilled = _runner.invoke(cli_app, ["memory", "distil", project["name"]])
     assert distilled.exit_code == 0, distilled.output
-    assert json.loads(_extract_json(distilled.output))["opened"] == 1
+    assert json.loads(_extract_json(distilled.output))["opened"] == 0
 
     # The note is a file: read where `coffer path memory` points.
     note = _partition_dir(project["name"]) / "notes" / "python-lockfile.md"
@@ -243,13 +248,14 @@ def test_show_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
     assert "Traceback" not in combined, combined
 
 
-def test_show_edit_disable_enable_and_rm_a_partition(memory_cli_daemon):
-    """The verbs every kind shares, on a partition; there is no `add`."""
+def test_show_edit_and_rm_a_partition(memory_cli_daemon):
+    """The verbs every kind shares, on a partition; there is no `add`, and no
+    switch (spec memory "Serve every partition to every agent")."""
     import typer.main
 
     partition = _distilled_partition(memory_cli_daemon)
     group = typer.main.get_command(cli_app).commands["memory"]  # type: ignore[attr-defined]
-    assert "add" not in group.commands
+    assert not {"add", "enable", "disable"} & set(group.commands)
 
     shown = _runner.invoke(cli_app, ["memory", "show", partition, "--json"])
     assert shown.exit_code == 0, shown.output
@@ -260,9 +266,6 @@ def test_show_edit_disable_enable_and_rm_a_partition(memory_cli_daemon):
     c, _info = _cli_client.client_or_exit()
     assert c.get(f"/resources/{uid}").json()["title"] == "Coffer repo"
 
-    assert _runner.invoke(cli_app, ["memory", "disable", partition]).exit_code == 0
-    assert c.get(f"/resources/{uid}").json()["enabled"] is False
-    assert _runner.invoke(cli_app, ["memory", "enable", uid]).exit_code == 0
     assert c.get(f"/resources/{uid}").json()["enabled"] is True
 
     removed = _runner.invoke(cli_app, ["memory", "rm", partition, "--yes"])
@@ -283,11 +286,17 @@ def test_distil_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
 def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memory_cli_daemon):
     """Per "Distil mechanically with no internal connection": thinner, not
     absent — the verb still returns a real pass, and says a model was not used
-    rather than pretending one was."""
+    rather than pretending one was.
+
+    ``sync`` already ran the mechanical pass over ``global`` ("Update memory in
+    one action"), which is what opened its note; the hand-started pass after it
+    finds nothing new and still reports honestly."""
     tmp_path = memory_cli_daemon
     _register_cc_via_http()
     _seed_repository(tmp_path)
-    _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    assert "global" in json.loads(_extract_json(synced.output))["distilled"]
+    assert len(list((_partition_dir("global") / "notes").glob("*.md"))) == 1
 
     distilled = _runner.invoke(cli_app, ["memory", "distil", "global"])
 
@@ -296,7 +305,7 @@ def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memor
     assert result == {
         "partition": "global",
         "merged": 0,
-        "opened": 1,
+        "opened": 0,
         "retired": 0,
         "dropped": 0,
         "model_used": False,

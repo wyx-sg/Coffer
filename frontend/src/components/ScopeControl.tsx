@@ -49,10 +49,6 @@
 //     same state can never arrive here under a second name.
 //   - A panel the user only glanced at writes nothing at all.
 //
-// Kinds that declare no scope still need enable/disable — this control owns it
-// — so they fall back to the same button over a two-choice Disabled/Enabled
-// panel.
-//
 // The control also sits in the status column of every resource LIST, one
 // instance per row. Mounting the per-resource scope query once per row would
 // turn one list render into one GET per row, so the list callers pass `scope`
@@ -62,38 +58,23 @@
 // requests. The detail pages pass nothing and keep fetching, since they render
 // one resource.
 //
-// Which is why `supportsScope` is a PROP and not only a server answer. Whether
-// a kind declares a scope at all arrives on the very query a list row
-// deliberately does not run, so a prefetching row cannot learn it — it used to
-// simply assert `supports_scope: true`, which made every row of a kind with no
-// scope claim a per-agent reach the server would refuse to write. A row's
-// caller knows its kind at the call site, so it says so; a detail page omits
-// it and the fetched answer governs. `knowledge` and `memory` are the kinds
-// that pass `false`: every enabled collection and partition is served to every
-// agent, and only `enabled` decides anything.
-//
-// Passing `false` also means there is no scope to report, so a value left in
-// the row payload from when the kind was scoped is normalised away here rather
-// than in each caller — otherwise the button would read "Enabled" over a panel
-// with neither of its two choices checked.
+// Every kind that mounts this control declares a per-agent scope. The fetched
+// `/scope` answer still carries `supports_scope`, but it is deliberately
+// ignored here: the kinds that answer `false` (agent, knowledge, memory) have
+// no reach control on any page, so no mounted instance can receive it.
 import { useTranslation } from "react-i18next";
 
 import { ReachControl } from "@/components/reach/ReachControl";
 import { reachModeOf, type ReachMode } from "@/components/reach/reachState";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
-import {
-  useResourceScope,
-  useUpdateResourceScope,
-  type ResourceScope,
-  type Scope,
-} from "@/lib/hooks/useScope";
+import { useResourceScope, useUpdateResourceScope, type Scope } from "@/lib/hooks/useScope";
 import { isDormantHere, sameScope } from "@/lib/scope";
 
 interface Props {
   /** Which kind this resource is. Not part of any request — the routes take the
    *  uid alone — but it decides which of the per-kind list keys a write
-   *  refreshes, and whether the kind declares a scope at all. */
+   *  refreshes. */
   kind: string;
   /** The resource this control is about. */
   uid: string;
@@ -102,41 +83,19 @@ interface Props {
    *  let the control fetch its own; `undefined` is "not supplied", never a
    *  value. */
   scope?: Scope | null;
-  /** Whether this KIND declares a per-agent scope at all. Only a prefetching
-   *  caller has to say: it skips the query that would have answered, and
-   *  `false` there collapses the panel to Disabled/Enabled. A caller that lets
-   *  the control fetch gets the server's answer and can leave this alone. */
-  supportsScope?: boolean;
 }
 
-export function ScopeControl({
-  kind,
-  uid,
-  enabled,
-  scope: presetScope,
-  supportsScope: kindSupportsScope = true,
-}: Props) {
+export function ScopeControl({ kind, uid, enabled, scope: presetScope }: Props) {
   const { t } = useTranslation();
   const prefetched = presetScope !== undefined;
   const { data: fetchedScope } = useResourceScope(uid, !prefetched);
-  const scopeData: ResourceScope | undefined = prefetched
-    ? {
-        // No scope declared means no scope to report, whatever the row still
-        // carries from when the kind had one.
-        scope: kindSupportsScope ? presetScope : null,
-        supports_scope: kindSupportsScope,
-      }
-    : fetchedScope;
   const { data: agentsData } = useAgents();
   const update = useUpdateResourceScope(kind, uid);
   const enable = useEnableResource();
   const disable = useDisableResource();
 
   const busy = update.isPending || enable.isPending || disable.isPending;
-  // While the scope query is in flight, assume the kind supports scope; the
-  // fallback only matters once the server has said otherwise.
-  const supportsScope = scopeData ? scopeData.supports_scope : true;
-  const scope = scopeData?.scope ?? null;
+  const scope = (prefetched ? presetScope : fetchedScope?.scope) ?? null;
 
   const mode: ReachMode = reachModeOf({ enabled, scope });
 
@@ -183,7 +142,6 @@ export function ScopeControl({
   return (
     <ReachControl
       mode={mode}
-      supportsScope={supportsScope}
       busy={busy}
       initialScope={scope}
       note={note}

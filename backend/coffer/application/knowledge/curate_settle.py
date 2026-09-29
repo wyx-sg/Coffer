@@ -33,7 +33,7 @@ from typing import Any
 
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
-from coffer.infrastructure.knowledge import fs
+from coffer.infrastructure.knowledge import fs, inbox
 
 #: Consecutive cut-offs of one item after which a pass stops retrying it.
 MAX_CONSECUTIVE_TRUNCATIONS = 3
@@ -65,7 +65,7 @@ def pending_items(collection: str) -> tuple[Pending, ...]:
     New material first, because until it is merged it is knowledge no agent
     can read; an edited document is already readable as it stands.
     """
-    return tuple(Pending(material=name) for name in fs.inbox_items(collection)) + tuple(
+    return tuple(Pending(material=name) for name in inbox.inbox_items(collection)) + tuple(
         Pending(document=relpath) for relpath in fs.edited_documents(collection)
     )
 
@@ -75,7 +75,7 @@ def settle(collection: str, item: Pending) -> None:
     stamped — unless the pass retired it, in which case there is nothing left
     to stamp."""
     if item.material is not None:
-        fs.discard_material(collection, item.material)
+        inbox.discard_material(collection, item.material)
         return
     with contextlib.suppress(KnowledgeFileNotFound):
         fs.mark_curated(item.document or "")
@@ -85,7 +85,7 @@ def give_up(collection: str, item: Pending) -> list[str]:
     """Settle an item no pass can finish; answer the documents it was promoted into."""
     if item.material is not None:
         with contextlib.suppress(KnowledgeFileNotFound):
-            return [fs.promote(collection, item.material).path]
+            return [inbox.promote(collection, item.material).path]
         return []
     settle(collection, item)
     return []
@@ -105,7 +105,7 @@ def shelve_oversized(collection: str, item: Pending) -> dict[str, Any]:
     """
     if item.material is not None:
         with contextlib.suppress(KnowledgeFileNotFound):
-            return {"promoted": [fs.promote(collection, item.material).path]}
+            return {"promoted": [inbox.promote(collection, item.material).path]}
         return {"promoted": []}
     settle(collection, item)
     return {"stamped": item.document or ""}
@@ -113,7 +113,7 @@ def shelve_oversized(collection: str, item: Pending) -> dict[str, Any]:
 
 def promote_all(collection: str) -> list[str]:
     """Every inbox item made a document as it stands — the no-model path."""
-    return [fs.promote(collection, name).path for name in fs.inbox_items(collection)]
+    return [inbox.promote(collection, name).path for name in inbox.inbox_items(collection)]
 
 
 __all__ = [

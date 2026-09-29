@@ -88,8 +88,8 @@ One knowledge tree: a directory of Markdown documents under
 ### `coffer-guide`
 
 The skill Coffer ships and maintains itself. It is Coffer's manual for agents, followed by
-the path, title and description of every document in the enabled
-[collections](#collection). Coffer regenerates it from the running build and refuses to
+the path, title and description of every document in every
+[collection](#collection). Coffer regenerates it from the running build and refuses to
 delete it. See [Skills](/guides/skills).
 
 ### Connection
@@ -299,7 +299,8 @@ One fact read out of an agent's [native memory](#native-memory) by the
 ### Reach
 
 Where a resource applies on this machine: its `enabled` flag together with its
-[scope](#scope). Reach is machine-local and never syncs, so each machine decides for itself
+[scope](#scope). Knowledge collections and memory partitions have no reach: each is
+served to every agent. Reach is machine-local and never syncs, so each machine decides for itself
 which agents see a synced resource. See
 [Resource framework](/architecture/resource-framework#reach).
 

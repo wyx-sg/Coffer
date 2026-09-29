@@ -146,7 +146,7 @@ async def test_the_service_serves_the_partition_under_its_new_name() -> None:
     await _rename(resources, row, "coffer-vault")
     service = _service(resources)
 
-    assert await service.enabled_partitions() == ["coffer-vault"]
+    assert await service.served_partitions() == ["coffer-vault"]
     assert [n.slug for n in await service.list_notes("coffer-vault")] == ["who-owns-login"]
 
 

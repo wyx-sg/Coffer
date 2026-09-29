@@ -48,6 +48,7 @@ const telegramResource = {
   kind: "channel",
   name: "tg",
   enabled: true,
+  toggleable: true,
   config: {
     channel_type: "telegram",
     bot_token_ref: "channel/tg/bot-token",

@@ -77,6 +77,9 @@ class ResourceOut(BaseModel):
     # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
+    #: ``Kind.toggleable``: False (knowledge, memory) means enable/disable is
+    #: refused with RESOURCE_NOT_TOGGLEABLE, so a surface leaves the switch out.
+    toggleable: bool
     created_at: datetime
     updated_at: datetime
 
@@ -90,14 +93,12 @@ class ResourceCreate(BaseModel):
 
 
 class ResourceUpdate(BaseModel):
-    #: Renaming is a field, not an operation. Absent means "leave the label
-    #: alone"; a value already taken within the kind is a 409, and so is any
-    #: change to a fixed name (NAME_IMMUTABLE).
+    #: Renaming is a field. Absent leaves the label alone; a name taken within
+    #: the kind is a 409, as is any change to a fixed name (NAME_IMMUTABLE).
     name: str | None = Field(
         default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$"
     )
-    #: Display text, on every kind. Absent leaves it alone; "" or null clears
-    #: it; longer than 80 characters is a validation error.
+    #: Display text on every kind: absent leaves it, "" or null clears it.
     title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
     description: str | None = None
     config: dict[str, Any] | None = None
@@ -204,8 +205,7 @@ class MCPToolView(BaseModel):
     description: str | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     enabled: bool
-    #: len("mcp__coffer__<prefixed_name>"); over 64 is past the provider API
-    #: limit (spec mcp-gateway "Flag tools whose client-visible name is too long").
+    #: len("mcp__coffer__<prefixed_name>"); over 64 is past the provider limit.
     client_name_length: int
 
 

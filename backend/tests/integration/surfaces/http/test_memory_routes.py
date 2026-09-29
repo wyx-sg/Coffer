@@ -218,11 +218,12 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert result["entries_written"] == 2
     assert result["failures"] == []
     assert sorted(result["partitions"]) == ["coffer", "global"]
+    # The same call distils what it aggregated ("Update memory in one action").
+    assert sorted(result["distilled"]) == ["coffer", "global"]
+    assert result["skipped"] == []
 
-    # Aggregation writes `.raw/` only — a partition has no note until a distil
-    # pass has run ("Keep raw entries verbatim and hidden").
     listed = _partitions(client)
-    assert listed["coffer"]["note_count"] == 0
+    assert listed["coffer"]["note_count"] == 1
     assert listed["coffer"]["repository_path"] == str(repository.resolve())
     assert listed["coffer"]["repository_key"] == f"path:{repository.resolve()}"
     assert listed["coffer"]["unresolvable"] is False
@@ -234,16 +235,16 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     # up by label first.
     assert listed["coffer"]["uid"] and listed["coffer"]["uid"] != listed["global"]["uid"]
 
+    # A hand-started pass afterwards finds nothing new to open.
     distilled = _distil(client, "coffer")
     assert distilled == {
         "partition": "coffer",
         "merged": 0,
-        "opened": 1,
+        "opened": 0,
         "retired": 0,
         "dropped": 0,
         "model_used": False,
     }
-    _distil(client, "global")
     assert _partitions(client)["coffer"]["note_count"] == 1
 
     coffer_uid = _partition_uid(client, "coffer")
@@ -376,11 +377,12 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     _register_agent(client, "cc")
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
-    _sync(client)
+    # Update memory runs the mechanical pass itself: one note per raw entry.
+    assert "coffer" in _sync(client)["distilled"]
+    assert _partitions(client)["coffer"]["note_count"] == 1
 
     body = _distil(client, "coffer")
     assert body["model_used"] is False
-    assert body["opened"] == 1
 
     index = client.get(
         f"/api/v1/memory/partitions/{_partition_uid(client, 'coffer')}/files/content",
@@ -437,6 +439,73 @@ def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) ->
     # The key is free again, so the real pass runs.
     assert client.post(f"/api/v1/memory/partitions/{uid}/distil").status_code == 200
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
+
+
+# ----- update memory: aggregate, then distil --------------------------------
+
+
+_CC_SECOND_PROJECT_MEMORY = _cc_memory_file(
+    "migration-numbering",
+    "Migrations are numbered sequentially",
+    "project",
+    "Name a new Alembic revision after the highest number already in versions/.",
+)
+
+
+@pytest.mark.acceptance(spec="memory", scenario="one action reads new agent memory and distils it")
+def test_update_memory_aggregates_and_distils_in_one_call(client, tmp_path) -> None:
+    """A partition already distilled gains a native entry; one ``POST /sync``
+    both files it under ``.raw/`` and distils it into a note, and says so."""
+    partition = _distilled(client, tmp_path)
+    before = {n.slug for n in memory_store.list_notes(partition)}
+    raw_dir = tmp_path / "memory" / partition / ".raw"
+    raw_before = {p.name for p in raw_dir.iterdir()}
+
+    repository = tmp_path / "coffer"
+    _seed(
+        tmp_path,
+        repository,
+        {**_default_files(), "migration-numbering.md": _CC_SECOND_PROJECT_MEMORY},
+    )
+    result = _sync(client)
+
+    assert result["entries_written"] == 1
+    assert {p.name for p in raw_dir.iterdir()} - raw_before  # the entry is under .raw/
+    assert partition in result["distilled"]
+    assert result["skipped"] == []
+    after = {n.slug for n in memory_store.list_notes(partition)}
+    assert after - before == {"migration-numbering"}
+    # `global` gained nothing, so it is not visited.
+    assert "global" not in result["distilled"]
+
+
+def test_update_memory_skips_a_partition_whose_distil_is_already_running(client, tmp_path) -> None:
+    """A pass already holding the partition is reported, not failed ("Run one
+    distil pass per partition at a time"): the caller asked for memory to be
+    updated, and the running pass is doing exactly that."""
+    _register_agent(client, "cc")
+    repository = _repository(tmp_path)
+    _seed(tmp_path, repository, _default_files())
+    # A first update registers the partition (its uid is what gets claimed);
+    # then the agent gains an entry for the second one to find.
+    _sync(client)
+    uid = _partition_uid(client, "coffer")
+    _seed(
+        tmp_path,
+        repository,
+        {**_default_files(), "migration-numbering.md": _CC_SECOND_PROJECT_MEMORY},
+    )
+
+    assert UPKEEP_RUNS.claim(KIND_MEMORY, uid) is True
+    try:
+        result = _sync(client)
+    finally:
+        UPKEEP_RUNS.release(KIND_MEMORY, uid)
+
+    assert result["entries_written"] == 1
+    assert result["skipped"] == ["coffer"]
+    assert "coffer" not in result["distilled"]
+    assert _partitions(client)["coffer"]["note_count"] == 1  # the new entry waits
 
 
 # ----- context: the payload the whole redesign is about ---------------------
@@ -550,10 +619,13 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     assert data["partition"] == partition
 
 
+@pytest.mark.acceptance(
+    spec="memory", scenario="a partition is registered as a resource keyed on its repository"
+)
 def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     client, tmp_path
 ) -> None:
-    """Per "Serve every enabled partition to every agent", at the wire: the
+    """Per "Serve every partition to every agent", at the wire: the
     partition reaches every agent, not its sources.
 
     The notes here were aggregated from ``cc`` alone, and ``outsider`` — a
@@ -571,9 +643,16 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
 
     # The kind carries no reach any more, and the framework's own scope route
     # says so rather than reporting an empty narrowing.
-    scope = client.get(f"/api/v1/resources/{_partition_uid(client, partition)}/scope").json()
+    partition_uid = _partition_uid(client, partition)
+    scope = client.get(f"/api/v1/resources/{partition_uid}/scope").json()
     assert scope["supports_scope"] is False
     assert scope["scope"] is None
+    # Nor an enabled switch: disabling the partition is refused, and it stays
+    # served ("Serve every partition to every agent").
+    refused = client.post(f"/api/v1/resources/{partition_uid}/disable")
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["error"]["code"] == "RESOURCE_NOT_TOGGLEABLE"
+    assert client.get(f"/api/v1/resources/{partition_uid}").json()["enabled"] is True
 
     served = client.post(
         "/api/v1/memory/context", json={"agent_uid": outsider_uid, "cwd": str(repository)}
@@ -708,19 +787,14 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert tree["path"] == ""
     assert tree["abs_path"] == str(tmp_path / "memory" / partition)
     names = {child["name"]: child for child in tree["children"]}
-    # Four things, one writer each — and nothing left of the shape this
-    # replaced: no README.md, no summary.md, no facts/.
-    assert set(names) == {"MEMORY.md", "notes", "RETIRED.md", ".raw"}
+    # Coffer's own writing, and nothing left of the shape this replaced: no
+    # README.md, no summary.md, no facts/. `.raw/` — aggregation's verbatim
+    # input — is on disk but not in the tree.
+    assert set(names) == {"MEMORY.md", "notes", "RETIRED.md"}
+    assert (tmp_path / "memory" / partition / ".raw").is_dir()
     assert names["notes"]["type"] == "dir"
-    assert names["notes"]["derived"] is False
+    assert "derived" not in names["notes"]
     assert "notes/python-lockfile.md" in {c["path"] for c in names["notes"]["children"]}
-    # `.raw/` is reachable through the same tree, and marked as the verbatim input
-    # rather than Coffer's own writing ("Keep raw entries verbatim and hidden",
-    # "Present partitions as a table and a file tree").
-    assert names[".raw"]["type"] == "dir"
-    assert names[".raw"]["derived"] is True
-    raw_children = names[".raw"]["children"]
-    assert len(raw_children) == 1
 
     content = client.get(
         f"/api/v1/memory/partitions/{uid}/files/content",
@@ -732,14 +806,14 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert content["abs_path"].endswith("/notes/python-lockfile.md")
     assert content["folder_abs_path"] == str(memory_paths.notes_dir(partition))
 
-    # The hidden half reads too, verbatim: it is the distil pass's input, and
-    # it is what makes a note's paraphrase checkable back against the source.
+    # Reading under `.raw/` is refused as absent, the way the tree leaves it out.
+    raw_entry = next((tmp_path / "memory" / partition / ".raw").iterdir())
     raw = client.get(
         f"/api/v1/memory/partitions/{uid}/files/content",
-        params={"path": raw_children[0]["path"]},
-    ).json()
-    assert "uv sync --frozen" in raw["content"]
-    assert "agent: cc" in raw["content"]
+        params={"path": f".raw/{raw_entry.name}"},
+    )
+    assert raw.status_code == 404
+    assert raw.json()["error"]["code"] == "MEMORY_FILE_NOT_FOUND"
 
 
 def test_partition_files_are_read_only(client, tmp_path) -> None:

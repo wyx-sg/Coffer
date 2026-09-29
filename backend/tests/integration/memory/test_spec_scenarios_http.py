@@ -126,6 +126,10 @@ def test_a_requested_aggregation_and_distil_each_record_one_event_naming_the_use
 
     r = client.post("/api/v1/memory/sync", headers=headers)
     assert r.status_code == 200, r.text
+    # Update memory distils what it aggregated, one event per partition, under
+    # the same actor ("Update memory in one action").
+    distilled_by_sync = sorted(r.json()["distilled"])
+    assert "coffer" in distilled_by_sync
     uid = _partitions(client)["coffer"]["uid"]
     r = client.post(f"/api/v1/memory/partitions/{uid}/distil", headers=headers)
     assert r.status_code == 200, r.text
@@ -140,9 +144,9 @@ def test_a_requested_aggregation_and_distil_each_record_one_event_naming_the_use
     aggregated = [e for e in events("memory_aggregated") if e["actor"] == "alice"]
     distilled = [e for e in events("memory_distilled") if e["actor"] == "alice"]
     assert len(aggregated) == 1
-    assert len(distilled) == 1
     assert aggregated[0]["details"]["entries_written"] == 2  # the requested pass itself
-    assert distilled[0]["resource_name"] == "coffer"
+    # One per partition the update distilled, plus the one requested by hand.
+    assert sorted(e["resource_name"] for e in distilled) == sorted([*distilled_by_sync, "coffer"])
     others = [
         e for e in events("memory_aggregated") + events("memory_distilled") if e["actor"] != "alice"
     ]

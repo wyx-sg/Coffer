@@ -2,11 +2,14 @@
 //
 // The collection viewer, which is ONE tree of documents rooted at the
 // collection directory. Data hooks are mocked so the test asserts the page's
-// own rendering: the tree, the document's body in the pane beside it, the same
-// actions on every document whoever wrote it, and the pending-material hint.
+// own rendering: the tree (the inbox a folder in it), the document's body in
+// the pane beside it, the same actions on every document whoever wrote it —
+// Edit / Save included — and none on an inbox item, with no status control,
+// no filter and no pending-material banner around them.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { useSyncExternalStore } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ApiError } from "@/lib/api/errors";
@@ -30,8 +33,6 @@ vi.mock("@/lib/hooks/useResources", () => ({
   })),
 }));
 vi.mock("@/lib/hooks/useKnowledge", () => ({
-  // The pending count comes off the collection list, matched by uid.
-  useKnowledgeCollections: vi.fn(),
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
   useCurateCollection: vi.fn(),
@@ -39,26 +40,27 @@ vi.mock("@/lib/hooks/useKnowledge", () => ({
   // this suite only exercises the tree + preview, so both get an inert default.
   useUploadKnowledgeFile: vi.fn(),
   useDeleteKnowledgeFile: vi.fn(),
+  useSaveKnowledgeFile: vi.fn(),
 }));
 
 const {
-  useKnowledgeCollections,
   useKnowledgeTree,
   useKnowledgeFile,
   useCurateCollection,
   useUploadKnowledgeFile,
   useDeleteKnowledgeFile,
+  useSaveKnowledgeFile,
 } = await import("@/lib/hooks/useKnowledge");
 const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
 const { useResource } = await import("@/lib/hooks/useResources");
 const resourceMock = vi.mocked(useResource);
 const runningMock = vi.mocked(useUpkeepRunning);
-const collectionsMock = vi.mocked(useKnowledgeCollections);
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
 const curateMock = vi.mocked(useCurateCollection);
 const uploadMock = vi.mocked(useUploadKnowledgeFile);
 const deleteMock = vi.mocked(useDeleteKnowledgeFile);
+const saveMock = vi.mocked(useSaveKnowledgeFile);
 
 /** A document a person wrote. */
 const MINE = {
@@ -72,6 +74,8 @@ const MINE = {
   body: "The orchestration layer.",
   file_path: "/Users/dev/.coffer/knowledge/shopee/gateway.md",
   folder_path: "/Users/dev/.coffer/knowledge/shopee",
+  fingerprint: "fp-gateway-1",
+  inbox: false,
 };
 
 /** A document curation wrote, one folder down. */
@@ -86,7 +90,32 @@ const CURATED = {
   body: "Login state is owned by account.session.",
   file_path: "/Users/dev/.coffer/knowledge/shopee/account/session-ownership.md",
   folder_path: "/Users/dev/.coffer/knowledge/shopee/account",
+  fingerprint: "fp-session-1",
+  inbox: false,
 };
+
+/** Material waiting in the collection's inbox to be merged — readable, never
+ *  edited or deleted. */
+const WAITING = {
+  path: "shopee/.inbox/20260928-login-retry.md",
+  title: "Login retry note",
+  description: "",
+  actor: "agent" as const,
+  created_at: "2026-09-28T00:00:00Z",
+  updated_at: "2026-09-28T00:00:00Z",
+  curated_at: "",
+  body: "Retries back off after three failures.",
+  file_path: "/Users/dev/.coffer/knowledge/shopee/.inbox/20260928-login-retry.md",
+  folder_path: "/Users/dev/.coffer/knowledge/shopee/.inbox",
+  fingerprint: "fp-waiting-1",
+  inbox: true,
+};
+
+/** What each path reads as. Mutable per test, so a save can change what the
+ *  next render reads — the way the real save writes its cache entry. */
+let documents: Record<string, typeof MINE | typeof CURATED | typeof WAITING> = {};
+/** The pane's `reload`: the answer to a conflict. */
+const refetch = vi.fn(async () => ({}));
 
 /** The delete mutation, stubbed. `mutate` reports nothing unless a test hands
  *  it an implementation — the default is a click that never succeeds, which is
@@ -122,50 +151,69 @@ function stubCurate(overrides: { mutate?: ReturnType<typeof vi.fn>; error?: unkn
 }
 
 /** The tree answers for its own path, the way the real hook does: the
- *  collection root holds one document and the `account` folder, and the folder
- *  holds the curated document. */
+ *  collection root lists its non-empty inbox first, then the `account` folder
+ *  and one document; the folder holds the curated document and the inbox holds
+ *  one item of material. */
 function stubTree({ empty = false } = {}) {
+  documents = { [MINE.path]: MINE, [CURATED.path]: CURATED, [WAITING.path]: WAITING };
+  const levels: Record<string, { directories: unknown[]; files: unknown[] }> = {
+    [COLLECTION_NAME]: {
+      directories: [
+        { path: "shopee/.inbox", name: ".inbox", file_count: 1, inbox: true },
+        { path: "shopee/account", name: "account", file_count: 1, inbox: false },
+      ],
+      files: [MINE],
+    },
+    "shopee/account": { directories: [], files: [CURATED] },
+    "shopee/.inbox": { directories: [], files: [WAITING] },
+  };
   treeMock.mockImplementation(
     (path: string) =>
       ({
         data: empty
           ? { path, directories: [], files: [] }
-          : path === COLLECTION_NAME
-            ? {
-                path,
-                directories: [{ path: "shopee/account", name: "account", file_count: 1 }],
-                files: [MINE],
-              }
-            : { path, directories: [], files: path === "shopee/account" ? [CURATED] : [] },
+          : { path, ...(levels[path] ?? { directories: [], files: [] }) },
         isPending: false,
         error: null,
       }) as unknown as ReturnType<typeof useKnowledgeTree>,
   );
-  // The file query is enabled only while one is selected (`enabled:
-  // Boolean(path)`), and answers for whichever document was asked for.
-  fileMock.mockImplementation(
-    (path: string | null) =>
-      ({
-        data: path === CURATED.path ? CURATED : path ? MINE : undefined,
-        isPending: false,
-        error: null,
-      }) as unknown as ReturnType<typeof useKnowledgeFile>,
-  );
+  fileMock.mockImplementation(useStubbedFile);
 }
 
-/** The collection list, carrying the pending count for this collection. */
-function stubPending(pending: number) {
-  collectionsMock.mockReturnValue({
-    data: [
-      {
-        uid: COLLECTION_UID,
-        name: COLLECTION_NAME,
-        description: "",
-        document_count: 2,
-        pending_count: pending,
-      },
-    ],
-  } as unknown as ReturnType<typeof useKnowledgeCollections>);
+/** Re-renders whoever reads `documents` — what a query cache update does. */
+const listeners = new Set<() => void>();
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** The file query, stubbed over `documents`. It is enabled only while one is
+ *  selected (`enabled: Boolean(path)`), answers for whichever document was
+ *  asked for, and re-renders when a save writes that document — as the real
+ *  save does by writing the query's cache entry. */
+function useStubbedFile(path: string | null) {
+  const data = useSyncExternalStore(subscribe, () => (path ? documents[path] : undefined));
+  return { data, isPending: false, error: null, refetch } as unknown as ReturnType<
+    typeof useKnowledgeFile
+  >;
+}
+
+/** The save the pane's editor calls, stubbed. By default it succeeds and
+ *  writes the new body where the next render reads it. */
+function stubSave(impl?: (input: { path: string; body: string }) => Promise<string>) {
+  const save = vi.fn(
+    impl ??
+      (async (input: { path: string; body: string }) => {
+        documents = {
+          ...documents,
+          [input.path]: { ...documents[input.path], body: input.body, fingerprint: "fp-2" },
+        };
+        listeners.forEach((listener) => listener());
+        return "fp-2";
+      }),
+  );
+  saveMock.mockReturnValue(save as unknown as ReturnType<typeof useSaveKnowledgeFile>);
+  return save;
 }
 
 function stubInertDefaults() {
@@ -181,13 +229,11 @@ beforeEach(() => {
   stubCurate();
   stubInertDefaults();
   stubTree();
-  stubPending(0);
+  stubSave();
+  refetch.mockClear();
 });
 
 function renderPage(search = "") {
-  // The header's reach control reads the collection's Resource, so the page
-  // needs a real query client — the fetch never resolves here, and the control
-  // renders from its own defaults.
   // The header's Curate button carries a tooltip, which Layout's provider
   // normally hosts; the page is rendered bare here, so mount one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -213,12 +259,15 @@ describe("KnowledgeDetailPage", () => {
   acceptance("knowledge", "the viewer shows one tree of documents", () => {
     renderPage();
 
-    // No tabs: the collection is one tree, rooted at its own directory.
+    // No tabs and no filter input: the collection is one tree, rooted at its
+    // own directory.
     expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
 
-    // --- a document a person wrote: open, reveal, delete --------------------
+    // --- a document a person wrote: edit, open, reveal, delete --------------
     fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /delete document/i })).toBeInTheDocument();
@@ -227,12 +276,70 @@ describe("KnowledgeDetailPage", () => {
     openAccountFolder();
     fireEvent.click(screen.getByRole("button", { name: /Session ownership/ }));
     expect(screen.getByText(/Login state is owned by account\.session\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /delete document/i })).toBeInTheDocument();
 
-    // The preview is read-only: editing happens in the person's own editor.
-    expect(screen.queryByRole("textbox", { name: /body|content/i })).toBeNull();
+    // --- the inbox: a folder in the same tree, its item read-only ------------
+    fireEvent.click(screen.getByRole("button", { name: /waiting to merge/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Login retry note/ }));
+    expect(screen.getByText("Retries back off after three failures.")).toBeInTheDocument();
+    expect(screen.getByText(/disappears from here once merged/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /delete document/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+  });
+
+  test("the inbox folder reads as an inbox, with how many items wait", () => {
+    renderPage();
+    const inbox = screen.getByRole("button", { name: /waiting to merge/i });
+    expect(inbox).toHaveTextContent("1");
+    expect(inbox).not.toHaveTextContent(".inbox");
+    expect(inbox).toHaveAttribute("aria-expanded", "false");
+    // It is listed first, ahead of the ordinary folders.
+    const rows = screen.getAllByRole("button", { name: /waiting to merge|^account$/i });
+    expect(rows[0]).toBe(inbox);
+  });
+
+  acceptance("knowledge", "edit a document in place", async () => {
+    const save = stubSave();
+    renderPage(`?file=${encodeURIComponent(MINE.path)}`);
+
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const editor = screen.getByRole("textbox", { name: /edit shopee\/gateway\.md/i });
+    expect(editor).toHaveValue("The orchestration layer.");
+    fireEvent.change(editor, { target: { value: "Rewritten by hand." } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        path: MINE.path,
+        body: "Rewritten by hand.",
+        expected_fingerprint: "fp-gateway-1",
+      }),
+    );
+    // Back to the rendered view, showing what was saved.
+    expect(await screen.findByText("Rewritten by hand.")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  test("a stale save keeps the draft and offers discard-and-reload", async () => {
+    stubSave(() => Promise.reject(new ApiError("KNOWLEDGE_FILE_CONFLICT", "changed on disk")));
+    renderPage(`?file=${encodeURIComponent(MINE.path)}`);
+
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "my work" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/changed on disk since you opened it/i),
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("my work");
+
+    fireEvent.click(screen.getByRole("button", { name: /discard my edits/i }));
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   test("the tree is rooted at the collection directory", () => {
@@ -249,15 +356,16 @@ describe("KnowledgeDetailPage", () => {
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
   });
 
-  test("says how much new material is waiting to be merged", () => {
-    stubPending(3);
-    renderPage();
-    expect(screen.getByText(/3 new items are being merged/i)).toBeInTheDocument();
-  });
-
-  test("says nothing about pending material when none is waiting", () => {
+  test("no pending-material banner — the inbox is not reported as a count", () => {
     renderPage();
     expect(screen.queryByText(/being merged/i)).toBeNull();
+  });
+
+  acceptance("web-ui", "a kind that cannot be disabled shows no status control", () => {
+    // The collection's page half: no reach or status button in the header.
+    renderPage();
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
   });
 
   test("shows when curation last had the document, or that it never has", () => {
@@ -277,15 +385,11 @@ describe("KnowledgeDetailPage", () => {
     expect(screen.getByText(/no documents yet/i)).toBeInTheDocument();
   });
 
-  test("the one input beside the tree is a filter, not a retrieval box", () => {
-    // The layer exposes no search and no grep (spec knowledge "Present a collection
-    // as one tree in the web UI"). The only textbox
-    // on the page narrows the names already on screen.
+  test("no input beside the tree — neither a filter nor a retrieval box", () => {
+    // The layer exposes no search and no grep (spec knowledge "Present a
+    // collection as one tree in the web UI"), and the tree has no filter.
     renderPage();
-
-    const boxes = screen.getAllByRole("textbox");
-    expect(boxes).toHaveLength(1);
-    expect(boxes[0]).toHaveAttribute("aria-label", "Filter by name…");
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   test("the Curate button is idle when nothing is running", () => {

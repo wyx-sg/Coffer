@@ -29,7 +29,7 @@ class _FakeMemory:
     def __init__(self, notes: list[Note]) -> None:
         self._notes = notes
 
-    async def enabled_partitions(self) -> list[str]:
+    async def served_partitions(self) -> list[str]:
         return ["global"]
 
     async def list_notes(self, partition: str) -> list[Note]:

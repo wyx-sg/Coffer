@@ -43,7 +43,7 @@ The framework takes the first half and refuses the second:
 | `title` | Optional display label, at most 80 characters of free text. Surfaces show it in place of the name when it is set. Editable on every kind, and carried in the synced resource document. |
 | `description` | Optional free text. |
 | `config` | The kind's configuration, validated against the kind's Pydantic schema. Stored as JSON text in `config_json`. |
-| `enabled` | The on/off switch. Half of the resource's reach. |
+| `enabled` | The on/off switch. Half of the resource's reach. Always true for a kind that is not `toggleable`. |
 | `created_at`, `updated_at` | Timestamps. |
 | `scope` | Optional agent allow-list (`Scope`), the other half of reach. `None` means every agent. |
 
@@ -62,6 +62,7 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | `config_schema` | — | Pydantic model the config must validate against. |
 | `generic_create_allowed` | `True` | Whether `POST /api/v1/resources` (and a generic config update) may touch this kind. |
 | `supports_scope` | `False` | Whether the kind carries a per-agent scope. A kind without it rejects any non-null scope (`SCOPE_INVALID`, 422). |
+| `toggleable` | `True` | Whether the kind has an enabled switch at all. `knowledge` and `memory` set it to `False`: every one of their resources is enabled and served, and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
 | `converges` | `True` | Whether the kind's rows travel to the sync remote. |
 | `converges_row` | `None` | Per-row refinement of `converges`, a function of the config alone. |
 | `name_fixed` | `False` | Whether the name is fixed once registered because it is quoted outside Coffer. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`; `title` stays editable. |
@@ -104,8 +105,8 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 | `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
 | `agent` | `generic_create_allowed=False`, `on_delete`, `on_enabled_changed` |
 | `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `on_delete`, `on_scope_changed`, `on_enabled_changed` |
-| `knowledge` | `generic_create_allowed=False`, `on_rename` (moves the collection directory), `on_delete`, `on_enabled_changed` (re-renders the catalogue) |
-| `memory` | `generic_create_allowed=False`, `converges=False`, `on_rename`, `on_delete` |
+| `knowledge` | `generic_create_allowed=False`, `toggleable=False`, `on_rename` (moves the collection directory), `on_delete` |
+| `memory` | `generic_create_allowed=False`, `toggleable=False`, `converges=False`, `on_rename`, `on_delete` |
 | `channel` | `supports_scope` (inverted, see below), `credential_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
 | `provider` | `supports_scope`, `default_scope`, `credential_ref_extractor`, `validate_config`, `on_update_config` |
 
@@ -119,7 +120,7 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 | `update_config` | Same generic-create gate → schema → credential probe → `on_update_config` → write → audit `resource_updated` with redacted before and after. |
 | `rename` | No-op if unchanged → refuse a kind with `name_fixed` (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → `on_rename` → write → audit `resource_renamed` with `from` and `to`. |
 | `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation, so every kind's title is editable. |
-| `set_enabled` | No-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
+| `set_enabled` | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
 | `update_scope` | `validate_scope` against `supports_scope` → `validate_scope_for` → write → audit `resource_scope_updated` → `on_scope_changed`. |
 | `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
 
@@ -154,16 +155,16 @@ A kind's own route and the generic route call the same service method, so a refu
 | --- | --- |
 | `GET /api/v1/resources?kind=&name=` | List, optionally by kind and exact name. The name filter is how the CLI turns a label into a uid. |
 | `POST /api/v1/resources` | Register a resource of a kind that allows generic creation. |
-| `GET /api/v1/resources/{uid}` | Show one resource. |
+| `GET /api/v1/resources/{uid}` | Show one resource. The answer carries the kind's `toggleable`, so a surface can leave the switch out rather than offer one that is refused. |
 | `PATCH /api/v1/resources/{uid}` | Edit `description`, `config`, `title` and `name`. Only fields present in the body change; a rename alone runs no config write, and the rename is applied last so a refused config leaves the name alone. A changed name on a `name_fixed` kind is refused first (`409 NAME_IMMUTABLE`), so nothing in that request is written. |
 | `DELETE /api/v1/resources/{uid}` | Delete. |
-| `POST /api/v1/resources/{uid}/enable`, `/disable` | Flip `enabled`. |
+| `POST /api/v1/resources/{uid}/enable`, `/disable` | Flip `enabled`. Refused with `409 RESOURCE_NOT_TOGGLEABLE` for a kind that is not `toggleable`. |
 | `GET /api/v1/resources/{uid}/scope` | The scope plus `supports_scope`. |
 | `PUT /api/v1/resources/{uid}/scope` | Replace the scope. |
 
 A kind that belongs to a switched-off experimental feature is refused on these routes with `404 FEATURE_DISABLED` and left out of lists; its rows are untouched. Kinds also mount their own routers (`/api/v1/skills`, `/api/v1/channels`, …) for behaviour the framework does not own.
 
-The CLI mirrors the generic surface with names instead of uids. Every kind's group carries the same lifecycle verbs — `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and `scope` — generated from the kind's descriptor by one factory ([`surfaces/cli/_kind_verbs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/_kind_verbs.py)). A verb the kind cannot support is left out rather than refused at run time: `scope` needs `supports_scope`, and `memory` has no `add` because only aggregation creates a partition.
+The CLI mirrors the generic surface with names instead of uids. Every kind's group carries the same lifecycle verbs — `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and `scope` — generated from the kind's descriptor by one factory ([`surfaces/cli/_kind_verbs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/_kind_verbs.py)). A verb the kind cannot support is left out rather than refused at run time: `scope` needs `supports_scope`, `enable` and `disable` need `toggleable` (so `knowledge` and `memory` have neither), and `memory` has no `add` because only aggregation creates a partition.
 
 ```sh
 coffer mcp list
@@ -209,7 +210,7 @@ Each kind's `config_schema` is a Pydantic v2 model. `ResourceService` validates 
 
 ## Reach
 
-A resource's **reach** is its `enabled` flag together with its `scope`. Both are machine-local: they are set on the machine they apply to and never converge through sync.
+A resource's **reach** is its `enabled` flag together with its `scope`. A kind that is neither `toggleable` nor scoped — `knowledge`, `memory` — has no reach to set: it reaches every agent, and the web UI shows no reach or status control for it. Both are machine-local: they are set on the machine they apply to and never converge through sync.
 
 [`domain/scope.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/scope.py) defines the shape and the one predicate every enforcement point calls:
 
@@ -239,12 +240,12 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `mcp_server` | Transport (stdio or HTTP), credential refs, per-server gateway policy. | Yes | The MCP gateway filters the server's tools by the session's agent uid (`application/mcp/gateway_scope.py`). |
 | `agent` | Agent type, config directory, Coffer-MCP install state. Everything else is read from the agent's own files. | No — it is the agent | — |
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and `is_active(scope, agent)`; anything else is reclaimed. |
-| `knowledge` | One collection, a directory under `~/.coffer/knowledge/`. | No | `enabled` alone decides whether the collection appears in the delivered catalogue. |
-| `memory` | One partition (a repository, or `global`) under `~/.coffer/memory/`, derived from agents' native memory. Does not converge. | No | `enabled` alone decides whether the partition is served. |
+| `knowledge` | One collection, a directory under `~/.coffer/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
+| `memory` | One partition (a repository, or `global`) under `~/.coffer/memory/`, derived from agents' native memory. Does not converge. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
 | `channel` | Transport config, credential refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/agent` and the default agent) and the channel runtime, which does not start a dormant channel. |
 | `provider` | Wire protocol, base URL, one `credential_ref`. | Yes, pre-filled by `default_scope` from the wire | The projection seam `application/provider/targets.py`: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
-`knowledge` and `memory` carry no scope because both serve files an agent is handed the path to: a scope could only ever hide them from a well-behaved lookup, never withhold them.
+`knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them. Each layer is switched as a whole by its experimental feature.
 
 ## Retention registry
 

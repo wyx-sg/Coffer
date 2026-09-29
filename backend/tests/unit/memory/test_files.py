@@ -1,10 +1,9 @@
 """A partition read as a file tree, which is what the surface claims it is.
 
 "Present partitions as a table and a file tree" rests on the claim that a
-partition *is* a folder of derived Markdown, so all four of its parts are
-reachable — with ``.raw/`` flagged as the verbatim input rather than Coffer's
-own writing, so a reader can tell the two apart without knowing which directory
-means which.
+partition *is* a folder of derived Markdown, so Coffer's own writing —
+``MEMORY.md``, ``notes/``, ``RETIRED.md`` — is reachable, and the hidden
+``.raw/`` of verbatim agent input is neither listed nor readable.
 
 Two things this file is careful about, because both would make the surface lie
 about the partition at exactly the moment a pass is rewriting it: the
@@ -47,22 +46,22 @@ def _names(node) -> list[str]:  # type: ignore[no-untyped-def]
     return [c.name for c in node.children]
 
 
-def test_the_tree_shows_all_four_parts_with_the_product_before_the_input(
+def test_the_tree_shows_coffers_own_writing_and_not_the_raw_input(
     partition_dir: pathlib.Path,
 ) -> None:
     tree = build_tree(partition_dir)
 
     assert tree.path == ""
     assert tree.name == "coffer"
-    assert _names(tree) == ["notes", ".raw", "MEMORY.md", "RETIRED.md"]
+    assert _names(tree) == ["notes", "MEMORY.md", "RETIRED.md"]
 
 
-def test_only_the_hidden_directory_the_layer_owns_is_flagged_as_derived(
-    partition_dir: pathlib.Path,
+@pytest.mark.parametrize("relpath", [".raw/3f2a91c4de55b071.md", ".raw"])
+def test_reading_under_the_raw_directory_is_refused(
+    partition_dir: pathlib.Path, relpath: str
 ) -> None:
-    children = {c.name: c for c in build_tree(partition_dir).children}
-    assert children[".raw"].derived is True
-    assert children["notes"].derived is False
+    with pytest.raises(MemoryFileNotFound):
+        read_file("coffer", partition_dir, relpath)
 
 
 def test_a_notes_file_carries_its_relative_path_and_size(partition_dir: pathlib.Path) -> None:
@@ -102,9 +101,7 @@ def test_a_symlink_pointing_outside_the_partition_is_skipped(
         read_file("coffer", partition_dir, "escape.md")
 
 
-@pytest.mark.parametrize(
-    "relpath", ["MEMORY.md", "RETIRED.md", "notes/worktree-trap.md", ".raw/3f2a91c4de55b071.md"]
-)
+@pytest.mark.parametrize("relpath", ["MEMORY.md", "RETIRED.md", "notes/worktree-trap.md"])
 def test_every_part_of_the_partition_reads(partition_dir: pathlib.Path, relpath: str) -> None:
     content = read_file("coffer", partition_dir, relpath)
     assert content.path == relpath

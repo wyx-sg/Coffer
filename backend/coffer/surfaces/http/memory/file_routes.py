@@ -50,7 +50,6 @@ def _node_out(node: memory_files.FileNode, root: pathlib.Path) -> FileNodeOut:
         abs_path=abs_path,
         folder_abs_path=folder_abs_path,
         type=node.type,
-        derived=node.derived,
         size=node.size,
         truncated=node.truncated,
         children=[_node_out(child, root) for child in node.children],

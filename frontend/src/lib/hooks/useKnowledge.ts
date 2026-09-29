@@ -5,6 +5,7 @@
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
 // whole subtree with a prefix — the tree is fetched one directory per key and a
 // curation pass may rewrite any level of it.
+import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -17,13 +18,16 @@ import {
   getFile,
   getTree,
   listCollections,
+  saveFile,
   uploadFile,
+  type FileSave,
 } from "@/lib/api/knowledge";
 import {
   knowledgeCollectionsKey,
   knowledgeFileKey,
   knowledgeKey,
   knowledgeTreeKey,
+  knowledgeTreeRootKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
 import { curateToastKey } from "@/lib/hooks/curateToast";
@@ -65,6 +69,34 @@ export function useKnowledgeFile(path: string | null) {
     queryFn: () => getFile(path as string),
     enabled: Boolean(path),
   });
+}
+
+/**
+ * The save the viewer's editor issues (see "Save a document edited in the web
+ * UI"). It is a plain async function rather than a mutation because
+ * `useFileDraft` owns the mutation — its pending state, its error and the 409
+ * it turns into a conflict — and only needs something to call.
+ *
+ * On success the saved file goes straight into its cache entry, so the pane
+ * renders the new body without waiting on a refetch, and every tree level is
+ * invalidated: a document's title comes from its frontmatter, and the next
+ * sweep may rewrite the rest. Resolves with the new fingerprint, so a second
+ * save in the same session does not 409 against the first.
+ *
+ * No toast either way: `FileEditor` says "saved" itself and renders a refusal
+ * in place, where the draft still is.
+ */
+export function useSaveKnowledgeFile() {
+  const qc = useQueryClient();
+  return useCallback(
+    async (input: FileSave): Promise<string> => {
+      const saved = await saveFile(input);
+      qc.setQueryData(knowledgeFileKey(saved.path), saved);
+      void qc.invalidateQueries({ queryKey: knowledgeTreeRootKey });
+      return saved.fingerprint;
+    },
+    [qc],
+  );
 }
 
 /**

@@ -26,13 +26,13 @@ from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
 
 class _Resources:
-    """A fake ``ResourceService`` holding enabled collections by name."""
+    """A fake ``ResourceService`` holding collections by name."""
 
     def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)
@@ -280,7 +280,7 @@ def _held_worker(lock: asyncio.Lock, curated: list[Any]) -> CurationWorker:
 async def test_the_sweep_waits_for_a_converge_round_to_release_the_lock(
     root: pathlib.Path,
 ) -> None:
-    fs.submit_material("shopee", title="Waiting", description="d", body="b", actor="agent")
+    inbox.submit_material("shopee", title="Waiting", description="d", body="b", actor="agent")
     lock = asyncio.Lock()
     curated: list[Any] = []
     worker = _held_worker(lock, curated)
@@ -326,8 +326,8 @@ async def test_a_truncated_item_neither_stops_the_sweep_nor_is_retried_within_it
     # moves on to the next item rather than stopping — the item that truncated
     # is first in line every sweep, so stopping on it would starve the rest —
     # and does not hand the same item back to a second pass in this sweep.
-    fs.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
-    fs.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
+    inbox.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
+    inbox.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
     curated: list[Any] = []
 
     async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
@@ -364,15 +364,15 @@ async def test_an_item_cut_off_last_sweep_goes_behind_the_rest_of_the_inbox(
     # With one pass a sweep, an item cut off every time would otherwise be
     # first in line every sweep and the rest of the inbox would never be
     # reached until it was given up on.
-    fs.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
-    fs.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
+    inbox.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
+    inbox.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
     curated: list[Any] = []
 
     async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
         curated.append(item.material)
         if item.material == "huge.md":
             return {"status": "truncated", "gave_up": False}
-        fs.discard_material("shopee", item.material)
+        inbox.discard_material("shopee", item.material)
         return {"status": "ok"}
 
     async def enabled() -> bool:

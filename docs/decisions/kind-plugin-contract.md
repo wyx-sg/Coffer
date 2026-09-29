@@ -81,7 +81,7 @@ a change that already happened and have no way to undo it:
 
 | Hook | Operation | Set by |
 | --- | --- | --- |
-| `on_enabled_changed(resource)` | enable/disable, only on a real transition | `agent`, `skill`, `knowledge` |
+| `on_enabled_changed(resource)` | enable/disable, only on a real transition | `agent`, `skill` |
 | `on_scope_changed(resource)` | update scope | `skill` |
 | `on_delete(resource)` | delete — the one reaction that runs *before* the row is removed, so cleanup can still read it, but after `validate_delete` has let the delete through | `agent`, `skill`, `knowledge`, `memory`, `mcp_server`, `channel` |
 

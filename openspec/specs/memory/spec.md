@@ -143,14 +143,6 @@ An entry MUST be filed into the partition of the repository it was learned in, e
 - **WHEN** the entries are filed
 - **THEN** the first `feedback` entry lands in that repository's partition, the `user` entry in `global`, and the root-less `feedback` entry in `global`
 
-### Requirement: Serve every enabled partition to every agent
-A partition MUST NOT carry the Resource framework's per-agent reach. Every **enabled** partition MUST be served to **every** agent on the path Coffer itself serves — delivery (see "Deliver the index and the notes path at session start", "Expose no memory tool and name the memory root at session start"). The per-agent form is withdrawn because its default worked directly against the point of aggregating: a partition was created scoped to the agents it had been aggregated from, so `memory/coffer` came out scoped to `claude-code` alone and a Codex session in the Coffer repository was served no project memory at all, while the `account*` partitions came out scoped to `codex` alone. Nobody chose any of that — a layer whose whole job is to let each agent read what the others learned was defaulting to withholding it from the one agent that had not learned it yet. `enabled` is the only gate. It gates **what Coffer serves**, not what a process on this machine can open: a note is a file an agent is given the path to, so a partition that is not delivered is one nothing points at, and the layer MUST NOT present `enabled` as a filesystem boundary it is not.
-
-#### Scenario: a partition is registered as a resource keyed on its repository
-- **GIVEN** exactly one registered agent contributing one raw entry about a repository
-- **WHEN** aggregation runs
-- **THEN** a `memory` Resource exists for that partition, and its config records the repository's own absolute path — the identity of a partition is the repository, so that path is what a later pass resolves it by (see "Identify a partition by its repository")
-- **AND** no per-agent reach is written for it: the partition is served to every agent, including the one that contributed nothing to it, which is the whole reason the memory of several agents is aggregated into one place (see "Serve every enabled partition to every agent")
 
 ### Requirement: Identify a partition by its repository
 A partition's identity is the **repository**, not a path. The main checkout, any worktree of it, and a second clone of it MUST resolve to one partition. The partition MUST be named by a readable slug — never an opaque id — and MUST record the repository's own absolute path on its Resource and restate it in its `MEMORY.md`. A name collision MUST be resolved by adding a distinguishing path segment.
@@ -351,13 +343,13 @@ Coffer MUST record **an audit event for every delivery fire**, so that whether d
 - **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire", "Show delivery state on the agent's own page")
 
 ### Requirement: Cover memory management on REST and the CLI
-A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, run an aggregation, run a distil pass, compose the session context, read what has been retired, and install/inspect/remove delivery for an agent. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `enable`, `disable`, `sync` (run an aggregation), `distil`, `context` (compose the session context; the command an installed delivery hook runs) and `delivery on|off <agent>` (install or remove delivery). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Delivery state is read with `coffer agent show` (see "Show delivery state on the agent's own page").
+A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), run a distil pass over one partition, compose the session context, read what has been retired, and install/inspect/remove delivery for an agent. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `sync` (update memory: an aggregation, then a distil pass, see "Update memory in one action"), `distil` (one partition), `context` (compose the session context; the command an installed delivery hook runs) and `delivery on|off <agent>` (install or remove delivery). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"), and no `enable` or `disable`, because a partition has no switch (see "Serve every partition to every agent"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Delivery state is read with `coffer agent show` (see "Show delivery state on the agent's own page").
 
 #### Scenario: a partition's own directory is browsable as a file tree
 - **GIVEN** a distilled partition
 - **WHEN** its file tree is requested, and then one file out of it
 - **THEN** the tree's root carries the partition directory's absolute path and holds `MEMORY.md`, a `notes/` directory listing one Markdown file per note, and `RETIRED.md` when anything has been retired; reading `notes/<slug>.md` returns its text — not binary, not truncated — with the absolute path of the file and of the folder holding it
-- **AND** `.raw/` is reachable through the same tree but marked as derived input, the family is read-only (a write is refused with 405), and a path escaping the partition is refused with `MEMORY_UNSAFE_PATH` (400) (see "Present partitions as a table and a file tree", "Confine reads to registered agents' memory paths")
+- **AND** `.raw/` is not in the tree and reading a path under it is refused, the family is read-only (a write is refused with 405), and a path escaping the partition is refused with `MEMORY_UNSAFE_PATH` (400) (see "Present partitions as a table and a file tree", "Confine reads to registered agents' memory paths")
 
 #### Scenario: locate a partition's notes from the command line
 - **GIVEN** a distilled partition named `coffer`
@@ -366,12 +358,12 @@ A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show
 - **AND** `coffer memory` offers no `partitions`, `notes`, `note`, `retired`, `ls`, `read`, `delivery-install` or `delivery-remove` command, and `coffer memory context` is unchanged
 
 ### Requirement: Present partitions as a table and a file tree
-The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows. One partition MUST be presented as a **file tree over its own directory** with a read-only preview beside it — the same two panes a skill's Files tab is — showing `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/`, and MUST offer open-in-editor and reveal-in-file-manager on the previewed file. It MUST NOT carry per-note actions: a partition is a folder of derived Markdown, and the surface that browses it says so by looking like one.
+The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows. One partition MUST be presented as a **file tree over its own directory** with a read-only preview beside it — the same two panes a skill's Files tab is — showing `MEMORY.md`, `notes/` and `RETIRED.md`, and MUST offer open-in-editor and reveal-in-file-manager on the previewed file. A note's frontmatter MUST be shown as metadata above its body, not rendered as body text. The tree and the preview MUST extend to the bottom of the window and scroll inside. It MUST NOT carry per-note actions: a partition is a folder of derived Markdown, and the surface that browses it says so by looking like one.
 
 #### Scenario: browse a partition as a file tree with a read-only preview
-- **GIVEN** the memory pages, with no partitions and then with one distilled partition
+- **GIVEN** the memory pages, with no partitions and then with one distilled partition that holds raw entries
 - **WHEN** the partitions page and the partition's page render and a note is chosen in the tree
-- **THEN** the partitions page shows the first-run welcome with none and the table with one, and the partition's page shows a file tree holding `MEMORY.md` and `notes/` beside a read-only preview of the chosen note
+- **THEN** the partitions page shows the first-run welcome with none and the table with one, and the partition's page shows a file tree holding `MEMORY.md` and `notes/` and no `.raw/`, beside a read-only preview of the chosen note whose frontmatter is not in the rendered body
 - **AND** the preview offers open-in-editor and reveal-in-file-manager and no per-note edit or delete action
 
 ### Requirement: Audit every lifecycle act
@@ -455,7 +447,7 @@ Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record r
 - **THEN** the note with a surviving entry is untouched, the routing request does not list the sources-gone title among the retired subjects, and the returning entry is distilled like any new one
 
 ### Requirement: Expose no memory tool and name the memory root at session start
-The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every enabled partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. On the command line `coffer path memory` prints the same root.
+The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. On the command line `coffer path memory` prints the same root.
 
 #### Scenario: no memory tool is listed, and delivery names the memory root
 - **GIVEN** a running daemon with the `memory` feature on, a partition holding notes, and a `global` partition holding more
@@ -478,3 +470,21 @@ File content MUST leave the machine only through the internal connection the dev
 - **GIVEN** a distilled partition and an internal connection rigged to fail the test if it is called
 - **WHEN** the session context is composed
 - **THEN** it answers, and the internal connection is never called
+
+### Requirement: Serve every partition to every agent
+A partition MUST NOT carry the Resource framework's per-agent reach or an enabled switch: the kind declares itself non-toggleable ([resource-framework](../resource-framework/spec.md) "Address every resource by an immutable uid through one kind-agnostic surface"). Every partition MUST be served to **every** agent on the path Coffer itself serves — delivery (see "Deliver the index and the notes path at session start", "Expose no memory tool and name the memory root at session start"). Aggregating the memory of several agents into one place exists so that each agent can read what the others learned, so a partition is served to the agents that contributed nothing to it as much as to those that did. Serving gates **what Coffer names**, not what a process on this machine can open: a note is a file an agent is given the path to, and the layer MUST NOT present serving as a filesystem boundary it is not.
+
+#### Scenario: a partition is registered as a resource keyed on its repository
+- **GIVEN** exactly one registered agent contributing one raw entry about a repository
+- **WHEN** aggregation runs
+- **THEN** a `memory` Resource exists for that partition, and its config records the repository's own absolute path — the identity of a partition is the repository, so that path is what a later pass resolves it by (see "Identify a partition by its repository")
+- **AND** no per-agent reach is written for it, and a request to disable it through the generic resource route is refused: the partition is served to every agent, including the one that contributed nothing to it
+
+### Requirement: Update memory in one action
+`POST /api/v1/memory/sync` and `coffer memory sync` MUST run an aggregation (see "Aggregate on an interval and on demand") and then a distil pass over every partition holding raw entries it has not yet distilled (see "Distil incrementally in two stages"), and MUST answer with what the aggregation wrote and which partitions were distilled. A distil pass already running over a partition MUST NOT fail the action: that partition is reported as skipped. The web UI MUST offer this as one **Update memory** button, on the partitions page and on a partition's page, and MUST NOT offer aggregation or distillation as separate buttons.
+
+#### Scenario: one action reads new agent memory and distils it
+- **GIVEN** a registered agent whose native memory gained an entry about a repository with a distilled partition
+- **WHEN** `POST /api/v1/memory/sync` is called
+- **THEN** the entry is written under that partition's `.raw/` and the same call distils it into the partition's notes
+- **AND** the answer names that partition among the distilled ones

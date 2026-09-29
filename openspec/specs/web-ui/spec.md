@@ -232,9 +232,8 @@ holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a
 scope narrowed to nobody — so the reader learns the reach by reading it rather
 than by comparing which of three side-by-side segments looks pressed. Every
 detail page MUST carry the same button in its header. A kind that declares no
-scope — knowledge, memory — MUST head the same column **Status** instead, and its
-button MUST read "Enabled" or "Disabled", because enabled or disabled is the
-whole of what it reports; see "Offer reach as one choice in a panel".
+scope — an agent, a knowledge collection, a memory partition — MUST carry neither
+the column, the button, nor a bulk reach action; see "Offer reach as one choice in a panel".
 
 #### Scenario: the reach button states the reach it holds
 - **GIVEN** resources that reach every agent, two agents, nobody selected, and one that is disabled
@@ -242,17 +241,21 @@ whole of what it reports; see "Offer reach as one choice in a panel".
 - **THEN** they read "Every agent", "2 agents", "No agent selected" and "Disabled"
 - **AND** each is one button rather than a row of segments
 
+#### Scenario: a kind that cannot be disabled shows no status control
+- **GIVEN** the knowledge and memory list pages and one collection's and one partition's page
+- **WHEN** each renders
+- **THEN** no list has a Status or Reach column and no header carries a reach or status button
+
 ### Requirement: Offer reach as one choice in a panel
 The button MUST open a panel where "who does this reach?" is a single choice
 between Disabled, Every agent and Only selected agents, the last over the
-scope's list of agents. A kind that declares no scope gets the same button over
-a two-choice Disabled / Enabled panel.
+scope's list of agents.
 
 #### Scenario: the reach panel offers the reach states as one choice
-- **GIVEN** a resource of a scoped kind and one of a kind that declares no scope
-- **WHEN** each one's reach panel is opened
-- **THEN** the scoped one offers Disabled, Every agent and Only selected agents with its current state chosen
-- **AND** the unscoped one offers only Disabled and Enabled, with no agent list
+- **GIVEN** a resource of a scoped kind
+- **WHEN** its reach panel is opened
+- **THEN** it offers Disabled, Every agent and Only selected agents with its current state chosen
+- **AND** choosing Only selected agents shows the list of agents to pick from
 
 ### Requirement: Write the reach once, when the panel closes
 The panel MUST stage its agent list and write exactly once, when it closes — the
@@ -293,8 +296,7 @@ its own button beside it.
 For a scoped kind, the list's reach filter MUST offer the same states the panel
 does, rather than a bare enabled / disabled pair, and the column, the filter and
 the button MUST all use the word *reach*, because they are all asking the one
-question. A kind that declares no scope MUST head its filter **Status**, like its
-column, and offer only Disabled and Enabled.
+question.
 
 #### Scenario: the reach filter offers the panel's states under the reach name
 - **GIVEN** a list surface of a scoped kind

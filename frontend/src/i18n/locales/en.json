@@ -334,6 +334,7 @@
       "credential_set": "Stored a credential",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a note from {{resource}}",
+      "knowledge_edited": "Edited a document in {{resource}}",
       "knowledge_written": "Wrote a note to {{resource}}",
       "master_key_exported": "Exported the master key",
       "master_key_imported": "Imported a master key",
@@ -751,6 +752,7 @@
     "KNOWLEDGE_COLLECTION_EXISTS": "A knowledge collection with that name already exists",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "Knowledge collection not found",
     "KNOWLEDGE_ERROR": "The knowledge layer rejected that operation",
+    "KNOWLEDGE_FILE_CONFLICT": "This document changed on disk since you opened it — discard your edit and reload to see the new version",
     "KNOWLEDGE_FILE_NOT_FOUND": "Knowledge file not found",
     "KNOWLEDGE_PATH_UNSAFE": "That path is outside the knowledge collection",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "This file is too large to upload. The limit is 20 MB.",
@@ -781,6 +783,7 @@
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
+    "RESOURCE_NOT_TOGGLEABLE": "This kind of resource is always on and can't be enabled or disabled",
     "RESOURCE_PROTECTED": "This resource is managed by Coffer and can't be deleted",
     "SCOPE_INVALID": "That reach isn't valid for this resource kind",
     "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
@@ -1132,7 +1135,7 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "Each collection is one folder of Markdown documents that you and Coffer write together. New material is merged into them by curation; agents read them with their own tools, and only the collections you enable are named to them.",
+    "subtitle": "Each collection is one folder of Markdown documents that you and Coffer write together. New material is merged into them by curation, and agents read every collection with their own tools.",
     "add": "New collection",
     "loadFailed": "Failed to load collections",
     "searchPlaceholder": "Search collections…",
@@ -1144,8 +1147,6 @@
       "pending": "Pending"
     },
     "detail": {
-      "noMatches": "No matches.",
-      "filterPlaceholder": "Filter by name…",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
       "deleteFile": "Delete document",
@@ -1165,10 +1166,11 @@
       },
       "curatedAt": "Last curated {{when}}",
       "notCuratedYet": "Not curated yet",
+      "inboxFolder": "Inbox (waiting to merge)",
+      "inboxReadOnly": "Waiting to be merged into the collection; it disappears from here once merged.",
+      "editorLabel": "Edit {{path}}",
       "treeLabel": "Documents in this collection",
-      "empty": "No documents yet — upload one, or drop a Markdown file into this folder.",
-      "pending_one": "{{count}} new item is being merged into the documents.",
-      "pending_other": "{{count}} new items are being merged into the documents."
+      "empty": "No documents yet — upload one, or drop a Markdown file into this folder."
     },
     "welcome": {
       "title": "One place for everything your agents know",
@@ -1207,12 +1209,13 @@
   "memory": {
     "title": "Memory",
     "subtitle": "What your agents already learned, read out of their own memory — Claude Code's per-project notes and Codex's task groups — and distilled into notes of Coffer's own, one topic per file, filed by repository, plus one global partition for what is about you rather than any one project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
-    "readFromAgents": "Read from agents",
-    "reading": "Reading…",
-    "syncDone": "Read {{count}} entries across {{partitions}} partitions.",
+    "update": "Update memory",
+    "updating": "Updating…",
+    "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's notes.",
+    "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
-    "empty": "No partitions yet. Read from agents to import what they already know.",
+    "empty": "No partitions yet. Update memory to import what your agents already know.",
     "searchPlaceholder": "Search partitions…",
     "cols": {
       "name": "Partition",
@@ -1241,14 +1244,7 @@
       "tree": "Files",
       "selectFile": "Select a file to view.",
       "binary": "Binary file ({{size}} bytes)",
-      "truncated": "Content truncated — showing the start of the file.",
-      "derivedBadge": "Derived input",
-      "derivedHint": "Derived input, not Coffer's own writing: the agents' own words exactly as Coffer read them, kept so a note can be checked against the source it came from. Coffer's own notes are in notes/, indexed by MEMORY.md."
-    },
-    "detail": {
-      "distil": "Distil",
-      "distilHint": "Turns this partition's new raw entries into Coffer's own notes — merging into a note, opening a new one, or retiring one into RETIRED.md — and rewrites the index.",
-      "distilDone": "Distil pass finished."
+      "truncated": "Content truncated — showing the start of the file."
     },
     "welcome": {
       "title": "Nothing distilled yet",
@@ -1527,7 +1523,6 @@
     "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "choicesLabel": "Reach",
     "setReach": "Set reach…",
-    "setStatus": "Set status…",
     "everywhere": "Every agent",
     "restricted": "Only selected agents",
     "agentCount_one": "{{count}} agent",

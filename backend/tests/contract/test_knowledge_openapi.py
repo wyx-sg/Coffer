@@ -23,7 +23,7 @@ from coffer.surfaces.http.knowledge import schemas
 
 #: Every route the knowledge kind serves, as (method, path). Deleting a
 #: collection goes through the kind-agnostic Resource route, so it is
-#: deliberately absent (spec knowledge "Cover collection management on REST and
+#: deliberately absent (spec knowledge "Cover knowledge management on REST and
 #: the CLI"). So are ``search`` and ``grep``: this surface serves the person
 #: and the UI, and neither retrieves.
 _EXPECTED_ROUTES = {
@@ -32,10 +32,11 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
-    # New knowledge arrives as material, never as a file write: there is no
-    # ``PUT /file``, because a person edits a document in their own editor and
-    # the next sweep carries the edit through (see "Submit every entrance's
-    # input as material", "Run curation on a sweep and on demand").
+    # The one document write: a person's edited body, kept frontmatter, and a
+    # fingerprint guard (see "Save a document edited in the web UI"). New
+    # knowledge still arrives as material (see "Submit every entrance's input
+    # as material").
+    ("PUT", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/material"),
     # The collection by its uid — a pass runs for minutes and must keep meaning
     # the same collection across a rename. The file routes above stay
@@ -105,8 +106,8 @@ def test_the_write_tool_tells_the_agent_where_reading_happens(builtin_registry) 
 def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # type: ignore[no-untyped-def]
     """Both axes are gone: there are no retrieval modes, and a caller never
     names a scope — it sees every collection it is authorized for (see "Derive
-    no boundary from the working directory", "Gate collections with enabled
-    alone")."""
+    no boundary from the working directory", "Serve every collection to every
+    agent")."""
     for tool in builtin_registry.list():
         properties = set(tool.input_schema.get("properties", {}))
         assert not properties & {"scope", "mode", "top_k", "cwd"}, tool.name
@@ -146,7 +147,7 @@ def test_a_submission_says_whether_it_became_a_document() -> None:
 
 def test_no_wire_model_carries_a_retrieval_payload() -> None:
     """A search request, a hit or a grep match here would be a second retrieval
-    surface no one decided to add (see "Cover collection management on REST and
+    surface no one decided to add (see "Cover knowledge management on REST and
     the CLI")."""
     for gone in ("SearchRequest", "SearchHit", "SearchResultOut", "GrepMatchOut", "GrepOut"):
         assert not hasattr(schemas, gone), gone

@@ -77,7 +77,7 @@ Gated by the `knowledge` feature. Guide: [Knowledge](/guides/knowledge).
 | `description` | string | yes | One line saying what this answers. Curation reads it first when deciding where the material belongs. |
 | `body` | string | no | The Markdown content. |
 
-Every enabled collection is writable by every agent. Empty or whitespace-only values for a
+Every collection is writable by every agent. Empty or whitespace-only values for a
 required property fail with `ValueError: 'title' must be a non-empty string` (and so on).
 A collection that does not exist fails with a message that lists the collections you may
 write to.

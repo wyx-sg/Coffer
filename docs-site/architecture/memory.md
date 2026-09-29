@@ -54,7 +54,7 @@ A partition is a top-level directory under `~/.coffer/memory/`:
 
 | Path | Written by | Role |
 | --- | --- | --- |
-| `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. |
+| `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI's tree and the partition file routes do not list or read it. |
 | `notes/` | distil only | Useful. Coffer's own prose, one topic per file, with provenance naming every raw entry behind it. |
 | `MEMORY.md` | distil only | Findable. One line per note, grouped by type, newest first. |
 | `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. |
@@ -80,11 +80,11 @@ Three routes lead to `global`:
 
 Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new row through the lifecycle opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
 
-### No per-agent reach
+### No per-agent reach and no switch
 
-Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`. Every **enabled** partition is delivered to **every** agent. `enabled` is the only gate, and it governs delivery: the notes themselves are files under the memory root either way.
+Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The `memory` experimental feature switches the whole layer, and the notes themselves are files under the memory root either way.
 
-This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so `enabled` decides what Coffer *serves*, not what a process can read.
+This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so no switch on a partition could decide more than what Coffer *serves*; a disabled partition was still a file any agent could read.
 
 ### Nothing converges
 
@@ -294,7 +294,7 @@ Both passes run as asyncio tasks that the daemon starts from `surfaces/http/memo
 | `AggregateWorker` | immediately on start | 1 hour | `system:memory-aggregate-worker` |
 | `DistilWorker` | after 60 s | 6 hours | `system:memory-distil-worker` |
 
-Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. While the `memory` feature is off, both skip their rounds. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also trigger aggregation by hand with `coffer memory sync` or `POST /api/v1/memory/sync`.
+Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. While the `memory` feature is off, both skip their rounds. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button (`application/memory/update.py`) aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
 
 ## Trade-offs and alternatives
 

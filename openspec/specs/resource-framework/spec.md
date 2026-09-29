@@ -79,10 +79,16 @@ On the command line, every kind's group MUST offer the same lifecycle verbs, gen
 kind registry and served by the kind-agnostic routes: `list`, `show`, `add`, `edit`, `rm`,
 `enable`, `disable` and `scope`. A verb the kind does not support MUST be absent from its group
 rather than refused when run (see "Keep creation a per-kind seam" and "Carry a per-agent reach
-on every resource"). `show` MUST resolve either a name or a uid. `edit` MUST take `--title` and
+on every resource"); a kind that cannot be disabled offers no `enable` or `disable`. `show` MUST resolve either a name or a uid. `edit` MUST take `--title` and
 `--description` on every kind, plus the kind's own flags. Every `list` and `show` MUST support
 `--json`. A group MAY add commands that are unique to its kind, and MUST NOT add a second
 spelling of a lifecycle verb.
+
+A kind MAY declare that its resources cannot be disabled — `knowledge` and `memory` do.
+Every resource of such a kind MUST be enabled, and enabling or disabling one through the
+kind-agnostic surface MUST be refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing
+nothing. The resource read carries the kind's answer as `toggleable`, so a surface can
+leave the switch out rather than offer one that is refused.
 
 A kind exists only because the composition root registered it; a request naming an
 unregistered kind MUST be refused rather than bringing one into being.
@@ -96,8 +102,14 @@ unregistered kind MUST be refused rather than bringing one into being.
 #### Scenario: every kind's group offers the same lifecycle verbs
 - **GIVEN** the CLI's command tree
 - **WHEN** each registered kind's group is read
-- **THEN** each offers `list`, `show`, `edit`, `rm`, `enable` and `disable`, offers `add` only where the kind can be created from that group, and offers `scope` only where the kind supports reach
+- **THEN** each offers `list`, `show`, `edit` and `rm`, offers `enable` and `disable` only where the kind can be disabled, offers `add` only where the kind can be created from that group, and offers `scope` only where the kind supports reach
 - **AND** `coffer <kind> disable <name>` and `coffer <kind> disable <uid>` disable the same resource through the kind-agnostic route, and the change is audited
+
+#### Scenario: a non-toggleable kind refuses to be disabled
+- **GIVEN** a `knowledge` collection and a `memory` partition
+- **WHEN** each is disabled through `/api/v1/resources` and read back
+- **THEN** both requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
+- **AND** both still read back enabled, with `toggleable` false, and neither `coffer knowledge` nor `coffer memory` offers `enable` or `disable`
 
 ### Requirement: Validate every registration and persist nothing on failure
 The system MUST validate every registration against its kind's schema and the kind's own

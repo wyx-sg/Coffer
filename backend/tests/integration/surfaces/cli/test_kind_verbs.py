@@ -117,6 +117,11 @@ def test_every_group_offers_the_same_verbs_and_disable_takes_name_or_uid(
     app = _tree()
     assert _commands(app, "fake") == {"list", "show", "edit", "rm", "enable", "disable"}
     assert _commands(app, "scoped") == set(ALL_VERBS)
+    # A kind that cannot be disabled offers no switch (knowledge, memory).
+    from coffer.surfaces.cli.main import app as cli_app
+
+    for group in ("knowledge", "memory"):
+        assert not {"enable", "disable"} & _commands(cli_app, group)
 
     uid = _register("fake_kind", "alpha", {"foo": 1})
     by_name = _runner.invoke(app, ["fake", "disable", "alpha"])

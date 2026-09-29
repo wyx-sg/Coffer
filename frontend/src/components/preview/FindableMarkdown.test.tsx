@@ -55,6 +55,32 @@ describe("FindableMarkdown", () => {
     expect(screen.getByText("1/1")).toBeInTheDocument();
   });
 
+  test("a file's frontmatter is shown as metadata above the body, not as body text", () => {
+    const { container } = render(
+      <FindableMarkdown>
+        {"---\ntitle: Build with uv\norigins:\n  - claude_code\n  - codex\n---\n# Heading\n\nbody"}
+      </FindableMarkdown>,
+    );
+    const meta = screen.getByTestId("markdown-frontmatter");
+    expect(meta.tagName).toBe("DL");
+    expect(meta).toHaveTextContent("title");
+    expect(meta).toHaveTextContent("Build with uv");
+    expect(meta).toHaveTextContent("claude_code");
+    // The fences did not become a rule, and the keys are not in a paragraph or
+    // a bullet list of the rendered body.
+    expect(container.querySelector("hr")).toBeNull();
+    const heading = screen.getByRole("heading", { name: "Heading" });
+    expect(meta.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const p of container.querySelectorAll("p")) {
+      expect(p.textContent).not.toMatch(/title:|origins:/);
+    }
+  });
+
+  test("frontmatter splitting can be turned off for text that is not a file", () => {
+    render(<FindableMarkdown frontmatter={false}>{"---\ntitle: T\n---\nbody"}</FindableMarkdown>);
+    expect(screen.queryByTestId("markdown-frontmatter")).toBeNull();
+  });
+
   test("closes find when initialQuery becomes empty", () => {
     const { rerender } = render(<FindableMarkdown initialQuery="alpha">{SOURCE}</FindableMarkdown>);
     expect(screen.getByPlaceholderText(/find/i)).toBeInTheDocument();

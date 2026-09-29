@@ -7,7 +7,7 @@ When it is given a name that is not a collection, it answers with the ones that
 are: a model that reached for the tool without having opened the delivered
 skill gets a correction instead of a dead end, and it discloses nothing the
 skill would not have. And the session's agent identity reaches the audit entry
-and nothing else — it narrows no collection, because every enabled collection
+and nothing else — it narrows no collection, because every collection
 is writable by every agent.
 """
 
@@ -23,7 +23,7 @@ from coffer.application.knowledge.builtin_tools import register_knowledge_builti
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs
+from coffer.infrastructure.knowledge import fs, inbox
 
 
 class _Resources:
@@ -116,7 +116,7 @@ async def test_a_write_waits_in_the_inbox_and_is_audited(handler) -> None:  # ty
     # an inbox path to the user would be reporting an address that vanishes.
     assert "path" not in answer
     assert "curation" in answer["note"]
-    assert fs.inbox_items("shopee") == ("session-ownership.md",)
+    assert inbox.inbox_items("shopee") == ("session-ownership.md",)
     assert audit.events == ["knowledge_written"]
 
 
@@ -135,7 +135,7 @@ async def test_with_no_model_a_write_is_a_document_at_once(tmp_path, monkeypatch
     )
     assert answer["status"] == "written"
     assert answer["path"] == "shopee/session-ownership.md"
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     assert fs.read_file(answer["path"]).body.strip() == "b"
 
 
@@ -187,7 +187,7 @@ async def test_a_caller_with_nothing_is_told_so(tmp_path, monkeypatch) -> None: 
         knowledge_service=KnowledgeService(resources=_Resources([]), audit=_Audit()),
     )
     write = {t.name: t for t in registry.list()}["write"].handler
-    with pytest.raises(ValueError, match="You have none"):
+    with pytest.raises(ValueError, match="There are none"):
         await write({"collection": "anything", "title": "t", "description": "d"})
 
 

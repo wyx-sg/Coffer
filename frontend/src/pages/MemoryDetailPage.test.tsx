@@ -2,31 +2,27 @@
 //
 // Wiring smoke test for one partition's detail page: the way back, the header
 // (name + the repository it is keyed on, and whether that repository is still
-// there), the status control, and the file browser standing where the fact list
-// used to. Data hooks are mocked, mirroring KnowledgeDetailPage.test.tsx.
-//
-// Unlike the list, this page passes NO prefetched scope, so the control asks
-// the server — and the `memory` kind answers `supports_scope: false`. That is
-// the whole of how the per-agent panel disappears here: no prop, no special
-// case on the page, just the answer honoured. The scope hook is stubbed with
-// that answer so the test proves the page honours it rather than that someone
-// remembered to pass a flag.
+// there), the one Update memory button, and the file browser. No status or
+// reach control: every partition is served to every agent. Data hooks are
+// mocked, mirroring KnowledgeDetailPage.test.tsx.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
+import { acceptance } from "@/test/acceptance";
 
 // The page asks the DAEMON whether a distil pass is running (that is the
 // whole point — a component's own pending flag dies on navigation), so the
 // hook is mocked here the way every other data hook is.
 vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
+const updateMutate = vi.fn();
 vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryPartitions: vi.fn(),
-  useDistilPartition: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useSyncMemory: vi.fn(() => ({ mutate: updateMutate, isPending: false })),
   // Mounted transitively via MemoryFileTree; this suite only exercises the
   // page's own wiring, so both file hooks get inert defaults.
   usePartitionFiles: vi.fn(() => ({
@@ -54,33 +50,14 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   })),
   usePartitionFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
 }));
-// The page is addressed by uid and gets the partition's LABEL from this read —
-// the heading, and the name `/upkeep/runs` reports a pass under.
-vi.mock("@/lib/hooks/useResources", () => ({
-  useResource: vi.fn(() => ({
-    data: { uid: "mp-be27", kind: "memory", name: "coffer", enabled: true, scope: null },
-  })),
+// The header's Edit dialog sets the partition's title.
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useSetResourceTitle: vi.fn(() => ({ mutate: vi.fn(), isPending: false, reset: vi.fn(), error: null })),
 }));
-const scopePut = vi.fn();
-vi.mock("@/lib/hooks/useScope", () => ({
-  // What the server answers for `memory`: no per-agent scope to set.
-  useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: false } })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: scopePut, isPending: false })),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
-vi.mock("@/lib/hooks/useResourceMutations", () => {
-  const stub = () => ({ mutate: vi.fn(), isPending: false });
-  return {
-    useEnableResource: vi.fn(stub),
-    useDisableResource: vi.fn(stub),
-    useSetResourceTitle: vi.fn(() => ({ ...stub(), reset: vi.fn(), error: null })),
-  };
-});
 
 function renderPage() {
-  // ScopeControl reads the agent registry to build its pick-list, so the page
-  // needs a query client; the Distil button's Tooltip needs the provider the
-  // app shell normally hosts, and the page is rendered bare here.
+  // The Update memory button's Tooltip needs the provider the app shell
+  // normally hosts, and the page is rendered bare here.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -95,12 +72,10 @@ function renderPage() {
   );
 }
 
-const { useMemoryPartitions, useDistilPartition, usePartitionFiles } =
-  await import("@/lib/hooks/useMemory");
+const { useMemoryPartitions, usePartitionFiles } = await import("@/lib/hooks/useMemory");
 const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
 const partitionsMock = vi.mocked(useMemoryPartitions);
 const runningMock = vi.mocked(useUpkeepRunning);
-const distilMock = vi.mocked(useDistilPartition);
 const filesMock = vi.mocked(usePartitionFiles);
 
 /** The two identities the page holds apart: the uid the URL carries and every
@@ -127,31 +102,32 @@ function stubPartitions(partitions: PartitionOut[]) {
 describe("MemoryDetailPage", () => {
   beforeEach(() => {
     runningMock.mockReturnValue(false);
+    updateMutate.mockClear();
     stubPartitions([COFFER]);
   });
 
-  test("renders the repository it is keyed on, the status control and its files", () => {
+  test("renders the repository it is keyed on and its files", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: "coffer" })).toBeInTheDocument();
     expect(screen.getByText("/Users/dev/coffer")).toBeInTheDocument();
-    expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
   });
 
-  test("the header control offers no per-agent reach, because the server has none", () => {
+  acceptance("web-ui", "a kind that cannot be disabled shows no status control", () => {
+    // The partition's page half: no reach or status button in the header.
     renderPage();
-    const control = within(screen.getByTestId("scope-control")).getByRole("button");
-    // Its label is the state, and the state is just "served or not".
-    expect(control).toHaveTextContent(/^enabled$/i);
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
+  });
 
-    fireEvent.click(control);
-    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
-    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
-    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
-    // And nothing here ever PUTs a scope the server would refuse.
-    expect(scopePut).not.toHaveBeenCalled();
+  test("one Update memory button, and no separate Distil or Read action", () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /update memory/i }));
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /distil/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /read from agents/i })).toBeNull();
   });
 
   test("a partition whose repository is gone says so in its header", () => {
@@ -171,7 +147,7 @@ describe("MemoryDetailPage", () => {
     expect(screen.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });
 
-  test("spins the Distil button while a pass this page did not start is running", () => {
+  test("spins the Update button while a pass this page did not start is running", () => {
     // The bug: the spinner used to come from the mutation's own `isPending`,
     // which a remount resets — so leaving the page mid-pass and coming back
     // showed an idle button and invited a second concurrent rewrite. The
@@ -181,26 +157,25 @@ describe("MemoryDetailPage", () => {
 
     renderPage();
 
-    const button = screen.getByRole("button", { name: /distil/i });
+    const button = screen.getByRole("button", { name: /updating/i });
     expect(button).toBeDisabled();
     expect(button.querySelector(".animate-spin")).not.toBeNull();
   });
 
-  test("the Distil button is idle when nothing is running", () => {
+  test("the Update button is idle when nothing is running", () => {
     renderPage();
 
-    const button = screen.getByRole("button", { name: /distil/i });
+    const button = screen.getByRole("button", { name: /update memory/i });
     expect(button).not.toBeDisabled();
     expect(button.querySelector(".animate-spin")).toBeNull();
   });
 
   test("the uid addresses the partition; its name is what a running pass is named by", () => {
-    // Both routes under this page take the uid, and `/upkeep/runs` reports the
-    // folder being rewritten — which is named after the partition. So the page
-    // has to hold both, and this is the assertion that it does.
+    // The file routes take the uid, and `/upkeep/runs` reports the folder
+    // being rewritten — which is named after the partition. So the page has to
+    // hold both, and this is the assertion that it does.
     renderPage();
 
-    expect(distilMock).toHaveBeenCalledWith(PARTITION_UID);
     expect(filesMock).toHaveBeenCalledWith(PARTITION_UID);
     expect(runningMock).toHaveBeenCalledWith("memory", PARTITION_NAME);
   });

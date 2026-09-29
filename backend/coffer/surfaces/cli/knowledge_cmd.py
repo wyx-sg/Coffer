@@ -1,15 +1,15 @@
 """``coffer knowledge …`` — knowledge collections from the terminal (spec
-knowledge "Cover collection management on REST and the CLI").
+knowledge "Cover knowledge management on REST and the CLI").
 
-``show``, ``edit``, ``rm``, ``enable`` and ``disable`` are the lifecycle verbs
-every kind shares (``_kind_verbs``). ``list`` and ``add`` are the kind's own:
-``list`` reads ``/knowledge/collections``, which counts each collection's
-documents and its unmerged material and reads its description off its
-``README.md``; ``add`` creates the directory and the README, which the generic
-create route does not (the kind is not generic-creatable). ``write``,
-``upload`` and ``curate`` feed and run curation. There is no ``scope``: a
-collection's one switch is ``enabled`` ("Gate collections with enabled
-alone").
+``show``, ``edit`` and ``rm`` are the lifecycle verbs every kind shares
+(``_kind_verbs``). ``list`` and ``add`` are the kind's own: ``list`` reads
+``/knowledge/collections``, which counts each collection's documents and its
+unmerged material and reads its description off its ``README.md``; ``add``
+creates the directory and the README, which the generic create route does not
+(the kind is not generic-creatable). ``save`` replaces one document's body
+behind a fingerprint guard. ``write``, ``upload`` and ``curate`` feed and run
+curation. There is no ``scope``, ``enable`` or ``disable``: every collection is
+served to every agent ("Serve every collection to every agent").
 
 A collection's documents are plain Markdown, so this group has no command that
 lists, prints or deletes one: ``coffer path knowledge [<collection>]`` names
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json as _json
 import pathlib
+import sys
 
 import typer
 from rich.console import Console
@@ -117,7 +118,7 @@ register_kind_verbs(
     KindVerbs(
         kind=KIND,
         noun="collection",
-        verbs=frozenset({"edit", "rm", "enable", "disable"}),
+        verbs=frozenset({"edit", "rm"}),
         # A collection's description is the opening paragraph of its README,
         # edited in the README itself.
         edit_description=False,
@@ -127,6 +128,35 @@ register_kind_verbs(
         },
     ),
 )
+
+
+@app.command("save")
+def save_file(
+    ctx: typer.Context,
+    path: str = typer.Argument(..., help="Document path, e.g. payments/gateway.md"),
+    body_file: str = typer.Argument(..., help="File holding the new body, or - for stdin"),
+) -> None:
+    """Replace a document's body, keeping its frontmatter.
+
+    Reads the document first and saves with the fingerprint that read carried,
+    so a file changed in between is refused rather than overwritten (spec
+    knowledge "Save a document edited in the web UI").
+    """
+    body = sys.stdin.read() if body_file == "-" else pathlib.Path(body_file).read_text("utf-8")
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/knowledge/file", params={"path": path})
+        _cli_client.check(r, verbose=_verbose(ctx))
+        r = c.put(
+            "/knowledge/file",
+            json={
+                "path": path,
+                "body": body,
+                "expected_fingerprint": r.json()["fingerprint"],
+            },
+        )
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"saved {path}")
 
 
 @app.command("write")

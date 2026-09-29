@@ -600,7 +600,7 @@ class FakeIngestedDocument:
 
 class FakeCollectionCatalog:
     """In-memory ``CollectionCatalogPort``: a fixed collection list, exactly
-    like the real ``KnowledgeService.enabled_collections`` but with no
+    like the real ``KnowledgeService.collection_names`` but with no
     knowledge kind behind it (the channel core never imports one — import-linter
     contract 5f)."""
 
@@ -610,7 +610,7 @@ class FakeCollectionCatalog:
         #: not vary, so the count is all there is to observe.
         self.calls = 0
 
-    async def enabled_collections(self) -> list[str]:
+    async def collection_names(self) -> list[str]:
         self.calls += 1
         return list(self.names)
 

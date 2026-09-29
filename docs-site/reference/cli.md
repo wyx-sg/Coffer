@@ -1400,29 +1400,20 @@ Remove a collection and its directory.
 | `NAME` | argument | text | required | Name or uid |
 | `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
-### knowledge enable
+### knowledge save
 
 ```sh
-coffer knowledge enable [OPTIONS] NAME
+coffer knowledge save [OPTIONS] PATH BODY_FILE
 ```
 
-Enable a collection.
+Replace a document's body, keeping its frontmatter.
+
+Reads the document first and saves with the fingerprint that read carried, so a file changed in between is refused rather than overwritten (spec knowledge "Save a document edited in the web UI").
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Name or uid |
-
-### knowledge disable
-
-```sh
-coffer knowledge disable [OPTIONS] NAME
-```
-
-Disable a collection.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Name or uid |
+| `PATH` | argument | text | required | Document path, e.g. payments/gateway.md |
+| `BODY_FILE` | argument | text | required | File holding the new body, or - for stdin |
 
 ### knowledge write
 
@@ -1530,37 +1521,15 @@ Remove a partition.
 | `NAME` | argument | text | required | Name or uid |
 | `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
-### memory enable
-
-```sh
-coffer memory enable [OPTIONS] NAME
-```
-
-Enable a partition: its notes are delivered to every agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Name or uid |
-
-### memory disable
-
-```sh
-coffer memory disable [OPTIONS] NAME
-```
-
-Disable a partition: its notes are no longer delivered.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Name or uid |
-
 ### memory sync
 
 ```sh
 coffer memory sync [OPTIONS]
 ```
 
-Run aggregation: read every registered agent's native memory.
+Update memory: read every registered agent's native memory, then distil.
+
+Every partition left holding undistilled entries is distilled in the same call; one whose distil pass is already running is reported as skipped.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

@@ -32,6 +32,10 @@ runner = CliRunner()
 #: The lifecycle verbs one factory builds for every kind group from its
 #: ``Kind`` descriptor (design D1). A kind that cannot support a verb omits it.
 _LIFECYCLE = {"list", "show", "edit", "rm", "enable", "disable"}
+#: The lifecycle verbs a non-toggleable kind (knowledge, memory) leaves out
+#: (spec resource-framework "Address every resource by an immutable uid
+#: through one kind-agnostic surface").
+_SWITCH = {"enable", "disable"}
 
 
 #: Every command group the CLI composition root registers, and every
@@ -105,14 +109,17 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # the web": `add <folder>` is the import, and the master folder is named
     # by `path skill <name>` rather than listed, printed or written here.
     "skill": {*_LIFECYCLE, "add", "scope", "verify"},
-    # Exactly spec knowledge "Cover collection management on REST and the
+    # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read and deleted on disk under `path
-    # knowledge`, and a collection has no `scope` — its one switch is enabled.
-    "knowledge": {*_LIFECYCLE, "add", "write", "upload", "curate"},
+    # knowledge`; `save` is the fingerprint-guarded body write. A collection
+    # has no `scope` and no switch (spec knowledge "Serve every collection to
+    # every agent"), so no `enable`/`disable`.
+    "knowledge": {*_LIFECYCLE - _SWITCH, "add", "save", "write", "upload", "curate"},
     # No `add`: partitions are provisioned only by aggregation. `context` is
     # what the installed session-start hook runs and must not move (spec
-    # memory "Cover memory management on REST and the CLI").
-    "memory": {*_LIFECYCLE, "sync", "distil", "context", "delivery"},
+    # memory "Cover memory management on REST and the CLI"). No switch either
+    # (spec memory "Serve every partition to every agent").
+    "memory": {*_LIFECYCLE - _SWITCH, "sync", "distil", "context", "delivery"},
     "memory delivery": {"on", "off"},
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
@@ -238,10 +245,11 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
 }
 
 #: File-shaped routes that are NOT answered by `coffer path`, because they
-#: change an agent's own config file through validation and a fingerprint
-#: check a text editor would skip (spec agent-registry "Reject stale
-#: config-file writes by fingerprint").
+#: change a file through validation and a fingerprint check a text editor
+#: would skip (spec agent-registry "Reject stale config-file writes by
+#: fingerprint", spec knowledge "Save a document edited in the web UI").
 _FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
+    "PUT /knowledge/file": "knowledge save",
     "PUT /agents/{uid}/config-files/{key}": "agent config edit",
     "PUT /agents/{uid}/config-files/{key}/files/{relpath}": "agent config edit",
     "DELETE /agents/{uid}/config-files/{key}/files/{relpath}": "agent config rm",

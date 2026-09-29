@@ -14,9 +14,10 @@ Some of what sits in the vault is not authored by anyone; each machine
   Its master folder under `~/.coffer/skills/` and its `skill` resource row
   (whose `version_hash` is that folder's digest) are regenerated at every boot
   and after curation, from the running build, the knowledge files — and
-  **which collections this machine has enabled**, which is reach and
-  deliberately machine-local
-  ([Resource Reach Is Machine-Local](resource-reach-is-machine-local.md)).
+  **this machine's own inputs**: its experimental-feature switches, which
+  decide which sections of the manual render
+  ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)),
+  and its own knowledge root path.
 - **The memory tree and its `memory` partition rows**, aggregated from the
   agents installed on *this* machine
   ([Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md)).
@@ -26,8 +27,9 @@ Some of what sits in the vault is not authored by anyone; each machine
 
 [Convergence](vault-sync.md) mirrors `skills/` and publishes every resource
 row, so by default it would carry the first two. For `coffer-guide` that is an
-endless exchange: two machines holding identical knowledge but a different set
-of collections enabled render different bytes, each correct where it is. Each
+endless exchange: two machines holding identical knowledge but different
+feature switches, or a relocated knowledge root, render different bytes, each
+correct where it is. Each
 round overwrites the other machine's folder and row, the overwritten machine
 re-renders at its next boot or curation pass and publishes back, and the
 result is a commit and an audit event per tick on both machines, forever, over
@@ -84,25 +86,26 @@ the same bytes. This was the first answer.
 
 Pros: nothing special in sync.
 
-Cons: determinism removes only accidental differences. The largest input to
-the manual is which collections are enabled, which is *meant* to differ per
-machine; no byte ordering makes a laptop with a collection switched off agree
-with a desktop that has it on. Version skew defeats it again on every release.
+Cons: determinism removes only accidental differences. Some inputs to the
+manual are *meant* to differ per machine — which experimental features are on
+decides which sections render; no byte ordering makes a laptop with `memory`
+switched off agree with a desktop that has it on. Version skew defeats it again on every release.
 
 Lost: the two machines are not supposed to agree. Determinism survives for a
 smaller reason — an unchanged catalogue re-rendering to identical bytes lets the
 seed skip the write (spec knowledge "Render the guide skill deterministically").
 
-### Option C — Converge the inputs, reach included
+### Option C — Converge the inputs, switches included
 
-Carry `enabled` too, so both machines render the same manual.
+Carry the feature switches too, so both machines render the same manual.
 
 Pros: one manual everywhere.
 
-Cons: publishing reach lets one machine silently re-answer a question another
-machine answered for itself — the reason reach is machine-local.
+Cons: publishing the switches lets one machine silently re-answer a question
+another machine answered for itself — a feature switch is per machine by
+design, and a relocated root is a fact about one disk.
 
-Lost: it trades a churn bug for a permissions bug.
+Lost: it trades a churn bug for a settings bug.
 
 ### Option D — A list of non-converging kinds or names in the sync layer
 

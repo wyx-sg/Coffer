@@ -1,40 +1,20 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
-// The partitions list: each row carries the repository it is keyed on, its note
-// count and the status control every Resource gets (spec memory "Present
-// partitions as a table and a file tree", "Serve every enabled partition to every agent")
-// — ONE button whose label says whether the partition is served, opening a
-// panel where the states are the choices. ScopeControl's own hooks are mocked,
-// mirroring `components/mcp/McpServersTable.test.tsx` — this suite only
-// exercises the table.
-//
-// The load-bearing assertion added since: this kind offers NO PER-AGENT REACH.
-// Memory is aggregated from every agent's own notes and served back to every
-// agent, so the panel must not put an agent list in front of anyone — the
-// server refuses a scope write for `memory`, and a UI that asks anyway is a UI
-// that asks for a 422. What it must keep is the enable/disable choice, because
-// THAT gate is real: a disabled partition is served to nobody.
+// The partitions list: each row carries the repository it is keyed on and its
+// note count (spec memory "Present partitions as a table and a file tree").
+// It carries no status control, no status filter and no bulk bar: every
+// partition is served to every agent (spec memory "Serve every partition to
+// every agent"), so there is nothing to switch.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { MemoryPartitionsTable, type MemoryPartitionRow } from "./MemoryPartitionsTable";
-
-vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: undefined })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "claude_code" }] })),
-}));
-const disableMutate = vi.fn();
-vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useDisableResource: vi.fn(() => ({ mutate: disableMutate, isPending: false })),
-}));
+import type { PartitionOut } from "@/lib/api/memoryTypes";
+import { acceptance } from "@/test/acceptance";
+import { MemoryPartitionsTable } from "./MemoryPartitionsTable";
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -51,7 +31,7 @@ function wrap(ui: React.ReactNode) {
 // different things: the `uid` every route takes, the `name` that is its folder
 // and its label, and the `repository_key` a working directory resolves
 // through. None of them is derived from another.
-const ROWS: MemoryPartitionRow[] = [
+const ROWS: PartitionOut[] = [
   {
     uid: "mp-4410",
     name: "global",
@@ -59,7 +39,6 @@ const ROWS: MemoryPartitionRow[] = [
     repository_key: "",
     note_count: 12,
     unresolvable: false,
-    enabled: true,
   },
   {
     uid: "mp-be27",
@@ -71,22 +50,18 @@ const ROWS: MemoryPartitionRow[] = [
     repository_key: "remote:github.com/wyx-sg/coffer",
     note_count: 34,
     unresolvable: false,
-    // Disabled, which is the one thing this column reports — and the one thing
-    // that stops a partition being served.
-    enabled: false,
   },
 ];
 
 /** A partition whose repository has been deleted from disk (see "Report
  *  unresolvable partitions"). */
-const GONE: MemoryPartitionRow = {
+const GONE: PartitionOut = {
   uid: "mp-0d5c",
   name: "old-api",
   repository_path: "/Users/dev/old-api",
   repository_key: "path:/Users/dev/old-api",
   note_count: 3,
   unresolvable: true,
-  enabled: true,
 };
 
 describe("MemoryPartitionsTable", () => {
@@ -119,68 +94,13 @@ describe("MemoryPartitionsTable", () => {
     expect(screen.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });
 
-  const controlIn = (name: string) =>
-    within(
-      within(screen.getByText(name).closest("tr") as HTMLElement).getByTestId("scope-control"),
-    ).getByRole("button");
-
-  test("the status control appears per partition and reports the enable gate", () => {
+  acceptance("web-ui", "a kind that cannot be disabled shows no status control", () => {
     render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    expect(screen.getAllByTestId("scope-control")).toHaveLength(ROWS.length);
-    // The whole answer this kind has: served, or not. Not "Every agent" — that
-    // name only means something beside a narrower one, and there is none here.
-    expect(controlIn("global")).toHaveTextContent(/^enabled$/i);
-    expect(controlIn("coffer")).toHaveTextContent(/^disabled$/i);
-  });
-
-  test("no per-agent reach is offered for a partition", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    fireEvent.click(controlIn("global"));
-
-    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
-    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: /claude_code/i })).toBeNull();
-    // Two choices, both of them about the gate that is real.
-    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
-  });
-
-  test("the enable gate still writes — it is the one control this column has", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    fireEvent.click(controlIn("global"));
-    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-
-    // Picked by the name in the row; written against the uid.
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "memory", uid: "mp-4410" });
-  });
-
-  test("the column and its filter are headed Status, not Reach", () => {
-    // (Which two options the filter offers is pinned in
-    // `lib/reachFilter.test.ts` — a Radix Select's list is not in the DOM until
-    // it opens.)
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    expect(screen.getByRole("columnheader", { name: /^status$/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /^status$/i })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: /^reach$/i })).toBeNull();
-    expect(screen.getByRole("combobox", { name: /^status$/i })).toBeInTheDocument();
-  });
-
-  test("selecting rows reveals the same control over the whole selection", () => {
-    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
-
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    const bar = within(screen.getByTestId("bulk-reach-control"));
-    // The same one-button control the rows carry; it names the action rather
-    // than a state, because a mixed selection has no single one to report.
-    const trigger = bar.getByRole("button");
-    fireEvent.click(trigger);
-    // And the same two choices as the rows — no agent list over a selection
-    // either, since no scope write would be accepted for any of them.
-    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
-    // No bulk delete: a partition is aggregated from the agents' own memories,
-    // never user-created, so there is nothing here to remove.
-    expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /^status$/i })).toBeNull();
+    // No selection either: with no bulk action there is nothing to select for.
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

@@ -12,8 +12,8 @@ Nullable with no backfill: a resource registered before this had no title, and
 ``NULL`` says that rather than copying the name into it. Older code ignores the
 column.
 
-Revision ID: 0104
-Revises: 0103
+Revision ID: 0106
+Revises: 0105
 Create Date: 2026-09-28
 """
 
@@ -24,8 +24,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0105"
-down_revision: str | None = "0104"
+revision: str = "0106"
+down_revision: str | None = "0105"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

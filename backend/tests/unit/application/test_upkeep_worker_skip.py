@@ -24,7 +24,7 @@ from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.memory.distil_worker import DistilWorker
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs
+from coffer.infrastructure.knowledge import fs, inbox
 
 
 async def _enabled() -> bool:
@@ -66,7 +66,7 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     for name in ("busy", "free"):
         fs.create_collection_dir(name)
-        fs.submit_material(name, title="Session", description="d", body="b", actor="user")
+        inbox.submit_material(name, title="Session", description="d", body="b", actor="user")
     return tmp_path / "knowledge"
 
 

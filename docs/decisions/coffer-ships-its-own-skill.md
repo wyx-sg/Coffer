@@ -125,7 +125,7 @@ Serve the manual through the MCP resources or prompts API.
 and the knowledge catalogue is one section of it.**
 
 - **One skill, one description, one body.** The description names Coffer, the
-  built-in tools this machine has, and the subjects the enabled collections
+  built-in tools this machine has, and the subjects the collections
   cover, within the tightest importer ceiling (1024 characters), dropping whole
   subjects from the tail rather than cutting a sentence. The body is the manual
   — the tools and when to reach for each, the tiering contract, that knowledge
@@ -143,7 +143,7 @@ and the knowledge catalogue is one section of it.**
   and a pointer to the skill.
 - **Generated, deterministic, and never received.** The master is rewritten
   from the build at every boot and whenever the catalogue moves; the same build
-  over the same enabled collections renders the same bytes, so an unchanged
+  over the same collections renders the same bytes, so an unchanged
   catalogue writes, audits and delivers nothing. The `builtin` source variant
   carries no fields — nothing about where a generated folder came from will be
   true tomorrow. The folder and its row are derived output and do not travel

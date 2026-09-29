@@ -13,9 +13,9 @@ BEFORE persistence; a hook that raises aborts the deletion.
 
 Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
-`resource_scope_ops`, `rename`'s in `resource_rename_ops`, `set_title`'s in
-`resource_title_ops`, `delete`'s credential-release step in
-`resource_delete_ops`, and every question about what
+`resource_scope_ops`, `set_enabled`'s in `resource_enable_ops`, `rename`'s in
+`resource_rename_ops`, `set_title`'s in `resource_title_ops`, `delete`'s
+credential-release step in `resource_delete_ops`, and every question about what
 a kind *declares* — what converges, what redacts, what cites a credential, what
 it will accept as a name — in `resource_kind_ops`.
 """
@@ -117,6 +117,10 @@ class ResourceService:
         without reaching into the private kinds registry.
         """
         return self._require_kind(kind).supports_scope
+
+    def toggleable(self, kind: str) -> bool:
+        """Whether the kind's resources carry an enabled switch at all."""
+        return self._require_kind(kind).toggleable
 
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -304,22 +308,10 @@ class ResourceService:
         return updated
 
     async def set_enabled(self, uid: str, enabled: bool, actor: str) -> Resource:
-        before = await self.get(uid)
-        kind_def = self._require_kind(before.kind)
-        if before.enabled == enabled:
-            return before  # idempotent — no audit, no hook
-        updated = await self._repo.set_enabled(uid, enabled)
-        event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
-        await self._audit.record(event.value, resource=updated, actor=actor)
-        # Kind-level reconciliation, exactly as ``update_scope`` fires
-        # ``on_scope_changed``: AFTER persistence + audit, and handed the row
-        # carrying the flag that triggered it. Fired only on a real transition
-        # (the idempotent early return above skips it).
-        if kind_def.on_enabled_changed is not None:
-            hook_result = kind_def.on_enabled_changed(updated)
-            if inspect.isawaitable(hook_result):
-                await hook_result
-        return updated
+        """Flip a resource's enabled flag; see ``resource_enable_ops``."""
+        from coffer.application.resource_enable_ops import set_enabled as _set_enabled
+
+        return await _set_enabled(self, uid, enabled, actor=actor)
 
     async def update_scope(
         self,

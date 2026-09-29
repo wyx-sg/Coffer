@@ -55,13 +55,13 @@ A collection MAY contain arbitrarily nested subdirectories, and the system MUST 
 - **AND** the catalogue carries it at that nested path, with no folder required or renamed
 
 ### Requirement: Hide dot-prefixed entries except the inbox
-Hidden entries (dot-prefixed) MUST be excluded from every listing, count of documents and catalogue. The system itself MUST write exactly one: a collection's `.inbox/`, where submitted material waits to be merged (see "Submit every entrance's input as material"). An inbox item MUST be deleted once a pass has merged it or it has been promoted (see "Settle an item only after its pass completes", "Promote material directly when no model is configured"), and MUST NOT be addressable through any surface. `.history/` and `.raw/` stay removed; nothing is kept of what a pass replaced or of the document an upload arrived in.
+Hidden entries (dot-prefixed) MUST be excluded from every count of documents and from the catalogue. The system itself MUST write exactly one: a collection's `.inbox/`, where submitted material waits to be merged (see "Submit every entrance's input as material"). An inbox item MUST be deleted once a pass has merged it or it has been promoted (see "Settle an item only after its pass completes", "Promote material directly when no model is configured"). The tree route MUST list a collection root's `.inbox/` as a directory and its items as files, and the read route MUST read an inbox item, so a person can see what is waiting; no other hidden entry is listed or readable, and no surface may write or delete an inbox item. `.history/` and `.raw/` stay removed; nothing is kept of what a pass replaced or of the document an upload arrived in.
 
 #### Scenario: leave hidden entries out of every listing
 - **GIVEN** a `shopee` collection holding one document, one item waiting in `.inbox/`, and a file a person put under `.scratch/`
-- **WHEN** the collection is listed, its document count read and its catalogue rendered
-- **THEN** each names the one document only, and the count is one
-- **AND** reading the inbox item through the read route is refused
+- **WHEN** the collection is listed, its document count read, its catalogue rendered and its tree requested
+- **THEN** the count is one and the catalogue names the one document only
+- **AND** the tree lists the document and an `.inbox` directory holding the waiting item, which the read route returns, and nothing from `.scratch/`
 
 ### Requirement: Guard every path through one module
 Every name that becomes a path segment MUST pass a traversal guard, and path construction MUST live in exactly one module. A path that names a document MUST lie inside a collection and MUST NOT be the collection itself or its `README.md`.
@@ -95,15 +95,6 @@ The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `
 - **WHEN** `coffer__write` names the collection `global`
 - **THEN** the write is refused with `shopee` named as the available collection
 - **AND** no `global` directory and no `project-` directory exists afterwards
-
-### Requirement: Gate collections with enabled alone
-A collection MUST NOT carry the Resource framework's **per-agent reach**. Every **enabled** collection MUST be named, catalogued and served to **every** agent, and a **disabled** collection MUST appear in no agent's delivered skill — not its name, not its catalogue, not its description, not a path inside it. The per-agent form is withdrawn because it never chose anything and could not have: in the live vault every collection's scope was null, and its only effect would have been to omit a collection from one agent's rendered skill while that same skill hands the agent the absolute knowledge root and tells it to grep the whole thing. It was non-disclosure, and it disclosed anyway. `enabled` is now the only gate on this layer, and it is a real one. `coffer__write` MUST refuse a write naming a collection that does not exist or is disabled, and MUST answer with the collections that **are** available.
-
-#### Scenario: a disabled collection is absent from every agent's skill
-- **GIVEN** a disabled `shopee` collection and an enabled `personal` one, both holding documents
-- **WHEN** the guide skill is re-rendered and seeded into its master folder
-- **THEN** the master `SKILL.md` names neither `shopee`, its catalogue, nor any path inside it
-- **AND** it names `personal` and lists its catalogue — `enabled` is the only thing that decides, and, because every agent reads the one master, it decides the same way for every agent
 
 ### Requirement: Read a collection's description from its README
 A collection's one-line description MUST be the first paragraph of its `README.md`, absent when there is none, and MUST be read off disk on every listing. It MUST NOT be stored in the database — not even in the `resources` row's own generic `description` column, which for this kind stays empty: a copy written once and read by nothing is wrong from the first time the person edits the file. It is also what the delivered skill's own description draws on (see "Describe Coffer and the collections' subjects in the skill description"), so a collection that fails to describe itself is a collection an agent never recognises.
@@ -334,7 +325,7 @@ The per-agent copies of the retired `coffer-knowledge` delivery MUST be removed 
 - **AND** the third is untouched — it is somebody else's skill that happens to share the name, and the sweep only removes what it can positively recognise as Coffer's own: a symlink, or a directory holding both `SKILL.md` and `README.md`
 
 ### Requirement: Deliver the guide as the shared-master link
-The skill MUST reach each agent as the **ordinary shared-master link** of [skill-manager](../skill-manager/spec.md) "Deliver a skill as a directory link" — one master folder, one link per agent — and MUST NOT be written into an agent's directory as real bytes. **This too reverses what this requirement used to say.** The rule was that each agent's copy be independent bytes, because a link into a shared master was "a copy this layer cannot re-render, stale or reclaim". Neither half of that is true any more: the master is re-rendered in place at every boot and whenever the catalogue changes, which re-renders every agent's view of it at once; and reclaiming is the skill kind's own per-agent reconciliation against the delivery predicate ([skill-manager](../skill-manager/spec.md) "Reconcile deliveries per agent on every trigger"), which removes one agent's link without touching another's or the master. The text is the same for every agent (see "Gate collections with enabled alone"), so per-agent bytes were buying independence nothing asked for while paying for it with a delivery path of this layer's own. Re-rendering MUST happen whenever the catalogue changes — after a curation pass or a promotion, or a collection's creation, deletion, enabling or disabling, and on every sweep tick so a document a person added by hand is catalogued too — and MUST never raise: a failed render leaves the previous master exactly where it was, and the corpus stays readable at paths a person can still give an agent.
+The skill MUST reach each agent as the **ordinary shared-master link** of [skill-manager](../skill-manager/spec.md) "Deliver a skill as a directory link" — one master folder, one link per agent — and MUST NOT be written into an agent's directory as real bytes. **This too reverses what this requirement used to say.** The rule was that each agent's copy be independent bytes, because a link into a shared master was "a copy this layer cannot re-render, stale or reclaim". Neither half of that is true any more: the master is re-rendered in place at every boot and whenever the catalogue changes, which re-renders every agent's view of it at once; and reclaiming is the skill kind's own per-agent reconciliation against the delivery predicate ([skill-manager](../skill-manager/spec.md) "Reconcile deliveries per agent on every trigger"), which removes one agent's link without touching another's or the master. The text is the same for every agent (see "Serve every collection to every agent"), so per-agent bytes were buying independence nothing asked for while paying for it with a delivery path of this layer's own. Re-rendering MUST happen whenever the catalogue changes — after a curation pass or a promotion, or a collection's creation, rename or deletion, and on every sweep tick so a document a person added by hand is catalogued too — and MUST never raise: a failed render leaves the previous master exactly where it was, and the corpus stays readable at paths a person can still give an agent.
 
 #### Scenario: every agent reaches the guide through the one master folder
 - **GIVEN** two registered agents and the `coffer-guide` skill seeded
@@ -388,29 +379,19 @@ The knowledge root MUST still be written in its `~`-relative form whenever it si
 - **THEN** they are identical, and the knowledge root appears in its `~`-relative form rather than as either home's absolute path
 - **AND** the relocated root is written out in full, and the skill's stored config carries no timestamp of when it was generated
 
-### Requirement: Cover collection management on REST and the CLI
-The REST API under `/api/v1/knowledge` MUST cover: create a collection, list one level of a collection at a path, read a document, submit material (`POST /material`), upload a document, delete a document, and trigger curation. The `coffer knowledge` CLI group MUST offer `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable`, `write` (submit material), `upload` and `curate`. A collection's documents are plain files, so on the command line `coffer path knowledge [<collection>]` prints the absolute path of the knowledge root or of one collection, and the documents are listed, read and deleted on disk; the `coffer knowledge` group carries no command that lists, prints or deletes a document. There MUST be no route that writes a document: a person edits one in their own editor, reached from the page's open-in-editor action, and the edit is live on the next read (see "Keep direct file edits a complete way to change knowledge"). Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/{uid}`; `coffer knowledge rm`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis "Derive no boundary from the working directory" forbids, and no per-agent reach endpoint or `scope` command for this kind (see "Gate collections with enabled alone") — a collection's one switch is `enabled`, which the framework already serves. These surfaces serve the human and the UI; they are not an agent's retrieval path.
-
-#### Scenario: expose every collection operation and no document write
-- **GIVEN** the daemon's route table and the `coffer knowledge` command group
-- **WHEN** both are enumerated
-- **THEN** the routes offer create, list a level, read, submit material, upload, delete a document and trigger curation, and the command group offers exactly `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable`, `write`, `upload` and `curate`
-- **AND** no route under `/api/v1/knowledge` accepts `PUT` or `PATCH` on a document, and none is an index, reindex, source, embedding, scope or reach endpoint
-
-#### Scenario: locate a collection's documents from the command line
-- **GIVEN** a `shopee` collection holding a document at `shopee/infra/cache.md`
-- **WHEN** `coffer path knowledge shopee` runs, and then `coffer path knowledge` with no collection
-- **THEN** the first prints the absolute path of the `shopee` directory, under which the document is read at `infra/cache.md`, and the second prints the absolute knowledge root
-- **AND** `coffer knowledge` offers no `collections`, `create`, `ls`, `read` or `delete` command
-
 ### Requirement: Present a collection as one tree in the web UI
-The web UI MUST present a collection as **one tree** of its documents — no lanes, no tabs — with the chosen document rendered read-only in the pane beside it, through the unified file preview with open-in-external-editor and reveal-in-file-manager. Every document MUST offer delete, naming the exact path before it runs, reporting a refusal in place, and leaving the preview on no file afterwards. The page MUST show how much material is waiting to be merged, offer upload into the collection in view, and offer a manual curation trigger that reports a pass already in flight. It MUST NOT list the inbox's items, and MUST NOT carry a retrieval box: the one input beside the tree narrows the names already on screen, client-side.
+The web UI MUST present a collection as **one tree** of its documents — no lanes, no tabs, no filter or retrieval box — with the chosen document in the pane beside it, the same two panes a skill's Files tab is. The pane MUST render the document and offer **Edit**, which turns it into an editor saved through "Save a document edited in the web UI" and reports a conflict in place; open-in-external-editor and reveal-in-file-manager; and delete, naming the exact path before it runs, reporting a refusal in place, and leaving the preview on no file afterwards. The tree MUST show the collection's `.inbox/` as a folder whose items open read-only, with no edit and no delete. The page MUST offer upload into the collection in view and a manual curation trigger that reports a pass already in flight. The tree and the pane MUST extend to the bottom of the window and scroll inside.
 
 #### Scenario: the viewer shows one tree of documents
 - **GIVEN** a collection page whose tree holds a document at the root and one inside a folder, with one item of material waiting in the inbox
-- **WHEN** the page renders and a document's row is clicked
-- **THEN** there is one tree — no lane headings and no tabs — listing both documents and not the inbox item, the pending material is shown as a count
-- **AND** the document offers open-in-editor, reveal and delete, and a delete names the exact path before it runs
+- **WHEN** the page renders, a document's row is clicked, and then the inbox item's
+- **THEN** there is one tree — no lane headings, no tabs, no filter input — listing both documents and an `.inbox` folder holding the item
+- **AND** the document offers Edit, open-in-editor, reveal and delete, and the inbox item offers neither Edit nor delete
+
+#### Scenario: edit a document in place
+- **GIVEN** a document open in a collection's pane
+- **WHEN** the user chooses Edit, changes the text and saves
+- **THEN** the save is sent with the fingerprint the pane loaded, and the pane renders the saved body
 
 ### Requirement: Return absolute paths on reads
 Read responses MUST carry the file's absolute path and its containing folder's absolute path.
@@ -484,3 +465,36 @@ Every curation outcome MUST be reported as a `status`, and the route that runs a
 - **WHEN** a curation pass is run over it
 - **THEN** it reports `up_to_date` with the collection's name and nothing else
 - **AND** the model was shown nothing and every document is unchanged, stamp included
+
+### Requirement: Serve every collection to every agent
+Every collection MUST be named, catalogued and served to **every** agent, and a collection MUST NOT carry the Resource framework's per-agent reach or an enabled switch: the kind declares itself non-toggleable ([resource-framework](../resource-framework/spec.md) "Address every resource by an immutable uid through one kind-agnostic surface"). A collection leaves every agent's delivered skill only by being deleted. `coffer__write` MUST refuse a write naming a collection that does not exist, and MUST answer with the collections that do.
+
+#### Scenario: every collection is in every agent's skill
+- **GIVEN** two collections, `shopee` and `personal`, both holding documents, one of them stored disabled by an earlier version
+- **WHEN** the database is migrated and the guide skill is re-rendered and seeded into its master folder
+- **THEN** the master `SKILL.md` names both collections and lists both catalogues
+- **AND** a request to disable either collection through the generic resource route is refused and changes nothing
+
+### Requirement: Save a document edited in the web UI
+`PUT /api/v1/knowledge/file` MUST replace a document's **body** with the text it is given and keep the document's frontmatter, and MUST take the fingerprint of the file the editor loaded: a file that changed on disk since is refused with `KNOWLEDGE_FILE_CONFLICT` (409) and left untouched. The read route MUST carry that fingerprint. The saved file's modification time moves, so the sweep treats it as a person's edit (see "Keep direct file edits a complete way to change knowledge", "Let newer statements win and a person's edit stand"). An inbox item and a path outside a document MUST be refused.
+
+#### Scenario: save an edited body and refuse a stale one
+- **GIVEN** a document `shopee/infra/cache.md` read with its fingerprint
+- **WHEN** a new body is saved with that fingerprint, and then another body is saved with the same, now stale, fingerprint
+- **THEN** the first save rewrites the body, keeps the frontmatter's title and description, and answers with the new fingerprint
+- **AND** the second is refused with 409 `KNOWLEDGE_FILE_CONFLICT` and the file still holds the first save's body
+
+### Requirement: Cover knowledge management on REST and the CLI
+The REST API under `/api/v1/knowledge` MUST cover: create a collection, list one level of a collection at a path, read a document, save an edited document's body (`PUT /file`, see "Save a document edited in the web UI"), submit material (`POST /material`), upload a document, delete a document, and trigger curation. The `coffer knowledge` CLI group MUST offer `list`, `show`, `add`, `edit`, `rm`, `save` (replace a document's body with the fingerprint guard of "Save a document edited in the web UI"), `write` (submit material), `upload` and `curate`. A collection's documents are plain files, so on the command line `coffer path knowledge [<collection>]` prints the absolute path of the knowledge root or of one collection, and the documents are listed, read and deleted on disk; the `coffer knowledge` group carries no command that lists, prints or deletes a document. A person may equally edit a document in their own editor, reached from the page's open-in-editor action or from that path, and that edit is live on the next read (see "Keep direct file edits a complete way to change knowledge"). Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/{uid}`; `coffer knowledge rm`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis "Derive no boundary from the working directory" forbids, and no per-agent reach endpoint, `scope` command, enabled switch or `enable`/`disable` command for this kind (see "Serve every collection to every agent"). These surfaces serve the human and the UI; they are not an agent's retrieval path.
+
+#### Scenario: expose every knowledge operation on both surfaces
+- **GIVEN** the daemon's route table and the `coffer knowledge` command group
+- **WHEN** both are enumerated
+- **THEN** the routes offer create, list a level, read, save an edited body, submit material, upload, delete a document and trigger curation, and the command group offers exactly `list`, `show`, `add`, `edit`, `rm`, `save`, `write`, `upload` and `curate`
+- **AND** none is an index, reindex, source, embedding, scope or reach endpoint, and the group has no `enable`, `disable` or `scope` command
+
+#### Scenario: locate a collection's documents from the command line
+- **GIVEN** a `shopee` collection holding a document at `shopee/infra/cache.md`
+- **WHEN** `coffer path knowledge shopee` runs, and then `coffer path knowledge` with no collection
+- **THEN** the first prints the absolute path of the `shopee` directory, under which the document is read at `infra/cache.md`, and the second prints the absolute knowledge root
+- **AND** `coffer knowledge` offers no `collections`, `create`, `ls`, `read` or `delete` command

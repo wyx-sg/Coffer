@@ -7,11 +7,13 @@ temp HOME — then route ``_cli_client.client_or_exit`` at a Starlette
 collection in here exists because a test created it (spec knowledge "Create
 collections only deliberately").
 
-The group covers exactly the list in "Cover collection management on REST and
-the CLI" and nothing beyond it: the lifecycle verbs, ``write``, ``upload`` and
-``curate``. Documents are plain Markdown under ``~/.coffer/knowledge/``, so the
-group neither lists, prints nor deletes one — ``coffer path knowledge`` names
-the directory (test_path_cmd.py) and a person's own tools do the rest.
+The group covers exactly the list in "Cover knowledge management on REST and
+the CLI" and nothing beyond it: the lifecycle verbs (no ``enable``/``disable``,
+since every collection is served to every agent), ``save``, ``write``,
+``upload`` and ``curate``. Documents are plain Markdown under
+``~/.coffer/knowledge/``, so the group neither lists, prints nor deletes one —
+``coffer path knowledge`` names the directory (test_path_cmd.py) and a person's
+own tools do the rest.
 """
 
 from __future__ import annotations
@@ -242,6 +244,21 @@ def test_write_takes_no_folder(knowledge_cli_daemon):
         assert result.exit_code == 2, result.output
 
 
+def test_save_replaces_a_body_and_keeps_the_frontmatter(knowledge_cli_daemon, tmp_path):
+    """``coffer knowledge save`` reads the fingerprint itself, then saves ("Save a
+    document edited in the web UI")."""
+    _make_collection("shopee")
+    path = _write("shopee", "Session", body="old")
+    body_file = tmp_path / "new-body.md"
+    body_file.write_text("account.session owns login state\n", encoding="utf-8")
+
+    saved = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "save", path, str(body_file)])
+    assert saved.exit_code == 0, saved.output
+
+    out = _daemon().get("/knowledge/file", params={"path": path}).json()
+    assert (out["title"], out["body"].strip()) == ("Session", "account.session owns login state")
+
+
 @pytest.mark.acceptance(
     spec="knowledge", scenario="an unknown collection is an error, never auto-created"
 )
@@ -256,7 +273,7 @@ def test_unknown_collection_is_an_error(knowledge_cli_daemon, tmp_path):
 # ----- the lifecycle verbs ---------------------------------------------------
 
 
-def test_show_edit_disable_enable_and_rm_a_collection(knowledge_cli_daemon, tmp_path):
+def test_show_edit_and_rm_a_collection(knowledge_cli_daemon, tmp_path):
     """The verbs every kind shares, on a collection: by name, and by uid."""
     _make_collection("shopee")
 
@@ -269,9 +286,9 @@ def test_show_edit_disable_enable_and_rm_a_collection(knowledge_cli_daemon, tmp_
     by_uid = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", uid, "--json"])
     assert json.loads(_extract_json(by_uid.output))["title"] == "Shopee"
 
-    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "disable", "shopee"]).exit_code == 0
-    assert _daemon().get(f"/resources/{uid}").json()["enabled"] is False
-    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "enable", "shopee"]).exit_code == 0
+    # No switch: every collection is served to every agent (spec knowledge
+    # "Serve every collection to every agent").
+    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "disable", "shopee"]).exit_code == 2
     assert _daemon().get(f"/resources/{uid}").json()["enabled"] is True
 
     removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "rm", "shopee", "--yes"])
@@ -466,6 +483,7 @@ _KNOWLEDGE_OPERATIONS = {
     ("POST", "/api/v1/knowledge/collections"),
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
+    ("PUT", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/material"),
     ("POST", "/api/v1/knowledge/upload"),
     ("DELETE", "/api/v1/knowledge/file"),
@@ -477,8 +495,7 @@ _KNOWLEDGE_COMMANDS = [
     "add",
     "edit",
     "rm",
-    "enable",
-    "disable",
+    "save",
     "write",
     "upload",
     "curate",
@@ -487,9 +504,9 @@ _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "r
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="expose every collection operation and no document write"
+    spec="knowledge", scenario="expose every knowledge operation on both surfaces"
 )
-def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_daemon):
+def test_rest_and_cli_cover_every_knowledge_operation(knowledge_cli_daemon):
     import typer.main
 
     # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
@@ -506,7 +523,6 @@ def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_
     group = typer.main.get_command(cli_app).commands[KIND_KNOWLEDGE]  # type: ignore[attr-defined]
     assert list(group.commands) == _KNOWLEDGE_COMMANDS
 
-    assert not any(method in {"PUT", "PATCH"} for method, _ in routes)
     for _, path in routes:
         tail = path.removeprefix("/api/v1/knowledge").lower()
         assert not any(word in tail for word in _FORBIDDEN_ROUTE_WORDS), path

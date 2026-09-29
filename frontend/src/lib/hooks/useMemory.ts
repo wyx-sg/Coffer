@@ -13,9 +13,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { ApiError, translateApiError } from "@/lib/api/errors";
+import { translateApiError } from "@/lib/api/errors";
 import {
-  distil,
   installDelivery,
   listDelivery,
   listPartitionFiles,
@@ -67,9 +66,16 @@ export function usePartitionFileContent(partitionUid: string, path: string | nul
   });
 }
 
-/** Read the agents' native memory now. Partitions, note counts and every
- * partition's files can all change, so the invalidation is the full
- * `["memory"]` prefix — same breadth as knowledge's curation. */
+/** Update memory: read every agent's latest native memory, then distil every
+ * partition that gained new entries (spec memory "Update memory in one
+ * action"). Partitions, note counts and every partition's files can all
+ * change, so the invalidation is the full `["memory"]` prefix — same breadth
+ * as knowledge's curation.
+ *
+ * A distil pass already running over a partition does not fail the request —
+ * the daemon reports that partition as skipped — and the shared run list is
+ * refreshed on settle, so a partition page's spinner follows the daemon's
+ * answer rather than this mutation's. */
 export function useSyncMemory() {
   const qc = useQueryClient();
   const { t } = useTranslation();
@@ -81,7 +87,7 @@ export function useSyncMemory() {
       toast.success(
         t("memory.syncDone", {
           count: result.entries_written,
-          partitions: result.partitions.length,
+          partitions: result.distilled.length,
         }),
       );
       if (result.failures.length > 0) {
@@ -89,33 +95,6 @@ export function useSyncMemory() {
       }
     },
     onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Distil one partition: route this round's raw entries onto Coffer's own
- * notes — merge, open, retire or keep nothing — and rewrite its index.
- *
- * The pass is long and the daemon refuses a second one over the same
- * partition, so this hook keeps the shared run list honest at both ends: it
- * refreshes on settle (the spinner clears as soon as the pass is gone) and it
- * treats a 409 as "already running" rather than an error. A 409 is not a
- * failure the user needs told about — it is the state the button should
- * already have been showing, so refreshing the run list is the whole
- * response. */
-export function useDistilPartition(partitionUid: string) {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => distil(partitionUid),
-    onSuccess: () => {
-      invalidateMemory(qc);
-      toast.success(t("memory.detail.distilDone"));
-    },
-    onError: (error) => {
-      if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
-      toast.error(translateApiError(t, error));
-    },
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
 }

@@ -237,7 +237,7 @@ The sync package imports no kind. Kinds contribute at the composition root throu
 
 **Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered: the laptop that left a server dark would find it live after the desktop's next round. See [Resource framework](/architecture/resource-framework).
 
-**Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own enabled collections. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
+**Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own feature switches. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
 
 **Channels** travel with a `runs_on` field naming the one `machine_id` whose daemon starts the adapter. The document, its credential references and its pairings converge, so taking over a bot on another machine is a rebind rather than a re-registration. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
 
