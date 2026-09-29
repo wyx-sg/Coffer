@@ -833,6 +833,7 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
             "context_window": None,
             "effort_levels": None,
             "default_effort": None,
+            "price": None,
         }
         curated_set = [
             {"id": "opus", "modality": "text", **unknown},
@@ -889,6 +890,7 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
                 "context_window": None,
                 "effort_levels": None,
                 "default_effort": None,
+                "price": None,
             }
         ]
         r = c.patch(f"/api/v1/providers/{uid}", json={"models": []})

@@ -297,6 +297,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/usage/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Export Csv */
+        get: operations["usage_export_csv_api_v1_usage_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Quota */
+        get: operations["usage_quota_api_v1_usage_quota_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/quota/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Usage Quota Refresh */
+        post: operations["usage_quota_refresh_api_v1_usage_quota_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/quota/statusline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Usage Quota Statusline */
+        post: operations["usage_quota_statusline_api_v1_usage_quota_statusline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Requests */
+        get: operations["usage_requests_api_v1_usage_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage Summary */
+        get: operations["usage_summary_api_v1_usage_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -314,12 +416,48 @@ export interface components {
             /** Skipped */
             skipped: string[];
         };
+        /** AgentQuotaOut */
+        AgentQuotaOut: {
+            /** Agent Type */
+            agent_type: string;
+            /** Has Value */
+            has_value: boolean;
+            /** Last Observed At */
+            last_observed_at: string | null;
+            /** Plan */
+            plan: string | null;
+            /** Windows */
+            windows: components["schemas"]["QuotaWindowOut"][];
+        };
         /**
          * AgentType
          * @description Supported agent products.
          * @enum {string}
          */
         AgentType: "claude_code" | "codex";
+        /**
+         * CuratedPrice
+         * @description What the user says this connection charges for a model, in USD per
+         *     million tokens (web search per thousand requests). Relays and resellers
+         *     price differently from the vendor, so a connection's own price wins over
+         *     the bundled snapshot when usage is costed (spec provider-switching "Price
+         *     usage from a bundled snapshot and per-connection prices"). A cache category
+         *     left out is charged at the input rate, so an estimate errs high.
+         */
+        CuratedPrice: {
+            /** Cache Read */
+            cache_read?: number | null;
+            /** Cache Write 1H */
+            cache_write_1h?: number | null;
+            /** Cache Write 5M */
+            cache_write_5m?: number | null;
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Web Search */
+            web_search?: number | null;
+        };
         /**
          * DeactivateOut
          * @description Result of switching an agent type back to its own built-in login.
@@ -379,6 +517,11 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /**
+         * GroupBy
+         * @enum {string}
+         */
+        GroupBy: "model" | "agent" | "day";
         /** ListModelsIn */
         ListModelsIn: {
             /** Base Url */
@@ -490,6 +633,7 @@ export interface components {
             id: string;
             /** @default text */
             modality?: components["schemas"]["Modality"];
+            price?: components["schemas"]["CuratedPrice"] | null;
         };
         /**
          * ProviderModelsOut
@@ -635,11 +779,62 @@ export interface components {
             /** Rotated */
             rotated: boolean;
         };
+        /** QuotaListOut */
+        QuotaListOut: {
+            /** Agents */
+            agents: components["schemas"]["AgentQuotaOut"][];
+        };
+        /** QuotaRefreshOut */
+        QuotaRefreshOut: {
+            /** Agents */
+            agents: components["schemas"]["AgentQuotaOut"][];
+            /** Reason */
+            reason: string | null;
+            /** Refreshed */
+            refreshed: boolean;
+        };
+        /** QuotaWindowOut */
+        QuotaWindowOut: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Resets At */
+            resets_at: string | null;
+            /** Source */
+            source: string;
+            /** Stale */
+            stale: boolean;
+            /** Used Percent */
+            used_percent: number | null;
+            /** Window Minutes */
+            window_minutes: number | null;
+        };
         /**
          * Runtime
          * @enum {string}
          */
         Runtime: "ollama" | "lmstudio" | "vllm" | "llama_server";
+        /**
+         * StatuslineQuotaIn
+         * @description The statusLine stdin JSON's ``rate_limits`` object, as Claude Code sent it.
+         */
+        StatuslineQuotaIn: {
+            /** Rate Limits */
+            rate_limits?: {
+                [key: string]: unknown;
+            };
+        };
+        /** StatuslineQuotaOut */
+        StatuslineQuotaOut: {
+            /** Accepted */
+            accepted: boolean;
+        };
         /** TestConnectionIn */
         TestConnectionIn: {
             /** Base Url */
@@ -666,6 +861,147 @@ export interface components {
             message: string;
             /** Ok */
             ok: boolean;
+        };
+        /** UsageRequestListOut */
+        UsageRequestListOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Requests */
+            requests: components["schemas"]["UsageRequestOut"][];
+        };
+        /** UsageRequestOut */
+        UsageRequestOut: {
+            /** Agent Type */
+            agent_type: string | null;
+            /** Agent Uid */
+            agent_uid: string | null;
+            /** Cache Read Tokens */
+            cache_read_tokens: number | null;
+            /** Cache Write 1H Tokens */
+            cache_write_1h_tokens: number | null;
+            /** Cache Write 5M Tokens */
+            cache_write_5m_tokens: number | null;
+            /** Connection Uid */
+            connection_uid: string | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Endpoint */
+            endpoint: string;
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number | null;
+            /** Failed Over */
+            failed_over: boolean;
+            /** Id */
+            id: number;
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Member */
+            member: string | null;
+            /** Model */
+            model: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Price Version */
+            price_version: string | null;
+            /** Reasoning Tokens */
+            reasoning_tokens: number | null;
+            /** Request Class */
+            request_class: string | null;
+            /** Session Id */
+            session_id: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status: number | null;
+            /** Stream */
+            stream: boolean;
+            /** Ttft Ms */
+            ttft_ms: number | null;
+            /** Unpriced */
+            unpriced: boolean;
+            /** Usage Known */
+            usage_known: boolean;
+            /** Web Search Requests */
+            web_search_requests: number | null;
+            /** Wire */
+            wire: string;
+        };
+        /** UsageSummaryOut */
+        UsageSummaryOut: {
+            /**
+             * Cost Is Estimate
+             * @default true
+             */
+            cost_is_estimate: boolean;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Group By */
+            group_by: string;
+            /** Price Note */
+            price_note: string;
+            /** Range */
+            range: string;
+            /** Rows */
+            rows: components["schemas"]["UsageSummaryRowOut"][];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            totals: components["schemas"]["UsageTotalsOut"];
+        };
+        /** UsageSummaryRowOut */
+        UsageSummaryRowOut: {
+            /** Agent Type */
+            agent_type: string | null;
+            /** Agent Uid */
+            agent_uid: string | null;
+            /** Connection Name */
+            connection_name: string | null;
+            /** Connection Uid */
+            connection_uid: string | null;
+            /** Day */
+            day: string | null;
+            /** Key */
+            key: string;
+            /** Model */
+            model: string | null;
+            totals: components["schemas"]["UsageTotalsOut"];
+        };
+        /** UsageTotalsOut */
+        UsageTotalsOut: {
+            /** Cache Read Tokens */
+            cache_read_tokens: number;
+            /** Cache Write 1H Tokens */
+            cache_write_1h_tokens: number;
+            /** Cache Write 5M Tokens */
+            cache_write_5m_tokens: number;
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Reasoning Tokens */
+            reasoning_tokens: number;
+            /** Requests */
+            requests: number;
+            /** Unknown Usage Requests */
+            unknown_usage_requests: number;
+            /** Unpriced Requests */
+            unpriced_requests: number;
+            /** Web Search Requests */
+            web_search_requests: number;
         };
     };
     responses: never;
@@ -1341,6 +1677,275 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProxyTokenRotatedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_export_csv_api_v1_usage_export_csv_get: {
+        parameters: {
+            query?: {
+                /** @description today | 7d | 30d | month | custom */
+                range?: string;
+                /** @description First local day (custom range) */
+                from?: string | null;
+                /** @description Last local day, inclusive (custom range) */
+                to?: string | null;
+                /** @description model | agent | day */
+                group_by?: components["schemas"]["GroupBy"];
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_quota_api_v1_usage_quota_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_quota_refresh_api_v1_usage_quota_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaRefreshOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_quota_statusline_api_v1_usage_quota_statusline_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatuslineQuotaIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatuslineQuotaOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_requests_api_v1_usage_requests_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description The previous page's next_cursor; bound to the filters it was issued with. */
+                cursor?: string | null;
+                agent_uid?: string | null;
+                connection_uid?: string | null;
+                model?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageRequestListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_summary_api_v1_usage_summary_get: {
+        parameters: {
+            query?: {
+                /** @description today | 7d | 30d | month | custom */
+                range?: string;
+                /** @description First local day (custom range) */
+                from?: string | null;
+                /** @description Last local day, inclusive (custom range) */
+                to?: string | null;
+                /** @description model | agent | day */
+                group_by?: components["schemas"]["GroupBy"];
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummaryOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

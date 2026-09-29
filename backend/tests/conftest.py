@@ -74,6 +74,9 @@ os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
 # of the proxy and its supervisor build their own; everything else runs
 # without one (``surfaces/http/model_proxy_wiring.AUTOSTART_ENV``).
 os.environ.setdefault("COFFER_MODEL_PROXY", "off")
+# Same reason for the background Codex quota read, which spawns a short-lived
+# ``codex app-server`` (``surfaces/http/usage_wiring.QUOTA_POLL_ENV``).
+os.environ.setdefault("COFFER_QUOTA_POLL", "off")
 
 
 @pytest.fixture(autouse=True)

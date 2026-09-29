@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0110"
+HEAD_REVISION = "0111"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -192,7 +192,8 @@ HEAD_REVISION = "0110"
 # 0105 is DATA-only: it sets ``enabled = 1`` on every ``knowledge`` and
 # ``memory`` row, whose kinds no longer carry a switch. 0106 adds the nullable
 # ``resources.title`` column and 0107 the ``resources.rev`` revision — no new
-# table. 0109 is DATA-only (an agent's fast model becomes its Haiku tier).
+# table. 0110 is DATA-only (an agent's fast model becomes its Haiku tier); 0111
+# adds the three usage-metering tables.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -225,6 +226,11 @@ EXPECTED_TABLES = {
     "workflow_events",
     "workflow_node_attempts",
     "workflow_approvals",
+    # 0111: what the local model proxy metered, rolled up per day, and the
+    # latest official quota each subscription agent reported.
+    "usage_requests",
+    "usage_daily",
+    "quota_snapshots",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -249,6 +255,10 @@ PRE_MERGE_TABLES = (
         # 0108 created these.
         "channel_thread_history",
         "channel_outbox",
+        # 0111 created these.
+        "usage_requests",
+        "usage_daily",
+        "quota_snapshots",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and

@@ -74,6 +74,10 @@ _START = {
 }
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the final message_delta overrides message_start",
+)
 def test_message_delta_overrides_message_start() -> None:
     raw = _sse(
         ("message_start", _START),
@@ -163,6 +167,10 @@ def test_a_bare_cache_creation_total_counts_as_five_minute_writes() -> None:
     assert usage.cache_read_tokens == 0
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a stream cut short is recorded as unknown",
+)
 def test_truncated_anthropic_stream_has_unknown_usage() -> None:
     reader = AnthropicUsageReader()
     reader.feed(

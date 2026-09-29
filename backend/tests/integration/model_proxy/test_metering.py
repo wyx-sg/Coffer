@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.domain.model_proxy.state import UpstreamAuth
 from coffer.domain.usage.records import UsageRecord
 from tests.integration.model_proxy.conftest import (
@@ -14,6 +16,10 @@ from tests.integration.model_proxy.conftest import (
 from tests.integration.model_proxy.harness import json_reply, sse, sse_reply
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a streamed request is recorded with its tokens by category",
+)
 def test_responses_stream_records_cached_and_reasoning_tokens(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
     completed = {
@@ -105,6 +111,10 @@ def test_non_streamed_anthropic_message_is_metered(proxy: Proxy, upstreams) -> N
     assert rec["outcome"] == "completed" and rec["source"] == "proxy"
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="nothing stored carries a body or a key",
+)
 def test_spool_lines_never_carry_bodies_or_keys(proxy: Proxy, upstreams) -> None:
     up, server = upstreams()
     up.script = json_reply(200, {"type": "message", "content": "SECRET-COMPLETION", "usage": {}})

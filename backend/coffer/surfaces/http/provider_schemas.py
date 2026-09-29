@@ -18,7 +18,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.config import CuratedPrice, Protocol
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
@@ -42,6 +42,9 @@ class ProviderModel(BaseModel):
     effort_levels: list[str] | None = None
     #: The level used when an agent's binding names none.
     default_effort: str | None = None
+    #: This connection's own price for the model (USD per million tokens);
+    #: ``None``: the bundled price list, or unpriced.
+    price: CuratedPrice | None = None
 
 
 class ProviderCreate(BaseModel):

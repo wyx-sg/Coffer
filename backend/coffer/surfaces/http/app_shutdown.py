@@ -125,6 +125,7 @@ async def shutdown(running: Running) -> None:
     # Stops supervising only: the proxy process outlives the daemon, so the
     # agents' in-flight model streams survive a daemon restart or upgrade.
     await best_effort("model_proxy", running.kinds.provider.proxy.stop())
+    await best_effort("usage", running.kinds.usage.stop())
     # Dispose MCP supervisors (best-effort). The process-wide supervisor is IN
     # this registry now — it has to be, or the kind's delete and rename hooks
     # cannot reach the upstreams it holds — so the loop covers it and the

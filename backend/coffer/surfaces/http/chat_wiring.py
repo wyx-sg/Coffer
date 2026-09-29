@@ -220,7 +220,9 @@ def wire_chat(
         _credential_resolver,
         compose_memory_context=compose_memory_context,
         resolve_channel=_channel_note,
-        # Official subscription quota from the turns Coffer drives.
+        # Official subscription quota from the turns Coffer drives (spec
+        # provider-switching "Show a subscription's official quota as of when
+        # it was seen").
         observe_quota=observe_quota,
     )
 

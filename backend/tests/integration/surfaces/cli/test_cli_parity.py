@@ -167,6 +167,13 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "drift": {"list", "repair"},
     # GET /attention: the Overview's "needs you" list — a single command.
     "attention": set(),
+    # The Usage page (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-
+    # only-official-quota): the bare group is the summary (GET /usage/summary,
+    # or /usage/export.csv with --csv); `requests` is GET /usage/requests;
+    # `quota` is GET /usage/quota (POST /usage/quota/refresh with --refresh);
+    # `statusline` is the opt-in Claude Code statusLine wrapper that posts to
+    # /usage/quota/statusline and chains the user's own command.
+    "usage": {"requests", "quota", "statusline"},
     # The local model proxy (spec provider-switching "Authenticate each agent
     # to the proxy with its own local token"): `token` is GET
     # /proxy/tokens/{uid} — what both agents' projected config runs — `rotate`
@@ -186,6 +193,8 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # unmanaged skill (spec skill-manager "Preview an unmanaged skill read-only").
     "scan": {"--agent", "--ref", "--source", "--json"},
     "attention": {"--json"},
+    # The usage summary's range, grouping and output form.
+    "usage": {"--range", "--from", "--to", "--by", "--json", "--csv"},
     # A name and a title are edited on the kinds that carry them (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the
@@ -370,7 +379,7 @@ def api_routes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[set[str]]:
 def test_cli_covers_every_visual_operation():
     """The CLI's command tree is exactly the reviewed table above.
 
-    The oracle names all eighteen top-level commands the composition root
+    The oracle names all nineteen top-level commands the composition root
     registers plus their nested groups, and this asserts exact equality
     against the live tree — in both directions. A new UI operation cannot
     ship a CLI counterpart without it appearing here for a reviewer to see,

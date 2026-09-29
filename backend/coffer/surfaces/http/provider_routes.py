@@ -49,6 +49,7 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
             context_window=m.context_window,
             effort_levels=m.effort_levels,
             default_effort=m.default_effort,
+            price=m.price,
         )
         for m in models
     ]
@@ -92,6 +93,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
                 context_window=m.context_window,
                 effort_levels=m.effort_levels,
                 default_effort=m.default_effort,
+                price=m.price,
             )
             for m in cfg.models
         ],

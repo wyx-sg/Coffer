@@ -53,6 +53,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
 | [`coffer proxy`](#coffer-proxy) | Inspect the local model proxy and its per-agent tokens |
+| [`coffer usage`](#coffer-usage) | Model usage through Coffer's proxy, and subscription quota |
 | [`coffer sync`](#coffer-sync) | Keep this vault converged with a git remote you own |
 | [`coffer drift`](#coffer-drift) | See and repair drift between Coffer and the agents' own files |
 
@@ -1812,6 +1813,62 @@ Show whether the model proxy is running, where, and how often it restarted.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | Machine-readable output |
+
+## coffer usage
+
+```sh
+coffer usage [OPTIONS] COMMAND [ARGS]...
+```
+
+Model usage through Coffer's proxy, and subscription quota
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--range` | option | text | `today` | today \| 7d \| 30d \| month \| custom |
+| `--from` | option | text |  | First day of a custom range |
+| `--to` | option | text |  | Last day of a custom range, inclusive |
+| `--by` | option | text | `model` | model \| agent \| day |
+| `--json` | option | flag |  | JSON output for scripts |
+| `--csv` | option | flag |  | CSV output |
+
+### usage requests
+
+```sh
+coffer usage requests [OPTIONS]
+```
+
+List recent metered requests, newest first.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--limit` | option | integer (1-500) | `20` | Most requests to print |
+| `--cursor` | option | text |  | The next_cursor a read printed |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### usage quota
+
+```sh
+coffer usage quota [OPTIONS]
+```
+
+Show each subscription agent's official remaining quota.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--refresh` | option | flag |  | Read Codex's windows now |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### usage statusline
+
+```sh
+coffer usage statusline [OPTIONS] [COMMAND]...
+```
+
+Opt-in Claude Code statusLine wrapper: forward rate limits, then chain.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `COMMAND` | argument | text (variadic) |  | The original statusLine command to run after forwarding |
 
 ## coffer sync
 

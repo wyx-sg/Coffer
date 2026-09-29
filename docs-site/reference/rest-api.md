@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 179 operations in 23 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 185 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -128,6 +128,7 @@ The daemon mounts 179 operations in 23 groups. Groups follow the order the daemo
 | [channels](#channels) | 3 |
 | [providers](#providers) | 10 |
 | [proxy](#proxy) | 3 |
+| [usage](#usage) | 6 |
 
 ### daemon
 
@@ -434,3 +435,14 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `GET` | `/api/v1/proxy/status` | The supervised proxy's state, as the daemon last saw it. |
 | `GET` | `/api/v1/proxy/tokens/{agent_uid}` | The agent's local proxy token, minted on first ask. |
 | `POST` | `/api/v1/proxy/tokens/{agent_uid}/rotate` | Replace the agent's token; the old one is refused from the next push, which happens before this answers. |
+
+### usage
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/usage/summary` | Usage Summary |
+| `GET` | `/api/v1/usage/requests` | Usage Requests |
+| `GET` | `/api/v1/usage/export.csv` | Usage Export Csv |
+| `GET` | `/api/v1/usage/quota` | Usage Quota |
+| `POST` | `/api/v1/usage/quota/refresh` | Usage Quota Refresh |
+| `POST` | `/api/v1/usage/quota/statusline` | Usage Quota Statusline |

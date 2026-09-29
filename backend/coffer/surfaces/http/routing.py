@@ -67,6 +67,7 @@ from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
+from coffer.surfaces.http.usage_routes import router as usage_router
 
 
 def include_all_routers(app: FastAPI) -> None:
@@ -115,6 +116,7 @@ def include_all_routers(app: FastAPI) -> None:
         channel_router,  # spec channels
         provider_router,  # spec provider-switching
         proxy_router,  # spec provider-switching (the local model proxy)
+        usage_router,  # spec provider-switching (usage metering + subscription quota)
     )
     for router in routers:
         _include(app, router)

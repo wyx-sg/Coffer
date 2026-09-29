@@ -25,6 +25,7 @@ const guides = [
       { text: 'Connect a client', link: '/guides/connect-a-client' },
       { text: 'MCP servers', link: '/guides/mcp-servers' },
       { text: 'Model providers', link: '/guides/providers' },
+      { text: 'Usage and quota', link: '/guides/usage' },
       { text: 'Credentials', link: '/guides/credentials' },
     ],
   },

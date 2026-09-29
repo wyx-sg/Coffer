@@ -407,5 +407,20 @@ from the stored document when unset.
 
 ### Curated-model facts
 
-`CuratedModel` gains `context_window`, `effort_levels` and `default_effort`,
-each omitted from the stored document while unknown.
+`CuratedModel` gains `context_window`, `effort_levels`, `default_effort` and
+`price` (`CuratedPrice {input, output, cache_write_5m?, cache_write_1h?,
+cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
+omitted from the stored document while unknown.
+
+### Usage (`usage_requests`, `usage_daily`, `quota_snapshots`; migration 0111)
+
+- `usage_requests` — one row per proxied upstream attempt: every field of
+  `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`
+  (`snapshot:<version>` or `override:<connection uid>`) and `unpriced`;
+  `UNIQUE(source, dedupe_key)`. Retention follows `mcp_invocations`.
+- `usage_daily` — per local day, agent, connection and model: request,
+  unknown-usage and unpriced counts, token sums per category, estimated cost.
+  Grouping columns use `''` for "none". Kept 365 days.
+- `quota_snapshots` — the latest official window per `(agent_type,
+  window_key)`: used percent, window length, reset time, label, source, when it
+  was seen, plan. An older observation never replaces a newer one.

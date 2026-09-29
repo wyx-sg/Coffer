@@ -734,6 +734,335 @@ paths:
       summary: Rotate Proxy Token
       tags:
       - proxy
+  /api/v1/usage/export.csv:
+    get:
+      operationId: usage_export_csv_api_v1_usage_export_csv_get
+      parameters:
+      - description: today | 7d | 30d | month | custom
+        in: query
+        name: range
+        required: false
+        schema:
+          default: today
+          description: today | 7d | 30d | month | custom
+          title: Range
+          type: string
+      - description: First local day (custom range)
+        in: query
+        name: from
+        required: false
+        schema:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: First local day (custom range)
+          title: From
+      - description: Last local day, inclusive (custom range)
+        in: query
+        name: to
+        required: false
+        schema:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Last local day, inclusive (custom range)
+          title: To
+      - description: model | agent | day
+        in: query
+        name: group_by
+        required: false
+        schema:
+          $ref: '#/components/schemas/GroupBy'
+          default: model
+          description: model | agent | day
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            text/csv: {}
+          description: The summary as CSV.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Export Csv
+      tags:
+      - usage
+  /api/v1/usage/quota:
+    get:
+      operationId: usage_quota_api_v1_usage_quota_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Quota
+      tags:
+      - usage
+  /api/v1/usage/quota/refresh:
+    post:
+      operationId: usage_quota_refresh_api_v1_usage_quota_refresh_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaRefreshOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Quota Refresh
+      tags:
+      - usage
+  /api/v1/usage/quota/statusline:
+    post:
+      operationId: usage_quota_statusline_api_v1_usage_quota_statusline_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatuslineQuotaIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatuslineQuotaOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Quota Statusline
+      tags:
+      - usage
+  /api/v1/usage/requests:
+    get:
+      operationId: usage_requests_api_v1_usage_requests_get
+      parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 500
+          minimum: 1
+          title: Limit
+          type: integer
+      - description: The previous page's next_cursor; bound to the filters it was issued with.
+        in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The previous page's next_cursor; bound to the filters it was issued with.
+          title: Cursor
+      - in: query
+        name: agent_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+      - in: query
+        name: connection_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
+      - in: query
+        name: model
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageRequestListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Requests
+      tags:
+      - usage
+  /api/v1/usage/summary:
+    get:
+      operationId: usage_summary_api_v1_usage_summary_get
+      parameters:
+      - description: today | 7d | 30d | month | custom
+        in: query
+        name: range
+        required: false
+        schema:
+          default: today
+          description: today | 7d | 30d | month | custom
+          title: Range
+          type: string
+      - description: First local day (custom range)
+        in: query
+        name: from
+        required: false
+        schema:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: First local day (custom range)
+          title: From
+      - description: Last local day, inclusive (custom range)
+        in: query
+        name: to
+        required: false
+        schema:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          description: Last local day, inclusive (custom range)
+          title: To
+      - description: model | agent | day
+        in: query
+        name: group_by
+        required: false
+        schema:
+          $ref: '#/components/schemas/GroupBy'
+          default: model
+          description: model | agent | day
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSummaryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Usage Summary
+      tags:
+      - usage
 components:
   schemas:
     ActivateOut:
@@ -761,6 +1090,38 @@ components:
       - skipped
       title: ActivateOut
       type: object
+    AgentQuotaOut:
+      properties:
+        agent_type:
+          title: Agent Type
+          type: string
+        has_value:
+          title: Has Value
+          type: boolean
+        last_observed_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Observed At
+        plan:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Plan
+        windows:
+          items:
+            $ref: '#/components/schemas/QuotaWindowOut'
+          title: Windows
+          type: array
+      required:
+      - agent_type
+      - has_value
+      - plan
+      - last_observed_at
+      - windows
+      title: AgentQuotaOut
+      type: object
     AgentType:
       description: Supported agent products.
       enum:
@@ -768,6 +1129,53 @@ components:
       - codex
       title: AgentType
       type: string
+    CuratedPrice:
+      additionalProperties: false
+      description: |-
+        What the user says this connection charges for a model, in USD per
+        million tokens (web search per thousand requests). Relays and resellers
+        price differently from the vendor, so a connection's own price wins over
+        the bundled snapshot when usage is costed (spec provider-switching "Price
+        usage from a bundled snapshot and per-connection prices"). A cache category
+        left out is charged at the input rate, so an estimate errs high.
+      properties:
+        cache_read:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - type: 'null'
+          title: Cache Read
+        cache_write_1h:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - type: 'null'
+          title: Cache Write 1H
+        cache_write_5m:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - type: 'null'
+          title: Cache Write 5M
+        input:
+          minimum: 0.0
+          title: Input
+          type: number
+        output:
+          minimum: 0.0
+          title: Output
+          type: number
+        web_search:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - type: 'null'
+          title: Web Search
+      required:
+      - input
+      - output
+      title: CuratedPrice
+      type: object
     DeactivateOut:
       description: Result of switching an agent type back to its own built-in login.
       properties:
@@ -868,6 +1276,13 @@ components:
       - error
       title: ErrorResponse
       type: object
+    GroupBy:
+      enum:
+      - model
+      - agent
+      - day
+      title: GroupBy
+      type: string
     ListModelsIn:
       properties:
         base_url:
@@ -1081,6 +1496,10 @@ components:
         modality:
           $ref: '#/components/schemas/Modality'
           default: text
+        price:
+          anyOf:
+          - $ref: '#/components/schemas/CuratedPrice'
+          - type: 'null'
       required:
       - id
       title: ProviderModel
@@ -1329,6 +1748,83 @@ components:
       - rotated
       title: ProxyTokenRotatedOut
       type: object
+    QuotaListOut:
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/AgentQuotaOut'
+          title: Agents
+          type: array
+      required:
+      - agents
+      title: QuotaListOut
+      type: object
+    QuotaRefreshOut:
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/AgentQuotaOut'
+          title: Agents
+          type: array
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        refreshed:
+          title: Refreshed
+          type: boolean
+      required:
+      - refreshed
+      - reason
+      - agents
+      title: QuotaRefreshOut
+      type: object
+    QuotaWindowOut:
+      properties:
+        as_of:
+          format: date-time
+          title: As Of
+          type: string
+        key:
+          title: Key
+          type: string
+        label:
+          title: Label
+          type: string
+        resets_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Resets At
+        source:
+          title: Source
+          type: string
+        stale:
+          title: Stale
+          type: boolean
+        used_percent:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Used Percent
+        window_minutes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Window Minutes
+      required:
+      - key
+      - label
+      - used_percent
+      - window_minutes
+      - resets_at
+      - as_of
+      - source
+      - stale
+      title: QuotaWindowOut
+      type: object
     Runtime:
       enum:
       - ollama
@@ -1337,6 +1833,24 @@ components:
       - llama_server
       title: Runtime
       type: string
+    StatuslineQuotaIn:
+      description: The statusLine stdin JSON's ``rate_limits`` object, as Claude Code sent it.
+      properties:
+        rate_limits:
+          additionalProperties: true
+          title: Rate Limits
+          type: object
+      title: StatuslineQuotaIn
+      type: object
+    StatuslineQuotaOut:
+      properties:
+        accepted:
+          title: Accepted
+          type: boolean
+      required:
+      - accepted
+      title: StatuslineQuotaOut
+      type: object
     TestConnectionIn:
       properties:
         base_url:
@@ -1383,4 +1897,317 @@ components:
       - message
       - detail
       title: TestResultOut
+      type: object
+    UsageRequestListOut:
+      properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        requests:
+          items:
+            $ref: '#/components/schemas/UsageRequestOut'
+          title: Requests
+          type: array
+      required:
+      - requests
+      - next_cursor
+      title: UsageRequestListOut
+      type: object
+    UsageRequestOut:
+      properties:
+        agent_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Type
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+        cache_read_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cache Read Tokens
+        cache_write_1h_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cache Write 1H Tokens
+        cache_write_5m_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cache Write 5M Tokens
+        connection_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
+        duration_ms:
+          title: Duration Ms
+          type: integer
+        endpoint:
+          title: Endpoint
+          type: string
+        estimated_cost_usd:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimated Cost Usd
+        failed_over:
+          title: Failed Over
+          type: boolean
+        id:
+          title: Id
+          type: integer
+        input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Input Tokens
+        member:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Member
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        outcome:
+          title: Outcome
+          type: string
+        output_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Output Tokens
+        price_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Price Version
+        reasoning_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Reasoning Tokens
+        request_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Class
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        source:
+          title: Source
+          type: string
+        started_at:
+          format: date-time
+          title: Started At
+          type: string
+        status:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Status
+        stream:
+          title: Stream
+          type: boolean
+        ttft_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Ttft Ms
+        unpriced:
+          title: Unpriced
+          type: boolean
+        usage_known:
+          title: Usage Known
+          type: boolean
+        web_search_requests:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Web Search Requests
+        wire:
+          title: Wire
+          type: string
+      required:
+      - id
+      - source
+      - started_at
+      - agent_uid
+      - agent_type
+      - session_id
+      - request_class
+      - connection_uid
+      - member
+      - wire
+      - endpoint
+      - model
+      - stream
+      - status
+      - outcome
+      - failed_over
+      - ttft_ms
+      - duration_ms
+      - usage_known
+      - input_tokens
+      - cache_write_5m_tokens
+      - cache_write_1h_tokens
+      - cache_read_tokens
+      - output_tokens
+      - reasoning_tokens
+      - web_search_requests
+      - estimated_cost_usd
+      - price_version
+      - unpriced
+      title: UsageRequestOut
+      type: object
+    UsageSummaryOut:
+      properties:
+        cost_is_estimate:
+          default: true
+          title: Cost Is Estimate
+          type: boolean
+        end:
+          format: date
+          title: End
+          type: string
+        group_by:
+          title: Group By
+          type: string
+        price_note:
+          title: Price Note
+          type: string
+        range:
+          title: Range
+          type: string
+        rows:
+          items:
+            $ref: '#/components/schemas/UsageSummaryRowOut'
+          title: Rows
+          type: array
+        start:
+          format: date
+          title: Start
+          type: string
+        totals:
+          $ref: '#/components/schemas/UsageTotalsOut'
+      required:
+      - range
+      - start
+      - end
+      - group_by
+      - rows
+      - totals
+      - cost_is_estimate
+      - price_note
+      title: UsageSummaryOut
+      type: object
+    UsageSummaryRowOut:
+      properties:
+        agent_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Type
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+        connection_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Name
+        connection_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
+        day:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Day
+        key:
+          title: Key
+          type: string
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        totals:
+          $ref: '#/components/schemas/UsageTotalsOut'
+      required:
+      - key
+      - model
+      - connection_uid
+      - connection_name
+      - agent_uid
+      - agent_type
+      - day
+      - totals
+      title: UsageSummaryRowOut
+      type: object
+    UsageTotalsOut:
+      properties:
+        cache_read_tokens:
+          title: Cache Read Tokens
+          type: integer
+        cache_write_1h_tokens:
+          title: Cache Write 1H Tokens
+          type: integer
+        cache_write_5m_tokens:
+          title: Cache Write 5M Tokens
+          type: integer
+        estimated_cost_usd:
+          title: Estimated Cost Usd
+          type: number
+        input_tokens:
+          title: Input Tokens
+          type: integer
+        output_tokens:
+          title: Output Tokens
+          type: integer
+        reasoning_tokens:
+          title: Reasoning Tokens
+          type: integer
+        requests:
+          title: Requests
+          type: integer
+        unknown_usage_requests:
+          title: Unknown Usage Requests
+          type: integer
+        unpriced_requests:
+          title: Unpriced Requests
+          type: integer
+        web_search_requests:
+          title: Web Search Requests
+          type: integer
+      required:
+      - requests
+      - unknown_usage_requests
+      - unpriced_requests
+      - input_tokens
+      - cache_write_5m_tokens
+      - cache_write_1h_tokens
+      - cache_read_tokens
+      - output_tokens
+      - reasoning_tokens
+      - web_search_requests
+      - estimated_cost_usd
+      title: UsageTotalsOut
       type: object

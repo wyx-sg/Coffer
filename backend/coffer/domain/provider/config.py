@@ -64,7 +64,25 @@ _MAX_MODEL_ID_LEN = 200
 
 
 #: Curated-model facts that are omitted from the document while unknown.
-_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort")
+_OPTIONAL_FACTS = ("context_window", "effort_levels", "default_effort", "price")
+
+
+class CuratedPrice(BaseModel):
+    """What the user says this connection charges for a model, in USD per
+    million tokens (web search per thousand requests). Relays and resellers
+    price differently from the vendor, so a connection's own price wins over
+    the bundled snapshot when usage is costed (spec provider-switching "Price
+    usage from a bundled snapshot and per-connection prices"). A cache category
+    left out is charged at the input rate, so an estimate errs high."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float = Field(ge=0)
+    output: float = Field(ge=0)
+    cache_write_5m: float | None = Field(default=None, ge=0)
+    cache_write_1h: float | None = Field(default=None, ge=0)
+    cache_read: float | None = Field(default=None, ge=0)
+    web_search: float | None = Field(default=None, ge=0)
 
 
 class CuratedModel(BaseModel):
@@ -95,6 +113,8 @@ class CuratedModel(BaseModel):
     effort_levels: list[str] | None = None
     #: The level used when the agent's binding names none.
     default_effort: str | None = None
+    #: This connection's own price for the model; ``None``: the bundled one.
+    price: CuratedPrice | None = None
 
     @model_serializer(mode="wrap")
     def _omit_unknowns(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
