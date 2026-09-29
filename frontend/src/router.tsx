@@ -94,6 +94,9 @@ const pageRoutes: RouteObject[] = [
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  // A skill's Requires tab links each command here; the CLIs page item gives
+  // it its own detail page.
+  { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
@@ -135,15 +138,11 @@ const pageRoutes: RouteObject[] = [
     path: "channels/:uid",
     element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
   },
+  // The Skills page is the library beside the open skill, so all three
+  // addresses render the same page; it loads the detail pane on first open.
   { path: "skills", element: <SkillsPage /> },
-  {
-    path: "skills/:name",
-    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
-  },
-  {
-    path: "skills/:name/:tab",
-    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
-  },
+  { path: "skills/:name", element: <SkillsPage /> },
+  { path: "skills/:name/:tab", element: <SkillsPage /> },
   // Knowledge is ONE page (spec knowledge "Present a collection as one tree in
   // the web UI"): the collection tree stays on the left whatever the right pane
   // shows — Recent changes (`/knowledge`), one change (`/knowledge/changes/<version>`),

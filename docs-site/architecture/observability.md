@@ -63,7 +63,7 @@ The timestamp comes from the `LogRecord`, not from the clock at format time. Tha
 
 A stderr handler would therefore write every record twice. The daemon attaches its stderr handler only when stderr is *not* the same file as `daemon.log` (compared by device and inode), which is the foreground case — a terminal or a test — where it is the only way to see output.
 
-The desktop shell writes its own few records (which daemon binary it chose, a failed restart from the tray) into the same `daemon.log`, as one-line JSON in the same shape.
+The desktop shell writes its own few records (which daemon binary it chose, a failed restart from the menu bar, a failed update check or install) into the same `daemon.log`, as one-line JSON in the same shape.
 
 ### Other log files
 

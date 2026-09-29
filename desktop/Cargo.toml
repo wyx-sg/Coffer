@@ -41,6 +41,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"
+# The updater (`updater.rs`): checks a signed release manifest on GitHub
+# Releases, verifies the archive against the public key built into the shell,
+# and replaces the `.app`. It runs in Rust only; the webview is granted none of
+# its permissions (`capabilities/default.json`).
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

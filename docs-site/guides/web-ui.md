@@ -116,7 +116,7 @@ It has five tabs, in this order:
 | **Security** | `/settings/security` | **Credential encryption**: whether the master key lives in a file beside the database or in the OS keychain (a signed release keeps it in its Keychain, with nothing to move). **Secret approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. |
 | **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
 | **Daemon** | `/settings/daemon` | The daemon's state, port, version and when it started, and **Start at login** (macOS). |
-| **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. |
+| **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. In the desktop app, **Updates**: when Coffer last checked, **Check for updates**, a newer version with **Download and restart**, and **Check automatically** (see [Desktop app → Update](/guides/desktop-app#update)). In a browser it says updates are installed by the desktop app. |
 
 **Each tab has its own address.** Opening a tab changes the URL to `/settings/<tab>`, so a bookmark or a shared link opens that tab directly. Close the window with **×**, **Escape**, a click outside it or the browser's **Back** button: you return to the page underneath, at its own address. If you load a `/settings/<tab>` address fresh, it opens over **Overview**, and closing it lands on `/`.
 

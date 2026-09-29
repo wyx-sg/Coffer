@@ -81,7 +81,7 @@ The app bundles the same three binaries as the release archive. The first time i
 export PATH="$HOME/.coffer/bin:$PATH"   # add to your shell profile
 ```
 
-See [Desktop app](/guides/desktop-app) for the tray menu, restarts and the offline banner.
+See [Desktop app](/guides/desktop-app) for the menu bar, updates, restarts and the offline banner.
 
 ## Release archive
 

@@ -364,8 +364,9 @@ describe("presence-gated actions", () => {
   test("inside the shell the approvals signal calls back and unsubscribes", async () => {
     enterTauri();
     const unlisten = vi.fn();
-    let handler: (() => void) | undefined;
-    listenMock.mockImplementation((_event: string, cb: () => void) => {
+    // Tauri hands every listener an event carrying the payload.
+    let handler: ((event: { payload: unknown }) => void) | undefined;
+    listenMock.mockImplementation((_event: string, cb: (event: { payload: unknown }) => void) => {
       handler = cb;
       return Promise.resolve(unlisten);
     });
@@ -375,7 +376,7 @@ describe("presence-gated actions", () => {
       expect(listenMock).toHaveBeenCalledWith(APPROVALS_EVENT, expect.any(Function)),
     );
     await vi.waitFor(() => expect(handler).toBeDefined());
-    handler?.();
+    handler?.({ payload: null });
     expect(callback).toHaveBeenCalledTimes(1);
     // Whether or not listen() has settled yet, stopping unlistens exactly once.
     stop();

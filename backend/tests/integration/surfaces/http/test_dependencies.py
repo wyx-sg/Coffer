@@ -82,7 +82,7 @@ _PROVIDERS: list[_Provider] = [
         "_agent_hooks_service",
     ),
     # skill kind
-    *_pairs(skill_deps, "_skill_service"),
+    *_pairs(skill_deps, "_skill_service", "_skill_source_service"),
     # knowledge kind — two services, not three: there is no search service to
     # provide any more (spec knowledge "Expose exactly one knowledge tool").
     *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_history_service"),

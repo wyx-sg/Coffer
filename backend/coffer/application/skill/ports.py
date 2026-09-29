@@ -18,6 +18,7 @@ from typing import Any, Protocol
 
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.scan import ScanEntry
+from coffer.domain.skill.source_status import SourceStatus
 
 
 class MasterStorePort(Protocol):
@@ -113,3 +114,48 @@ class SyncEnginePort(Protocol):
         SYMLINK.
         """
         ...
+
+
+class GitSourcePort(Protocol):
+    """``git`` over a skill's repository (``infrastructure.skill.git_source``).
+
+    Every method raises ``SkillSourceUnreachable`` with git's own message when
+    git fails; nothing here writes outside the directories it is given.
+    """
+
+    async def clone(self, url: str, dest: pathlib.Path) -> None: ...
+
+    async def resolve(self, repo: pathlib.Path, ref: str | None, *, url: str) -> str: ...
+
+    async def checkout(
+        self, repo: pathlib.Path, commit: str, subpath: str, dest: pathlib.Path, *, url: str
+    ) -> pathlib.Path: ...
+
+    async def has_commit(self, repo: pathlib.Path, commit: str) -> bool: ...
+
+    async def commits(
+        self, repo: pathlib.Path, base: str, head: str, subpath: str, *, limit: int = ...
+    ) -> list[Any]: ...
+
+    async def changed_files(
+        self, repo: pathlib.Path, base: str, head: str, subpath: str
+    ) -> list[Any]: ...
+
+
+class ArchiveReaderPort(Protocol):
+    """Reads an uploaded skill archive into staging, refusing it first
+    (``infrastructure.skill.archive_reader``)."""
+
+    def save_upload(self, stream: Any, dest: pathlib.Path, *, cap_bytes: int) -> int: ...
+
+    def extract(self, archive: pathlib.Path, dest: pathlib.Path, *, cap_bytes: int) -> None: ...
+
+
+class SourceStatusRepoPort(Protocol):
+    """``skill_source_status`` — a Git-imported skill's last check, machine-local."""
+
+    async def get(self, skill_id: int) -> SourceStatus | None: ...
+
+    async def list_all(self) -> dict[int, SourceStatus]: ...
+
+    async def put(self, status: SourceStatus) -> SourceStatus: ...

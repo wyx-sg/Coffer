@@ -5,10 +5,13 @@
 // selected file; `SkillFileTree` binds it to a managed skill's master folder,
 // whose viewer (SkillFileViewer) renders Markdown nicely, shows other text files
 // raw, and edits behind an explicit Edit — except a builtin skill's, which it
-// keeps read-only because Coffer rewrites them at every start. The unmanaged
-// preview (UnmanagedSkillFiles) binds the same browser to a read-only viewer.
-// Mirrors the AgentConfigFilesEditor layout.
+// keeps read-only because Coffer rewrites them at every start. The managed
+// tree opens on SKILL.md and keeps the open file in `?file=`, so a reload or a
+// link lands on the same file. The unmanaged preview (UnmanagedSkillFiles)
+// binds the same browser to a read-only viewer. Mirrors the
+// AgentConfigFilesEditor layout.
 import { useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
@@ -24,12 +27,29 @@ import type { SkillFileNode } from "@/lib/api/skills";
 import { useSkillFiles } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
 
+/** The file a skill opens on: its SKILL.md, the one file every skill has. */
+const DEFAULT_FILE = "SKILL.md";
+
 export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?: boolean }) {
   const tree = useSkillFiles(uid);
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("file") ?? DEFAULT_FILE;
+  const select = (path: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (path === DEFAULT_FILE) next.delete("file");
+        else next.set("file", path);
+        return next;
+      },
+      { replace: true },
+    );
   return (
     <SkillFileBrowser
       tree={tree}
-      renderFile={(path) => <SkillFileViewer uid={uid} path={path} builtin={builtin} />}
+      selectedPath={selected}
+      onSelect={select}
+      renderFile={(path) => <SkillFileViewer key={path} uid={uid} path={path} builtin={builtin} />}
     />
   );
 }
@@ -44,12 +64,20 @@ export interface SkillFileTreeQuery {
 export function SkillFileBrowser({
   tree,
   renderFile,
+  selectedPath: controlledPath,
+  onSelect,
 }: {
   tree: SkillFileTreeQuery;
   renderFile: (path: string) => ReactNode;
+  /** The open file, when the caller keeps it (e.g. in the URL); omit to let
+   *  the browser keep it itself, starting with nothing open. */
+  selectedPath?: string | null;
+  onSelect?: (path: string) => void;
 }) {
   const { t } = useTranslation();
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [ownPath, setOwnPath] = useState<string | null>(null);
+  const selectedPath = controlledPath !== undefined ? controlledPath : ownPath;
+  const setSelectedPath = onSelect ?? setOwnPath;
   const fill = useFillToBottom();
 
   return (

@@ -18,11 +18,11 @@ vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
   AddMcpServerDialog: () => <button>add mcp server</button>,
 }));
 
-vi.mock("@/lib/hooks/useSkills", () => ({
+vi.mock("@/lib/hooks/useSkills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useSkills")>()),
   useSkills: vi.fn(() => ({ data: [], isPending: false, error: null, refetch: vi.fn() })),
-  useImportSkill: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false, error: null })),
-  useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 
 const { useResources } = await import("@/lib/hooks/useResources");
 

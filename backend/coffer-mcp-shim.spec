@@ -8,6 +8,8 @@
 
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
 
 
@@ -84,4 +86,11 @@ exe = EXE(
     runtime_tmpdir=None,
     console=True,
     target_arch=None,
+    # A signed release (scripts/release_signing.sh) sets both: PyInstaller then
+    # signs this executable AND every binary it collects with the Developer ID
+    # under the hardened runtime, so the libraries a one-file build unpacks at
+    # start pass library validation. Unset — every other build — it stays
+    # ad-hoc signed, exactly as before.
+    codesign_identity=os.environ.get("COFFER_CODESIGN_IDENTITY") or None,
+    entitlements_file=os.environ.get("COFFER_ENTITLEMENTS_FILE") or None,
 )
