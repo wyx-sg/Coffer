@@ -42,7 +42,7 @@ _STATE = "state/"
 #: The file trees, where a deletion is housekeeping and an edit is a decision.
 #: Deliberately not ``resources/``: a deleted registration that keeps coming
 #: back because someone touched its YAML is a worse failure than a lost edit.
-_TREES = ("knowledge/", "skills/")
+_TREES = ("knowledge/", "skills/", "memory-triggers/")
 _OURS = ":2"
 _THEIRS = ":3"
 #: git writes these into a conflicted file; one surviving means the resolver

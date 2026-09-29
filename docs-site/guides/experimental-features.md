@@ -38,7 +38,7 @@ pid:     41822
 | --- | --- | --- |
 | `vault_sync` | Sync | Converging this vault with a git remote you own: the **Sync** page, `coffer sync`, the `/api/v1/sync` routes and the background converge rounds. See [Vault sync](/guides/vault-sync). |
 | `knowledge` | Knowledge | Knowledge collections under `~/.coffer/knowledge/`: the **Knowledge** page, `coffer knowledge`, the `/api/v1/knowledge` routes, the `coffer__write` tool, the knowledge catalogue in the `coffer-guide` skill, the curation pass, and saving to knowledge from a chat channel. See [Knowledge](/guides/knowledge). |
-| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the session-start hook that delivers memory into agents. See [Memory](/guides/memory). |
+| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the memory hook that delivers memory into agents. See [Memory](/guides/memory). |
 
 Everything else in Coffer is always on.
 

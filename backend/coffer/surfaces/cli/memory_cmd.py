@@ -47,6 +47,7 @@ from rich.table import Table
 
 from coffer.infrastructure.daemon.bootstrap import live_daemon
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import memory_hook_cmd
 from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs
 
 #: The registry kind the partition-addressing commands resolve a name against.
@@ -193,3 +194,10 @@ def _hook_output(event: str, text: str) -> dict[str, object]:
     """The JSON a hook prints to add context: the shape Codex documents for
     ``SessionStart`` (and Claude Code accepts too)."""
     return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}
+
+
+# The three moments after session start: the hook every installed entry runs,
+# the authored triggers, and the delivery views (``memory_hook_cmd``).
+app.command("hook")(memory_hook_cmd.hook)
+app.command("delivered")(memory_hook_cmd.delivered)
+app.add_typer(memory_hook_cmd.trigger_app, name="trigger")

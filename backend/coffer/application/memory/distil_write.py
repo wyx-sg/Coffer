@@ -70,10 +70,17 @@ WRITE_SYSTEM = (
     "conclusion itself, so that reading it is usually the end of the errand: "
     '"worktrees have no .venv, symlink the main one first", not "notes about '
     'the virtualenv situation".\n'
+    "Only when the note records a known trap that one specific shell command "
+    "walks into (a wrong tool version, a flag this machine lacks, a variable "
+    "the command needs), you MAY add a trigger: a Python regex matching the "
+    "command as it executes (program and arguments), and optionally an "
+    "`unless` regex matching a command that already does it right. A person "
+    "reviews every trigger before it takes effect; omit it (null) otherwise.\n"
     "Reply with EXACTLY ONE JSON object and nothing else — no prose, no "
     "markdown code fences:\n"
     '{"title": "<short subject>", "description": "<one line, the conclusion>", '
-    '"body": "<the note, in Markdown, your own words>"}'
+    '"body": "<the note, in Markdown, your own words>", '
+    '"trigger": null | {"command": "<regex>", "unless": "<regex or empty>"}}'
 )
 
 
@@ -91,6 +98,19 @@ class WrittenNote:
     title: str
     description: str
     body: str
+    #: A guard distil proposes for a known trap, or ``None``. It lands unarmed.
+    trigger: tuple[str, str] | None = None
+
+
+def _parse_trigger(raw: object) -> tuple[str, str] | None:
+    """``(command, unless)`` from the model's optional ``trigger``, or ``None``."""
+    if not isinstance(raw, dict):
+        return None
+    command = raw.get("command")
+    unless = raw.get("unless")
+    if not isinstance(command, str) or not command.strip():
+        return None
+    return command.strip(), unless.strip() if isinstance(unless, str) else ""
 
 
 def _current_payload(existing: Note | None) -> dict[str, str]:
@@ -160,6 +180,7 @@ def parse_written(text: str) -> WrittenNote | None:
         # depend on.
         description=one_line,
         body=body.strip() + "\n",
+        trigger=_parse_trigger(parsed.get("trigger")),
     )
 
 

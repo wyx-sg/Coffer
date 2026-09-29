@@ -40,6 +40,7 @@ The working tree is a plain git repository. Its layout is versioned by `manifest
 ├── manifest.json                    {"schema_version": 2}
 ├── knowledge/<collection>/…         mirrored from ~/.coffer/knowledge/, .inbox/ included
 ├── skills/<skill>/…                 mirrored from ~/.coffer/skills/, except skills/coffer-guide/
+├── memory-triggers/<id>.md          mirrored from ~/.coffer/vault/memory-triggers/ (authored memory triggers)
 ├── resources/<kind>/<uid>.yaml      one document per resource, keyed by its immutable uid
 ├── state/<area>/<doc>.yaml          module-owned shared state
 ├── credentials/<ref>.enc            Fernet ciphertext, only if the remote carries credentials
@@ -196,6 +197,7 @@ Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never an
 flowchart LR
     D["Diff D + retry set"] --> K["knowledge/ → TreeApplier"]
     D --> SK["skills/ → TreeApplier (coffer-guide excluded)"]
+    D --> MT["memory-triggers/ → TreeApplier"]
     D --> RS["resources/ → ResourceApplier"]
     D --> ST["state/ → StateApplier"]
     D --> CR["credentials/ → CredentialApplier"]
@@ -246,7 +248,7 @@ The sync package imports no kind. Kinds contribute at the composition root throu
 Most concurrent edits are not conflicts: git merges different hunks of one file on its own. What git cannot settle goes to `ConflictArbiter` (`application/sync/conflicts.py`), narrowest rule first:
 
 1. **Credential blobs never reach a text merge.** A Fernet token carries its encryption time in cleartext, so two blobs for one ref are ordered without the key and the fresher one wins. Unreadable headers are refused rather than guessed.
-2. **Delete versus edit in `knowledge/` and `skills/` resolves toward the edit.** A deletion there is usually a curation pass's housekeeping, which the next pass will redo; losing an edit is unrecoverable. This rule does not apply to `resources/`.
+2. **Delete versus edit in `knowledge/`, `skills/` and `memory-triggers/` resolves toward the edit.** A deletion there is usually a curation pass's housekeeping, which the next pass will redo; losing an edit is unrecoverable. This rule does not apply to `resources/`.
 3. **An agent may attempt the rest** if an internal model is configured. `AgenticConflictResolver` works in the working tree only and never sees the vault. It is bounded (at most 20 files, 96 KiB per file, 90 s per call, 300 s per pass) and untrusted: each file it claims must exist, carry no conflict marker and, under `resources/` or `state/`, parse as a YAML mapping. Agent-resolved paths are reported on the round so you can review them.
 4. **Otherwise the round stops** with status `conflict`. The merge is aborted, the vault is untouched and the pointer stays; you resolve in the working tree with your own git tools. Two machines waiting is better than two machines quietly disagreeing.
 

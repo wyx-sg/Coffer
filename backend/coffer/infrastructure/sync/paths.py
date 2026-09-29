@@ -37,11 +37,18 @@ def skills_root() -> pathlib.Path:
     return _rooted("COFFER_SKILLS_ROOT", "skills")
 
 
+def memory_triggers_root() -> pathlib.Path:
+    """``~/.coffer/vault/memory-triggers/`` — authored memory triggers, one file
+    each (override ``$COFFER_MEMORY_TRIGGERS_ROOT``, as the memory kind reads it)."""
+    return _rooted("COFFER_MEMORY_TRIGGERS_ROOT", "vault", "memory-triggers")
+
+
 #: The file-backed trees a round mirrors, as (tree-subdir, live-root) pairs.
 def mirrored_trees() -> list[tuple[str, pathlib.Path]]:
     return [
         ("knowledge", knowledge_root()),
         ("skills", skills_root()),
+        ("memory-triggers", memory_triggers_root()),
     ]
 
 

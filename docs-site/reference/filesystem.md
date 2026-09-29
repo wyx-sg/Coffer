@@ -33,6 +33,7 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 ├── knowledge/<collection>/       # knowledge documents (+ README.md, hidden .inbox/)
 ├── knowledge/.git/               # knowledge history: every write as one commit
 ├── memory/<partition>/           # derived memory (MEMORY.md, notes/, RETIRED.md, .raw/)
+├── vault/memory-triggers/        # memory triggers you wrote or armed, one file each
 ├── skills/<name>/                # skill master store (SKILL.md, .coffer.meta.json, …)
 ├── sync/                         # vault sync working tree (a git repository)
 ├── cache/agent/                  # derived agent state
@@ -98,6 +99,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `knowledge.pre-<revision>.bak/` | A copy of the knowledge tree taken before a migration that restructured it. | daemon | No | Yes, once you have checked the migrated tree. |
 | `memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/` (Coffer's notes), `RETIRED.md` (what was retired and why). | daemon (distil pass) | **No** (derived and local) | Yes: aggregation and distil rebuild it. Retirement decisions in `RETIRED.md` are lost. |
 | `memory/<partition>/.raw/` | What aggregation read out of the agents' own memory, verbatim. | daemon (aggregate pass) | No | Yes: the next aggregation rereads the agents. |
+| `vault/memory-triggers/<id>.md` | One memory trigger: the note it names, its kind (`block` or `context`), its command, `unless` and error patterns, who proposed and who armed it. Written by `coffer memory trigger add`, by the distil pass as an unarmed proposal, and by you in an editor. `COFFER_MEMORY_TRIGGERS_ROOT` moves the directory. | you, daemon | No | **No.** A trigger is authored; rebuilding memory does not bring it back. |
 | `memory/.source_state.json` | The digest of each native memory file at the last aggregation (`digests`), and the `version` of the filing rules it was written under. A file from another version reads as empty, so every source is re-read once. | daemon (aggregate pass) | No | Yes: the next pass re-reads every source. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | daemon | Yes, except `skills/coffer-guide/`, which each machine renders for itself | **No.** Deleting a folder breaks the symlinks delivered to agents. |
 
@@ -133,7 +135,6 @@ Each applied round is preceded by a git tag under `coffer/pre-apply/` in this re
 | Path | Purpose | Owner | Safe to delete |
 | --- | --- | --- | --- |
 | `~/Library/LaunchAgents/dev.coffer.daemon.plist` | The login service that starts the daemon at login and restarts it after a crash (macOS). Runs `~/.coffer/bin/coffer-daemon` and logs to `~/.coffer/logs/daemon.log`. | daemon (**Settings → General → Start at login**, `coffer daemon service install`) | Use `coffer daemon service uninstall` instead. |
-| `${TMPDIR:-/tmp}/.coffer-memory-fired-<pid>` | Once-per-session guard of the Codex memory delivery hook. | the hook | Yes. |
 | Your shell profile | `install.sh` appends `~/.coffer/bin` to `PATH` unless `COFFER_NO_MODIFY_PATH=1`. | installer | Remove the line by hand. |
 
 ## Inside an agent's config directory
@@ -148,7 +149,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | --- | --- | --- |
 | `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Connecting the agent to Coffer. See [Agents](/guides/agents#connect-an-agent-to-coffer). |
 | `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> provider key --connection-uid <uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found) and `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_MODEL`, `env.ANTHROPIC_SMALL_FAST_MODEL`. The API key itself is never written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
-| `settings.json` | A `hooks.SessionStart` entry, matcher `startup\|resume\|clear\|compact`, whose command begins `: coffer-memory;` and runs `coffer memory context --agent-uid <uid> --cwd "$PWD"`. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory). |
+| `settings.json` | Four hook entries whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path as `coffer memory hook --agent-uid <uid> --cwd "$PWD"`: `hooks.SessionStart` (matcher `startup\|resume\|clear\|compact`, 10-second timeout), `hooks.UserPromptSubmit`, and `hooks.PreToolUse` and `hooks.PostToolUse` (matcher `Bash`), each with a 5-second timeout. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory#install-the-hook). |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex
@@ -158,7 +159,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Connecting the agent to Coffer. |
 | `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table whose `env_key` is `COFFER_PROVIDER_KEY`, and `model_catalog_json` pointing at the catalogue below. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
-| `hooks.json` | A `hooks.SessionStart` entry whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path with `--hook-event SessionStart`, with a 10-second timeout. Coffer reads, and never writes, Codex's approval of it in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
+| `hooks.json` | The same four hook entries as for Claude Code, on the same events with the same matchers and timeouts, all running `coffer memory hook`. Coffer reads, and never writes, Codex's approval of each entry in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
 
 Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `provider key`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.

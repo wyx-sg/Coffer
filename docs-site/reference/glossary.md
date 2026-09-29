@@ -164,8 +164,9 @@ See [Vault sync](/architecture/vault-sync#the-deletion-guard).
 ### Delivery
 
 Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding), and
-[memory](#partition) by a session-start hook Coffer installs in the agent's settings. See
-[Memory](/guides/memory).
+[memory](#partition) by a hook Coffer installs in the agent's settings, which hands over the
+index at session start, the notes a prompt names, and a [trigger's](#memory-trigger) note
+before a known trap. See [Memory](/guides/memory).
 
 ### Destination
 
@@ -266,6 +267,14 @@ every enabled [MCP server](#mcp-server) in the session's [reach](#reach), adds t
 An upstream Model Context Protocol server you register with Coffer, over stdio or HTTP. It
 is a [resource](#resource) of kind `mcp_server`, and its tools reach agents as
 `<server>__<tool>`. See [MCP servers](/guides/mcp-servers).
+
+### Memory trigger
+
+A person's mark that one memory [note](#note) is a known trap tied to a command: a file in
+`~/.coffer/vault/memory-triggers/` naming the note and a pattern. A `block` trigger holds the
+first matching shell command of a session once, with the note as the reason; a `context`
+trigger adds the note after a command whose output shows a known error. The distil pass may
+propose one; only a person arms it. See [Memory](/guides/memory#guard-a-known-trap-with-a-trigger).
 
 ## N
 

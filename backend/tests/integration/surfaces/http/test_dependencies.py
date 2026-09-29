@@ -87,7 +87,14 @@ _PROVIDERS: list[_Provider] = [
     # provide any more (spec knowledge "Expose exactly one knowledge tool").
     *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_history_service"),
     # memory kind
-    *_pairs(memory_deps, "_memory_service", "_memory_delivery_service"),
+    *_pairs(
+        memory_deps,
+        "_memory_service",
+        "_memory_delivery_service",
+        "_memory_hook_service",
+        "_memory_trigger_service",
+        "_memory_stats_service",
+    ),
     # turn platform (chat)
     *_pairs(
         chat_deps,
