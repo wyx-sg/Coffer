@@ -45,12 +45,12 @@ These rules come from [Principles](/architecture/principles), which outranks eve
 
 ### The daemon listens on loopback only
 
-The HTTP API binds `127.0.0.1` and nothing else. Every router that reads or changes vault state declares the `require_token` dependency, so its requests must carry the API token in `X-Coffer-Token`. Only the readiness probe, `GET /api/v1/daemon/status`, answers without it. The token is minted on each daemon start and published in `~/.coffer/daemon.json`, written with mode `0600`. A host guard also rejects any request whose `Host` header is not a loopback authority (`127.0.0.1`, `localhost`, `::1`). That check defeats DNS rebinding, where a web page re-resolves its own hostname to `127.0.0.1`.
+The HTTP API binds `127.0.0.1` and nothing else. Every router that reads or changes vault state declares the `require_token` dependency, so its requests must carry the API token in `X-Coffer-Token`. Only the readiness probe, `GET /api/v1/daemon/status`, answers without it. The token is minted on each daemon start and published in `~/.coffer/daemon.json`, written with mode `0600`. A guard in front of every route also rejects any request whose `Host` header is not `127.0.0.1`, `localhost` or `[::1]` on the daemon's port. That check defeats DNS rebinding, where a web page re-resolves its own hostname to `127.0.0.1`. The same guard rejects any request whose `Origin` is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin.
 
 When you contribute:
 
 - Never add a bind address, flag or setting that exposes the daemon beyond loopback.
-- Give every new router `dependencies=[Depends(require_token)]`, and never exempt a route from the host guard.
+- Give every new router `dependencies=[Depends(require_token)]`, and never exempt a route or a listener from the Host and Origin guard.
 - CORS is not the security boundary, and widening it grants nothing. The token is the boundary. Do not treat an origin check as authentication.
 
 ### Secrets exist only as ciphertext

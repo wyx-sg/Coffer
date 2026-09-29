@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host is not loopback", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
 
 ## Context
 
@@ -58,10 +58,14 @@ serves the page, so the response body is a channel too.
   read from `daemon.json`, and the page sets the globals before first render.
   The Vite dev server's plugin injects both globals from `daemon.json`
   (`frontend/vite.config.ts`).
-- Every request whose `Host` header is not a loopback authority (`127.0.0.1`,
-  `localhost`, `::1`, with or without a port) is refused with
-  `421 HOST_NOT_LOOPBACK` (`surfaces/http/host_guard.py`), before CORS and
-  before any route.
+- Every request whose `Host` header does not name `127.0.0.1`, `localhost` or
+  `[::1]` with the port the request arrived on is refused with
+  `403 HOST_NOT_ALLOWED` (`surfaces/http/host_guard.py`). So is every request
+  that carries an `Origin` that is not Coffer's own, with
+  `403 ORIGIN_NOT_ALLOWED`. Coffer's own origins are the daemon's web origins on
+  its port, the desktop shell's origins, and the dev origins when a developer
+  opts in. A request with no `Origin` (the CLI, the shim, agents' MCP clients)
+  goes on to the token check. Both checks run before CORS and before any route.
 - CORS allows only the desktop shell's origins by default, adds the Vite
   origins under `COFFER_DEV_CORS=1`, and never allows credentials
   (`surfaces/http/cors.py`).
@@ -142,8 +146,10 @@ The token is minted per start, lives only in the `0600` `daemon.json` and in
 process memory, and travels only in the `X-Coffer-Token` header. The UI gets it
 from whoever hosts its document — the daemon by injection, the desktop shell
 over IPC, the Vite dev server by its plugin — and never persists it. Every
-request must name a loopback `Host` or is refused with 421. CORS admits the
-shell's own origins and nothing else by default, with credentials off.
+request must name a loopback `Host` on the daemon's port, and any `Origin` it
+carries must be Coffer's own, or it is refused with 403. CORS admits the same
+cross-origin list the Origin check does — the shell's own origins by default —
+with credentials off.
 
 Rules a future change must respect:
 
@@ -159,8 +165,11 @@ Rules a future change must respect:
   a prefix test such as `startswith("mcp")` would claim the UI's `/mcp-servers`
   route.
 - The middleware order is fixed (`surfaces/http/middleware.py`): trace
-  outermost, then the host guard, then CORS, so a rebound request is refused
-  before CORS can bless it and the refusal still carries a trace id.
+  outermost, then the host and origin guard, then CORS, so a rebound or
+  cross-site request is refused before CORS can bless it and the refusal still
+  carries a trace id.
+- CORS and the Origin check read one list (`cors.cross_origin_allowlist`); a
+  new cross-origin host is added there, once.
 - A new host for the UI is a new *supplier* of the two globals, not a new code
   path in the frontend.
 
@@ -176,9 +185,13 @@ Rules a future change must respect:
 - The daemon's loopback socket is the only socket Coffer listens on, so the host
   guard covers every surface there is. A future listener on the same port
   inherits it; one on a different port must bring its own.
-- `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) widens the guard. The backend
-  test suite sets `*` because it drives the ASGI app in-process; nothing in a
-  real deployment needs it.
+- `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) widens the Host check, never
+  the Origin check. The backend test suite sets `*` because it drives the ASGI
+  app in-process; nothing in a real deployment needs it.
+- The Origin check closes the cross-site *send* that CORS never governed (a form
+  post, an `EventSource`, a `no-cors` fetch), as the MCP specification requires
+  for its HTTP transport. The token already refused such a request; the check
+  means it no longer has to.
 - Allowing `tauri://localhost` widens nothing that matters: any Tauri app on the
   machine shares that origin, but it would still need the token, and any process
   running as the user can already read `daemon.json`. Whether the macOS WebView

@@ -9,11 +9,12 @@ the composition root:
 1. :mod:`coffer.surfaces.http.cors` — innermost. It only answers preflights
    and stamps headers on responses that got as far as a route.
 2. :mod:`coffer.surfaces.http.host_guard` — wraps CORS. A request naming an
-   authority this daemon does not answer for is a DNS-rebinding attempt and
-   must be refused before CORS gets a chance to bless it.
+   authority this daemon does not answer for is a DNS-rebinding attempt, and
+   one carrying a foreign ``Origin`` is another site's page; both must be
+   refused before CORS gets a chance to bless them.
 3. :mod:`coffer.surfaces.http.trace` — outermost. A request gets its trace id
    before the host guard can refuse it, so even the refusal is correlatable:
-   the 421 carries the same ``X-Coffer-Trace`` value as the log record that
+   the 403 carries the same ``X-Coffer-Trace`` value as the log record that
    explains it.
 """
 
