@@ -154,7 +154,7 @@ def test_coffer_log_mcp_without_a_server_keeps_its_filters(mcp_daemon: Any) -> N
     assert errors.exit_code == capped.exit_code == future.exit_code == 0, errors.output
     assert {r["capability_key"] for r in json.loads(errors.output)["invocations"]} == {"b", "c"}
     assert len(json.loads(capped.output)["invocations"]) == 1
-    assert json.loads(future.output) == {"invocations": [], "next_cursor": None}
+    assert json.loads(future.output) == {"invocations": [], "next_cursor": None, "total": 0}
 
 
 def test_coffer_log_mcp_table_names_each_rows_server(mcp_daemon: Any) -> None:  # noqa: F811

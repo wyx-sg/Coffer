@@ -130,3 +130,45 @@ async def test_a_malformed_or_foreign_cursor_is_refused(env: _Env) -> None:
         assert r.json()["error"]["code"] == "CURSOR_INVALID"
     # The cursor still reads the list it was issued for.
     assert (await env.read(kind="fake_kind", limit=1, cursor=issued)).status_code == 200
+
+
+# revise-web-ui-ia: resource-framework "a page carries the count of every matching row" —
+# the acceptance marker is added when the change is archived.
+async def test_a_page_carries_the_count_of_every_matching_row(env: _Env) -> None:
+    for event, minutes, kind in (
+        ("e1", 0, "fake_kind"),
+        ("e2", 1, "other_kind"),
+        ("e3", 2, "fake_kind"),
+        ("e4", 3, "other_kind"),
+        ("e5", 4, "fake_kind"),
+    ):
+        await env.record(event, _T0 + timedelta(minutes=minutes), kind=kind)
+
+    first = (await env.read(kind="fake_kind", limit=2)).json()
+    second = (await env.read(kind="fake_kind", limit=2, cursor=first["next_cursor"])).json()
+
+    assert _events(first) == ["e5", "e3"]
+    assert _events(second) == ["e1"]
+    assert first["total"] == 3
+    assert second["total"] == 3
+
+
+async def test_total_follows_every_filter(env: _Env) -> None:
+    for event, minutes in (
+        ("memory.a", 0),
+        ("memory.b", 1),
+        ("skill.a", 2),
+        ("memory.a", 3),
+    ):
+        await env.record(event, _T0 + timedelta(minutes=minutes))
+
+    assert (await env.read()).json()["total"] == 4
+    assert (await env.read(event_prefix="memory.")).json()["total"] == 3
+    assert (await env.read(event_type="memory.a")).json()["total"] == 2
+    since = (_T0 + timedelta(minutes=2)).isoformat().replace("+00:00", "Z")
+    assert (await env.read(since=since)).json()["total"] == 2
+    assert (await env.read(kind="nothing_here")).json() == {
+        "entries": [],
+        "next_cursor": None,
+        "total": 0,
+    }

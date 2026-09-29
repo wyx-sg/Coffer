@@ -375,6 +375,11 @@ export interface components {
             entries: components["schemas"]["AuditEntryOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+            /**
+             * Total
+             * @description How many rows match the filters, across every page; the cursor does not change it.
+             */
+            total: number;
         };
         /**
          * ChangeEventOut

@@ -76,6 +76,15 @@ class AuditRepo(Protocol):
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
     ) -> list[AuditEntry]: ...
+    async def count(
+        self,
+        *,
+        kind: str | None = None,
+        resource_id: int | None = None,
+        event_type: str | None = None,
+        event_prefix: str | None = None,
+        since: datetime | None = None,
+    ) -> int: ...
 
 
 class RetentionRepo(Protocol):
