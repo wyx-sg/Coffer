@@ -43,6 +43,7 @@ from coffer.infrastructure.channel.telegram_profile import (
     probe_identity,
     register_profile,
 )
+from coffer.infrastructure.channel.telegram_reactions import set_reaction
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
@@ -375,12 +376,8 @@ class TelegramAdapter:
         )
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        # React on the user's message (👀 receipt / ✅ completion, both in
-        # Telegram's fixed allowed set). An empty list would clear; we only set.
-        reaction = [{"type": "emoji", "emoji": emoji}]
-        await self._call(
-            "setMessageReaction", chat_id=chat_id, message_id=message_id, reaction=reaction
-        )
+        # Only an emoji on Telegram's fixed list lands (see telegram_reactions).
+        await set_reaction(self._call, chat_id, message_id, emoji)
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 

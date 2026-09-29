@@ -27,9 +27,9 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
+from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,

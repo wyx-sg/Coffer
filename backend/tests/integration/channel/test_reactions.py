@@ -54,11 +54,11 @@ async def test_reaction_ack_on_receipt_and_completion(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "hi", platform_message_id="msg-42"))
     await wait_until(lambda: "Hello world" in adapter.texts())
     # Both marks land on the user's own inbound message id, receipt before done.
-    await wait_until(lambda: ("owner", "msg-42", "✅") in adapter.reactions)
+    await wait_until(lambda: ("owner", "msg-42", "👌") in adapter.reactions)
 
     assert adapter.reactions == [
         ("owner", "msg-42", "👀"),
-        ("owner", "msg-42", "✅"),
+        ("owner", "msg-42", "👌"),
     ]
 
 

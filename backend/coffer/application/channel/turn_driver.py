@@ -307,9 +307,10 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # Mark completion (✅) on the user's message ONLY on a clean finish
+        # Mark completion (👌 — ✅ is not a reaction Telegram lets a bot set) on
+        # the user's message ONLY on a clean finish
         # (an errored/interrupted turn keeps just the 👀 receipt), where the
         # transport supports reactions. Best-effort — never fails a delivered reply.
         if clean and adapter.capabilities.supports_reactions and item.reply_to_message_id:
             with contextlib.suppress(Exception):
-                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "✅")
+                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "👌")

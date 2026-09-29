@@ -77,10 +77,13 @@ class _Progress:
     # keeps a transport that refuses one from being asked on every event.
     live: LiveText | None = None
     live_tried: bool = False
-    # Once reply text starts streaming it takes over the single live
-    # surface from the tool-progress lines, and a late tool event must not
-    # overwrite it back to tool lines.
+    # Once reply text starts streaming it shares the live surface with the
+    # tool-progress lines: a tool event after it redraws both, so a turn that
+    # says one sentence and then runs twenty tools keeps showing them.
     text_started: bool = False
+    # A tool event arrived since the last text: the next text starts a new
+    # paragraph (text either side of a tool call is two, not one run-on).
+    tool_since_text: bool = False
     # The turn's start time (renderer clock), so a text-only turn can gate
     # opening its live surface on ELAPSED TIME — a fast reply opens none (no
     # flicker), a slow/long one does.
@@ -141,6 +144,9 @@ class TurnRenderer:
             if event is None:
                 break
             if isinstance(event, TextDelta):
+                if progress.tool_since_text and parts:
+                    parts.append("\n\n")
+                progress.tool_since_text = False
                 parts.append(event.text)
                 # Reply text takes over the single live surface (a turn
                 # runs tools first, then writes its answer).
@@ -153,7 +159,8 @@ class TurnRenderer:
                 progress.lines[event.tool_use_id] = _progress_line(
                     "⏳", event.tool_name, descriptor
                 )
-                await self._update_progress(progress)
+                progress.tool_since_text = True
+                await self._update_progress(progress, parts)
             elif isinstance(event, ToolResult):
                 mark = "❌" if event.error else "✅"
                 # Keep the call's descriptor so the finished line still says what
@@ -161,7 +168,7 @@ class TurnRenderer:
                 progress.lines[event.tool_use_id] = _progress_line(
                     mark, event.tool_name, progress.desc.get(event.tool_use_id, "")
                 )
-                await self._update_progress(progress)
+                await self._update_progress(progress, parts)
             elif isinstance(event, TurnDone):
                 stop_reason = event.stop_reason
                 if event.prompt_tokens is not None or event.completion_tokens is not None:
@@ -202,21 +209,11 @@ class TurnRenderer:
         return f"✅ done · {detail}"
 
     def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:
-        # A supports_typing-but-not-edit transport (SeaTalk) has an
-        # ephemeral keep-alive nothing else offers — the typing indicator (zero
-        # chat clutter), which expires within seconds, so re-send it on a
-        # heartbeat while the turn runs. It covers the window BEFORE the live
-        # surface opens (a turn that answers instantly opens none at all).
-        # Groups get it too: SeaTalk has a group_chat_typing endpoint taking the
-        # thread, so the cue appears where the reply will. (This was DM-only on
-        # the belief that no such endpoint existed.)
-        #
-        # Gated on the RECEIPT mechanism, not on editing: a transport that can react
-        # (Telegram, 👀 per "Acknowledge receipt and completion by capability") already
-        # told the sender it was heard, and one that cannot leans on typing for the same
-        # cue. Reading `supports_edit` here happened to give the same answer for both
-        # live transports while meaning something else entirely — the exact confusion
-        # this capability split exists to remove.
+        # A transport whose receipt cue is typing (SeaTalk — it cannot react)
+        # re-sends it on a heartbeat while the turn runs, in DMs and group
+        # threads alike: the indicator expires within seconds. Gated on the
+        # receipt mechanism, not on editing (see "Acknowledge receipt and
+        # completion by capability").
         caps = self.adapter.capabilities
         if caps.supports_typing and not caps.supports_reactions:
             return asyncio.create_task(self._typing_heartbeat())
@@ -231,12 +228,15 @@ class TurnRenderer:
                     self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
                 )
 
-    async def _update_progress(self, progress: _Progress) -> None:
-        # Once reply text is streaming it owns the live surface — a
-        # late tool event must not overwrite it back to tool lines.
-        if progress.text_started:
-            return
+    async def _update_progress(self, progress: _Progress, parts: list[str]) -> None:
+        # A tool event after text keeps the text under the tool lines rather
+        # than freezing the surface on the first sentence the agent wrote.
         text = "\n".join(list(progress.lines.values())[-_PROGRESS_MAX_LINES:])
+        if progress.text_started:
+            written = "".join(parts).strip()
+            if written:
+                limit = self.adapter.capabilities.max_message_chars - len(text) - 2
+                text = f"{text}\n\n{clip_stream_preview(written, max(limit, 1))}"
         await self._render_status(progress, text)
 
     async def _stream_text(self, progress: _Progress, parts: list[str]) -> None:

@@ -246,3 +246,30 @@ class TestChunkText:
         assert all(chunks)
         assert all(len(c) <= 20 for c in chunks)
         assert "".join(chunks).count("x") == 25  # nothing dropped
+
+
+class TestChunkTextKeepsFencesWhole:
+    """A chunk boundary inside a fenced block renders as two broken halves on
+    every platform, so the chunker treats a fence as one block."""
+
+    def test_a_fence_holding_a_blank_line_is_never_cut_at_it(self):
+        fence = "```python\nfirst = 1\n\nsecond = 2\n```"
+        text = "intro paragraph here\n\n" + fence + "\n\nafter"
+        chunks = chunk_text(text, 40)
+        assert fence in chunks
+        assert all(c.count("```") % 2 == 0 for c in chunks)
+
+    def test_an_oversized_fence_is_closed_and_reopened_with_its_language(self):
+        body = "\n".join(f"line {i:02d}" for i in range(30))
+        text = f"```log\n{body}\n```"
+        chunks = chunk_text(text, 80)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert chunk.startswith("```log\n") and chunk.endswith("\n```")
+            assert len(chunk) <= 80
+        joined = "\n".join(c.removeprefix("```log\n").removesuffix("\n```") for c in chunks)
+        assert joined == body
+
+    def test_a_long_plain_paragraph_prefers_a_newline_to_cut_at(self):
+        text = "a" * 30 + "\n" + "b" * 30
+        assert chunk_text(text, 40) == ["a" * 30, "b" * 30]

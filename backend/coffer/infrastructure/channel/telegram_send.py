@@ -178,6 +178,7 @@ async def _send_rich_chunks(
             title=title if i == 0 else "",
             thread_id=thread_id,
             reply_to_message_id=reply_to_message_id if i == 0 else "",
+            silent=i > 0,
         )
         if sent is None:
             if last is None:
@@ -191,6 +192,7 @@ async def _send_rich_chunks(
                 title="",
                 thread_id=thread_id,
                 reply_to_message_id="",
+                silent=True,
             )
         last = sent
     return last if last is not None else SentMessage(message_id="")
@@ -206,8 +208,12 @@ async def _send_plain_chunks(
     title: str,
     thread_id: str,
     reply_to_message_id: str,
+    silent: bool = False,
 ) -> SentMessage:
     """The pre-rich path: markdown rendered to Telegram's HTML subset.
+
+    Only the first chunk notifies; the rest go silently (``silent`` makes the
+    first one silent too, for a remainder whose head was already delivered).
 
     Telegram has no card title element here — an inline keyboard hangs off an
     ordinary message — so ``title`` becomes the body's first line in bold
@@ -229,6 +235,7 @@ async def _send_plain_chunks(
             keyboard,
             thread_id=thread_id,
             reply_to_message_id=reply_to_message_id if i == 0 else "",
+            silent=silent or i > 0,
         )
     return last if last is not None else SentMessage(message_id="")
 
@@ -241,11 +248,14 @@ async def _send_chunk(
     *,
     thread_id: str,
     reply_to_message_id: str,
+    silent: bool = False,
 ) -> SentMessage:
     markup = inline_keyboard(buttons) if buttons else None
     extra = routing_params(thread_id, reply_to_message_id)
     if markup is not None:
         extra["reply_markup"] = markup
+    if silent:
+        extra["disable_notification"] = True
     try:
         sent = await call(
             "sendMessage",
