@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from coffer.domain.resource import TITLE_MAX_LEN
 from coffer.domain.scope import Scope
 
 # --- Error envelope ---
@@ -64,8 +65,11 @@ class ResourceOut(BaseModel):
     #: holding this resource — every route that addresses one takes this.
     uid: str = Field(examples=["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"])
     kind: str
-    #: A mutable label, unique within ``kind``. Editable through PATCH.
+    #: A label, unique within ``kind``. Editable through PATCH unless the kind
+    #: declares its name fixed (``mcp_server``, ``skill``): 409 NAME_IMMUTABLE.
     name: str
+    #: Optional display text surfaces show in place of ``name``; null = none.
+    title: str | None = None
     description: str | None = None
     config: dict[str, Any]
     # Framework-level activation scope (ADR per-agent-resource-scope). None =
@@ -73,9 +77,8 @@ class ResourceOut(BaseModel):
     # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
-    #: Whether the kind has an enabled switch at all (``Kind.toggleable``).
-    #: False for ``knowledge`` and ``memory``, whose enable/disable is refused
-    #: with ``RESOURCE_NOT_TOGGLEABLE``, so a surface leaves the switch out.
+    #: ``Kind.toggleable``: False (knowledge, memory) means enable/disable is
+    #: refused with RESOURCE_NOT_TOGGLEABLE, so a surface leaves the switch out.
     toggleable: bool
     created_at: datetime
     updated_at: datetime
@@ -84,16 +87,19 @@ class ResourceOut(BaseModel):
 class ResourceCreate(BaseModel):
     kind: str
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
+    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
     description: str | None = None
     config: dict[str, Any]
 
 
 class ResourceUpdate(BaseModel):
-    #: Renaming is a field, not an operation. Absent means "leave the label
-    #: alone"; a value already taken within the kind is a 409.
+    #: Renaming is a field. Absent leaves the label alone; a name taken within
+    #: the kind is a 409, as is any change to a fixed name (NAME_IMMUTABLE).
     name: str | None = Field(
         default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$"
     )
+    #: Display text on every kind: absent leaves it, "" or null clears it.
+    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
     description: str | None = None
     config: dict[str, Any] | None = None
 
@@ -199,6 +205,8 @@ class MCPToolView(BaseModel):
     description: str | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     enabled: bool
+    #: len("mcp__coffer__<prefixed_name>"); over 64 is past the provider limit.
+    client_name_length: int
 
 
 class MCPResourceView(BaseModel):
@@ -222,6 +230,7 @@ class MCPPromptView(BaseModel):
     description: str | None = None
     arguments: list[_MCPPromptArgument] = Field(default_factory=list)
     enabled: bool
+    client_name_length: int  # as on a tool
 
 
 class CapabilityListOut(BaseModel):

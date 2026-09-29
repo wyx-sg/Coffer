@@ -1408,3 +1408,23 @@ async def test_the_two_default_flags_never_move_each_other(tmp_path, monkeypatch
         await c.post(f"/api/v1/providers/{hears}/internal-default")
         assert await _flags(hears) == (True, False)
         assert await _flags(thinks) == (False, True)
+
+
+def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):
+    """spec resource-framework "Carry an optional editable title on every resource":
+    the connection's own read carries the title set through the kind-agnostic
+    update, and an empty one clears it back to null."""
+    app = _app(tmp_path, monkeypatch, 59795)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body())
+        assert c.get(f"/api/v1/providers/{uid}").json()["title"] is None
+
+        r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Team gateway"})
+        assert r.status_code == 200, r.text
+        assert c.get(f"/api/v1/providers/{uid}").json()["title"] == "Team gateway"
+        listed = {p["uid"]: p for p in c.get("/api/v1/providers").json()["providers"]}
+        assert listed[uid]["title"] == "Team gateway"
+        assert listed[uid]["name"] == "acme"
+
+        assert c.patch(f"/api/v1/resources/{uid}", json={"title": ""}).status_code == 200
+        assert c.get(f"/api/v1/providers/{uid}").json()["title"] is None

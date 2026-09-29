@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from coffer.domain.errors import ConfigValidationError
-from coffer.domain.resource import Kind, validate_resource_name
+from coffer.domain.resource import Kind, normalise_title, validate_resource_name
 
 Registry = Mapping[str, Kind]
 
@@ -126,6 +126,30 @@ def check_name(kind_def: Kind, name: str) -> None:
             kind_def.validate_name(name)
         except ValueError as e:
             raise ConfigValidationError(str(e)) from e
+
+
+def check_new_name(kind_def: Kind, name: str) -> None:
+    """The kind's rule for the name of a resource created on this machine.
+
+    Asked by registration only when it mints the uid, after :func:`check_name`
+    — so a rule tightened today refuses new names without refusing a row that
+    was registered before it, whether that row is loaded here or arrives from
+    another machine carrying its own uid.
+    """
+    if kind_def.validate_new_name is not None:
+        try:
+            kind_def.validate_new_name(name)
+        except ValueError as e:
+            raise ConfigValidationError(str(e)) from e
+
+
+def checked_title(title: str | None) -> str | None:
+    """The title to store — ``None`` for a blank one — or ``ConfigValidationError``
+    for one over the cap, before any write."""
+    try:
+        return normalise_title(title)
+    except ValueError as e:
+        raise ConfigValidationError(str(e)) from e
 
 
 __all__ = [

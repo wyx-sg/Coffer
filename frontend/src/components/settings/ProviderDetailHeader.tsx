@@ -27,7 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Provider } from "@/lib/api/providers";
 import { useUpdateProvider } from "@/lib/hooks/useProviders";
-import { useRenameResource } from "@/lib/hooks/useResourceMutations";
+import { useRenameResource, useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 export function ProviderDetailHeader({
   provider,
@@ -41,12 +42,14 @@ export function ProviderDetailHeader({
   const { t } = useTranslation();
   const update = useUpdateProvider();
   const rename = useRenameResource();
+  const setTitle = useSetResourceTitle();
   const [editOpen, setEditOpen] = useState(false);
 
   const closeEdit = () => {
     setEditOpen(false);
     update.reset();
     rename.reset();
+    setTitle.reset();
   };
 
   /** Save the edit dialog.
@@ -66,9 +69,13 @@ export function ProviderDetailHeader({
   const save = async (
     patch: Parameters<typeof update.mutateAsync>[0]["patch"],
     next: string | null,
+    nextTitle?: string | null,
   ) => {
     try {
       if (next) await rename.mutateAsync({ kind: "provider", uid: provider.uid, name: next });
+      if (nextTitle !== undefined) {
+        await setTitle.mutateAsync({ kind: "provider", uid: provider.uid, title: nextTitle });
+      }
       await update.mutateAsync({ uid: provider.uid, patch });
     } catch {
       // Swallowed deliberately: the failure is already the mutation's state,
@@ -83,7 +90,7 @@ export function ProviderDetailHeader({
     <>
       <PageHeader
         back={{ to: "/model-providers", label: t("settings.connections.detail.back") }}
-        title={provider.name}
+        title={<ResourceLabel resource={provider} heading />}
         badges={
           <>
             <Badge variant="secondary">{t(PROTOCOL_LABEL_KEY[provider.protocol])}</Badge>
@@ -117,8 +124,8 @@ export function ProviderDetailHeader({
           </DialogHeader>
           <ProviderForm
             initial={provider}
-            submitError={rename.error ?? update.error}
-            pending={update.isPending || rename.isPending}
+            submitError={rename.error ?? setTitle.error ?? update.error}
+            pending={update.isPending || rename.isPending || setTitle.isPending}
             onCancel={closeEdit}
             onSubmit={() => {}}
             onUpdate={save}

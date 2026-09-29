@@ -5,7 +5,7 @@ description: Keep one library of AgentSkills-standard skills in Coffer and deliv
 
 # Skills
 
-Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers importing and adopting skills, choosing which agents a skill reaches, editing skill files, repairing drift, and Coffer's own built-in `coffer-guide` skill.
+Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers importing and adopting skills, choosing which agents a skill reaches, editing skill files, names and titles, repairing drift, and Coffer's own built-in `coffer-guide` skill.
 
 ## What skills are for
 
@@ -67,7 +67,7 @@ Import copies a local skill folder into the master library. Coffer records the p
 ::: code-group
 
 ```sh [CLI]
-coffer skill import ~/src/team-skills/release-checklist
+coffer skill add ~/src/team-skills/release-checklist
 ```
 
 ```text [Web UI]
@@ -76,19 +76,19 @@ Skills → Add skill → paste the path, or Browse… to choose the folder, unde
 
 :::
 
-Coffer reads the skill's name from its `SKILL.md` frontmatter and creates `~/.coffer/skills/release-checklist/`. A freshly imported skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
+Coffer reads the skill's name from its `SKILL.md` frontmatter and creates `~/.coffer/skills/release-checklist/`. Pass `--title` to give it a display name at the same time (see [Skill names and titles](#skill-names-and-titles)). A freshly imported skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
 
-Importing a folder whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, re-import with `--force` (in the web UI, confirm **Replace** in the dialog that asks). The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
+Importing a folder whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, import again with `--force` (in the web UI, confirm **Replace** in the dialog that asks). The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
 
 ```sh
-coffer skill import --force ~/src/team-skills/release-checklist
+coffer skill add --force ~/src/team-skills/release-checklist
 ```
 
 Re-importing is the only way to update a skill from an outside source. Coffer does not import from a URL or a git repository; clone it first, then import the folder.
 
 ## Adopt skills an agent already has
 
-Agents accumulate skills that Coffer does not manage — a folder you copied into `~/.claude/skills/` by hand, or one a tool installed into Codex's `~/.agents/skills/`. Coffer lists these as **unmanaged** skills so you can bring them into the library.
+Agents accumulate skills that Coffer does not manage — a folder you copied into `~/.claude/skills/` by hand, or one a tool installed into Codex's `~/.agents/skills/`. Coffer lists these as **unmanaged** skills so you can bring them into the library, or delete them.
 
 Coffer scans:
 
@@ -102,8 +102,8 @@ Anything there that is not a Coffer-managed link is unmanaged. Codex's own `.sys
 ::: code-group
 
 ```sh [CLI]
-coffer skill unmanaged codex
-coffer skill unmanaged codex --json
+coffer scan --agent codex
+coffer scan --agent codex --json
 ```
 
 ```text [Web UI]
@@ -112,7 +112,7 @@ Agents → choose the agent → Skills tab → Unmanaged skills
 
 :::
 
-Each entry shows its name, path, location and whether its `SKILL.md` is valid. An invalid entry shows the reason.
+On the CLI, `coffer scan` lists unmanaged skills in one table with detected agents and MCP entries that Coffer does not manage yet; skill rows have kind `skill`. Each entry shows its name, path, location and whether its `SKILL.md` is valid. An invalid entry shows the reason. The **Ref** column of a skill row is the folder's path, which is what `coffer adopt skill` and `coffer discard skill` take.
 
 ### Preview one
 
@@ -121,10 +121,8 @@ Read an unmanaged skill before you decide what to do with it. Nothing here chang
 ::: code-group
 
 ```sh [CLI]
-coffer skill files pdf-tools --agent codex
-coffer skill cat pdf-tools SKILL.md --agent codex
-# a folder in ~/.agents/skills/
-coffer skill files pdf-tools --agent codex --location agents_dir
+coffer scan --agent codex --json   # each skill row's "ref" is the folder's absolute path
+cat <that path>/SKILL.md           # read it with your own tools
 ```
 
 ```text [Web UI]
@@ -143,10 +141,10 @@ Adopting moves the folder into `~/.coffer/skills/<name>/`, registers it as a ski
 
 ```sh [CLI]
 # a folder in ~/.codex/skills/
-coffer skill adopt codex pdf-tools
+coffer adopt skill ~/.codex/skills/pdf-tools
 
 # a folder in ~/.agents/skills/
-coffer skill adopt codex pdf-tools --location agents_dir
+coffer adopt skill ~/.agents/skills/pdf-tools
 ```
 
 ```text [Web UI]
@@ -171,7 +169,7 @@ To remove an unmanaged folder from disk without adopting it:
 ::: code-group
 
 ```sh [CLI]
-coffer skill rm-unmanaged codex old-experiment --force
+coffer discard skill ~/.codex/skills/old-experiment --force
 ```
 
 ```text [Web UI]
@@ -200,18 +198,21 @@ A skill is delivered to an agent if and only if the skill is enabled **and** its
 ::: code-group
 
 ```sh [CLI]
+# show the current reach
+coffer skill scope release-checklist
+
 # only Claude Code
-coffer scope set skill release-checklist --agents claude-code
+coffer skill scope release-checklist --agents claude-code
 
 # nobody, but keep it in the library
-coffer scope set skill release-checklist --no-agents
+coffer skill scope release-checklist --none
 
 # back to every agent
-coffer scope clear skill release-checklist
+coffer skill scope release-checklist --all
 
 # switch it off entirely
-coffer resource disable skill release-checklist
-coffer resource enable skill release-checklist
+coffer skill disable release-checklist
+coffer skill enable release-checklist
 ```
 
 ```text [Web UI]
@@ -246,22 +247,16 @@ If something that is not a Coffer link already sits at `<config_dir>/skills/<nam
 
 ## View and edit skill files
 
-The master folder is a normal directory, so the simplest way to edit a skill is to open `~/.coffer/skills/<name>/` in your editor. Changes take effect on the agent's next read, with no import step.
-
-Coffer also shows the folder in the web UI and on the CLI.
+The master folder is a normal directory, so the way to edit a skill is to open `~/.coffer/skills/<name>/` in your editor or shell. Changes take effect on the agent's next read, with no import step. `coffer path skill <name>` prints the folder's absolute path.
 
 ::: code-group
 
 ```sh [CLI]
-# the folder as a tree
-coffer skill files release-checklist
+# where the master folder is
+coffer path skill release-checklist
 
-# one file
-coffer skill cat release-checklist SKILL.md
-
-# overwrite an existing file from a local file, or from stdin
-coffer skill write release-checklist SKILL.md --from-file ./SKILL.md
-cat ./SKILL.md | coffer skill write release-checklist SKILL.md
+# then edit it in place with your own tools
+$EDITOR "$(coffer path skill release-checklist)/SKILL.md"
 ```
 
 ```text [Web UI]
@@ -272,15 +267,13 @@ Skills → choose the skill → Files tab → pick a file → Edit → Save
 
 The Files tab also offers **Open in editor** and **Reveal in Finder** (your system's file manager) on every file and folder.
 
-Saving is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Re-read the file and apply your change again. On the CLI, `coffer skill write` takes a fresh fingerprint just before writing unless you pass the one your edit started from with `--fingerprint` (from `coffer skill cat --json`).
+Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Re-read the file and apply your change again. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
 
-`coffer skill write` edits existing text files only. It cannot create new files or folders, and it refuses binary files. To add a file to a skill, create it in the master folder with your editor or shell.
+## Skill names and titles
 
-::: warning Guards on `coffer skill write`
-`skill write` refuses to save empty content unless you pass `--allow-empty`, so an empty stdin (cron, CI, an agent's shell) cannot silently blank a file. With stdin attached to a terminal and no `--from-file`, it refuses immediately instead of waiting for input. Both refusals exit with code 2 and change nothing. A stale fingerprint exits with code 5.
-:::
+A skill's name comes from the `name` line of its `SKILL.md` and is fixed once the skill is registered. It is the name of the directory an agent loads the skill from and the identifier an agent invokes it by, so instructions, other skills and permission rules that quote it would break on a rename. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, remove the skill and add it again under the new name, which resets its reach and delivered links (its bindings). The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-`coffer skill cat` prints at most the read cap. For a larger file it prints the first part, reports the true size on stderr and exits with code 1, so a script never mistakes the part for the whole file. With `--json` it exits 0 and sets `truncated: true`.
+A **title** is the optional display name for Coffer's own pages: up to 80 characters of free text, shown in the web UI and the CLI in place of the name when it is set. Agents never see it. Set it with `coffer skill add … --title`, change it with `coffer skill edit <name> --title "…"` (an empty value clears it), or edit it in the web UI.
 
 ## Check for drift and repair it
 
@@ -330,7 +323,7 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 - Coffer's own MCP tools and when to reach for each.
 - That tools hidden from the agent's tool list are still callable through `coffer__search_tools`.
 - When [Knowledge](/guides/knowledge) is switched on: where the knowledge root is, how to read it with the agent's own file tools, how to add to it with `coffer__write`, and a catalogue of every document in every collection, with its path, title and description.
-- When [Memory](/guides/memory) is switched on: that Coffer reads the agent's memory and never writes it, and how `coffer__recall` locates Coffer's notes.
+- When [Memory](/guides/memory) is switched on: that Coffer reads the agent's memory and never writes it, and that Coffer's notes are Markdown under the memory root, which the agent greps with its own file tools.
 - That no Coffer tool waits on a human approval.
 
 Its frontmatter description names Coffer's tools and the subjects of your collections (taken from each collection's `README.md`), so the model has something concrete to match against. The description stays within 1024 characters; if the collections do not fit, whole subjects are dropped from the end.
@@ -341,7 +334,7 @@ In every other respect it is an ordinary skill. It lives at `~/.coffer/skills/co
 
 Coffer rewrites `coffer-guide` from the running build at every daemon start and whenever the knowledge catalogue changes (after a curation pass, when a collection is created or deleted, and on each curation sweep so hand-added documents are picked up). A rewrite is skipped when the content is already identical. Because of this:
 
-- Its files are read-only in the web UI, and `coffer skill write` refuses it.
+- Its files are read-only in the web UI.
 - Any edit you make on disk is replaced at the next rewrite.
 
 The skill is not carried by [vault sync](/guides/vault-sync). Each machine renders its own from its own collections and settings.
@@ -351,8 +344,8 @@ The skill is not carried by [vault sync](/guides/vault-sync). Each machine rende
 Deleting `coffer-guide` is refused with `RESOURCE_PROTECTED` on every surface, because the next start would write it back. What you can change is who gets it: disable it, or narrow its reach, exactly as for any other skill.
 
 ```sh
-coffer scope set skill coffer-guide --agents claude-code
-coffer resource disable skill coffer-guide
+coffer skill scope coffer-guide --agents claude-code
+coffer skill disable coffer-guide
 ```
 
 ## Remove a skill
@@ -380,7 +373,7 @@ Removing an agent from Coffer also removes that agent's skill links. The master 
 
 ## How it works
 
-Each skill is a `skill` resource in Coffer's registry, identified by an immutable uid. Its name is a label you can change; renaming a skill moves its master folder, re-points every link and rewrites the `name` line in `SKILL.md`, leaving the rest of the file byte-for-byte unchanged.
+Each skill is a `skill` resource in Coffer's registry, identified by an immutable uid. Its name is fixed once registered (see [Skill names and titles](#skill-names-and-titles)); its title is a free label you can change at any time.
 
 Coffer records each delivered link in internal bookkeeping (the link path, the link mode, when it was linked). The link on disk is the live truth; the record is what `verify` compares it against. Every import, delivery, removal of a link, removal of a skill and repair is written to the audit log, which you can read on the [Activity](/guides/activity) page.
 
@@ -390,7 +383,7 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 ## Troubleshooting
 
-**An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent: `coffer scope show skill <name>`. Check that the agent itself is enabled. Then run `coffer skill verify` to see whether its link is missing or blocked by a foreign folder.
+**An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent: `coffer skill scope <name>`. Check that the agent itself is enabled. Then run `coffer skill verify` to see whether its link is missing or blocked by a foreign folder.
 
 **Import is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
 

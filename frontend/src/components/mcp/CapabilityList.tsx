@@ -4,30 +4,24 @@
 // (unified with the MCP-servers, Agents, and audit surfaces): a search box, a
 // status filter (all/enabled/disabled), pagination, and a per-row enable
 // switch. Tools additionally expose their input_schema as an expandable row
-// detail. The enable/disable mutations keep per-row in-flight state so toggling
+// detail, and a tool whose client-visible name is over 64 characters is flagged
+// under its name. The enable/disable mutations keep per-row in-flight state so toggling
 // one capability never disables the switches on the others.
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { CodeView } from "@/components/preview/CodeView";
-import type { components } from "@/lib/api/types";
-import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
-import { declaresParameters } from "./declaresParameters";
+import { ClientNameFlag, ToggleSwitch } from "./CapabilityRowCells";
+import {
+  CLIENT_NAME_LIMIT,
+  toRows,
+  type CapabilityLists,
+  type RowDescriptor,
+} from "./capabilityRows";
 
-type ToolView = components["schemas"]["MCPToolView"];
-type ResourceView = components["schemas"]["MCPResourceView"];
-type PromptView = components["schemas"]["MCPPromptView"];
-type CapabilityKind = "tool" | "resource" | "prompt";
-
-interface Props {
+interface Props extends CapabilityLists {
   serverUid: string;
-  kind: CapabilityKind;
-  tools?: ToolView[];
-  resources?: ResourceView[];
-  prompts?: PromptView[];
   // Set when the /capabilities fetch failed. An errored fetch yields an
   // undefined list — the same shape as a genuinely empty upstream — so we must
   // distinguish them: a failure shows a load-error message, not "nothing
@@ -38,53 +32,6 @@ interface Props {
   // so the parameters are unknown rather than absent — say so, and offer no
   // row detail.
   fromCache?: boolean;
-}
-
-interface RowDescriptor {
-  key: string;
-  prefixed: string;
-  description: string | null | undefined;
-  enabled: boolean;
-  schema?: Record<string, unknown>;
-}
-
-function ToggleSwitch({
-  serverUid,
-  kind,
-  row,
-}: {
-  serverUid: string;
-  kind: CapabilityKind;
-  row: RowDescriptor;
-}) {
-  const { t } = useTranslation();
-  const enable = useEnableCapability();
-  const disable = useDisableCapability();
-  // Per-row in-flight state: this switch is the only one toggling, so a single
-  // boolean suffices (the per-row scope is naturally enforced by component
-  // instance rather than a shared key set).
-  const [pending, setPending] = useState(false);
-
-  return (
-    <Switch
-      checked={row.enabled}
-      disabled={pending}
-      aria-label={t("mcp.capabilities.toggleAria", { kind, key: row.key })}
-      onClick={(e) => e.stopPropagation()}
-      onCheckedChange={(checked) => {
-        const m = checked ? enable : disable;
-        setPending(true);
-        m.mutate(
-          {
-            serverUid,
-            capabilityType: kind,
-            capabilityKey: row.key,
-          },
-          { onSettled: () => setPending(false) },
-        );
-      }}
-    />
-  );
 }
 
 export function CapabilityList(props: Props) {
@@ -123,6 +70,9 @@ export function CapabilityList(props: Props) {
               {row.prefixed}
             </Badge>
           </div>
+          {row.clientNameLength !== undefined && row.clientNameLength > CLIENT_NAME_LIMIT ? (
+            <ClientNameFlag length={row.clientNameLength} />
+          ) : null}
           {row.description ? (
             <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
           ) : null}
@@ -210,36 +160,4 @@ export function CapabilityList(props: Props) {
       />
     </div>
   );
-}
-
-function toRows(props: Props): RowDescriptor[] {
-  if (props.kind === "tool" && props.tools) {
-    return props.tools.map((t) => {
-      const schema = t.input_schema as Record<string, unknown> | undefined;
-      return {
-        key: t.original_name,
-        prefixed: t.prefixed_name,
-        description: t.description,
-        enabled: t.enabled,
-        schema: declaresParameters(schema) ? schema : undefined,
-      };
-    });
-  }
-  if (props.kind === "resource" && props.resources) {
-    return props.resources.map((r) => ({
-      key: r.original_uri,
-      prefixed: r.prefixed_uri,
-      description: r.description,
-      enabled: r.enabled,
-    }));
-  }
-  if (props.kind === "prompt" && props.prompts) {
-    return props.prompts.map((p) => ({
-      key: p.original_name,
-      prefixed: p.prefixed_name,
-      description: p.description,
-      enabled: p.enabled,
-    }));
-  }
-  return [];
 }

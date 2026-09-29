@@ -46,6 +46,10 @@ class FeatureSettingsPort(Protocol):
         """Persist one setting. Raises if it could not be kept."""
         ...
 
+    def clear(self, key: str) -> None:
+        """Remove one stored setting. Raises if the removal could not be kept."""
+        ...
+
 
 @dataclass(frozen=True)
 class FeatureState:
@@ -120,10 +124,30 @@ class FeatureService:
                 raise FeaturePinned(key)
             self._settings_port.write(key, enabled)
             self._settings[key] = enabled
-            after = self.state(key)
-            if after.enabled != before.enabled:
-                await self._notify(key, after.enabled)
-            return after
+            return await self._settled(key, before)
+
+    async def unset(self, key: str) -> FeatureState:
+        """Remove this machine's setting for ``key``, so it follows the channel
+        default again (spec experimental-features "Switch a feature from the
+        settings page or the command line").
+
+        Refuses a pinned feature with ``FeaturePinned``, like :meth:`set`, and
+        is written, serialized and heard the same way. Unsetting a feature
+        that has no setting changes nothing and is not an error.
+        """
+        async with self._switching:
+            before = self.state(key)
+            if before.source == "pin":
+                raise FeaturePinned(key)
+            self._settings_port.clear(key)
+            self._settings.pop(key, None)
+            return await self._settled(key, before)
+
+    async def _settled(self, key: str, before: FeatureState) -> FeatureState:
+        after = self.state(key)
+        if after.enabled != before.enabled:
+            await self._notify(key, after.enabled)
+        return after
 
     async def _notify(self, key: str, enabled: bool) -> None:
         # One subscriber's failure must not keep the others from hearing: the

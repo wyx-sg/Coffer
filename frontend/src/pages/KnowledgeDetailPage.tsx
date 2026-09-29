@@ -13,6 +13,9 @@
 // land in the documents directly. It waits in the collection's inbox until a
 // pass merges it; the header's Curate button runs the next pass now.
 //
+// The header names the collection by its title (the directory name beside it)
+// and carries the Edit dialog that sets or clears that title.
+//
 // There is no status or reach control in the header: every collection is
 // served to every agent (spec knowledge "Serve every collection to every
 // agent"), so a control there would offer a choice with nothing behind it.
@@ -32,6 +35,8 @@ import { KnowledgeBrowser } from "@/components/knowledge/KnowledgeBrowser";
 import { KnowledgeCurateButton } from "@/components/knowledge/KnowledgeCurateButton";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { PageHeader } from "@/components/PageHeader";
+import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { useResource } from "@/lib/hooks/useResources";
 
 export function KnowledgeDetailPage() {
@@ -60,11 +65,12 @@ export function KnowledgeDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/knowledge", label: t("common.backTo", { label: t("nav.knowledge") }) }}
-        title={collection}
+        title={resource.data ? <ResourceLabel resource={resource.data} heading /> : collection}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <KnowledgeCurateButton collectionUid={uid} collectionName={collection} />
             <KnowledgeUploadButton collection={collection} />
+            {resource.data ? <EditTitleDialog kind="knowledge" resource={resource.data} /> : null}
           </div>
         }
       />

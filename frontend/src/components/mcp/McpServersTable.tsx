@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/McpServersTable.tsx
 //
 // The MCP servers list rendered via the shared DataTable (matching the
-// Agents/Skills tables): name + transport + health + description + the
+// Agents/Skills tables): title (with the name beside it) + transport + health + description + the
 // three-state reach control (ScopeControl, as on the detail header) + a delete
 // action, with row multi-select driving bulk enable/disable/delete. A row click
 // opens the server's detail page; the inline controls stop propagation so they
@@ -13,6 +13,8 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import type { ResourceOut } from "@/lib/api/resources";
 import { reachFilter } from "@/lib/reachFilter";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import {
   McpServersBulkActions,
   ServerDeleteCell,
@@ -44,7 +46,7 @@ export function McpServersTable({
       key: "name",
       header: t("resources.cols.name"),
       className: "whitespace-nowrap",
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      cell: (r) => <ResourceLabel resource={r} />,
     },
     {
       key: "transport",
@@ -93,14 +95,14 @@ export function McpServersTable({
       columns={columns}
       rowKey={(r) => r.uid}
       search={{
-        accessor: (r) => `${r.name} ${transportType(r)}`,
+        accessor: (r) => `${searchableName(r)} ${transportType(r)}`,
         placeholder: t("mcp.table.search"),
       }}
       filters={filters}
       onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.uid)}`)}
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
-        ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
+        ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${displayName(r)}`,
         bulkLabel: (count) => t("common.bulk.selected", { count }),
         clearLabel: t("common.clear"),
         renderBulkActions: ({ selectedRows, clear }) => (

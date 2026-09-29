@@ -51,7 +51,7 @@ def test_the_walk_reaches_every_group_and_leaf() -> None:
     names = {name for name, _cmd in _COMMANDS}
     # A walk that stopped at the root would pass every check below vacuously.
     assert len(_COMMANDS) > 150
-    assert {"coffer daemon status", "coffer sync remote pause", "coffer channel set"} <= names
+    assert {"coffer daemon status", "coffer sync remote pause", "coffer channel edit"} <= names
 
 
 @pytest.mark.parametrize(("name", "cmd"), _COMMANDS, ids=[name for name, _ in _COMMANDS])

@@ -619,6 +619,15 @@ components:
             the kind-agnostic `PATCH /api/v1/resources/{uid}`. Display only:
             nothing Coffer writes into another tool's config spells it any
             more, which is what let the provider-specific rename route go.
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: >-
+            Optional display text a person chose, shown in place of the name
+            wherever this resource is listed or shown; null when none is set.
+            Edited through `PATCH /api/v1/resources/{uid}` (resource-framework
+            "Carry an optional editable title on every resource").
         protocol:
           $ref: "#/components/schemas/Protocol"
         base_url:

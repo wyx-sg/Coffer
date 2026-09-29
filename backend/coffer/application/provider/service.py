@@ -328,7 +328,7 @@ class ProviderService:
         A thin delegate: the flag's single-global invariant and the fate of the
         internal-engine model when the connection moves both live in
         ``internal_default_ops``, so BOTH callers — the HTTP route and
-        ``coffer provider internal-default`` — get them.
+        ``coffer config set engine.provider`` — get them.
         """
         return await _set_internal_default_op(self, uid, actor=actor)
 
@@ -345,7 +345,7 @@ class ProviderService:
         The twin of :meth:`set_internal_default`, delegating for the same
         reason: the single-global invariant and the fate of the transcription
         model when the connection moves belong to both callers, the HTTP route
-        and ``coffer provider transcribe-default``.
+        and ``coffer config set transcribe.provider``.
         """
         return await _set_transcribe_default_op(self, uid, actor=actor)
 

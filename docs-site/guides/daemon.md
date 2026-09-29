@@ -58,15 +58,15 @@ The daemon listens on **port 8000** by default and never scans for another one. 
 To move it:
 
 ```sh
-coffer daemon port show          # configured port, and the port the daemon is on
-coffer daemon port set 8765      # always bind 8765 from now on
-coffer daemon restart            # apply it
-coffer daemon port clear         # back to 8000
+coffer config get daemon.port        # the configured port
+coffer config set daemon.port 8765   # always bind 8765 from now on
+coffer daemon restart                # apply it
+coffer config unset daemon.port      # back to 8000
 ```
 
-`set` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. For the same reason the port has no page in the web UI and no REST route.
+`daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. For the same reason the port has no page in the web UI and no REST route.
 
-A change applies at the next start. If a daemon is running on the old port, `set` and `clear` say so and tell you to run `coffer daemon restart`.
+A change applies at the next start. If a daemon is running on the old port, `set` and `unset` say so and tell you to run `coffer daemon restart`.
 
 ### When the port is taken
 
@@ -77,7 +77,7 @@ port 8000 is the port Coffer's daemon binds, but something else is already using
   held by: pid 5120  python3 -m http.server 8000
   fix one of:
     stop that process, then    coffer daemon start
-    use a different port       coffer daemon port set <port>
+    use a different port       coffer config set daemon.port <port>
 ```
 
 When the holder is itself a Coffer daemon, the message says so: most often it is your own daemon still starting up, so wait a few seconds and run `coffer daemon status`. If it serves a different vault (for example a test run under a throwaway `HOME`), the message gives you the `kill` command for it.
@@ -140,7 +140,7 @@ Everything the daemon, the processes it spawns and the surfaces acting for it wr
 
 Shim logs and rolled-aside upstream logs older than seven days are pruned automatically. `daemon.log` and its rotations are never deleted, only rotated. Set `COFFER_LOG_DIR` in the daemon's environment to put the directory elsewhere.
 
-You rarely need to open the file: the **Activity → Daemon** tab reads it with a level filter, and agents can read it through `coffer__diagnose`. See [Activity and audit](/guides/activity).
+You rarely need to open the file: the **Activity → Daemon** tab reads it with a level filter, and `coffer log daemon` prints the same records on the command line (`--errors` for errors only, `--since 1h` for a recent window). `coffer path logs` prints where the directory and `daemon.log` are, so an agent in a shell can grep the file directly. See [Activity and audit](/guides/activity).
 
 ## The access token
 

@@ -30,6 +30,9 @@ _STATUS: dict[str, int] = {
     # The database was migrated by a newer build than this one.
     "DB_SCHEMA_TOO_NEW": 409,
     "GENERIC_CREATE_NOT_ALLOWED": 409,
+    # A changed name on a kind whose name is fixed (ADR
+    # names-visible-to-agents-are-fixed): a conflict with what quotes the name.
+    "NAME_IMMUTABLE": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)

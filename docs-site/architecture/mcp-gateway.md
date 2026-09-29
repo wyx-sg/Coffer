@@ -96,7 +96,7 @@ On `initialize`, the session records the client's declared capabilities, the lau
 The identity is self-reported, not verified. Any local process that holds the token can open `/mcp` and claim any uid. This is acceptable under the loopback-only, single-user posture described in [Security model](/architecture/security).
 :::
 
-The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
+The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools (while the `memory` feature is on) and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
 
 ## Discovery and namespacing
 
@@ -108,7 +108,7 @@ The `initialize` reply declares `tools`, `resources` and `prompts`, each with `l
 | Prompt | `summarize` | `jira__summarize` |
 | Resource | `file:///notes.md` | `coffer://jira/file:///notes.md` |
 
-Parsing splits on the first `__`, so the kind refuses any server name that contains `__`. An upstream that answers `resources/list` or `prompts/list` with `-32601` (method not found) is treated as having none of that capability. It is not treated as failing.
+Parsing splits on the first `__`, so the kind refuses any server name that contains `__`. Because the server name is the prefix of every tool name an agent sees, and agents' permission rules and skills quote it, the name is fixed once registered (`name_fixed`): a change is refused with `409 NAME_IMMUTABLE`, and a server's `title` is what a person edits to relabel it. A client adds its own prefix on top — Claude Code shows `mcp__coffer__<server>__<tool>` — and model provider APIs cap a tool name at 64 characters (Cursor drops tools above 60). So a new server name is capped at 24 characters, which leaves 25 for the upstream tool name, and each discovered capability row carries `client_name_length`, the length of `mcp__coffer__<server>__<tool>`; the **Tools** tab and `coffer mcp cap list` flag rows above 64. Names registered before the cap keep working. An upstream that answers `resources/list` or `prompts/list` with `-32601` (method not found) is treated as having none of that capability. It is not treated as failing.
 
 Each cold fetch also reconciles preferences in `mcp_capability_preferences`, keyed on the server's surrogate id. Newly seen keys are inserted as enabled. Existing keys get their `last_seen_at` updated. Keys that have disappeared are left in place, so a tool you disabled stays disabled if it vanishes and comes back. Preference rows are read fresh on every list, so a toggle takes effect immediately, whatever the cache holds.
 
@@ -147,7 +147,7 @@ The policy is the pure function `select_listed_tools` in `domain/mcp/tool_tierin
 5. Fill any remaining slots from the ranking in order.
 6. Emit the chosen tools in their original catalogue order. The number left out becomes `hidden_count`, which the next `initialize` instructions report.
 
-Usage comes from `MCPInvocationRepo.usage_counts(since=…)`. That is one grouped query over `mcp_invocations` for `capability_type = 'tool'`, joined to `resources` on uid, so the counts follow a server's current name even after a rename. Calls of every status count. An errored call still shows that the agent reached for that tool.
+Usage comes from `MCPInvocationRepo.usage_counts(since=…)`. That is one grouped query over `mcp_invocations` for `capability_type = 'tool'`, joined to `resources` on uid, so the counts belong to the registered server rather than to whatever name a call carried. Calls of every status count. An errored call still shows that the agent reached for that tool.
 
 Tiering only affects what is listed:
 
@@ -186,8 +186,6 @@ The results are real upstream schemas under the names the agent calls directly. 
 | Tool | Declared in | Experimental feature |
 | --- | --- | --- |
 | `coffer__write` | `application/knowledge/builtin_tools.py` | `knowledge` |
-| `coffer__recall` | `application/memory/builtin_recall_tool.py` | `memory` |
-| `coffer__diagnose` | `application/diagnostics.py` | none |
 | `coffer__search_tools` | `application/mcp/gateway_tool_search.py` (gateway-owned) | none |
 
 The registry checks the feature on every read. While a feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
@@ -269,14 +267,14 @@ stateDiagram-v2
   STARTING --> COOLDOWN: 4th attempt fails
   STARTING --> UNHEALTHY: server disabled
   COOLDOWN --> UNHEALTHY: 60 s elapsed, next call
-  HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete, rename)
+  HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete)
   HEALTHY --> [*]: session disposed
 ```
 
 - **Retry ladder.** Up to four attempts, with waits of 1, 5 and 30 seconds between them (`_RETRY_DELAYS_SECONDS`). Only transient spawn failures are retried: `UpstreamUnavailable`, `UpstreamTimeout`, `OSError`, `ConnectionError` and `TimeoutError`. A config error, a credential error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
 - **Cooldown.** After the fourth failure, the entry enters `COOLDOWN` for 60 seconds. Calls during the cooldown fail fast with `UpstreamUnavailable`. The cooldown is checked both before and after taking the per-server spawn lock, so callers queued behind one failing ladder do not each re-run it.
 - **Concurrency.** At most 4 cold starts run at once per supervisor (`COFFER_MCP_MAX_CONCURRENT_SPAWNS`). The slot is held only during build and initialize, never during a backoff sleep.
-- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, renaming, disabling or editing a server therefore never waits on a slow ladder. The kind's `on_delete`, `on_rename`, `on_enabled_changed` (on disable) and `on_update_config` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or credential refs; re-enabling needs nothing, because the next call spawns afresh.
+- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, disabling or editing a server therefore never waits on a slow ladder. The kind's `on_delete`, `on_enabled_changed` (on disable) and `on_update_config` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or credential refs; re-enabling needs nothing, because the next call spawns afresh.
 - **Crash recovery.** A `tools/call` that fails on the transport evicts the connection, and the next call respawns the server. A transport failure is any non-`MCPError` exception, or an `MCPError` with `CONNECTION_CLOSED`. A well-formed `MCPError` means the upstream answered, so the connection is kept. A timeout does not evict either, and neither does a failure to obtain a connection in the first place.
 - **Teardown.** A stdio close waits up to 10 seconds for the SDK's own shutdown, which escalates SIGTERM to SIGKILL. The shim then kills every PID recorded for that connection, along with its descendants. Each spawn records a PID file under `~/.coffer/upstream-pids/`, keyed by the server's uid. At startup, the daemon sweeps any files left by a crash.
 - **Logs.** Each stdio upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to `daemon.log`.
@@ -296,7 +294,7 @@ The session subscribes lazily to each upstream it touches:
 
 Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`) and from which session. Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
 
-The row's columns, the exact meaning of each status, the buffered writer and retention are described once, in [Observability](/architecture/observability#the-mcp-invocation-log). You read the log per server (`coffer mcp invocations <server>`) or across all servers (`coffer mcp invocations`); see [Activity and audit](/guides/activity).
+The row's columns, the exact meaning of each status, the buffered writer and retention are described once, in [Observability](/architecture/observability#the-mcp-invocation-log). You read the log per server (`coffer log mcp --server <server>`) or across all servers (`coffer log mcp`); see [Activity and audit](/guides/activity).
 
 ### Server status
 

@@ -38,7 +38,7 @@ The **Experimental features** card in **Settings → General** names the channel
 | --- | --- | --- |
 | `vault_sync` | Sync | Converging this vault with a git remote you own: the **Sync** page, `coffer sync`, the `/api/v1/sync` routes and the background converge rounds. See [Vault sync](/guides/vault-sync). |
 | `knowledge` | Knowledge | Knowledge collections under `~/.coffer/knowledge/`: the **Knowledge** page, `coffer knowledge`, the `/api/v1/knowledge` routes, the `coffer__write` tool, the knowledge catalogue in the `coffer-guide` skill, the curation pass, and saving to knowledge from a chat channel. See [Knowledge](/guides/knowledge). |
-| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the `coffer__recall` tool, the aggregation and distil passes, and the session-start hook that delivers memory into agents. See [Memory](/guides/memory). |
+| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the session-start hook that delivers memory into agents. See [Memory](/guides/memory). |
 
 Everything else in Coffer is always on.
 
@@ -49,9 +49,10 @@ A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon
 ::: code-group
 
 ```sh [CLI]
-coffer daemon features list
-coffer daemon features enable vault_sync
-coffer daemon features disable memory
+coffer config list feature.
+coffer config set feature.vault_sync on
+coffer config set feature.memory off
+coffer config unset feature.memory        # back to the channel default
 ```
 
 ```text [Web UI]
@@ -60,18 +61,18 @@ Settings → General → Experimental features
 
 :::
 
-`list` shows each feature's state and what decided it:
+`config list feature.` shows each feature's state and what decided it:
 
 ```text
-channel: stable
-vault_sync   on   (set on this machine)
-knowledge    off  (channel default)
-memory       off  (channel default)
+Key                  Value                      Default   Type
+feature.vault_sync   on (set on this machine)   channel   on|off
+feature.knowledge    off (channel default)      channel   on|off
+feature.memory       off (channel default)      channel   on|off
 ```
 
 On the settings page each feature has a switch and a line naming the source: **Set on this machine**, **Default for the stable channel**, or a pin (below). The sidebar entry of a feature you switch on appears without a reload.
 
-`features list`, `enable` and `disable` go through the running daemon, because only it can make a switch take effect immediately. Add `--json` to `list` for scripts.
+The `feature.*` keys go through the running daemon, because only it can make a switch take effect immediately. Add `--json` to `config list` for scripts.
 
 ## How a feature's state is decided
 
@@ -100,7 +101,7 @@ Switching a feature off closes it everywhere on this machine:
 - **REST:** its routes answer `404` with the code `FEATURE_DISABLED` and the feature's key. Resources of a kind the feature owns (`knowledge` collections, `memory` partitions) are also hidden from the generic `/api/v1/resources` routes.
 - **CLI:** its commands print one line and exit 1:
   ```text
-  vault_sync is switched off on this machine — run: coffer daemon features enable vault_sync
+  vault_sync is switched off on this machine — run: coffer config set feature.vault_sync on
   ```
 - **MCP:** its tools leave the tool list, and a call to one answers as an unknown tool. The handshake instructions and the `coffer-guide` skill stop mentioning them.
 - **Web UI:** its sidebar entry disappears, and its pages show a notice ("Knowledge is switched off") with a link to **Settings → General**.
@@ -108,7 +109,7 @@ Switching a feature off closes it everywhere on this machine:
 
 Some features also withdraw what they placed in front of agents:
 
-- Switching `memory` off removes the memory delivery hook from every agent it was installed in; switching it on installs it again in the same agents.
+- Switching `memory` off removes the memory delivery hook from every agent it was installed in; switching it on installs it into every agent connected to Coffer.
 - Switching `knowledge` off rewrites `coffer-guide` without the knowledge catalogue, and a channel `/save` replies that knowledge is switched off instead of saving.
 - Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and removes the tray's Sync item. While it is off, the knowledge curation pass treats the vault as a single-machine one.
 

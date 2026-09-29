@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
-from coffer.application.agent.mcp_service import AgentMcpService
+from coffer.application.agent.connection_service import AgentConnectionService
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
 from coffer.application.fs.browse_service import FsBrowseService
@@ -63,20 +63,20 @@ def get_agent_config_file_service() -> AgentConfigFileService:
     return _agent_config_file_service
 
 
-_agent_mcp_service: AgentMcpService | None = None
+_agent_connection_service: AgentConnectionService | None = None
 
 
-def set_agent_mcp_service(svc: AgentMcpService) -> None:
+def set_agent_connection_service(svc: AgentConnectionService) -> None:
     """Called by the composition root once on startup."""
-    global _agent_mcp_service
-    _agent_mcp_service = svc
+    global _agent_connection_service
+    _agent_connection_service = svc
 
 
-def get_agent_mcp_service() -> AgentMcpService:
+def get_agent_connection_service() -> AgentConnectionService:
     """FastAPI Depends() target."""
-    if _agent_mcp_service is None:
-        raise RuntimeError("agent MCP service not initialised")
-    return _agent_mcp_service
+    if _agent_connection_service is None:
+        raise RuntimeError("agent connection service not initialised")
+    return _agent_connection_service
 
 
 _agent_model_catalogue: AgentModelCatalogueService | None = None

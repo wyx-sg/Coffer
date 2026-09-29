@@ -102,7 +102,7 @@ flowchart TB
   H --> W["Background workers"]
 ```
 
-[`kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway can advertise `coffer__recall`; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. What each kind contributes to sync — import gates, post-import hooks, synced state areas — is collected in one `SyncContributions` object and handed to the sync worker at the end.
+[`kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway's handshake can name the memory root; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. What each kind contributes to sync — import gates, post-import hooks, synced state areas — is collected in one `SyncContributions` object and handed to the sync worker at the end.
 
 HTTP routers are included from one table in [`surfaces/http/routing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/routing.py), which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in `surfaces/cli/main.py`.
 
@@ -147,7 +147,7 @@ backend/coffer/
 │   ├── knowledge/          # the write tool, curation, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # aggregate, distil, delivery, recall
+│   ├── memory/             # aggregate, distil, delivery, session-start context
 │   ├── provider/           # provider service, projection, reconcile
 │   └── sync/               # converge round, exporter, appliers, worker, ports
 ├── infrastructure/
@@ -184,7 +184,7 @@ backend/coffer/
 | A value object or rule with no I/O | `domain/<kind>/` |
 | A use case, or a port it needs | `application/<kind>/` |
 | An adapter for a database table, file tree, subprocess or SDK | `infrastructure/<kind>/`, implementing the port |
-| A route or CLI command | `surfaces/http/<kind>_routes.py` or `surfaces/cli/<kind>_cmd.py` |
+| A route or CLI command | `surfaces/http/<kind>_routes.py` or `surfaces/cli/<kind>_cmd.py`; a kind's lifecycle verbs come from `surfaces/cli/_kind_verbs.py`, so its module adds only what is specific to it |
 | Wiring the above together | the kind's `surfaces/http/<kind>_wiring.py` |
 | Something a second kind now needs too | a kind-agnostic module at the layer root |
 | A schema change | a new Alembic migration under `infrastructure/persistence/migrations/versions/` |

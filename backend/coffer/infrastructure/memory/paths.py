@@ -23,7 +23,7 @@ four things with one writer each:
     and hidden"). Written **only** by aggregation, and never by distil (see
     "Keep distil out of the raw directory"): that is what lets a bad
     distillation be re-run without going back to the agents. Hidden, and
-    excluded from the index, from delivery and from recall.
+    excluded from the index and from delivery.
 
 ``$COFFER_MEMORY_ROOT`` overrides the root, exactly like knowledge's own
 override, so a test can never wander into a developer's real

@@ -7,6 +7,8 @@ structured events.
 
 The daemon is the sole credential owner (creator = reader → silent
 reads within an app version). The CLI here imports no credential/keyring code.
+Where the master key lives is a setting: ``coffer config get|set
+credentials.storage``.
 """
 
 from __future__ import annotations
@@ -161,13 +163,19 @@ def list_refs(
     _console.print(table)
 
 
-@app.command("delete")
+@app.command("rm")
 def delete_secret(
     ctx: typer.Context,
     ref: str = typer.Argument(..., help="Credential reference key"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
 ) -> None:
-    """Delete a secret from the encrypted credential store (via the daemon)."""
+    """Delete a secret from the encrypted credential store (via the daemon).
+
+    Asks first unless --force is given.
+
+    \f
+    Spec credentials "Confirm a command-line delete unless forced".
+    """
     if not force and not typer.confirm(f"Delete credential {ref!r}?"):
         raise typer.Exit(int(ExitCode.GENERIC))
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -176,32 +184,3 @@ def delete_secret(
         r = c.delete(f"/credentials/{ref}")
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"deleted: {ref}")
-
-
-@app.command("storage")
-def storage(
-    ctx: typer.Context,
-    set_to: str | None = typer.Option(
-        None,
-        "--set",
-        help="Move the master key: 'file' (default location) or 'keychain'.",
-    ),
-    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
-) -> None:
-    """Show or change where the credential master key is stored."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    if set_to is not None and set_to not in ("file", "keychain"):
-        typer.echo("invalid value: --set must be 'file' or 'keychain'", err=True)
-        raise typer.Exit(int(ExitCode.INVALID_INPUT))
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        if set_to is None:
-            r = c.get("/settings/credentials")
-        else:
-            r = c.put("/settings/credentials", json={"master_key_storage": set_to})
-        _cli_client.check(r, verbose=verbose)
-        storage_now = r.json()["master_key_storage"]
-    if output_json:
-        typer.echo(_json.dumps({"master_key_storage": storage_now}))
-    else:
-        typer.echo(f"master key storage: {storage_now}")

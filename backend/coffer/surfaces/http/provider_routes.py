@@ -59,6 +59,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
     return ProviderOut(
         uid=resource.uid,
         name=resource.name,
+        title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
         credential_ref=cfg.credential_ref,

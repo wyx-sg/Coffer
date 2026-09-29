@@ -51,6 +51,7 @@ async def list_partitions(
                 # up by label to act on it.
                 uid=p.uid,
                 name=p.name,
+                title=p.title,
                 repository_key=p.repository_key,
                 repository_path=p.repository_path,
                 note_count=p.note_count,

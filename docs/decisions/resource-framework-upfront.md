@@ -25,7 +25,7 @@ be built on.
 What made it more than a style question is where the shared part lives. It is
 not a helper library; it is the `resources` table every other table points at,
 the audit log's `resource_id`, the REST routes under `/api/v1/resources`, the
-CLI `resource` group and the sync document format. Every one of those is
+lifecycle verbs every kind's CLI group shares and the sync document format. Every one of those is
 either user data or an external contract, so building it MCP-shaped first and
 generalising it later means migrating a live database and breaking a public
 API, not moving code between files.
@@ -114,7 +114,7 @@ Every kind is a vertical feature with its own entity table (`mcp_servers`,
   serialisation and the resource-list UI are rebuilt once per kind, and they
   drift: the name rule, the audit shape and the delete semantics end up
   subtly different in seven places. Anything that needs "every resource" —
-  the audit log, `coffer__diagnose`'s history filter, the sync bundle, the
+  the audit log, the filters of `coffer log audit`, the sync bundle, the
   per-agent reach picker — has to union seven tables.
 - **Why it loses.** Four or more kinds sharing the same lifecycle make the
   duplication certain, and the cross-kind readers make it expensive. The real
@@ -128,9 +128,9 @@ The Resource framework is core domain, not a cross-cutting module, and it was
 built with the first kind. Every user-managed thing is a `Resource` row in one
 `resources` table, created, changed, enabled, scoped, renamed and deleted
 through one `ResourceService`, audited in one `audit_log`, and served through
-one kind-agnostic REST surface (`/api/v1/resources`) and CLI group. A kind
-contributes a config schema and optional hooks; it does not re-implement any
-of the lifecycle. The framework never unifies invocation — each kind decides
+one kind-agnostic REST surface (`/api/v1/resources`) and one set of CLI
+lifecycle verbs on every kind's group. A kind contributes a config schema and
+optional hooks; it does not re-implement any of the lifecycle. The framework never unifies invocation — each kind decides
 what "using" a resource means.
 
 Rules a future change must respect:

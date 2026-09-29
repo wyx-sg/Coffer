@@ -75,7 +75,7 @@ def _read_raw() -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError) as exc:
         # A hand-mangled config must not stop the daemon from starting — that
         # would be unrecoverable from the UI, which needs a running daemon. Warn
-        # loudly and fall back to the default port; `coffer daemon port show`
+        # loudly and fall back to the default port; `coffer config get daemon.port`
         # reports the same problem where the user can act on it.
         _logger.warning("daemon config at %s is unreadable (%r); ignoring it", path, exc)
         return None
@@ -283,6 +283,16 @@ def write_feature_setting(key: str, enabled: bool) -> None:
     _merge(features=features)
 
 
+def clear_feature_setting(key: str) -> None:
+    """Remove one feature from the ``features`` object, keeping every other key
+    in it, so the feature falls back to the channel default."""
+    payload = _read_raw() or {}
+    current = payload.get("features")
+    features = dict(current) if isinstance(current, dict) else {}
+    features.pop(key, None)
+    _merge(features=features)
+
+
 def parse_feature_pins(raw: str | None, known: tuple[str, ...]) -> dict[str, bool]:
     """Parse ``COFFER_FEATURES`` (``key=on|off``, comma-separated).
 
@@ -310,26 +320,3 @@ def parse_feature_pins(raw: str | None, known: tuple[str, ...]) -> dict[str, boo
 def read_feature_pins(known: tuple[str, ...]) -> dict[str, bool]:
     """The pins in this process's environment."""
     return parse_feature_pins(os.environ.get(FEATURES_ENV), known)
-
-
-def read_withdrawn_memory_delivery() -> list[str]:
-    """The agents a switched-off ``memory`` took the delivery hook out of.
-
-    Kept beside the switch that caused it, and machine-local for the same
-    reason: switching ``memory`` back on must put the hook back into exactly
-    these agents, and nowhere else (``application.memory.delivery_switch``).
-    """
-    payload = _read_raw()
-    raw = payload.get("memory_delivery_withdrawn") if payload is not None else None
-    if not isinstance(raw, list):
-        return []
-    return [str(uid) for uid in raw if isinstance(uid, str) and uid]
-
-
-def write_withdrawn_memory_delivery(uids: list[str]) -> None:
-    """Replace the withdrawn list. An empty list is not written into a config
-    that never held one."""
-    payload = _read_raw()
-    if not uids and (payload is None or "memory_delivery_withdrawn" not in payload):
-        return
-    _merge(memory_delivery_withdrawn=list(uids))

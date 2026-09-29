@@ -20,6 +20,7 @@ import type { TFunction } from "i18next";
 
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
+import { titlePatchValue } from "@/lib/resourceTitle";
 import type { components } from "@/lib/api/types";
 import { isMintedCredentialRef, mintCredentialRef } from "@/lib/credentialRef";
 import type { CredRow } from "./CredentialRowEditor";
@@ -53,6 +54,8 @@ export function configWithoutOwnControls(config: unknown): string {
 
 export interface SaveArgs {
   resource: ResourceOut;
+  /** The title field's text; blank clears the title. */
+  title: string;
   description: string;
   configText: string;
   creds: CredRow[];
@@ -62,6 +65,7 @@ export interface SaveArgs {
 
 export async function saveMcpServerEdit({
   resource,
+  title,
   description,
   configText,
   creds,
@@ -120,6 +124,7 @@ export async function saveMcpServerEdit({
     }
   }
 
+  const nextTitle = titlePatchValue(title);
   const transport = {
     ...((config.transport as Record<string, unknown>) ?? {}),
     credential_refs: credentialRefs,
@@ -127,6 +132,8 @@ export async function saveMcpServerEdit({
   const { error: pe } = await client.PATCH("/resources/{uid}", {
     params: { path: { uid: resource.uid } },
     body: {
+      // Sent only when it moved, so saving other fields writes no title change.
+      ...(nextTitle !== (resource.title ?? null) ? { title: nextTitle } : {}),
       description: description.trim() || null,
       config: withTimeouts({ ...config, transport }, timeouts),
     },

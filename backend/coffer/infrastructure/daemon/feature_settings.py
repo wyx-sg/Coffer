@@ -15,13 +15,5 @@ class DaemonConfigFeatureSettings:
     def write(self, key: str, enabled: bool) -> None:
         daemon_config.write_feature_setting(key, enabled)
 
-
-class DaemonConfigWithdrawnDelivery:
-    """Adapts ``application.memory.delivery_switch.WithdrawnDeliveryPort`` to
-    the ``memory_delivery_withdrawn`` list of the daemon config."""
-
-    def read(self) -> list[str]:
-        return daemon_config.read_withdrawn_memory_delivery()
-
-    def write(self, uids: list[str]) -> None:
-        daemon_config.write_withdrawn_memory_delivery(uids)
+    def clear(self, key: str) -> None:
+        daemon_config.clear_feature_setting(key)

@@ -27,14 +27,11 @@ daemon-to-daemon protocol; the daemon spawns children but does not install runti
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
 wraps the same three binaries this spec builds.
 
-Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate and
-one is not. The pre-bind port setting is CLI-only by design, because it must work with no daemon
+Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate. The pre-bind port setting is CLI-only by design, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
 cannot reach the OS by itself, while a terminal user already has `cd`, `$EDITOR` and their
 platform's own open command. `POST /daemon/shutdown` has no dedicated CLI verb because
-`coffer daemon stop` reaches the same exit through a signal. The gap with no reason behind it is
-`GET /api/v1/daemon/logs`, which has no `coffer daemon logs` counterpart — a terminal user reads
-the file directly, which works but is not the same contract. `COFFER_PORT_RANGE_START` /
+`coffer daemon stop` reaches the same exit through a signal. `COFFER_PORT_RANGE_START` /
 `COFFER_PORT_RANGE_END` are test-harness machinery, not product behaviour: they are the one
 surviving path on which a start scans for a free port, they deliberately outrank the user's
 setting so a test run is hermetic on a machine whose vault has a port pinned, and no user-facing
@@ -175,7 +172,7 @@ than tearing down inline, so an API stop and a signal stop cannot diverge. Exit 
 
 ### Requirement: Manage the daemon from the command line
 Users MUST be able to run `coffer daemon start`, `stop`, `restart`, `status [--json]`,
-`rotate-token`, `port show|set|clear` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
+`rotate-token` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
 presence of `daemon.json`, MUST diagnose a port that is already held *before* spawning rather than
 after a boot timeout, and MUST wait a bounded time for the daemon to publish itself. That pre-flight
 check MUST be allowed to report "free" when the port is not — a port in `TIME_WAIT` from the daemon
@@ -186,9 +183,13 @@ it, and MUST clean up the stale discovery file instead when it is not. `restart`
 `start`, and is how a setting read before the bind takes effect. `status` MUST only look: with no
 daemon answering — no `daemon.json`, or one whose port nothing answers on — it MUST report the
 daemon as not running (`{"status": "stopped"}` under `--json`) and exit non-zero, and MUST NOT
-start one. The `port` and `service`
-groups MUST work with no daemon running (see "Bind a fixed, settable port" and "Change residency
-from the settings page or the command line").
+start one. With a daemon answering, `status` MUST also report the passes in flight — the list
+[resource-framework](../resource-framework/spec.md) "Report the passes in flight in one cross-kind read"
+defines, each with its kind, its target and when it started — in its own section of the table form,
+which says so when nothing is running, and as part of the object under `--json`. The daemon port is
+read and changed with `coffer config get|set|unset daemon.port`, and it and the `service` group MUST
+work with no daemon running (see "Bind a fixed, settable port" and "Change residency from the
+settings page or the command line").
 
 #### Scenario: a recorded pid that is not ours is never signalled
 - **GIVEN** a `~/.coffer/daemon.json` whose recorded pid has been recycled onto an unrelated process,
@@ -200,6 +201,12 @@ from the settings page or the command line").
 - **WHEN** the user runs `coffer daemon status`, or `coffer daemon status --json`,
 - **THEN** it reports the daemon as not running (`{"status": "stopped"}` under `--json`) and exits non-zero,
 - **AND** no daemon is spawned and no `daemon.json` is written.
+
+#### Scenario: status names the passes in flight
+- **GIVEN** a running daemon with a pass over a knowledge collection and a pass over a memory partition under way,
+- **WHEN** the user runs `coffer daemon status --json`, and again `coffer daemon status` once both passes have ended,
+- **THEN** the JSON reports the daemon as ready and lists both passes with their kind, target and start time, oldest first,
+- **AND** the later table form carries a passes section saying that no pass is running, and neither call starts a pass.
 
 ### Requirement: Own and reap the daemon's long-lived children
 The daemon MUST spawn, record and terminate every long-lived child it owns — such as an agent
@@ -238,11 +245,16 @@ MUST refuse to start and MUST report which process holds the port and the exact 
 resolve it. A config file that will not parse MUST warn and fall back to the default rather than
 stopping the boot, since an unbootable daemon cannot be repaired from the UI it serves.
 
-Users MUST be able to read and change the setting **from the CLI**, and it MUST work with no daemon
-running, because a daemon that cannot bind its port is exactly the state the setting has to be
-fixable from. It MUST NOT have a REST endpoint or a settings panel: a port that is correct by
-default does not earn a place in the UI, and the escape hatch belongs where a squatted port is
-diagnosed. A change takes effect at the next start, which `coffer daemon restart` applies in one
+Users MUST be able to read and change the setting **from the CLI** as the key `daemon.port` of the
+generic `coffer config` command ([resource-framework](../resource-framework/spec.md): one key
+registry, typed validation, `unset` returns a key to its default) — `coffer config get daemon.port`
+prints the configured port or the 8000 default, `coffer config set daemon.port <n>` pins one, and
+`coffer config unset daemon.port` returns to 8000. Those three MUST read and write the pre-bind file
+directly and MUST work with no daemon running, because a daemon that cannot bind its port is exactly
+the state the setting has to be fixable from. It MUST NOT have a REST endpoint or a settings panel: a
+port that is correct by default does not earn a place in the UI, and the escape hatch belongs where a
+squatted port is diagnosed; `daemon.port` is therefore the one `coffer config` key no route stores. A
+change takes effect at the next start, which `coffer daemon restart` applies in one
 command. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
 the CLI that owns it must work with no daemon running — so the audit table is unreachable on
@@ -255,14 +267,20 @@ would be less honest than recording none.
 - **THEN** it binds 8000 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
 
 #### Scenario: a configured daemon port survives restarts
-- **GIVEN** the user has moved the daemon's port with `coffer daemon port set <n>`,
+- **GIVEN** the user has moved the daemon's port with `coffer config set daemon.port <n>`,
 - **WHEN** the daemon is stopped and started again by any of those routes,
 - **THEN** it binds that same port every time and records it in `~/.coffer/daemon.json`.
 
 #### Scenario: a port that is taken refuses to start and says what holds it
 - **GIVEN** the port the daemon would bind — its 8000 default, or one the user configured — is already held by another process,
 - **WHEN** the daemon starts,
-- **THEN** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, or `coffer daemon port set <other>`.
+- **THEN** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, or `coffer config set daemon.port <other>`.
+
+#### Scenario: the port key is read and changed with no daemon running
+- **GIVEN** no daemon is running and no port has been configured,
+- **WHEN** the user runs `coffer config get daemon.port`, then `coffer config set daemon.port 8123`, then `coffer config get daemon.port`, then `coffer config unset daemon.port`,
+- **THEN** the first prints the 8000 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
+- **AND** no daemon is spawned, no database is opened and no audit entry is recorded.
 
 ### Requirement: Run as a login service
 The daemon MUST be installable as a **login service** — on macOS, a per-user launchd agent — so
@@ -463,7 +481,10 @@ are [agent-registry](../agent-registry/spec.md) "Open config files in an externa
 `~/.coffer/logs/daemon.log` MUST be the one file the daemon, the children it spawns, and every
 surface writing on their behalf append to — one timeline rather than one file per writer, because
 the question it answers is always "what else happened around then". The directory MUST be
-relocatable through `COFFER_LOG_DIR` so a packaged or test install can put it elsewhere. The file
+relocatable through `COFFER_LOG_DIR` so a packaged or test install can put it elsewhere, and
+`coffer path logs` MUST print the absolute path of the log directory and of `daemon.log` in it,
+honouring that relocation, so a terminal or an agent can open or grep the file without knowing where
+this install keeps it. The file
 MUST be bounded by rotation rather than by deletion, and the retention sweep that ages out the
 per-process and per-upstream log files MUST NOT delete it or its rotations: it is held open, and
 deleting it would leave the daemon logging nowhere until the next restart.
@@ -489,6 +510,12 @@ record everything twice and make one event read as two.
 - **THEN** that record is one line stating the instant it was created, its level, its logger and its message, and a record logged with an exception carries the traceback inside that same line rather than as lines stating none of those,
 - **AND** the record appears exactly once, even though the detached daemon's own stderr is that same file.
 
+#### Scenario: the command line names the daemon log file
+- **GIVEN** an install whose log directory is relocated with `COFFER_LOG_DIR`, and a running daemon that has written to its log,
+- **WHEN** the user runs `coffer path logs`, and `coffer path logs --json`,
+- **THEN** both name the relocated directory and the `daemon.log` inside it as absolute paths, the second as a JSON object,
+- **AND** the named `daemon.log` exists and is the file the daemon is writing to.
+
 ### Requirement: Serve the daemon log tail normalised
 `GET /api/v1/daemon/logs` MUST return the tail of that file, newest-first, guarded by the token even
 though `/daemon/status` on the same router is not: a readiness probe is public, log contents are
@@ -499,11 +526,24 @@ stated, whichever writer produced it; escape sequences MUST be stripped; continu
 a traceback MUST ride with the record that raised them; and a line no format fits MUST be kept whole
 rather than dropped, because it is often the interesting one.
 
+`coffer log daemon [--since <when>] [--errors] [--limit <n>] [--json]` MUST read the same tail
+through that route — the one the Activity page reads — so a terminal sees the same normalised
+records the page shows: `--since` and `--limit` pass through, `--errors` narrows to errors, the
+table form prints one record per entry with its time, level, logger and message, and `--json`
+prints the records as the route returns them. A refusal from the route MUST be printed with the
+route's error and a non-zero exit.
+
 #### Scenario: the daemon log tail reads every writer's format
 - **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a line in the format the daemon wrote before "Write one bounded daemon log in one format" was met, a uvicorn line, a colour-escaped line from an upstream, and a multi-line traceback,
 - **WHEN** `GET /api/v1/daemon/logs` is called with a token,
 - **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
 - **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.
+
+#### Scenario: the command line reads the daemon log tail
+- **GIVEN** a running daemon whose `daemon.log` holds an info record, an error record carrying a traceback, and a record older than one hour,
+- **WHEN** the user runs `coffer log daemon --json --since 1h`, then `coffer log daemon --errors --limit 1`,
+- **THEN** the first prints, newest-first, the two recent records exactly as `GET /api/v1/daemon/logs` returns them for that window, the older record absent,
+- **AND** the second prints only the error record, with its traceback riding with it.
 
 ### Requirement: Install the console scripts from source
 Installing from source (`pip install ./backend`) MUST place the `coffer` CLI and the
@@ -632,7 +672,7 @@ is written, so the file only ever states settings that still decide something.
 
 #### Scenario: an idle window left in the daemon config is ignored and dropped
 - **GIVEN** a `~/.coffer/daemon-config.json` an earlier build wrote, carrying `idle_shutdown_hours: 6` beside a pinned port,
-- **WHEN** the daemon starts, and the user then runs `coffer daemon port set` with another port,
+- **WHEN** the daemon starts, and the user then runs `coffer config set daemon.port` with another port,
 - **THEN** the daemon serves on the pinned port and never stands down on its own,
 - **AND** the rewritten file carries the new port and no `idle_shutdown_hours` key.
 

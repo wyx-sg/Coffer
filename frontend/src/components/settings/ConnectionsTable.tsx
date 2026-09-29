@@ -39,6 +39,8 @@ import type { Provider } from "@/lib/api/providers";
 import { useDeleteProvider } from "@/lib/hooks/useProviders";
 import { useKindReach } from "@/lib/hooks/useResources";
 import { reachFilter } from "@/lib/reachFilter";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 export function ConnectionsTable({
   providers,
@@ -68,7 +70,7 @@ export function ConnectionsTable({
       header: t("settings.connections.name"),
       cell: (p) => (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{p.name}</span>
+          <ResourceLabel resource={p} />
           {p.is_active ? <ActiveProviderBadge /> : null}
           {p.internal_default ? <CofferUseBadge use="engine" /> : null}
           {p.transcribe_default ? <CofferUseBadge use="transcribe" /> : null}
@@ -137,14 +139,14 @@ export function ConnectionsTable({
         rowKey={(p) => p.uid}
         isLoading={isLoading}
         search={{
-          accessor: (p) => `${p.name} ${p.base_url} ${p.description ?? ""}`,
+          accessor: (p) => `${searchableName(p)} ${p.base_url} ${p.description ?? ""}`,
           placeholder: t("settings.connections.searchPlaceholder"),
         }}
         filters={filters}
         onRowClick={(p) => navigate(`/model-providers/${encodeURIComponent(p.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (p) => `${t("common.bulk.selectRow")}: ${p.name}`,
+          ariaSelectRow: (p) => `${t("common.bulk.selectRow")}: ${displayName(p)}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -158,7 +160,9 @@ export function ConnectionsTable({
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={t("settings.connections.deleteTitle")}
-        description={t("settings.connections.deleteConfirm", { name: deleteTarget?.name ?? "" })}
+        description={t("settings.connections.deleteConfirm", {
+          name: deleteTarget ? displayName(deleteTarget) : "",
+        })}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {

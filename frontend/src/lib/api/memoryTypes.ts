@@ -32,6 +32,9 @@ export interface PartitionOut {
   /** A mutable label, and the partition's directory name under the memory
    *  root. For display. */
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}`. */
+  title?: string | null;
   /** Absolute path of the repository's main working tree; empty for `global`. */
   repository_path: string;
   /** What the repository was resolved to: `remote:<host>/<path>` when it has an
@@ -99,24 +102,4 @@ export interface AggregationResultOut {
   /** Partitions (by name) left alone because a distil pass over them was
    *  already running — reported, not failed. */
   skipped: string[];
-}
-
-/** Per-agent delivery state — whether Coffer's hook is written into that
- *  agent's settings. Whether it has fired is read from the audit log, one
- *  entry per fire (see "Audit every delivery fire"), not from here. */
-export interface DeliveryStatusOut {
-  /** Which agent this row is about, and what install/remove take. */
-  agent_uid: string;
-  /** The same agent's label, for the row's heading. Both travel, so a surface
-   *  never has to fetch the agent list to recover the other half. */
-  agent_name: string;
-  installed: boolean;
-  /** Coffer's own CLI invocation the hook runs. */
-  command: string;
-  /** The hook event delivery is attached to (e.g. `SessionStart`). */
-  event: string;
-}
-
-export interface DeliveryStatusListOut {
-  delivery: DeliveryStatusOut[];
 }

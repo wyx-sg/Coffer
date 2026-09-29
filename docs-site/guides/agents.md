@@ -40,14 +40,15 @@ Coffer scans for each supported type's config directory and offers what it finds
 **CLI:**
 
 ```sh
-coffer agent detect
-# detected: codex -> add with `coffer agent add codex --name codex`
+coffer scan
+# lists detected agents that are not registered (kind "agent"), with their type as the ref
 
-coffer agent add codex
+coffer adopt agent codex          # register a detected agent under its suggested name
+coffer agent add codex            # or register by type yourself
 # registered: agent codex
 ```
 
-`--name` is optional. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
+`--name` is optional on both. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
 
 ### Manually, with a custom config directory
 
@@ -71,41 +72,58 @@ When Coffer itself starts an agent for such a registration — a [chat](/guides/
 
 ```sh
 coffer agent edit claude-work --config-dir ~/work2/.claude --description "Work account"
-coffer resource rename agent claude-work claude-office
-coffer resource disable agent claude-office
+coffer agent edit claude-work --title "Claude (work account)"
+coffer agent edit claude-work --name claude-office
+coffer agent disable claude-office
 coffer agent rm claude-office
 ```
 
 In the web UI, the agent's detail page has **Edit** (config directory and description) and **Delete** in its header.
 
+- **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 - **Rename** changes only the label. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`, so a rename breaks nothing.
 - **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. This switch is on the CLI and REST API only.
-- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer agent detect` offers it again for as long as its config directory exists.
+- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its config directory exists.
 
-::: warning Removing an agent leaves its MCP entry in place
-Removing an agent does not uninstall the `coffer` MCP entry from its config. That entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent mcp uninstall <name>` before removing, or re-install after registering the agent again.
+::: warning Removing an agent leaves Coffer's entries in place
+Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <name>` before removing, or connect again after registering the agent again.
 :::
 
-## Install Coffer's MCP entry
+## Connect an agent to Coffer
 
-One action writes a `coffer` stdio MCP server entry into the agent's own config, pointing at `coffer-mcp-shim`. After that, the agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through a single connection.
+Connecting writes everything Coffer needs into the agent's own config, in one action:
 
-**Web UI:** on the agent's detail page, click **Install Coffer MCP**. On the **Agents** list you can select several agents and use the bulk **Install Coffer MCP** action. The **Coffer MCP** status reads **Installed** or **Not installed**.
+| Part | What it does | When |
+| --- | --- | --- |
+| Gateway MCP entry | A `coffer` stdio MCP server entry pointing at `coffer-mcp-shim`. The agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through it. | Always |
+| Memory delivery hook | A session-start hook that hands the agent its memory index. See [Memory](/guides/memory#at-session-start-through-a-hook). | While the `memory` feature is on |
+
+Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
+
+**Web UI:** on the agent's detail page, click **Connect to Coffer** (the **?** beside it lists the parts and which are in place). On the **Agents** list you can select several agents and use the bulk **Connect to Coffer** or **Disconnect from Coffer** action. The **Coffer** column reads **Connected**, **Not connected**, or **Needs repair** when only some parts are in place; connecting again puts the rest back.
 
 **CLI:**
 
 ```sh
-coffer agent mcp install claude-code
-# installed Coffer MCP into agent claude-code (/Users/you/.coffer/bin/coffer-mcp-shim)
+coffer agent connect claude-code
+# connected agent claude-code to Coffer
+#   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
+#   memory delivery hook: installed (: coffer-memory; coffer memory context --agent-uid …)
 
-coffer agent mcp status claude-code
-# installed: True
-# command: /Users/you/.coffer/bin/coffer-mcp-shim
+coffer agent connection claude-code          # add --json for the raw answer
+# claude-code: connected
 
-coffer agent mcp uninstall claude-code
+coffer agent show claude-code                # the same report, beside the agent's record
+# ...
+# coffer_connection: connected
+#   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
+
+coffer agent disconnect claude-code
 ```
 
-Restart the agent (or reload its MCP servers) after installing so it starts the shim.
+Restart the agent (or reload its MCP servers) after connecting so it starts the shim.
+
+Switching the `memory` feature on installs the hook into every connected agent; switching it off removes it everywhere. An agent that carries the gateway entry but not the hook while `memory` is on reads **Needs repair** until you connect it again.
 
 ### What gets written where
 
@@ -136,7 +154,9 @@ command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 ```
 
-Install is idempotent: installing again rewrites the `coffer` entry in place and never adds a second one. Uninstalling when nothing is installed succeeds and changes nothing. Both are backed up and audited (`agent_mcp_installed`, `agent_mcp_uninstalled`). The install status is read from the file each time; Coffer does not store it.
+The memory hook's entry is described in [Filesystem](/reference/filesystem).
+
+Connecting is idempotent: connecting again rewrites each entry in place and never adds a second one. Disconnecting when nothing is installed succeeds and changes nothing. Every write is backed up and audited by part (`agent_mcp_installed` / `agent_mcp_uninstalled`, `memory_delivery_installed` / `memory_delivery_removed`). The connection status is read from the files each time; Coffer does not store it.
 
 ### Why the shim path is absolute
 
@@ -200,18 +220,16 @@ Each type has a fixed allowlist:
 **CLI:**
 
 ```sh
-coffer agent config ls claude-code
-coffer agent config cat claude-code settings
+coffer path agent claude-code config                        # where each allowlisted file is
 coffer agent config edit claude-code instructions          # opens $EDITOR
 coffer agent config edit codex config --from-file ./config.toml
 
 # Directory entries (Claude Code subagents)
-coffer agent config files claude-code subagents
-coffer agent config write claude-code subagents reviewer.md --from-file ./reviewer.md
-coffer agent config rm claude-code subagents reviewer.md
+coffer agent config edit claude-code subagents/reviewer.md --from-file ./reviewer.md
+coffer agent config rm claude-code subagents/reviewer.md
 ```
 
-Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
+To read a file, open the path `coffer path agent <name> config` prints with your own tools. Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
 
 ::: tip Concurrent edits are refused, not overwritten
 Every read returns a fingerprint of the content. The editor and `coffer agent config edit` send it back with the save, and if the file changed on disk in the meantime — the agent itself rewrote it, or you saved it elsewhere — the write is refused with `CONFIG_FILE_STALE` (exit code 5 on the CLI) and the file is left as it is. Re-open and save again.
@@ -234,11 +252,13 @@ You can do two things with a direct entry:
 - **Adopt into Coffer**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway. Adopting from the detail page opens the new managed server's page.
 
 ```sh
-coffer agent mcp entries claude-code
-coffer agent mcp show-entry claude-code github --source global
-coffer agent mcp remove-entry claude-code old-server --source settings
-coffer agent mcp adopt claude-code github --secret GITHUB_TOKEN=github/token
+coffer scan --agent claude-code                       # direct MCP entries have kind "mcp"
+coffer scan --ref claude-code:github --source global  # one entry in full, secrets withheld
+coffer discard mcp claude-code:old-server --source settings
+coffer adopt mcp claude-code:github --secret GITHUB_TOKEN=github/token
 ```
+
+The ref is `<agent>:<entry>`, as the scan prints it.
 
 When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), adoption requires a `--secret KEY=REF` mapping for each one. Coffer stores the current value in its [encrypted credential store](/guides/credentials) under the ref you name, and the new resource config carries only the ref. A name collision is refused with a suggested alternative (`--name` to pick one). For a Claude Code name that appears in both files, pass `--source` with the file's key (`global` or `settings`). The `coffer` entry itself is never removable or adoptable this way.
 
@@ -263,7 +283,7 @@ coffer agent plugin list claude-code
 coffer agent plugin show claude-code formatter@acme
 coffer agent plugin disable claude-code formatter@acme
 coffer agent plugin enable claude-code formatter@acme
-coffer agent plugin uninstall codex formatter@acme
+coffer agent plugin rm codex formatter@acme
 ```
 
 | | Claude Code | Codex |
@@ -308,16 +328,18 @@ The **Memory** tab lists the agent's own memory stores, read-only:
 - **Claude Code:** one store per project at `<config_dir>/projects/<slug>/memory/`, labelled with the real project directory.
 - **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to.
 
-Opening a row shows the store's files with a read-only preview. The same tab carries the memory-delivery hook install, which is covered in [Memory](/guides/memory).
+Opening a row shows the store's files with a read-only preview. The memory delivery hook is part of the agent's [Coffer connection](#connect-an-agent-to-coffer), not this tab.
 
 The **Conversations** tab lists the agent's local transcripts (`<config_dir>/projects/**/*.jsonl` for Claude Code, `<config_dir>/sessions/**/*.jsonl` for Codex) with title, project, message count and activity times, searchable and sortable. Opening one renders the session as a conversation with a **Contents** list of your prompts; the harness's own injected blocks are folded under **Harness context**.
 
 ```sh
-coffer agent native-memory claude-code
-coffer agent native-memory-files claude-code --dir <memory_dir>
-coffer agent transcripts claude-code -q "release" --sort message_count
-coffer agent transcript claude-code --path <source_path> --limit 50
+coffer path agent claude-code memory                   # the native memory stores
+coffer path agent claude-code transcripts              # the transcript folders
+coffer agent transcript claude-code -q "release" --sort message_count
+coffer agent transcript claude-code <session_id> --limit 50
 ```
+
+Native memory stores are plain files; read them with your own tools at the paths `coffer path` prints.
 
 Transcript text is secret-scrubbed before it is shown, long turns are cut and flagged, and a session is read in windows of turns. Coffer never writes, stores or sends transcripts or native memory anywhere.
 
@@ -329,8 +351,8 @@ The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by C
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| **Install Coffer MCP** fails naming `coffer-mcp-shim` | The daemon cannot find the shim | Set `COFFER_MCP_SHIM_PATH` in the daemon's environment, or reinstall Coffer so `~/.coffer/bin/coffer-mcp-shim` exists. |
-| Status says **Installed** but the agent has no Coffer tools | The agent was not restarted, or reads a different config directory | Restart the agent. For a custom directory, start the agent with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointing at it. |
+| **Connect to Coffer** fails naming `coffer-mcp-shim` | The daemon cannot find the shim | Set `COFFER_MCP_SHIM_PATH` in the daemon's environment, or reinstall Coffer so `~/.coffer/bin/coffer-mcp-shim` exists. |
+| Status says **Connected** but the agent has no Coffer tools | The agent was not restarted, or reads a different config directory | Restart the agent. For a custom directory, start the agent with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointing at it. |
 | **Availability** shows **Not found** | The agent's CLI (`claude` or `codex`) is not on the daemon's `PATH` | Install the CLI, or make it visible to the daemon. |
 | A save fails with `CONFIG_FILE_STALE` | The file changed after you opened it | Re-open the file and save again. |
 | Plugin uninstall is missing | `claude` is not on `PATH` | Run `claude plugin uninstall <id>` yourself. |

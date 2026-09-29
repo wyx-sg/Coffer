@@ -1,9 +1,9 @@
 """Wiring for the one ``memory`` kind (spec memory).
 
 Mirrors ``knowledge_wiring.py`` + ``curation_wiring.py`` combined: one service for
-the derived tree and its two passes (``MemoryService``), the MCP locator
-(``RecallService`` / ``coffer__recall``), and the explicit-install delivery half
-(``DeliveryService``).
+the derived tree and its two passes (``MemoryService``), the memory root the
+gateway's handshake names, and the delivery hook half (``DeliveryService``),
+which the agent's Coffer connection installs.
 
 **The three internal-engine arguments on ``MemoryService`` are the point of
 this module.** The distil pass reaches a model through the same injected ports
@@ -23,16 +23,16 @@ internal connection is Coffer's own engine's job
 (``application.engine.resolve``) and not something each kind's wiring works out
 from the provider service for itself.
 
-The kind is wired before the MCP kind so the gateway advertises
-``coffer__recall``; the distil sweep it starts is on by default, because it only
+The kind exposes no MCP tool (spec memory "Expose no memory tool and name the
+memory root at session start"): it registers the memory root as an agent
+directory instead, which the handshake and the ``coffer-guide`` skill name while
+the ``memory`` feature is on. The distil sweep it starts is on by default, because it only
 ever rewrites a tree that can be rebuilt from the agents' own memories (see
 ``distil_worker.py``).
 
 Nothing here can fail to build: with no internal connection configured the
-selector just resolves to ``None`` per call, and ``RecallService`` /
-``MemoryService`` / ``DeliveryService`` need no internal connection at all —
-recall is a literal scan over notes on disk ("Recall locations by literal
-match").
+selector just resolves to ``None`` per call, and ``MemoryService`` /
+``DeliveryService`` need no internal connection at all.
 """
 
 from __future__ import annotations
@@ -44,29 +44,29 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.service import AgentService
-from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
-from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_switch import (
+    ConnectedAgents,
     memory_switch_subscriber,
-    reconcile_delivery,
+    reconcile_at_boot,
+    reconcile_on_switch,
 )
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
-from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.daemon.feature_settings import DaemonConfigWithdrawnDelivery
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
@@ -125,34 +125,37 @@ async def run_memory_delivery_boot_heal(
 
     It follows the ``memory`` switch as well (spec experimental-features
     "Withdraw what a switched-off feature put in front of agents"): with memory
-    off it makes sure no agent still carries the hook, with memory on it puts
-    back what an earlier switch took out before healing. The same reconcile
-    runs on every switch (:func:`follow_memory_switch`).
+    off it makes sure no agent still carries the hook. Switching it on later
+    installs the hook into the connected agents (:func:`follow_memory_switch`).
 
     Best-effort, like the sweeps it sits beside: whatever it finds is logged,
     and nothing here is allowed to fail boot.
     """
-    await _reconcile_delivery(delivery, enabled=features.is_enabled("memory"))
+    enabled = features.is_enabled("memory")
+    await _logged(reconcile_at_boot(delivery, enabled=enabled))
 
 
-def follow_memory_switch(delivery: DeliveryService, features: FeatureService) -> None:
+def follow_memory_switch(
+    delivery: DeliveryService, features: FeatureService, connected: ConnectedAgents
+) -> None:
     """Re-run the delivery reconcile whenever ``memory`` is switched, to the
-    state ``memory`` is in when it runs."""
+    state ``memory`` is in when it runs: off withdraws the hook everywhere, on
+    installs it into every agent ``connected`` names."""
 
     async def _reconcile(enabled: bool) -> None:
-        await _reconcile_delivery(delivery, enabled=enabled)
+        await _logged(reconcile_on_switch(delivery, connected, enabled=enabled))
 
     features.subscribe(memory_switch_subscriber(features, _reconcile))
 
 
-async def _reconcile_delivery(delivery: DeliveryService, *, enabled: bool) -> None:
+async def _logged(reconcile: Awaitable[tuple[str, ...]]) -> None:
     try:
-        notes = await reconcile_delivery(delivery, DaemonConfigWithdrawnDelivery(), enabled=enabled)
+        notes = await reconcile
     except Exception:
-        logger.exception("memory_delivery_boot_heal.failed")
+        logger.exception("memory_delivery_reconcile.failed")
         return
     for note in notes:
-        logger.warning("memory_delivery_boot_heal %s", note)
+        logger.warning("memory_delivery_reconcile %s", note)
 
 
 def wire_memory_kind(
@@ -186,8 +189,15 @@ def wire_memory_kind(
     # is derived from the agents installed on THIS machine and is rebuilt per
     # machine (spec vault-sync "Keep reach machine-local").
 
-    recall_service = RecallService(memory=service)
-    register_recall_tool(builtin_tools, recall_service=recall_service)
+    # No tool: an agent finds a note by searching this directory with its own
+    # tools, and the handshake names it while the feature is on.
+    builtin_tools.register_directory(
+        AgentDirectory(
+            name="memory",
+            path=lambda: str(memory_paths.memory_root()),
+            feature="memory",
+        )
+    )
 
     delivery_service = DeliveryService(
         agent_service=agent_service, audit=audit, store=ConfigFileStore()

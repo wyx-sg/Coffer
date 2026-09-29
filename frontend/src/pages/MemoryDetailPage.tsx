@@ -16,6 +16,9 @@
 // promise the surface could not keep. What is left is the truth it can keep:
 // here are the files, this is what they say, open one if you want to change it.
 //
+// The heading shows the partition's title when one is set (the name beside
+// it), and the header carries the Edit dialog that sets or clears it.
+//
 // The header names the REPOSITORY the partition is keyed on, not a working
 // directory: a worktree and a second clone are one partition (see
 // "Identify a partition by its repository"). When
@@ -26,6 +29,8 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
@@ -53,14 +58,19 @@ export function MemoryDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) }}
-        title={partition}
+        title={row ? <ResourceLabel resource={row} heading /> : partition}
         badges={row?.unresolvable ? <UnresolvableBadge /> : null}
         subtitle={
           row?.repository_path ? (
             <span className="font-mono text-xs">{row.repository_path}</span>
           ) : null
         }
-        actions={<MemoryUpdateButton variant="outline" size="sm" running={passRunning} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <MemoryUpdateButton variant="outline" size="sm" running={passRunning} />
+            {row ? <EditTitleDialog kind="memory" resource={row} /> : null}
+          </div>
+        }
       />
 
       <MemoryFileTree uid={uid} />

@@ -1,6 +1,6 @@
 // frontend/src/pages/AgentDetailPage.tsx — spec agent-registry.
 // Per-agent detail page: the shared PageHeader (back link, type chip, and the
-// [Install/Uninstall Coffer MCP][Edit][Delete] actions) over seven tabs —
+// [Connect to / Disconnect from Coffer][Edit][Delete] actions) over seven tabs —
 // Overview, Skills, MCP servers, Plugins, Memory, Conversations and Config
 // files. The active tab lives in the URL (?tab=) so a refresh or a shared link
 // reopens the same one — and so that coming back from a Memory or Conversations
@@ -22,7 +22,7 @@ import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEdit
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentDeleteDialog } from "@/components/agents/AgentDeleteDialog";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
-import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
+import { AgentConnectionButton } from "@/components/agents/AgentConnectionControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
@@ -37,6 +37,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgent } from "@/lib/hooks/useAgents";
+import { displayName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 const TABS = ["overview", "skills", "mcpServers", "plugins", "memory", "conversations", "config"];
 const DEFAULT_TAB = "overview";
@@ -103,12 +105,12 @@ export function AgentDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/agents", label: t("agents.detail.back") }}
-        title={agent.name}
+        title={<ResourceLabel resource={agent} heading />}
         badges={<Badge variant="secondary">{agentTypeLabel(agent.type)}</Badge>}
         subtitle={agent.description ?? undefined}
         actions={
           <div className="flex items-center gap-2">
-            <AgentMcpButton uid={uid} />
+            <AgentConnectionButton uid={uid} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-1.5 size-3.5" /> {t("agents.edit")}
             </Button>
@@ -183,7 +185,7 @@ export function AgentDetailPage() {
 
       <AgentDeleteDialog
         uid={uid}
-        name={agent.name}
+        name={displayName(agent)}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={() => navigate("/agents")}

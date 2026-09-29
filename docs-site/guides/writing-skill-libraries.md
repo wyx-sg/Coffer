@@ -275,7 +275,7 @@ Write the flow as numbered functions with explicit gates between them:
 
 ## Authoring workflow
 
-Author outside Coffer's master store. `coffer skill import` copies a folder into `~/.coffer/skills/`; authoring inside the store would mean importing a folder onto itself.
+Author outside Coffer's master store. `coffer skill add` copies a folder into `~/.coffer/skills/`; authoring inside the store would mean importing a folder onto itself.
 
 ```sh
 # 1. Author and test in the authoring root
@@ -284,7 +284,7 @@ cd ~/.coffer/skill-src/<domain>
 ~/.cache/coffer-skill-venv/bin/python scripts/lint_portable.py .
 
 # 2. Import into the master store; Coffer validates and delivers it
-coffer skill import ~/.coffer/skill-src/<domain>
+coffer skill add ~/.coffer/skill-src/<domain>
 
 # 3. Confirm delivery
 coffer skill verify
@@ -292,8 +292,8 @@ coffer skill verify
 
 After the first import, keep the authoring root as the source of truth:
 
-- For a real change, edit the authoring root, run the tests and the lint again, then `coffer skill import --force ~/.coffer/skill-src/<domain>`.
-- For a quick fix to an existing text file, `coffer skill write <domain> <path> --from-file <file>` edits the master in place, with a fingerprint check against concurrent edits. It cannot create files. Apply the same change to the authoring root, or the next import overwrites it.
+- For a real change, edit the authoring root, run the tests and the lint again, then `coffer skill add --force ~/.coffer/skill-src/<domain>`.
+- For a quick fix, edit the file in the master folder that `coffer path skill <domain>` prints; agents see the change on their next read. Apply the same change to the authoring root, or the next `coffer skill add --force` overwrites it.
 - `coffer skill verify` reports drift between the master and each agent's delivered link, and `--fix` repairs missing or re-pointed links.
 
 When a new domain replaces older single-purpose skills, remove the old ones with `coffer skill rm` only after the new domain has worked end to end, then confirm no stale links remain in the agents' skill folders.

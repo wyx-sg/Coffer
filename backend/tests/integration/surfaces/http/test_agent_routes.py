@@ -452,3 +452,22 @@ def test_error_422_unprocessable_body(tmp_path, monkeypatch):
                 json={"type": bad_type, "name": "x", "config_dir": str(config_dir)},
             )
             assert r.status_code == 422, f"{bad_type}: {r.text}"
+
+
+def test_agent_out_carries_the_resource_title(tmp_path, monkeypatch):
+    """spec resource-framework "Carry an optional editable title on every resource":
+    the agent's own list and detail reads carry the title set through the
+    kind-agnostic update beside the unchanged name."""
+    app = _app(tmp_path, monkeypatch, 59796)
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    with _client(app) as c:
+        uid = _codex_uid(c, "cx", config_dir)
+        assert c.get(f"/api/v1/agents/{uid}").json()["title"] is None
+
+        r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Work Codex"})
+        assert r.status_code == 200, r.text
+        detail = c.get(f"/api/v1/agents/{uid}").json()
+        assert (detail["name"], detail["title"]) == ("cx", "Work Codex")
+        items = {a["uid"]: a for a in c.get("/api/v1/agents").json()["items"]}
+        assert items[uid]["title"] == "Work Codex"

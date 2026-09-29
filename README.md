@@ -17,7 +17,7 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 - **Providers** — one shared registry of model-provider profiles (base URL plus credential), projected atomically into each agent's own native config, so you switch provider once instead of once per agent. Credentials stay Fernet ciphertext and are isolated per agent.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read the same bytes with their own file tools, find things by walking a generated catalogue and grepping, and add to it through `coffer__write`, with nothing chunked, embedded or reconciled in between. Each collection is a resource you can enable or disable; an enabled collection is served to every agent. A curation pass merges new material into coherent documents, on a sweep or on request.
-- **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers a budgeted digest back at session start; `coffer__recall` fetches whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
+- **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers a budgeted digest back at session start, naming the memory root (`coffer path memory`) that an agent greps with its own file tools for whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
 - **Channels** — chat with your registered coding agents (Claude Code, Codex) from Telegram or SeaTalk, and receive notifications from your phone.
 
 Run Coffer on more than one machine? The vault **converges bidirectionally** with one git remote you own. A background worker applies a diff against the last state the vault provably held, and git's three-way merge is the arbiter when both ends moved — so nothing is overwritten wholesale. A new machine bootstraps with `coffer sync adopt`. Secrets travel as ciphertext only; the master key never leaves a machine except through an explicit out-of-band transfer you perform yourself. One thing deliberately stays behind: a resource's **reach** — whether it is enabled, and which agents it is scoped to — is machine-local, so each machine answers that question for itself.
@@ -101,7 +101,7 @@ coffer open                             # opens an authenticated browser session
 origin, where the daemon serves the web UI itself. The frozen daemon deploys its sibling
 binaries into `~/.coffer/bin` on first start, so MCP clients can resolve `coffer-mcp-shim` from
 `PATH`. The daemon listens on port 8000 by default, so that address is stable enough to
-bookmark; `coffer daemon port set <port>` moves it if something else on your machine wants 8000.
+bookmark; `coffer config set daemon.port <port>` moves it if something else on your machine wants 8000.
 
 > **macOS (unsigned):** binaries extracted from a browser-downloaded archive are quarantined too.
 > Clear the flag: `xattr -dr com.apple.quarantine ~/.coffer/bin`
@@ -142,7 +142,7 @@ coffer mcp add filesystem \
   --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
 
 coffer mcp list                   # → filesystem  | stdio | enabled
-coffer mcp tool list filesystem   # → read_file, write_file, list_directory, …
+coffer mcp cap list filesystem    # → tool:read_file, tool:write_file, …
 ```
 
 Then point your MCP client at the shim — see **Connect to an MCP client** below.
@@ -153,14 +153,15 @@ An **agent** is a registered local AI coding agent (supported types: `claude_cod
 Coffer can auto-detect installed agents (it lists candidates and asks you to confirm — nothing is
 registered automatically), edit each agent's curated config files in-app (format-validated,
 atomic write with a `.bak` backup, plus an in-editor find/replace that scrolls to the match), and
-one-click install or uninstall Coffer's own MCP server into an agent. The web UI has an
-**Agents** page (list + detail), a detect dialog, the config-file editor, and an MCP-install toggle.
+connect an agent to Coffer (or disconnect it) in one click — its gateway MCP entry plus, while
+memory is on, the memory delivery hook. The web UI has an **Agents** page (list + detail), a detect
+dialog, the config-file editor, and a Connect to Coffer control.
 
 ```bash
-coffer agent detect               # discover installed agents (confirm before registering)
+coffer scan                       # discover installed agents (confirm before registering)
 coffer agent add claude_code      # register one (--name optional; defaults to claude-code)
 coffer agent config edit <name> <key>  # edit a curated config file in your $EDITOR
-coffer agent mcp install <name>   # install Coffer's MCP server into the agent
+coffer agent connect <name>       # connect the agent to Coffer (MCP entry + memory hook)
 ```
 
 ---
@@ -173,7 +174,7 @@ Use `coffer-mcp-shim` as the stdio MCP server command. The shim auto-discovers (
 
 ```bash
 coffer agent add claude_code
-coffer agent mcp install claude-code
+coffer agent connect claude-code
 ```
 
 This writes the shim entry into Claude Code's own config, with the agent's identity on it.
@@ -182,7 +183,7 @@ This writes the shim entry into Claude Code's own config, with the agent's ident
 
 ```bash
 coffer agent add codex
-coffer agent mcp install codex
+coffer agent connect codex
 ```
 
 ### Any other MCP client

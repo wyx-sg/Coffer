@@ -197,11 +197,11 @@ class KnowledgeService:
         them here — once — is what lets a caller act on a row it just rendered,
         and what keeps a folder nobody registered out of the list.
         """
-        uid_by_name = {r.name: r.uid for r in await self._rows()}
+        row_by_name = {r.name: r for r in await self._rows()}
         return [
-            dataclasses.replace(c, uid=uid_by_name[c.name])
+            dataclasses.replace(c, uid=row_by_name[c.name].uid, title=row_by_name[c.name].title)
             for c in catalogue.list_collections()
-            if c.name in uid_by_name
+            if c.name in row_by_name
         ]
 
     # ----- reading, for the human surfaces -----------------------------

@@ -97,10 +97,10 @@ def test_taken_fixed_port_refuses_to_start_with_an_actionable_message(
     assert str(_HELD_PORT) in message
     # It must not merely fail — it must leave the user able to act without
     # going looking for the commands.
-    assert "coffer daemon port set" in message
+    assert "coffer config set daemon.port" in message
     # This port is not the default, so returning to the default is a real way
     # out and the message owes the user that option.
-    assert "coffer daemon port clear" in message
+    assert "coffer config unset daemon.port" in message
     # Identifying the holder is best-effort (another user's process cannot be
     # inspected), but this one is ours, so it must be named.
     assert raised.value.holder is not None
@@ -192,7 +192,7 @@ def test_a_held_default_port_refuses_to_start_with_nothing_configured(
 
     Before the inversion this was the case that moved on quietly to the next
     port; it is now the same startup failure as a squatted fixed port, and has
-    to carry the same diagnosis. ``coffer daemon port clear`` is deliberately
+    to carry the same diagnosis. ``coffer config unset daemon.port`` is deliberately
     NOT offered: nothing is configured, so it would change nothing.
     """
     monkeypatch.setattr(daemon_config, "DEFAULT_PORT", _STAND_IN_DEFAULT)
@@ -209,8 +209,8 @@ def test_a_held_default_port_refuses_to_start_with_nothing_configured(
     assert str(_STAND_IN_DEFAULT) in message
     assert raised.value.holder is not None
     assert f"pid {raised.value.holder.pid}" in message
-    assert "coffer daemon port set" in message
-    assert "coffer daemon port clear" not in message
+    assert "coffer config set daemon.port" in message
+    assert "coffer config unset daemon.port" not in message
 
     assert not (_isolated_home / ".coffer" / "daemon.json").exists()
 

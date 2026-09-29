@@ -48,8 +48,8 @@ parameters and **returns what it built** as a small frozen dataclass
 (`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`,
 `McpWiring`, `ChatWiring`, …). `wire_resource_kinds` calls the kind steps in
 dependency order — agent and skill, then provider (it projects into agents),
-then knowledge, then memory (so the gateway advertises `coffer__recall`), then
-MCP last of the kinds (so it picks up every built-in tool), then Coffer's own
+then knowledge, then memory (so the gateway's handshake names the memory
+root), then MCP last of the kinds (so it picks up every built-in tool), then Coffer's own
 guide skill — and returns them bundled in `KindWirings`. Chat, curation and
 channels are wired after that from those results. Sync contributions travel
 the same way: one mutable `SyncContributions` collector is created by the

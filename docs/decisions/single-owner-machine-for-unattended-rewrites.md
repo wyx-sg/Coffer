@@ -56,7 +56,7 @@ derives four states from the field and the registry — `unowned`, `self`,
 a fault, because the pass then runs on no machine at all; an **empty** registry
 never yields it, since "we cannot say" is not "no machine claims this". The
 user takes the pass over or clears the owner from
-`coffer engine curate-owner show|set|clear` or
+`coffer config get|set|unset engine.curate_owner` or
 `PUT /api/v1/internal-engine-config/curation-owner`. The four states are the
 same rule, statement for statement, as a channel's machine binding
 (frontend `lib/machineBinding.ts`), because the two facts have the same shape:

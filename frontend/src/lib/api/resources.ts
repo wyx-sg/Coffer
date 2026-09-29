@@ -19,7 +19,7 @@ export type ResourceOut = components["schemas"]["ResourceOut"];
 
 /** `POST /resources` body — what registering any kind takes. */
 export type ResourceCreate = components["schemas"]["ResourceCreate"];
-/** `PATCH /resources/{uid}` body — name, description and/or config. */
+/** `PATCH /resources/{uid}` body — name, title, description and/or config. */
 export type ResourceUpdate = components["schemas"]["ResourceUpdate"];
 
 export const resourcesApi = {
@@ -55,6 +55,18 @@ export const resourcesApi = {
       params: { path: { uid } },
     });
     if (error) throwApiError(error, "INTERNAL_ERROR", "delete failed");
+  },
+  /** Set or clear (null) a resource's display title — every kind, a kind
+   *  whose name is fixed included (spec resource-framework "Carry an optional
+   *  editable title on every resource"). */
+  setTitle: async (uid: string, title: string | null): Promise<ResourceOut> => {
+    const { data, error } = await getApiClient().PATCH("/resources/{uid}", {
+      params: { path: { uid } },
+      body: { title },
+    });
+    if (error) throwApiError(error, "INTERNAL_ERROR", "update failed");
+    if (!data) throw new ApiError("INTERNAL_ERROR", "empty update response");
+    return data;
   },
   /**
    * Rename a resource of ANY kind.

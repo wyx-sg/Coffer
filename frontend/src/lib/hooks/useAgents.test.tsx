@@ -23,8 +23,8 @@ import {
   useAgentConfigFile,
   useAgentConfigFiles,
   useAgentMcpEntries,
-  useAgentMcpInstall,
-  useAgentMcpStatus,
+  useAgentConnect,
+  useAgentConnection,
   useAgents,
   useDeleteUnmanagedSkill,
   usePatchAgent,
@@ -245,32 +245,36 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
   });
 });
 
-describe("useAgentMcpStatus / useAgentMcpInstall", () => {
+describe("useAgentConnection / useAgentConnect", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("GETs the MCP install status", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { installed: true }));
+  test("GETs the Coffer connection", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { state: "connected", parts: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentMcpStatus("u-cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentConnection("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
     expect((init as RequestInit).method).toBe("GET");
   });
 
-  test("POSTs to install and DELETEs to uninstall", async () => {
+  test("POSTs to connect and DELETEs to disconnect", async () => {
     // A fresh Response per call: a body can only be read once, and the shared
     // `call` reads every 2xx body (it does not swallow a second read).
-    const fetchMock = vi.fn().mockImplementation(() => jsonResponse(200, { installed: true }));
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => jsonResponse(200, { state: "connected", parts: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentConnect("u-cur"), { wrapper: wrapper() });
 
     await result.current.mutateAsync(true);
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("POST");
 
     await result.current.mutateAsync(false);
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("DELETE");
-    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/u-cur\/mcp-install$/);
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/u-cur\/coffer-connection$/);
   });
 });
 
@@ -416,7 +420,7 @@ describe("mutation failures are never silent", () => {
 
   test.each([
     ["useRemoveAgent", () => useRemoveAgent(), "u-cur"],
-    ["useAgentMcpInstall", () => useAgentMcpInstall("u-cur"), true],
+    ["useAgentConnect", () => useAgentConnect("u-cur"), true],
     ["useUninstallPlugin", () => useUninstallPlugin("u-cur"), { id: "p1" }],
     ["useTogglePlugin", () => useTogglePlugin("u-cur"), { id: "p1", enabled: true }],
     ["useRemoveMcpEntry", () => useRemoveMcpEntry("u-cur"), { entry: "e" }],

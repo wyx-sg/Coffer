@@ -10,18 +10,17 @@ import typer
 from coffer.surfaces.cli import (
     _client,
     agent_cmd,
-    audit_cmd,
     channel_cmd,
+    config_cmd,
     credentials_cmd,
     daemon_cmd,
-    engine_cmd,
     knowledge_cmd,
+    log_cmd,
     memory_cmd,
     open_cmd,
+    path_cmd,
     provider_cmd,
-    resource_cmd,
-    retention_cmd,
-    scope_cmd,
+    scan_cmd,
     skill_cmd,
     sync_cmd,
 )
@@ -47,10 +46,12 @@ def root(
 
 app.add_typer(daemon_cmd.app, name="daemon")
 app.add_typer(open_cmd.app, name="open")
-app.add_typer(resource_cmd.app, name="resource")
-app.add_typer(scope_cmd.app, name="scope")
-app.add_typer(audit_cmd.app, name="audit")
-app.add_typer(retention_cmd.app, name="retention")
+app.add_typer(config_cmd.app, name="config")
+app.add_typer(log_cmd.app, name="log")
+app.add_typer(path_cmd.app, name="path")
+app.command("scan")(scan_cmd.scan)
+app.add_typer(scan_cmd.adopt_app, name="adopt")
+app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(credentials_cmd.app, name="credentials")
 app.add_typer(agent_cmd.app, name="agent")
@@ -59,7 +60,6 @@ app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
-app.add_typer(engine_cmd.app, name="engine")
 app.add_typer(sync_cmd.app, name="sync")
 
 

@@ -1,20 +1,44 @@
-"""coffer channel ... commands (spec channels)."""
+"""coffer channel ... commands (spec channels).
+
+``list``, ``edit``, ``rm``, ``enable``, ``disable`` and ``scope`` are the
+lifecycle verbs every kind's group shares (``_kind_verbs``); ``edit`` carries
+the two group-gating switches as this kind's own flags. ``add`` and ``show``
+are this kind's own: ``add`` takes a channel type's settings as flags and binds
+the channel to this machine, and ``show`` reports the channel's status beside
+its configuration. ``pair``, ``bind`` and ``notify`` are channel-specific.
+"""
 
 from __future__ import annotations
 
+import dataclasses
 import json as _json
 from typing import Any
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._channel_options import (
+    _IGNORE_OTHER_MENTIONS,
+    _REQUIRE_MENTION,
+    _WAIT_AFTER_FORWARD,
+    _WAIT_AFTER_TEXT,
+    _settings,
+    edit_option,
+    settings_config,
+)
+from coffer.surfaces.cli._kind_verbs import (
+    Column,
+    EditFlags,
+    KindVerbs,
+    check_title_arg,
+    label,
+    register_kind_verbs,
+    verbose_of,
+)
 from coffer.surfaces.cli._options import ExitCode
-from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
 
 app = typer.Typer(help="Manage messaging channels (Telegram, SeaTalk)")
-_console = Console()
 
 
 def _this_machine_id(client: Any, *, verbose: bool) -> str:
@@ -35,91 +59,7 @@ def _this_machine_id(client: Any, *, verbose: bool) -> str:
     return str(machine_id)
 
 
-@app.command("list")
-def list_cmd(
-    ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """List registered channels."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/resources", params={"kind": "channel"})
-        _cli_client.check(r, verbose=verbose)
-    items = r.json()["resources"]
-    if output_json:
-        typer.echo(_json.dumps(items, indent=2))
-        return
-    table = Table(title="Channels")
-    # "Runs on" is the machine id rather than a name: resolving a name needs
-    # the machine registry, which only exists once this vault converges with a
-    # remote, and a column that is blank on a single-machine install would say
-    # less than the id does. `coffer sync machine list` maps the two.
-    for col in ("Name", "Type", "Agent", "Enabled", "Runs on"):
-        table.add_column(col)
-    for it in items:
-        config = it.get("config", {})
-        table.add_row(
-            it["name"],
-            str(config.get("channel_type", "")),
-            str(config.get("default_agent", "")),
-            "yes" if it.get("enabled") else "no",
-            str(config.get("runs_on") or "unbound"),
-        )
-    _console.print(table)
-
-
-# Group gating (spec channels "Configure when the bot answers in a group"):
-# tri-state, so an option left out keeps the stored value (or, at register,
-# the config's own default) instead of overwriting it.
-_REQUIRE_MENTION = typer.Option(
-    None,
-    "--require-mention/--no-require-mention",
-    help="In groups, answer only when @mentioned or replied to (default: on)",
-)
-_IGNORE_OTHER_MENTIONS = typer.Option(
-    None,
-    "--ignore-other-mentions/--no-ignore-other-mentions",
-    help="In groups, drop a message that @mentions anyone else (default: off)",
-)
-
-
-_WAIT_AFTER_TEXT = typer.Option(
-    None,
-    "--wait-after-text",
-    min=0,
-    max=60,
-    help="Seconds to wait after a text message for more before answering (default: 1.5; 0 = none)",
-)
-_WAIT_AFTER_FORWARD = typer.Option(
-    None,
-    "--wait-after-forward",
-    min=0,
-    max=60,
-    help="Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none)",
-)
-
-
-def _settings(
-    require_mention: bool | None,
-    ignore_other_mentions: bool | None,
-    wait_after_text: float | None = None,
-    wait_after_forward: float | None = None,
-) -> dict[str, bool | float]:
-    """The config keys the user actually passed: group gating ("Configure when the
-    bot answers in a group") and the quiet windows ("Take a burst of messages as
-    one turn")."""
-    passed: dict[str, bool | float | None] = {
-        "require_mention": require_mention,
-        "ignore_other_mentions": ignore_other_mentions,
-        "wait_after_text_seconds": wait_after_text,
-        "wait_after_forward_seconds": wait_after_forward,
-    }
-    return {key: value for key, value in passed.items() if value is not None}
-
-
-@app.command("register")
-def register(
+def add(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
     channel_type: str = typer.Option(..., "--type", help="telegram | seatalk"),
@@ -151,6 +91,8 @@ def register(
     ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
     wait_after_text: float | None = _WAIT_AFTER_TEXT,
     wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
+    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
+    description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Register a channel.
 
@@ -199,21 +141,25 @@ def register(
     else:
         typer.echo("--type must be telegram or seatalk", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         config["runs_on"] = runs_on if runs_on else _this_machine_id(c, verbose=verbose)
         # A new channel is created unscoped, so an enabled one starts here and
         # may drive every registered agent (ADR per-agent-resource-scope).
         # Narrowing the agents it may drive is a later, separate edit —
-        # ``coffer scope set channel <name> --agents <names>`` — not something
-        # register has to ask about.
+        # ``coffer channel scope <name> --agents <names>`` — not something
+        # add has to ask about.
         config["default_agent"] = resolve_uid(c, "agent", default_agent, verbose=verbose)
-        r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
+        body = {"kind": "channel", "name": name, "config": config, "description": description}
+        r = c.post("/resources", json=body)
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"registered: channel {name}")
+        if title:
+            r = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
+            _cli_client.check(r, verbose=verbose)
+    typer.echo(f"added: channel {name}")
 
 
-@app.command("pair")
 def pair(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
@@ -235,24 +181,43 @@ def pair(
     typer.echo("Send this code to the bot from the account that should own the channel.")
 
 
-@app.command("status")
-def status(
+def show(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Channel name"),
+    ref: str = typer.Argument(..., metavar="NAME", help="Name or uid"),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
-    """Show runtime, pairing, and inbound status."""
-    verbose = (ctx.obj or {}).get("verbose", False)
+    """Show a channel's configuration and status (runtime, binding, pairing, inbound).
+
+    \f
+    Two reads: the resource document (``GET /resources/{uid}``) and the
+    channel's status (``GET /channels/{uid}/status``); ``--json`` carries the
+    document with the status under ``status`` (spec channels "Manage channels
+    from the Channels page and the CLI").
+    """
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "channel", name, verbose=verbose)
-        r = c.get(f"/channels/{uid}/status")
+        resource = resolve_ref(c, "channel", ref, verbose=verbose)
+        r = c.get(f"/channels/{resource['uid']}/status")
         _cli_client.check(r, verbose=verbose)
     body = r.json()
     if output_json:
-        typer.echo(_json.dumps(body, indent=2))
+        typer.echo(_json.dumps({**resource, "status": body}, indent=2))
         return
-    typer.echo(f"channel:  {body['name']} ({body['channel_type']})")
+    config = resource.get("config") or {}
+    typer.echo(f"channel:  {label(resource)} ({body['channel_type']})")
+    if resource.get("title"):
+        typer.echo(f"name:     {resource['name']}")
+    typer.echo(f"uid:      {resource['uid']}")
+    if resource.get("description"):
+        typer.echo(f"about:    {resource['description']}")
+    typer.echo(f"agent:    {config.get('default_agent') or '-'}")
+    typer.echo(
+        f"gating:   require_mention={'on' if config.get('require_mention', True) else 'off'}"
+        f"  ignore_other_mentions={'on' if config.get('ignore_other_mentions') else 'off'}"
+    )
+    for key in sorted(k for k in config if k.endswith("_ref")):
+        typer.echo(f"secret:   {key} = {config[key]}")
     typer.echo(f"enabled:  {body['enabled']}    running: {body['running']}")
     # spec channels "Bind each channel to the one machine that runs it": unbound runs
     # nowhere and is said so — never dressed as the normal "another machine" state.
@@ -280,7 +245,7 @@ def status(
 
 
 def _echo_inbound(inbound: dict[str, object]) -> None:
-    """The inbound lines of ``coffer channel status`` for a SeaTalk channel.
+    """The inbound lines of ``coffer channel show`` for a SeaTalk channel.
 
     Spec channels/seatalk "Report the websocket connection as the channel's
     inbound state": the connection state and its last error, and nothing about
@@ -295,7 +260,6 @@ def _echo_inbound(inbound: dict[str, object]) -> None:
         typer.echo(f"ws error: {error}")
 
 
-@app.command("bind")
 def bind(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
@@ -325,38 +289,6 @@ def bind(
     typer.echo(f"channel {name} runs on {config['runs_on']}")
 
 
-@app.command("set")
-def set_cmd(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Channel name"),
-    require_mention: bool | None = _REQUIRE_MENTION,
-    ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
-    wait_after_text: float | None = _WAIT_AFTER_TEXT,
-    wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
-) -> None:
-    """Change when the bot answers in a group, and how long it waits for more.
-
-    Options left out keep their current value.
-    """
-    verbose = (ctx.obj or {}).get("verbose", False)
-    changes = _settings(require_mention, ignore_other_mentions, wait_after_text, wait_after_forward)
-    if not changes:
-        typer.echo("nothing to change — pass at least one option", err=True)
-        raise typer.Exit(int(ExitCode.INVALID_USAGE))
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "channel", name, verbose=verbose)
-        r = c.get(f"/resources/{uid}")
-        _cli_client.check(r, verbose=verbose)
-        config = {**(r.json().get("config") or {}), **changes}
-        r = c.patch(f"/resources/{uid}", json={"config": config})
-        _cli_client.check(r, verbose=verbose)
-    for key, value in changes.items():
-        shown = ("on" if value else "off") if isinstance(value, bool) else f"{value:g}s"
-        typer.echo(f"{key}: {shown}")
-
-
-@app.command("notify")
 def notify(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
@@ -381,3 +313,46 @@ def notify(
         r = c.post(f"/channels/{uid}/notify", json=body)
         _cli_client.check(r, verbose=verbose)
     typer.echo("sent")
+
+
+_CHANNEL = KindVerbs(
+    kind="channel",
+    noun="channel",
+    verbs=frozenset({"list", "edit", "rm", "enable", "disable", "scope"}),
+    columns=(
+        Column("Type", lambda it: str((it.get("config") or {}).get("channel_type", ""))),
+        Column("Agent", lambda it: str((it.get("config") or {}).get("default_agent", ""))),
+        # The machine id rather than a name: resolving a name needs the
+        # machine registry, which only exists once this vault converges
+        # with a remote. `coffer sync machine list` maps the two.
+        Column("Runs on", lambda it: str((it.get("config") or {}).get("runs_on") or "unbound")),
+    ),
+    edit_flags=EditFlags(
+        params=(
+            edit_option("require_mention", _REQUIRE_MENTION),
+            edit_option("ignore_other_mentions", _IGNORE_OTHER_MENTIONS),
+            edit_option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
+            edit_option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
+        ),
+        to_config=settings_config,
+    ),
+    help={
+        "list": "List registered channels.",
+        "edit": "Change a channel's name, title, description, group gating or quiet windows.",
+        "rm": "Remove a channel and its pairings.",
+        "enable": "Enable a channel (its adapter starts on the machine it is bound to).",
+        "disable": "Disable a channel (its adapter stops).",
+        "scope": "Show or set which agents a channel may drive (this machine only).",
+    },
+)
+
+
+# Registered in one order so `--help` reads lifecycle first, then the
+# channel-specific commands.
+register_kind_verbs(app, dataclasses.replace(_CHANNEL, verbs=frozenset({"list"})))
+app.command("show")(show)
+app.command("add")(add)
+register_kind_verbs(app, dataclasses.replace(_CHANNEL, verbs=_CHANNEL.verbs - {"list"}))
+app.command("pair")(pair)
+app.command("bind")(bind)
+app.command("notify")(notify)

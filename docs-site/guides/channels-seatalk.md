@@ -53,7 +53,7 @@ Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start
 # Paste the App Secret at the prompt; it is read from stdin
 coffer credentials set channel/st/app-secret
 
-coffer channel register my-seatalk --type seatalk \
+coffer channel add my-seatalk --type seatalk \
   --app-id <APP_ID> \
   --app-secret-ref channel/st/app-secret \
   --agent claude-code
@@ -76,11 +76,15 @@ The configuration is the App ID and a reference to the App Secret, plus the fiel
 Check the connection:
 
 ```sh
-coffer channel status my-seatalk
+coffer channel show my-seatalk
 ```
 
 ```text
 channel:  my-seatalk (seatalk)
+uid:      4c7a…
+agent:    claude-code
+gating:   require_mention=on  ignore_other_mentions=off
+secret:   app_secret_ref = channel/st/app-secret
 enabled:  True    running: True
 runs on:  3f9c… (this machine)
 pairing:  no pending code
@@ -107,7 +111,7 @@ Send the bot a message. A typing indicator appears at once, the reply streams in
 
 ## Connection states
 
-`coffer channel status` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `inbound.websocket_state` and `inbound.websocket_error`.
+`coffer channel show` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
 | State | Badge label | Meaning |
 | --- | --- | --- |
@@ -142,7 +146,7 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel set my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
@@ -202,7 +206,7 @@ Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_
 Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, use `coffer channel bind` from the machine that currently runs it.
 
 **Re-verify fails in the Developer Portal.**
-The channel is not connected yet. Wait until `coffer channel status` shows `connected`, then press **Re-verify** again.
+The channel is not connected yet. Wait until `coffer channel show` shows `connected`, then press **Re-verify** again.
 
 **`connected`, but the bot never answers.**
 Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.

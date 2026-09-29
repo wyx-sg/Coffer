@@ -1,4 +1,4 @@
-"""/api/v1/daemon/features — list and switch the experimental features.
+"""/api/v1/daemon/features — list, switch and unset the experimental features.
 
 Kept apart from ``daemon_routes`` for the file-size cap; same prefix, same tag.
 Both routes carry the token: only ``/daemon/status`` is a probe.
@@ -44,3 +44,16 @@ async def set_feature(
     answers.
     """
     return _out(await features.set(key, body.enabled))
+
+
+@router.delete("/{key}", response_model=FeatureOut)
+async def unset_feature(
+    key: str,
+    features: FeatureService = Depends(get_feature_service),  # noqa: B008
+) -> FeatureOut:
+    """Remove this machine's setting, so the feature follows the channel default.
+
+    Answers with the feature's state after the removal. The same refusals as
+    the switch: 404 ``FEATURE_UNKNOWN``, 409 ``FEATURE_PINNED``.
+    """
+    return _out(await features.unset(key))

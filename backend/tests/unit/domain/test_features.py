@@ -71,7 +71,7 @@ def test_the_disabled_error_names_the_command_that_switches_it_on() -> None:
     err = FeatureDisabled("knowledge")
     assert err.code == "FEATURE_DISABLED"
     assert err.feature == "knowledge"
-    assert "coffer daemon features enable knowledge" in str(err)
+    assert "coffer config set feature.knowledge on" in str(err)
 
 
 def test_the_pinned_error_names_its_key() -> None:

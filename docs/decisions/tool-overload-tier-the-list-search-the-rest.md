@@ -57,8 +57,8 @@ budget, every upstream tool is listed. Over it, upstream tools are ranked by
 invocation count over the last 90 days, with catalogue order breaking ties.
 Each server's best-ranked tool is reserved first, so no enabled server
 disappears; the remaining slots are filled in pure rank order. With every
-experimental feature on, there are four builtins (`write`, `recall`,
-`diagnose`, `search_tools`), so a session lists at most about 54 tools.
+experimental feature on, there are two builtins (`write`, `search_tools`), so
+a session lists at most 52 tools.
 
 **Hidden is not disabled.** `tools/call` gates on the capability preference
 (`check_capability_enabled` in `application/mcp/gateway_handlers.py`) and on
@@ -180,7 +180,7 @@ Rules a change must keep:
 ## Consequences
 
 - The upstream slice a session lists drops from ~125 to at most 50, inside the
-  30–50 accuracy band, with at most four builtins on top. Whether that clears a given client's own
+  30–50 accuracy band, with at most two builtins on top. Whether that clears a given client's own
   deferral threshold is the client's business.
 - The `tool_search` eval suite (recall@3 over the ranker, deterministic)
   gates ranker changes in CI ([Eval Capture and Regression Gate](eval-capture-and-regression-gate.md)).

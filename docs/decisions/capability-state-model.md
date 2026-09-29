@@ -44,7 +44,7 @@ session (`surfaces/http/app_mcp_composition.py`).
 
 The cache slice is dropped on TTL expiry, on an upstream `list_changed`
 notification (which is also forwarded to the downstream client), on an explicit
-refresh (`coffer mcp refresh <name>` / `POST …/{uid}/refresh`), and when a
+refresh (`coffer mcp test <name>` / `POST …/{uid}/refresh`), and when a
 server that failed to list recovers. Every successful list reconciles
 preferences in one batch: a newly seen key gets a row, enabled; an existing
 key's `last_seen_at` is touched; a key that disappeared is **not** deleted, so

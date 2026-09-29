@@ -12,9 +12,10 @@ These three tables were created by the first Alembic revision
 The lineage has grown well past it as later specs landed, so the head revision
 is whatever the newest file under
 `backend/coffer/infrastructure/persistence/migrations/versions/` declares rather
-than a number written down here. Two later revisions add columns the DDL below
-shows in place: `scope_json` on `resources` (migration `0046`) and
-`resource_id` on `audit_log` (migration `0067`).
+than a number written down here. Three later revisions add columns the DDL below
+shows in place: `scope_json` on `resources` (migration `0046`),
+`resource_id` on `audit_log` (migration `0067`) and `title` on `resources`
+(migration `0106`).
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -32,6 +33,11 @@ for the next reader to reach for the wrong one
 single helper, because while rename lived in one kind's service the two had
 already drifted apart.
 
+`normalise_title(title)` is the title rule: surrounding whitespace is dropped,
+an empty title becomes `None` (which is how a title is cleared), and one longer
+than `TITLE_MAX_LEN` (80) raises `ValueError`, which the service reports as
+`CONFIG_INVALID`.
+
 ### `Resource` (`domain/resource.py`)
 
 Plain Python dataclass; **not** a Pydantic model (domain stays pure).
@@ -41,12 +47,13 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `id`          | `int`            | DB surrogate; internal and per-machine. The FK four kind-owned tables hold. Never serialised externally, and NOT the identity — two machines allocate the same row number to different resources |
 | `uid`         | `str`            | **the identity**: `uuid4().hex`, minted once, never reused, the same value on every machine holding this resource. Every route, every cross-resource reference and the synced document's filename address this |
 | `kind`        | `str`            | matches `Kind.name`                                                        |
-| `name`        | `str`            | a mutable **label**, unique within its kind                                |
+| `name`        | `str`            | a **label**, unique within its kind; mutable unless the kind declares it fixed (`Kind.name_fixed`) |
 | `description` | `str \| None`    | optional free text                                                         |
 | `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
 | `enabled`     | `bool`           | user-controlled enable/disable flag                                        |
 | `created_at`  | `datetime`       | UTC, set on insert, never updated                                          |
 | `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
+| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable on every kind, fixed name or not, through `ResourceService.set_title`; travels in the synced resource document, as a `title` key present only when set (spec resource-framework "Carry an optional editable title on every resource") |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its
@@ -64,12 +71,15 @@ any framework-level adapter.
 | `display_name`              | `str`                                                                      | UI label                                                                                                |
 | `config_schema`             | `type[pydantic.BaseModel]`                                                 | Pydantic schema used to validate `Resource.config`                                                      |
 | `generic_create_allowed`    | `bool`                                                                     | whether the kind-agnostic `POST /resources` may create this kind; False for kinds that own a creation invariant beyond config validation (a skill's master folder, an agent's on-disk detection) |
+| `name_fixed`                | `bool`                                                                     | whether a registered row's name is fixed because it is quoted outside Coffer; `rename` refuses a changed name with `NAME_IMMUTABLE` (409) before any hook or write, and nothing is audited. True for `mcp_server` (its name prefixes every tool name an agent sees) and `skill` (its name is the folder an agent loads it from) |
+| `name_fixed_resets`         | `str`                                                                      | for a `name_fixed` kind, what deleting and registering again resets, quoted in the refusal message      |
 | `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
+| `validate_new_name`         | `Callable[[str], None] \| None`                                            | rule for the name of a resource created on this machine, run by `register` only when it mints the uid — never on load, and never for a row arriving from another machine with its uid. `mcp_server` caps new names at 24 characters |
 | `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
 | `on_update_config`          | `Callable[[Resource, dict], Awaitable[None] \| None] \| None`               | pre-write hook for `update_config`, handed the resource as it stands and the proposed config             |
-| `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `skill`, `knowledge` and `memory` supply one |
+| `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `knowledge` and `memory` supply one; `skill` keeps a directory too but its name is fixed, so it never renames |
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
 | `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
@@ -118,7 +128,7 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | Value                      | When emitted                                               |
 | -------------------------- | ---------------------------------------------------------- |
 | `"resource_created"`       | After `ResourceService.register`                           |
-| `"resource_updated"`       | After config or description change                         |
+| `"resource_updated"`       | After a config, description or title change (a title change records `details.title.before`/`after`) |
 | `"resource_enabled"`       | After `set_enabled(True)` when state flipped               |
 | `"resource_disabled"`      | After `set_enabled(False)` when state flipped              |
 | `"resource_deleted"`       | After `delete` (includes pre-delete snapshot in `details`)  |
@@ -192,6 +202,7 @@ CREATE TABLE resources (
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0096)
+    title         VARCHAR(80),       -- display text shown in place of the name; NULL = none (0106)
     UNIQUE (kind, name)              -- the LABEL is unique within its kind; that is a constraint, not identity
 );
 CREATE UNIQUE INDEX uq_resources_uid      ON resources(uid);

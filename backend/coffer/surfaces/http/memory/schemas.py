@@ -55,6 +55,10 @@ class PartitionOut(BaseModel):
     #: partitions"). Surfaced
     #: rather than hidden: only the developer can decide it is not coming back.
     unresolvable: bool
+    #: The display title a person chose (spec resource-framework "Carry an optional
+    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: the name in its place.
+    title: str | None = None
 
 
 class PartitionListOut(BaseModel):
@@ -252,34 +256,6 @@ class FileContentOut(BaseModel):
     truncated: bool
     binary: bool
     size: int
-
-
-class DeliveryStatusOut(BaseModel):
-    """Installed or not, and nothing else.
-
-    There is deliberately no last-fired field. A fire is an **event**, written
-    to the audit log as ``memory_delivery_fired``; a hook installed a minute ago
-    has legitimately never fired, so a status field flagging that would be
-    crying wolf on its own normal state ("Audit every delivery fire", "Show
-    delivery state on the agent's own page").
-    """
-
-    #: Which agent this row is about, and what the install and remove routes
-    #: take — so a surface rendering this list acts on a row directly.
-    agent_uid: str
-    #: The same agent's label, for the row's heading. Beside the uid rather
-    #: than instead of it, for the reason an audit row carries
-    #: ``resource_name`` beside ``resource_id``: the list has to be both
-    #: readable and actionable, and a client given only one of the two would
-    #: have to fetch the agent list to recover the other.
-    agent_name: str
-    installed: bool
-    command: str
-    event: str
-
-
-class DeliveryStatusListOut(BaseModel):
-    delivery: list[DeliveryStatusOut]
 
 
 class ContextQuery(BaseModel):

@@ -22,6 +22,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { AgentSelect } from "@/components/agents/AgentSelect";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
+import { displayName, titlePatchValue } from "@/lib/resourceTitle";
+import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 import type { ResourceOut } from "@/lib/api/resources";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
@@ -64,6 +66,7 @@ export function EditChannelDialog({
   // the binding was a provider KEY while the scope beside it held resource
   // names — two vocabularies for one thing, which is what this change removes.)
   const [defaultAgent, setDefaultAgent] = useState(strField(config, "default_agent"));
+  const [title, setTitle] = useState(resource.title ?? "");
   // The credential inputs. The rotation fields start blank on purpose: blank
   // means "leave the stored secret alone".
   const storedSecrets = (): ChannelEditDraft => ({
@@ -93,6 +96,7 @@ export function EditChannelDialog({
 
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent"));
+    setTitle(resource.title ?? "");
     setSecrets(storedSecrets());
     setGroup(storedGroup());
     setBurst(storedBurst());
@@ -102,9 +106,11 @@ export function EditChannelDialog({
 
   const submit = () => {
     if (!burstValid) return;
+    const nextTitle = titlePatchValue(title);
     const plan = planChannelEdit({
       uid: resource.uid,
-      name: resource.name,
+      name: displayName({ name: resource.name, title: nextTitle }),
+      title: nextTitle !== (resource.title ?? null) ? nextTitle : undefined,
       config,
       values: {
         default_agent: defaultAgent,
@@ -148,6 +154,13 @@ export function EditChannelDialog({
             submit();
           }}
         >
+          <ResourceTitleField
+            id="edit-channel-title"
+            value={title}
+            onChange={setTitle}
+            name={resource.name}
+          />
+
           <div className="space-y-2">
             <Label htmlFor="edit-channel-agent">{t("channels.edit.agent")}</Label>
             {/* A binding this vault has no agent for is kept and shown as the

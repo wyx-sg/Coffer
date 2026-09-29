@@ -185,17 +185,6 @@ class SkillService:
         # so this path and the kind-agnostic DELETE share one cleanup flow.
         await self._rs.delete(uid, actor=actor)
 
-    async def move_master_folder(self, skill: Resource, new_name: str) -> None:
-        """on_rename hook: carry the master folder + delivered copies along.
-
-        PRE-write, so raising aborts the rename with nothing moved. Delegates
-        to ``rename_ops``, which is where the ordering — and what a
-        half-finished move leaves behind — is spelled out.
-        """
-        from coffer.application.skill.rename_ops import move_master_folder
-
-        await move_master_folder(service=self, skill=skill, new_name=new_name)
-
     async def cleanup_bindings_for_skill(self, skill: Resource) -> None:
         """on_delete hook: tear down symlinks + binding rows + master folder.
 

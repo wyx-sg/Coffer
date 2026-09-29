@@ -1,14 +1,11 @@
-"""Integration tests for `coffer agent config ...` and `coffer agent mcp ...`.
+"""Integration tests for `coffer agent config edit|rm`, `coffer agent
+connect|disconnect` and the `coffer_connection` field of `coffer agent show`.
 
 Covers the spec scenario "config-file and MCP operations mirror across
 surfaces": each CLI subcommand calls the corresponding REST endpoint.
 
-The commands under test live in ``surfaces/cli/agent_config_cmd.py`` (whole
-files) and ``surfaces/cli/agent_workspace_cmd.py`` (directory children); both
-attach onto the typer ``agent_cmd`` owns, so the user-facing tree is still
-``coffer agent config ...`` and the invocations below are unchanged by the
-split. It matters in one place: a test that reaches into a module to patch
-``click.edit`` has to reach into the module the command is actually written in.
+The config commands live in ``surfaces/cli/agent_config_cmd.py``; a test that
+patches ``click.edit`` reaches into that module, where the command is written.
 
 The in-process app mounts TWO routers. Each of these commands takes the agent's
 NAME and resolves it to the uid the routes address
@@ -28,12 +25,17 @@ from datetime import UTC
 from datetime import datetime as dt
 
 import pytest
+import typer
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.application.agent.config_file_service import AgentConfigFileService
+from coffer.application.agent.connection_service import (
+    AgentConnectionService,
+    McpConnectionPart,
+)
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
@@ -54,12 +56,16 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
+from coffer.surfaces.http.agent_connection_routes import router as agent_connection_router
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_config_file_service,
-    get_agent_mcp_service,
+    get_agent_connection_service,
+    get_agent_service,
 )
+from coffer.surfaces.http.agent_routes import router as agent_router
+from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
 
 _runner = CliRunner()
@@ -88,6 +94,9 @@ def agent_config_cli(tmp_path, monkeypatch):
     mcp = AgentMcpService(
         agent_service=agent_svc, audit=audit, store=store, shim_resolver=lambda: str(shim)
     )
+    # Only the gateway part: the memory hook is the memory kind's, wired by the
+    # composition root and covered by test_agent_connection.py.
+    connection = AgentConnectionService(agent_service=agent_svc, parts=(McpConnectionPart(mcp),))
 
     # Register a claude_code agent up front.
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
@@ -102,13 +111,20 @@ def agent_config_cli(tmp_path, monkeypatch):
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(agent_config_router)
+    app.include_router(agent_connection_router)
     # Name → uid resolution runs before every command below and lives here, on
     # the framework's shared router. The SAME ResourceService the AgentService
     # was built on — a second one would have its own session and the resolver
     # would search a registry ``cc`` was never registered into.
     app.include_router(resource_router)
+    # `agent show` reads the record from /agents; the audit route is how the
+    # tests read the audit entries a write records.
+    app.include_router(agent_router)
+    app.include_router(audit_router)
+    app.dependency_overrides[get_agent_service] = lambda: agent_svc
+    app.dependency_overrides[get_audit_service] = lambda: audit
     app.dependency_overrides[get_agent_config_file_service] = lambda: config_files
-    app.dependency_overrides[get_agent_mcp_service] = lambda: mcp
+    app.dependency_overrides[get_agent_connection_service] = lambda: connection
     app.dependency_overrides[get_resource_service] = lambda: resource_svc
 
     set_active_token(_TOKEN)
@@ -138,61 +154,97 @@ async def _create_tables(engine) -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="config-file and MCP operations mirror across surfaces"
-)
-def test_config_ls_json(agent_config_cli):
-    result = _runner.invoke(cli_app, ["agent", "config", "ls", "cc", "--json"])
-    assert result.exit_code == 0, result.output
-    items = json.loads(result.output)
-    # v2 allowlist for claude_code: file entries + the subagents directory entry.
-    assert [i["key"] for i in items] == [
-        "settings",
-        "settings_local",
-        "global",
-        "instructions",
-        "subagents",
-    ]
-    by_key = {i["key"]: i for i in items}
-    assert by_key["settings"]["kind"] == "file"
-    assert by_key["subagents"]["kind"] == "directory"
-    # Directory entries carry a `files` listing (null while the dir is absent).
-    assert "files" in by_key["subagents"]
+def _audit_events(event_type: str) -> list[dict]:
+    client, _info = _cli_client.client_or_exit()
+    r = client.get("/audit", params={"event_type": event_type})
+    assert r.status_code == 200, r.text
+    return list(r.json()["entries"])
 
 
-def test_config_cat_reads_existing_file(agent_config_cli):
-    tmp_path, _shim = agent_config_cli
-    (tmp_path / ".claude" / "settings.json").write_text('{"x": 1}', encoding="utf-8")
-    r = _runner.invoke(cli_app, ["agent", "config", "cat", "cc", "settings"])
-    assert r.exit_code == 0
-    assert r.output.strip() == '{"x": 1}'
+def _uid(name: str = "cc") -> str:
+    client, _info = _cli_client.client_or_exit()
+    return str(
+        client.get("/resources", params={"kind": "agent", "name": name}).json()["resources"][0][
+            "uid"
+        ]
+    )
 
 
-def test_config_cat_unknown_key_exit4(agent_config_cli):
+def test_config_edit_unknown_key_exit4(agent_config_cli):
     """A bad config KEY exits 4 — and says so about the key, not the agent.
 
-    Two different 404s reach exit 4 now: the agent's name failing to resolve,
-    and the key failing to exist once it has. The agent here is real, so the
-    message must be about the key; a message naming the agent would mean
-    resolution had silently gone wrong and the test would be passing on the
-    wrong failure.
+    Two different 404s reach exit 4: the agent's name failing to resolve, and
+    the key failing to exist once it has. The agent here is real, so the
+    message must be about the key.
     """
-    r = _runner.invoke(cli_app, ["agent", "config", "cat", "cc", "nope"])
+    tmp_path, _shim = agent_config_cli
+    src = tmp_path / "x.json"
+    src.write_text("{}", encoding="utf-8")
+    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "nope", "--from-file", str(src)])
     assert r.exit_code == 4
     assert "no agent named" not in (r.output + (r.stderr or ""))
 
 
 def test_config_unknown_agent_name_exit4(agent_config_cli):
-    """An unheld agent name stops at resolution, before any config route.
-
-    Same exit code the config routes' own 404 produces, from one step earlier
-    and with a message naming what was actually typed — the whole reason the
-    name is resolved up front rather than handed to a route that would 404 on a
-    uid the user never saw (ADR resource-identity-is-an-immutable-uid).
-    """
-    r = _runner.invoke(cli_app, ["agent", "config", "ls", "ghost"])
+    """An unheld agent name stops at resolution, before any config route."""
+    r = _runner.invoke(cli_app, ["agent", "config", "rm", "ghost", "subagents/x.md", "--yes"])
     assert r.exit_code == 4, r.output
     assert "no agent named 'ghost'" in (r.output + (r.stderr or ""))
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="edit a config file from a file on the command line"
+)
+def test_edit_a_config_file_from_a_file_on_the_command_line(agent_config_cli):
+    tmp_path, _shim = agent_config_cli
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"theme": "light"}', encoding="utf-8")
+    good = tmp_path / "good.json"
+    good.write_text('{"theme": "dark"}', encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(good)]
+    )
+    assert r.exit_code == 0, r.output
+    assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
+    assert (tmp_path / ".claude" / "settings.json.bak").read_text(
+        encoding="utf-8"
+    ) == '{"theme": "light"}'
+    written = _audit_events("agent_config_file_written")
+    assert len(written) == 1 and written[0]["resource_name"] == "cc"
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(bad)]
+    )
+    assert r.exit_code != 0, r.output
+    assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
+    assert len(_audit_events("agent_config_file_written")) == 1
+
+
+def test_config_edit_from_file_sends_the_fingerprint_of_its_read(agent_config_cli, monkeypatch):
+    """--from-file still carries the fingerprint of the read it started from, so a
+    change landing between that read and the write is refused (exit 5)."""
+    import coffer.surfaces.cli.agent_config_cmd as agent_config_cmd
+
+    tmp_path, _shim = agent_config_cli
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"theme": "light"}', encoding="utf-8")
+    src = tmp_path / "new.json"
+    src.write_text('{"theme": "dark"}', encoding="utf-8")
+    real_read = agent_config_cmd._read_source
+
+    def _read_while_agent_rewrites(path: str) -> str:
+        settings.write_text('{"theme": "agent"}', encoding="utf-8")
+        return real_read(path)
+
+    monkeypatch.setattr(agent_config_cmd, "_read_source", _read_while_agent_rewrites)
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+    )
+    assert r.exit_code == 5, r.output
+    assert settings.read_text(encoding="utf-8") == '{"theme": "agent"}'
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="save a config file with valid content")
@@ -280,47 +332,48 @@ def test_config_edit_from_file_malformed_exit2_unchanged(agent_config_cli):
 
 
 # ---------------------------------------------------------------------------
-# agent config files / write / rm (directory entries)
+# agent config edit KEY/CHILD, rm KEY/CHILD (directory entries)
 # ---------------------------------------------------------------------------
 
 
-def test_config_files_write_and_rm_roundtrip(agent_config_cli):
-    """`config write` creates a child file, `files` lists it, `rm` deletes it."""
+@pytest.mark.acceptance(spec="agent-registry", scenario="create a file inside a directory entry")
+@pytest.mark.acceptance(spec="agent-registry", scenario="delete a file inside a directory entry")
+def test_config_child_edit_and_rm_roundtrip(agent_config_cli):
+    """`config edit KEY/CHILD --from-file` creates a child file, `rm` deletes it."""
     tmp_path, _shim = agent_config_cli
+    child = tmp_path / ".claude" / "agents" / "reviewer.md"
     src = tmp_path / "reviewer.md"
     src.write_text("# Reviewer\n", encoding="utf-8")
 
     r = _runner.invoke(
         cli_app,
-        ["agent", "config", "write", "cc", "subagents", "reviewer.md", "--from-file", str(src)],
+        ["agent", "config", "edit", "cc", "subagents/reviewer.md", "--from-file", str(src)],
     )
     assert r.exit_code == 0, r.output
     assert "saved: subagents/reviewer.md" in r.output
-    assert (tmp_path / ".claude" / "agents" / "reviewer.md").read_text(
-        encoding="utf-8"
-    ) == "# Reviewer\n"
+    assert child.read_text(encoding="utf-8") == "# Reviewer\n"
+    assert len(_audit_events("agent_config_file_written")) == 1
+    client, _info = _cli_client.client_or_exit()
+    listing = client.get(f"/agents/{_uid()}/config-files").json()["items"]
+    subagents = next(i for i in listing if i["key"] == "subagents")
+    assert [f["relpath"] for f in subagents["files"]] == ["reviewer.md"]
 
-    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "subagents", "--json"])
+    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/reviewer.md", "--force"])
     assert r.exit_code == 0, r.output
-    files = json.loads(r.output)
-    assert [f["relpath"] for f in files] == ["reviewer.md"]
-
-    r = _runner.invoke(
-        cli_app, ["agent", "config", "rm", "cc", "subagents", "reviewer.md", "--force"]
-    )
-    assert r.exit_code == 0, r.output
-    assert not (tmp_path / ".claude" / "agents" / "reviewer.md").exists()
-
-    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "subagents", "--json"])
-    assert json.loads(r.output) == []
+    assert not child.exists()
+    assert child.with_name("reviewer.md.bak").read_text(encoding="utf-8") == "# Reviewer\n"
+    assert len(_audit_events("agent_config_file_deleted")) == 1
+    listing = client.get(f"/agents/{_uid()}/config-files").json()["items"]
+    subagents = next(i for i in listing if i["key"] == "subagents")
+    assert not subagents["files"]
 
 
-def test_config_write_from_stdin(agent_config_cli):
-    """Without --from-file the content is read from stdin."""
+def test_config_child_edit_from_stdin(agent_config_cli):
+    """`--from-file -` reads the content from stdin."""
     tmp_path, _shim = agent_config_cli
     r = _runner.invoke(
         cli_app,
-        ["agent", "config", "write", "cc", "subagents", "helper.md"],
+        ["agent", "config", "edit", "cc", "subagents/helper.md", "--from-file", "-"],
         input="# Helper\n",
     )
     assert r.exit_code == 0, r.output
@@ -329,10 +382,19 @@ def test_config_write_from_stdin(agent_config_cli):
     ) == "# Helper\n"
 
 
-def test_config_files_non_directory_key_exit6(agent_config_cli):
-    """`config files` on a plain file entry is rejected with exit 6."""
-    r = _runner.invoke(cli_app, ["agent", "config", "files", "cc", "settings"])
-    assert r.exit_code == 6, r.output
+def test_config_child_of_a_plain_file_entry_exits_4(agent_config_cli):
+    tmp_path, _shim = agent_config_cli
+    src = tmp_path / "x.md"
+    src.write_text("x", encoding="utf-8")
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "cc", "settings/x.md", "--from-file", str(src)]
+    )
+    assert r.exit_code == 4, r.output
+
+
+def test_config_rm_needs_a_child(agent_config_cli):
+    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "settings", "--yes"])
+    assert r.exit_code == 2, r.output
 
 
 def test_config_rm_without_force_aborts(agent_config_cli):
@@ -342,62 +404,123 @@ def test_config_rm_without_force_aborts(agent_config_cli):
     child.parent.mkdir(parents=True, exist_ok=True)
     child.write_text("# Keep\n", encoding="utf-8")
 
-    r = _runner.invoke(
-        cli_app, ["agent", "config", "rm", "cc", "subagents", "keep.md"], input="n\n"
-    )
+    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/keep.md"], input="n\n")
     assert r.exit_code == 1
     assert child.exists()
 
 
-def test_mcp_install_status_uninstall(agent_config_cli):
-    _tmp, shim = agent_config_cli
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert r.exit_code == 0
-    assert json.loads(r.output)["installed"] is False
+# ---------------------------------------------------------------------------
+# agent connect / disconnect / show (coffer_connection)
+# ---------------------------------------------------------------------------
 
-    r = _runner.invoke(cli_app, ["agent", "mcp", "install", "cc"])
+
+def _show(name: str = "cc") -> dict:
+    r = _runner.invoke(cli_app, ["agent", "show", name, "--json"])
     assert r.exit_code == 0, r.output
-    # The echo reports the agent by the label that was typed — the uid it
-    # resolved to is an address, and a person reading this line is checking
-    # which agent they just changed.
-    assert "installed Coffer MCP into agent cc (" in r.output
-    assert shim in r.output
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert json.loads(r.output)["installed"] is True
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "uninstall", "cc"])
-    assert r.exit_code == 0
-    assert "removed Coffer MCP from agent cc" in r.output
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert json.loads(r.output)["installed"] is False
+    return dict(json.loads(r.output))
 
 
-def test_config_cat_json_prints_the_full_response(agent_config_cli):
-    """spec agent-registry "Offer JSON output on every CLI read": ``cat --json``
-    prints the whole read — content plus the fingerprint a later write needs."""
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="connect an agent to Coffer from the command line"
+)
+def test_connect_an_agent_to_coffer_from_the_command_line(agent_config_cli):
+    tmp_path, shim = agent_config_cli
+    r = _runner.invoke(cli_app, ["agent", "connect", "cc"])
+    assert r.exit_code == 0, r.output
+    assert "connected agent cc to Coffer" in r.output
+    assert f"gateway MCP entry: installed ({shim})" in r.output
+    mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
+    entry = mcp_config["mcpServers"]["coffer"]
+    assert _uid() in entry["args"]
+    installed = _audit_events("agent_mcp_installed")
+    assert len(installed) == 1 and installed[0]["resource_name"] == "cc"
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="disconnect an agent from Coffer on the command line"
+)
+def test_disconnect_an_agent_from_coffer_on_the_command_line(agent_config_cli):
     tmp_path, _shim = agent_config_cli
-    settings = tmp_path / ".claude" / "settings.json"
-    settings.write_text('{"x": 1}', encoding="utf-8")
-    r = _runner.invoke(cli_app, ["agent", "config", "cat", "cc", "settings", "--json"])
+    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+
+    r = _runner.invoke(cli_app, ["agent", "disconnect", "cc"])
     assert r.exit_code == 0, r.output
-    data = json.loads(r.output)
-    assert data["key"] == "settings"
-    assert data["content"] == '{"x": 1}'
-    assert data["exists"] is True
-    assert data["path"] == str(settings)
-    assert data["format"] == "json"
-    assert isinstance(data["fingerprint"], str) and data["fingerprint"]
+    assert "disconnected agent cc from Coffer" in r.output
+    mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
+    assert "coffer" not in mcp_config.get("mcpServers", {})
+    assert _show()["coffer_connection"]["state"] == "disconnected"
+    text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    assert "coffer_connection: not connected" in text
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="agent show reports the Coffer MCP status")
+def test_agent_show_reports_the_coffer_connection(agent_config_cli):
+    tmp_path, _shim = agent_config_cli
+    other_dir = tmp_path / "other-claude"
+    (other_dir / "skills").mkdir(parents=True)
+    added = _runner.invoke(
+        cli_app,
+        ["agent", "add", "claude_code", "--name", "other", "--config-dir", str(other_dir)],
+    )
+    assert added.exit_code == 0, added.output
+    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+
+    assert _show("cc")["coffer_connection"]["state"] == "connected"
+    assert _show("other")["coffer_connection"]["state"] == "disconnected"
+    text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    assert "coffer_connection: connected" in text
+    assert "gateway MCP entry: installed" in text
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="config-file and MCP operations mirror across surfaces"
+)
+def test_config_and_mcp_commands_mirror_their_rest_routes(agent_config_cli):
+    tmp_path, _shim = agent_config_cli
+    client, _info = _cli_client.client_or_exit()
+    uid = _uid()
+    status = f"/agents/{uid}/coffer-connection"
+
+    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+    assert client.get(status).json()["state"] == "connected"
+    assert _show()["coffer_connection"] == client.get(status).json()
+    shown = _runner.invoke(cli_app, ["agent", "connection", "cc", "--json"])
+    assert json.loads(shown.output) == client.get(status).json()
+    assert _runner.invoke(cli_app, ["agent", "disconnect", "cc"]).exit_code == 0
+    assert client.get(status).json()["state"] == "disconnected"
+    assert _show()["coffer_connection"] == client.get(status).json()
+
+    src = tmp_path / "s.json"
+    src.write_text('{"a": 1}', encoding="utf-8")
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+    )
+    assert r.exit_code == 0, r.output
+    assert client.get(f"/agents/{uid}/config-files/settings").json()["content"] == '{"a": 1}'
+
+    child = tmp_path / "c.md"
+    child.write_text("# c\n", encoding="utf-8")
+    edit_child = ["agent", "config", "edit", "cc", "subagents/c.md", "--from-file", str(child)]
+    assert _runner.invoke(cli_app, edit_child).exit_code == 0
+    read = client.get(f"/agents/{uid}/config-files/subagents/files/c.md").json()
+    assert read["exists"] is True
+    rm = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/c.md", "--yes"])
+    assert rm.exit_code == 0, rm.output
+    read = client.get(f"/agents/{uid}/config-files/subagents/files/c.md").json()
+    assert read["exists"] is False
 
 
 def test_config_key_help_names_real_keys(agent_config_cli):
-    for cmd in ("cat", "edit"):
-        r = _runner.invoke(cli_app, ["agent", "config", cmd, "--help"])
-        assert r.exit_code == 0, r.output
-        # Rich wraps help inside a box; flatten borders and line breaks first.
-        flat = " ".join(r.output.replace("│", " ").split())
-        assert "settings, config, instructions" in flat
-        assert "memory" not in flat
+    # The KEY argument's own help, read off the command rather than out of the
+    # rendered --help, whose layout changes between typer/rich releases.
+    edit = typer.main.get_command(cli_app).commands["agent"].commands["config"].commands["edit"]  # type: ignore[attr-defined]
+    help_text = (
+        " ".join(" ".join(str(getattr(p, "help", "") or "").split()) for p in edit.params)
+        + " "
+        + " ".join((edit.help or "").split())
+    )
+    assert "settings, config, instructions" in help_text
+    assert "memory" not in help_text
 
 
 def test_config_edit_refuses_when_the_file_changed_since_its_read(agent_config_cli, monkeypatch):

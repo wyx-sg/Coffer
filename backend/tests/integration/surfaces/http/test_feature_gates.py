@@ -48,6 +48,11 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pa
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59780")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
+    # Connecting an agent writes the gateway entry first, so it needs a shim
+    # to point at.
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     (tmp_path / ".coffer").mkdir(parents=True, exist_ok=True)
     prior = feature_dependencies._feature_service
     yield tmp_path
@@ -129,7 +134,7 @@ def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
         _patch_cli(monkeypatch, c)
         _assert_disabled(c.get("/api/v1/sync/status"), "vault_sync")
 
-        res = runner.invoke(cli_app, ["daemon", "features", "enable", "vault_sync"])
+        res = runner.invoke(cli_app, ["config", "set", "feature.vault_sync", "on"])
         assert res.exit_code == 0, res.output
 
         # Same process, same app: no restart between the switch and the answer.
@@ -194,7 +199,7 @@ def test_a_switched_off_features_command_says_how_to_switch_it_on(
     assert res.exit_code == 1, res.output
     lines = [line for line in res.output.splitlines() if line.strip()]
     assert len(lines) == 1, res.output
-    assert "coffer daemon features enable vault_sync" in lines[0]
+    assert "coffer config set feature.vault_sync on" in lines[0]
 
 
 # --- MCP ----------------------------------------------------------------------
@@ -215,6 +220,12 @@ def _tool_names(c: TestClient, session: str) -> set[str]:
     return {t["name"] for t in _mcp(c, session, "tools/list", {}).json()["result"]["tools"]}
 
 
+def _unknown_as(called: Any, unknown: Any, name: str) -> bool:
+    """Whether ``called`` is exactly what an unknown tool answers, with the
+    name swapped."""
+    return json.dumps(called).replace(name, "coffer__nosuchtool") == json.dumps(unknown)
+
+
 @pytest.mark.acceptance(
     spec="experimental-features",
     scenario="a switched-off feature's tool leaves the tool list",
@@ -222,7 +233,7 @@ def _tool_names(c: TestClient, session: str) -> set[str]:
 def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -> None:
     with _client() as c:
         session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
-        assert "coffer__recall" in _tool_names(c, session)
+        assert "coffer__write" in _tool_names(c, session)
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
@@ -230,31 +241,48 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -
         # An unknown tool is refused, not served.
         assert "error" in unknown or unknown["result"].get("isError") is True, unknown
 
-        _switch(c, "memory", False)
+        _switch(c, "knowledge", False)
         names = _tool_names(c, session)
-        assert "coffer__recall" not in names
-        # Only the memory feature's tool; the always-on ones stay.
-        assert {"coffer__search_tools", "coffer__diagnose", "coffer__write"} <= names
+        assert "coffer__write" not in names
+        # Only the knowledge feature's tool; the always-on one stays.
+        assert "coffer__search_tools" in names
 
         called = _mcp(
-            c, session, "tools/call", {"name": "coffer__recall", "arguments": {"query": "x"}}
+            c,
+            session,
+            "tools/call",
+            {"name": "coffer__write", "arguments": {"collection": "x", "title": "t"}},
         ).json()
-        # Exactly what an unknown tool answers, with the name swapped.
-        assert json.dumps(called).replace("coffer__recall", "coffer__nosuchtool") == json.dumps(
-            unknown
-        )
+        assert _unknown_as(called, unknown, "coffer__write")
 
-        _switch(c, "memory", True)
-        assert "coffer__recall" in _tool_names(c, session)
+        _switch(c, "knowledge", True)
+        assert "coffer__write" in _tool_names(c, session)
 
 
-def test_knowledge_off_takes_coffer_write_out_of_the_list(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("knowledge", False)
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="the gateway advertises exactly two built-in tools"
+)
+def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -> None:
+    def builtins(c: TestClient, session: str) -> set[str]:
+        return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
+
     with _client() as c:
         session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
-        names = _tool_names(c, session)
-    assert "coffer__write" not in names
-    assert "coffer__recall" in names
+        unknown = _mcp(
+            c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
+        ).json()
+
+        _switch(c, "knowledge", True)
+        assert builtins(c, session) == {"coffer__search_tools", "coffer__write"}
+        _switch(c, "knowledge", False)
+        assert builtins(c, session) == {"coffer__search_tools"}
+
+        for name, arguments in (
+            ("coffer__recall", {"query": "x"}),
+            ("coffer__diagnose", {"since_minutes": 5}),
+        ):
+            called = _mcp(c, session, "tools/call", {"name": name, "arguments": arguments})
+            assert _unknown_as(called.json(), unknown, name), called.text
 
 
 # --- data kept ----------------------------------------------------------------
@@ -299,16 +327,23 @@ def _hook_installed(config_dir: pathlib.Path) -> bool:
     return settings.is_file() and f": {MARKER}" in settings.read_text()
 
 
-def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Path]:
-    config_dir = home / "cc-config"
+def _agent(c: TestClient, home: pathlib.Path, name: str) -> tuple[str, pathlib.Path]:
+    config_dir = home / f"{name}-config"
     config_dir.mkdir()
     r = c.post(
         "/api/v1/agents",
-        json={"type": "claude_code", "name": "cc", "config_dir": str(config_dir)},
+        json={"type": "claude_code", "name": name, "config_dir": str(config_dir)},
     )
     assert r.status_code == 201, r.text
-    uid = str(r.json()["uid"])
-    r = c.post(f"/api/v1/memory/delivery/{uid}/install")
+    return str(r.json()["uid"]), config_dir
+
+
+def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Path]:
+    """A Claude Code agent connected to Coffer, which with memory on puts the
+    delivery hook in its settings (spec agent-registry "Connect an agent to
+    Coffer in one action")."""
+    uid, config_dir = _agent(c, home, "cc")
+    r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
     assert r.status_code == 200, r.text
     assert _hook_installed(config_dir)
     return uid, config_dir
@@ -320,20 +355,20 @@ def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Pa
 )
 def test_switching_memory_off_removes_the_delivery_hook(home: pathlib.Path) -> None:
     with _client() as c:
-        uid, config_dir = _agent_with_hook(c, home)
+        _uid, config_dir = _agent_with_hook(c, home)
+        _other_uid, other_dir = _agent(c, home, "not-connected")
 
         _switch(c, "memory", False)
         assert not _hook_installed(config_dir)
-        assert _daemon_config(home)["memory_delivery_withdrawn"] == [uid]
 
         _switch(c, "memory", True)
         assert _hook_installed(config_dir)
-        assert _daemon_config(home)["memory_delivery_withdrawn"] == []
+        assert not _hook_installed(other_dir)
 
 
-def test_the_withdrawn_hook_comes_back_across_a_restart(home: pathlib.Path) -> None:
-    """Off, restart, on: the list of agents to put the hook back into is kept
-    with the switch, not in the process."""
+def test_the_hook_comes_back_across_a_restart(home: pathlib.Path) -> None:
+    """Off, restart, on: the connected agents are read from their own files, so
+    nothing has to be remembered across the restart."""
     with _client() as c:
         _uid, config_dir = _agent_with_hook(c, home)
         _switch(c, "memory", False)
@@ -341,6 +376,16 @@ def test_the_withdrawn_hook_comes_back_across_a_restart(home: pathlib.Path) -> N
         assert not _hook_installed(config_dir)
         _switch(c, "memory", True)
         assert _hook_installed(config_dir)
+
+
+def test_switching_memory_on_skips_a_disconnected_agent(home: pathlib.Path) -> None:
+    """Disconnected while memory was off: switching it on gives it nothing."""
+    with _client() as c:
+        uid, config_dir = _agent_with_hook(c, home)
+        _switch(c, "memory", False)
+        assert c.delete(f"/api/v1/agents/{uid}/coffer-connection").status_code == 200
+        _switch(c, "memory", True)
+        assert not _hook_installed(config_dir)
 
 
 def test_a_boot_with_memory_off_removes_a_hook_left_in_place(home: pathlib.Path) -> None:
@@ -431,7 +476,7 @@ def test_a_channel_bound_here_registers_while_sync_is_off(
             cli_app,
             [
                 "channel",
-                "register",
+                "add",
                 "tg",
                 "--type",
                 "telegram",
@@ -453,5 +498,5 @@ def test_curate_owner_show_answers_while_sync_is_off(
     daemon_config.write_feature_setting("vault_sync", False)
     with _client() as c:
         _patch_cli(monkeypatch, c)
-        res = runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+        res = runner.invoke(cli_app, ["config", "get", "engine.curate_owner", "--json"])
     assert res.exit_code == 0, res.output

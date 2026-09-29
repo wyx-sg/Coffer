@@ -212,6 +212,10 @@ return useMutation({
     description, action).
   - `Button` icon sizes are `icon-sm` / `icon-md` (plus the default `icon`);
     pick from those, do not size an icon button by hand.
+- **A resource shows its `title` when set, its `name` otherwise** — in tables,
+  headers and pickers alike. An MCP server's and a skill's name is fixed once
+  registered (the daemon answers `409 NAME_IMMUTABLE`), so their edit forms
+  offer the title, not a rename; every other kind keeps a name field.
 - **Dates always go through `formatDateTime`** (`src/lib/utils`) — never a raw
   `toLocaleString`, so every timestamp reads the same.
 - **Named exports only.** `export function Foo()`. No default exports.

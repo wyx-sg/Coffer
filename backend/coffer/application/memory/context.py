@@ -1,12 +1,14 @@
 """Composing the session-start payload: the whole index, and where the bodies
 are (spec memory "Deliver the index and the notes path at session start", "Write
 each index line to stand on its own", "Bound delivery and prefer the current
-repository").
+repository", "Expose no memory tool and name the memory root at session start").
 
 Delivery is no longer a digest. It is **the index** — every non-retired note
 in the current repository's partition and in ``global``, one line each, from
 ``index.index_line`` — followed by the **absolute path** of the directory the
-bodies live in. Nothing here names a tool, and that omission is the design:
+bodies live in, and the **memory root** that spans every partition, so a note
+from a partition the session was not opened in is one search away. Nothing here
+names a tool, and that omission is the design:
 every consumer of this payload is a process on this machine with filesystem
 access. A hook-driven Claude Code session and a hook-driven Codex session
 both read files as their ordinary way of reaching their own memory, and a
@@ -138,6 +140,17 @@ def _ordered(notes: Iterable[Note]) -> tuple[Note, ...]:
 def _notes_dir(partition: str) -> str:
     """The absolute path of one partition's ``notes/`` directory."""
     return str(memory_paths.notes_dir(partition))
+
+
+def _root_line() -> str:
+    """The line naming the memory root: one directory, so one search with the
+    agent's own tools covers every partition (see "Expose no memory tool and
+    name the memory root at session start")."""
+    root = memory_paths.memory_root()
+    return (
+        f"Every partition's notes are Markdown files under {root}/<partition>/notes/ — "
+        f"for a note from another repository, search {root} with your own tools."
+    )
 
 
 def _trim_notice(dropped: int, notes_path: str) -> str:
@@ -304,9 +317,10 @@ async def compose_context(
         f"Each line names its note's file. The bodies are Markdown files in {body_dir} — "
         "read one as a file, the way you read your own memory."
     )
+    root_line = _root_line()
 
     ceiling = _Ceiling(ceiling_tokens)
-    for scaffolding in (header, global_heading, project_heading, closing):
+    for scaffolding in (header, global_heading, project_heading, closing, root_line):
         ceiling.reserve(scaffolding)
     if project_visible:
         ceiling.reserve(_trim_notice(len(project_visible), project_dir))
@@ -330,6 +344,7 @@ async def compose_context(
     if dropped:
         lines.append(_trim_notice(dropped, project_dir))
     lines.append(closing)
+    lines.append(root_line)
 
     included = len(global_lines) + len(project_lines)
     return ComposedContext(

@@ -135,14 +135,14 @@ def test_no_memory_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_twelve_routes(spec_doc: dict[str, Any]) -> None:
-    """The contract's own ``info.description`` says twelve routes and that this
+def test_the_management_plane_is_nine_routes(spec_doc: dict[str, Any]) -> None:
+    """The contract's own ``info.description`` says nine routes and that this
     is the whole management plane (see "Cover memory management on REST and the
-    CLI"). A thirteenth arriving is a decision, not an accident, so the count
-    is pinned. It was eleven until ``/partitions/{uid}/retired`` joined it: a
-    retirement record is not a detail of the distil pass but a thing a person
-    reads (see "Record retirements so they stick")."""
-    assert len(_declared_operations(spec_doc)) == 12
+    CLI"). A tenth arriving is a decision, not an accident, so the count is
+    pinned. It was twelve until the three delivery routes left for the agent's
+    Coffer connection (spec agent-registry "Connect an agent to Coffer in one
+    action")."""
+    assert len(_declared_operations(spec_doc)) == 9
 
 
 def test_deleting_a_partition_is_not_on_this_surface(spec_doc: dict[str, Any]) -> None:
@@ -220,21 +220,6 @@ def test_the_read_only_file_shape_carries_no_fingerprint(
     has no write — unlike the skill kind's equivalent shape."""
     file_content = generated_schema["components"]["schemas"]["FileContentOut"]
     assert "fingerprint" not in file_content.get("properties", {})
-
-
-def test_delivery_status_answers_only_installed_or_not(
-    generated_schema: dict[str, Any],
-) -> None:
-    """A fire is an event, not a property of an agent (see "Audit every
-    delivery fire", "Show delivery state on the agent's own page"): there is
-    deliberately no last-fired field, so a hook installed a minute ago is not
-    flagged for its own normal state."""
-    delivery = generated_schema["components"]["schemas"]["DeliveryStatusOut"]
-    properties = set(delivery.get("properties", {}))
-    # ``agent_uid`` + ``agent_name``, not one ``agent``: the identity a caller
-    # acts on and the label a surface renders, carried together so a client
-    # holding one does not have to fetch the agent list for the other.
-    assert properties == {"agent_uid", "agent_name", "installed", "command", "event"}
 
 
 # ---------------------------------------------------------------------------

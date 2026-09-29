@@ -63,13 +63,7 @@ _RETIRED_KNOWLEDGE_TOOLS = frozenset(
 #: superset. `scripts/check_architecture_doc.py` is the gate that owns the full
 #: roster and reds when a slice registers a tool the docs-site architecture
 #: pages never name; here the split is what scopes the claim to one kind.
-_NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset(
-    {
-        "coffer__recall",
-        "coffer__diagnose",
-        "coffer__search_tools",
-    }
-)
+_NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset({"coffer__search_tools"})
 
 _APPLICATION_ROOT = Path(__file__).resolve().parents[2] / "coffer" / "application"
 #: The same declaration shape `scripts/check_architecture_doc.py` scrapes.
@@ -205,6 +199,9 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     spec="skill-manager",
     scenario="Coffer exposes no skill tools over MCP",
 )
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the handshake names Coffer's tools and points at the skill"
+)
 async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
 
@@ -276,6 +273,19 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         assert not {"list_skills", "load_skill"} & set(instructions.split()), (
             f"the initialize instructions still name a skill tool: {instructions!r}"
         )
+        # The handshake over the SDK with nothing hidden (two upstream tools fit
+        # the budget): within its cap, naming the two built-ins and neither
+        # removed one, pointing at the skill, and carrying no catalogue.
+        assert 0 < len(instructions) <= 800
+        assert "coffer__write" in instructions
+        assert "coffer__search_tools" in instructions
+        assert "coffer__recall" not in instructions
+        assert "coffer__diagnose" not in instructions
+        assert "coffer-guide" in instructions
+        assert "What is in this developer's knowledge" not in instructions
+        assert "unlisted" not in instructions
+        # Exactly the two built-ins, and no other ``coffer__`` name.
+        assert coffer_tools == {"coffer__search_tools", "coffer__write"}, coffer_tools
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
             f"the knowledge tools in tools/list are not exactly the one the spec "

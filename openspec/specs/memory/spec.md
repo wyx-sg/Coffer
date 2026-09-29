@@ -103,12 +103,12 @@ Aggregation MUST run on a background worker on an interval and MUST be triggerab
 - **AND** the audit actor on that pass is the worker's own, so the log can tell a scheduled pass from a requested one (see "Audit every lifecycle act")
 
 ### Requirement: Keep raw entries verbatim and hidden
-Raw entries MUST be written under the partition's hidden `.raw/` directory, **verbatim**, one file per entry, and MUST be excluded from the index, from delivery and from recall. They are aggregation's output and the distil pass's input, and they are the reason a distillation can be re-run without re-reading the agents.
+Raw entries MUST be written under the partition's hidden `.raw/` directory, **verbatim**, one file per entry, and MUST be excluded from the index and from delivery. They are aggregation's output and the distil pass's input, and they are the reason a distillation can be re-run without re-reading the agents.
 
 #### Scenario: raw entries land hidden, and only aggregation writes them
 - **GIVEN** a partition with notes already distilled
 - **WHEN** aggregation runs
-- **THEN** the entries it wrote are under the partition's `.raw/`, which is excluded from the index, from delivery and from recall
+- **THEN** the entries it wrote are under the partition's `.raw/`, which is excluded from the index and from delivery
 - **AND** a distil pass over that partition writes nothing under `.raw/` (see "Keep raw entries verbatim and hidden", "Keep distil out of the raw directory")
 
 ### Requirement: Let only aggregation write raw entries
@@ -143,13 +143,6 @@ An entry MUST be filed into the partition of the repository it was learned in, e
 - **WHEN** the entries are filed
 - **THEN** the first `feedback` entry lands in that repository's partition, the `user` entry in `global`, and the root-less `feedback` entry in `global`
 
-### Requirement: Create partitions only by aggregation
-Partitions MUST be **created by aggregation**, not by the user, and MUST NOT be created by an agent's working directory at read time.
-
-#### Scenario: compose context and recall without creating a partition
-- **GIVEN** a memory root with no partitions and a working directory inside a git repository
-- **WHEN** the session context is composed for that working directory and `coffer__recall` is called
-- **THEN** no partition directory and no `memory` Resource exists afterwards
 
 ### Requirement: Identify a partition by its repository
 A partition's identity is the **repository**, not a path. The main checkout, any worktree of it, and a second clone of it MUST resolve to one partition. The partition MUST be named by a readable slug — never an opaque id — and MUST record the repository's own absolute path on its Resource and restate it in its `MEMORY.md`. A name collision MUST be resolved by adding a distinguishing path segment.
@@ -261,7 +254,7 @@ With no internal connection configured, distil MUST still produce a usable parti
 - **AND** `MEMORY.md` is still written, one line per note from its frontmatter, so an installation with no internal model still gets an index and a delivery — thinner, not absent (see "Distil mechanically with no internal connection")
 
 ### Requirement: Record retirements so they stick
-A retirement MUST be recorded in the partition's `RETIRED.md`: the note's title, why it was retired, and the note that replaced it when there is one. The file MUST be part of the next pass's input, so a retired subject is not reinstated from the same unchanged raw entry — this is the only mechanism that makes a deletion stick in a store whose sources are outside it, and without it every pass would re-import what the last one removed. A retired note's file MUST leave `notes/` and MUST NOT appear in the index, in delivery or in recall.
+A retirement MUST be recorded in the partition's `RETIRED.md`: the note's title, why it was retired, and the note that replaced it when there is one. The file MUST be part of the next pass's input, so a retired subject is not reinstated from the same unchanged raw entry — this is the only mechanism that makes a deletion stick in a store whose sources are outside it, and without it every pass would re-import what the last one removed. A retired note's file MUST leave `notes/` and MUST NOT appear in the index or in delivery.
 
 #### Scenario: a retired note leaves the index and stays out
 - **GIVEN** a partition holding a note, and a later raw entry that contradicts it
@@ -323,7 +316,7 @@ A **channel-driven turn** MUST receive the same payload through the system-promp
 - **AND** when there is nothing to deliver the turn carries no memory header at all, rather than an empty one (see "Deliver to channel turns through the system prompt")
 
 ### Requirement: Install delivery hooks explicitly and removably
-For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it; where it has none, delivery MUST use its earliest per-session event with a **once-per-session guard**. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing.
+For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it; where it has none, delivery MUST use its earliest per-session event with a **once-per-session guard**. Installation MUST be an **explicit act** on Coffer's surface — connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or switching `memory` on while the agent is connected — marker-scoped, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing.
 
 #### Scenario: hook installation is marker-scoped and removable
 - **GIVEN** an agent whose settings file already carries a foreign hook on the same lifecycle event, other events' hooks, and unrelated top-level keys
@@ -341,40 +334,33 @@ An installed hook MUST be repaired when the command Coffer would write is no lon
 - **AND** an agent whose hook is already current is left untouched, and an agent with no hook is not given one.
 
 ### Requirement: Audit every delivery fire
-Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact. A fire is an event, not a property of the agent: the per-agent delivery status MUST report installation only, and MUST NOT carry a last-fired timestamp.
+Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact. A fire is an event, not a property of the agent: the hook's per-agent status MUST report installation only, and MUST NOT carry a last-fired timestamp.
 
 #### Scenario: every hook fire is recorded in the audit log
 - **GIVEN** an agent for which delivery has been installed
 - **WHEN** the installed hook fires and the served context is recorded as a delivery
 - **THEN** exactly one audit event is written naming that agent as both the resource and the actor
-- **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire", "Show delivery state on the agent's own page")
-
-### Requirement: Expose only coffer__recall
-The MCP gateway MUST expose exactly one built-in tool for this layer, `coffer__recall`, and its description MUST state that it **locates** notes rather than returning them: matching is literal, and the answer is where to read. There MUST be no `remember` tool: an agent records something by recording it the way it already does, and Coffer reads it on the next pass.
-
-#### Scenario: advertise recall as a locator and no remember tool
-- **GIVEN** the built-in tools Coffer's gateway advertises
-- **WHEN** they are listed
-- **THEN** `coffer__recall` is among them and its description says it locates notes by literal match and answers with where to read
-- **AND** no tool named `coffer__remember`, and no other memory tool, is listed
-
-### Requirement: Recall locations by literal match
-`coffer__recall` MUST take a word or phrase, span every partition (see "Serve every partition to every agent"), exclude retired notes and `.raw/`, and return each match's **absolute path**, title and description — not its body, which the caller reads for itself (see "Keep notes readable as plain files"). Matching MUST be a case-insensitive literal scan with no score, no mode and no reason in the answer, and MUST need no internal connection. Its job is to answer "where is the note about X" for a partition the session was not opened in; for the partition it *was* opened in, the index is already in front of the caller and recall should not be needed at all.
-
-#### Scenario: recall answers with locations, and never with a retired note
-- **GIVEN** a partition holding notes, one of them retired, both matching a distinctive phrase
-- **WHEN** `coffer__recall` is called with that phrase
-- **THEN** the active note comes back with its **absolute path**, title and description, and the retired one does not
-- **AND** the answer spans every partition, whichever agent is asking, and carries no score, no mode and no ranking (see "Serve every partition to every agent", "Recall locations by literal match")
+- **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire")
 
 ### Requirement: Cover memory management on REST and the CLI
-A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), run a distil pass over one partition, compose the session context, read what has been retired, and install/inspect/remove delivery for an agent.
+A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), run a distil pass over one partition, compose the session context, and read what has been retired. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `sync` (update memory: an aggregation, then a distil pass, see "Update memory in one action"), `distil` (one partition) and `context` (compose the session context; the command an installed delivery hook runs). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"), and no `enable` or `disable`, because a partition has no switch (see "Serve every partition to every agent"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family: on the command line they are `coffer agent connect|disconnect|connection <agent>`, and `coffer agent show <agent>` carries the hook as a part of its `coffer_connection`.
 
 #### Scenario: a partition's own directory is browsable as a file tree
 - **GIVEN** a distilled partition
 - **WHEN** its file tree is requested, and then one file out of it
 - **THEN** the tree's root carries the partition directory's absolute path and holds `MEMORY.md`, a `notes/` directory listing one Markdown file per note, and `RETIRED.md` when anything has been retired; reading `notes/<slug>.md` returns its text — not binary, not truncated — with the absolute path of the file and of the folder holding it
 - **AND** `.raw/` is not in the tree and reading a path under it is refused, the family is read-only (a write is refused with 405), and a path escaping the partition is refused with `MEMORY_UNSAFE_PATH` (400) (see "Present partitions as a table and a file tree", "Confine reads to registered agents' memory paths")
+
+#### Scenario: locate a partition's notes from the command line
+- **GIVEN** a distilled partition named `coffer`
+- **WHEN** `coffer path memory coffer` runs, and then `coffer path memory` with no partition
+- **THEN** the first prints the absolute path of the partition directory, which holds `MEMORY.md` and `notes/`, and the second prints the absolute memory root that holds it
+- **AND** `coffer memory` offers no `partitions`, `notes`, `note`, `retired`, `ls`, `read`, `delivery`, `delivery-install` or `delivery-remove` command, and `coffer memory context` is unchanged
+
+#### Scenario: the agent's command-line view reports delivery state
+- **GIVEN** the `memory` feature on and two registered agents, one connected by `coffer agent connect <agent>` and one not
+- **WHEN** `coffer agent show <name> --json` runs for each
+- **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time
 
 ### Requirement: Present partitions as a table and a file tree
 The web UI MUST present partitions **as a table** once any exists; with none, it shows the first-run welcome every other empty surface shows. One partition MUST be presented as a **file tree over its own directory** with a read-only preview beside it — the same two panes a skill's Files tab is — showing `MEMORY.md`, `notes/` and `RETIRED.md`, and MUST offer open-in-editor and reveal-in-file-manager on the previewed file. A note's frontmatter MUST be shown as metadata above its body, not rendered as body text. The tree and the preview MUST extend to the bottom of the window and scroll inside. It MUST NOT carry per-note actions: a partition is a folder of derived Markdown, and the surface that browses it says so by looking like one.
@@ -386,21 +372,12 @@ The web UI MUST present partitions **as a table** once any exists; with none, it
 - **AND** the preview offers open-in-editor and reveal-in-file-manager and no per-note edit or delete action
 
 ### Requirement: Audit every lifecycle act
-Every lifecycle act — aggregation, distil, retirement, delivery installed, removed or fired — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
+Every lifecycle act — aggregation, distil, retirement, delivery installed, removed or fired — MUST record an audit event with its actor.
 
 #### Scenario: audit a requested aggregation and distil with their actor
 - **GIVEN** a registered agent with native memory and a partition to distil
 - **WHEN** a user requests an aggregation and then a distil pass
 - **THEN** exactly one aggregation audit event and one distil audit event name that user as their actor, beside any the daemon's own worker recorded under its own actor
-
-### Requirement: Show delivery state on the agent's own page
-Per-agent delivery state MUST be presented on **that agent's own detail page**, not on the partitions surface. That surface answers one question — installed or not; firing is read as events on the audit surface.
-
-#### Scenario: show installed or not on the agent page
-- **GIVEN** an agent's detail page, for an agent with delivery installed and one without
-- **WHEN** its memory delivery section renders
-- **THEN** it states whether delivery is installed and offers the matching install or remove action
-- **AND** it shows no last-fired time
 
 ### Requirement: Show memory events on the vault-wide audit surface
 This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, and every event type this layer records MUST be legible there rather than shown as a raw event code.
@@ -427,14 +404,6 @@ This layer MUST add **no table of its own**. Notes, raw entries, the index and p
 - **WHEN** its tables are listed after an aggregation and a distil pass
 - **THEN** no table is named for memory, and each partition is one `resources` row of kind `memory`
 
-### Requirement: Send content out only for distil
-File content MUST leave the machine only through the internal connection the developer configured, and only for the distil pass (see "Distil incrementally in two stages") — and not at all when none is configured (see "Distil mechanically with no internal connection"). Delivery and recall MUST send nothing anywhere.
-
-#### Scenario: compose context and recall without calling any model
-- **GIVEN** a distilled partition and an internal connection rigged to fail the test if it is called
-- **WHEN** the session context is composed and `coffer__recall` is called
-- **THEN** both answer, and the internal connection is never called
-
 ### Requirement: Confine reads to registered agents' memory paths
 Reading MUST be confined to the memory paths of registered agents' config directories. Every path built from a source's contents MUST pass a traversal guard.
 
@@ -453,7 +422,7 @@ This layer MUST NOT reintroduce transcript distillation, a journal lane, native-
 - **AND** a full aggregation and distil writes no journal directory and nothing outside `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/` in a partition
 
 ### Requirement: Retire a note whose raw entries are all gone
-Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index, in delivery or in recall — otherwise the same lesson is served from two partitions once placement moves its entries.
+Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index or in delivery — otherwise the same lesson is served from two partitions once placement moves its entries.
 
 Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record retirements so they stick"), with a reason saying its sources are gone. Because nothing judged the note untrue, the record MUST NOT exclude anything from later passes: it names no raw entries, and its title MUST NOT be handed to routing as a retired subject, so material that comes back is distilled afresh. A note with at least one provenance entry still under `.raw/` MUST be left alone, and so MUST a note that names no provenance at all.
 
@@ -468,8 +437,33 @@ Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record r
 - **WHEN** a raw entry on the retired note's subject is aggregated into the partition again and the distil pass runs with an internal connection
 - **THEN** the note with a surviving entry is untouched, the routing request does not list the sources-gone title among the retired subjects, and the returning entry is distilled like any new one
 
+### Requirement: Expose no memory tool and name the memory root at session start
+The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. On the command line `coffer path memory` prints the same root.
+
+#### Scenario: no memory tool is listed, and delivery names the memory root
+- **GIVEN** a running daemon with the `memory` feature on, a partition holding notes, and a `global` partition holding more
+- **WHEN** an agent lists the gateway's tools, and the session context is composed for a cwd inside that partition's repository
+- **THEN** no `coffer__recall`, no `coffer__remember` and no other memory tool is listed
+- **AND** the payload names the absolute memory root that `coffer path memory` prints, and states that each partition's notes are Markdown files under `<root>/<partition>/notes/` to be searched with the agent's own tools
+
+### Requirement: Provision partitions only from aggregation
+Partitions MUST be **created by aggregation**, not by the user, and MUST NOT be created by an agent's working directory at read time.
+
+#### Scenario: compose context and locate the memory root without creating a partition
+- **GIVEN** a memory root with no partitions and a working directory inside a git repository
+- **WHEN** the session context is composed for that working directory and `coffer path memory` runs
+- **THEN** no partition directory and no `memory` Resource exists afterwards
+
+### Requirement: Send file content out only for distil
+File content MUST leave the machine only through the internal connection the developer configured, and only for the distil pass (see "Distil incrementally in two stages") — and not at all when none is configured (see "Distil mechanically with no internal connection"). Delivery MUST send nothing anywhere.
+
+#### Scenario: compose context without calling any model
+- **GIVEN** a distilled partition and an internal connection rigged to fail the test if it is called
+- **WHEN** the session context is composed
+- **THEN** it answers, and the internal connection is never called
+
 ### Requirement: Serve every partition to every agent
-A partition MUST NOT carry the Resource framework's per-agent reach or an enabled switch: the kind declares itself non-toggleable ([resource-framework](../resource-framework/spec.md) "Address every resource by an immutable uid through one kind-agnostic surface"). Every partition MUST be served to **every** agent, on both paths Coffer itself serves — delivery (see "Deliver the index and the notes path at session start") and recall (see "Recall locations by literal match"). Aggregating the memory of several agents into one place exists so that each agent can read what the others learned, so a partition is served to the agents that contributed nothing to it as much as to those that did.
+A partition MUST NOT carry the Resource framework's per-agent reach or an enabled switch: the kind declares itself non-toggleable ([resource-framework](../resource-framework/spec.md) "Address every resource by an immutable uid through one kind-agnostic surface"). Every partition MUST be served to **every** agent on the path Coffer itself serves — delivery (see "Deliver the index and the notes path at session start", "Expose no memory tool and name the memory root at session start"). Aggregating the memory of several agents into one place exists so that each agent can read what the others learned, so a partition is served to the agents that contributed nothing to it as much as to those that did. Serving gates **what Coffer names**, not what a process on this machine can open: a note is a file an agent is given the path to, and the layer MUST NOT present serving as a filesystem boundary it is not.
 
 #### Scenario: a partition is registered as a resource keyed on its repository
 - **GIVEN** exactly one registered agent contributing one raw entry about a repository

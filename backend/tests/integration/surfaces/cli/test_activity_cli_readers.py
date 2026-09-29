@@ -2,7 +2,7 @@
 command-line record readers").
 
 Gathering the audit log and the MCP invocation log onto one web page must not
-withdraw the scripts' way in: ``coffer audit`` and ``coffer mcp invocations``
+withdraw the scripts' way in: ``coffer log audit`` and ``coffer log mcp``
 still read each record through a running (in-process) daemon.
 """
 
@@ -27,7 +27,7 @@ _runner = CliRunner()
 
 
 @pytest.mark.acceptance(spec="web-ui", scenario="the command-line readers still read the records")
-def test_coffer_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
+def test_coffer_log_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
     from coffer.surfaces.cli import _client as _cli_client
 
     client, _info = _cli_client.client_or_exit()
@@ -36,14 +36,14 @@ def test_coffer_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
     )
     assert created.status_code == 201, created.text
 
-    result = _runner.invoke(app, ["audit", "list", "--json"])
+    result = _runner.invoke(app, ["log", "audit", "--json"])
     assert result.exit_code == 0, result.output
     entries = json.loads(result.output)["audit_events"]
     assert any(e.get("resource_name") == "reader-probe" for e in entries), entries
 
 
 @pytest.mark.acceptance(spec="web-ui", scenario="the command-line readers still read the records")
-def test_coffer_mcp_invocations_still_reads_the_invocation_log(mcp_daemon: Any) -> None:  # noqa: F811
+def test_coffer_log_mcp_still_reads_the_invocation_log(mcp_daemon: Any) -> None:  # noqa: F811
     from coffer.domain.mcp.capability import MCPInvocation
     from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
     from coffer.infrastructure.persistence.engine import (
@@ -74,7 +74,7 @@ def test_coffer_mcp_invocations_still_reads_the_invocation_log(mcp_daemon: Any) 
     loop.run_until_complete(_seed())
     loop.close()
 
-    result = _runner.invoke(app, ["mcp", "invocations", "fs", "--json"])
+    result = _runner.invoke(app, ["log", "mcp", "--server", "fs", "--json"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.output)["invocations"]
     assert [r["capability_key"] for r in rows] == ["list_directory"]
@@ -115,7 +115,7 @@ def _seed_rows(rows: list[tuple[str, str, str]]) -> None:
 
 
 @pytest.mark.acceptance(spec="web-ui", scenario="the command-line readers still read the records")
-def test_coffer_mcp_invocations_without_a_server_reads_every_server(mcp_daemon: Any) -> None:  # noqa: F811
+def test_coffer_log_mcp_without_a_server_reads_every_server(mcp_daemon: Any) -> None:  # noqa: F811
     """No server named: the cross-server log the Activity page reads, including
     Coffer's own built-in calls and a deleted server's rows."""
     fs = _register_server("fs")
@@ -129,7 +129,7 @@ def test_coffer_mcp_invocations_without_a_server_reads_every_server(mcp_daemon: 
         ]
     )
 
-    result = _runner.invoke(app, ["mcp", "invocations", "--json"])
+    result = _runner.invoke(app, ["log", "mcp", "--json"])
 
     assert result.exit_code == 0, result.output
     rows = json.loads(result.output)["invocations"]
@@ -143,15 +143,13 @@ def test_coffer_mcp_invocations_without_a_server_reads_every_server(mcp_daemon: 
     assert names[fs] == "fs" and names[git] == "git" and names["coffer"] is None
 
 
-def test_coffer_mcp_invocations_without_a_server_keeps_its_filters(mcp_daemon: Any) -> None:  # noqa: F811
+def test_coffer_log_mcp_without_a_server_keeps_its_filters(mcp_daemon: Any) -> None:  # noqa: F811
     fs = _register_server("fs")
     _seed_rows([(fs, "a", "ok"), ("coffer", "b", "error"), (fs, "c", "error")])
 
-    errors = _runner.invoke(app, ["mcp", "invocations", "--status", "error", "--json"])
-    capped = _runner.invoke(app, ["mcp", "invocations", "--limit", "1", "--json"])
-    future = _runner.invoke(
-        app, ["mcp", "invocations", "--since", "2999-01-01T00:00:00+00:00", "--json"]
-    )
+    errors = _runner.invoke(app, ["log", "mcp", "--status", "error", "--json"])
+    capped = _runner.invoke(app, ["log", "mcp", "--limit", "1", "--json"])
+    future = _runner.invoke(app, ["log", "mcp", "--since", "2999-01-01T00:00:00+00:00", "--json"])
 
     assert errors.exit_code == capped.exit_code == future.exit_code == 0, errors.output
     assert {r["capability_key"] for r in json.loads(errors.output)["invocations"]} == {"b", "c"}
@@ -159,11 +157,11 @@ def test_coffer_mcp_invocations_without_a_server_keeps_its_filters(mcp_daemon: A
     assert json.loads(future.output) == {"invocations": []}
 
 
-def test_coffer_mcp_invocations_table_names_each_rows_server(mcp_daemon: Any) -> None:  # noqa: F811
+def test_coffer_log_mcp_table_names_each_rows_server(mcp_daemon: Any) -> None:  # noqa: F811
     fs = _register_server("fs")
     _seed_rows([(fs, "read_file", "ok"), ("deleted:old", "gone_tool", "ok")])
 
-    result = _runner.invoke(app, ["mcp", "invocations"], env={"COLUMNS": "200"})
+    result = _runner.invoke(app, ["log", "mcp"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0, result.output
     fs_line = next(line for line in result.output.splitlines() if "read_file" in line)
@@ -172,11 +170,11 @@ def test_coffer_mcp_invocations_table_names_each_rows_server(mcp_daemon: Any) ->
     assert "deleted:old" in gone_line
 
 
-def test_coffer_mcp_invocations_with_a_server_stays_on_that_server(mcp_daemon: Any) -> None:  # noqa: F811
+def test_coffer_log_mcp_with_a_server_stays_on_that_server(mcp_daemon: Any) -> None:  # noqa: F811
     fs = _register_server("fs")
     _seed_rows([(fs, "read_file", "ok"), ("coffer", "coffer__recall", "ok")])
 
-    result = _runner.invoke(app, ["mcp", "invocations", "fs", "--json"])
+    result = _runner.invoke(app, ["log", "mcp", "--server", "fs", "--json"])
 
     assert result.exit_code == 0, result.output
     assert [r["capability_key"] for r in json.loads(result.output)["invocations"]] == ["read_file"]

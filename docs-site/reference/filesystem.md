@@ -62,7 +62,7 @@ See [Persistence](/architecture/persistence) and [Credentials](/guides/credentia
 | --- | --- | --- | --- | --- |
 | `daemon.json` | Runtime state of the running daemon: `version`, `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`. Every client (CLI, shim, desktop app, web UI dev server) reads the port and API token from it. Removed when the daemon exits. | daemon | No | Only while no daemon runs. A stale file is detected and ignored. |
 | `daemon.lock` | `flock` target that serialises detect-or-spawn, so two clients never start two daemons. Left on disk between runs by design. | daemon, CLI, shim | No | Yes, while no daemon is starting. |
-| `daemon-config.json` | Settings read before the database opens: `port`, `machine_name`, `machine_id` (cache), `features`, `memory_delivery_withdrawn`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the channel defaults. |
+| `daemon-config.json` | Settings read before the database opens: `port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the channel defaults. |
 | `upstream-pids/<server-uid>-<pid>.json` | One file per upstream MCP server process the daemon spawned, so the next daemon can reap orphans after a crash. | daemon | No | Yes, while the daemon is stopped. |
 | `state/removed-agent-notice.done` | Marks that the one-time notice about config directories of agent types Coffer no longer supports was logged. | daemon | No | Yes; the notice is logged once more. |
 
@@ -81,7 +81,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page and read by `coffer__diagnose`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
+| `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 
@@ -113,7 +113,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `sync/machines/<machine-id>.yaml` | One descriptor per machine sharing the vault. | daemon | Yes | — |
 | `sync/knowledge/`, `sync/skills/` | Mirrors of the live trees. | daemon | Yes | — |
 
-Each applied round is preceded by a git tag under `coffer/pre-apply/` in this repository, which `coffer sync rollback` returns to. See [Vault sync](/architecture/vault-sync).
+Each applied round is preceded by a git tag under `coffer/pre-apply/` in this repository, which `coffer sync restore` returns to. See [Vault sync](/architecture/vault-sync).
 
 ### Caches, media and working directories
 
@@ -136,7 +136,7 @@ Each applied round is preceded by a git tag under `coffer/pre-apply/` in this re
 
 ## Inside an agent's config directory
 
-Coffer writes into a registered agent's own config directory only for things you asked for: installing its MCP entry, delivering a skill, switching a model provider, installing memory delivery, or editing a config file from the agent's page. Every write is atomic, and the previous version of an edited file is kept as `<file>.bak`, `<file>.bak.1` and `<file>.bak.2`.
+Coffer writes into a registered agent's own config directory only for things you asked for: connecting it to Coffer, delivering a skill, switching a model provider, or editing a config file from the agent's page. Every write is atomic, and the previous version of an edited file is kept as `<file>.bak`, `<file>.bak.1` and `<file>.bak.2`.
 
 The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by default. An agent registered with another directory gets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` set on every process Coffer starts for it.
 
@@ -144,25 +144,25 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 
 | File | What Coffer writes | When |
 | --- | --- | --- |
-| `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Installing Coffer's MCP entry. See [Connect a client](/guides/connect-a-client). |
+| `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Connecting the agent to Coffer. See [Agents](/guides/agents#connect-an-agent-to-coffer). |
 | `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> provider key --connection-uid <uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found) and `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_MODEL`, `env.ANTHROPIC_SMALL_FAST_MODEL`. The API key itself is never written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
-| `settings.json` | A `hooks.SessionStart` entry, matcher `startup\|resume\|clear\|compact`, whose command begins `: coffer-memory;` and runs `coffer memory context --agent-uid <uid> --cwd "$PWD"`. | Installing memory delivery. See [Memory](/guides/memory). |
+| `settings.json` | A `hooks.SessionStart` entry, matcher `startup\|resume\|clear\|compact`, whose command begins `: coffer-memory;` and runs `coffer memory context --agent-uid <uid> --cwd "$PWD"`. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory). |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex
 
 | File | What Coffer writes | When |
 | --- | --- | --- |
-| `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Installing Coffer's MCP entry. |
+| `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Connecting the agent to Coffer. |
 | `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table whose `env_key` is `COFFER_PROVIDER_KEY`, and `model_catalog_json` pointing at the catalogue below. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
-| `hooks.json` | A `hooks.UserPromptSubmit` entry whose command begins `: coffer-memory;`, guarded to fire once per session, with a 10-second timeout. | Installing memory delivery. |
+| `hooks.json` | A `hooks.UserPromptSubmit` entry whose command begins `: coffer-memory;`, guarded to fire once per session, with a 10-second timeout. | Connecting the agent to Coffer while `memory` is on. |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
 
 Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `provider key`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
 
 ::: tip Cleaning up an agent
-Before removing Coffer, uninstall the MCP entry, memory delivery and provider projection from each agent's page (or the matching `coffer agent` and `coffer provider` commands), then delete `~/.coffer`. Deleting `~/.coffer` first leaves the agents pointing at a shim that no longer exists.
+Before removing Coffer, disconnect each agent from Coffer and remove the provider projection from each agent's page (or `coffer agent disconnect` and the matching `coffer provider` commands), then delete `~/.coffer`. Deleting `~/.coffer` first leaves the agents pointing at a shim that no longer exists.
 :::
 
 ## Related

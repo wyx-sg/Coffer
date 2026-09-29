@@ -22,7 +22,7 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
-from coffer.application.mcp.supervisor import SubprocessSupervisor, UpstreamHealth
+from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ToolDisabled
 from coffer.domain.resource import Resource
@@ -192,8 +192,53 @@ def test_validate_name_rejects_double_underscore() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# on_rename — the name a live connection is held under changes                 #
+# A fixed name — the name a live connection is held under never changes        #
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_a_rename_is_refused_before_any_session_is_touched(tmp_path: Path) -> None:
+    """The name prefixes every tool name an agent sees, so it is fixed.
+
+    Refused before any hook runs: no session loses its live connection, the row
+    keeps its name, and nothing is audited (ADR
+    names-visible-to-agents-are-fixed).
+    """
+    from coffer.domain.errors import NameImmutable
+
+    sup_a, sup_b = _RecordingSupervisor(), _RecordingSupervisor()
+    supervisor_for: dict[str, object] = {"a": sup_a, "b": sup_b}
+    rsvc, engine = await _services(tmp_path, supervisor_for)
+    try:
+        await rsvc.register(
+            kind="mcp_server", name="fs", config=_stdio_config("read_file"), actor="test"
+        )
+        before = await rsvc.get_by_name("mcp_server", "fs")
+        trail = await rsvc._audit.query(resource=before)
+
+        with pytest.raises(NameImmutable, match="capability toggles"):
+            await rsvc.rename(before.uid, "files", actor="test")
+
+        assert (await rsvc.get(before.uid)).name == "fs"
+        assert await rsvc.find_by_name("mcp_server", "files") is None
+        assert sup_a.evicted == [] and sup_b.evicted == []
+        assert await rsvc._audit.query(resource=before) == trail
+        # The name it already has is not a change, so it is not refused.
+        assert (await rsvc.rename(before.uid, "fs", actor="test")).name == "fs"
+    finally:
+        await engine.dispose()
+
+
+def test_new_mcp_server_names_are_capped_at_24_characters() -> None:
+    """The cap is a rule for NEW names (``validate_new_name``), never for the
+    name check a loaded or arriving row goes through (``validate_name``)."""
+    mcp_kind = make_mcp_kind({})  # type: ignore[arg-type]
+    assert mcp_kind.validate_new_name is not None
+    assert mcp_kind.validate_name is not None
+    mcp_kind.validate_new_name("a" * 24)
+    with pytest.raises(ValueError, match="24"):
+        mcp_kind.validate_new_name("a" * 25)
+    mcp_kind.validate_name("a" * 30)
 
 
 def _live_fake_servers() -> set[int]:
@@ -211,117 +256,6 @@ def _live_fake_servers() -> set[int]:
             if str(_FAKE) in " ".join(child.cmdline()):
                 live.add(child.pid)
     return live
-
-
-@pytest.mark.asyncio
-async def test_rename_leaves_one_reachable_upstream_and_strands_none(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The defect this hook exists for, end to end with a real subprocess.
-
-    A supervisor holds its live connections under the server's NAME. Renaming
-    the row used to leave that entry addressed by a name nothing would ask for
-    again — its subprocess alive, unreachable, and duplicated the moment the
-    next call came in under the new name. After the rename there must be exactly
-    one fake server running, it must answer under the new name, and the process
-    that was serving the old one must be gone.
-    """
-    install_in_memory_keyring(monkeypatch)
-    pre_existing = _live_fake_servers()
-
-    supervisor_for: dict[str, object] = {}
-    rsvc, engine = await _services(tmp_path, supervisor_for)
-
-    sup = SubprocessSupervisor(
-        upstream_factory=build_upstream,
-        resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
-    )
-    supervisor_for["session-1"] = sup
-    try:
-        await rsvc.register(
-            kind="mcp_server",
-            name="fs",
-            config=_stdio_config("read_file"),
-            actor="test",
-        )
-        conn = await sup.get_or_spawn("fs")
-        assert {t.name for t in (await conn.request("tools/list", {})).tools} == {"read_file"}
-        spawned = _live_fake_servers() - pre_existing
-        assert len(spawned) == 1, f"expected one upstream for 'fs', got {spawned}"
-        (old_pid,) = spawned
-
-        before = await rsvc.get_by_name("mcp_server", "fs")
-        await rsvc.rename(before.uid, "files", actor="test")
-
-        # The old key no longer holds a connection...
-        assert sup.health("fs") == UpstreamHealth.UNHEALTHY
-        # ...and the process it held is gone, not merely unreferenced.
-        assert old_pid not in _live_fake_servers()
-
-        # The server is fully reachable under its new label, on one process.
-        renamed = await sup.get_or_spawn("files")
-        assert {t.name for t in (await renamed.request("tools/list", {})).tools} == {"read_file"}
-        now_live = _live_fake_servers() - pre_existing
-        assert len(now_live) == 1, f"a rename must not duplicate the upstream, got {now_live}"
-        assert old_pid not in now_live
-    finally:
-        await sup.dispose()
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_rename_evicts_every_registered_session(tmp_path: Path) -> None:
-    """Every session holds its own supervisor, so every one of them is carrying
-    a connection under the outgoing name."""
-    sup_a, sup_b = _RecordingSupervisor(), _RecordingSupervisor()
-    supervisor_for: dict[str, object] = {"a": sup_a, "b": sup_b}
-    rsvc, engine = await _services(tmp_path, supervisor_for)
-    try:
-        await rsvc.register(
-            kind="mcp_server", name="fs", config=_stdio_config("read_file"), actor="test"
-        )
-        before = await rsvc.get_by_name("mcp_server", "fs")
-
-        renamed = await rsvc.rename(before.uid, "files", actor="test")
-
-        assert renamed.name == "files"
-        assert renamed.uid == before.uid, "a rename changes the label, never the identity"
-        # Evicted under the OLD name — the only key those connections answer to.
-        assert sup_a.evicted == ["fs"]
-        assert sup_b.evicted == ["fs"]
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_a_failed_eviction_aborts_the_rename(tmp_path: Path) -> None:
-    """Unlike on_delete, this hook can refuse — and does.
-
-    Renaming on top of a connection that could not be released would leave a
-    live subprocess addressed by a name the row no longer carries. Keeping the
-    old name is what keeps it reachable, so the row must not move. The healthy
-    supervisor is still attempted first, because eviction costs nothing to redo:
-    its session simply respawns on its next call, under the name it already had.
-    """
-    good = _RecordingSupervisor()
-    supervisor_for: dict[str, object] = {"good": good, "bad": _Boom()}
-    rsvc, engine = await _services(tmp_path, supervisor_for)
-    try:
-        await rsvc.register(
-            kind="mcp_server", name="fs", config=_stdio_config("read_file"), actor="test"
-        )
-        before = await rsvc.get_by_name("mcp_server", "fs")
-
-        with pytest.raises(RuntimeError, match="boom"):
-            await rsvc.rename(before.uid, "files", actor="test")
-
-        still = await rsvc.get(before.uid)
-        assert still.name == "fs", "the row must not move while a connection is unreleased"
-        assert await rsvc.find_by_name("mcp_server", "files") is None
-        assert good.evicted == ["fs"], "the reachable sessions are still attempted"
-    finally:
-        await engine.dispose()
 
 
 # --------------------------------------------------------------------------- #

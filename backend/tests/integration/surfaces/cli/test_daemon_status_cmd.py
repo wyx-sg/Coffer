@@ -65,3 +65,116 @@ def test_status_treats_a_stale_daemon_json_as_not_running(no_daemon):
     assert res.exit_code == 3
     assert "not running" in res.stdout
     assert spawned == []
+
+
+# --- a running daemon: its channel and the passes in flight -----------------------
+
+
+_TOKEN = "cli-status-token"
+
+
+@pytest.fixture
+def live_daemon(tmp_path, monkeypatch):
+    """An in-process daemon serving ``/daemon/status`` and ``/upkeep/runs``."""
+    from datetime import UTC, datetime
+
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from coffer.infrastructure.daemon import config as daemon_config
+    from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+    from coffer.surfaces.http import daemon_routes, feature_dependencies
+    from coffer.surfaces.http import errors as err_handlers
+    from coffer.surfaces.http.auth import set_active_token
+    from coffer.surfaces.http.daemon_routes import router as daemon_router
+    from coffer.surfaces.http.upkeep_routes import router as upkeep_router
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
+    prior = feature_dependencies._feature_service
+    feature_dependencies.set_feature_service(feature_dependencies.build_feature_service())
+    set_active_token(_TOKEN)
+    # The phase is process-wide; an earlier test's shutdown may have left it
+    # draining.
+    monkeypatch.setattr(daemon_routes, "_DAEMON_PHASE", "ready")
+
+    def _connect():
+        app = FastAPI()
+        err_handlers.register(app)
+        app.include_router(daemon_router)
+        app.include_router(upkeep_router)
+        client = TestClient(
+            app,
+            base_url="http://localhost/api/v1",
+            headers={"X-Coffer-Token": _TOKEN},
+            raise_server_exceptions=False,
+        )
+        info = DaemonInfo(
+            version=1,
+            pid=4242,
+            port=8000,
+            token=_TOKEN,
+            started_at=datetime.now(tz=UTC),
+            binary_path="/test",
+        )
+        return client, info
+
+    monkeypatch.setattr(cli_client, "client_or_exit", _connect)
+    monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
+    yield
+    set_active_token(None)
+    feature_dependencies._feature_service = prior
+
+
+def test_status_prints_the_channel(live_daemon):
+    res = CliRunner().invoke(app, ["daemon", "status"])
+    assert res.exit_code == 0, res.output
+    assert "channel: dev" in res.stdout.splitlines()
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="status names the passes in flight")
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the command line reads the passes in flight"
+)
+def test_status_names_the_passes_in_flight(live_daemon):
+    """Both passes, oldest first, with kind, target and start time under
+    ``--json``; once they end, the table's passes section says none is running.
+    Neither call starts a pass: the registry holds exactly what the test put
+    there."""
+    from coffer.application.upkeep_runs import UPKEEP_RUNS
+
+    assert UPKEEP_RUNS.claim("knowledge", "shopee") is True
+    assert UPKEEP_RUNS.claim("memory", "coffer") is True
+    try:
+        as_json = CliRunner().invoke(app, ["daemon", "status", "--json"])
+        during = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+        assert {(r.kind, r.name) for r in UPKEEP_RUNS.list_running()} == {
+            ("knowledge", "shopee"),
+            ("memory", "coffer"),
+        }
+    finally:
+        UPKEEP_RUNS.release("knowledge", "shopee")
+        UPKEEP_RUNS.release("memory", "coffer")
+
+    assert as_json.exit_code == 0, as_json.output
+    payload = json.loads(as_json.stdout)
+    assert payload["status"] == "ready"
+    runs = payload["passes_in_flight"]
+    assert [(r["kind"], r["name"]) for r in runs] == [("knowledge", "shopee"), ("memory", "coffer")]
+    assert all(r["started_at"] for r in runs)
+    assert runs[0]["started_at"] <= runs[1]["started_at"]
+
+    assert during.exit_code == 0, during.output
+    lines = during.stdout.splitlines()
+    section = lines[lines.index("passes in flight:") + 1 :]
+    assert "knowledge" in section[0] and "shopee" in section[0]
+    assert "memory" in section[1] and "coffer" in section[1]
+
+    after = CliRunner().invoke(app, ["daemon", "status"])
+    assert after.exit_code == 0, after.output
+    lines = after.stdout.splitlines()
+    assert lines[lines.index("passes in flight:") + 1].strip() == "no pass is running"
+    assert UPKEEP_RUNS.list_running() == []
+
+    as_json = CliRunner().invoke(app, ["daemon", "status", "--json"])
+    assert json.loads(as_json.stdout)["passes_in_flight"] == []

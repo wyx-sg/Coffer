@@ -171,6 +171,10 @@ class ResourceApplier:
 
         raw_description = doc.get("description")
         description = raw_description if isinstance(raw_description, str) else None
+        # A document with no ``title`` key means "no title": the exporter only
+        # writes the key when there is one, and an older build never did.
+        raw_title = doc.get("title")
+        title = raw_title if isinstance(raw_title, str) else None
         # The normaliser's write to another row (a moved internal default's
         # release) runs only once the gate has passed, and is reverted if this
         # document's own write then fails — so a document that does not land
@@ -178,7 +182,7 @@ class ResourceApplier:
         if pre_write is not None:
             await pre_write.apply()
         try:
-            await self._write(existing, uid, kind, name, config, description)
+            await self._write(existing, uid, kind, name, config, description, title)
         except Exception:
             if pre_write is not None:
                 await pre_write.revert()
@@ -193,6 +197,7 @@ class ResourceApplier:
         name: str,
         config: dict[str, object],
         description: str | None,
+        title: str | None,
     ) -> None:
         if existing is None:
             # Registered at the identity the document carries rather than a
@@ -215,6 +220,7 @@ class ResourceApplier:
                 description=description,
                 allow_lifecycle_kind=True,
                 uid=uid,
+                title=title,
             )
         else:
             # A document that arrives at an identity this machine already
@@ -239,6 +245,9 @@ class ResourceApplier:
                 description=description,
                 allow_lifecycle_kind=True,
             )
+            # Only on a real change, so an unchanged document audits nothing.
+            if existing.title != title:
+                await self._resources.set_title(uid, title, self._actor)
 
     async def _tree_config(self, kind: str, uid: str) -> Mapping[str, object] | None:
         """The config of ``resources/<kind>/<uid>.yaml`` in this round's tree."""

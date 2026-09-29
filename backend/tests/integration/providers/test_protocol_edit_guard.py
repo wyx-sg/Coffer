@@ -105,7 +105,7 @@ def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypat
         # uid in it would be a dead end. This is the same assertion as before —
         # only now it is the one place in the exchange the label appears.
         assert "acme" in envelope["message"]
-        assert "use-builtin" in envelope["message"]
+        assert "coffer provider builtin anthropic" in envelope["message"]
 
         # Nothing moved: not the stored wire, not the file the agent reads.
         assert c.get(f"/api/v1/providers/{uid}").json()["protocol"] == "anthropic"

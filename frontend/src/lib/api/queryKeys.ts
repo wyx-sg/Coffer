@@ -46,7 +46,7 @@ export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
 export const agentConfigChildKey = (uid: string, key: string, relpath: string) =>
   ["agents", uid, "config-files", key, relpath] as const;
-export const agentMcpInstallKey = (uid: string) => ["agents", uid, "mcp-install"] as const;
+export const agentConnectionKey = (uid: string) => ["agents", uid, "coffer-connection"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
 /** One entry's detail — under the listing's key, so whatever refreshes the
  *  listing (a remove, an adopt) refreshes the detail too. */
@@ -133,6 +133,8 @@ export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as con
 // channels — channel resources ride `resourcesKey`; only live status is here
 // ---------------------------------------------------------------------------
 
+/** Prefix of every channel status key: a title or rename refreshes them all. */
+const channelsKey = ["channels"] as const;
 export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
 
 // ---------------------------------------------------------------------------
@@ -193,7 +195,7 @@ export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 
 // ---------------------------------------------------------------------------
-// memory — partitions, files, delivery
+// memory — partitions, files
 // ---------------------------------------------------------------------------
 
 export const memoryKey = ["memory"] as const;
@@ -204,9 +206,6 @@ export const memoryPartitionFilesKey = (partitionUid: string) =>
   ["memory", "partitions", partitionUid, "files"] as const;
 export const memoryPartitionFileKey = (partitionUid: string, path: string) =>
   ["memory", "partitions", partitionUid, "files", "content", path] as const;
-export const memoryDeliveryKey = ["memory", "delivery"] as const;
-export const memoryAgentDeliveryKey = (agentUid: string) =>
-  ["memory", "delivery", agentUid] as const;
 
 // ---------------------------------------------------------------------------
 // upkeep — the long rewrites (memory organise, knowledge curation) in flight
@@ -262,6 +261,12 @@ export function ownListKeyForKind(kind: string): QueryKey | undefined {
       return providersKey;
     case "agent":
       return agentsKey;
+    case "knowledge":
+      return knowledgeCollectionsKey;
+    case "memory":
+      return memoryPartitionsKey;
+    case "channel":
+      return channelsKey;
     default:
       return undefined;
   }

@@ -8,7 +8,7 @@ description: How Coffer reads every agent's native memory without writing it, di
 This page explains how Coffer's memory layer works: how it reads what Claude Code and Codex have learned out of their own memory files, distils that into notes of its own, and hands the result back to every agent. It is written for engineers who want the mechanism and the reasoning behind it. For the task-oriented view, see the [Memory guide](/guides/memory).
 
 ::: info Experimental
-Memory is an [experimental feature](/guides/experimental-features) (key `memory`). On a stable build it is off until you switch it on. While it is off, the workers skip their rounds, `coffer__recall` leaves `tools/list`, and the delivery hooks are withdrawn from every agent.
+Memory is an [experimental feature](/guides/experimental-features) (key `memory`). On a stable build it is off until you switch it on. While it is off, the workers skip their rounds, the gateway stops naming the memory root, and the delivery hooks are withdrawn from every agent.
 :::
 
 ## The problem
@@ -34,7 +34,7 @@ Coffer reads native memory and never creates, modifies, moves, deletes or reform
 - **No agent's own loop is disturbed.** Each agent keeps managing its memory exactly as its vendor designed. Coffer never holds a second copy that could drift from the first, so nothing has to be reconciled.
 - **The whole store becomes disposable.** Everything under `~/.coffer/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources, possibly in different words. That is what makes it safe for the distil pass to rewrite notes aggressively.
 
-The one file Coffer does write into an agent's configuration is a hook entry in the agent's *settings*. That file is not memory, and Coffer writes the entry only when you install delivery (see [Delivery](#delivery)).
+The one file Coffer does write into an agent's configuration is a hook entry in the agent's *settings*. That file is not memory, and Coffer writes the entry only when you connect the agent to Coffer (see [Delivery](#delivery)).
 
 ### Four directories with one writer each
 
@@ -78,11 +78,11 @@ Three routes lead to `global`:
 - An entry with no working directory, or whose working directory is your home directory, goes to `global`.
 - An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then judges the entry on its merits and either keeps it in `global` or keeps nothing.
 
-Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new row through the lifecycle opt-in. Composing a context or calling recall never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
+Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new row through the lifecycle opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
 
 ### No per-agent reach and no switch
 
-Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is served to **every** agent, on both paths Coffer serves: delivery and recall. The `memory` experimental feature switches the whole layer.
+Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The `memory` experimental feature switches the whole layer, and the notes themselves are files under the memory root either way.
 
 This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so no switch on a partition could decide more than what Coffer *serves*; a disabled partition was still a file any agent could read.
 
@@ -230,12 +230,12 @@ A line carries the note's conclusion, not a pointer to it, so reading the index 
 Delivery hands a session the index. `compose_context` in `application/memory/context.py` builds the payload for a working directory:
 
 1. It resolves `cwd` to a partition by the longest recorded `repository_path` that contains it. A worktree therefore resolves to its repository's partition. An unknown directory resolves to `global`.
-2. It emits, in order: a `## Coffer memory` header, `global`'s lines under *Known about you:*, the current repository's lines, and a closing line giving the absolute path of the `notes/` directory with the instruction to read a note as a file.
+2. It emits, in order: a `## Coffer memory` header, `global`'s lines under *Known about you:*, the current repository's lines, a line giving the absolute path of the `notes/` directory with the instruction to read a note as a file, and a line naming the memory root to search for a note from another repository.
 3. It names no tool. Every consumer is a local process that already reads files.
 
 The payload is bounded by a ceiling of 12,000 estimated tokens (`DEFAULT_CEILING_TOKENS`), sized for a whole index rather than a handful of lines. It rarely binds. When it does, the **current repository's lines are spent first** and `global` gets what is left. Within each section the oldest lines drop first, and a notice states how many were dropped and which directory holds them. A trim therefore still leaves every note reachable as a file. With nothing to deliver, the text is empty rather than a bare header.
 
-Composing a context and calling recall send nothing anywhere. Note content leaves the machine only through the distil pass's internal connection.
+Composing a context sends nothing anywhere. Note content leaves the machine only through the distil pass's internal connection.
 
 ### Hooks for the agents you drive yourself
 
@@ -250,7 +250,7 @@ Delivery reaches an agent through the agent's own hook mechanism, calling Coffer
 | Claude Code | `settings.json` (`settings` key) | `SessionStart`, matcher `startup\|resume\|clear\|compact` | 10 s timeout |
 | Codex | `hooks.json` (`hooks` key) | `UserPromptSubmit` | Codex has no session-start event, so the command carries a once-per-session guard: a flag file under `$TMPDIR` keyed by `$PPID` |
 
-The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entry by that marker, and never touches another tool's hooks on the same event. Installing is always an explicit act (`coffer memory delivery-install`, or the agent's detail page). It is idempotent, and removing the entry deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
+The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entry by that marker, and never touches another tool's hooks on the same event. Installing is always an explicit act: the hook is one part of the agent's Coffer connection (`coffer agent connect`, or **Connect to Coffer** on the agent's page; see [Agents](/guides/agents#connect-an-agent-to-coffer)). It is idempotent, and removing the entry deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
 
 ```mermaid
 sequenceDiagram
@@ -265,13 +265,13 @@ sequenceDiagram
   C-->>A: print text to stdout (becomes session context)
 ```
 
-The CLI command is silent on every failure. If no daemon is running, or the daemon answers with an error, the command prints nothing, so a hook never breaks a session. Each real fire records a `memory_delivery_fired` audit event. A management preview leaves `record_fired` false. The per-agent delivery status reports only whether the hook is installed. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
+The CLI command is silent on every failure. If no daemon is running, or the daemon answers with an error, the command prints nothing, so a hook never breaks a session. Each real fire records a `memory_delivery_fired` audit event. A management preview leaves `record_fired` false. The connection status reports only whether the hook is installed. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
 
 ### Keeping hooks current
 
 Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. At boot the daemon compares each installed command with the command the running build would install, and rewrites the ones that differ (`DeliveryService.heal_drift`). The repair runs best-effort per agent and never installs a hook for an agent that has none.
 
-The same reconcile follows the `memory` feature switch (`application/memory/delivery_switch.py`). Switching memory off removes the hook from every agent and records their uids in `daemon-config.json`. Switching it back on reinstalls the hook into exactly those agents, then heals stale commands.
+The same reconcile follows the `memory` feature switch (`application/memory/delivery_switch.py`). Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — then heals stale commands. Boot with memory on only heals; a connected agent missing the hook reads as needing repair until it is connected again.
 
 ### Channel turns
 
@@ -279,16 +279,11 @@ A turn that arrives from Telegram or SeaTalk runs no session-start hook, so the 
 
 The composer answers nothing, and the turn carries no memory header, while the `memory` feature is off (read per turn), when the composed index is empty, or when the tree cannot be read (logged; memory is an append to the turn, not a precondition of it). A turn from the web Chat page gets no append: it receives memory through the agent's own hook, so no turn gets it twice.
 
-## Recall
+## Finding a note in another partition
 
-`coffer__recall` is the layer's one builtin MCP tool (see [MCP tools](/reference/mcp-tools)). It **locates** notes and does not return their bodies:
+The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text while the `memory` feature is on. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
 
-- It takes one `query` string and scans every partition's `notes/`. A match is a case-insensitive substring match over each note's body, title, description and search terms.
-- It returns up to 10 matches, sorted by path, each with its absolute `path`, `title`, `description`, `type` and `partition`. There is no score and no ranking. The caller reads the file itself.
-- It never sees a retired note or a raw entry. It reads only what `notes/` holds, so this exclusion is structural rather than a filter.
-- It needs no internal connection. The asking agent's identity reaches the handler, like every builtin's, but the handler ignores it: every agent gets the same answer.
-
-Recall is for finding a note in a partition the session was *not* opened in. For the current repository, the index is already in the session's context. There is no `remember` tool. An agent records something the way it always does, and Coffer reads it on the next pass. A recall call produces the usual `mcp_invocations` row, which records nothing about the query or the results.
+A search over the files never sees a raw entry or a retired note as a note: raw entries live under `.raw/`, and retired notes leave `notes/` for `RETIRED.md`. There is no `remember` tool either. An agent records something the way it always does, and Coffer reads it on the next pass.
 
 ## Workers and scheduling
 
@@ -305,7 +300,7 @@ Both are on by default. They read the agents' files and write only the derived t
 
 - **Projecting a Coffer-owned store into each agent's memory.** This would give ambient loading for free, but only by writing, symlinking or disabling another tool's memory. That is intrusive, hard to understand, and fragile against vendor changes. Aggregation leaves each agent's loop untouched and pays for it with a hook.
 - **Storing the sources' words verbatim as the product.** This keeps quotes exact, but Codex's untitled bullets would become notes whose title, description and body were the same sentence. Coffer keeps verbatim text in `.raw/`, where provenance points at it, and writes the notes in its own words.
-- **A budgeted digest plus a search tool.** Agents do not call a tool to find something they have not been shown. Both supported hosts solve retrieval the same way: they load a whole index and read a body as a file. Coffer copies that shape, and keeps recall only as a locator for other partitions.
+- **A budgeted digest plus a search tool.** Agents do not call a tool to find something they have not been shown. Both supported hosts solve retrieval the same way: they load a whole index and read a body as a file. Coffer copies that shape, and names the memory root so a note from another partition is one search away.
 - **Literal de-duplication across agents.** Two agents never phrase a lesson the same way, so a literal comparison merges nothing. Merging is a judgement about meaning, made by the distil model.
 - **Keying partitions on working directories.** This splits a repository across its worktrees, orphans partitions when directories disappear, and turns scratch folders into permanent partitions. Keying on the repository avoids all three.
 - **A third reader abstraction.** Two readers are written as two readers. A third agent gets an adapter against the existing `MemoryReader` and `DeliveryAdapter` protocols, not a capability matrix.
@@ -324,7 +319,6 @@ Both are on by default. They read the agents' files and write only the derived t
 | Index rendering | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
 | Context composition | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
 | Delivery service and feature-switch reconcile | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py), [`delivery_switch.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_switch.py) |
-| Recall service and builtin tool | [`application/memory/recall.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/recall.py), [`builtin_recall_tool.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/builtin_recall_tool.py) |
 | Kind (`converges=False`, no scope) and service | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py), [`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
 | Native-memory readers | [`infrastructure/memory/readers/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/readers) |
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |

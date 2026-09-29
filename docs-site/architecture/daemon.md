@@ -76,7 +76,7 @@ The daemon reads one file before it binds and writes another once it has bound. 
 
 | File | Direction | Written by | Contents | Lifetime |
 | --- | --- | --- | --- | --- |
-| `daemon-config.json` | In | CLI, feature switches, sync machine identity | `port` (optional), `machine_name`, cached `machine_id`, `features` switches, `memory_delivery_withdrawn` | Survives restarts |
+| `daemon-config.json` | In | CLI, feature switches, sync machine identity | `port` (optional), `machine_name`, cached `machine_id`, `features` switches | Survives restarts |
 | `daemon.json` | Out | The daemon, at start | `version` (schema, currently `1`), `pid`, `port`, `token`, `started_at`, `binary_path` | Unlinked at exit |
 
 `daemon-config.json` cannot live in SQLite, because the port has to be chosen before the database is opened or migrated. It cannot be an environment variable either: whichever caller spawns the daemon passes on its own environment, and a shell profile only reaches your terminal. The file is read with the standard library alone. An unreadable or malformed file logs a warning and reads as "no setting", so a hand-edited typo never keeps the daemon from starting. Writes merge into the existing object and keep keys this build does not know, so a file written by a newer Coffer survives being touched by an older one.
@@ -223,13 +223,13 @@ A shim can live for hours, and the daemon may restart underneath it. When a POST
 The daemon binds one port and never moves off it. With nothing configured that port is `8000`. You can pin another port between 1024 and 65535:
 
 ```sh
-coffer daemon port show     # the port the next start will bind, and the one in use now
-coffer daemon port set 8765 # write it to daemon-config.json
-coffer daemon restart       # a running daemon owns its socket; restart to move
-coffer daemon port clear    # back to 8000
+coffer config get daemon.port      # the port the next start will bind
+coffer config set daemon.port 8765 # write it to daemon-config.json
+coffer daemon restart              # a running daemon owns its socket; restart to move
+coffer config unset daemon.port    # back to 8000
 ```
 
-The `port` group works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason the setting has no REST route.
+The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason it is the one `coffer config` key stored in the pre-bind settings file rather than behind a route, and the setting has no REST route.
 
 A daemon that scans for a free port breaks two things without saying so: your bookmark to the web UI, and everything the browser has stored against that origin. Refusing to start and naming the process that holds the port is the better failure. When the holder is itself a Coffer daemon, the message says it is most likely your own daemon still warming up rather than telling you to kill it.
 

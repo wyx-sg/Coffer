@@ -136,6 +136,7 @@ class SyncExporter:
                         name=r.name,
                         description=r.description,
                         config=config,
+                        title=r.title,
                     )
                 )
             except Exception as e:

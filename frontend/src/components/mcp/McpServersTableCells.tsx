@@ -18,6 +18,7 @@ import { resourcesKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
 import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
+import { displayName } from "@/lib/resourceTitle";
 import { HealthBadge } from "./HealthBadge";
 
 /** Persisted health (last /test probe or most recent invocation), else "—".
@@ -76,7 +77,7 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <RowDeleteButton
-        ariaLabel={t("mcp.table.deleteAria", { name: resource.name })}
+        ariaLabel={t("mcp.table.deleteAria", { name: displayName(resource) })}
         onDelete={() => setOpen(true)}
       />
       <ConfirmDialog
@@ -85,7 +86,7 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
           setOpen(o);
           if (!o) del.reset();
         }}
-        title={t("mcp.server.deleteConfirmTitle", { name: resource.name })}
+        title={t("mcp.server.deleteConfirmTitle", { name: displayName(resource) })}
         description={t("mcp.server.deleteConfirmBody")}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}

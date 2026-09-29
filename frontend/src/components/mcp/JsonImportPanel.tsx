@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { parseMcpJson, type ParsedServer } from "./jsonImport";
+import { Lock } from "lucide-react";
+import {
+  MCP_SERVER_NAME_MAX,
+  parseMcpJson,
+  serverNameTooLong,
+  type ParsedServer,
+} from "./jsonImport";
 
 interface Props {
   onImport: (servers: ParsedServer[]) => void;
@@ -29,6 +35,12 @@ function jsonSyntaxError(text: string): string | null {
  * The "Paste JSON" tab: paste MCP server JSON, then a review step where
  * each env var (an http server's headers) is shown with a Secret toggle (pre-set by heuristic) — so
  * the user confirms what goes to the encrypted credential store before importing.
+ *
+ * The review also shows each server's name as the one it will keep: it is the
+ * key in the pasted block, fixed after registration. A name over the 24-character
+ * cap is flagged there and the import stays disabled until it is shortened in
+ * the pasted block, so no registration is sent for it (spec web-ui "Import MCP
+ * servers from pasted JSON").
  */
 export function JsonImportPanel({ onImport, importing }: Props) {
   const { t } = useTranslation();
@@ -97,13 +109,28 @@ export function JsonImportPanel({ onImport, importing }: Props) {
     );
   }
 
+  const tooLong = servers.filter((s) => serverNameTooLong(s.name));
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("mcp.import.review")}</p>
       <div className="space-y-3">
         {servers.map((srv, si) => (
           <div key={srv.name} className="rounded-lg border border-border p-3">
-            <div className="font-medium">{srv.name}</div>
+            <div className="flex items-center gap-1.5 font-mono font-medium">
+              <Lock className="size-3.5 text-muted-foreground" aria-hidden />
+              {srv.name}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("mcp.import.fixedName")}</p>
+            {serverNameTooLong(srv.name) ? (
+              <p className="mt-1 text-xs text-destructive" role="alert">
+                {t("mcp.import.nameTooLong", {
+                  name: srv.name,
+                  length: srv.name.length,
+                  max: MCP_SERVER_NAME_MAX,
+                })}
+              </p>
+            ) : null}
             <div className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
               {srv.transportType === "stdio" ? [srv.command, ...srv.args].join(" ") : srv.url}
             </div>
@@ -134,11 +161,16 @@ export function JsonImportPanel({ onImport, importing }: Props) {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{t("mcp.import.secretHint")}</p>
+      {tooLong.length > 0 ? (
+        <p className="text-sm text-destructive" role="status">
+          {t("mcp.import.blockedByName", { max: MCP_SERVER_NAME_MAX })}
+        </p>
+      ) : null}
       <div className="flex justify-between gap-2">
         <Button variant="outline" onClick={() => setServers(null)} disabled={importing}>
           {t("mcp.import.back")}
         </Button>
-        <Button onClick={() => onImport(servers)} disabled={importing}>
+        <Button onClick={() => onImport(servers)} disabled={importing || tooLong.length > 0}>
           {importing ? t("common.saving") : t("mcp.import.import", { count: servers.length })}
         </Button>
       </div>

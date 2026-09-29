@@ -34,7 +34,7 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages, resolving a sync conflict), and they call a model provider you pick under **Settings → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), sync conflicts wait for you, and voice messages reach the agent as audio files.
 
-Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge with their own file tools, `coffer__recall` is a literal match, and nothing is embedded. See [Model providers](/guides/providers).
+Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory notes with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 
 ## What does it cost?
 
@@ -55,7 +55,7 @@ Skills, knowledge, memory and model providers work the same way: kept once, deli
 
 ## Does Coffer change my agents' configuration files?
 
-Only when you ask it to, and each change is recorded in the audit log. Installing Coffer's MCP entry writes one server entry into the agent's configuration. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Installing memory delivery (`coffer memory delivery-install <agent>`) adds a session-start hook to the agent's settings. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
+Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and, while the `memory` feature is on, a session-start hook into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
 
 ## Do I have to start the daemon myself?
 
@@ -91,11 +91,11 @@ No. The daemon binds to loopback only, so its UI and API are reachable from the 
 
 ## Why are Sync, Knowledge and Memory missing?
 
-They are [experimental features](/guides/experimental-features), switched off by default in release builds. Turn them on under **Settings → General → Experimental features**, or with `coffer daemon features enable <key>`. Switching one off never deletes what it holds.
+They are [experimental features](/guides/experimental-features), switched off by default in release builds. Turn them on under **Settings → General → Experimental features**, or with `coffer config set feature.<key> on`. Switching one off never deletes what it holds.
 
 ## Why port 8000, and can I change it?
 
-A fixed port keeps bookmarks working and keeps the browser's stored preferences for the UI. Change it with `coffer daemon port set <port>`, then `coffer daemon restart`. See [Choose the port](/guides/daemon#choose-the-port).
+A fixed port keeps bookmarks working and keeps the browser's stored preferences for the UI. Change it with `coffer config set daemon.port <port>`, then `coffer daemon restart`. See [Choose the port](/guides/daemon#choose-the-port).
 
 ## How do I upgrade?
 

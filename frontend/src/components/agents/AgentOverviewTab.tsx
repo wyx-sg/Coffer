@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentOut } from "@/lib/api/agents";
 import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { displayName } from "@/lib/resourceTitle";
 
 export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -62,7 +63,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
                       takes — and the LABEL is its name. */}
                   {c.compatible.map((p) => (
                     <SelectItem key={p.uid} value={p.uid}>
-                      {p.name}
+                      {displayName(p)}
                     </SelectItem>
                   ))}
                 </SelectContent>

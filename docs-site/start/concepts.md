@@ -51,13 +51,13 @@ Reference: [Files and directories](/reference/filesystem). Architecture: [Persis
 
 ## Resource and kind
 
-Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are seven kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited (knowledge collections and memory partitions cannot be disabled). What a resource *does* is up to its kind. The kind-agnostic commands (`coffer resource list`, `enable`, `disable`, `rename`, `delete`) work on any kind.
+Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are seven kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited (knowledge collections and memory partitions cannot be disabled). What a resource *does* is up to its kind. Each kind has its own CLI group with the same verbs — `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and `scope`, each where the kind supports it — so `coffer skill disable <name>` and `coffer channel disable <name>` work the same way.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
 ## uid and name
 
-Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label you can change. Names are unique within a kind and are what you type in the CLI. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
+Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it with `coffer <kind> edit <name> --name <new>`, except for an MCP server's or a skill's name, which is fixed because agents quote it. Any resource can also carry a **title**, up to 80 characters, that Coffer's pages and the CLI show in place of the name. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -70,11 +70,11 @@ A resource's **reach** decides where it takes effect. Reach has two parts:
 
 Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent, and only the `knowledge` or `memory` experimental feature switches the whole layer. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
-Set scope with `coffer scope set <kind> <name> --agents <names>`, or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
+Set scope with `coffer <kind> scope <name> --agents <names>` (`--all` for every agent, `--none` for none), or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
 ## Agent
 
-An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). Registering an agent tells Coffer where its config directory is. Nothing is registered automatically: `coffer agent detect` only suggests candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a `.bak` backup.
+An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). Registering an agent tells Coffer where its config directory is. Nothing is registered automatically: `coffer scan` only lists candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a `.bak` backup.
 
 Guide: [Agents](/guides/agents). Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -91,9 +91,9 @@ Besides upstream tools, the gateway always offers Coffer's own tools, prefixed `
 | Tool | What it does |
 | --- | --- |
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
-| `coffer__diagnose` | Reads Coffer's own logs, so an agent can look into a problem with Coffer. |
 | `coffer__write` | Files new material into a knowledge collection. Available when Knowledge is on. |
-| `coffer__recall` | Finds Coffer's distilled memory notes by literal match. Available when Memory is on. |
+
+There is no memory or log tool. Memory notes are Markdown files under `~/.coffer/memory/` that an agent searches with its own file tools, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
 The gateway takes the calling agent's identity from the MCP handshake. It is not an argument the agent can set.
 
@@ -143,7 +143,7 @@ Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/ar
 
 ## Experimental features
 
-Three capabilities are switched on or off on each machine: **Sync** (`vault_sync`), **Knowledge** (`knowledge`) and **Memory** (`memory`). Their default comes from the build's channel: off on a `stable` release, on on a `dev` build. Switching one off hides its pages, commands and `coffer__` tools but deletes nothing. Switching it back on continues where it stopped. You can switch them under **Settings → General** or with `coffer daemon features enable|disable <key>`.
+Three capabilities are switched on or off on each machine: **Sync** (`vault_sync`), **Knowledge** (`knowledge`) and **Memory** (`memory`). Their default comes from the build's channel: off on a `stable` release, on on a `dev` build. Switching one off hides its pages, commands and `coffer__` tools but deletes nothing. Switching it back on continues where it stopped. You can switch them under **Settings → General** or with `coffer config set feature.<key> on|off`.
 
 Guide: [Experimental features](/guides/experimental-features).
 

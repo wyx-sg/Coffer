@@ -354,3 +354,23 @@ acceptance("web-ui", "legacy /audit redirects to activity", async () => {
   expect(await screen.findByRole("heading", { name: "Activity" })).toBeInTheDocument();
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });
+
+acceptance("web-ui", "each activity tab reads its owner's route", async () => {
+  const get = mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
+  // The three routes the page may read — each owned by the capability that
+  // keeps the record. Anything else it asked for would be a route of its own.
+  const OWNERS = ["/audit", "/mcp/invocations", "/daemon/logs"];
+  const requested = () => new Set(fetchedPaths(get));
+
+  render(wrap(<ActivityPage />));
+  expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(requested()).toEqual(new Set(["/audit"]));
+
+  openTab(/mcp calls/i);
+  expect(await screen.findByText("search_issues")).toBeInTheDocument();
+  expect(requested()).toEqual(new Set(["/audit", "/mcp/invocations"]));
+
+  openTab(/daemon/i);
+  expect(await screen.findByText("auto_sync_failed")).toBeInTheDocument();
+  expect(requested()).toEqual(new Set(OWNERS));
+});

@@ -30,7 +30,7 @@ import zh from "@/i18n/locales/zh.json";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
-    mcpStatus: vi.fn(),
+    connection: vi.fn(),
     mcpEntries: vi.fn(),
     removeMcpEntry: vi.fn(),
     adoptMcpEntry: vi.fn(),
@@ -93,7 +93,10 @@ const CODEX_ENTRY: McpEntryOut = {
 };
 
 function stub(entries: Partial<McpEntriesResponse> = {}) {
-  api.mcpStatus.mockResolvedValue({ installed: true, command: "/opt/coffer-mcp-shim" });
+  api.connection.mockResolvedValue({
+    state: "connected",
+    parts: [{ key: "mcp", installed: true, detail: "/opt/coffer-mcp-shim" }],
+  });
   api.mcpEntries.mockResolvedValue({
     items: [COFFER_ENTRY, CLAUDE_ENTRY, CODEX_ENTRY],
     parse_errors: [],
@@ -124,11 +127,12 @@ describe("AgentMcpServersTab", () => {
       await screen.findByRole("button", { name: /open the mcp servers page/i }),
     ).toBeInTheDocument();
 
-    api.mcpStatus.mockResolvedValue({ installed: false, command: null });
+    api.connection.mockResolvedValue({
+      state: "disconnected",
+      parts: [{ key: "mcp", installed: false, detail: null }],
+    });
     renderTab();
-    expect(
-      await screen.findAllByText(/coffer mcp isn't installed on this agent/i),
-    ).not.toHaveLength(0);
+    expect(await screen.findAllByText(/isn't connected to coffer yet/i)).not.toHaveLength(0);
   });
 
   test("direct entries render name + description; coffer entry hidden; no source or enabled column", async () => {

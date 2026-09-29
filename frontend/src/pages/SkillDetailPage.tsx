@@ -1,6 +1,7 @@
 // frontend/src/pages/SkillDetailPage.tsx
 // Per-skill detail page (mirrors AgentDetailPage): the shared PageHeader with
-// a back link, reach + Delete as actions, and two tabs — Overview and Files (a
+// a back link, the title (name beside it) and the fixed-name badge, reach +
+// Edit (the title) + Delete as actions, and two tabs — Overview and Files (a
 // tree + content viewer of the skill's master folder, read-only for a builtin
 // skill since Coffer rewrites it at every start). The open tab
 // lives in the URL (`?tab=`), so a reload lands on the same tab.
@@ -12,6 +13,9 @@ import { ArrowLeft, Sparkles, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
+import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
+import { FixedNameBadge } from "@/components/resource/FixedName";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { Button } from "@/components/ui/button";
@@ -20,6 +24,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useRemoveSkill, useSkill } from "@/lib/hooks/useSkills";
+import { displayName } from "@/lib/resourceTitle";
 
 export function SkillDetailPage() {
   const { t } = useTranslation();
@@ -80,10 +85,16 @@ export function SkillDetailPage() {
           subtitle — a paragraph under the title pushed the tabs off-screen. */}
       <PageHeader
         back={back}
-        title={skill.name}
+        title={<ResourceLabel resource={skill} heading />}
+        badges={<FixedNameBadge />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ScopeControl kind="skill" uid={skill.uid} enabled={skill.enabled} />
+            <EditTitleDialog
+              kind="skill"
+              resource={skill}
+              fixedNameHint={t("skills.detail.fixedNameHint")}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -114,7 +125,7 @@ export function SkillDetailPage() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={t("skills.removeConfirmTitle", { name: skill.name })}
+        title={t("skills.removeConfirmTitle", { name: displayName(skill) })}
         description={t("skills.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}

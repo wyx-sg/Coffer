@@ -14,7 +14,7 @@ its risk both sit:
 * a retirement that **sticks**: the note leaves ``notes/``, the record goes
   into ``RETIRED.md``, and the next pass over unchanged sources does not
   re-open it ("Record retirements so they stick") — nor does it reach delivery
-  or recall, which is the specific bug the previous design had, where 11 dead
+  or a search of the notes, which is the specific bug the previous design had, where 11 dead
   facts stayed answerable.
 """
 
@@ -27,9 +27,7 @@ from typing import Any
 import pytest
 
 from coffer.application.memory.context import compose_context
-from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY
-from coffer.domain.memory.note import TYPE_PROJECT
 from coffer.infrastructure.memory import paths, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from tests.integration.memory.conftest import FakeResources, init_repository
@@ -336,38 +334,27 @@ async def test_a_second_pass_over_unchanged_sources_does_not_re_open_it(vault: _
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="memory", scenario="a retired note leaves the index and stays out")
-async def test_a_retired_note_reaches_neither_delivery_nor_recall(vault: _Vault) -> None:
-    """The previous design kept 11 dead facts answerable through ``recall``,
-    and that is the specific bug this must never allow back."""
+async def test_a_retired_note_reaches_neither_delivery_nor_a_search_of_the_notes(
+    vault: _Vault,
+) -> None:
+    """The previous design kept 11 dead facts answerable through a recall tool,
+    and that is the specific bug this must never allow back. An agent now
+    finds a note by searching ``<memory root>/*/notes/`` itself, and a
+    retirement takes the file out of ``notes/``, so the search cannot find it."""
     await _retire_one(vault)
     service = vault.service()
 
     composed = await compose_context(service, cwd=str(vault.repository))
-    recalled = await RecallService(memory=service).recall("session injection")
+    matches = [
+        path
+        for path in sorted(paths.memory_root().glob("*/notes/*.md"))
+        if "session injection" in path.read_text(encoding="utf-8").lower()
+    ]
 
     assert composed.partition == _PARTITION
     assert "session-injection.md" not in composed.text
     assert "session-injection-removed.md" in composed.text
-    assert [n.path for n in recalled.notes] == [
-        str(paths.note_path(_PARTITION, "session-injection-removed"))
-    ]
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="recall answers with locations, and never with a retired note"
-)
-async def test_recall_locates_a_live_note_by_its_absolute_path(vault: _Vault) -> None:
-    await _retire_one(vault)
-
-    recalled = await RecallService(memory=vault.service()).recall("removed in September")
-
-    assert len(recalled.notes) == 1
-    found = recalled.notes[0]
-    assert found.path == str(paths.note_path(_PARTITION, "session-injection-removed"))
-    assert found.partition == _PARTITION
-    assert found.type == TYPE_PROJECT
-    assert found.description
+    assert matches == [paths.note_path(_PARTITION, "session-injection-removed")]
 
 
 @pytest.mark.asyncio

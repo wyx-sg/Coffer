@@ -44,3 +44,30 @@ def resolve(client: httpx.Client, kind: str, name: str, *, verbose: bool = False
     # asserting it here would add a branch no input can reach, so the first is
     # simply taken.
     return dict(matches[0])
+
+
+def resolve_ref(
+    client: httpx.Client, kind: str, ref: str, *, verbose: bool = False
+) -> dict[str, Any]:
+    """The ``kind`` resource that ``ref`` names — its name first, then its uid.
+
+    The lifecycle verbs accept either (spec resource-framework "Address every
+    resource by an immutable uid through one kind-agnostic surface"): a person
+    types the name, a script that kept a uid from ``--json`` passes that. The
+    name is tried first because it is what a person types; a uid of another
+    kind is not an answer, so it reads as not found like any other miss.
+    """
+    from coffer.surfaces.cli import _client as _cli_client
+
+    r = client.get("/resources", params={"kind": kind, "name": ref})
+    _cli_client.check(r, verbose=verbose)
+    matches = r.json()["resources"]
+    if matches:
+        return dict(matches[0])
+    by_uid = client.get(f"/resources/{ref}")
+    if by_uid.status_code == 200 and by_uid.json().get("kind") == kind:
+        return dict(by_uid.json())
+    if by_uid.status_code not in (200, 404, 422):
+        _cli_client.check(by_uid, verbose=verbose)
+    typer.echo(f"no {kind} named {ref!r}", err=True)
+    raise typer.Exit(4)

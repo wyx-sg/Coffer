@@ -43,22 +43,23 @@ give the status each code is actually sent with.
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path against the [REST API reference](/reference/rest-api). |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
 | `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json`. |
-| `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or ask your agent to call `coffer__diagnose`. |
+| `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
 | `HTTP_<status>` | as named | A bare HTTP error with a status that has no named code. | Read `message`. |
 
 ## Resources and scope
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `RESOURCE_NOT_FOUND` | 404 | Nothing answers to the uid or name you gave. | Check the name with `coffer resource list`; names are unique only within a kind. |
+| `RESOURCE_NOT_FOUND` | 404 | Nothing answers to the uid or name you gave. | Check the name with the kind's `list` command (for example `coffer mcp list`); names are unique only within a kind. |
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
-| `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a kind from `coffer resource list`, such as `mcp_server`, `skill` or `agent`. |
+| `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a registered kind, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or command (for example `coffer agent add`, `coffer provider add`). |
-| `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use `coffer scope set` on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
+| `NAME_IMMUTABLE` | 409 | The resource's kind fixes its name once registered, because agents quote it: an MCP server's name prefixes its tool names, and a skill's name is its folder. The message names what a re-registration resets. | Set a title to change what is shown, or delete the resource and register it again under the new name. |
+| `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use the kind's `scope` command (for example `coffer skill scope <name> --agents a,b`) on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
 | `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (memory organising, knowledge curation) is already running for this target. | Wait for the running pass; the UI shows it. |
-| `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer retention list`. |
+| `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer config list retention.`. |
 
 ## Credentials
 
@@ -77,7 +78,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `UPSTREAM_UNAVAILABLE` | 503 | The upstream MCP server could not be reached, is disabled, or does not support the method. | Run `coffer mcp test <name>`; check the server's command or URL and its credentials. |
 | `UPSTREAM_TIMEOUT` | 504 | The upstream MCP server did not answer in time. | Check the server; retry. |
-| `TOOL_DISABLED` | 403 | The tool, resource or prompt is switched off on its server, the server is outside the calling agent's reach, or the name is not recognised. | Enable it with `coffer mcp tool enable`, or widen the server's reach. |
+| `TOOL_DISABLED` | 403 | The tool, resource or prompt is switched off on its server, the server is outside the calling agent's reach, or the name is not recognised. | Enable it with `coffer mcp cap enable <server> tool:<name>`, or widen the server's reach. |
 | `INVALID_PREFIX` | 400 | A name is not in Coffer's namespaced form (`<server>__<tool>`, `coffer://<server>/<uri>`). | Use the name exactly as `tools/list` or `coffer__search_tools` returned it. See [MCP tools](/reference/mcp-tools#upstream-names). |
 
 ## Agents and agent workspaces
@@ -88,7 +89,7 @@ give the status each code is actually sent with.
 | `AGENT_CONFIG_DIR_MISSING` | 409 | The agent's config directory does not exist on this machine. Raised while applying a synced agent. | Install the agent on this machine, or ignore it here. |
 | `PRIVILEGED_PATH` | 422 | The path is a system location Coffer refuses to manage. | Choose a path in your home directory. |
 | `SKILL_DIR_NOT_WRITABLE` | 422 | The agent's skills directory is missing, not a directory, or not writable. `details.reason` says which. | Create the directory or fix its permissions. |
-| `CONFIG_FILE_NOT_ALLOWED` | 404 | The config-file key is not one Coffer edits for this agent type. | Use a key from `coffer agent config ls <agent>`. |
+| `CONFIG_FILE_NOT_ALLOWED` | 404 | The config-file key is not one Coffer edits for this agent type. | Use a key the agent's detail page lists (for example `settings` or `instructions`); `coffer path agent <agent> config` names the files. |
 | `CONFIG_FILE_FORMAT_INVALID` | 422 | The new content is malformed JSON or TOML. The file on disk is unchanged. | Fix the syntax and save again. |
 | `CONFIG_FILE_STALE` | 409 | The config file changed on disk after you read it. | Reload the file and reapply your edit. |
 | `AGENT_CONFIG_PARSE_ERROR` | 422 | An agent config file on disk cannot be parsed. | Repair the file in your editor. |
@@ -120,9 +121,9 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | List collections with `coffer knowledge collections`. |
+| `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | List collections with `coffer knowledge list`. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
-| `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection with `coffer knowledge ls <collection>`. |
+| `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's directory, which `coffer path knowledge <collection>` names. |
 | `KNOWLEDGE_FILE_CONFLICT` | 409 | The document changed on disk after you read it, so your save was refused. | Reload the document and reapply your edit. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
@@ -142,7 +143,7 @@ give the status each code is actually sent with.
 | `MEMORY_FILE_NOT_FOUND` | 404 | No readable file at that path inside the partition. | Browse the partition's files. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
-| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no session-start hook Coffer can install. | None; memory reaches that agent through `coffer__recall` only. |
+| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no session-start hook Coffer can install. | None; that agent reads memory notes from the memory root (`coffer path memory`) with its own file tools. |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object Coffer can edit. | Repair the file, then install delivery again. |
 
 ## Chat and channels
@@ -164,9 +165,9 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a credential ref. | Pass `--secret` or `--credential-ref`, not both. |
-| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while it is switched on. | Run `coffer provider use-builtin <wire>`, edit, then switch again. |
+| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while it is switched on. | Run `coffer provider builtin <wire>`, edit, then switch again. |
 | `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
-| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer provider internal-default <name>`. |
+| `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer config set engine.provider <name>`. |
 | `NO_ACTIVE_PROVIDER` | 404 | No connection is active for the requested wire format. | Switch one on with `coffer provider switch <name>`. |
 
 ## Vault sync
@@ -187,8 +188,8 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | `coffer daemon features enable <feature>`. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. | List keys with `coffer daemon features list`. |
+| `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | `coffer config set feature.<feature> on`. See [Experimental features](/guides/experimental-features). |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. | List keys with `coffer config list feature.`. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors
@@ -262,4 +263,4 @@ Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context 
 
 - [REST API reference](/reference/rest-api)
 - [Troubleshooting](/guides/troubleshooting)
-- [Observability](/architecture/observability) — trace ids, the daemon log and `coffer__diagnose`
+- [Observability](/architecture/observability) — trace ids, the daemon log and `coffer log`

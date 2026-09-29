@@ -47,7 +47,6 @@ from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
 from coffer.surfaces.http.agent_dependencies import (
     set_agent_config_file_service,
-    set_agent_mcp_service,
     set_agent_service,
     set_auto_detect_service,
 )
@@ -89,6 +88,10 @@ class AgentSkillWiring:
     #: Moves a custom-dir Claude Code agent's MCP entry out of
     #: ``~/.claude.json`` into its own file (see ``mcp_home_migration``).
     mcp_home_migration: ClaudeHomeMcpEntryMigration
+    #: Installs Coffer's gateway entry — the first part of an agent's Coffer
+    #: connection, which ``agent_connection_wiring`` composes once the memory
+    #: kind (the other part's owner) is wired too.
+    mcp_service: AgentMcpService
 
 
 class _BootHeal(Protocol):
@@ -252,11 +255,6 @@ def wire_agent_and_skill_kinds(
     )
     skill_kind = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
-        # A skill's name IS its master folder, so the rename hook is what moves
-        # it — and re-points every delivered link at the new one. Passed
-        # positionally and required, so this composition root cannot forget it
-        # and leave renames stranding folders.
-        skill_svc.move_master_folder,
         on_scope_changed=_skill_delivery_changed,
         on_enabled_changed=_skill_delivery_changed,
     )
@@ -280,7 +278,6 @@ def wire_agent_and_skill_kinds(
     set_agent_service(agent_svc)
     set_auto_detect_service(auto_detect_svc)
     set_agent_config_file_service(agent_config_file_svc)
-    set_agent_mcp_service(agent_mcp_svc)
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
@@ -302,6 +299,7 @@ def wire_agent_and_skill_kinds(
         mcp_home_migration=ClaudeHomeMcpEntryMigration(
             agent_service=agent_svc, audit=audit, store=config_file_store
         ),
+        mcp_service=agent_mcp_svc,
     )
 
 
