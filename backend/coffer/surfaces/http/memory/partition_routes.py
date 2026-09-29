@@ -1,10 +1,11 @@
-"""``/api/v1/memory/partitions`` and the two passes that rewrite the tree.
+"""``/api/v1/memory/partitions`` and the one action that rewrites the tree.
 
-The list a management surface starts from, ``POST /sync`` (Update memory:
+The list a management surface starts from, and ``POST /sync`` (Update memory:
 aggregation, which is corpus-wide, then distil over every partition it left
-new) and ``POST /partitions/{uid}/distil`` (one partition at a time). Grouped
-together because they are the family's *write* half: everything else under
-this prefix reads.
+new). Grouped together because ``/sync`` is the family's *write* half:
+everything else under this prefix reads. There is no per-partition trigger:
+Update memory already distils every partition that gained entries, and skips
+one whose pass is running ("Run one distil pass per partition at a time").
 
 Partition deletion is deliberately absent — it goes through the kind-agnostic
 ``DELETE /api/v1/resources/{uid}``, exactly like knowledge's collections, since
@@ -15,18 +16,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from coffer.application.memory.service import KIND_MEMORY, MemoryService
+from coffer.application.memory.service import MemoryService
 from coffer.application.memory.update import update_memory
-from coffer.application.resource_service import ResourceService
-from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor, get_resource_service
+from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.memory.dependencies import get_memory_service
-from coffer.surfaces.http.memory.distil_state import get_distil_runner
-from coffer.surfaces.http.memory.lookup import require_partition
 from coffer.surfaces.http.memory.schemas import (
     AggregationResultOut,
-    DistilResultOut,
     PartitionListOut,
     PartitionOut,
 )
@@ -85,39 +81,4 @@ async def sync(
         failures=[f.path for f in result.failures],
         distilled=list(outcome.distilled),
         skipped=list(outcome.skipped),
-    )
-
-
-@router.post("/partitions/{uid}/distil", response_model=DistilResultOut)
-async def distil(
-    uid: str,
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> DistilResultOut:
-    """Turn one partition's raw entries into notes, and rewrite its index."""
-    # Resolved first so an unknown partition is a 404 BEFORE anything is
-    # claimed; the row itself is not wanted here, because the pass resolves it
-    # again for the directory it rewrites.
-    await require_partition(uid, resources)
-    # One pass per partition at a time. The pass takes minutes and rewrites the
-    # whole partition directory, so a second request while one is in flight is
-    # refused (409 ``UPKEEP_ALREADY_RUNNING``) rather than started: two of them
-    # are two writers racing, not one faster pass. The registry is also what
-    # `GET /api/v1/upkeep/runs` reads, so a surface that mounts mid-pass can
-    # show the button as already running instead of inviting the second click.
-    #
-    # Keyed on the uid, which is exactly what the unattended sweep claims
-    # (``distil_worker``): the collision "Run one distil pass per partition at a
-    # time" needs only happens if both
-    # writers spell the partition the same way, and a label is the one spelling
-    # that can change between the two of them reading it.
-    with UPKEEP_RUNS.guard(KIND_MEMORY, uid):
-        result = await get_distil_runner()(uid, actor=actor)
-    return DistilResultOut(
-        partition=result.partition,
-        merged=result.merged,
-        opened=result.opened,
-        retired=result.retired,
-        dropped=result.dropped,
-        model_used=result.model_used,
     )

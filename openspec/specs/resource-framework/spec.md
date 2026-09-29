@@ -76,8 +76,9 @@ that two machines can tell "the same thing" from "a different thing with the sam
 asking each other.
 
 On the command line, every kind's group MUST offer the same lifecycle verbs, generated from the
-kind registry and served by the kind-agnostic routes: `list`, `show`, `add`, `edit`, `rm`,
-`enable`, `disable` and `scope`. A verb the kind does not support MUST be absent from its group
+kind registry and served by the kind-agnostic routes: `list`, `show`, `edit`, `rm`,
+`enable`, `disable` and `scope`. `add` is not one of them: a group offers `add` only when its
+kind supplies one of its own (see "Keep creation a per-kind seam"). A verb the kind does not support MUST be absent from its group
 rather than refused when run (see "Keep creation a per-kind seam" and "Carry a per-agent reach
 on every resource"); a kind that cannot be disabled offers no `enable` or `disable`. `show` MUST resolve either a name or a uid. `edit` MUST take `--title` and
 `--description` on every kind, plus the kind's own flags. Every `list` and `show` MUST support
@@ -132,8 +133,7 @@ accept only kinds that declare themselves creatable through it, and MUST refuse 
 that owns a creation invariant beyond config validation — a skill's master folder, an
 agent's on-disk detection — so that such a kind is registered through its own surface,
 which can hold that invariant. On the command line a kind's group MUST offer `add` only when
-the kind is creatable through the kind-agnostic route, or when the kind supplies an `add` of its
-own that holds its invariant. A kind that is created only by the system, such as a memory
+the kind supplies an `add` of its own that holds its invariant. A kind that is created only by the system, such as a memory
 partition, MUST offer no `add`. There is no kind-agnostic create command, because a generic
 create would have to guess a config shape it cannot know. What this spec owns is everything that
 happens to a resource once a kind has made one.
@@ -381,7 +381,7 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 #### Scenario: file-backed reads are answered by coffer path
 - **GIVEN** the reviewed parity table
 - **WHEN** its list of file-backed REST routes is compared with the management API
-- **THEN** it names every route that serves or writes a plain file for the web UI — the knowledge tree, file read and file delete; the memory partition's file tree, file content, notes, one note and retired notes; the skill master folder's file tree, file read and file write; an agent's config-file list and config-file reads; an agent's native-memory list, file tree and file content — each paired with the `coffer path` target that names the same files
+- **THEN** it names every route that serves or writes a plain file for the web UI — the knowledge tree, file read, file write and file delete; the memory partition's file tree, file content, notes, one note and retired notes; the skill master folder's file tree, file read and file write; an agent's config-file list and config-file reads; an agent's native-memory list, file tree and file content — each paired with the `coffer path` target that names the same files
 - **AND** a file-backed route missing from that list fails the parity test, as does a listed route the API no longer serves
 
 #### Scenario: command line surfaces same errors
@@ -486,9 +486,10 @@ adopting or discarding each one does, belong to the spec that owns that kind.
 `coffer adopt <kind> <ref>` MUST bring the one row the ref names under management, and
 `coffer discard <kind> <ref>` MUST remove it from the agent, each acting through the owning
 kind's REST route. The `ref` MUST be the value the scan printed for that row. A ref that names
-no row in a fresh scan MUST be refused with nothing changed. A kind that offers no discard MUST
-refuse `discard` with a message saying so, with nothing changed. Adopting or discarding MUST be
-audited by the owning kind.
+no row in a fresh scan MUST be refused with nothing changed. `adopt` and `discard` MUST offer a
+command only for a kind that supports that act; a kind whose rows are brought under management
+by a command of its own offers neither, and its scan row MUST name that command. Adopting or
+discarding MUST be audited by the owning kind.
 
 #### Scenario: a scan row is adopted by its ref
 - **GIVEN** an agent holds an item of a kind Coffer can adopt, and Coffer does not manage it
@@ -497,7 +498,7 @@ audited by the owning kind.
 - **AND** the second scan no longer lists that row
 
 #### Scenario: an unknown or undiscardable row is refused
-- **GIVEN** a scan that lists a detected agent which is not registered
+- **GIVEN** a scan that lists a detected agent which is not registered, and names `coffer agent add <type>` on that row
 - **WHEN** the user runs `coffer discard agent <ref>` for that row, and `coffer adopt skill no-such-ref`
-- **THEN** both exit non-zero, the first saying that kind cannot be discarded and the second saying the ref names no row
+- **THEN** both exit non-zero, the first because `discard` offers no `agent` command and the second saying the ref names no row
 - **AND** nothing on disk or in the vault changed

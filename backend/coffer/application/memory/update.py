@@ -17,11 +17,9 @@ connection") — ``MemoryService.distil`` decides that, not this module.
 
 **A partition already being distilled is skipped, not failed (see "Run one distil
 pass per partition at a time").** The claim is the same upkeep-runs key, on the same
-uid, that the unattended sweep and the one-partition Distil route take, so whichever
-arrives first holds it. The route answers a busy partition with 409 because the
-caller asked for exactly that partition; here the caller asked for *memory* to be
-updated, and the pass already running is doing that very thing, so the partition is
-reported under ``skipped`` and the rest proceed.
+uid, that the unattended sweep takes, so whichever arrives first holds it. The
+caller asked for *memory* to be updated, and the pass already running is doing that
+very thing, so the partition is reported under ``skipped`` and the rest proceed.
 """
 
 from __future__ import annotations

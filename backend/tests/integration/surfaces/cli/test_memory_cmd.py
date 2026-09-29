@@ -1,7 +1,7 @@
 """Integration tests for ``coffer memory ...``.
 
 See spec memory "Cover memory management on REST and the CLI": the lifecycle
-verbs (no ``add``), ``sync``, ``distil``, ``context`` and ``delivery on|off``.
+verbs (no ``add``), ``sync`` and ``context``.
 Notes, the index and the retirement record are plain files that ``coffer path
 memory`` names (test_path_cmd.py), so no command here reads one.
 
@@ -16,11 +16,12 @@ fail a session" contract even when nothing is listening at all.
 The fixture repository is a **real** ``git init``, because a partition is keyed
 on a repository and a plain directory deliberately earns none ("Identify a partition
 by its repository", "Create no partition for a non-repository directory");
-and every test that wants notes runs ``sync`` **then** ``distil``, because
-aggregation writes only the hidden ``.raw/`` and the notes are the distil pass's
-output ("Keep raw entries verbatim and hidden"). With no internal connection
-configured that pass is the mechanical one — one note per entry, and an index
-over them ("Distil mechanically with no internal connection").
+and every test that wants notes runs ``sync``, which aggregates **then**
+distils, because aggregation alone writes only the hidden ``.raw/`` and the
+notes are the distil pass's output ("Keep raw entries verbatim and hidden").
+With no internal connection configured that pass is the mechanical one — one
+note per entry, and an index over them ("Distil mechanically with no internal
+connection").
 """
 
 from __future__ import annotations
@@ -164,7 +165,8 @@ def _seed_repository(tmp_path: pathlib.Path) -> pathlib.Path:
 
 
 def _distilled_partition(tmp_path: pathlib.Path) -> str:
-    """Register, seed, ``sync`` and ``distil`` — the state most tests start in."""
+    """Register, seed and ``sync`` — which distils what it read ("Update memory
+    in one action") — the state most tests start in."""
     _register_cc_via_http()
     # Every command below still names the partition by its LABEL: the CLI
     # resolves it to a uid itself, which is the whole point of `_resolve`.
@@ -173,11 +175,7 @@ def _distilled_partition(tmp_path: pathlib.Path) -> str:
     assert synced.exit_code == 0, synced.output
     listed = _runner.invoke(cli_app, ["memory", "list", "--json"])
     partitions = json.loads(_extract_json(listed.output))["partitions"]
-    name = next(p["name"] for p in partitions if p["name"] != "global")
-    for partition in (name, "global"):
-        distilled = _runner.invoke(cli_app, ["memory", "distil", partition])
-        assert distilled.exit_code == 0, distilled.output
-    return name
+    return next(p["name"] for p in partitions if p["name"] != "global")
 
 
 # ----- list, and the notes on disk ----------------------------------------
@@ -189,7 +187,7 @@ def _partition_dir(name: str) -> pathlib.Path:
     return pathlib.Path(located.output.strip().splitlines()[-1])
 
 
-def test_sync_list_distil_and_the_note_on_disk(memory_cli_daemon):
+def test_sync_list_and_the_note_on_disk(memory_cli_daemon):
     tmp_path = memory_cli_daemon
     _register_cc_via_http()
     repository = _seed_repository(tmp_path)
@@ -211,11 +209,11 @@ def test_sync_list_distil_and_the_note_on_disk(memory_cli_daemon):
     assert project["repository_path"] == str(repository.resolve())
     assert project["unresolvable"] is False
 
-    # A second, hand-started pass finds nothing new: the update already opened
+    # A second update finds nothing new to distil: the first already opened
     # the note.
-    distilled = _runner.invoke(cli_app, ["memory", "distil", project["name"]])
-    assert distilled.exit_code == 0, distilled.output
-    assert json.loads(_extract_json(distilled.output))["opened"] == 0
+    again = _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    assert again.exit_code == 0, again.output
+    assert json.loads(_extract_json(again.output))["distilled"] == []
 
     # The note is a file: read where `coffer path memory` points.
     note = _partition_dir(project["name"]) / "notes" / "python-lockfile.md"
@@ -271,45 +269,6 @@ def test_show_edit_and_rm_a_partition(memory_cli_daemon):
     removed = _runner.invoke(cli_app, ["memory", "rm", partition, "--yes"])
     assert removed.exit_code == 0, removed.output
     assert c.get(f"/resources/{uid}").status_code == 404
-
-
-# ----- distil ---------------------------------------------------------------
-
-
-def test_distil_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
-    distilled = _runner.invoke(cli_app, ["memory", "distil", "does-not-exist"])
-    combined = distilled.output + (distilled.stderr or "")
-    assert distilled.exit_code == 4, combined
-    assert "Traceback" not in combined, combined
-
-
-def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memory_cli_daemon):
-    """Per "Distil mechanically with no internal connection": thinner, not
-    absent — the verb still returns a real pass, and says a model was not used
-    rather than pretending one was.
-
-    ``sync`` already ran the mechanical pass over ``global`` ("Update memory in
-    one action"), which is what opened its note; the hand-started pass after it
-    finds nothing new and still reports honestly."""
-    tmp_path = memory_cli_daemon
-    _register_cc_via_http()
-    _seed_repository(tmp_path)
-    synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
-    assert "global" in json.loads(_extract_json(synced.output))["distilled"]
-    assert len(list((_partition_dir("global") / "notes").glob("*.md"))) == 1
-
-    distilled = _runner.invoke(cli_app, ["memory", "distil", "global"])
-
-    assert distilled.exit_code == 0, distilled.output
-    result = json.loads(_extract_json(distilled.output))
-    assert result == {
-        "partition": "global",
-        "merged": 0,
-        "opened": 0,
-        "retired": 0,
-        "dropped": 0,
-        "model_used": False,
-    }
 
 
 # ----- `context`: the hook-invoked command, tested without client_or_exit --

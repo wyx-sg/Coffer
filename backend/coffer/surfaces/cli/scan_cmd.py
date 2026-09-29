@@ -5,7 +5,8 @@ One table with a ``kind`` column (spec resource-framework "Scan, adopt and
 discard what Coffer does not manage"):
 
 - ``agent`` — an installed agent that is not registered (``GET
-  /agents/candidates``); its ref is the agent type;
+  /agents/candidates``); its ref is the agent type, and its detail names
+  ``coffer agent add <type>``, the command that registers it;
 - ``skill`` — a skill-shaped folder in a registered agent's skill locations that
   is not a Coffer-managed link (``GET /agents/{uid}/unmanaged-skills``); its ref
   is the folder's path;
@@ -13,10 +14,11 @@ discard what Coffer does not manage"):
   entry excepted (``GET /agents/{uid}/mcp-entries``); its ref is
   ``<agent>:<entry>``.
 
-``scan --ref`` shows one row in full. ``adopt`` and ``discard`` act on one row
-by the ref the scan printed, re-scanned first so a ref that names nothing now
-is refused before any change. A detected agent cannot be discarded: nothing of
-Coffer's put it there.
+``scan --ref`` shows one row in full. ``adopt`` and ``discard`` act on one
+``skill`` or ``mcp`` row by the ref the scan printed, re-scanned first so a ref
+that names nothing now is refused before any change. Neither offers ``agent``:
+a detected agent is registered with ``coffer agent add``, and nothing of
+Coffer's put it there to discard.
 """
 
 from __future__ import annotations
@@ -66,7 +68,10 @@ def _agent_rows(c: httpx.Client, *, verbose: bool) -> list[dict[str, Any]]:
             "kind": "agent",
             "agent": cand["suggested_name"],
             "ref": cand["type"],
-            "detail": f"{cand['display_name']} at {cand['config_dir']}",
+            "detail": (
+                f"{cand['display_name']} at {cand['config_dir']}"
+                f" — register: coffer agent add {cand['type']}"
+            ),
             "config_dir": cand["config_dir"],
             "suggested_name": cand["suggested_name"],
         }
@@ -224,23 +229,6 @@ _YES = typer.Option(False, "--yes", "-y", "--force", "-f", help="Do not ask")
 _SOURCE = typer.Option(None, "--source", help="Config-file key when the entry is in several files")
 
 
-@adopt_app.command("agent")
-def adopt_agent(
-    ctx: typer.Context,
-    ref: str = typer.Argument(..., metavar="TYPE", help="The agent type the scan printed"),
-    name: str | None = typer.Option(None, "--name", help="Register under this name instead"),
-) -> None:
-    """Register a detected agent under its suggested name and config directory."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        row = _row(c, "agent", ref, verbose=verbose)
-        body = {"type": ref, "name": name or row["suggested_name"], "config_dir": row["config_dir"]}
-        r = c.post("/agents", json=body)
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(f"adopted: agent {r.json().get('name', body['name'])}")
-
-
 @adopt_app.command("skill")
 def adopt_skill(
     ctx: typer.Context,
@@ -308,17 +296,6 @@ def _adopt_refusal(r: httpx.Response) -> None:
         if suggested:
             typer.echo(f"hint: retry with --name {suggested}", err=True)
         raise typer.Exit(int(ExitCode.CONFLICT))
-
-
-@discard_app.command("agent")
-def discard_agent(ref: str = typer.Argument(..., metavar="TYPE")) -> None:
-    """Refused: a detected agent was not put there by Coffer, so Coffer does not remove it."""
-    typer.echo(
-        f"a detected agent cannot be discarded: nothing of Coffer's put {ref!r} there "
-        "— uninstall it with its own tools",
-        err=True,
-    )
-    raise typer.Exit(1)
 
 
 @discard_app.command("skill")

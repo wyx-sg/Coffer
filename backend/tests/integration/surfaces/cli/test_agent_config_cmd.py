@@ -484,8 +484,6 @@ def test_config_and_mcp_commands_mirror_their_rest_routes(agent_config_cli):
     assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
     assert client.get(status).json()["state"] == "connected"
     assert _show()["coffer_connection"] == client.get(status).json()
-    shown = _runner.invoke(cli_app, ["agent", "connection", "cc", "--json"])
-    assert json.loads(shown.output) == client.get(status).json()
     assert _runner.invoke(cli_app, ["agent", "disconnect", "cc"]).exit_code == 0
     assert client.get(status).json()["state"] == "disconnected"
     assert _show()["coffer_connection"] == client.get(status).json()

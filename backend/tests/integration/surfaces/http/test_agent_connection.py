@@ -304,7 +304,7 @@ def _patch_cli(monkeypatch: pytest.MonkeyPatch, c: TestClient) -> None:
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="config-file and MCP operations mirror across surfaces"
 )
-def test_cli_connect_connection_and_disconnect(
+def test_cli_connect_show_and_disconnect(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     daemon_config.write_feature_setting("memory", True)
@@ -312,9 +312,9 @@ def test_cli_connect_connection_and_disconnect(
         uid = _register(c)
         _patch_cli(monkeypatch, c)
 
-        res = runner.invoke(cli_app, ["agent", "connection", "cc", "--json"])
+        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
         assert res.exit_code == 0, res.output
-        assert json.loads(res.output)["state"] == "disconnected"
+        assert json.loads(res.output)["coffer_connection"]["state"] == "disconnected"
 
         res = runner.invoke(cli_app, ["agent", "connect", "cc"])
         assert res.exit_code == 0, res.output
@@ -324,9 +324,12 @@ def test_cli_connect_connection_and_disconnect(
         rest = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
         assert rest["state"] == "connected"
 
-        res = runner.invoke(cli_app, ["agent", "connection", "cc"])
+        res = runner.invoke(cli_app, ["agent", "show", "cc", "--json"])
         assert res.exit_code == 0, res.output
-        assert res.output.splitlines()[0] == "cc: connected"
+        assert json.loads(res.output)["coffer_connection"] == rest
+        res = runner.invoke(cli_app, ["agent", "show", "cc"])
+        assert res.exit_code == 0, res.output
+        assert "coffer_connection: connected" in res.output.splitlines()
 
         res = runner.invoke(cli_app, ["agent", "disconnect", "cc"])
         assert res.exit_code == 0, res.output
@@ -334,7 +337,7 @@ def test_cli_connect_connection_and_disconnect(
         assert c.get(f"/api/v1/agents/{uid}/coffer-connection").json()["state"] == "disconnected"
 
 
-def test_cli_connection_reads_needs_repair_for_a_partial_connection(
+def test_cli_show_reads_needs_repair_for_a_partial_connection(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     daemon_config.write_feature_setting("memory", True)
@@ -343,7 +346,7 @@ def test_cli_connection_reads_needs_repair_for_a_partial_connection(
         _patch_cli(monkeypatch, c)
         runner.invoke(cli_app, ["agent", "connect", "cc"])
         (home / ".claude" / "settings.json").write_text("{}\n", encoding="utf-8")
-        res = runner.invoke(cli_app, ["agent", "connection", "cc"])
+        res = runner.invoke(cli_app, ["agent", "show", "cc"])
         assert res.exit_code == 0, res.output
         assert "needs repair" in res.output
         assert "memory delivery hook: missing" in res.output

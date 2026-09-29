@@ -276,8 +276,8 @@ restart:
 
 The one in-flight fact this layer keeps is per-daemon and deliberately does
 not outlive it: which partitions are being distilled right now, held in the
-shared upkeep-runs registry so a second pass over one partition can be refused
-and a surface mounting mid-pass can show the running pass ("Run one distil
+shared upkeep-runs registry so a second pass over one partition is skipped
+rather than started, and a surface mounting mid-pass can show the running pass ("Run one distil
 pass per partition at a time"). A restart ends the pass and the reading comes
 back empty, which is the truth rather than a lost record.
 
@@ -308,7 +308,7 @@ every kind shares.
 | Event | Recorded when |
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
-| `memory_distilled` | a distil pass completes — scheduled, on one partition by hand, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
+| `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
 | `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by switching `memory` on while it is connected |
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it, or by switching `memory` off |
 | `memory_delivery_fired` | an installed hook fires ("Audit every delivery fire") |

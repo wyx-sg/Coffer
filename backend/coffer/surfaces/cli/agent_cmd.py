@@ -6,8 +6,9 @@ written here because an agent's record is served by its own routes
 (``/agents``): the kind owns its lifecycle, so the generic config PATCH refuses
 it, and the resolved config directory and model binding a person wants to read
 are on ``AgentOut``, not on the raw resource document. ``show`` also carries the
-derived ``coffer_connection`` — the same report ``coffer agent connection``
-prints (spec agent-registry "Manage the agent lifecycle").
+derived ``coffer_connection`` — the agent's Coffer connection part by part, as
+``GET /agents/{uid}/coffer-connection`` answers it (spec agent-registry "Manage
+the agent lifecycle", "Report an agent's Coffer connection part by part").
 
 The connection, config, plugin, transcript and model commands live in sibling
 modules, attached below (backend file-size cap).

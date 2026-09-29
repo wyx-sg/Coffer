@@ -20,10 +20,11 @@ A pass over a kind whose experimental feature is switched off is left out,
 like that kind's rows on ``/api/v1/resources`` (spec experimental-features
 "Close every surface of a switched-off feature").
 
-Read-only. A pass is started by the kind's own route (``POST
-/api/v1/memory/partitions/{uid}/distil``, ``POST
-/api/v1/knowledge/collections/{uid}/curate``), each of which refuses a second
-concurrent pass over the same target with ``UPKEEP_ALREADY_RUNNING`` (409).
+Read-only. A pass is started by the kind's own route: ``POST
+/api/v1/knowledge/collections/{uid}/curate`` refuses a second concurrent pass
+over the same collection with ``UPKEEP_ALREADY_RUNNING`` (409), and ``POST
+/api/v1/memory/sync`` skips a partition whose pass is already running and
+reports it as skipped.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """The lifecycle verbs every kind's group shares, generated from one descriptor.
 
-``list``, ``show``, ``add``, ``edit``, ``rm``, ``enable``, ``disable`` and
-``scope`` are the same operation on every kind, served by the same
+``list``, ``show``, ``edit``, ``rm``, ``enable``, ``disable`` and ``scope``
+are the same operation on every kind, served by the same
 kind-agnostic routes (``/resources*``), so they are written once here and
 registered onto each kind's Typer group (spec resource-framework "Address every
 resource by an immutable uid through one kind-agnostic surface"). A verb the
@@ -9,10 +9,12 @@ kind cannot support is simply not registered: a missing command is a clearer
 answer than one that refuses when run.
 
 A per-kind module calls :func:`register_kind_verbs` with a :class:`KindVerbs`
-descriptor. It may add its own commands beside them, and supplies its own
-``add`` (leaving ``"add"`` out of ``verbs``) when creating the kind holds an
-invariant beyond config validation. Kind-specific ``edit`` flags come in
-through :class:`EditFlags` rather than a second ``edit`` spelling.
+descriptor. It may add its own commands beside them. Creation is not one of
+these verbs: a kind that can be created from its group registers an ``add`` of
+its own, because what creating one takes differs by kind (spec
+resource-framework "Keep creation a per-kind seam"). Kind-specific ``edit``
+flags come in through :class:`EditFlags` rather than a second ``edit``
+spelling.
 """
 
 from __future__ import annotations
@@ -34,9 +36,9 @@ from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
 
 #: Every lifecycle verb, in the order a group's ``--help`` lists them.
-ALL_VERBS: tuple[str, ...] = ("list", "show", "add", "edit", "rm", "enable", "disable", "scope")
-#: What a kind gets unless it says otherwise: creation and reach are opt-in,
-#: because each needs the kind to support it.
+ALL_VERBS: tuple[str, ...] = ("list", "show", "edit", "rm", "enable", "disable", "scope")
+#: What a kind gets unless it says otherwise: reach is opt-in, because it needs
+#: the kind to support it.
 DEFAULT_VERBS: frozenset[str] = frozenset({"list", "show", "edit", "rm", "enable", "disable"})
 
 _console = Console()
@@ -206,38 +208,6 @@ def _show(spec: KindVerbs) -> Callable[..., None]:
     return show
 
 
-def _add(spec: KindVerbs) -> Callable[..., None]:
-    def add(
-        ctx: typer.Context,
-        name: str = typer.Argument(..., help="Name"),
-        config: str = typer.Option("{}", "--config", help="Config as a JSON object"),
-        title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
-        description: str | None = typer.Option(None, "--description"),
-    ) -> None:
-        verbose = verbose_of(ctx)
-        try:
-            parsed = _json.loads(config)
-        except ValueError as exc:
-            typer.echo(f"--config is not JSON: {exc}", err=True)
-            raise typer.Exit(2) from None
-        if not isinstance(parsed, dict):
-            typer.echo("--config must be a JSON object", err=True)
-            raise typer.Exit(2)
-        check_title_arg(title)
-        body = {"kind": spec.kind, "name": name, "config": parsed, "description": description}
-        c, _info = _cli_client.client_or_exit()
-        with c:
-            r = c.post("/resources", json=body)
-            _cli_client.check(r, verbose=verbose)
-            if title:
-                r = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
-                _cli_client.check(r, verbose=verbose)
-        typer.echo(f"added: {spec.noun} {name}")
-
-    add.__doc__ = spec.help.get("add", f"Register a {spec.noun}.")
-    return add
-
-
 def _edit(spec: KindVerbs) -> Callable[..., None]:
     extra = list(spec.edit_flags.params) if spec.edit_flags else []
     extra_names = [p.name for p in extra]
@@ -383,7 +353,6 @@ def register_kind_verbs(app: typer.Typer, spec: KindVerbs) -> None:
     builders: dict[str, Callable[[], Callable[..., None]]] = {
         "list": lambda: _list(spec),
         "show": lambda: _show(spec),
-        "add": lambda: _add(spec),
         "edit": lambda: _edit(spec),
         "rm": lambda: _rm(spec),
         "enable": lambda: _toggle(spec, "enable"),

@@ -41,7 +41,7 @@ What a facet looks like for one type is that type's child spec. There is no per-
 ### Requirement: Discover installed agents as candidates without registering them
 The system MUST provide a read-only discovery operation that scans each supported type's install marker — named in that type's child spec — and reports installed types that are not already registered as **candidates** (each carrying `type`, `display_name`, `config_dir`, `default_skill_dir`, and `suggested_name`). Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add. The daemon MUST NOT auto-register agents on startup.
 
-On the command line, candidates are rows of kind `agent` in `coffer scan`, the one listing of everything agents hold that Coffer does not manage yet (see [resource-framework](../resource-framework/spec.md), the requirement that defines `coffer scan`, `coffer adopt` and `coffer discard`). Confirming a candidate is `coffer adopt agent <type>`, which registers that type under its suggested name and default config directory through the ordinary registration of "Manage the agent lifecycle". A candidate MUST NOT be discardable: nothing of Coffer's put the agent there, so `coffer discard agent` is refused and removes nothing.
+On the command line, candidates are rows of kind `agent` in `coffer scan`, the one listing of everything agents hold that Coffer does not manage yet (see [resource-framework](../resource-framework/spec.md), the requirement that defines `coffer scan`, `coffer adopt` and `coffer discard`). Each such row MUST name `coffer agent add <type>` as the way to register it; that command registers the type under its suggested name and default config directory through the ordinary registration of "Manage the agent lifecycle". A candidate MUST NOT be discardable: nothing of Coffer's put the agent there, so neither `coffer adopt` nor `coffer discard` offers an `agent` command.
 
 #### Scenario: discover installed agents as candidates
 - **GIVEN** a Coffer install with a supported agent's install marker present and no agent registered
@@ -55,10 +55,10 @@ On the command line, candidates are rows of kind `agent` in `coffer scan`, the o
 
 #### Scenario: adopt a discovered agent from the command line
 - **GIVEN** a `codex` install marker is present and no `codex` agent is registered
-- **WHEN** the user runs `coffer scan`, then `coffer adopt agent codex`
-- **THEN** the scan lists a row of kind `agent` for `codex` and registers nothing
-- **AND** the adopt registers a `codex` agent under the candidate's suggested name and default config directory, audited as `resource_created`
-- **AND** `coffer discard agent codex` is refused and changes nothing
+- **WHEN** the user runs `coffer scan`, then `coffer agent add codex`
+- **THEN** the scan lists a row of kind `agent` for `codex` that names `coffer agent add codex`, and registers nothing
+- **AND** the add registers a `codex` agent under the candidate's suggested name and default config directory, audited as `resource_created`
+- **AND** neither `coffer adopt` nor `coffer discard` offers an `agent` command
 
 ### Requirement: Re-offer a removed agent while its install marker remains
 A removed agent MUST re-appear as a discovery candidate on subsequent scans while its install marker is present — a removal is not permanent (it may be accidental). The system MUST NOT keep a "suppressed types" list.
@@ -71,7 +71,7 @@ A removed agent MUST re-appear as a discovery candidate on subsequent scans whil
 ### Requirement: Manage the agent lifecycle
 Users MUST be able to register, list, view, update (config_dir, description, title, name), and remove agents. An agent also carries the kind-agnostic `enabled` flag every Resource has; switching it is "Switch an agent off with the kind-agnostic enabled flag", not a field of the agent's own update. The agent name is optional at registration — when omitted, the system MUST derive a stable per-type default (underscores become hyphens, e.g. `claude_code` → `claude-code`). An agent's name stays renamable, because it appears only on Coffer's own surfaces; like every resource it also carries an optional, editable `title` that surfaces show in place of the name when it is set. Skill bindings between an agent and a skill belong to skill-manager; this registry defines no skill operations beyond exposing an `on_delete` hook for cascade cleanup and an `on_enabled_changed` hook for the reclaim of "Switch an agent off with the kind-agnostic enabled flag".
 
-On the command line the lifecycle is the `coffer agent` group's uniform verbs — `list`, `show`, `add <type>`, `edit <name>` (with `--name`, `--title`, `--description`, `--config-dir` and the model options of "Carry the model binding on the agent record"), `rm`, `enable` and `disable`. The `agent` kind has no `scope` verb, because it declares no scope. `coffer agent show <name>` MUST print the agent's record together with one derived state, `coffer_connection`: the agent's Coffer connection part by part ("Report an agent's Coffer connection part by part"), in the shape `coffer agent connection <name> --json` prints — its state and, for each applicable part (the gateway MCP entry, and the memory delivery hook while memory is on), whether it is installed.
+On the command line the lifecycle is the `coffer agent` group's uniform verbs — `list`, `show`, `add <type>`, `edit <name>` (with `--name`, `--title`, `--description`, `--config-dir` and the model options of "Carry the model binding on the agent record"), `rm`, `enable` and `disable`. The `agent` kind has no `scope` verb, because it declares no scope. `coffer agent show <name>` MUST print the agent's record together with one derived state, `coffer_connection`: the agent's Coffer connection part by part ("Report an agent's Coffer connection part by part"), in the shape `GET /api/v1/agents/{uid}/coffer-connection` answers — its state and, for each applicable part (the gateway MCP entry, and the memory delivery hook while memory is on), whether it is installed.
 
 #### Scenario: register an agent without an explicit name
 - **GIVEN** the daemon is running
@@ -217,7 +217,7 @@ Installing the `mcp` part MUST be idempotent — re-installing updates the exist
 - **GIVEN** one registered agent with Coffer's MCP installed and one without
 - **WHEN** the user runs `coffer agent show <name> --json` for each
 - **THEN** the first carries `coffer_connection` whose `mcp` part reports installed and the second `coffer_connection` whose state is `disconnected`
-- **AND** `coffer_connection` has the shape `coffer agent connection <name> --json` prints
+- **AND** `coffer_connection` has the shape `GET /api/v1/agents/{uid}/coffer-connection` answers
 
 ### Requirement: Uninstall Coffer's MCP server from an agent
 Disconnecting an agent from Coffer ("Disconnect an agent from Coffer") MUST uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config. Uninstalling when not installed is a no-op success and the `mcp` part then reports not installed.
@@ -529,7 +529,7 @@ Every management operation — register/list/view/update/remove, config-file wri
 
 - the lifecycle verbs of "Manage the agent lifecycle" under `coffer agent`;
 - `coffer agent config edit` and `coffer agent config rm` for config-file writes and deletes;
-- `coffer agent connect`, `coffer agent disconnect` and `coffer agent connection [--json]` for the agent's Coffer connection ("Connect an agent to Coffer in one action"), whose status `coffer agent show` also carries;
+- `coffer agent connect` and `coffer agent disconnect` for the agent's Coffer connection ("Connect an agent to Coffer in one action"), whose status `coffer agent show [--json]` carries as `coffer_connection`;
 - `coffer scan --agent <name>`, `coffer scan --ref <agent>:<entry>`, `coffer adopt mcp` and `coffer discard mcp` for direct MCP entries;
 - `coffer agent plugin list|show|enable|disable|rm` for plugins, where `rm` is the uninstall of "Uninstall a plugin by the type's own strategy";
 - `coffer agent transcript <name>` to list an agent's sessions, with the listing's search, project, sort and paging options, and `coffer agent transcript <name> <id>` to read one session in the bounded windows of "Read one transcript session in bounded windows";
@@ -551,9 +551,9 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 
 #### Scenario: config-file and MCP operations mirror across surfaces
 - **GIVEN** the daemon exposes the config-file and Coffer-connection routes
-- **WHEN** the user invokes `coffer agent config edit`, `coffer agent config rm`, `coffer agent connect`, `coffer agent connection` and `coffer agent disconnect`
+- **WHEN** the user invokes `coffer agent config edit`, `coffer agent config rm`, `coffer agent connect` and `coffer agent disconnect`
 - **THEN** each command calls the corresponding REST endpoint and produces equivalent state
-- **AND** `coffer agent show --json` and `coffer agent connection --json` report the connection the REST status route reports
+- **AND** `coffer agent show --json` reports, as `coffer_connection`, the connection the REST status route reports
 
 #### Scenario: CLI surface mirrors REST operations
 - **GIVEN** the daemon is running and exposes the REST agent routes
@@ -619,7 +619,7 @@ The system MUST record an audit entry, carrying timestamp, actor and the affecte
 - **THEN** every lifecycle change (create, update, remove) appears via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events, each carrying timestamp, actor, and the affected agent reference. (Discovery is read-only and registers nothing, so it emits no audit event of its own.)
 
 ### Requirement: Expose agent discovery on every surface
-The system MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where the user adds each candidate with a single confirm and no typing of type identifiers or paths. The command line's single confirm is `coffer adopt agent <type>`.
+The system MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where the user adds each candidate with a single confirm and no typing of type identifiers or paths. On the command line a candidate is registered with `coffer agent add <type>`, which its scan row names.
 
 #### Scenario: list discovery candidates from the command line
 - **GIVEN** a supported agent's install marker is present and no agent of that type is registered
@@ -695,7 +695,7 @@ The gateway entry MUST be installed first, so that a connect refused for want of
 - **THEN** only the gateway entry is installed, no hook is written into the agent's settings, and the connection reports `connected` with the `mcp` part alone
 
 ### Requirement: Report an agent's Coffer connection part by part
-The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`, `coffer agent connection <name> [--json]`) as the list of parts that apply to the agent now — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
+The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`, `coffer_connection` in `coffer agent show <name> [--json]`) as the list of parts that apply to the agent now — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
 
 #### Scenario: report a partly installed connection
 - **GIVEN** a registered agent carrying the gateway entry but not the memory hook, with `memory` switched on

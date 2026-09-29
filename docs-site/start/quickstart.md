@@ -54,7 +54,7 @@ coffer agent add claude_code
 registered: agent claude-code
 ```
 
-(`coffer adopt agent claude_code` does the same from the scan row.) If you leave out `--name`, Coffer uses a default based on the type: `claude_code` becomes `claude-code`. If your Claude Code config is somewhere other than `~/.claude`, pass `--config-dir <path>`.
+(`coffer scan` lists a detected agent with this same command.) If you leave out `--name`, Coffer uses a default based on the type: `claude_code` becomes `claude-code`. If your Claude Code config is somewhere other than `~/.claude`, pass `--config-dir <path>`.
 
 **In the web UI:** open **Agents**, click **Add agent**, tick Claude Code under **Detected agents**, and click **Add selected (1)**.
 

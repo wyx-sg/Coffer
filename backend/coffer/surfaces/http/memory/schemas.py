@@ -172,26 +172,6 @@ class AggregationResultOut(BaseModel):
     skipped: list[str]
 
 
-class DistilResultOut(BaseModel):
-    """What one distil pass found, by the four actions of "Distil incrementally
-    in two stages".
-
-    ``dropped`` is a first-class outcome, not a failure: it is how a scratch
-    directory's incidental material and an agent's transient observations stay
-    out of the store. ``model_used`` is false when no internal connection is
-    configured — each entry became a note of its own and the index was still
-    written, from their frontmatter ("Distil mechanically with no internal
-    connection").
-    """
-
-    partition: str
-    merged: int
-    opened: int
-    retired: int
-    dropped: int
-    model_used: bool
-
-
 class ComposedContextOut(BaseModel):
     """The session-start payload, and enough accounting to audit the ceiling.
 

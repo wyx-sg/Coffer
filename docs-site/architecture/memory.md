@@ -213,7 +213,7 @@ Each pass records a `memory_distilled` audit event with the counts `merged`, `op
 
 ### One pass per partition
 
-The interval worker and the manual trigger (`POST /api/v1/memory/partitions/{uid}/distil`, `coffer memory distil`) both claim the partition's **uid** in the shared upkeep-runs registry. A manual request that arrives while a pass is running is refused with `UPKEEP_ALREADY_RUNNING` (409). The worker skips a busy partition and returns to it on its next sweep. The registry lives in memory, one per daemon.
+The interval worker and Update memory (`POST /api/v1/memory/sync`, `coffer memory sync`) both claim the partition's **uid** in the shared upkeep-runs registry. Update memory reports a partition whose pass is already running under `skipped` and distils the rest. The worker skips a busy partition and returns to it on its next sweep. The registry lives in memory, one per daemon.
 
 ## The index line
 

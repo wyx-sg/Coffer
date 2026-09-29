@@ -165,14 +165,9 @@ def _partition_uid(c: TestClient, name: str) -> str:
     return str(_partitions(c)[name]["uid"])
 
 
-def _distil(c: TestClient, partition: str) -> dict:
-    r = c.post(f"/api/v1/memory/partitions/{_partition_uid(c, partition)}/distil")
-    assert r.status_code == 200, r.text
-    return r.json()
-
-
 def _distilled(c: TestClient, tmp_path: pathlib.Path, files: dict[str, str] | None = None) -> str:
-    """Register an agent, seed a repository, sync and distil both partitions.
+    """Register an agent, seed a repository and update memory, which distils
+    both partitions.
 
     Returns the repository partition's name. Most tests below want a partition
     with real notes in it, and notes only exist after a distil pass: aggregation
@@ -182,10 +177,7 @@ def _distilled(c: TestClient, tmp_path: pathlib.Path, files: dict[str, str] | No
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, files if files is not None else _default_files())
     _sync(c)
-    name = next(n for n in _partitions(c) if n != "global")
-    _distil(c, name)
-    _distil(c, "global")
-    return name
+    return next(n for n in _partitions(c) if n != "global")
 
 
 def _lines(text: str) -> list[str]:
@@ -240,16 +232,9 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     # up by label first.
     assert listed["coffer"]["uid"] and listed["coffer"]["uid"] != listed["global"]["uid"]
 
-    # A hand-started pass afterwards finds nothing new to open.
-    distilled = _distil(client, "coffer")
-    assert distilled == {
-        "partition": "coffer",
-        "merged": 0,
-        "opened": 0,
-        "retired": 0,
-        "dropped": 0,
-        "model_used": False,
-    }
+    # A second update finds nothing new to distil.
+    again = _sync(client)
+    assert (again["entries_written"], again["distilled"]) == (0, [])
     assert _partitions(client)["coffer"]["note_count"] == 1
 
     coffer_uid = _partition_uid(client, "coffer")
@@ -386,9 +371,6 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     assert "coffer" in _sync(client)["distilled"]
     assert _partitions(client)["coffer"]["note_count"] == 1
 
-    body = _distil(client, "coffer")
-    assert body["model_used"] is False
-
     index = client.get(
         f"/api/v1/memory/partitions/{_partition_uid(client, 'coffer')}/files/content",
         params={"path": "MEMORY.md"},
@@ -397,53 +379,18 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     assert str(repository.resolve()) in index["content"]
 
     audit = client.get("/api/v1/audit").json()["entries"]
-    assert any(e["event_type"] == "memory_distilled" for e in audit)
+    distilled = [e for e in audit if e["event_type"] == "memory_distilled"]
+    assert distilled and all(e["details"]["model_used"] is False for e in distilled)
     assert any(e["event_type"] == "memory_aggregated" for e in audit)
 
 
-def test_distil_unknown_partition_is_not_found(client) -> None:
-    r = client.post("/api/v1/memory/partitions/no-such-uid/distil")
-    assert r.status_code == 404
-    assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a second distil pass over the same partition is refused while the first is running",
-)
-def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) -> None:
-    """The bug this is here for: the button's spinner used to live in a browser
-    component, so navigating away mid-pass and back showed an idle button and the
-    next click started a SECOND pass over the same files ("Run one distil pass per
-    partition at a time"). The daemon now holds that fact, and refuses.
-
-    The in-flight pass is simulated by claiming the partition's key directly —
-    the route is synchronous, so a real second request could only be made from
-    another thread, and what is under test is the refusal, not the threading.
-    """
+def test_there_is_no_per_partition_distil_route(client, tmp_path) -> None:
+    """Update memory distils every partition that gained entries, so the family
+    has no route that distils one ("Cover memory management on REST and the
+    CLI")."""
     partition = _distilled(client, tmp_path)
-    uid = _partition_uid(client, partition)
-
-    # Claimed by UID, because that is what the route claims and what the
-    # unattended sweep claims: two writers only collide if both spell the
-    # partition the same way, and the label is the spelling that can move.
-    assert UPKEEP_RUNS.claim(KIND_MEMORY, uid) is True
-    try:
-        r = client.post(f"/api/v1/memory/partitions/{uid}/distil")
-        assert r.status_code == 409, r.text
-        assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
-
-        # … and the surface can see it, so the button shows the running pass
-        # instead of inviting that second click.
-        runs = client.get("/api/v1/upkeep/runs").json()["runs"]
-        assert {"memory"} == {run["kind"] for run in runs}
-        assert [run["name"] for run in runs] == [uid]
-    finally:
-        UPKEEP_RUNS.release(KIND_MEMORY, uid)
-
-    # The key is free again, so the real pass runs.
-    assert client.post(f"/api/v1/memory/partitions/{uid}/distil").status_code == 200
-    assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
+    r = client.post(f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/distil")
+    assert r.status_code in (404, 405), r.text
 
 
 # ----- update memory: aggregate, then distil --------------------------------
@@ -484,10 +431,20 @@ def test_update_memory_aggregates_and_distils_in_one_call(client, tmp_path) -> N
     assert "global" not in result["distilled"]
 
 
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a second distil pass over the same partition is refused while the first is running",
+)
 def test_update_memory_skips_a_partition_whose_distil_is_already_running(client, tmp_path) -> None:
-    """A pass already holding the partition is reported, not failed ("Run one
-    distil pass per partition at a time"): the caller asked for memory to be
-    updated, and the running pass is doing exactly that."""
+    """A pass already holding the partition is reported, not failed and not
+    queued ("Run one distil pass per partition at a time"): the caller asked for
+    memory to be updated, and the running pass is doing exactly that.
+
+    The in-flight pass is simulated by claiming the partition's key directly —
+    by UID, because that is what Update memory and the unattended sweep both
+    claim: two writers only collide if both spell the partition the same way,
+    and the label is the spelling that can move.
+    """
     _register_agent(client, "cc")
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
@@ -504,6 +461,11 @@ def test_update_memory_skips_a_partition_whose_distil_is_already_running(client,
     assert UPKEEP_RUNS.claim(KIND_MEMORY, uid) is True
     try:
         result = _sync(client)
+        # … and the surface can see the running pass, so the page shows it
+        # instead of inviting a second request.
+        runs = client.get("/api/v1/upkeep/runs").json()["runs"]
+        assert {"memory"} == {run["kind"] for run in runs}
+        assert [run["name"] for run in runs] == [uid]
     finally:
         UPKEEP_RUNS.release(KIND_MEMORY, uid)
 
@@ -511,6 +473,11 @@ def test_update_memory_skips_a_partition_whose_distil_is_already_running(client,
     assert result["skipped"] == ["coffer"]
     assert "coffer" not in result["distilled"]
     assert _partitions(client)["coffer"]["note_count"] == 1  # the new entry waits
+
+    # The key is free again, so the next update distils what waited.
+    assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
+    assert _sync(client)["distilled"] == ["coffer"]
+    assert _partitions(client)["coffer"]["note_count"] == 2
 
 
 # ----- context: the payload the whole redesign is about ---------------------

@@ -2,18 +2,16 @@
 
 See "Run one distil pass per partition at a time".
 
-The timer and the Distil button are two writers over one directory, so both
-claim the same upkeep-runs key. The two callers want different things from a
-busy partition and get them from the same table: a surface **refuses** with
-``UpkeepAlreadyRunning`` (which the HTTP layer answers as
-``UPKEEP_ALREADY_RUNNING``, 409) rather than queueing, and the worker
-**skips** and comes back on the next sweep.
+The timer and Update memory are two writers over one directory, so both claim
+the same upkeep-runs key, and neither starts or queues a pass over a partition
+the other holds: Update memory reports it as skipped, and the worker passes it
+by and comes back on the next sweep.
 
-The HTTP half of that scenario — the status code and the runs surface — is
-covered where the route lives. This file covers the half that is this layer's:
-which partitions are readable as running, that a worker skips a claimed one,
-and that the key is released even when the pass raises, so a crashed pass
-cannot wedge a partition for the life of the daemon.
+The Update memory half of that scenario — ``skipped`` and the runs surface — is
+covered where the route lives (``test_memory_routes.py``). This file covers the
+half that is this layer's: which partitions are readable as running, that a
+worker skips a claimed one, and that the key is released even when the pass
+raises, so a crashed pass cannot wedge a partition for the life of the daemon.
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ async def test_a_partition_already_being_distilled_is_skipped_by_the_worker(
     async def _partitions() -> list[str]:
         return ["coffer", "global"]
 
-    assert runs.claim(KIND_MEMORY, "coffer") is True  # a pass is in flight by hand
+    assert runs.claim(KIND_MEMORY, "coffer") is True  # a pass is already in flight
 
     await DistilWorker(
         distil=_distil, list_partitions=_partitions, start_delay_s=0, runs=runs
@@ -61,11 +59,7 @@ async def test_a_partition_already_being_distilled_is_skipped_by_the_worker(
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a second distil pass over the same partition is refused while the first is running",
-)
-async def test_a_second_request_over_one_partition_is_refused_rather_than_queued(
+async def test_a_second_claim_over_one_partition_is_refused_rather_than_queued(
     runs: UpkeepRunRegistry,
 ) -> None:
     with runs.guard(KIND_MEMORY, "coffer"):
