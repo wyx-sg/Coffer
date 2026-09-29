@@ -57,6 +57,66 @@ block drops the step lines, then the header.
 - **WHEN** the owner runs `coffer channel edit <name> --hide-steps`, then `--show-steps`
 - **THEN** the channel's `show_steps` setting is off, then on again
 
+### Requirement: Ping the asker when a long turn ends
+A turn that ran at least the channel's `notify_after_seconds` (default 90, from
+0 to 3600; 0 turns it off) MUST end with one short new message wherever its
+answer would not notify on its own — that is, where the answer was delivered by
+finishing a live surface that persists from the turn's start (see "Grow a reply
+in place on one live surface"): a message created minutes ago notifies nobody
+when it is finished. The ping reads `✅ Done · 4m 12s — <first line of the
+answer>`, the first line read as plain words and clipped to 120 characters; a
+turn that failed, was stopped or hit the tool-iteration limit pings `⚠️ Failed ·
+…`, `⏹ Stopped · …` or `⚠️ Tool limit · …` with the tool count and tokens, and
+that ping takes the place of its separate summary. It is sent the way the turn's
+other replies are — into the same chat and thread — and in a group it opens with
+the asker's @mention (see "Mention the asker in a group answer"). A turn whose
+answer went out as a new message (a scaffolding surface, or a stream that died
+and fell back to the ordinary send) needs no ping: that message already
+notified. A turn shorter than the threshold sends none either — the answer
+itself is the signal.
+
+Presence is not observable on any platform, so duration is the only signal. The
+setting is edited on the Channels page and with `coffer channel add|edit
+--notify-after <seconds>`.
+
+#### Scenario: a long turn whose answer does not notify ends with a ping
+- **GIVEN** a transport whose streamed answer persists from the turn's start, and
+  a turn that ran 4 minutes 12 seconds against the default threshold
+- **WHEN** the turn ends cleanly
+- **THEN** after the streamed answer one new message reads `✅ Done · 4m 12s —`
+  followed by the answer's first line in plain words
+
+#### Scenario: a short turn or a zero threshold sends no ping
+- **GIVEN** a turn shorter than the threshold, and a long turn on a channel whose
+  threshold is 0
+- **WHEN** each ends
+- **THEN** neither sends a ping
+
+#### Scenario: an answer sent as a new message needs no ping
+- **GIVEN** a transport whose live surface is scaffolding deleted before the answer
+- **WHEN** a long turn ends
+- **THEN** no ping is sent — the answer's own new message notified
+
+#### Scenario: a long failed turn pings instead of summarising
+- **GIVEN** a long turn on a persisting surface that errors after one tool
+- **WHEN** it ends
+- **THEN** exactly one message follows the answer: `⚠️ Failed · <elapsed> · 1 tool
+  — <error>`
+
+#### Scenario: the ping threshold comes from the channel's settings
+- **WHEN** a channel config omits `notify_after_seconds`, sets it to 0, or sets it
+  past 3600
+- **THEN** it is 90, it is 0 (off), and it is refused
+
+#### Scenario: the ping threshold is edited from the command line
+- **WHEN** the owner runs `coffer channel edit <name> --notify-after 0`
+- **THEN** the channel's threshold is 0, and a value past 3600 is refused
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Summarise only a turn that did not end normally`
+- TO: `### Requirement: Summarise a turn that did not end normally`
+
 ## MODIFIED Requirements
 
 ### Requirement: Grow a reply in place on one live surface
@@ -165,3 +225,97 @@ a failed mark never breaks the turn.
 - **GIVEN** a paired channel on an adapter that supports reactions
 - **WHEN** the owner's message drives a turn that is interrupted
 - **THEN** the message's marks are received, working, then stopped
+
+### Requirement: Summarise a turn that did not end normally
+After a turn that did not end normally the channel MUST send one compact
+completion summary as a fresh message: a failure reports the error, an
+interrupt reports the stop, and the tool-iteration limit reports the limit, each
+with tool count, duration, and token usage. A turn error is reported to the IM
+chat as a short notice and the channel stays up. Where a long turn pings (see
+"Ping the asker when a long turn ends"), the ping carries these facts and takes
+the summary's place. A clean success MUST send **no** summary — the reply itself
+is the completion signal, so the fact line would only be noise (this holds
+regardless of whether the transport can edit messages); the one line a clean
+*long* turn may end with is its ping.
+
+#### Scenario: a turn error is reported to the IM chat
+- **GIVEN** a scripted agent that fails mid-turn
+- **WHEN** the peer sends a message
+- **THEN** the IM chat receives a short error notice and the channel stays up
+
+#### Scenario: a turn that does not end normally sends a completion summary
+- **GIVEN** a paired channel
+- **WHEN** a turn fails, is interrupted, or hits the tool-iteration limit
+- **THEN** a compact completion summary is sent to the chat reporting the outcome
+  (the error / stop / limit) with tool count, duration, and tokens
+
+#### Scenario: a clean success sends no completion summary
+- **GIVEN** a paired channel (whether or not the transport can edit messages)
+- **WHEN** a turn shorter than the ping threshold completes successfully
+- **THEN** no completion summary is sent — the reply itself is the end-of-turn
+  signal
+
+### Requirement: Mention the asker in a group answer
+A group answer MUST name who it is for, and notify them. In a group, the bot's
+reply MUST open by @mentioning the member whose message drove the turn, using the
+platform's own mention markup — so the answer notifies the person waiting for it
+and a busy room can see at a glance which of them it belongs to. In a direct chat
+it MUST NOT: a 1:1 conversation has nobody to disambiguate, and an @ there is
+only shouting. Four constraints bound it.
+
+- **The mention MUST be in the content the reply is CREATED with**, not added to
+  it later. A platform decides @ notifications at creation; a mention that
+  arrives on a later update of the same message renders as a name and notifies
+  nobody, which is the worst of both — the room sees an @ the mentioned person
+  never got. For a streamed reply that means the opening post carries it, and
+  therefore so does every snapshot in between: a mention that appeared at
+  creation, vanished for the length of the stream and returned at the end would
+  be a visible glitch.
+- Because every snapshot then carries markup, every snapshot MUST be sent in the
+  platform's rich format. The protection that the plain format used to give a
+  reply clipped mid-word — an unclosed emphasis run the client would render as
+  noise — MUST instead come from ESCAPING the agent's partial text, leaving the
+  mention markup itself untouched.
+- The mention is built from the id the PLATFORM addresses a member by, which is
+  not always the id the owner gate matches — so the transport carries both.
+  Where the platform documents a second way to address a member, it is a
+  FALLBACK for a sender whose id is missing, never the primary: the id is the
+  identifier that is always present.
+- A platform whose mention is a link that shows a name (Telegram) spells it
+  with the asker's display name as well as the id; the name is stripped of
+  anything that could end the link text.
+- It degrades silently: no id and no usable fallback, or a transport that cannot
+  mention at all, yields an ordinary unmentioned reply — never a broken tag.
+- Only a surface that persists as the reply carries the mention while it grows;
+  scaffolding that is deleted before the answer carries none, and the answer —
+  a new message — opens with it.
+
+#### Scenario: a group reply @mentions whoever asked
+- **GIVEN** an addressed message in a group from a member the transport named,
+- **WHEN** the turn replies,
+- **THEN** the reply opens with the platform's mention markup for that member.
+
+#### Scenario: a direct reply carries no mention
+- **GIVEN** the same channel answering in a 1:1 chat,
+- **WHEN** the turn replies,
+- **THEN** the reply carries no mention — there is nobody to disambiguate.
+
+#### Scenario: a streamed group reply is created already mentioning the asker
+- **GIVEN** a group turn that opens a live surface before it has anything to say,
+- **WHEN** the first snapshot is posted and the reply then grows in place,
+- **THEN** the mention markup is in the content the message is created with, and
+  in every snapshot after it, exactly once.
+
+#### Scenario: an @ notification needs the mention in the message that creates it
+- **GIVEN** the transport that creates its reply as a stream and grows it,
+- **WHEN** the reply is delivered,
+- **THEN** the mention travels in the creating call, because the platform decides
+  @ notifications then and not on any later update of the same message.
+
+#### Scenario: an interim snapshot reaches the chat as written, not as markup
+- **GIVEN** an in-flight snapshot of a reply, clipped mid-word so it can end
+  inside an unclosed emphasis run,
+- **WHEN** it is sent in the platform's rich format, as carrying a mention
+  requires,
+- **THEN** its formatting characters are escaped — one escape each — so the
+  reader sees the text the agent has written so far.

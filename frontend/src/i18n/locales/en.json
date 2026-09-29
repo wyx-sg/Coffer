@@ -1581,6 +1581,16 @@
         "waitAfterForwardHint": "A forwarded chat record or files without text are rarely the whole question, so wait longer for what follows.",
         "invalid": "Enter a number of seconds from {{min}} to {{max}}."
       },
+      "replies": {
+        "title": "Replies",
+        "showSteps": "Show steps while working",
+        "showStepsHelpLabel": "About the step list",
+        "showStepsHelp": "While a turn runs, the live status line lists each step (tool call) under its header, e.g. \"⏳ Working · 2m 14s · 7 steps\". Turned off, it keeps only the header and the agent's latest narration line — quieter in busy groups.",
+        "notifyAfter": "Ping when a turn takes longer than",
+        "notifyAfterHint": "0 turns the ping off.",
+        "notifyAfterHelpLabel": "About the completion ping",
+        "notifyAfterHelp": "A turn that runs at least this long ends with one short line in the chat, e.g. \"✅ Done · 4m 12s — first line of the answer\", where the answer would not notify on its own (on SeaTalk the answer is a message created when the turn began)."
+      },
       "directories": {
         "label": "Directories for /dir",
         "help": "The only folders a chat can switch the agent into with /dir. Each also allows its subfolders.",

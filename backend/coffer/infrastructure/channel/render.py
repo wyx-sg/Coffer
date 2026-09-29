@@ -21,7 +21,7 @@ _CODE_FENCE = re.compile(r"```[a-zA-Z0-9_+-]*\n?(.*?)```", re.DOTALL)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 _BOLD = re.compile(r"\*\*([^*\n]+)\*\*")
 _ITALIC = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)|\b_([^_\n]+)_\b")
-_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+|tg://user\?id=\d+)\)")
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 # A line-leading "- " / "* " (with optional indent) is a markdown bullet. Telegram
 # HTML has no list element, so render a tidy "• " glyph rather than a raw dash. The

@@ -40,6 +40,14 @@ _SHOW_STEPS = typer.Option(
     "--show-steps/--hide-steps",
     help="List each step under the live status line while a turn runs (default: on)",
 )
+# "Ping the asker when a long turn ends".
+_NOTIFY_AFTER = typer.Option(
+    None,
+    "--notify-after",
+    min=0,
+    max=3600,
+    help="Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never)",
+)
 _WAIT_AFTER_FORWARD = typer.Option(
     None,
     "--wait-after-forward",
@@ -78,6 +86,7 @@ def _settings(
     wait_after_text: float | None = None,
     wait_after_forward: float | None = None,
     show_steps: bool | None = None,
+    notify_after: float | None = None,
 ) -> dict[str, bool | float]:
     """The config keys the user actually passed: group gating ("Configure when the
     bot answers in a group"), the quiet windows ("Take a burst of messages as
@@ -89,6 +98,7 @@ def _settings(
         "wait_after_text_seconds": wait_after_text,
         "wait_after_forward_seconds": wait_after_forward,
         "show_steps": show_steps,
+        "notify_after_seconds": notify_after,
     }
     return {key: value for key, value in passed.items() if value is not None}
 
@@ -102,6 +112,7 @@ def settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[st
             values.get("wait_after_text"),
             values.get("wait_after_forward"),
             values.get("show_steps"),
+            values.get("notify_after"),
         )
     )
     dirs = directories(values.get("dirs"), bool(values.get("no_dirs")))

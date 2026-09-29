@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Grow a reply in place on one live surface", "Stream through the platform's own surface where the chat has one", "Acknowledge receipt and completion by capability", "Summarise only a turn that did not end normally", "Stop the turn from the platform's own stop control");
+**Related**: spec channels ("Grow a reply in place on one live surface", "Stream through the platform's own surface where the chat has one", "Acknowledge receipt and completion by capability", "Summarise a turn that did not end normally", "Stop the turn from the platform's own stop control");
 spec channels/telegram ("Stream through a message draft in direct chats only", "Use a deleted status message as the live scaffolding");
 spec channels/seatalk ("Stream the reply under SeaTalk's streaming contract", "Keep a typing heartbeat alive in DMs and group threads");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md);

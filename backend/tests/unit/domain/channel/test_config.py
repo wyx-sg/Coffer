@@ -153,6 +153,20 @@ def test_steps_are_shown_unless_the_channel_hides_them():
     assert parse_channel_config({**TELEGRAM_CONFIG, "show_steps": False}).show_steps is False
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="the ping threshold comes from the channel's settings"
+)
+def test_the_ping_threshold_defaults_to_ninety_seconds_and_zero_turns_it_off():
+    """spec channels "Ping the asker when a long turn ends"."""
+    assert parse_channel_config(SEATALK_CONFIG).notify_after_seconds == 90.0
+    assert (
+        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 0}).notify_after_seconds
+        == 0
+    )
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 3601})
+
+
 def test_raw_telegram_token_in_bot_token_ref_rejected():
     raw_token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     with pytest.raises(ValidationError, match="looks like a raw secret"):
@@ -223,6 +237,7 @@ def test_root_model_round_trips_flat_dict():
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
+        "notify_after_seconds": 90.0,
         "directories": [],
         "runs_on": None,
     }
@@ -240,6 +255,7 @@ def test_root_model_round_trips_seatalk_dict():
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
+        "notify_after_seconds": 90.0,
         "directories": [],
         "runs_on": None,
     }

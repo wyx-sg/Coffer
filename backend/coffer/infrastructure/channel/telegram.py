@@ -46,6 +46,7 @@ from coffer.infrastructure.channel.telegram_profile import (
 from coffer.infrastructure.channel.telegram_reactions import TELEGRAM_REACTIONS, set_reaction
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
+from coffer.infrastructure.channel.telegram_text import TELEGRAM_MENTION_TEMPLATE
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
 from coffer.infrastructure.channel.telegram_transport import call
 from coffer.infrastructure.channel.telegram_updates import (
@@ -127,6 +128,7 @@ class TelegramAdapter:
             supports_groups=True,
             supports_reactions=True,
             reactions=TELEGRAM_REACTIONS,
+            mention_template=TELEGRAM_MENTION_TEMPLATE,
         )
 
     # -- lifecycle ---------------------------------------------------------

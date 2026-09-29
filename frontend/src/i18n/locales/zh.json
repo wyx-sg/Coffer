@@ -1581,6 +1581,16 @@
         "waitAfterForwardHint": "转发的聊天记录、不带文字的文件很少是完整的问题，所以多等一会儿。",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
+      "replies": {
+        "title": "回复",
+        "showSteps": "工作时显示步骤",
+        "showStepsHelpLabel": "关于步骤列表",
+        "showStepsHelp": "回合进行时，实时状态行会在标题（如「⏳ Working · 2m 14s · 7 steps」）下逐条列出每一步（工具调用）。关闭后只保留标题和 Agent 最新的一句说明，适合消息多的群。",
+        "notifyAfter": "回合超过多久时提醒",
+        "notifyAfterHint": "设为 0 则不提醒。",
+        "notifyAfterHelpLabel": "关于完成提醒",
+        "notifyAfterHelp": "回合运行达到这个时长时，结束后会在聊天里发一条简短提醒（如「✅ Done · 4m 12s — 回答的第一行」），用于回答本身不会触发通知的情况（SeaTalk 的回答是回合开始时就创建的那条消息）。"
+      },
       "directories": {
         "label": "/dir 可用目录",
         "help": "聊天里用 /dir 只能把 Agent 切换到这些目录。每个目录也包括它的子目录。",

@@ -73,6 +73,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "supports_groups",
         "supports_history_fetch",
         "supports_reactions",
+        "reactions",
         "mention_template",
         "mention_email_template",
         "direct_threads_are_replies",

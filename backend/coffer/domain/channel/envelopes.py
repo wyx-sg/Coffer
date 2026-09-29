@@ -42,9 +42,9 @@ class InboundMessage:
     # ``employee_code`` while a mention
     # must carry ``seatalk_id``, and the docs warn that ``employee_code`` and
     # ``email`` arrive EMPTY for a sender outside the bot's organisation while
-    # ``seatalk_id`` is always present. "" when the transport has no such id, or
-    # spells mentions in a way that needs more than one (Telegram needs a
-    # display name too) — the reply then simply carries no mention.
+    # ``seatalk_id`` is always present. "" when the transport has no such id —
+    # the reply then simply carries no mention. (Telegram's is ``from.id``; its
+    # mention also carries ``sender_display`` as the link text.)
     sender_mention_id: str = ""
     # The same thing by ADDRESS, for a platform that documents a second mention
     # form (SeaTalk: ``?email=``). Only a fallback: it is precisely the field the
@@ -156,9 +156,10 @@ class ChannelCapabilities:
     # "Mention the asker in a group answer": how this transport spells an
     # @mention, with ``{user_id}`` standing
     # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
-    # The core substitutes and prefixes; it never learns the shape. A transport
-    # that cannot mention, or whose mention needs more than an id (Telegram's
-    # carries a display name), declares none and its replies carry none. The
+    # The core substitutes and prefixes; it never learns the shape. A mention
+    # that also needs a display name (Telegram's inline mention is a link with
+    # text) puts ``{name}`` where the name goes. A transport that cannot mention
+    # declares none and its replies carry none. The
     # markup is the platform's RICH text, so every snapshot that may carry it is
     # sent as such — see ``turn_text.with_mention``.
     mention_template: str = ""

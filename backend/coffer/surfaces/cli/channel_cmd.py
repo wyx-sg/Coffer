@@ -21,6 +21,7 @@ from coffer.surfaces.cli._channel_options import (
     _DIRS,
     _IGNORE_OTHER_MENTIONS,
     _NO_DIRS,
+    _NOTIFY_AFTER,
     _REQUIRE_MENTION,
     _SHOW_STEPS,
     _WAIT_AFTER_FORWARD,
@@ -96,6 +97,7 @@ def add(
     wait_after_text: float | None = _WAIT_AFTER_TEXT,
     wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
     show_steps: bool | None = _SHOW_STEPS,
+    notify_after: float | None = _NOTIFY_AFTER,
     dirs: list[str] | None = _DIRS,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
@@ -121,7 +123,12 @@ def add(
     config: dict[str, Any] = {"channel_type": channel_type}
     config.update(
         _settings(
-            require_mention, ignore_other_mentions, wait_after_text, wait_after_forward, show_steps
+            require_mention,
+            ignore_other_mentions,
+            wait_after_text,
+            wait_after_forward,
+            show_steps,
+            notify_after,
         )
     )
     allowed = directories(dirs, False)
@@ -347,6 +354,7 @@ _CHANNEL = KindVerbs(
             edit_option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
             edit_option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
             edit_option("show_steps", _SHOW_STEPS),
+            edit_option("notify_after", _NOTIFY_AFTER, float | None),
             edit_option("dirs", _DIRS, list[str] | None),
             edit_option("no_dirs", _NO_DIRS, bool),
         ),
@@ -356,7 +364,7 @@ _CHANNEL = KindVerbs(
         "list": "List registered channels.",
         "edit": (
             "Change a channel's name, title, description, group gating, quiet windows, "
-            "live status or `/dir` directories."
+            "live status, completion ping or `/dir` directories."
         ),
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",

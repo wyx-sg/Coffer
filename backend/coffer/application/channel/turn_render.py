@@ -32,6 +32,7 @@ from coffer.application.channel.turn_finish import (
     TurnEnd,
     TurnOutcome,
     deliver_reply,
+    ping_line,
     summary_line,
 )
 from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
@@ -78,8 +79,11 @@ class TurnRenderer:
     # template; "" everywhere else.
     mention_user_id: str = ""
     mention_user_email: str = ""
+    mention_user_name: str = ""  # for a transport whose mention shows a name
     # The channel's "show steps" setting: off hides the step lines.
     show_steps: bool = True
+    # "Ping the asker when a long turn ends": seconds, 0 = never.
+    notify_after_seconds: float = 0.0
     # Cadences, injectable so a test can drive them fast.
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
     tick_seconds: float = _STATUS_TICK_SECONDS
@@ -141,7 +145,7 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
-        await deliver_reply(
+        body, in_place = await deliver_reply(
             adapter=self.adapter,
             chat_id=self.chat_id,
             thread_id=self.thread_id,
@@ -152,9 +156,25 @@ class TurnRenderer:
             text=self._reply.full(),
             end=end,
         )
-        if not end.clean:
+        if self._ping_due(end, in_place):
+            # One new message where the answer's own message was created when
+            # the turn began — it replaces the summary of an abnormal ending.
+            await self.send(self._with_mention(ping_line(end, body)))
+        elif not end.clean:
             await self.send(summary_line(end))
         return end.outcome
+
+    def _ping_due(self, end: TurnEnd, in_place: bool) -> bool:
+        """A long turn whose answer finished a message that PERSISTS from the
+        turn's start (a SeaTalk stream): finishing it notifies nobody, so the
+        end is said once more, in a new message. An answer that went out as a
+        new message (Telegram, or a stream that died) already notified."""
+        return (
+            self.notify_after_seconds > 0
+            and end.duration >= self.notify_after_seconds
+            and self._surface.persisted
+            and in_place
+        )
 
     def _close_segment(self) -> None:
         """A tool event: the text before it was narration — it moves up into
@@ -246,4 +266,5 @@ class TurnRenderer:
             user_id=self.mention_user_id,
             email_template=caps.mention_email_template,
             user_email=self.mention_user_email,
+            user_name=self.mention_user_name,
         )

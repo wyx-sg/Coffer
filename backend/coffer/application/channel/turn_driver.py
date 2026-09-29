@@ -71,7 +71,8 @@ class QueuedInbound:
     came from; ``reply_to_message_id`` is the user's inbound platform_message_id the
     receipt/completion reactions target (see "Acknowledge receipt and completion by
     capability"; "" when the transport supplied none); the mention id and address are
-    what a group reply opens by @mentioning (see "Mention the asker in a group answer");
+    what a group reply opens by @mentioning (see "Mention the asker in a group answer"),
+    with the display name a platform that spells mentions by name needs;
     and ``title_hint`` is the human's own words, carried apart from the driving text
     (spec chat "Persist conversations and messages in SQLite"; "" when nothing was
     nameable). ``conversation_thread_id`` is which of the chat's conversations the
@@ -87,6 +88,7 @@ class QueuedInbound:
     reply_to_message_id: str = ""
     mention_user_id: str = ""
     mention_user_email: str = ""
+    mention_user_name: str = ""
     title_hint: str = ""
     conversation_thread_id: str = ""
 
@@ -295,7 +297,9 @@ class TurnDriver:
             chat_kind=item.chat_kind,
             mention_user_id=item.mention_user_id,
             mention_user_email=item.mention_user_email,
+            mention_user_name=item.mention_user_name,
             show_steps=binding.show_steps,
+            notify_after_seconds=binding.notify_after_seconds,
         )
         outcome: TurnOutcome = "failed"
         try:

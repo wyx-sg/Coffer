@@ -446,6 +446,17 @@ def test_edit_hides_and_shows_the_step_lines(channel_daemon: _Daemon) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="channels", scenario="the ping threshold is edited from the command line"
+)
+def test_edit_changes_the_ping_threshold(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    r = runner.invoke(app, ["channel", "edit", "tg", "--notify-after", "0"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["notify_after_seconds"] == 0
+    assert runner.invoke(app, ["channel", "edit", "tg", "--notify-after", "3601"]).exit_code == 2
+
+
+@pytest.mark.acceptance(
     spec="channels",
     scenario="the channel's directories are edited from the Channels page and the CLI",
 )

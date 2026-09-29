@@ -5,7 +5,7 @@ Telegram's is a message it edits (deleted when the turn ends, the final reply
 sent after it); SeaTalk's is a stream that finishes as the reply itself. A
 transport with neither sends no interim traffic at all. Every turn that ends
 abnormally closes with a compact completion summary, capability-agnostic
-("Summarise only a turn that did not end normally").
+("Summarise a turn that did not end normally").
 """
 
 from __future__ import annotations

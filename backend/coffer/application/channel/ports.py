@@ -240,6 +240,8 @@ class ChannelBinding:
     wait_after_forward_seconds: float = 5.0
     # "Show a turn's working state as one status line": list the step lines.
     show_steps: bool = True
+    # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
+    notify_after_seconds: float = 90.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here

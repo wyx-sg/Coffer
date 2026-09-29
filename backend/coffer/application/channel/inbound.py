@@ -259,6 +259,7 @@ class InboundProcessor:
             reply_to_message_id=msg.platform_message_id,
             mention_user_id=msg.sender_mention_id,
             mention_user_email=msg.sender_mention_email,
+            mention_user_name=msg.sender_display,
             title_hint=title_hint,
             conversation_thread_id=conv_thread,
         )
