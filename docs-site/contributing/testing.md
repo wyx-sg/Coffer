@@ -1,6 +1,6 @@
 ---
 title: Testing
-description: Coffer's four test tiers, where each lives and how to run it, the real-home guard and isolated-HOME builders, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
+description: Coffer's four test tiers, where each lives and how to run it, the real-home guard and isolated homes, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
 ---
 
 # Testing
@@ -62,63 +62,26 @@ Mock only what is **non-local** (an external HTTP service, an LLM API), **non-de
 
 ### Tests never touch your real home
 
-Almost every path Coffer uses is derived from `$HOME`: the vault at `~/.coffer`, its database, its logs, and the agent config trees it writes into (`~/.claude`, `~/.claude.json`, `~/.codex`). So a test that forgets to point one of those somewhere else does not fail. It quietly runs against the developer's real data. This has happened. `paths.knowledge_root()` falls back to `$HOME/.coffer/knowledge` when `COFFER_KNOWLEDGE_ROOT` is unset, and a test that booted the app without pinning it ran the knowledge migration over a real vault and moved the owner's files.
+Nearly everything Coffer keeps on disk lives under your home directory: the vault with its database, notes and logs, and the configuration of the coding agents that Coffer connects to. A test that forgets to point one of those somewhere else does not fail. It quietly runs against your real data.
 
-Pinning one variable per tree only closed that one path. The suite now has a structural guard, in `backend/tests/support/real_home_guard.py`, which the root `backend/tests/conftest.py` installs before any `coffer` module is imported. It has two layers.
+This has happened. When the setting that locates the knowledge tree was left unset, Coffer fell back to the default location in the home directory. A test that started the app without setting it ran the knowledge migration over a developer's real vault and moved their files. Setting one more variable would only have closed that one path, so the suite now enforces the rule for every path at once, in two layers.
 
-**Redirection.** At import time the suite points `HOME` at a throwaway directory and strips every `COFFER_*` variable inherited from your shell, so an exported `COFFER_DB_URL` or skills root cannot leak in. Only variables that steer the test run itself survive: `COFFER_RUN_*`, `COFFER_SMOKE_*` and `COFFER_TEST_*`. It also removes `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GIT_CONFIG_GLOBAL` and the `XDG_*` roots, which would otherwise send an agent or git somewhere other than the home. An autouse fixture then gives **each test its own `HOME`**, containing a `.gitconfig` with a commit identity. Subprocesses inherit the environment, so a daemon, shim or CLI that a test spawns runs in the same throwaway home. The per-tree pins (`COFFER_LOG_DIR`, `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_AGENT_STATE_ROOT`) are still set as well, so each tree keeps its own per-test directory.
+**Redirect the home.** Before any Coffer code loads, the test run points the home directory at a throwaway location. It also drops every Coffer setting inherited from your shell, along with the variables that could send an agent or git to a different directory. Each test then gets a fresh home of its own, already set up so git can commit in it. Programs that a test starts, such as the daemon, the MCP shim or the command line, inherit the same throwaway home, so they cannot reach the real one either.
 
-**Tripwire.** Redirection can be undone by the thing tests do most often, which is rewriting `HOME`. If a test deletes `HOME`, `Path.home()` falls back to the password database, which is the real home. A subprocess started with a hand-built `env` that has no `HOME` does the same. So the guard also installs a Python audit hook ([PEP 578](https://peps.python.org/pep-0578/)). The hook sees every `open`, directory listing, `mkdir`, rename, remove, `shutil` tree operation, `sqlite3.connect` and process spawn in the test process. If the path is under a protected directory of the real home (`.coffer`, `.claude`, `.claude.json`, `.codex` or `.agents`), it raises `RealHomeAccessError`, a `PermissionError`, before the system call runs, so the write never happens. It also refuses a spawn whose environment has no `HOME` or has the real one. Each refusal is recorded as well as raised, because code that tolerates an unreadable file would swallow the exception. At teardown the autouse fixture fails the test with the list of what it touched, even when nothing visible went wrong.
+**A tripwire on the real home.** Redirection can still be undone, most easily by a test that changes or removes the home variable. Without one, the system falls back to your real home. So the suite also watches the interpreter's own file, database and process-start events. Any attempt to read or write inside Coffer's directory or an agent's configuration directory under your real home is refused *before* it happens, so nothing is ever written. Starting a program with no home set, or with the real one, is refused the same way. Each refusal is also recorded, because code that tolerates an unreadable file might quietly swallow the error. The test then fails with a list of what it tried to touch, even when nothing else went wrong. A dedicated set of tests proves this: they aim at the real home on purpose, and they check both that every attempt is refused and that nothing appeared.
 
-An audit hook was chosen over monkeypatching `Path.home()` because Coffer reads the home through three routes (`Path.home()`, `expanduser` and `os.environ["HOME"]`), and SQLite, `shutil` and `subprocess` never consult `Path.home()` at all. The hook checks the path at the moment it is used, however it was computed, and a test cannot uninstall it. It costs one string-prefix comparison per event.
+If the tripwire fails your test, the message names each path. The fix is almost always to build that path inside the test's own temporary directory, or to use one of the isolated setups below. Do not point anything at your real home.
 
-`backend/tests/integration/isolation/test_real_home_guard.py` proves the guard works. It writes, lists, connects to and removes probe paths under the real home, recreates the original knowledge-root fallback, and spawns processes with no `HOME` or with the real one. Each attempt is refused, and the probe is still absent afterwards. It also runs a nested pytest session in which a test swallows the refusal, and checks that the session still fails.
+### Isolated homes
 
-If the guard fails your test, the message lists each event and path. The fix is almost always to build the paths from `tmp_path` or from one of the builders below, not to point anything at the real home.
+In a test, a "machine" is simply a home directory. The suite provides ready-made isolated setups, so a test never has to assemble its own:
 
-### Isolated-HOME builders
+- **A single machine.** A fresh home that the test process is already using. Coffer derives every one of its directories from it, exactly as an installed copy would. The same home can be handed to a program the test starts, so the program runs as that machine.
+- **Two machines sharing a remote.** Two independent homes that share nothing except one real git repository they can both reach. Vault sync scenarios are played out between them through the real sync code and real git, with nothing faked.
+- **Fake agent configuration.** An agent's configuration directory, such as Claude Code's or Codex's, laid out inside an isolated home from the same description of that agent that Coffer itself uses. A file the test writes therefore lands exactly where Coffer will look for it. Both the default location and a custom one are supported.
+- **A fake chat channel.** A stand-in for an instant-messaging platform. It records everything Coffer sends (messages, cards, edits, typing indicators, reactions, files) and lets a test deliver incoming messages and button taps. Its capabilities can be switched on and off, so the same fake can act like a platform that edits messages in place or like one that streams its replies.
 
-In a test, a "machine" is a home directory. `backend/tests/support/homes.py` builds them, and `backend/tests/support/fixtures.py` exposes the common cases as fixtures that any test can request by name.
-
-**One machine.** `isolated_home` is an `IsolatedHome` that is already active in the test process. `HOME` points at it, and the per-tree pins are removed, so Coffer derives every tree from this home the way an installed copy does. `env()` returns the environment for a subprocess that should run as that machine.
-
-```python
-from coffer.infrastructure.knowledge.paths import knowledge_root
-
-def test_boot_uses_its_own_vault(isolated_home):
-    assert knowledge_root() == isolated_home.coffer_dir / "knowledge"
-    probe = [sys.executable, "-c", "import pathlib; print(pathlib.Path.home())"]
-    out = subprocess.run(probe, env=isolated_home.env(), capture_output=True, text=True)
-    assert out.stdout.strip() == str(isolated_home.root)
-```
-
-To build a home without activating it, call `make_home(tmp_path / "other")`.
-
-**Two machines and a remote.** `two_homes` is a `TwoMachineHomes` with two homes, `a` and `b`, that share nothing but a real bare git repository at `remote_url`. Neither home is active. Drive each one through its own `env()`. `remote_log()` lists the remote's commit subjects. The in-process vault-sync harness in `integration/sync/harness.py` builds its remote with the same `bare_remote()` helper.
-
-```python
-def test_b_sees_what_a_pushed(two_homes):
-    a, b = two_homes.a, two_homes.b
-    subprocess.run(["git", "clone", two_homes.remote_url, "work"], cwd=a.root, env=a.env(), check=True)
-    ...  # commit and push as a, then clone as b
-    assert two_homes.remote_log() == ["a writes"]
-```
-
-**Agent config directories.** `fake_agent_dir(home, AgentType.X)` lays out an agent's config tree from that agent's own descriptor in `coffer.domain.agent.descriptor`, so every file lands exactly where Coffer's code looks for it. `write(key, text)` writes an allowlisted file by its key (`settings`, `global`, `config` and so on). For the default Claude Code directory, `global` is `~/.claude.json` beside the directory, not inside it. `add_skill(name)` creates an unmanaged skill folder. Pass `config_dir=` for a custom directory, and `home_env()` then returns the variable the agent needs to find it, such as `CLAUDE_CONFIG_DIR`. The `claude_code_dir` and `codex_dir` fixtures give the default directory inside `isolated_home`.
-
-```python
-def test_reads_user_settings(claude_code_dir):
-    claude_code_dir.write("settings", '{"model": "opus"}')
-    ...
-```
-
-**A fake IM channel.** `FakeChannelAdapter`, in `backend/tests/support/channel.py`, implements the channel adapter port and records every outbound call: texts, cards, edits, typing, reactions and media. Every transport capability is a constructor flag, so one fake can stand in for a Telegram-shaped or a SeaTalk-shaped transport. Inbound traffic is simulated through the callbacks the core passed to `start()`, and `tap()` simulates a card button. The `fake_channel_adapter` fixture gives a fresh one. The channel-core tests in `integration/channel/` build a whole channel environment around it.
-
-```python
-async def test_reply_is_sent(fake_channel_adapter):
-    ...  # wire it into the channel runtime, deliver an inbound message
-    assert fake_channel_adapter.texts() == ["Hello world"]
-```
+When a test needs a new kind of isolated setup, add it next to these rather than building a one-off inside a single test file.
 
 ## Acceptance markers
 
