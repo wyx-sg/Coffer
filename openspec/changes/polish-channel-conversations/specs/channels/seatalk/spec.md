@@ -25,3 +25,16 @@ thread, each opening with its place counting the stream as part one — `(2/3)`,
 - **WHEN** the stream closes
 - **THEN** the remainder goes out as messages headed `(2/N)` … `(N/N)` and nothing
   is handed back for the ordinary send
+
+### Requirement: Post a reply's details into the card's thread
+A SeaTalk thread's id is its root message's id and any message can root one, so
+the Details button of a summary card ([channels](../spec.md) "Offer a reply's
+details behind a summary card") MUST post the details as a reply in the thread
+the card sits in — or, in a direct chat, the thread the card itself roots — and
+rewrite the card (inside SeaTalk's update window) to say they were posted.
+
+#### Scenario: the details button posts them as a thread reply
+- **GIVEN** a SeaTalk summary card `m7` in a direct chat
+- **WHEN** the owner taps Details
+- **THEN** the details are sent into thread `m7` and the card reads `Details posted
+  in the thread.`

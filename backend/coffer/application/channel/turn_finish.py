@@ -12,11 +12,12 @@ from __future__ import annotations
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 
+from coffer.application.channel.details_card import details_buttons, save_details
 from coffer.application.channel.needs_you import Question, extract_question, question_buttons
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.reply_shape import ReplyFile, shape_reply
+from coffer.application.channel.reply_shape import ReplyFile, shape_reply, split_details
 from coffer.application.channel.turn_media import deliver_media, send_reply_files
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
@@ -47,8 +48,14 @@ _EMPHASIS = re.compile(r"[*_`~]+")
 #: owner into buttons").
 TurnOutcome = Literal["done", "failed", "stopped", "waiting"]
 
-#: Sends one message with buttons into the turn's chat and thread.
-SendCard = Callable[[str, Sequence[ChoiceButton]], Awaitable[None]]
+
+class SendCard(Protocol):
+    """Sends one message with buttons (a card, where the transport has them)
+    into the turn's chat and thread."""
+
+    async def __call__(
+        self, text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -195,6 +202,17 @@ async def deliver_reply(
         text = f"{text}\n\n❓ {question.text}".strip()
         if question.options:
             text += " (" + " / ".join(question.options) + ")"
+    details = ""
+    caps = adapter.capabilities
+    if end.clean and send_card is not None and caps.supports_buttons and not caps.collapses_details:
+        # A transport that cannot collapse a details section but has cards moves
+        # it behind a summary card (see "Offer a reply's details behind a
+        # summary card").
+        head, details = split_details(text)
+        if details and head:
+            text = head
+        else:
+            details = ""
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
@@ -219,6 +237,8 @@ async def deliver_reply(
     if leftover:
         await send(leftover)
     await send_reply_files(adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind)
+    if details and send_card is not None:
+        await _send_details_card(send_card, send, text, details)
     sent = False
     if question is not None and buttons and send_card is not None:
         try:
@@ -227,3 +247,21 @@ async def deliver_reply(
         except Exception:
             await send(f"❓ {question.text}")
     return Delivered(body, was_open and leftover != mentioned, question, sent)
+
+
+async def _send_details_card(
+    send_card: SendCard, send: Callable[[str], Awaitable[None]], head: str, details: str
+) -> None:
+    """The outcome as the card's title, how long the details are, and the two
+    buttons that fetch them. A card the platform refuses leaves the details
+    as an ordinary message instead — they are never lost."""
+    lines = len([line for line in details.splitlines() if line.strip()])
+    try:
+        details_id = save_details(f"## Details\n\n{details}")
+        await send_card(
+            f"{lines} more line" + ("" if lines == 1 else "s") + " of details.",
+            details_buttons(details_id),
+            title=first_line(head) or "Details",
+        )
+    except Exception:
+        await send(f"**Details**\n\n{details}")

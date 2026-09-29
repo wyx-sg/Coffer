@@ -288,12 +288,15 @@ class TurnDriver:
                 reply_to_message_id=item.reply_to_message_id,
             )
 
-        async def _send_card(message: str, buttons: Sequence[ChoiceButton]) -> None:
+        async def _send_card(
+            text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
+        ) -> None:
             await self._safe_send(
                 binding,
                 peer.chat_id,
-                message,
+                text,
                 buttons=buttons,
+                title=title,
                 thread_id=item.thread_id,
                 chat_kind=item.chat_kind,
                 reply_to_message_id=item.reply_to_message_id,

@@ -29,7 +29,7 @@ async def _render(adapter: FakeChannelAdapter) -> str:
     async def send(text: str) -> None:
         await adapter.send_text("owner", text)
 
-    async def send_card(text: str, buttons: Any) -> None:
+    async def send_card(text: str, buttons: Any, *, title: str = "") -> None:
         cards.append((text, list(buttons)))
         await adapter.send_text("owner", text, buttons=buttons)
 

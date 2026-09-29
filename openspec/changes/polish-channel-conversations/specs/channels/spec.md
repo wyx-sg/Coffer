@@ -204,6 +204,27 @@ cannot send the answer twice.
 - **WHEN** it ends on a `NEEDS YOU:` line
 - **THEN** the ping reads `❓ Needs you · <elapsed> — <question>`
 
+### Requirement: Offer a reply's details behind a summary card
+On a transport that has cards (`supports_buttons`) but does not collapse a
+`## Details` section itself (`collapses_details` false), a clean reply's details
+section MUST move behind a summary card: the answer's head is delivered as the
+reply, then a card whose title is the answer's first line, whose body says how
+many lines of details there are, and whose buttons are **Details** and **As
+file**. The details are kept as a file under the temporary directory, keyed by a
+random id the buttons carry (`details:<id>`, `detailsfile:<id>`). A tap is
+owner-gated like every card tap: **Details** posts them into the card's thread
+and rewrites the card to say so, **As file** uploads them as a `.md`, and an id
+whose file is gone answers that the details are no longer available. A card the
+platform refuses leaves the details as an ordinary message — they are never
+lost. A transport that collapses details (Telegram) sends no such card.
+
+#### Scenario: details go behind a card where the chat cannot collapse them
+- **GIVEN** a transport with cards that does not collapse details
+- **WHEN** a reply `Deploy is green on live.` ends with a two-line `## Details`
+  section
+- **THEN** the reply carries the head only, and a card titled `Deploy is green on
+  live.` reads `2 more lines of details.` with the buttons Details and As file
+
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Summarise only a turn that did not end normally`
