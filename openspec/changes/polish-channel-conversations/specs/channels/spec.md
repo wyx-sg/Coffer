@@ -319,3 +319,43 @@ only shouting. Four constraints bound it.
   requires,
 - **THEN** its formatting characters are escaped — one escape each — so the
   reader sees the text the agent has written so far.
+
+### Requirement: Tell a channel-driven agent it is on a chat channel
+A channel-originated turn MUST tell the agent it is bridged to a chat channel,
+not a terminal. The agent receives a short system-prompt note naming **where**
+it is — the platform, the chat kind (direct chat, group chat, group thread) and
+the channel by its current label — and **what renders there**, in the sentence
+or two the running transport declares as its `render_notes` (SeaTalk: bold,
+italic, inline code, code fences and lists, but no headings, links or tables;
+Telegram: its rich Markdown, tables included). It then asks for a reply shaped
+for a phone: do not narrate steps (Coffer already shows the working state); the
+first line is the outcome in one sentence, because it becomes the notification;
+at most about 15 lines, anything longer under a `## Details` heading; code blocks
+under 30 lines, longer logs attached as files; diagrams and charts as PNG files,
+never as source; and, when the agent needs a yes or a choice before it goes on,
+a final `NEEDS YOU:` line (see "Turn a question for the owner into buttons").
+Concise never drops evidence — an investigation's key log lines, error messages
+and IDs are quoted verbatim — and the agent is told it cannot click permission
+or confirmation dialogs on the user's computer. Web-UI turns are unaffected —
+the note rides only on a conversation whose `channel_uid` is set. A channel that
+has been deleted, or is not running, still gets the note, saying less.
+
+#### Scenario: the channel-driven agent is told it is on a chat channel
+- **GIVEN** a channel-originated conversation
+- **WHEN** a turn is driven from the channel
+- **THEN** the agent receives a system-prompt note naming the platform, the chat
+  kind and the channel, telling it not to narrate its steps, to quote an
+  investigation's key evidence verbatim, and that it cannot click the user's OS
+  dialogs, while a web-UI conversation gets no such note
+
+#### Scenario: the note lists what renders on the platform the turn is on
+- **GIVEN** a SeaTalk group-thread conversation on a running channel
+- **WHEN** its turn's note is composed
+- **THEN** it says the turn is in a SeaTalk group thread and that headings, links
+  and tables do not render there (write one bullet per row)
+
+#### Scenario: the note asks for the answer's shape
+- **WHEN** a channel turn's note is composed
+- **THEN** it asks for the outcome in one first sentence, long content under
+  `## Details`, diagrams as PNG files, and a final `NEEDS YOU:` line with at most
+  four options when the agent needs the owner's answer

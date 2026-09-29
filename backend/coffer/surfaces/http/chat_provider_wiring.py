@@ -22,7 +22,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.adapter_support import (
-    ChannelNameResolver,
+    ChannelNoteResolver,
     MemoryContextComposer,
 )
 from coffer.infrastructure.chat.drivers import DriverDeps
@@ -68,7 +68,7 @@ def build_agent_provider_registry(
     agent_catalog: AgentCatalog,
     credential_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
-    resolve_channel_name: ChannelNameResolver | None = None,
+    resolve_channel: ChannelNoteResolver | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
@@ -80,12 +80,12 @@ def build_agent_provider_registry(
     and there is no fallback to the engine's own connection (spec
     internal-engine "Transcribe speech on its own connection and model").
 
-    ``resolve_channel_name`` turns the channel UID a conversation stores into
-    the channel's current name, for the one place the name belongs: the
-    system-prompt line telling the model which channel this turn came from. The
-    row holds the identity so a renamed channel keeps its conversations; the
-    label is resolved here, at read time, so the model is told what the channel
-    is called NOW rather than what it was called when the thread started.
+    ``resolve_channel`` turns the channel UID a conversation stores into the
+    facts the channel note is written from — the channel's current name, its
+    platform, whether the conversation is a direct chat or a group thread, and
+    what renders there. The row holds the identity so a renamed channel keeps
+    its conversations; the facts are resolved here, at read time, so the model
+    is told what the channel is called NOW rather than when the thread started.
     ``None`` means the append still happens — the turn really did arrive over a
     channel — without naming it.
 
@@ -151,7 +151,7 @@ def build_agent_provider_registry(
         list_models=_list_models,
         transcriber_factory=transcriber_factory,
         compose_memory_context=compose_memory_context,
-        resolve_channel_name=resolve_channel_name,
+        resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
         resolve_key=_key_resolver,
     )

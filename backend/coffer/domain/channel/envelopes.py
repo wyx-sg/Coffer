@@ -174,6 +174,9 @@ class ChannelCapabilities:
     # where a direct-chat thread only exists because someone created it
     # (Telegram's private-chat topics), so every one is its own conversation.
     direct_threads_are_replies: bool = False
+    # One or two sentences telling the agent what Markdown renders on this
+    # transport (see "Tell a channel-driven agent it is on a chat channel").
+    render_notes: str = ""
 
 
 @dataclass(frozen=True)

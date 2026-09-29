@@ -26,6 +26,7 @@ from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import projection_targets
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.errors import CredentialMissing, ResourceNotFound
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
@@ -42,6 +43,7 @@ from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentia
 from coffer.infrastructure.provider.introspector import ProviderIntrospector
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
+    get_channel_note_reader,
     set_agent_registry,
     set_attachment_service,
     set_chat_service,
@@ -191,16 +193,22 @@ def wire_chat(
 
     # 3. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
-    async def _channel_name(channel_uid: str) -> str | None:
-        """The channel's current label, for the system-prompt line naming it.
+    async def _channel_note(channel_uid: str, conversation_id: str) -> ChannelNote | None:
+        """The facts the channel note is written from (spec channels "Tell a
+        channel-driven agent it is on a chat channel").
 
-        A conversation stores the channel's UID, so this is the read-time half
-        of that split: the binding survives a rename and the model is told what
-        the channel is called now. ``None`` for a channel that has since been
-        deleted — the turn still came from a channel, it just has no name left.
+        The channel kind publishes a reader that knows the platform, the chat
+        kind and what renders (``set_channel_note_reader``); before it is wired,
+        the note names the channel only. A conversation stores the channel's
+        UID, so this is the read-time half of that split: the binding survives
+        a rename. ``None`` for a channel that has since been deleted — the turn
+        still came from a channel, it just has no facts left.
         """
+        reader = get_channel_note_reader()
+        if reader is not None:
+            return await reader(channel_uid, conversation_id)
         try:
-            return (await resource_service.get(channel_uid)).name
+            return ChannelNote(name=(await resource_service.get(channel_uid)).name)
         except ResourceNotFound:
             return None
 
@@ -209,7 +217,7 @@ def wire_chat(
         agent_catalog,
         _credential_resolver,
         compose_memory_context=compose_memory_context,
-        resolve_channel_name=_channel_name,
+        resolve_channel=_channel_note,
     )
 
     # 4. Application services + the agent-agnostic turn orchestrator.

@@ -27,6 +27,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
+from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
 from coffer.infrastructure.channel.telegram_cards import edit_card
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_features import FeatureSet
@@ -43,10 +44,8 @@ from coffer.infrastructure.channel.telegram_profile import (
     probe_identity,
     register_profile,
 )
-from coffer.infrastructure.channel.telegram_reactions import TELEGRAM_REACTIONS, set_reaction
-from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
+from coffer.infrastructure.channel.telegram_reactions import set_reaction
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
-from coffer.infrastructure.channel.telegram_text import TELEGRAM_MENTION_TEMPLATE
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
 from coffer.infrastructure.channel.telegram_transport import call
 from coffer.infrastructure.channel.telegram_updates import (
@@ -112,24 +111,7 @@ class TelegramAdapter:
 
     @property
     def capabilities(self) -> ChannelCapabilities:
-        return ChannelCapabilities(
-            supports_edit=True,
-            supports_live_text=True,  # the edit IS its live surface
-            supports_typing=True,
-            # "Render replies in the platform's rich format": a rich message carries 32k characters
-            # against an ordinary message's 4k, so the chunk budget follows whether the platform
-            # still accepts them — and drops back the moment it does not.
-            max_message_chars=(
-                RICH_MESSAGE_LIMIT if self._features.rich_messages.available else _CHUNK_LIMIT
-            ),
-            supports_buttons=True,
-            supports_card_update=True,  # editMessageText rewrites text + keyboard
-            supports_media=True,
-            supports_groups=True,
-            supports_reactions=True,
-            reactions=TELEGRAM_REACTIONS,
-            mention_template=TELEGRAM_MENTION_TEMPLATE,
-        )
+        return telegram_capabilities(self._features)
 
     # -- lifecycle ---------------------------------------------------------
 
