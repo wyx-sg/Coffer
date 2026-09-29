@@ -32,6 +32,7 @@ const guides = [
     text: 'What agents share',
     items: [
       { text: 'Skills', link: '/guides/skills' },
+      { text: 'Writing skill libraries', link: '/guides/writing-skill-libraries' },
       { text: 'Knowledge', link: '/guides/knowledge' },
       { text: 'Memory', link: '/guides/memory' },
     ],
