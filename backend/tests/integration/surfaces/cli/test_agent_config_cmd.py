@@ -1,5 +1,5 @@
 """Integration tests for `coffer agent config edit|rm`, `coffer agent
-connect|disconnect` and the `coffer_mcp` field of `coffer agent show`.
+connect|disconnect` and the `coffer_connection` field of `coffer agent show`.
 
 Covers the spec scenario "config-file and MCP operations mirror across
 surfaces": each CLI subcommand calls the corresponding REST endpoint.
@@ -32,6 +32,10 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.application.agent.config_file_service import AgentConfigFileService
+from coffer.application.agent.connection_service import (
+    AgentConnectionService,
+    McpConnectionPart,
+)
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
@@ -52,9 +56,10 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
+from coffer.surfaces.http.agent_connection_routes import router as agent_connection_router
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_config_file_service,
-    get_agent_mcp_service,
+    get_agent_connection_service,
     get_agent_service,
 )
 from coffer.surfaces.http.agent_routes import router as agent_router
@@ -89,6 +94,9 @@ def agent_config_cli(tmp_path, monkeypatch):
     mcp = AgentMcpService(
         agent_service=agent_svc, audit=audit, store=store, shim_resolver=lambda: str(shim)
     )
+    # Only the gateway part: the memory hook is the memory kind's, wired by the
+    # composition root and covered by test_agent_connection.py.
+    connection = AgentConnectionService(agent_service=agent_svc, parts=(McpConnectionPart(mcp),))
 
     # Register a claude_code agent up front.
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
@@ -103,6 +111,7 @@ def agent_config_cli(tmp_path, monkeypatch):
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(agent_config_router)
+    app.include_router(agent_connection_router)
     # Name → uid resolution runs before every command below and lives here, on
     # the framework's shared router. The SAME ResourceService the AgentService
     # was built on — a second one would have its own session and the resolver
@@ -115,7 +124,7 @@ def agent_config_cli(tmp_path, monkeypatch):
     app.dependency_overrides[get_agent_service] = lambda: agent_svc
     app.dependency_overrides[get_audit_service] = lambda: audit
     app.dependency_overrides[get_agent_config_file_service] = lambda: config_files
-    app.dependency_overrides[get_agent_mcp_service] = lambda: mcp
+    app.dependency_overrides[get_agent_connection_service] = lambda: connection
     app.dependency_overrides[get_resource_service] = lambda: resource_svc
 
     set_active_token(_TOKEN)
@@ -401,7 +410,7 @@ def test_config_rm_without_force_aborts(agent_config_cli):
 
 
 # ---------------------------------------------------------------------------
-# agent connect / disconnect / show (coffer_mcp)
+# agent connect / disconnect / show (coffer_connection)
 # ---------------------------------------------------------------------------
 
 
@@ -418,8 +427,8 @@ def test_connect_an_agent_to_coffer_from_the_command_line(agent_config_cli):
     tmp_path, shim = agent_config_cli
     r = _runner.invoke(cli_app, ["agent", "connect", "cc"])
     assert r.exit_code == 0, r.output
-    assert "connected: agent cc to Coffer (" in r.output
-    assert shim in r.output
+    assert "connected agent cc to Coffer" in r.output
+    assert f"gateway MCP entry: installed ({shim})" in r.output
     mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     entry = mcp_config["mcpServers"]["coffer"]
     assert _uid() in entry["args"]
@@ -436,16 +445,16 @@ def test_disconnect_an_agent_from_coffer_on_the_command_line(agent_config_cli):
 
     r = _runner.invoke(cli_app, ["agent", "disconnect", "cc"])
     assert r.exit_code == 0, r.output
-    assert "disconnected: agent cc from Coffer" in r.output
+    assert "disconnected agent cc from Coffer" in r.output
     mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     assert "coffer" not in mcp_config.get("mcpServers", {})
-    assert _show()["coffer_mcp"]["installed"] is False
+    assert _show()["coffer_connection"]["state"] == "disconnected"
     text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
-    assert "coffer_mcp: not installed" in text
+    assert "coffer_connection: not connected" in text
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent show reports the Coffer MCP status")
-def test_agent_show_reports_the_coffer_mcp_status(agent_config_cli):
+def test_agent_show_reports_the_coffer_connection(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     other_dir = tmp_path / "other-claude"
     (other_dir / "skills").mkdir(parents=True)
@@ -456,9 +465,11 @@ def test_agent_show_reports_the_coffer_mcp_status(agent_config_cli):
     assert added.exit_code == 0, added.output
     assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
 
-    assert _show("cc")["coffer_mcp"]["installed"] is True
-    assert _show("other")["coffer_mcp"]["installed"] is False
-    assert "coffer_mcp: installed" in _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    assert _show("cc")["coffer_connection"]["state"] == "connected"
+    assert _show("other")["coffer_connection"]["state"] == "disconnected"
+    text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    assert "coffer_connection: connected" in text
+    assert "gateway MCP entry: installed" in text
 
 
 @pytest.mark.acceptance(
@@ -468,14 +479,16 @@ def test_config_and_mcp_commands_mirror_their_rest_routes(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     client, _info = _cli_client.client_or_exit()
     uid = _uid()
-    status = f"/agents/{uid}/mcp-install"
+    status = f"/agents/{uid}/coffer-connection"
 
     assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
-    assert client.get(status).json()["installed"] is True
-    assert _show()["coffer_mcp"] == client.get(status).json()
+    assert client.get(status).json()["state"] == "connected"
+    assert _show()["coffer_connection"] == client.get(status).json()
+    shown = _runner.invoke(cli_app, ["agent", "connection", "cc", "--json"])
+    assert json.loads(shown.output) == client.get(status).json()
     assert _runner.invoke(cli_app, ["agent", "disconnect", "cc"]).exit_code == 0
-    assert client.get(status).json()["installed"] is False
-    assert _show()["coffer_mcp"] == client.get(status).json()
+    assert client.get(status).json()["state"] == "disconnected"
+    assert _show()["coffer_connection"] == client.get(status).json()
 
     src = tmp_path / "s.json"
     src.write_text('{"a": 1}', encoding="utf-8")

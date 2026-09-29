@@ -58,17 +58,18 @@ registered: agent claude-code
 
 **In the web UI:** open **Agents**, click **Add agent**, tick Claude Code under **Detected agents**, and click **Add selected (1)**.
 
-## 3. Install Coffer's MCP entry into Claude Code
+## 3. Connect Claude Code to Coffer
 
 ```sh
 coffer agent connect claude-code
 ```
 
 ```text
-connected: agent claude-code to Coffer (/Users/you/.coffer/bin/coffer-mcp-shim)
+connected agent claude-code to Coffer
+  gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 ```
 
-This adds one entry to `mcpServers` in `~/.claude.json`. Coffer writes the file atomically and keeps a `.bak` of the previous version:
+This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, a session-start hook to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
 
 ```json
 {
@@ -83,7 +84,7 @@ This adds one entry to `mcpServers` in `~/.claude.json`. Coffer writes the file 
 
 The `--agent-uid` argument is how Coffer knows which agent a session belongs to. It lets you restrict a server or a skill to particular agents later. The command path is absolute because agents launched from a GUI do not inherit your shell's `PATH`.
 
-**In the web UI:** open **Agents → claude-code** and click **Install Coffer MCP**. The badge beside the button changes from **Not installed** to **Installed**.
+**In the web UI:** open **Agents → claude-code** and click **Connect to Coffer**. The agent's **Coffer** status on the Agents list changes from **Not connected** to **Connected**.
 
 ::: tip Why not `claude mcp add`?
 You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written entry has no `--agent-uid`, so Coffer cannot tell which agent the session belongs to, and servers restricted to particular agents stay hidden from it. For Claude Code and Codex, use `coffer agent connect`. See [Connect a client](/guides/connect-a-client) for other clients.

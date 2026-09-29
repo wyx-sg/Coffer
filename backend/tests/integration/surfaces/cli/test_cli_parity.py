@@ -84,8 +84,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
     "mcp cap": {"list", "enable", "disable"},
     "credentials": {"set", "get", "list", "rm"},
-    # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
-    # install and remove Coffer's own MCP entry; `transcript [<id>]` reads
+    # No `scope`: an agent is not reached by agents. `connect`/`disconnect`/
+    # `connection` are its Coffer connection — the gateway entry and the memory
+    # hook as one action (spec agent-registry "Connect an agent to Coffer in
+    # one action"); `transcript [<id>]` reads
     # the agent's history; `models` is the web model picker's list
     # (GET /agent-providers/{agent_key}/models).
     "agent": {
@@ -93,6 +95,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "add",
         "connect",
         "disconnect",
+        "connection",
         "transcript",
         "models",
         "config",
@@ -117,10 +120,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "knowledge": {*_LIFECYCLE - _SWITCH, "add", "save", "write", "upload", "curate"},
     # No `add`: partitions are provisioned only by aggregation. `context` is
     # what the installed session-start hook runs and must not move (spec
-    # memory "Cover memory management on REST and the CLI"). No switch either
-    # (spec memory "Serve every partition to every agent").
-    "memory": {*_LIFECYCLE - _SWITCH, "sync", "distil", "context", "delivery"},
-    "memory delivery": {"on", "off"},
+    # memory "Cover memory management on REST and the CLI"); installing that
+    # hook is part of `agent connect`. No switch either (spec memory "Serve
+    # every partition to every agent").
+    "memory": {*_LIFECYCLE - _SWITCH, "sync", "distil", "context"},
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.

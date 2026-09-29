@@ -15,17 +15,12 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  installDelivery,
-  listDelivery,
   listPartitionFiles,
   listPartitions,
   readPartitionFile,
-  removeDelivery,
   sync,
 } from "@/lib/api/memory";
 import {
-  memoryAgentDeliveryKey,
-  memoryDeliveryKey,
   memoryKey,
   memoryPartitionFileKey,
   memoryPartitionFilesKey,
@@ -96,50 +91,5 @@ export function useSyncMemory() {
     },
     onError: (error) => toast.error(translateApiError(t, error)),
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
-  });
-}
-
-/** Per-agent delivery state — whether Coffer's hook is installed in that
- * agent's own settings (see "Show delivery state on the agent's own page"). Whether it has ever
- * fired is a separate question, answered by the audit surface. Omit `agentUid` to list every agent
- * delivery can install for.
- *
- * Each row carries the agent's name beside its uid, so a surface renders the
- * name and acts on the uid without a second request. */
-export function useMemoryDelivery(agentUid?: string) {
-  return useQuery({
-    queryKey: agentUid ? memoryAgentDeliveryKey(agentUid) : memoryDeliveryKey,
-    queryFn: async () => (await listDelivery(agentUid)).delivery,
-  });
-}
-
-export function useInstallDelivery() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (agentUid: string) => installDelivery(agentUid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: memoryDeliveryKey });
-      toast.success(t("memory.delivery.installDone"));
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Removal only takes out Coffer's own marker-scoped entry — nothing else in
- * the agent's own settings file is touched (spec memory "Install delivery hooks
- * explicitly and removably"). */
-export function useRemoveDelivery() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (agentUid: string) => removeDelivery(agentUid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: memoryDeliveryKey });
-      toast.success(t("memory.delivery.removeDone"));
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

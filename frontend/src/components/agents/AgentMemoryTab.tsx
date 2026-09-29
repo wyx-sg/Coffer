@@ -1,5 +1,5 @@
 // frontend/src/components/agents/AgentMemoryTab.tsx
-// "Memory" tab on the agent detail page, in three sections that mirror the
+// "Memory" tab on the agent detail page, in two sections that mirror the
 // Skills and MCP-servers tabs (Coffer-managed vs the agent's own):
 //
 //   A. Coffer-managed memory — Coffer aggregates every agent's native memory
@@ -8,15 +8,7 @@
 //      tab does not re-list them: the shared CofferGatewayRow points straight
 //      there. Knowledge is a different layer with its own page and its own tab
 //      pointer — this one must not send the user there.
-//   B. Delivery — whether Coffer's session-start hook is installed in THIS
-//      agent's own settings (spec memory "Install delivery hooks explicitly and
-//      removably"; whether it has fired is
-//      read as events on the Activity page, not guessed at here). The only
-//      section here that writes anything, and the only
-//      one that is per-agent rather than per-partition: a hook lives in one
-//      agent's settings file, so it belongs on that agent's page rather than on
-//      the Memory resource page, where it used to render as a list of agents.
-//   C. The agent's own memory — the coding agent's OWN native per-project memory
+//   B. The agent's own memory — the coding agent's OWN native per-project memory
 //      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
 //      read-only as a table of (project, path, item count). A store is a
 //      DIRECTORY, so clicking a row opens its own page: a file tree and a
@@ -26,11 +18,14 @@
 //      Coffer knowledge and NOT the CLAUDE.md instructions file; it is the
 //      agent's native memory, surfaced so the user can read and open it. Coffer
 //      never writes it.
+//
+// Nothing here writes. Coffer's memory delivery hook is one part of the agent's
+// Coffer connection, installed and removed with it from the page header (spec
+// agent-registry "Show the Coffer connection on the agent pages").
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
-import { AgentMemoryDelivery } from "@/components/agents/AgentMemoryDelivery";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Card } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
@@ -43,9 +38,9 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const native = useAgentNativeMemory(agent.uid);
-  // The first two sections are Coffer's memory layer — a pointer to its page
-  // and this agent's delivery hook — and leave with it while `memory` is
-  // switched off. The agent's own stores are the agent's, and stay.
+  // The first section is Coffer's memory layer — a pointer to its page — and
+  // leaves with it while `memory` is switched off. The agent's own stores are
+  // the agent's, and stay.
   const memoryOn = useFeatureEnabled("memory") === true;
 
   const columns: Column<NativeMemoryStore>[] = [
@@ -91,9 +86,6 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
           />
         </Card>
       ) : null}
-
-      {/* Delivery: whether this agent's own session-start hook is installed. */}
-      {memoryOn ? <AgentMemoryDelivery agentUid={agent.uid} /> : null}
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">

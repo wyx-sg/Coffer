@@ -9,12 +9,13 @@ only by aggregation ("Provision partitions only from aggregation"), and no
 ``/memory/partitions``, which counts each partition's notes and names the
 repository it is keyed on. ``sync`` updates memory — aggregation, then a
 distil pass over every partition that gained entries ("Update memory in one
-action") — ``distil`` runs one pass over one partition, and ``delivery on|off``
-installs or removes the session-start hook in an agent's own settings file.
+action") — and ``distil`` runs one pass over one partition. The session-start
+hook in an agent's own settings file is part of that agent's Coffer
+connection (``coffer agent connect``), not a command of this group.
 A partition's notes, index, retirement record and file tree are plain files,
 so this group has no command that lists or prints one: ``coffer path memory
-[<partition>]`` names the directory. Delivery state is a field of
-``coffer agent show``.
+[<partition>]`` names the directory. Whether the hook is installed is a part of
+``coffer_connection`` in ``coffer agent show``.
 
 ``context`` is the exception to everything above: it is the exact command an
 agent's own session-start hook invokes (``domain.memory.delivery.hook_command``),
@@ -25,8 +26,8 @@ delivery fire" exists precisely because the previous injection layer had no
 such safety net and nothing said so for two months; this command must not
 repeat that by crashing a real session over its own plumbing.
 
-Every other command takes **names** — a partition's, an agent's — because that
-is what a person knows; each resolves once through ``_resolve`` to the uid the
+Every other command takes a partition's **name**, because that is what a
+person knows; each resolves once through ``_resolve`` to the uid the
 routes address resources by (ADR resource-identity-is-an-immutable-uid).
 ``context`` deliberately takes ``--agent-uid``: its caller is not a person but
 the hook entry Coffer wrote into that agent's own settings file, months ago,
@@ -53,8 +54,6 @@ from coffer.surfaces.cli._resolve import resolve_uid
 #: Spelled here rather than imported from ``application.memory.service`` so a
 #: CLI module keeps depending on the daemon's HTTP surface and nothing deeper.
 _KIND_MEMORY = "memory"
-#: ``delivery on|off`` name an *agent*, not a partition.
-_KIND_AGENT = "agent"
 
 app = typer.Typer(help="Browse and manage Coffer's memory layer")
 _console = Console()
@@ -198,35 +197,3 @@ def context(
             typer.echo(text)
     except Exception:
         return
-
-
-delivery_app = typer.Typer(
-    help="Install or remove Coffer's session-start hook in an agent's own settings file"
-)
-app.add_typer(delivery_app, name="delivery")
-
-
-def _set_delivery(ctx: typer.Context, agent: str, *, on: bool) -> None:
-    """The name is resolved here; the uid is what the route takes and what ends
-    up written into the agent's settings file, so relabelling the agent
-    afterwards costs no reinstall."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, _KIND_AGENT, agent, verbose=_verbose(ctx))
-        r = c.post(f"/memory/delivery/{uid}/install") if on else c.delete(f"/memory/delivery/{uid}")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
-
-
-@delivery_app.command("on")
-def delivery_on(ctx: typer.Context, agent: str = typer.Argument(..., help="Agent name")) -> None:
-    """Install Coffer's session-start hook for an agent.
-
-    Renaming the agent later does not need a reinstall."""
-    _set_delivery(ctx, agent, on=True)
-
-
-@delivery_app.command("off")
-def delivery_off(ctx: typer.Context, agent: str = typer.Argument(..., help="Agent name")) -> None:
-    """Remove Coffer's session-start hook from an agent."""
-    _set_delivery(ctx, agent, on=False)

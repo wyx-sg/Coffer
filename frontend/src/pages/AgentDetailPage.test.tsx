@@ -21,8 +21,11 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentPlugins: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
-  useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
+  useAgentConnection: vi.fn(() => ({
+    data: { state: "disconnected", parts: [] },
+    isPending: false,
+  })),
+  useAgentConnect: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
 // The edit form renames through the kind-agnostic resource PATCH, so that
 // module is stubbed too. All four writes are declared, not just the rename:
@@ -84,7 +87,7 @@ function renderAt(path = "/agents/u-cur") {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage header and tab routing", () => {
-  test("header shows a back link, the type as a product name, and actions ordered MCP · Edit · Delete", () => {
+  test("header shows a back link, the type as a product name, and actions ordered Connect · Edit · Delete", () => {
     mockAgentLoaded();
     renderAt();
     expect(screen.getByRole("link", { name: /back to agents/i })).toHaveAttribute(
@@ -97,8 +100,8 @@ describe("AgentDetailPage header and tab routing", () => {
     const names = screen
       .getAllByRole("button")
       .map((b) => b.textContent?.trim() ?? "")
-      .filter((n) => /coffer mcp|^edit$|^delete$/i.test(n));
-    expect(names).toEqual(["Install Coffer MCP", "Edit", "Delete"]);
+      .filter((n) => /coffer|^edit$|^delete$/i.test(n));
+    expect(names).toEqual(["Connect to Coffer", "Edit", "Delete"]);
   });
 
   test("?tab= opens that tab and clicking a tab writes it to the URL", () => {
@@ -149,8 +152,8 @@ describe("AgentDetailPage", () => {
     // instructions delivery stays available via the API/CLI.
     expect(screen.queryByRole("tab", { name: /instructions/i })).not.toBeInTheDocument();
 
-    // The Coffer-MCP install control lives in the header.
-    expect(screen.getByRole("button", { name: /install coffer mcp/i })).toBeInTheDocument();
+    // The Coffer connection control lives in the header.
+    expect(screen.getByRole("button", { name: /^connect to coffer$/i })).toBeInTheDocument();
     // Overview (default tab) shows the config directory but no Skill directory row.
     expect(screen.getByText("/home/u/.codex")).toBeInTheDocument();
     expect(screen.queryByText(/skill directory/i)).not.toBeInTheDocument();

@@ -2,8 +2,8 @@
 
 Mirrors ``knowledge_wiring.py`` + ``curation_wiring.py`` combined: one service for
 the derived tree and its two passes (``MemoryService``), the memory root the
-gateway's handshake names, and the explicit-install delivery half
-(``DeliveryService``).
+gateway's handshake names, and the delivery hook half (``DeliveryService``),
+which the agent's Coffer connection installs.
 
 **The three internal-engine arguments on ``MemoryService`` are the point of
 this module.** The distil pass reaches a model through the same injected ports
@@ -53,8 +53,10 @@ from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_switch import (
+    ConnectedAgents,
     memory_switch_subscriber,
-    reconcile_delivery,
+    reconcile_at_boot,
+    reconcile_on_switch,
 )
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
@@ -63,7 +65,6 @@ from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.daemon.feature_settings import DaemonConfigWithdrawnDelivery
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
@@ -124,34 +125,37 @@ async def run_memory_delivery_boot_heal(
 
     It follows the ``memory`` switch as well (spec experimental-features
     "Withdraw what a switched-off feature put in front of agents"): with memory
-    off it makes sure no agent still carries the hook, with memory on it puts
-    back what an earlier switch took out before healing. The same reconcile
-    runs on every switch (:func:`follow_memory_switch`).
+    off it makes sure no agent still carries the hook. Switching it on later
+    installs the hook into the connected agents (:func:`follow_memory_switch`).
 
     Best-effort, like the sweeps it sits beside: whatever it finds is logged,
     and nothing here is allowed to fail boot.
     """
-    await _reconcile_delivery(delivery, enabled=features.is_enabled("memory"))
+    enabled = features.is_enabled("memory")
+    await _logged(reconcile_at_boot(delivery, enabled=enabled))
 
 
-def follow_memory_switch(delivery: DeliveryService, features: FeatureService) -> None:
+def follow_memory_switch(
+    delivery: DeliveryService, features: FeatureService, connected: ConnectedAgents
+) -> None:
     """Re-run the delivery reconcile whenever ``memory`` is switched, to the
-    state ``memory`` is in when it runs."""
+    state ``memory`` is in when it runs: off withdraws the hook everywhere, on
+    installs it into every agent ``connected`` names."""
 
     async def _reconcile(enabled: bool) -> None:
-        await _reconcile_delivery(delivery, enabled=enabled)
+        await _logged(reconcile_on_switch(delivery, connected, enabled=enabled))
 
     features.subscribe(memory_switch_subscriber(features, _reconcile))
 
 
-async def _reconcile_delivery(delivery: DeliveryService, *, enabled: bool) -> None:
+async def _logged(reconcile: Awaitable[tuple[str, ...]]) -> None:
     try:
-        notes = await reconcile_delivery(delivery, DaemonConfigWithdrawnDelivery(), enabled=enabled)
+        notes = await reconcile
     except Exception:
-        logger.exception("memory_delivery_boot_heal.failed")
+        logger.exception("memory_delivery_reconcile.failed")
         return
     for note in notes:
-        logger.warning("memory_delivery_boot_heal %s", note)
+        logger.warning("memory_delivery_reconcile %s", note)
 
 
 def wire_memory_kind(

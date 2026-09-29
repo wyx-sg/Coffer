@@ -205,11 +205,10 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Uninstall
 
-1. Remove Coffer's entry from each agent, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
+1. Disconnect each agent from Coffer, which removes Coffer's entries from its config, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
 
    ```sh
    coffer agent disconnect claude-code
-   coffer memory delivery off claude-code      # only if you installed memory delivery
    coffer agent rm claude-code
    ```
 

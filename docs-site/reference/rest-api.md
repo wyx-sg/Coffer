@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 169 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -108,7 +108,7 @@ The daemon mounts 169 operations in 20 groups. Groups follow the order the daemo
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
 | [knowledge](#knowledge) | 9 |
-| [memory](#memory) | 12 |
+| [memory](#memory) | 9 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -235,9 +235,9 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `DELETE` | `/api/v1/agents/{uid}/config-files/{key}/files/{relpath}` | Delete Config Dir File |
 | `GET` | `/api/v1/agents/{uid}/config-files/{key}` | Read Config File |
 | `PUT` | `/api/v1/agents/{uid}/config-files/{key}` | Write Config File |
-| `GET` | `/api/v1/agents/{uid}/mcp-install` | Mcp Install Status |
-| `POST` | `/api/v1/agents/{uid}/mcp-install` | Install Mcp |
-| `DELETE` | `/api/v1/agents/{uid}/mcp-install` | Uninstall Mcp |
+| `GET` | `/api/v1/agents/{uid}/coffer-connection` | Connection Status |
+| `POST` | `/api/v1/agents/{uid}/coffer-connection` | Connect |
+| `DELETE` | `/api/v1/agents/{uid}/coffer-connection` | Disconnect |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries` | List Mcp Entries |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Get Mcp Entry |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Delete Mcp Entry |
@@ -332,9 +332,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `GET` | `/api/v1/memory/partitions/{uid}/files` | The partition's own directory, as a read-only tree. |
 | `GET` | `/api/v1/memory/partitions/{uid}/files/content` | One file out of the partition's directory. |
 | `POST` | `/api/v1/memory/context` | Compose the session-start payload for one directory. |
-| `GET` | `/api/v1/memory/delivery` | Delivery state for one agent, or for every agent with an adapter. |
-| `POST` | `/api/v1/memory/delivery/{agent_uid}/install` | Write Coffer's hook into one agent's own settings file. |
-| `DELETE` | `/api/v1/memory/delivery/{agent_uid}` | Remove Delivery |
 
 ### agent-providers
 

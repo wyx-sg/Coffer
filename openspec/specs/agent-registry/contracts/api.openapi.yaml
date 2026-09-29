@@ -400,7 +400,7 @@ paths:
         the `source` query parameter disambiguates; omitting it then is
         rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
         is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
-        the `/mcp-install` operations.
+        the `/coffer-connection` operations.
       parameters:
         - in: query
           name: source
@@ -579,7 +579,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{uid}/mcp-install:
+  /agents/{uid}/coffer-connection:
     parameters:
       - in: path
         name: uid
@@ -588,58 +588,74 @@ paths:
         schema: { type: string }
     get:
       tags: [agents]
-      operationId: getAgentMcpInstallStatus
-      summary: Whether Coffer's MCP is installed in this agent
+      operationId: getAgentCofferConnection
+      summary: Whether this agent is connected to Coffer, part by part
+      description: |
+        Reads the agent's own config files; writes nothing and records no
+        audit event ("Report an agent's Coffer connection part by part").
+        `parts` lists what applies to this agent now — the gateway MCP entry
+        (`mcp`) always, the memory delivery hook (`memory_hook`) while the
+        `memory` feature is on — and `state` is `connected` when every one
+        is installed, `disconnected` when none is, `partial` otherwise.
       responses:
         "200":
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+              schema: { $ref: "#/components/schemas/CofferConnection" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [agents]
-      operationId: installAgentMcp
-      summary: Install Coffer's MCP server into this agent
+      operationId: connectAgentToCoffer
+      summary: Connect this agent to Coffer
       description: |
-        Writes a `coffer` stdio MCP-server entry (command = absolute path to
-        coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
-        config file (claude_code: its global config file — `~/.claude.json`
-        for the default config directory, `<config_dir>/.claude.json` for a
-        custom one; codex: `<config_dir>/config.toml`), atomically and with a
-        `.bak` backup. The shim reports
-        that uid on every call and the gateway matches it against each
-        resource's `scope.agents`, which is why the argument is the uid and
-        not the agent's name: this line is written once into a file Coffer
-        does not own and then read on every turn, so a label in it would stop
-        matching any scope the first time the user renamed the agent — and a
-        reference that resolves to nothing in an allow-list is the silent
-        widening this change exists to remove. Idempotent — re-installing
-        updates the entry in place. Returns 422 if the coffer-mcp-shim binary
-        cannot be resolved.
+        Installs every part that applies to the agent now, the gateway MCP
+        entry first ("Connect an agent to Coffer in one action"). The MCP
+        entry is a `coffer` stdio MCP-server entry (command = absolute path
+        to coffer-mcp-shim, argument `--agent-uid <uid>`) written into the
+        agent's MCP config file (claude_code: its global config file —
+        `~/.claude.json` for the default config directory,
+        `<config_dir>/.claude.json` for a custom one; codex:
+        `<config_dir>/config.toml`). The shim reports that uid on every call
+        and the gateway matches it against each resource's `scope.agents`,
+        which is why the argument is the uid and not the agent's name: this
+        line is written once into a file Coffer does not own and then read
+        on every turn, so a label in it would stop matching any scope the
+        first time the user renamed the agent. The memory delivery hook
+        (while `memory` is on) is a marker-scoped entry in the agent's
+        settings/hooks file. Every write is atomic with a `.bak` backup and
+        is audited by the part that made it. Idempotent — connecting again
+        rewrites each entry in place. Returns 422 if the coffer-mcp-shim
+        binary cannot be resolved (nothing is written) or a file to edit is
+        not valid JSON.
       responses:
         "200":
-          description: Installed (or already installed)
+          description: Connected
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+              schema: { $ref: "#/components/schemas/CofferConnection" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [agents]
-      operationId: uninstallAgentMcp
-      summary: Remove Coffer's MCP server entry from this agent
-      description: Removes the `coffer` entry. No-op success when not installed.
+      operationId: disconnectAgentFromCoffer
+      summary: Disconnect this agent from Coffer
+      description: |
+        Removes every part Coffer wrote into the agent — only Coffer's own
+        marked entries, never other configuration ("Disconnect an agent from
+        Coffer"). A part that is absent is a no-op that writes and audits
+        nothing.
       responses:
         "200":
-          description: Uninstalled (or was not installed)
+          description: Disconnected (or was not connected)
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+              schema: { $ref: "#/components/schemas/CofferConnection" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /agents/{uid}/native-memory:
     parameters:
@@ -1701,17 +1717,32 @@ components:
         limit: { type: integer }
         offset: { type: integer }
 
-    McpInstallStatus:
+    CofferConnection:
       type: object
-      required: [installed, command]
+      required: [state, parts]
       properties:
+        state:
+          type: string
+          enum: [connected, partial, disconnected]
+          description: "`connected` when every part in `parts` is installed, `disconnected` when none is, `partial` otherwise."
+        parts:
+          type: array
+          description: The parts that apply to this agent now, in install order.
+          items: { $ref: "#/components/schemas/CofferConnectionPart" }
+
+    CofferConnectionPart:
+      type: object
+      required: [key, installed, detail]
+      properties:
+        key:
+          type: string
+          description: "`mcp` (the gateway MCP entry) or `memory_hook` (the memory delivery hook)."
         installed:
           type: boolean
-          description: "Whether a `coffer` MCP-server entry is present in the agent's MCP config."
-        command:
+        detail:
           type: string
           nullable: true
-          description: "The resolved coffer-mcp-shim command written/found, when installed."
+          description: What is installed, when it is — the shim command or the hook command.
 
     AgentModelOut:
       type: object

@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
-import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
+import { AgentConnectionBadge } from "@/components/agents/AgentConnectionControls";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { Badge } from "@/components/ui/badge";
@@ -138,10 +138,10 @@ export function AgentTable({
       cell: (a) => <Badge variant="secondary">{cofferSkillCounts.get(a.uid) ?? 0}</Badge>,
     },
     {
-      key: "mcp",
-      header: t("agents.mcp.title"),
+      key: "coffer",
+      header: t("agents.cofferConnection.title"),
       className: "whitespace-nowrap",
-      cell: (a) => <AgentMcpStatusBadge uid={a.uid} />,
+      cell: (a) => <AgentConnectionBadge uid={a.uid} />,
     },
     {
       key: "actions",

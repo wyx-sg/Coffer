@@ -27,7 +27,8 @@ class McpEntryProtected(CofferError):  # noqa: N818
 
     def __init__(self, entry: str) -> None:
         super().__init__(
-            f"entry {entry!r} is Coffer's own gateway entry; use the mcp-install operations"
+            f"entry {entry!r} is Coffer's own gateway entry; "
+            "disconnect the agent from Coffer instead"
         )
         self.entry = entry
 

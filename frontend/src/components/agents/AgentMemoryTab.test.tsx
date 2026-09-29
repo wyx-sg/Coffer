@@ -2,18 +2,18 @@
 //
 // The "Memory" tab on the agent detail page has two read-only sections: (A) a
 // "Managed by Coffer" card reached via the Coffer MCP gateway — it links to the
-// standalone Memory page when Coffer MCP is installed, or shows the
-// not-installed note otherwise; and (B) a table of the agent's OWN native
+// standalone Memory page when the agent is connected to Coffer, or shows the
+// not-connected note otherwise; and (B) a table of the agent's OWN native
 // per-project memory stores (project / path / item count), independent of the
 // gateway, whose rows open the store's own page. The open / reveal actions used
 // to live in a per-row "⋯" menu and now live on that page instead, so what this
 // suite pins is that a row NAVIGATES and that the menu is gone. We mock the two
-// hooks at the network boundary (useAgentNativeMemory + useAgentMcpStatus) and
+// hooks at the network boundary (useAgentNativeMemory + useAgentConnection) and
 // useNavigate.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentMemoryTab } from "./AgentMemoryTab";
@@ -31,28 +31,8 @@ vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({
   useAgentNativeMemory: vi.fn(),
   agentNativeMemoryKey: (uid: string) => ["agents", uid, "native-memory"],
 }));
-vi.mock("@/lib/hooks/useAgents", () => ({ useAgentMcpStatus: vi.fn() }));
-// Section B's own network hooks. Delivery has its own suite
-// (AgentMemoryDelivery.test.tsx); here we only assert it is ON this tab.
-vi.mock("@/lib/hooks/useMemory", () => ({
-  useMemoryDelivery: vi.fn(() => ({
-    data: [
-      {
-        agent_uid: "u-claude",
-        agent_name: "claude",
-        installed: true,
-        command: "coffer memory context --agent-uid u-claude",
-        event: "SessionStart",
-      },
-    ],
-    isPending: false,
-    error: null,
-  })),
-  useInstallDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRemoveDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-
-// Sections A and B are Coffer's memory layer and leave while `memory` is off.
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgentConnection: vi.fn() }));
+// Section A is Coffer's memory layer and leaves while `memory` is off.
 const memoryOn = vi.fn((): boolean | undefined => true);
 vi.mock("@/lib/hooks/useFeatures", () => ({
   useFeatureEnabled: () => memoryOn(),
@@ -103,11 +83,14 @@ function stubNative(items: NativeMemoryStore[] = [COFFER_STORE]) {
 }
 
 function stubMcp(installed: boolean) {
-  vi.mocked(agentHooks.useAgentMcpStatus).mockReturnValue({
-    data: { installed, command: installed ? "/shim" : null },
+  vi.mocked(agentHooks.useAgentConnection).mockReturnValue({
+    data: {
+      state: installed ? "connected" : "disconnected",
+      parts: [{ key: "mcp", installed, detail: installed ? "/shim" : null }],
+    },
     isPending: false,
     error: null,
-  } as unknown as ReturnType<typeof agentHooks.useAgentMcpStatus>);
+  } as unknown as ReturnType<typeof agentHooks.useAgentConnection>);
 }
 
 afterEach(() => {
@@ -137,25 +120,23 @@ describe("AgentMemoryTab", () => {
     stubMcp(false);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(screen.getByText(/coffer mcp isn't installed on this agent/i)).toBeInTheDocument();
+    expect(screen.getByText(/isn't connected to coffer yet/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open the memory page/i })).not.toBeInTheDocument();
     // Section B (the agent's own native memory) is independent of the gateway —
     // it still renders when Coffer MCP is not installed.
     expect(screen.getByText("Coffer")).toBeInTheDocument();
   });
 
-  test("delivery for this agent renders on the tab", () => {
-    // Delivery installs a hook into THIS agent's settings file, so it belongs
-    // here rather than on the Memory resource page. It says whether the hook
-    // is installed and nothing else — whether it has fired is read as events
-    // on the Activity page (spec memory "Audit every delivery fire").
+  test("the tab offers no action on the delivery hook", () => {
+    // The hook is one part of the agent's Coffer connection, installed and
+    // removed from the page header (spec agent-registry "Show the Coffer
+    // connection on the agent pages") — not from a card of its own here.
     stubMcp(true);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
 
-    const delivery = within(screen.getByTestId("memory-delivery-claude"));
-    expect(delivery.getByText(/installed/i)).toBeInTheDocument();
-    expect(delivery.queryByText(/last fired/i)).toBeNull();
+    expect(screen.queryByText(/delivery/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^install$|^remove$/i })).toBeNull();
   });
 
   test("with memory switched off, only the agent's own stores remain", () => {
@@ -165,7 +146,6 @@ describe("AgentMemoryTab", () => {
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
 
     expect(screen.queryByRole("button", { name: /open the memory page/i })).toBeNull();
-    expect(screen.queryByTestId("memory-delivery-claude")).toBeNull();
     expect(screen.getByText("Coffer")).toBeInTheDocument();
   });
 

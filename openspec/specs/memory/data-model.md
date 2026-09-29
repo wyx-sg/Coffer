@@ -292,12 +292,12 @@ a leading no-op shell command, so detection never depends on `argv[0]`:
 | Claude Code | `settings.json` | `SessionStart`, matcher `startup\|resume\|clear\|compact` — Claude Code's own matcher vocabulary for that event | none needed |
 | Codex | `hooks.json` | `UserPromptSubmit` | once-per-session, keyed on the agent process, since Codex publishes no session id |
 
-The per-agent status answers exactly one question — installed or not — and
-carries `agent_uid`, `agent_name`, `installed`, `command` and `event`. It has **no last-fired
-timestamp**, on purpose: a fire is an event, not a property, so every fire is
-one `memory_delivery_fired` audit row and "has it ever run" is read on the
-vault-wide audit surface ("Audit every delivery fire", "Show delivery state on
-the agent's own page").
+The hook is one part — `memory_hook` — of the agent's Coffer connection
+(spec agent-registry "Connect an agent to Coffer in one action"), and its state
+is reported there as installed or not, with the installed command. It has **no
+last-fired timestamp**, on purpose: a fire is an event, not a property, so every
+fire is one `memory_delivery_fired` audit row and "has it ever run" is read on
+the vault-wide audit surface ("Audit every delivery fire").
 
 ## Audit events
 
@@ -309,8 +309,8 @@ every kind shares.
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
 | `memory_distilled` | a distil pass completes — scheduled, on one partition by hand, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
-| `memory_delivery_installed` | delivery is installed for an agent |
-| `memory_delivery_removed` | delivery is removed for an agent |
+| `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by switching `memory` on while it is connected |
+| `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it, or by switching `memory` off |
 | `memory_delivery_fired` | an installed hook fires ("Audit every delivery fire") |
 
 A recall records the usual `mcp_invocations` row and nothing about its query

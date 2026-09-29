@@ -5,10 +5,8 @@
 // deliberately absent: a partition is one `memory` Resource, so it goes through the kind-agnostic
 // `DELETE /api/v1/resources/{uid}`, exactly like knowledge's collections.
 //
-// A partition is addressed by its uid and an agent by ITS uid — delivery is a
-// route about one agent, and the uid is also what goes into the hook command
-// the install writes, so the entry keeps naming that agent through any number
-// of relabels.
+// A partition is addressed by its uid. The delivery hook is not managed here:
+// it is one part of an agent's Coffer connection (`agentsApi.connect`).
 //
 // Transport via the shared `call` (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`.
@@ -16,8 +14,6 @@
 import { call, enc } from "@/lib/api/call";
 import type {
   AggregationResultOut,
-  DeliveryStatusListOut,
-  DeliveryStatusOut,
   MemoryFileContentOut,
   MemoryFileTreeOut,
   PartitionListOut,
@@ -60,20 +56,4 @@ export function readPartitionFile(
   return call<MemoryFileContentOut>(
     `${ROOT}/partitions/${enc(partitionUid)}/files/content?path=${enc(path)}`,
   );
-}
-// --- delivery ("Install delivery hooks explicitly and removably") ---------------
-
-/** Every agent delivery can be installed for, and whether it is. Omit
- * `agentUid` to list all of them. */
-export function listDelivery(agentUid?: string): Promise<DeliveryStatusListOut> {
-  const qs = agentUid ? `?agent_uid=${enc(agentUid)}` : "";
-  return call<DeliveryStatusListOut>(`${ROOT}/delivery${qs}`);
-}
-
-export function installDelivery(agentUid: string): Promise<DeliveryStatusOut> {
-  return call<DeliveryStatusOut>(`${ROOT}/delivery/${enc(agentUid)}/install`, { method: "POST" });
-}
-
-export function removeDelivery(agentUid: string): Promise<DeliveryStatusOut> {
-  return call<DeliveryStatusOut>(`${ROOT}/delivery/${enc(agentUid)}`, { method: "DELETE" });
 }

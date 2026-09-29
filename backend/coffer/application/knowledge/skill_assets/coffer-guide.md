@@ -18,9 +18,8 @@ see through Coffer belongs to an upstream server and is named `<server>__<tool>`
 | `coffer__write` | You learned something durable about this environment. |
 <!-- end:knowledge -->
 
-If you cannot see Coffer's tools at all, Coffer's MCP server is not connected to
-the agent you are running as; the developer connects it with
-`coffer agent connect <agent>`.
+If you cannot see Coffer's tools at all, the agent you are running as is not
+connected to Coffer; the developer connects it with `coffer agent connect <agent>`.
 
 ## The tools you were listed are not all the tools there are
 

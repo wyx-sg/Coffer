@@ -52,7 +52,10 @@ export type ConfigFileWrite = Schemas["ConfigFileWrite"];
 /** `path` / `folder_path` are absolute, for the external-editor actions. */
 export type ConfigFileContent = Schemas["ConfigFileContent"];
 
-export type McpInstallStatus = Schemas["McpInstallStatus"];
+/** An agent's Coffer connection: every part Coffer writes into the agent
+ *  that applies now (`mcp` always, `memory_hook` while memory is on), and a
+ *  state derived from them — `partial` is "needs repair". */
+export type CofferConnection = Schemas["CofferConnection"];
 
 /**
  * Hand-written rather than the contract's `AgentOut`: the contract requires
@@ -170,11 +173,11 @@ export const agentsApi = {
       body,
     }),
 
-  mcpStatus: (uid: string) => call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`),
-  mcpInstall: (uid: string) =>
-    call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`, { method: "POST" }),
-  mcpUninstall: (uid: string) =>
-    call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`, { method: "DELETE" }),
+  connection: (uid: string) => call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`),
+  connect: (uid: string) =>
+    call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`, { method: "POST" }),
+  disconnect: (uid: string) =>
+    call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`, { method: "DELETE" }),
 
   // MCP entries (specs agent-registry/005 workspace amendment)
   mcpEntries: (uid: string) => call<McpEntriesResponse>(`/agents/${enc(uid)}/mcp-entries`),

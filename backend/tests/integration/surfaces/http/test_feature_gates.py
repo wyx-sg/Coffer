@@ -48,6 +48,11 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pa
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59780")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
+    # Connecting an agent writes the gateway entry first, so it needs a shim
+    # to point at.
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     (tmp_path / ".coffer").mkdir(parents=True, exist_ok=True)
     prior = feature_dependencies._feature_service
     yield tmp_path
@@ -322,16 +327,23 @@ def _hook_installed(config_dir: pathlib.Path) -> bool:
     return settings.is_file() and f": {MARKER}" in settings.read_text()
 
 
-def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Path]:
-    config_dir = home / "cc-config"
+def _agent(c: TestClient, home: pathlib.Path, name: str) -> tuple[str, pathlib.Path]:
+    config_dir = home / f"{name}-config"
     config_dir.mkdir()
     r = c.post(
         "/api/v1/agents",
-        json={"type": "claude_code", "name": "cc", "config_dir": str(config_dir)},
+        json={"type": "claude_code", "name": name, "config_dir": str(config_dir)},
     )
     assert r.status_code == 201, r.text
-    uid = str(r.json()["uid"])
-    r = c.post(f"/api/v1/memory/delivery/{uid}/install")
+    return str(r.json()["uid"]), config_dir
+
+
+def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Path]:
+    """A Claude Code agent connected to Coffer, which with memory on puts the
+    delivery hook in its settings (spec agent-registry "Connect an agent to
+    Coffer in one action")."""
+    uid, config_dir = _agent(c, home, "cc")
+    r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
     assert r.status_code == 200, r.text
     assert _hook_installed(config_dir)
     return uid, config_dir
@@ -343,20 +355,20 @@ def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Pa
 )
 def test_switching_memory_off_removes_the_delivery_hook(home: pathlib.Path) -> None:
     with _client() as c:
-        uid, config_dir = _agent_with_hook(c, home)
+        _uid, config_dir = _agent_with_hook(c, home)
+        _other_uid, other_dir = _agent(c, home, "not-connected")
 
         _switch(c, "memory", False)
         assert not _hook_installed(config_dir)
-        assert _daemon_config(home)["memory_delivery_withdrawn"] == [uid]
 
         _switch(c, "memory", True)
         assert _hook_installed(config_dir)
-        assert _daemon_config(home)["memory_delivery_withdrawn"] == []
+        assert not _hook_installed(other_dir)
 
 
-def test_the_withdrawn_hook_comes_back_across_a_restart(home: pathlib.Path) -> None:
-    """Off, restart, on: the list of agents to put the hook back into is kept
-    with the switch, not in the process."""
+def test_the_hook_comes_back_across_a_restart(home: pathlib.Path) -> None:
+    """Off, restart, on: the connected agents are read from their own files, so
+    nothing has to be remembered across the restart."""
     with _client() as c:
         _uid, config_dir = _agent_with_hook(c, home)
         _switch(c, "memory", False)
@@ -364,6 +376,16 @@ def test_the_withdrawn_hook_comes_back_across_a_restart(home: pathlib.Path) -> N
         assert not _hook_installed(config_dir)
         _switch(c, "memory", True)
         assert _hook_installed(config_dir)
+
+
+def test_switching_memory_on_skips_a_disconnected_agent(home: pathlib.Path) -> None:
+    """Disconnected while memory was off: switching it on gives it nothing."""
+    with _client() as c:
+        uid, config_dir = _agent_with_hook(c, home)
+        _switch(c, "memory", False)
+        assert c.delete(f"/api/v1/agents/{uid}/coffer-connection").status_code == 200
+        _switch(c, "memory", True)
+        assert not _hook_installed(config_dir)
 
 
 def test_a_boot_with_memory_off_removes_a_hook_left_in_place(home: pathlib.Path) -> None:

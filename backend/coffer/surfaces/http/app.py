@@ -51,6 +51,7 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
+from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
 from coffer.surfaces.http.agent_skill_wiring import (
     run_claude_mcp_home_migration,
     run_skill_drift_boot_heal,
@@ -240,8 +241,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await run_claude_mcp_home_migration(kinds.agent_skill.mcp_home_migration)
     # Both follow their feature's switch from here on, and at boot already
     # match it (spec experimental-features).
+    # An agent's Coffer connection spans two kinds (the gateway entry is the
+    # agent kind's, the memory hook the memory kind's), so it is composed here.
+    connection = wire_agent_connection(
+        kinds.agent_skill.agent_service,
+        kinds.agent_skill.mcp_service,
+        kinds.memory.delivery_service,
+        features,
+    )
     await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)
-    follow_memory_switch(kinds.memory.delivery_service, features)
+    follow_memory_switch(kinds.memory.delivery_service, features, connection.connected_agents)
     follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and whatever the corpus
     # holds right now, and seeded into the master store as an ordinary skill

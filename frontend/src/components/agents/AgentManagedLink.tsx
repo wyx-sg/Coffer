@@ -7,15 +7,15 @@
 // toggle and the pointer share a single white box.
 //
 // <CofferGatewayCard> wraps that pointer for surfaces an agent reaches THROUGH
-// the Coffer MCP gateway (its Coffer memory, its gateway MCP servers): when
-// Coffer MCP isn't installed on the agent those surfaces are unreachable, so the
-// card shows the shared "Coffer MCP not installed" note instead of the link.
+// the Coffer MCP gateway (its Coffer memory, its gateway MCP servers): when the
+// agent's connection has no gateway entry those surfaces are unreachable, so the
+// card shows the shared "not connected" note instead of the link.
 import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useAgentMcpStatus } from "@/lib/hooks/useAgents";
+import { useAgentConnection } from "@/lib/hooks/useAgents";
 
 export interface ManagedLinkProps {
   /** Muted section heading, e.g. "Managed by Coffer" / "Via Coffer gateway". */
@@ -45,16 +45,17 @@ export function ManagedLinkRow({ title, hint, buttonLabel, onOpen }: ManagedLink
 
 /** The gateway pointer's content WITHOUT a Card wrapper, so it can sit as a row
  * inside a shared card (e.g. the Memory tab's combined box). Gated on whether
- * Coffer MCP is installed: until it is, the surface is unreachable, so the row
- * shows the "not installed" note instead of the link. */
+ * the agent's Coffer connection carries the gateway entry: until it does, the
+ * surface is unreachable, so the row shows the "not connected" note instead of
+ * the link. */
 export function CofferGatewayRow({
   agentUid,
   notInstalledHint,
   ...link
 }: ManagedLinkProps & { agentUid: string; notInstalledHint: string }) {
   const { t } = useTranslation();
-  const status = useAgentMcpStatus(agentUid);
-  const installed = status.data?.installed ?? false;
+  const status = useAgentConnection(agentUid);
+  const installed = status.data?.parts.some((p) => p.key === "mcp" && p.installed) ?? false;
 
   if (installed) {
     return <ManagedLinkRow {...link} />;

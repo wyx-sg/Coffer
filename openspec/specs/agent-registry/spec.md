@@ -71,7 +71,7 @@ A removed agent MUST re-appear as a discovery candidate on subsequent scans whil
 ### Requirement: Manage the agent lifecycle
 Users MUST be able to register, list, view, update (config_dir, description, title, name), and remove agents. An agent also carries the kind-agnostic `enabled` flag every Resource has; switching it is "Switch an agent off with the kind-agnostic enabled flag", not a field of the agent's own update. The agent name is optional at registration — when omitted, the system MUST derive a stable per-type default (underscores become hyphens, e.g. `claude_code` → `claude-code`). An agent's name stays renamable, because it appears only on Coffer's own surfaces; like every resource it also carries an optional, editable `title` that surfaces show in place of the name when it is set. Skill bindings between an agent and a skill belong to skill-manager; this registry defines no skill operations beyond exposing an `on_delete` hook for cascade cleanup and an `on_enabled_changed` hook for the reclaim of "Switch an agent off with the kind-agnostic enabled flag".
 
-On the command line the lifecycle is the `coffer agent` group's uniform verbs — `list`, `show`, `add <type>`, `edit <name>` (with `--name`, `--title`, `--description`, `--config-dir` and the model options of "Carry the model binding on the agent record"), `rm`, `enable` and `disable`. The `agent` kind has no `scope` verb, because it declares no scope. `coffer agent show <name>` MUST print the agent's record together with two derived states: `coffer_mcp`, whether Coffer's MCP entry is installed (see "Keep the Coffer MCP install idempotent and report its status"), and `memory_delivery`, whether memory's session-start delivery is installed ([memory](../memory/spec.md) "Show delivery state on the agent's own page").
+On the command line the lifecycle is the `coffer agent` group's uniform verbs — `list`, `show`, `add <type>`, `edit <name>` (with `--name`, `--title`, `--description`, `--config-dir` and the model options of "Carry the model binding on the agent record"), `rm`, `enable` and `disable`. The `agent` kind has no `scope` verb, because it declares no scope. `coffer agent show <name>` MUST print the agent's record together with one derived state, `coffer_connection`: the agent's Coffer connection part by part ("Report an agent's Coffer connection part by part"), in the shape `coffer agent connection <name> --json` prints — its state and, for each applicable part (the gateway MCP entry, and the memory delivery hook while memory is on), whether it is installed.
 
 #### Scenario: register an agent without an explicit name
 - **GIVEN** the daemon is running
@@ -181,16 +181,16 @@ Config-file read and write MUST be addressable only by allowlisted `key` (never 
 - **THEN** Coffer responds `not_found` (404) and performs no filesystem read
 
 ### Requirement: Install Coffer's MCP server into an agent in one action
-Users MUST be able to install Coffer's own MCP server into an agent in one action — the Install action on the agent's page, the REST install route, or `coffer agent connect <name>` on the command line. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` and named by that type's child spec.
+Connecting an agent to Coffer ("Connect an agent to Coffer in one action") MUST install Coffer's own MCP server into it as the connection's `mcp` part. The install writes a `coffer` stdio MCP-server entry into the agent's MCP config, using the shape declared by that agent's manifest `McpInjectionSpec` and named by that type's child spec.
 
 - `command` is the absolute path of the `coffer-mcp-shim` binary, resolved on `PATH`, then the running interpreter's scripts directory — so a venv-installed shim is found even when the daemon's `PATH` lacks the venv — then the bundled binary; a `COFFER_MCP_SHIM_PATH` environment override takes precedence over all.
 - The install additionally writes `--agent-uid <uid>` in the entry shape's argument slot — the agent's immutable uid, never its mutable name, because the entry is written once into a file Coffer does not otherwise revisit and a name would go stale on the first rename — so the gateway can attribute the session to this agent for per-agent scope enforcement ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)).
-- If the shim cannot be resolved, install is rejected with an error naming the missing binary and nothing is written.
+- If the shim cannot be resolved, the connect is rejected with an error naming the missing binary and nothing is written.
 
 #### Scenario: refuse the Coffer MCP install when the shim cannot be resolved
 - **GIVEN** a registered agent and no resolvable `coffer-mcp-shim` binary
-- **WHEN** the user installs Coffer's MCP
-- **THEN** the install is rejected with an error naming the missing binary
+- **WHEN** the user connects the agent to Coffer
+- **THEN** the connect is rejected with an error naming the missing binary
 - **AND** the agent's MCP config file is not written
 
 #### Scenario: connect an agent to Coffer from the command line
@@ -198,39 +198,41 @@ Users MUST be able to install Coffer's own MCP server into an agent in one actio
 - **WHEN** the user runs `coffer agent connect <name>`
 - **THEN** the agent's MCP config carries a `coffer` entry whose arguments name the agent's uid
 - **AND** an `agent_mcp_installed` audit entry is recorded
+- **AND** the command prints each part of the connection and whether it is installed
 
 ### Requirement: Keep the Coffer MCP install idempotent and report its status
-Install MUST be idempotent — re-installing updates the existing `coffer` entry in place and never creates a duplicate. The system MUST expose a status operation reporting whether Coffer's MCP is currently installed for the agent; the status is derived from the agent's MCP config file, never stored. On the command line the status is the `coffer_mcp` field of `coffer agent show <name>`, in its plain and its `--json` output.
+Installing the `mcp` part MUST be idempotent — re-installing updates the existing `coffer` entry in place and never creates a duplicate. Whether it is installed MUST be reported as that part of the agent's Coffer connection ("Report an agent's Coffer connection part by part"), derived from the agent's MCP config file, never stored.
 
 #### Scenario: report Coffer-MCP install status
 - **GIVEN** a registered agent whose MCP config does not contain a `coffer` server entry
-- **WHEN** the user checks Coffer-MCP install status
-- **THEN** Coffer reports `installed=false`
+- **WHEN** the user checks the agent's Coffer connection
+- **THEN** the `mcp` part reports `installed=false`
 
 #### Scenario: install Coffer's MCP is idempotent
 - **GIVEN** an agent that already has Coffer's MCP installed
-- **WHEN** the user installs again
-- **THEN** the existing `coffer` entry is updated in place (never duplicated) and status still reports `installed=true`
+- **WHEN** the user connects it again
+- **THEN** the existing `coffer` entry is updated in place (never duplicated) and the `mcp` part still reports `installed=true`
 
 #### Scenario: agent show reports the Coffer MCP status
 - **GIVEN** one registered agent with Coffer's MCP installed and one without
 - **WHEN** the user runs `coffer agent show <name> --json` for each
-- **THEN** the first carries `coffer_mcp` reporting installed and the second `coffer_mcp` reporting not installed
+- **THEN** the first carries `coffer_connection` whose `mcp` part reports installed and the second `coffer_connection` whose state is `disconnected`
+- **AND** `coffer_connection` has the shape `coffer agent connection <name> --json` prints
 
 ### Requirement: Uninstall Coffer's MCP server from an agent
-Users MUST be able to uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config — from the agent's page, the REST uninstall route, or `coffer agent disconnect <name>` on the command line. Uninstalling when not installed is a no-op success and status then reports not installed.
+Disconnecting an agent from Coffer ("Disconnect an agent from Coffer") MUST uninstall Coffer's MCP, removing the `coffer` entry from the agent's MCP config. Uninstalling when not installed is a no-op success and the `mcp` part then reports not installed.
 
 #### Scenario: uninstall Coffer's MCP when it is not installed
 - **GIVEN** a registered agent whose MCP config has no `coffer` entry
-- **WHEN** the user uninstalls Coffer's MCP
+- **WHEN** the user disconnects the agent from Coffer
 - **THEN** the operation succeeds without changing the agent's MCP config
-- **AND** status reports `installed=false`
+- **AND** the `mcp` part reports `installed=false`
 
 #### Scenario: disconnect an agent from Coffer on the command line
 - **GIVEN** an agent that has Coffer's MCP installed
 - **WHEN** the user runs `coffer agent disconnect <name>`
 - **THEN** the `coffer` entry is gone from the agent's MCP config
-- **AND** `coffer agent show <name>` reports `coffer_mcp` as not installed
+- **AND** `coffer agent show <name>` reports `coffer_connection` as not connected
 
 ### Requirement: Back up and audit Coffer MCP install and uninstall
 Install and uninstall MUST reuse the atomic-write + `.bak` machinery of "Write config files atomically with a backup and an audit entry" and record an audit entry (`agent_mcp_installed` / `agent_mcp_uninstalled`).
@@ -523,11 +525,11 @@ The system MUST expose a read-only **native-memory store read** that returns one
 - **THEN** Coffer returns the store directory as a tree (directories before files, paths relative to the store) and the file's contents with the absolute path that backs open / reveal, while a directory that is not one of this agent's stores — its sibling project directory included — and a path escaping the store are both rejected as `not_found` (404); read-only, emitting no audit event and writing nothing
 
 ### Requirement: Expose every agent operation through REST, CLI and the Agents page
-Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
+Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
 
 - the lifecycle verbs of "Manage the agent lifecycle" under `coffer agent`;
 - `coffer agent config edit` and `coffer agent config rm` for config-file writes and deletes;
-- `coffer agent connect` and `coffer agent disconnect` for Coffer's MCP entry, with its status on `coffer agent show`;
+- `coffer agent connect`, `coffer agent disconnect` and `coffer agent connection [--json]` for the agent's Coffer connection ("Connect an agent to Coffer in one action"), whose status `coffer agent show` also carries;
 - `coffer scan --agent <name>`, `coffer scan --ref <agent>:<entry>`, `coffer adopt mcp` and `coffer discard mcp` for direct MCP entries;
 - `coffer agent plugin list|show|enable|disable|rm` for plugins, where `rm` is the uninstall of "Uninstall a plugin by the type's own strategy";
 - `coffer agent transcript <name>` to list an agent's sessions, with the listing's search, project, sort and paging options, and `coffer agent transcript <name> <id>` to read one session in the bounded windows of "Read one transcript session in bounded windows";
@@ -538,7 +540,7 @@ The reads of plain files on disk — an agent's config files and their content, 
 The Agents page in the web UI MUST expose all of these, config-file content writes included. It renders within the web-ui shell at `/agents` as a **dedicated top-level nav entry** — a sibling of the Resources and System groups, not nested under Resources, because agents are consumers of vault assets, not assets themselves; agent resources do not appear in the kind-agnostic resources browser.
 
 - A config file (and a directory-entry child) opens in a viewer that becomes **editable behind an explicit Edit**, saves through the same path as REST and the CLI ("Validate config-file content before saving it", "Write config files atomically with a backup and an audit entry"), and guards an unsaved draft three ways — picking another file asks first, leaving the tab asks first, and leaving the page asks first. Open-in-external-editor / reveal-in-file-manager sit beside the content for the edits that want a real editor.
-- The agent detail page has seven tabs — Overview, Skills, MCP servers, Plugins, Memory, Conversations, and Config files. Plugins acts on the agent (enable / disable / uninstall), and a plugin's name opens that plugin's own detail page — the table has no expandable rows. The detail page shows the plugin's version, author, description, homepage, marketplace and its source, the directory it is installed in (with open / reveal), its enabled switch and uninstall (which returns to the Plugins tab), and everything it contributes — skills, commands and subagents with their descriptions, hook events and MCP servers — from "Read one installed plugin's detail read-only". Its back link returns to the agent's Plugins tab. Memory carries one write — installing or removing Coffer's memory-delivery hook, which memory specifies (including its audit events and the per-agent delivery status the tab renders) and this page mounts; the rest of Memory, and all of Conversations, are read-only views of the agent's own stores.
+- The agent detail page has seven tabs — Overview, Skills, MCP servers, Plugins, Memory, Conversations, and Config files. Plugins acts on the agent (enable / disable / uninstall), and a plugin's name opens that plugin's own detail page — the table has no expandable rows. The detail page shows the plugin's version, author, description, homepage, marketplace and its source, the directory it is installed in (with open / reveal), its enabled switch and uninstall (which returns to the Plugins tab), and everything it contributes — skills, commands and subagents with their descriptions, hook events and MCP servers — from "Read one installed plugin's detail read-only". Its back link returns to the agent's Plugins tab. Memory and Conversations are read-only views of the agent's own stores; the memory delivery hook is installed and removed with the agent's Coffer connection in the page header ("Show the Coffer connection on the agent pages").
 - A direct server's name on the MCP servers tab opens that entry's own read-only detail page ("Show one direct MCP entry's full configuration without its secrets"), whose header carries the same two writes as the row — adopt and delete — and whose way back returns to the MCP servers tab.
 - Neither the Memory nor the Conversations table carries per-row actions: a row OPENS its subject, and the open / reveal affordances live on the page it opens, beside the thing they act on. A Conversations row opens that one session rendered as a readable conversation, beside a contents list of the session's prompts that scrolls the conversation to any one of them; a Memory row opens that store's directory as a file tree with a read-only preview, because a store is a directory and one session is a single file.
 
@@ -548,10 +550,10 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 - **THEN** every registered agent appears with type, name, and `config_dir`
 
 #### Scenario: config-file and MCP operations mirror across surfaces
-- **GIVEN** the daemon exposes the config-file and MCP-install routes
-- **WHEN** the user invokes `coffer agent config edit`, `coffer agent config rm`, `coffer agent connect` and `coffer agent disconnect`
+- **GIVEN** the daemon exposes the config-file and Coffer-connection routes
+- **WHEN** the user invokes `coffer agent config edit`, `coffer agent config rm`, `coffer agent connect`, `coffer agent connection` and `coffer agent disconnect`
 - **THEN** each command calls the corresponding REST endpoint and produces equivalent state
-- **AND** `coffer agent show --json` reports the install status the REST status route reports
+- **AND** `coffer agent show --json` and `coffer agent connection --json` report the connection the REST status route reports
 
 #### Scenario: CLI surface mirrors REST operations
 - **GIVEN** the daemon is running and exposes the REST agent routes
@@ -597,7 +599,7 @@ The CLI MUST support `--json` for machine-readable output on every read operatio
 #### Scenario: agent reads print JSON with --json
 - **GIVEN** a registered agent
 - **WHEN** the user runs `coffer agent list --json` and `coffer agent show <name> --json`
-- **THEN** each prints only JSON, carrying the agent's name, title, type and config directory, and `show` also its uid, its `coffer_mcp` status and its `memory_delivery` status
+- **THEN** each prints only JSON, carrying the agent's name, title, type and config directory, and `show` also its uid and its `coffer_connection` status
 
 ### Requirement: Open config files in an external editor or reveal them
 For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from "List an agent's config files with their locations" and "Read allowlisted config files without creating them". Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).
@@ -609,7 +611,7 @@ For each config file (and each directory-entry child) the UI MUST offer **open-i
 - **AND** no copy-path affordance is offered
 
 ### Requirement: Audit every agent lifecycle event
-The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); agent enabled/disabled (via the kind-agnostic `resource_enabled` / `resource_disabled` events); config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, transcript sessions, the model catalogue — are read-only and emit no audit event, the background pass that warms the transcript summary cache included. Reading ONE of the listed items — a single session's turns, a single store's files — is the same act at a smaller scale and audits nothing either. The audit events of the memory-delivery install the Memory tab offers are memory's, not this spec's.
+The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); agent enabled/disabled (via the kind-agnostic `resource_enabled` / `resource_disabled` events); config file written/deleted (`agent_config_file_written` / `agent_config_file_deleted`); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, transcript sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event, the background pass that warms the transcript summary cache included. Reading ONE of the listed items — a single session's turns, a single store's files — is the same act at a smaller scale and audits nothing either. A connect or disconnect records the events of the parts it installs or removes and none of its own; the memory delivery hook's events are memory's, not this spec's.
 
 #### Scenario: audit lifecycle events
 - **GIVEN** the user has registered, edited, or removed agents
@@ -672,3 +674,49 @@ The system MUST return one installed plugin's detail, addressed by the `<name>@<
 - **GIVEN** a registered agent
 - **WHEN** the user reads the detail of a plugin id its listing does not report
 - **THEN** Coffer answers 404 with `PLUGIN_NOT_FOUND`
+
+### Requirement: Connect an agent to Coffer in one action
+Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`), the CLI (`coffer agent connect <name>`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration that applies to that agent now:
+
+- `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action", for every agent type;
+- `memory_hook` — the memory delivery hook of [memory](../memory/spec.md) "Install delivery hooks explicitly and removably", for an agent type with a hook adapter, and only while the `memory` experimental feature is on.
+
+The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a `.bak` and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
+
+#### Scenario: connect installs every part that applies
+- **GIVEN** a registered Claude Code agent with neither the gateway entry nor the memory hook, and `memory` switched on
+- **WHEN** the user connects it to Coffer
+- **THEN** the agent's `.claude.json` carries the `coffer` MCP entry and its `settings.json` carries Coffer's marked hook entry
+- **AND** one `agent_mcp_installed` and one `memory_delivery_installed` audit entry name the user as actor, and the connection reports `connected` with both parts installed
+
+#### Scenario: connect leaves out a part whose feature is off
+- **GIVEN** a registered agent and `memory` switched off
+- **WHEN** the user connects it to Coffer
+- **THEN** only the gateway entry is installed, no hook is written into the agent's settings, and the connection reports `connected` with the `mcp` part alone
+
+### Requirement: Report an agent's Coffer connection part by part
+The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`, `coffer agent connection <name> [--json]`) as the list of parts that apply to the agent now — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
+
+#### Scenario: report a partly installed connection
+- **GIVEN** a registered agent carrying the gateway entry but not the memory hook, with `memory` switched on
+- **WHEN** the user reads its Coffer connection
+- **THEN** the state is `partial`, the `mcp` part is installed with its shim command and the `memory_hook` part is not installed
+- **AND** connecting again installs the missing hook and the state becomes `connected`
+
+### Requirement: Disconnect an agent from Coffer
+Users MUST be able to disconnect an agent from Coffer in one action (`DELETE /api/v1/agents/{uid}/coffer-connection`, `coffer agent disconnect <name>`, the web UI). Disconnecting MUST remove every part the agent type has — whether or not it applies now, since a part whose feature was switched off may still have been left behind — taking out only Coffer's own marked entries and leaving every other entry, key and hook in those files as it was. A part that is absent MUST be a no-op that writes no file and records no audit event.
+
+#### Scenario: disconnect removes only Coffer's entries
+- **GIVEN** a connected Claude Code agent whose `.claude.json` also carries another MCP server and whose `settings.json` also carries a foreign hook on the same event
+- **WHEN** the user disconnects it from Coffer
+- **THEN** the `coffer` MCP entry and Coffer's hook entry are gone, the other MCP server and the foreign hook are untouched, and the connection reports `disconnected`
+- **AND** disconnecting again writes no file and records no audit entry
+
+### Requirement: Show the Coffer connection on the agent pages
+The agent detail page's header MUST offer **Connect to Coffer** when the agent is not connected or needs repair, and **Disconnect from Coffer** — behind a confirmation — when it is connected. The Agents list MUST carry a Coffer column showing each agent's state as **Connected**, **Not connected** or **Needs repair** (the `partial` state), and bulk **Connect to Coffer** / **Disconnect from Coffer** actions over the selected agents. Which parts a connection installs MUST be explained behind a help affordance beside the action rather than as inline text. The Memory tab MUST NOT carry a separate install or remove action for the memory delivery hook.
+
+#### Scenario: the header offers the action the state calls for
+- **GIVEN** an agent's detail page for an agent that is not connected, one that is connected, and one whose connection is partial
+- **WHEN** the header renders
+- **THEN** the unconnected agent offers Connect to Coffer, the connected one offers Disconnect from Coffer, and the partial one reads Needs repair and offers Connect to Coffer
+- **AND** the agent's Memory tab offers no action on the delivery hook

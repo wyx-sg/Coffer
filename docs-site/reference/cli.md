@@ -795,7 +795,7 @@ Register an agent.
 coffer agent show [OPTIONS] NAME
 ```
 
-Show one agent, with whether Coffer's MCP and memory delivery are installed.
+Show one agent, with its Coffer connection part by part.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -861,13 +861,26 @@ Switch an agent off: its delivered skills are reclaimed.
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
 
+### agent connection
+
+```sh
+coffer agent connection [OPTIONS] NAME
+```
+
+Report whether this agent is connected to Coffer, part by part.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name or uid |
+| `--json` | option | flag |  | JSON output |
+
 ### agent connect
 
 ```sh
 coffer agent connect [OPTIONS] NAME
 ```
 
-Install Coffer's MCP server entry into this agent's MCP config.
+Connect this agent to Coffer: install every part that applies to it.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -879,7 +892,7 @@ Install Coffer's MCP server entry into this agent's MCP config.
 coffer agent disconnect [OPTIONS] NAME
 ```
 
-Remove Coffer's MCP server entry from this agent's MCP config.
+Disconnect this agent from Coffer: remove every part Coffer wrote into it.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1578,42 +1591,6 @@ The installed session-start hook runs this; you rarely need to. It prints nothin
 | `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
 | `--cwd` | option | text | required | The session's working directory |
 | `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
-
-### memory delivery
-
-```sh
-coffer memory delivery [OPTIONS] COMMAND [ARGS]...
-```
-
-Install or remove Coffer's session-start hook in an agent's own settings file
-
-Subcommands: `on`, `off`.
-
-### memory delivery on
-
-```sh
-coffer memory delivery on [OPTIONS] AGENT
-```
-
-Install Coffer's session-start hook for an agent.
-
-Renaming the agent later does not need a reinstall.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name |
-
-### memory delivery off
-
-```sh
-coffer memory delivery off [OPTIONS] AGENT
-```
-
-Remove Coffer's session-start hook from an agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name |
 
 ## coffer provider
 

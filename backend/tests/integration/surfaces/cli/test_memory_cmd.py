@@ -312,36 +312,6 @@ def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memor
     }
 
 
-# ----- delivery -------------------------------------------------------------
-
-
-def _delivery_row(name: str) -> dict:  # type: ignore[type-arg]
-    c, _info = _cli_client.client_or_exit()
-    r = c.get("/memory/delivery")
-    assert r.status_code == 200, r.text
-    return next(d for d in r.json()["delivery"] if d["agent_name"] == name)  # type: ignore[no-any-return]
-
-
-def test_delivery_on_and_off_round_trip(memory_cli_daemon):
-    _register_cc_via_http()
-
-    installed = _runner.invoke(cli_app, ["memory", "delivery", "on", "cc"])
-    assert installed.exit_code == 0, installed.output
-    assert json.loads(_extract_json(installed.output))["installed"] is True
-    assert _delivery_row("cc")["installed"] is True
-
-    removed = _runner.invoke(cli_app, ["memory", "delivery", "off", "cc"])
-    assert removed.exit_code == 0, removed.output
-    assert json.loads(_extract_json(removed.output))["installed"] is False
-    assert _delivery_row("cc")["installed"] is False
-
-
-def test_delivery_of_an_unknown_agent_exits_not_found(memory_cli_daemon):
-    r = _runner.invoke(cli_app, ["memory", "delivery", "on", "ghost"])
-    assert r.exit_code == 4, r.output
-    assert "no agent named 'ghost'" in r.output
-
-
 # ----- `context`: the hook-invoked command, tested without client_or_exit --
 
 

@@ -321,10 +321,10 @@ def test_agent_show_existing_json(agent_cli_daemon):
     # A script reading `--json` must be able to keep hold of the agent across a
     # later rename, which the name cannot do and the uid can.
     assert data["uid"]
-    # Both derived states are always present. This app serves neither the
-    # MCP-install nor the memory-delivery route, so both are unknown (null).
-    assert "coffer_mcp" in data and "memory_delivery" in data
-    assert data["coffer_mcp"] is None and data["memory_delivery"] is None
+    # The derived connection is always present. This app does not serve the
+    # connection route, so it is unknown (null).
+    assert "coffer_connection" in data
+    assert data["coffer_connection"] is None
 
 
 def test_agent_show_prints_the_uid_the_daemon_reports(agent_cli_daemon):
@@ -582,7 +582,7 @@ def test_agent_group_offers_the_new_commands_only():
     group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
     assert set(group.commands) == {
         "list", "show", "add", "edit", "rm", "enable", "disable",
-        "connect", "disconnect", "transcript", "models", "config", "plugin",
+        "connect", "disconnect", "connection", "transcript", "models", "config", "plugin",
     }  # fmt: skip
 
 
@@ -927,7 +927,7 @@ def test_agent_show_reports_the_model_binding(agent_cli_daemon):
 
 
 # ---------------------------------------------------------------------------
-# agent show — memory_delivery, through the full app with memory switched on
+# agent show — coffer_connection, through the full app with memory switched on
 # ---------------------------------------------------------------------------
 
 
@@ -935,6 +935,10 @@ def test_agent_show_reports_the_model_binding(agent_cli_daemon):
 def memory_daemon(tmp_path, monkeypatch):
     from ._real_app import boot
 
+    # `agent connect` writes the gateway entry, which names the shim binary.
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     yield from boot(tmp_path, monkeypatch, features="memory=on")
 
 
@@ -942,7 +946,7 @@ def memory_daemon(tmp_path, monkeypatch):
     spec="memory", scenario="the agent's command-line view reports delivery state"
 )
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
-def test_agent_show_reports_memory_delivery_state(memory_daemon, tmp_path):
+def test_agent_show_reports_the_connection_part_by_part(memory_daemon, tmp_path):
     for name in ("with", "without"):
         config_dir = tmp_path / f"claude-{name}"
         (config_dir / "skills").mkdir(parents=True)
@@ -957,19 +961,20 @@ def test_agent_show_reports_memory_delivery_state(memory_daemon, tmp_path):
         )
         for name in ("with", "without")
     }
-    installed = memory_daemon.post(f"/memory/delivery/{shown['with']['uid']}/install")
-    assert installed.status_code == 200, installed.text
+    connected = _runner.invoke(cli_app, ["agent", "connect", "with"])
+    assert connected.exit_code == 0, connected.output
 
     with_ = json.loads(
         _extract_json(_runner.invoke(cli_app, ["agent", "show", "with", "--json"]).output)
     )
     without = shown["without"]
-    assert with_["memory_delivery"]["installed"] is True
-    assert without["memory_delivery"]["installed"] is False
+    parts = {p["key"]: p["installed"] for p in with_["coffer_connection"]["parts"]}
+    assert with_["coffer_connection"]["state"] == "connected"
+    assert parts == {"mcp": True, "memory_hook": True}
+    assert without["coffer_connection"]["state"] == "disconnected"
     for data in (with_, without):
-        assert "last_fired" not in json.dumps(data["memory_delivery"])
-        assert {"name", "title", "type", "config_dir", "uid", "coffer_mcp"} <= set(data)
-        assert data["coffer_mcp"]["installed"] is False
+        assert "last_fired" not in json.dumps(data["coffer_connection"])
+        assert {"name", "title", "type", "config_dir", "uid", "coffer_connection"} <= set(data)
     listed = json.loads(_extract_json(_runner.invoke(cli_app, ["agent", "list", "--json"]).output))[
         "resources"
     ]
@@ -978,4 +983,5 @@ def test_agent_show_reports_memory_delivery_state(memory_daemon, tmp_path):
         ("without", "claude_code"),
     }
     text = _runner.invoke(cli_app, ["agent", "show", "with"]).output
-    assert "memory_delivery: installed" in text
+    assert "coffer_connection: connected" in text
+    assert "memory delivery hook: installed" in text

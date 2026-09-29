@@ -125,19 +125,18 @@ Memory → choose the partition → Update memory
 
 ### At session start, through a hook
 
-Delivery goes through each agent's own hook mechanism, and you install it explicitly, per agent. Coffer never installs it on its own.
+Delivery goes through each agent's own hook mechanism. The hook is one part of the agent's [Coffer connection](/guides/agents#connect-an-agent-to-coffer): connecting an agent while `memory` is on installs it, disconnecting removes it, and switching `memory` on installs it into every connected agent. Coffer never installs it into an agent you have not connected.
 
 ::: code-group
 
 ```sh [CLI]
-coffer agent show claude-code             # memory_delivery: installed or not
-coffer memory delivery on claude-code
-coffer memory delivery on codex
-coffer memory delivery off codex
+coffer agent connect claude-code
+coffer agent connection claude-code         # lists the hook with the other parts
+coffer agent disconnect codex
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Memory tab → Delivery → Install
+Agents → choose the agent → Connect to Coffer
 ```
 
 :::
@@ -182,7 +181,7 @@ coffer log audit --event-type memory_delivery_fired
 
 A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the same payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. It stops on the next turn after you switch the `memory` feature off, and a turn gets no memory header at all when the index is empty.
 
-A turn you send from the [Chat](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own session-start hook when delivery is installed. No turn gets memory both ways.
+A turn you send from the [Chat](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own session-start hook when the agent is connected to Coffer. No turn gets memory both ways.
 
 ### On demand: search the memory root
 
@@ -249,7 +248,7 @@ coffer memory rm payments-api
 
 **A partition is empty or missing.** Check that the agent is registered and enabled, then run `coffer memory sync` and read its report. Entries learned outside a git repository do not get a partition of their own.
 
-**An agent is not given its memory at session start.** Run `coffer agent show <agent>` to confirm the hook is installed (`memory_delivery`), then `coffer log audit --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
+**An agent is not given its memory at session start.** Run `coffer agent connection <agent>` to confirm the memory delivery hook is installed for that agent (connect it again if it reads **needs repair**), then `coffer log audit --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
 
 **Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings → Coffer's model**, then run `coffer memory distil <partition>`.
 

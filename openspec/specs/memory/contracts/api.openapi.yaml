@@ -4,7 +4,7 @@ info:
   version: 0.4.0
   description: |
     REST surface for the one `memory` resource kind (spec memory, "Cover memory
-    management on REST and the CLI"). Twelve routes, and that is the whole
+    management on REST and the CLI"). Nine routes, and that is the whole
     management plane.
 
     ## Everything here is derived
@@ -73,15 +73,15 @@ info:
     which runs the same audit and cascade as every other kind and cleans the
     directory up through the Kind's `on_delete`.
 
-    ## Why per-agent delivery status has no last-fired field
+    ## Where the delivery hook is installed
 
-    `DeliveryStatusOut` answers exactly one question: installed or not ("Audit
-    every delivery fire", "Show delivery state on the agent's own page"). A fire
-    is an **event**, not a property of an agent — every fire writes one
-    `memory_delivery_fired` audit row, and "has it ever run" is read on the
-    vault-wide audit surface. A hook installed a minute ago has legitimately
-    never fired, so a status field flagging that would be crying wolf on its own
-    normal state. This layer carries no audit surface of its own either ("Show
+    Not here. The hook is one part of an agent's Coffer connection
+    (`/api/v1/agents/{uid}/coffer-connection`, spec agent-registry "Connect
+    an agent to Coffer in one action"), which reports it as installed or not
+    and nothing else. A fire is an **event**, not a property of an agent —
+    every fire writes one `memory_delivery_fired` audit row, and "has it ever
+    run" is read on the vault-wide audit surface ("Audit every delivery
+    fire"). This layer carries no audit surface of its own either ("Show
     memory events on the vault-wide audit surface").
 
     ## Errors
@@ -107,7 +107,7 @@ security:
 
 tags:
   - name: memory
-    description: Partitions, notes, the session context, and per-agent delivery.
+    description: Partitions, notes and the session context.
 
 paths:
   /api/v1/memory/partitions:
@@ -343,73 +343,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ComposedContextOut"
 
-  /api/v1/memory/delivery:
-    get:
-      tags: [memory]
-      operationId: listMemoryDelivery
-      summary: Per-agent delivery installation state.
-      parameters:
-        - name: agent_uid
-          in: query
-          required: false
-          description: >-
-            Restrict to one agent, by uid. Omitted, every registered agent is
-            reported.
-          schema:
-            type: string
-      responses:
-        "200":
-          description: One entry per agent.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeliveryStatusListOut"
-
-  /api/v1/memory/delivery/{agent_uid}/install:
-    post:
-      tags: [memory]
-      operationId: installMemoryDelivery
-      summary: Install Coffer's session-start hook into one agent's own settings.
-      description: |
-        An **explicit** act, never a side effect of registering an agent or
-        aggregating memory ("Install delivery hooks explicitly and removably").
-        Idempotent, marker-scoped, and it leaves every hook Coffer did not write
-        exactly as it was. Writes the agent's *settings* file — never any file
-        that is an agent's memory. Records a `memory_delivery_installed` audit
-        event with the actor.
-      parameters:
-        - $ref: "#/components/parameters/AgentUid"
-      responses:
-        "200":
-          description: The resulting state.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeliveryStatusOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /api/v1/memory/delivery/{agent_uid}:
-    delete:
-      tags: [memory]
-      operationId: removeMemoryDelivery
-      summary: Remove Coffer's hook from one agent's settings.
-      description: |
-        Takes out only the marked entry, dropping the event array and the
-        top-level hooks key once they are empty. With nothing installed it is a
-        clean no-op that writes no file and records no audit event.
-      parameters:
-        - $ref: "#/components/parameters/AgentUid"
-      responses:
-        "200":
-          description: The resulting state.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeliveryStatusOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
 components:
   securitySchemes:
     CofferToken:
@@ -427,17 +360,6 @@ components:
         project slug — is also its directory under the memory root and moves
         when the partition is renamed, so the name addresses a place on disk
         and the uid addresses the partition.
-      schema:
-        type: string
-    AgentUid:
-      name: agent_uid
-      in: path
-      required: true
-      description: |
-        The registered agent Resource's immutable uid. Spelled `agent_uid`
-        rather than `uid` because nothing else in this path is a resource:
-        the delivery routes act on one agent's own settings file, and a bare
-        `uid` here would read as the partition's.
       schema:
         type: string
 
@@ -859,50 +781,3 @@ components:
           type: boolean
         size:
           type: integer
-
-    DeliveryStatusOut:
-      type: object
-      required: [agent_uid, agent_name, installed, command, event]
-      description: |
-        Installed or not, and nothing else. There is deliberately no last-fired
-        field — see the `info.description` above ("Audit every delivery fire",
-        "Show delivery state on the agent's own page").
-      properties:
-        agent_uid:
-          type: string
-          description: |
-            Which agent this row is about — and what the install and remove
-            routes take, so a surface rendering this list acts on a row
-            without translating anything.
-          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-        agent_name:
-          type: string
-          description: |
-            The same agent's label, for the row's heading. Carried beside the
-            uid rather than instead of it: the list is one row per agent and
-            has to be both readable and actionable, and a client holding only
-            one of the two would have to fetch the agent list to get the
-            other.
-        installed:
-          type: boolean
-        command:
-          type: string
-          description: |
-            The command the hook entry runs, carrying Coffer's marker so
-            detection never depends on `argv[0]`.
-        event:
-          type: string
-          description: |
-            The agent's own lifecycle event the entry is attached to —
-            `SessionStart` for Claude Code, `UserPromptSubmit` with a
-            once-per-session guard for Codex, which publishes no session-start
-            event ("Install delivery hooks explicitly and removably").
-
-    DeliveryStatusListOut:
-      type: object
-      required: [delivery]
-      properties:
-        delivery:
-          type: array
-          items:
-            $ref: "#/components/schemas/DeliveryStatusOut"

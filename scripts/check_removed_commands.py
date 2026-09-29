@@ -12,8 +12,7 @@ suite, so those are the trees scanned here.
 
 Each entry is a whole command phrase matched on word boundaries, so a phrase
 that is a prefix of a live command is not caught by accident (`coffer mcp
-test` stays legal while `coffer mcp refresh` fails; `coffer memory delivery
-on|off` stays legal while the bare read `coffer memory delivery` fails). The
+test` stays legal while `coffer mcp refresh` fails). The
 REST routes behind many removed commands still exist, so route paths are not
 matched — only `coffer ...` command phrases and the two tool names.
 
@@ -91,28 +90,17 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory retired", "coffer path memory [<partition>]"),
     ("coffer memory ls", "coffer path memory [<partition>]"),
     ("coffer memory read", "coffer path memory [<partition>], then read the file"),
-    ("coffer memory delivery-install", "coffer memory delivery on <agent>"),
-    ("coffer memory delivery-remove", "coffer memory delivery off <agent>"),
+    ("coffer memory delivery-install", "coffer agent connect <agent>"),
+    ("coffer memory delivery-remove", "coffer agent disconnect <agent>"),
+    # The delivery hook is a part of the agent's Coffer connection (spec
+    # agent-registry "Connect an agent to Coffer in one action").
+    ("coffer memory delivery", "coffer agent connect|disconnect|connection <agent>"),
     ("coffer sync rollback", "coffer sync restore"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )
-
-#: `coffer memory delivery` alone was the read; `on|off` are the live writes,
-#: and the generated reference prints the group's own usage line
-#: (`coffer memory delivery [OPTIONS] COMMAND`).
-_EXTRA: tuple[tuple[re.Pattern[str], str, str], ...] = (
-    (
-        re.compile(
-            r"\bcoffer\s+memory\s+delivery(?![\w-])(?!\s+(?:on|off)\b)(?!\s+\[OPTIONS\]\s+COMMAND)"
-        ),
-        "coffer memory delivery",
-        "coffer agent show (field memory_delivery); coffer memory delivery on|off <agent>",
-    ),
-)
-
 
 def _pattern(phrase: str) -> re.Pattern[str]:
     words = [re.escape(w) for w in phrase.split()]
@@ -121,7 +109,6 @@ def _pattern(phrase: str) -> re.Pattern[str]:
 
 PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     *((_pattern(phrase), phrase, instead) for phrase, instead in REMOVED),
-    *_EXTRA,
 )
 
 

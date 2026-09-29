@@ -1,6 +1,6 @@
 // frontend/src/pages/AgentDetailPage.tsx — spec agent-registry.
 // Per-agent detail page: the shared PageHeader (back link, type chip, and the
-// [Install/Uninstall Coffer MCP][Edit][Delete] actions) over seven tabs —
+// [Connect to / Disconnect from Coffer][Edit][Delete] actions) over seven tabs —
 // Overview, Skills, MCP servers, Plugins, Memory, Conversations and Config
 // files. The active tab lives in the URL (?tab=) so a refresh or a shared link
 // reopens the same one — and so that coming back from a Memory or Conversations
@@ -22,7 +22,7 @@ import { AgentConfigFilesEditor } from "@/components/agents/AgentConfigFilesEdit
 import { AgentConversationsTab } from "@/components/agents/AgentConversationsTab";
 import { AgentDeleteDialog } from "@/components/agents/AgentDeleteDialog";
 import { AgentEditForm } from "@/components/agents/AgentEditForm";
-import { AgentMcpButton } from "@/components/agents/AgentMcpControls";
+import { AgentConnectionButton } from "@/components/agents/AgentConnectionControls";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
@@ -110,7 +110,7 @@ export function AgentDetailPage() {
         subtitle={agent.description ?? undefined}
         actions={
           <div className="flex items-center gap-2">
-            <AgentMcpButton uid={uid} />
+            <AgentConnectionButton uid={uid} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-1.5 size-3.5" /> {t("agents.edit")}
             </Button>
