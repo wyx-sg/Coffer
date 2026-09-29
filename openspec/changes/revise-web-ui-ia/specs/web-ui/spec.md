@@ -1053,32 +1053,39 @@ gateway as every other MCP server, and carries:
   a tool reaches agents as `<group>__<tool>`, under the same name rules as any
   MCP server ([mcp-gateway](../mcp-gateway/spec.md) "Manage MCP servers as resources");
 - a shared **base URL** its tools' paths are relative to;
-- an optional **auth header** whose value is bound to a stored secret (see
-  "Manage stored secrets on the Secrets page"): Coffer's gateway adds the header
+- an optional **auth header** whose value is bound to a stored secret, chosen by
+  its name on the Secrets page (see "Manage stored secrets on the Secrets
+  page"): Coffer's gateway adds the header
   when it calls the API, and neither the header's value nor the secret's
   reference is ever part of what an agent sees or sends;
 - a default **reach**, which each tool follows unless it overrides it.
 
-Each tool in a group MUST carry its own **on/off** switch and an optional
-**reach override**. The page MUST list the groups grouped by health, the failing
-ones first, each showing its tools. It MUST carry one **Add custom tool** action
-offering two ways in:
+Each tool in a group MUST carry its own **on/off** switch, an optional **reach
+override**, and a **changes data** flag — on by default for every method but
+GET, and editable — which the gateway passes to agents as the tool's MCP
+annotations (`readOnlyHint` false and `destructiveHint` true when it changes
+data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
+to it. The page MUST list the groups grouped by health, the failing ones first,
+each showing its tools. Its header MUST carry one action, **Add custom tool**,
+whose flow asks first for the group — an existing one to join, or a new one to
+create, named in the same step — and then offers two ways in:
 
-- **Import an OpenAPI spec** — from a URL or a file; the user picks which
-  operations become tools, and the import creates a new group. A group made by
+- **Import an OpenAPI spec** — from a URL or a file, into a new group; the user
+  picks which operations become tools. A group made by
   an import MUST offer **Re-import**, which reads the spec again and shows a
   preview of the operations it would add and remove before anything changes;
   confirming keeps every kept tool's switch and reach override as they were.
 - **Define one request by hand** — method, path, parameters and body schema —
-  joining an existing group or a new one named in the same step.
+  in the group chosen, existing or new.
 
-A group's detail page (`/custom-tools/<group>`) MUST carry three tabs:
-**Overview** (the default — its definition: base URL, auth header with the
-secret it is bound to, the group's reach, and Re-import for an imported group),
-**Tools** (`/custom-tools/<group>/tools` — each tool's request, its switch, its
-reach override, and a **Test** action that calls the tool with sample arguments
-and shows the response) and **Calls** (`/custom-tools/<group>/calls` — the
-Activity calls table scoped to the group). Script tools are not offered: they are deferred past 1.0.
+A group's detail page (`/custom-tools/<group>`, and no other route) MUST be one
+page with no tabs: the group's **definition** (base URL, and the auth header with
+the name of the secret it is bound to), its **reach**, a one-line summary of the
+last 24 hours (calls and failures), and the **tools table** — each tool's
+method and path, its switch, its changes-data flag and its reach override. Choosing
+a tool opens its editor in a **drawer** over the page, where the request is
+edited and a **Test** action calls the tool with sample arguments and shows the
+response. Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is specified with the change that adds the
 transport.
 
@@ -1119,7 +1126,18 @@ transport.
 #### Scenario: the custom tools page lists groups by health
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the failing group is listed first with its tools, and the page carries one Add custom tool action offering Import an OpenAPI spec and Define one request by hand, and no Script type
+- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Define one request by hand, and no Script type
+
+#### Scenario: a group's page is one page with a tool drawer
+- **GIVEN** the `billing` group with three tools
+- **WHEN** the user opens `/custom-tools/billing` and chooses one tool
+- **THEN** the page shows the definition with the bound secret's name, the reach, a one-line 24-hour summary and the tools table, with no tabs
+- **AND** the tool opens in a drawer with its request and Test, and the address stays `/custom-tools/billing`
+
+#### Scenario: a tool that changes data is annotated for the agent
+- **GIVEN** a group with a `GET /invoices` tool and a `POST /refunds` tool, and the user turning the changes-data flag off on a third, `POST /search`
+- **WHEN** an agent lists the group's tools
+- **THEN** `refunds` carries `readOnlyHint` false and `destructiveHint` true, while `invoices` and `search` carry `readOnlyHint` true, so the agent's own approval applies to `refunds`
 
 ### Requirement: Show every CLI a skill requires on the CLIs page
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that

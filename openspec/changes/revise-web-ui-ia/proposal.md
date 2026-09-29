@@ -51,8 +51,9 @@ unarchived until that implementation lands.
   fifteen entries. Usage's page is specified with the change that meters use.
 - A **Custom tools** page (`/custom-tools`) manages HTTP API tools in groups: a group has a fixed
   name agents see as the prefix (`<group>__<tool>`), a shared base URL, an auth header bound to a
-  secret that never reaches the agent, and a default reach; each tool has its own switch and an
-  optional reach override. Add custom tool imports an OpenAPI spec (picking operations, creating a
+  secret that never reaches the agent, and a default reach; each tool has its own switch, an
+  optional reach override and a "changes data" flag passed to agents as MCP annotations; a group
+  is one page with a tool drawer. Add custom tool imports an OpenAPI spec (picking operations, creating a
   group that can be re-imported with a preview) or defines one request by hand in an existing or
   new group. Script tools are deferred past 1.0. The MCP servers Add dialog offers no custom
   tools.

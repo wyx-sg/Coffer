@@ -346,7 +346,11 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   group and can be re-imported, with a preview of the operations added and removed so a changed
   spec never silently drops a tool; a hand-made request joins an existing group or a new one.
   *Rejected:* one resource per tool, which repeats the base URL and secret on every tool and
-  gives agents a flat, unprefixed list. **Script tools are deferred past 1.0**: running a
+  gives agents a flat, unprefixed list. A group's page is one page — definition, reach, a 24-hour
+  line and the tools table — with each tool edited in a drawer; a group holds too little for
+  tabs. Each tool's **changes data** flag (on by default for non-GET methods) becomes the MCP
+  `readOnlyHint` / `destructiveHint` annotation, so an agent's own approval prompt, not a Coffer
+  one, guards a tool that writes. **Script tools are deferred past 1.0**: running a
   user's script is a process-sandbox question the HTTP type does not raise.
 - **CLIs get their own entry** because they have data nothing else shows — installed or not,
   version against the skills' minimum, login state — and actions nothing else offers: install
