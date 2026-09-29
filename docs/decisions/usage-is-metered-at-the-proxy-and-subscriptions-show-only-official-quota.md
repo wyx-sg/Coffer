@@ -216,6 +216,22 @@ Rules a future change must respect:
   incomplete stream is recorded as unknown, not zero.
 - Stored cost always names the price snapshot and override it used.
 
+## Implementation notes (2026-09-30)
+
+- The usage tables (`usage_requests`, `usage_daily`, `quota_snapshots`) are in
+  the daemon's database (migration 0111) until `runs.db` exists, as the
+  decision allowed. Per-request rows follow the MCP invocation retention
+  policy; daily totals are kept for 365 days.
+- The bundled price snapshot (`2026-09-25`) carries Anthropic's first-party
+  rates only; other vendors' models are unpriced until the user sets a price on
+  the connection's curated model. A cache category an override leaves out is
+  charged at its input rate.
+- Codex's background read runs only while a Codex agent is on its own login;
+  a manual refresh is floored at 30 seconds.
+- The statusline wrapper is `coffer usage statusline -- <command>`, documented
+  and never installed by Coffer; the experimental `get_usage` request is not
+  used.
+
 ## Consequences
 
 - **Storage.** `runs.db` gains usage records and the quota snapshots; the

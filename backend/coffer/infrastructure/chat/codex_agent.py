@@ -22,6 +22,7 @@ import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
+from coffer.application.chat.ports import QuotaObserver
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED,
@@ -47,6 +48,7 @@ from coffer.infrastructure.chat.document_extract import (
     extract_document_attachments,
     prompt_with_document_text,
 )
+from coffer.infrastructure.chat.quota_observe import forward_quota
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -57,6 +59,9 @@ _logger = logging.getLogger(__name__)
 
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
+
+#: The notification carrying Codex's official subscription windows mid-turn.
+RATE_LIMITS_UPDATED = "account/rateLimits/updated"
 
 #: JSON-RPC client info Coffer announces in the ``initialize`` handshake.
 _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
@@ -93,6 +98,7 @@ class CodexAppServerAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
+        observe_quota: QuotaObserver | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -103,6 +109,9 @@ class CodexAppServerAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
+        # Codex's own subscription windows, pushed as ``account/rateLimits/
+        # updated`` during a turn; forwarded as-is, never affecting the turn.
+        self._observe_quota = observe_quota
 
     async def run_turn(
         self,
@@ -263,6 +272,8 @@ class CodexAppServerAdapter:
             # ``stream_ended`` error).
             try:
                 async for method, params in _notifications_until_eof(rpc):
+                    if method == RATE_LIMITS_UPDATED:
+                        await forward_quota(self._observe_quota, "codex", params)
                     for event in map_codex_notification(method, params, state):
                         await queue.put(event)
                         if isinstance(event, (TurnDone, TurnError)):

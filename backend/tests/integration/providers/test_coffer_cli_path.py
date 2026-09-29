@@ -128,5 +128,5 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
 
     settings = json.loads((tmp_path / "settings.json").read_text())
     assert settings["apiKeyHelper"] == (
-        f"'/Users/me/My Apps/coffer' provider key --connection-uid {connection_uid}"
+        f"'/Users/me/My Apps/coffer' proxy token --agent-uid {agent_uid}"
     )

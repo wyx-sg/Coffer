@@ -25,6 +25,8 @@ from coffer.domain.agent.hooks import parse_hooks
 from coffer.domain.agent.types import AgentType
 from coffer.domain.memory.delivery import DELIVERY_EVENTS, events_label
 from coffer.domain.provider.agent_projection import ProviderProjectionRequest
+from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from tests.support.facets import agent_catalog
 from tests.support.homes import FakeAgentDir, IsolatedHome, fake_agent_dir
 
@@ -73,12 +75,13 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
     request = ProviderProjectionRequest(
         connection_uid=_UID,
         connection_name="gw",
+        agent_uid="a" * 32,
         base_url="https://gw.example/v1",
-        model=None,
-        fast_model=None,
+        key_helper=anthropic_api_key_helper(_UID, coffer_cli="/opt/coffer/bin/coffer"),
+        codex_auth=None,
+        binding=ModelBinding(),
         wire_api=None,
-        text_models=("m-1",),
-        coffer_cli="/opt/coffer/bin/coffer",
+        models=(ProjectedModel(id="m-1"),),
     )
     plan = facet.apply(original, request, path)
     for side in plan.before:

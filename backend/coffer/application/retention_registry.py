@@ -34,6 +34,11 @@ class PrunableTable:
     later. ``name`` is the policy key (one ``retention_policies`` row); ``target_table``
     is the SQL table acted on, which differs from ``name`` only for an archive entry
     that shares a table with its delete sibling.
+
+    ``policy_name`` makes a table a FOLLOWER of another entry's policy: it has no
+    ``retention_policies`` row of its own (never seeded, never listed, never
+    set), and it is pruned with the named policy's window whenever that policy
+    is — the per-request usage detail follows the MCP-calls window this way.
     """
 
     name: str
@@ -44,6 +49,17 @@ class PrunableTable:
     action: str = "delete"  # "delete" | "archive"
     target_table: str | None = None
     archive_set_column: str | None = None
+    policy_name: str | None = None
+
+    @property
+    def policy_key(self) -> str:
+        """The ``retention_policies`` row whose window governs this table."""
+        return self.policy_name or self.name
+
+    @property
+    def owns_policy(self) -> bool:
+        """Whether this entry has a policy row of its own (not a follower)."""
+        return self.policy_name is None
 
     @property
     def sql_table(self) -> str:
@@ -66,6 +82,13 @@ class PrunableRegistry:
     def register(self, table: PrunableTable) -> None:
         if table.name in self._tables:
             raise ValueError(f"duplicate prunable table: {table.name!r}")
+        if table.policy_name is not None:
+            leader = self._tables.get(table.policy_name)
+            if leader is None or not leader.owns_policy:
+                raise ValueError(
+                    f"{table.name!r} follows {table.policy_name!r}, which is not a "
+                    "registered policy (register the leader first)"
+                )
         self._tables[table.name] = table
         self._order.append(table.name)
 
@@ -76,3 +99,11 @@ class PrunableRegistry:
 
     def all(self) -> list[PrunableTable]:
         return [self._tables[n] for n in self._order]
+
+    def policies(self) -> list[PrunableTable]:
+        """The entries that own a policy row — what is seeded and listed."""
+        return [t for t in self.all() if t.owns_policy]
+
+    def followers(self, policy: str) -> list[PrunableTable]:
+        """The entries pruned with ``policy``'s window but owning no row."""
+        return [t for t in self.all() if t.policy_name == policy]

@@ -32,6 +32,7 @@ from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledg
 from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
 from coffer.surfaces.http.provider_wiring import ProviderWiring, wire_provider_kind
 from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.usage_wiring import UsageWiring, wire_model_usage
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,8 @@ class KindWirings:
     knowledge: KnowledgeWiring
     memory: MemoryWiring
     mcp: McpWiring
+    #: Usage metering and subscription quota (spec provider-switching).
+    usage: UsageWiring
     #: Coffer's own skill. Built here rather than by either kind because it is
     #: the knowledge layer's text written through the skill layer's store, and
     #: the two may not import each other.
@@ -89,6 +92,9 @@ async def wire_resource_kinds(
         agent_catalog,
         reconciler,
     )
+
+    # What the proxy metered, and the official quota of subscription agents.
+    usage = await wire_model_usage(sm, provider.service, agent_skill.agent_service)
 
     # Coffer's own skill carries the knowledge catalogue, so a collection
     # appearing, going or being switched has to reach the rendered file. The
@@ -142,5 +148,6 @@ async def wire_resource_kinds(
         knowledge=knowledge,
         memory=memory,
         mcp=mcp,
+        usage=usage,
         guide=guide,
     )

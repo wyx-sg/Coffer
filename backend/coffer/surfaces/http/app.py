@@ -235,6 +235,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc,
         agent_catalog,
         compose_memory_context=memory_context_composer(kinds.memory.service, features),
+        observe_quota=kinds.usage.quota.observe_agent_event,
     )
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors

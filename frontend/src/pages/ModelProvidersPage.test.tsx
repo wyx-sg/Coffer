@@ -84,6 +84,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     protocol: "anthropic",
     base_url: "https://gw/anthropic",
     credential_ref: "provider/acme/key",
+    local_runtime: null,
     compatible_agents: ["claude_code"],
     is_active: false,
     title: null,

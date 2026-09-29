@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 185 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 193 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -126,7 +126,9 @@ The daemon mounts 185 operations in 22 groups. Groups follow the order the daemo
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
 | [channels](#channels) | 3 |
-| [providers](#providers) | 11 |
+| [providers](#providers) | 10 |
+| [proxy](#proxy) | 3 |
+| [usage](#usage) | 6 |
 
 ### daemon
 
@@ -425,8 +427,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | --- | --- | --- |
 | `GET` | `/api/v1/providers` | List all provider profiles. |
 | `POST` | `/api/v1/providers` | Create a provider profile (422 when the credential source is invalid). |
-| `GET` | `/api/v1/providers/active-key/{wire}` | Back-compat: the decrypted key of the connection active for ``wire``'s agent (legacy ``--wire`` helper). |
-| `GET` | `/api/v1/providers/{uid}/key` | The decrypted key of a SPECIFIC connection — what Claude Code's projected ``apiKeyHelper`` (``coffer provider key --connection-uid <uid>``) fetches, so the agent always reads exactly the activated connection's key (no wire+active mismatch). |
+| `POST` | `/api/v1/providers/detect-local` | Which local model runtime answers where (spec provider-switching "Detect a local model runtime without changing it"). |
 | `GET` | `/api/v1/providers/{uid}` | Get one provider profile (404 if absent). |
 | `PATCH` | `/api/v1/providers/{uid}` | Partially update a provider profile. |
 | `DELETE` | `/api/v1/providers/{uid}` | Delete a provider profile (404 if absent). |
@@ -434,3 +435,22 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `POST` | `/api/v1/providers/use-builtin/{agent_type}` | Switch every agent of this type back to its OWN built-in login: remove Coffer's projection from the native config and clear the active connection covering it. |
 | `POST` | `/api/v1/providers/{uid}/internal-default` | Make this connection Coffer's internal-engine default (≤1 globally). |
 | `POST` | `/api/v1/providers/{uid}/transcribe-default` | Make this connection the one Coffer transcribes speech on (≤1 globally). |
+
+### proxy
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/proxy/status` | The supervised proxy's state, as the daemon last saw it. |
+| `GET` | `/api/v1/proxy/tokens/{agent_uid}` | The agent's local proxy token, minted on first ask. |
+| `POST` | `/api/v1/proxy/tokens/{agent_uid}/rotate` | Replace the agent's token; the old one is refused from the next push, which happens before this answers. |
+
+### usage
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/usage/summary` | Usage Summary |
+| `GET` | `/api/v1/usage/requests` | Usage Requests |
+| `GET` | `/api/v1/usage/export.csv` | Usage Export Csv |
+| `GET` | `/api/v1/usage/quota` | Usage Quota |
+| `POST` | `/api/v1/usage/quota/refresh` | Usage Quota Refresh |
+| `POST` | `/api/v1/usage/quota/statusline` | Usage Quota Statusline |

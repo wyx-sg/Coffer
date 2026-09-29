@@ -154,7 +154,7 @@ Secrets live only as **Fernet ciphertext** in the `credentials` table of `~/.cof
 
 - An MCP server's config maps environment variables or headers to refs in `transport.credential_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `credential_refs`.
 - A channel's bot token or app secret, a provider's API key, and the sync remote's push credential are refs.
-- When you switch a provider into Claude Code, Coffer writes an `apiKeyHelper` line (`<absolute path to coffer> provider key --connection-uid <uid>`) into Claude Code's settings, never the key itself. Codex is pointed at an environment variable name, also never the key.
+- When you switch an agent onto a provider, the agent is pointed at the [local model proxy](/architecture/model-proxy) on loopback and authenticates with its own local proxy token (`coffer proxy token --agent-uid <uid>`, run by Claude Code's `apiKeyHelper` and Codex's provider `auth` command). The provider's key is never written into an agent's file or environment, and no route or command returns it: the daemon decrypts it and hands it to the proxy, which injects it upstream and holds it in memory only.
 
 Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a credential that a resource still cites is refused with `409`; and deleting a resource releases any credential no remaining resource cites.
 

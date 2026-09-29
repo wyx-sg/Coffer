@@ -16,11 +16,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
-from coffer.application.chat.ports import AgentAdapter
+from coffer.application.chat.ports import AgentAdapter, QuotaObserver
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
-from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
@@ -36,11 +35,6 @@ from coffer.infrastructure.chat.codex_app_server import (
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import Transcriber
-
-#: Resolve the active openai connection's decrypted API key, or ``None`` when no
-#: Coffer connection is active for Codex (it then runs on its own login).
-KeyResolver = Callable[[], Awaitable[str | None]]
-
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -65,22 +59,18 @@ class CodexAppServerProvider:
         conversations: ConversationRepo,
         session_factory: AppServerSessionFactory | None = None,
         which: Any = shutil.which,
-        resolve_key: KeyResolver | None = None,
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
+        observe_quota: QuotaObserver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
             session_factory or default_app_server_session
         )
         self._which = which
-        # Resolves the active openai connection's key for COFFER_PROVIDER_KEY
-        # injection (the provider-switching env_key seam). ``None`` → no injection, codex
-        # inherits the daemon env and uses its own login.
-        self._resolve_key = resolve_key
         # None ⇒ voice is never transcribed and the audio file reaches the agent
         # as-is. That is the default: nothing leaves the machine unasked.
         self._transcriber_factory = transcriber_factory
@@ -98,6 +88,9 @@ class CodexAppServerProvider:
         # Points the spawned app-server at the agent's own config dir
         # (CODEX_HOME) when it is not ~/.codex. ``None`` ⇒ the default dir.
         self._resolve_home_env = resolve_home_env
+        # Where Codex's ``account/rateLimits/updated`` goes (the usage kind's
+        # quota service, bound at the composition root). ``None`` ⇒ dropped.
+        self._observe_quota = observe_quota
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -140,20 +133,15 @@ class CodexAppServerProvider:
                 conversation_id, replace(latest, session_id=session_id)
             )
 
-        # Inject the active openai connection's key as COFFER_PROVIDER_KEY (the
-        # env var named by config.toml's ``env_key``). Codex reads the key from
-        # there; without it it fails "Missing environment variable:
-        # COFFER_PROVIDER_KEY". MERGE with os.environ — create_subprocess_exec
-        # REPLACES the environment, so a bare {KEY: ...} would strip PATH etc.
-        # CODEX_HOME rides the same merged env when the agent has its own
-        # config dir; with neither override the env stays None (inherit as-is).
+        # No provider key rides the environment: an API-key connection is
+        # reached through Coffer's model proxy, which injects the real key
+        # upstream, and Codex authenticates to the proxy with its own ``auth``
+        # command. CODEX_HOME is the one override, when the agent has its own
+        # config dir — MERGED with os.environ, because create_subprocess_exec
+        # REPLACES the environment; with none the env stays None (inherit).
         overrides: dict[str, str] = (
             dict(await self._resolve_home_env()) if self._resolve_home_env else {}
         )
-        if self._resolve_key is not None:
-            key = await self._resolve_key()
-            if key:
-                overrides[CODEX_ENV_KEY] = key
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,
@@ -183,6 +171,7 @@ class CodexAppServerProvider:
             # text-extracted so it reaches the agent as text (spec chat "Extract
             # document attachments to text").
             document_extractor=default_document_extractor(),
+            observe_quota=self._observe_quota,
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

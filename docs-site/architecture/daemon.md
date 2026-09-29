@@ -61,6 +61,7 @@ flowchart LR
 | Process | Lifetime | Role |
 | --- | --- | --- |
 | `coffer-daemon` | Long-lived, one per vault | Serves the REST API (`/api/v1/*`), the MCP endpoint (`/mcp`) and the built web UI on `127.0.0.1:<port>`. It owns all state and is the only SQLite writer. From source it runs as `python -m coffer.infrastructure.daemon.entry`. A frozen build runs the `coffer-daemon` binary. |
+| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy`, the daemon's only sibling process, on `127.0.0.1:8001`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
 | `coffer` CLI | One command | Calls the daemon over loopback HTTP with the token from `daemon.json` and an `X-Coffer-Actor: cli` header, so its mutations are audited as the CLI. |
 | `coffer-mcp-shim` | One MCP client session | A stdio ↔ HTTP/SSE forwarder. An agent launches it as a stdio MCP server, and it relays each JSON-RPC line to `/mcp`. See [MCP gateway](/architecture/mcp-gateway). |
 | Desktop shell | While the app runs | A Tauri 2 app that hosts the same frontend build as a local asset and hands it the daemon's URL and token over IPC. It detects or spawns the daemon, but the daemon outlives the app: quitting the app does not stop it. See [Desktop app](/guides/desktop-app). |
