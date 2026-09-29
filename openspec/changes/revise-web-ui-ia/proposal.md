@@ -116,6 +116,9 @@ unarchived until that implementation lands.
   at the bare path, named by the resource's fixed name for skills, MCP servers and custom tool
   groups, by type for agents, by command for CLIs, and by `uid` for kinds that can be renamed; old
   `?tab=` and uid addresses redirect.
+- Every **split view** (list/detail, file tree/file, conversation list/thread, the sidebar) resizes
+  by dragging its divider, within minimum widths, with double-click to reset and ←/→ from the
+  keyboard; the width is remembered per page in the browser, safe to lose.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's

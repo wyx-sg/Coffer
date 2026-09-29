@@ -1051,3 +1051,46 @@ that adds skill requirements; this page shows what they report.
 - **WHEN** the user opens Overview
 - **THEN** an attention item names the CLI and the problem and opens its page
 - **AND** once every required CLI is present, current and logged in, no such item is shown
+
+### Requirement: Resize every split view by its divider
+Every split view — a list beside its detail, a file tree beside its file, a
+conversation list beside its thread, and the sidebar beside the workspace — MUST
+be resizable by dragging the divider between its panes. Each pane MUST keep a
+minimum width: a list pane at least 240px and a detail pane at least 480px, and
+a list pane at most half the window; the expanded sidebar between 200px and
+300px (the collapsed icon rail keeps its own fixed width, see "Collapse the
+sidebar to a remembered icon rail"). A drag MUST stop at those bounds rather
+than pass them. Double-clicking a divider MUST restore that split's default
+width. A divider MUST be keyboard-focusable, with an accessible name saying what
+it resizes, and while it has focus ← and → MUST move it by a fixed step within
+the same bounds.
+
+The chosen width MUST be remembered per page in that viewer's browser storage
+and restored on the next visit. It is a convenience: when the storage is empty,
+unreadable or blocked, the split opens at its default width and still works,
+and a remembered width that no longer fits the window is clamped to the bounds.
+
+#### Scenario: dragging a divider resizes and survives a reload
+- **GIVEN** the Skills detail page with its file tree beside the file
+- **WHEN** the user drags the divider to widen the tree, then reloads the page
+- **THEN** the tree keeps the width it was dragged to, on that page only
+
+#### Scenario: a divider cannot be dragged past a pane's minimum
+- **GIVEN** the Chat page with its conversation list beside the thread
+- **WHEN** the user drags the divider towards the list until the list would be narrower than 240px, and then the other way until the thread would be narrower than 480px or the list wider than half the window
+- **THEN** the divider stops at 240px, and at whichever of the other two bounds comes first
+
+#### Scenario: double-clicking a divider restores the default
+- **GIVEN** a split view whose divider was dragged to a remembered width
+- **WHEN** the user double-clicks the divider
+- **THEN** the split returns to its default width, and that default is what the next visit opens with
+
+#### Scenario: a divider moves from the keyboard
+- **GIVEN** the sidebar expanded at its default width
+- **WHEN** the user tabs to the sidebar's divider and presses → three times, then ← once
+- **THEN** the sidebar widens by two steps in total, never past 300px, and the divider announces what it resizes
+
+#### Scenario: no stored width falls back to the default
+- **GIVEN** browser storage that is blocked for the page
+- **WHEN** a split view opens and the user drags its divider
+- **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
