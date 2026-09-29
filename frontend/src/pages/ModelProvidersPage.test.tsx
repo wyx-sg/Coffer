@@ -447,20 +447,28 @@ describe("ModelProvidersPage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  test("the library says which connection speech is transcribed on", async () => {
-    // Transcription has no fallback: every voice message goes to the one
-    // connection carrying the flag, so the library has to answer "which one?"
-    // without a trip to Settings.
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({ name: "official" }),
-        makeProvider({ name: "agnes", transcribe_default: true }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("official");
+  acceptance(
+    "provider-switching",
+    "the library names the connections Coffer itself uses",
+    async () => {
+      // Each flag sits on one connection with no fallback, so the library has to
+      // answer "which one does Coffer use?" without a trip to Settings — and say
+      // it is Coffer's own use, not a capability of the provider.
+      apiMock.list.mockResolvedValue({
+        providers: [
+          makeProvider({ name: "official" }),
+          makeProvider({ name: "agnes", internal_default: true }),
+          makeProvider({ name: "groq", transcribe_default: true }),
+        ],
+      });
+      renderPage();
+      await screen.findByText("official");
 
-    expect(within(rowFor("agnes")).getByText("Speech to text")).toBeInTheDocument();
-    expect(within(rowFor("official")).queryByText("Speech to text")).toBeNull();
-  });
+      expect(within(rowFor("agnes")).getByText("Coffer · background model")).toBeInTheDocument();
+      expect(within(rowFor("agnes")).queryByText("Coffer · speech to text")).toBeNull();
+      expect(within(rowFor("groq")).getByText("Coffer · speech to text")).toBeInTheDocument();
+      expect(within(rowFor("groq")).queryByText("Coffer · background model")).toBeNull();
+      expect(within(rowFor("official")).queryByText(/^Coffer · /)).toBeNull();
+    },
+  );
 });

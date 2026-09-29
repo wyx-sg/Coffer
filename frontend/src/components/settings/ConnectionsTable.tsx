@@ -26,7 +26,7 @@ import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { ActiveProviderBadge } from "@/components/settings/ActiveProviderBadge";
-import { TranscribeProviderBadge } from "@/components/settings/TranscribeProviderBadge";
+import { CofferUseBadge } from "@/components/settings/CofferUseBadge";
 import {
   ConnectionRowActions,
   ConnectionStatusCell,
@@ -72,7 +72,8 @@ export function ConnectionsTable({
         <div className="flex flex-wrap items-center gap-2">
           <ResourceLabel resource={p} />
           {p.is_active ? <ActiveProviderBadge /> : null}
-          {p.transcribe_default ? <TranscribeProviderBadge /> : null}
+          {p.internal_default ? <CofferUseBadge use="engine" /> : null}
+          {p.transcribe_default ? <CofferUseBadge use="transcribe" /> : null}
         </div>
       ),
     },
