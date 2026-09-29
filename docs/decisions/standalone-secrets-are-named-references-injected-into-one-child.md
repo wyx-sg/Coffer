@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Audit every read of a secret value", spec credentials "List every cited reference with its presence", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
+**Related**: [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Audit every read of a secret value", spec credentials "List every cited reference with its presence", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
 
 ## Context
 
@@ -59,10 +59,11 @@ them. Coffer is "not a firewall or security boundary" (principles), and a
 managed agent runs with full permissions
 ([Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md)):
 Claude Code with `bypassPermissions`, Codex with `approvalPolicy: "never"`.
-Such an agent runs as the user. It can read `~/.coffer/master.key` (the
-default location, `surfaces/http/credential_composition.py:99`) and
-`~/.coffer/daemon.json` with the per-start token, and then ask the daemon for
-any value. Nothing a local tool does stops a process that *intends* to read a
+Such an agent runs as the user. It can read `~/.coffer/daemon.json` with the
+per-start token and then ask the daemon for any value — whether the master
+key is a file it can also read (today's default,
+`surfaces/http/credential_composition.py:99`) or a Keychain item only the
+signed daemon reads silently ([The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)). Nothing a local tool does stops a process that *intends* to read a
 secret its user can read.
 
 | Threat | Protected? |
@@ -249,8 +250,9 @@ user for the daemon, the key only in a signed keychain item, per-agent tokens
 - **Pros.** It would protect against the one threat Option A does not.
 - **Cons.** The agent runs as the user with full permissions by design; a
   separate OS user means an installer, privilege separation and a second home
-  directory for a single-user tool; the signed-keychain path needs a paid
-  Apple Team ID ([Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md));
+  directory for a single-user tool; a signed Keychain item keeps the master
+  key itself out of reach ([The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md))
+  but not the daemon, which answers anyone holding its per-start token;
   and per-agent tokens would live in files the same agent can read, which
   [Per-Agent Resource Scope Is One Framework Allow-List](per-agent-resource-scope.md)
   already rejected as ceremony under a same-user threat model.
@@ -275,7 +277,8 @@ references.
 The threat model is part of the decision: this protects against secrets
 landing in transcripts, git and plaintext files by accident. It does not
 protect against a deliberate agent running with full permissions, which can
-read the master key and the daemon token; nothing in Coffer claims otherwise.
+read the daemon token and ask the daemon for any value; nothing in Coffer
+claims otherwise.
 
 Rules a future change must respect:
 
