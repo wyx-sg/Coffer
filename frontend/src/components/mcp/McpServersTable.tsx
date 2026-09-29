@@ -97,7 +97,7 @@ export function McpServersTable({
         placeholder: t("mcp.table.search"),
       }}
       filters={filters}
-      onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.uid)}`)}
+      onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.name)}`)}
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
         ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,

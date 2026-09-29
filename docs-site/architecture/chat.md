@@ -1,6 +1,6 @@
 ---
 title: Chat and turns
-description: How Coffer runs a turn on Claude Code or Codex, streams it to every surface watching, and lets IM channels drive the same conversations as the web Chat page.
+description: How Coffer runs a turn on Claude Code or Codex, streams it to every surface watching, and lets IM channels drive the same conversations as the web Conversations page.
 ---
 
 # Chat and turns
@@ -15,7 +15,7 @@ There is also a cost constraint. Coffer drives two agents and two IM platforms, 
 
 ## Design decisions
 
-**One turn platform, several surfaces.** Conversations, the pending queue, the turn lifecycle and the event stream belong to one platform. The web Chat page and every channel are clients of it. Once a message reaches the orchestrator, nothing downstream knows which surface it came from, and an agent cannot tell a phone turn from a browser turn.
+**One turn platform, several surfaces.** Conversations, the pending queue, the turn lifecycle and the event stream belong to one platform. The web Conversations page and every channel are clients of it. Once a message reaches the orchestrator, nothing downstream knows which surface it came from, and an agent cannot tell a phone turn from a browser turn.
 
 **Single owner, one timeline, two screens.** Channels are owner-paired: the "IM peer" is always the vault's owner on their phone. So watching a phone conversation from the browser is continuity for one person, not multi-user collaboration. Coffer has no peer-identity model, no per-user visibility rules and no question of who may interrupt whom. The web page shows every conversation, including the ones a channel opened, with a badge naming the channel it is also reachable on.
 
@@ -92,7 +92,7 @@ The ways a turn can end early are told apart by flags on `ActiveTurn`, set by wh
 
 ```mermaid
 sequenceDiagram
-    participant UI as Web Chat page
+    participant UI as Web Conversations page
     participant API as turn_routes
     participant O as TurnOrchestrator
     participant R as run_turn_task
@@ -229,7 +229,7 @@ The appends an agent receives on top of its own system prompt are composed in on
 2. For a channel-driven conversation, the [memory](/architecture/memory) index. The composition root builds the composer (`memory_wiring.memory_context_composer`) and hands it to both providers through `wire_chat`. It returns nothing while the `memory` feature is off, when the index is empty, or when the tree cannot be read. See [Channel turns](/architecture/memory#channel-turns).
 3. On every turn, a model note naming the model Coffer put the agent on, or saying the agent's own default is in use, with a few alternatives. An agent cannot see Coffer's choice and invents one when asked, so the note says it outranks the agent's own guess.
 
-A turn from the web Chat page, like a session you start yourself in a terminal, gets memory through the agent's own memory hook, when the agent is connected to Coffer. No turn gets it both ways.
+A turn from the web Conversations page, like a session you start yourself in a terminal, gets memory through the agent's own memory hook, when the agent is connected to Coffer. No turn gets it both ways.
 
 ## Attachments and document extraction
 
@@ -335,7 +335,7 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 
 ### Mirroring a web reply
 
-A conversation a channel opened is one conversation with two screens, so a reply typed on the Chat page must reach the phone too. Chat must not import the channel kind, so the dependency points the other way: **chat declares a mirror port** — "is this conversation mirrored, where to, and deliver this reply" — and **the channel kind implements it**, wired together at the composition root.
+A conversation a channel opened is one conversation with two screens, so a reply typed on the Conversations page must reach the phone too. Chat must not import the channel kind, so the dependency points the other way: **chat declares a mirror port** — "is this conversation mirrored, where to, and deliver this reply" — and **the channel kind implements it**, wired together at the composition root.
 
 - **Where a reply may go.** The conversation is located through the per-thread history: its channel, chat, thread and chat kind. A direct chat, its threads and a group thread are deliverable. A group's main chat is not: it is the room's shared space, and a reply typed at a desk, followed by an answer nobody in the room asked for, does not belong there. Such a reply stays in Coffer. The conversation's view names the target (platform and thread mark) so the page can say where a reply will go before it is sent.
 - **What is sent.** The reply is posted to that chat or thread marked `(from Coffer)`, and the turn is queued with the same render hook a channel-driven turn gets, so the agent's answer reaches the chat exactly as it would have.

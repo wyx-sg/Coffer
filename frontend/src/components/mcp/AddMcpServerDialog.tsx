@@ -43,7 +43,7 @@ export function AddMcpServerDialog() {
         onSuccess: (created) => {
           setOpen(false);
           if (created.length === 1) {
-            navigate(`/mcp-servers/${encodeURIComponent(created[0].uid)}`);
+            navigate(`/mcp-servers/${encodeURIComponent(created[0].name)}`);
           }
         },
         onError: (err: unknown) => {

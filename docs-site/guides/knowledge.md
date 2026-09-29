@@ -171,7 +171,7 @@ Agents may do the same thing with their own file tools: the `coffer-guide` skill
 
 ## Curation
 
-Curation is how items become knowledge. It is a short, bounded pass driven by Coffer's own model (the model configured under **Settings → Coffer's model**; see [Model providers](/guides/providers)).
+Curation is how items become knowledge. It is a short, bounded pass driven by Coffer's own model (the model configured under **Settings › General → Coffer's model**; see [Model providers](/guides/providers)).
 
 ### What a pass does
 
@@ -206,7 +206,7 @@ A pass can only retire a document whose content it has already written elsewhere
 
 Curation runs on a background sweep, every hour by default, starting about a minute after the daemon starts. New items are therefore curated within the hour; to have them curated now, curate by hand (below). Each sweep takes inbox items first, oldest first, then edited documents, and runs a few passes per collection.
 
-Change the switch or the interval under **Settings → Coffer's model → Automatic upkeep → Merge new knowledge into documents**, or on the CLI:
+Change the switch or the interval under **Settings › General → Coffer's model → Automatic upkeep → Merge new knowledge into documents**, or on the CLI:
 
 ```sh
 coffer config list engine.upkeep.
@@ -274,7 +274,7 @@ If Coffer's model is not configured, nothing waits: each submission becomes a do
 A pass rewrites documents that [vault sync](/guides/vault-sync) carries between machines. If two machines both curated, the same item would be folded into two different documents. So curation runs on one **owner machine** only.
 
 - With no owner named, curation runs wherever the vault is open — correct for a single machine.
-- To name this machine: **Settings → Coffer's model → Automatic upkeep → Run curation on this machine**, or `coffer config set engine.curate_owner this`.
+- To name this machine: **Settings › General → Coffer's model → Automatic upkeep → Run curation on this machine**, or `coffer config set engine.curate_owner this`.
 - `coffer config get engine.curate_owner` reports the current owner, and flags an owner that no known machine claims (in that state curation runs nowhere); `coffer config unset engine.curate_owner` removes it.
 
 Curation and a sync round never run at the same time, and curation is skipped while a sync conflict or confirmation is outstanding.

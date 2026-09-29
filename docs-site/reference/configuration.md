@@ -184,7 +184,7 @@ These live in the database (or, where noted, elsewhere on disk) and are changed 
 | **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | `coffer daemon service install`, `uninstall`, `status` | the plist file |
 | **Experimental features** | channel default | See [Experimental features](#experimental-features). | `coffer config set feature.<key>` | `daemon-config.json` |
 
-### Settings → Coffer's model
+### Settings › General → Coffer's model
 
 The internal engine settings are one record, and all of them are *synced*. Each one is a `coffer config` key; `coffer config list engine.` prints them with their current values and defaults.
 

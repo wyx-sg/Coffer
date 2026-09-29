@@ -45,7 +45,7 @@ acceptance(
   async ({ page }) => {
     const id = await createConversation(page);
     try {
-      await page.goto(`/chat/${id}`);
+      await page.goto(`/conversations/${id}`);
       const composer = page.getByTestId("composer");
       await expect(composer).toBeVisible();
 
@@ -88,7 +88,7 @@ acceptance(
 acceptance("chat", "an attached file is shown in the thread after a reload", async ({ page }) => {
   const id = await createConversation(page);
   try {
-    await page.goto(`/chat/${id}`);
+    await page.goto(`/conversations/${id}`);
     await page.getByTestId("composer-file-input").setInputFiles({
       name: "diagram.png",
       mimeType: "image/png",

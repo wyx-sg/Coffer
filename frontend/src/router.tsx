@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { ChatRedirect, SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
 import type { FeatureKey } from "./lib/hooks/useFeatures";
@@ -10,6 +11,7 @@ import { SkillsPage } from "./pages/SkillsPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ModelProvidersPage } from "./pages/ModelProvidersPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { OverviewPage } from "./pages/OverviewPage";
 
 // Page-level code splitting. The list pages a user lands on stay in the main
 // bundle so the first paint needs one request; every detail page and every
@@ -32,201 +34,203 @@ function lazyPage<K extends string>(
 }
 
 /** A page that belongs to an experimental feature: while the feature is off
- *  the route renders a notice linking to Settings → General instead. */
+ *  the route renders a notice saying so instead. */
 function gated(feature: FeatureKey, page: JSX.Element): JSX.Element {
   return <FeatureGate feature={feature}>{page}</FeatureGate>;
 }
 
-// Exported as data, not only as a built router: a test that has to prove a
-// legacy URL still lands somewhere (rather than on "page not found") needs the
-// real route table under a memory router, and rebuilding it in the test would
-// prove nothing about this one.
+const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "SettingsModal");
+
+// The route table, exported as data: a test that has to prove a URL lands
+// somewhere (rather than on "page not found") needs the real table, and
+// rebuilding it in the test would prove nothing about this one.
 //
-// Every detail route is `:uid` — a resource's immutable identity — and not its
-// name. A name is a label the user edits, so a URL built from one stops
-// resolving the moment they do, and the page it names would 404 while the thing
-// it was about is still there (ADR resource-identity-is-an-immutable-uid).
-// Nothing translates an old name-based URL into a uid one: doing so would need
-// a lookup by name, which is the addressing this change removed.
-export const routes: RouteObject[] = [
+// Two tables, because Settings is a modal and not a page (spec web-ui "Open
+// Settings as a modal from the sidebar footer"): the shell renders `pageRoutes`
+// against the location of the page the user is on — the one under the modal
+// while Settings is open — and `settingsRoutes` over it. `routes` mounts the
+// shell at `*` so both are its descendants.
+//
+// Detail routes follow one rule (spec web-ui "Lay out every detail page's tabs
+// alike"): `/<kind>/<id>/<tab>`, the default tab at the bare path. `<id>` is the
+// name where a kind's name is fixed — skills and MCP servers — and the immutable
+// uid where a name can be renamed (ADR resource-identity-is-an-immutable-uid);
+// each page redirects an old `?tab=` or old uid address to the new one.
+const pageRoutes: RouteObject[] = [
+  { index: true, element: <OverviewPage /> },
   {
-    path: "/",
-    element: <Layout />,
-    children: [
-      { index: true, element: <Navigate to="/agents" replace /> },
-      { path: "chat", element: lazyPage(() => import("./pages/ChatPage"), "ChatPage") },
-      { path: "chat/:id", element: lazyPage(() => import("./pages/ChatPage"), "ChatPage") },
-      { path: "mcp-servers", element: <ResourcesPage /> },
-      {
-        path: "mcp-servers/:uid",
-        element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-      },
-      // Legacy route — this surface used to live at /resources.
-      { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
-      { path: "agents", element: <AgentsPage /> },
-      {
-        path: "agents/:uid",
-        element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
-      },
-      // Detail pages reached by clicking a row on the agent's Memory /
-      // Conversations tabs. Each identifies its subject by a search param (the
-      // store's `dir`, the session's `path`) rather than a path segment,
-      // because both identities are absolute filesystem paths — a path segment
-      // would have to survive encoding its own separators.
-      {
-        path: "agents/:uid/conversations",
-        element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
-      },
-      // An unmanaged skill folder, reached from the agent's Skills tab. It has
-      // no uid of its own, so the scan's location and the folder name name it.
-      {
-        path: "agents/:uid/skills/unmanaged/:location/:name",
-        element: lazyPage(
-          () => import("./pages/UnmanagedSkillDetailPage"),
-          "UnmanagedSkillDetailPage",
-        ),
-      },
-      {
-        path: "agents/:uid/memory",
-        element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
-      },
-      // A direct (unmanaged) MCP server of the agent, from the MCP servers
-      // tab. It has no uid — it is a stanza in the agent's own config file — so
-      // it is addressed as the REST route addresses it: the entry's name, and
-      // `?source=` for the file when two of the agent's files share that name.
-      {
-        path: "agents/:uid/mcp-servers/:entry",
-        element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
-      },
-      // A plugin, reached from the agent's Plugins tab. Its id
-      // (`<name>@<marketplace>`) is URL-encoded into one path segment.
-      {
-        path: "agents/:uid/plugins/:pluginId",
-        element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
-      },
-      { path: "channels", element: <ChannelsPage /> },
-      {
-        path: "channels/:uid",
-        element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
-      },
-      { path: "skills", element: <SkillsPage /> },
-      {
-        path: "skills/:uid",
-        element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
-      },
-      {
-        path: "knowledge",
-        element: gated(
-          "knowledge",
-          lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
-        ),
-      },
-      {
-        path: "knowledge/:uid",
-        element: gated(
-          "knowledge",
-          lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
-        ),
-      },
-      {
-        path: "memory",
-        element: gated(
-          "memory",
-          lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
-        ),
-      },
-      {
-        path: "memory/:uid",
-        element: gated(
-          "memory",
-          lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
-        ),
-      },
-      {
-        path: "sync",
-        element: gated(
-          "vault_sync",
-          lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
-        ),
-      },
-      { path: "model-providers", element: <ModelProvidersPage /> },
-      {
-        path: "model-providers/:uid",
-        element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
-      },
-      // Legacy route — `knowledge_base` was a resource kind with its own
-      // surface before it merged into the one Knowledge kind. Keep old
-      // bookmarks for the LIST working by redirecting to the merged path.
-      //
-      // There is deliberately no redirect for an individual collection. A
-      // detail URL is now built from the collection's uid, and an old link
-      // carries its name — translating one into the other would mean a lookup
-      // by name, which is exactly the addressing this change removed. Such a
-      // link lands on the list, from which the collection is one click away.
-      { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
-      {
-        path: "activity",
-        element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
-      },
-      // Legacy routes — the audit log had its own page at /audit, and
-      // "Observability" was the name this surface carried before Activity
-      // gathered all three records. Keep old bookmarks and links working by
-      // redirecting to the page that now holds what they were asking for.
-      { path: "audit", element: <Navigate to="/activity" replace /> },
-      { path: "observability", element: <Navigate to="/activity" replace /> },
-      {
-        path: "settings",
-        element: lazyPage(() => import("./pages/settings/SettingsLayout"), "SettingsLayout"),
-        children: [
-          {
-            index: true,
-            element: <Navigate to="/settings/general" replace />,
-          },
-          {
-            path: "general",
-            element: lazyPage(() => import("./pages/settings/GeneralSettings"), "GeneralSettings"),
-          },
-          {
-            path: "engine",
-            element: lazyPage(() => import("./pages/settings/EngineSettings"), "EngineSettings"),
-          },
-          // Legacy routes — this surface used to live under Settings as
-          // "LLM connections" (and before that as separate Models/Providers
-          // pages). It is now /model-providers under RESOURCES. Keep old
-          // bookmarks and links working by redirecting.
-          { path: "llm-connections", element: <Navigate to="/model-providers" replace /> },
-          { path: "models", element: <Navigate to="/model-providers" replace /> },
-          { path: "providers", element: <Navigate to="/model-providers" replace /> },
-          {
-            path: "data",
-            element: lazyPage(() => import("./pages/settings/DataSettings"), "DataSettings"),
-          },
-          // Legacy route — there is no embedding configuration any more:
-          // knowledge is a directory of files an agent greps, so no index
-          // needs an embedding model (ADR knowledge-is-plain-files). An old
-          // bookmark lands on "Coffer's model" — the nearest live surface,
-          // where the model Coffer's own passes run on is configured — rather
-          // than on the 404 page.
-          { path: "embedding", element: <Navigate to="/settings/engine" replace /> },
-          // Legacy route — Sync was a Settings tab before it became a
-          // top-level page. Keep old bookmarks and links working.
-          { path: "sync", element: <Navigate to="/sync" replace /> },
-          {
-            path: "security",
-            element: lazyPage(
-              () => import("./pages/settings/SecuritySettings"),
-              "SecuritySettings",
-            ),
-          },
-          {
-            path: "about",
-            element: lazyPage(() => import("./pages/settings/AboutPage"), "AboutPage"),
-          },
-        ],
-      },
-      { path: "*", element: <NotFoundPage /> },
-    ],
+    path: "conversations",
+    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
   },
+  {
+    path: "conversations/:id",
+    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
+  },
+  // Legacy routes — Conversations was Chat.
+  { path: "chat", element: <ChatRedirect /> },
+  { path: "chat/:id", element: <ChatRedirect /> },
+  { path: "mcp-servers", element: <ResourcesPage /> },
+  {
+    path: "mcp-servers/:name",
+    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
+  },
+  {
+    path: "mcp-servers/:name/:tab",
+    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
+  },
+  // Legacy route — this surface used to live at /resources.
+  { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
+  {
+    path: "custom-tools",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
+  { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  { path: "agents", element: <AgentsPage /> },
+  {
+    path: "agents/:uid",
+    element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
+  },
+  // Detail pages reached by clicking a row on the agent's Memory /
+  // Conversations tabs. Each identifies its subject by a search param (the
+  // store's `dir`, the session's `path`) rather than a path segment,
+  // because both identities are absolute filesystem paths — a path segment
+  // would have to survive encoding its own separators.
+  {
+    path: "agents/:uid/conversations",
+    element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
+  },
+  // An unmanaged skill folder, reached from the agent's Skills tab. It has
+  // no uid of its own, so the scan's location and the folder name name it.
+  {
+    path: "agents/:uid/skills/unmanaged/:location/:name",
+    element: lazyPage(() => import("./pages/UnmanagedSkillDetailPage"), "UnmanagedSkillDetailPage"),
+  },
+  {
+    path: "agents/:uid/memory",
+    element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
+  },
+  // A direct (unmanaged) MCP server of the agent, from the MCP servers
+  // tab. It has no uid — it is a stanza in the agent's own config file — so
+  // it is addressed as the REST route addresses it: the entry's name, and
+  // `?source=` for the file when two of the agent's files share that name.
+  {
+    path: "agents/:uid/mcp-servers/:entry",
+    element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
+  },
+  // A plugin, reached from the agent's Plugins tab. Its id
+  // (`<name>@<marketplace>`) is URL-encoded into one path segment.
+  {
+    path: "agents/:uid/plugins/:pluginId",
+    element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
+  },
+  { path: "channels", element: <ChannelsPage /> },
+  {
+    path: "channels/:uid",
+    element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
+  },
+  { path: "skills", element: <SkillsPage /> },
+  {
+    path: "skills/:name",
+    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
+  },
+  {
+    path: "skills/:name/:tab",
+    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
+  },
+  {
+    path: "knowledge",
+    element: gated(
+      "knowledge",
+      lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+    ),
+  },
+  {
+    path: "knowledge/:uid",
+    element: gated(
+      "knowledge",
+      lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
+    ),
+  },
+  {
+    path: "memory",
+    element: gated(
+      "memory",
+      lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
+    ),
+  },
+  {
+    path: "memory/:uid",
+    element: gated(
+      "memory",
+      lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+    ),
+  },
+  {
+    path: "sync",
+    element: gated(
+      "vault_sync",
+      lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
+    ),
+  },
+  { path: "model-providers", element: <ModelProvidersPage /> },
+  {
+    path: "model-providers/:uid",
+    element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
+  },
+  {
+    path: "model-providers/:uid/:tab",
+    element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
+  },
+  // Legacy route — `knowledge_base` was a resource kind with its own
+  // surface before it merged into the one Knowledge kind. Keep old
+  // bookmarks for the LIST working by redirecting to the merged path.
+  //
+  // There is deliberately no redirect for an individual collection. A
+  // detail URL is built from the collection's uid, and an old link carries
+  // its name — such a link lands on the list, from which the collection is
+  // one click away.
+  { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
+  { path: "secrets", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
+  {
+    path: "activity",
+    element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
+  },
+  // Legacy routes — the audit log had its own page at /audit, and
+  // "Observability" was the name this surface carried before Activity
+  // gathered all three records. Keep old bookmarks and links working by
+  // redirecting to the page that now holds what they were asking for.
+  { path: "audit", element: <Navigate to="/activity" replace /> },
+  { path: "observability", element: <Navigate to="/activity" replace /> },
+  { path: "usage", element: lazyPage(() => import("./pages/UsagePage"), "UsagePage") },
+  { path: "*", element: <NotFoundPage /> },
+];
+
+/** The Settings modal's routes, rendered over the page underneath. */
+const settingsRoutes: RouteObject[] = [
+  { path: "settings", element: <SettingsIndexRedirect /> },
+  // Legacy routes — Coffer's model was a tab of its own before it became a
+  // section of General (spec web-ui "Choose Coffer's model in Settings ›
+  // General"), and `/settings/embedding` is an old bookmark only: there is no
+  // embedding configuration (ADR knowledge-is-plain-files).
+  { path: "settings/engine", element: <Navigate to="/settings/general" replace /> },
+  { path: "settings/embedding", element: <Navigate to="/settings/general" replace /> },
+  // Legacy routes — this surface used to live under Settings as "LLM
+  // connections" (and before that as separate Models/Providers pages). It is
+  // /model-providers now. Keep old bookmarks and links working.
+  { path: "settings/llm-connections", element: <Navigate to="/model-providers" replace /> },
+  { path: "settings/models", element: <Navigate to="/model-providers" replace /> },
+  { path: "settings/providers", element: <Navigate to="/model-providers" replace /> },
+  // Legacy route — Sync was a Settings tab before it became a page.
+  { path: "settings/sync", element: <Navigate to="/sync" replace /> },
+  { path: "settings/:tab", element: settingsModal },
+];
+
+/** Every route the app answers, pages and Settings alike — what a test that
+ *  resolves a path against the real table reads. */
+export const appRoutes: RouteObject[] = [...pageRoutes, ...settingsRoutes];
+
+export const routes: RouteObject[] = [
+  { path: "*", element: <Layout pageRoutes={pageRoutes} settingsRoutes={settingsRoutes} /> },
 ];
 
 export const router = createBrowserRouter(routes);

@@ -1,20 +1,20 @@
 ---
-title: Chat
-description: Talk to Claude Code or Codex from Coffer's web Chat page, and watch, steer or continue conversations started from an IM channel.
+title: Conversations
+description: Talk to Claude Code or Codex from Coffer's web Conversations page, and watch, steer or continue conversations started from an IM channel.
 ---
 
-# Chat
+# Conversations
 
-The **Chat** page is where you talk to a managed agent — Claude Code or Codex — from Coffer's web UI. This guide covers starting a conversation, choosing the model and reasoning effort, what a turn looks like while it streams, stopping and queueing, and how the page relates to the agent's own sessions and to your [channels](/guides/channels).
+The **Conversations** page (formerly Chat) is where you talk to a managed agent — Claude Code or Codex — from Coffer's web UI. This guide covers starting a conversation, choosing the model and reasoning effort, what a turn looks like while it streams, stopping and queueing, and how the page relates to the agent's own sessions and to your [channels](/guides/channels).
 
-## What Chat is for
+## What Conversations is for
 
-Chat drives the agent you already use, through that agent's own runtime: Claude Code through the Claude Agent SDK, Codex through `codex app-server`. Coffer does not put a model of its own in between. The turn runs with the agent's own login and built-in model unless you pick a model for it.
+The page drives the agent you already use, through that agent's own runtime: Claude Code through the Claude Agent SDK, Codex through `codex app-server`. Coffer does not put a model of its own in between. The turn runs with the agent's own login and built-in model unless you pick a model for it.
 
-The page is one window onto a conversation, and an IM channel is another. A conversation you start on your phone through Telegram or SeaTalk appears on the Chat page, where you can watch its turns stream, stop them, and keep typing. The agent cannot tell which window a turn came from.
+The page is one window onto a conversation, and an IM channel is another. A conversation you start on your phone through Telegram or SeaTalk appears on the Conversations page, where you can watch its turns stream, stop them, and keep typing. The agent cannot tell which window a turn came from.
 
 ::: info No CLI
-There is no `coffer chat` command group. Conversations are reachable from the Chat page, from a channel, and over the REST API under `/api/v1/chat`.
+There is no `coffer chat` command group. Conversations are reachable from the Conversations page, from a channel, and over the REST API under `/api/v1/chat`.
 :::
 
 ## Prerequisites
@@ -29,18 +29,18 @@ If no managed agent is available, the page shows **No managed agent available** 
 
 ## Start a conversation
 
-1. Open **Chat** in the sidebar (under **Agents**). The page opens on a blank draft.
+1. Open **Conversations** in the sidebar (under **Run**). The page opens on a blank draft.
 2. In the bar at the top of the draft, pick the agent. An agent whose CLI is not on the daemon's `PATH` is listed as **unavailable** and cannot be chosen.
 3. Optionally pick a model and a reasoning effort (see [Choose the model and reasoning effort](#choose-the-model-and-reasoning-effort)).
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
 
 The first send creates the conversation. Opening the draft and leaving creates nothing. The conversation is titled after the first thing you wrote; rename it at any time and Coffer does not overwrite your name.
 
-The open conversation is part of the URL, `/chat/<id>`, so a refresh, a bookmark or a second tab reopens the same thread. A link to a conversation that has been deleted shows **Conversation not found** with a **Start a new chat** button.
+The open conversation is part of the URL, `/conversations/<id>` (old `/chat/<id>` links redirect), so a refresh, a bookmark or a second tab reopens the same thread. A link to a conversation that has been deleted shows **Conversation not found** with a **Start a new chat** button.
 
 ### Working directory
 
-Every Chat page turn runs in the Coffer-managed workspace, `~/.coffer/workspace`, which is created on first use. The page has no working-directory picker. A conversation's agent and working directory are fixed when it is created, because the agent's session belongs to that one directory.
+Every Conversations page turn runs in the Coffer-managed workspace, `~/.coffer/workspace`, which is created on first use. The page has no working-directory picker. A conversation's agent and working directory are fixed when it is created, because the agent's session belongs to that one directory.
 
 ::: tip
 If you want the agent to work inside a particular repository, tell it the absolute path in your message. The agent runs with full permissions, so it can read and write outside its working directory.
@@ -118,7 +118,7 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 
 ## Replying to a channel's conversation
 
-A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Chat page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
+A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Conversations page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
 
 - Before you send, the composer says where the reply will also go, for example **Also sends to SeaTalk · 🧵#1 deploy check**.
 - The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
@@ -156,9 +156,9 @@ How the agent receives an attachment depends on its kind, whichever way it arriv
 
 - **Images** — Claude Code receives a PNG, JPEG, GIF or WEBP image inline, as an image it can see, when it is at most 5 MB once encoded for sending (about 3.75 MB on disk). A larger image, or one in another format, reaches Claude Code as its file path instead, so the turn still runs. Codex always receives the file path.
 - **Documents** (PDF, office formats, epub, rtf) — extracted to text and folded into the prompt, so every agent reads the content. If extraction is unavailable or fails, the agent receives the file path.
-- **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings → Coffer's model**. With transcription off, nothing leaves your machine and the agent receives the audio file.
+- **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings › General → Coffer's model**. With transcription off, nothing leaves your machine and the agent receives the audio file.
 
-The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Chat page are kept in `~/.coffer/chat-media`, and files a channel received in `~/.coffer/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
+The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Conversations page are kept in `~/.coffer/chat-media`, and files a channel received in `~/.coffer/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
 
 Retrying a failed turn resends the message with its attachments. If a file it carried has since been pruned, the retry is refused with an error saying so, and nothing is sent: attach the file again and send a new message.
 
@@ -192,7 +192,7 @@ A Coffer conversation is backed by one real session of the agent. Coffer stores 
 
 There are two records of that conversation:
 
-- **Coffer's conversation** — messages, tool calls, results, model and token usage, in Coffer's database. This is what the Chat page shows, and it is the record of what the agent did. Turns are not written to the audit log.
+- **Coffer's conversation** — messages, tool calls, results, model and token usage, in Coffer's database. This is what the Conversations page shows, and it is the record of what the agent did. Turns are not written to the audit log.
 - **The agent's own session files** — kept by the agent itself, as for any session. The agent's detail page lists these under **Agents → *agent* → Conversations** (**Transcript sessions**), together with the sessions you ran directly in a terminal.
 
 Each conversation has one owner — you — whichever screen you are on. Chat does not model several people sharing a conversation; the channel pairing that lets your phone drive a conversation is the same trust decision as your browser session.
@@ -207,7 +207,7 @@ On top of the agent's own system prompt, Coffer appends, in this order:
 2. For a turn from a channel, while the `memory` feature is on: the [memory](/guides/memory#in-channel-turns) index for the conversation's working directory and `global`, and where the notes are.
 3. On every turn: the note naming the model Coffer put the agent on.
 
-A turn you send from the Chat page gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.
+A turn you send from the Conversations page gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.
 
 ::: danger Full permissions
 Chat runs Claude Code with `bypassPermissions` and Codex with `approvalPolicy: never` and `sandbox: danger-full-access`. Coffer does not ask you to approve individual tool calls. Pairing a channel to your own account is the gate for turns that come from IM; see [Channels](/guides/channels#security).

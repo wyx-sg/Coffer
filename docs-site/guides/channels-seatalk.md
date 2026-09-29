@@ -107,7 +107,7 @@ Wait for `connected` before the next step. The channel's page shows the same sta
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
-Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Chat](/guides/chat) page marked `via my-seatalk`.
+Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page marked `via my-seatalk`.
 
 ## Connection states
 
@@ -180,7 +180,7 @@ A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, an
 Everything SeaTalk can attach drives a turn: images, files and documents, video, and voice or audio. Coffer downloads each one with the app's token, since SeaTalk file links require authentication.
 
 - Documents are extracted to text for the agent.
-- Voice is transcribed when speech to text is on (**Settings → Coffer's model**); otherwise the agent gets the audio file.
+- Voice is transcribed when speech to text is on (**Settings › General → Coffer's model**); otherwise the agent gets the audio file.
 - A file keeps its real filename.
 
 The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an image or file message in the same chat and thread, with any caption as a following message. See [Channels → Sending files back](/guides/channels#sending-files-back).

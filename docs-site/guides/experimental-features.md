@@ -1,6 +1,6 @@
 ---
 title: Experimental features
-description: Which Coffer features are experimental, what each one gates, and how to switch them on or off per machine from Settings, the CLI or COFFER_FEATURES.
+description: Which Coffer features are experimental, what each one gates, and how to switch them on or off per machine from the CLI, the REST API or COFFER_FEATURES.
 ---
 
 # Experimental features
@@ -30,7 +30,7 @@ port:    8000
 pid:     41822
 ```
 
-The **Experimental features** card in **Settings → General** names the channel too.
+`coffer config list feature.` names the channel too.
 
 ## The features
 
@@ -46,20 +46,14 @@ Everything else in Coffer is always on.
 
 A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It is never synced, so switching a feature on the laptop leaves the desktop as it was.
 
-::: code-group
-
-```sh [CLI]
+```sh
 coffer config list feature.
 coffer config set feature.vault_sync on
 coffer config set feature.memory off
 coffer config unset feature.memory        # back to the channel default
 ```
 
-```text [Web UI]
-Settings → General → Experimental features
-```
-
-:::
+The same switch is `PUT /api/v1/daemon/features/{key}`. Settings in the web UI lists no features: at 1.0 every experimental feature graduates and its switch is deleted.
 
 `config list feature.` shows each feature's state and what decided it:
 
@@ -70,7 +64,7 @@ feature.knowledge    off (channel default)      channel   on|off
 feature.memory       off (channel default)      channel   on|off
 ```
 
-On the settings page each feature has a switch and a line naming the source: **Set on this machine**, **Default for the stable channel**, or a pin (below). The sidebar entry of a feature you switch on appears without a reload.
+The sidebar entry of a feature you switch on appears in an open web UI without a reload.
 
 The `feature.*` keys go through the running daemon, because only it can make a switch take effect immediately. Add `--json` to `config list` for scripts.
 
@@ -92,7 +86,7 @@ COFFER_FEATURES=vault_sync=on,memory=off coffer daemon restart
 
 Entries are comma-separated `key=value` pairs; `on`, `true` and `1` switch a feature on, `off`, `false` and `0` switch it off. An unknown key or a malformed entry is logged as a warning and ignored.
 
-A pinned feature cannot be switched: the settings switch is disabled and labelled **Pinned by COFFER_FEATURES — change it where the daemon is started**, and a write answers `409 FEATURE_PINNED`. The variable must be in the environment of the process that starts the daemon. The daemon is started by whichever surface needs it first (a CLI command, an agent's MCP shim, the desktop app, the login service), so a variable exported in one shell does not reach a daemon started from elsewhere.
+A pinned feature cannot be switched: a write answers `409 FEATURE_PINNED`. The variable must be in the environment of the process that starts the daemon. The daemon is started by whichever surface needs it first (a CLI command, an agent's MCP shim, the desktop app, the login service), so a variable exported in one shell does not reach a daemon started from elsewhere.
 
 ## What "off" means
 
@@ -104,7 +98,7 @@ Switching a feature off closes it everywhere on this machine:
   vault_sync is switched off on this machine — run: coffer config set feature.vault_sync on
   ```
 - **MCP:** its tools leave the tool list, and a call to one answers as an unknown tool. The handshake instructions and the `coffer-guide` skill stop mentioning them.
-- **Web UI:** its sidebar entry disappears, and its pages show a notice ("Knowledge is switched off") with a link to **Settings → General**.
+- **Web UI:** its sidebar entry disappears, and its pages show a notice ("Knowledge is switched off") naming the command that switches it back on.
 - **Background passes:** its passes skip their rounds.
 
 Some features also withdraw what they placed in front of agents:

@@ -63,13 +63,23 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+// revise-web-ui-ia: web-ui "the index opens Overview" — the marker moves to
+// that scenario when the change is archived (its task 7.2).
 acceptance("web-ui", "the index opens the Agents page", async () => {
   const get = mockApi();
   const location = renderAt("/");
 
-  await waitFor(() => expect(location.pathname).toBe("/agents"));
-  expect(await screen.findByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
+  // Overview renders in place at `/`, with no redirect, and is marked current.
+  expect(
+    await screen.findByRole("heading", { level: 1, name: "Overview" }, { timeout: 5_000 }),
+  ).toBeInTheDocument();
+  expect(location.pathname).toBe("/");
+  expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+
+  // /agents still opens the Agents page.
+  renderAt("/agents");
+  expect(await screen.findByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
 
   // The MCP servers surface asks the daemon for MCP servers only.
   get.mockClear();
@@ -89,5 +99,40 @@ acceptance("web-ui", "legacy resource paths redirect instead of 404ing", async (
   const location = renderAt("/resources");
 
   await waitFor(() => expect(location.pathname).toBe("/mcp-servers"));
+  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+});
+
+test("the old Chat addresses open Conversations", async () => {
+  mockApi();
+  const list = renderAt("/chat");
+  await waitFor(() => expect(list.pathname).toBe("/conversations"));
+  const one = renderAt("/chat/conv-1");
+  await waitFor(() => expect(one.pathname).toBe("/conversations/conv-1"));
+});
+
+test("the old Settings addresses land on a live tab", async () => {
+  mockApi();
+  for (const [from, to] of [
+    ["/settings", "/settings/general"],
+    ["/settings/engine", "/settings/general"],
+    ["/settings/embedding", "/settings/general"],
+    ["/settings/nope", "/settings/general"],
+    ["/settings/llm-connections", "/model-providers"],
+    ["/settings/sync", "/sync"],
+  ] as const) {
+    const location = renderAt(from);
+    await waitFor(() => expect(location.pathname).toBe(to));
+  }
+});
+
+test("every page the shell adds resolves to a page of its own", async () => {
+  mockApi();
+  for (const path of ["/custom-tools", "/clis", "/secrets", "/usage"]) {
+    renderAt(path);
+  }
+  // Each page is code-split, so they arrive one by one.
+  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(4), {
+    timeout: 5_000,
+  });
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });

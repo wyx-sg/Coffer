@@ -211,7 +211,8 @@ describe("UnmanagedSkillDetailPage", () => {
       await waitFor(() =>
         expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills"),
       );
-      expect(await screen.findByTestId("where")).toHaveTextContent("/skills/u-new");
+      // Addressed by the new skill's fixed name, not its uid (revise-web-ui-ia).
+      expect(await screen.findByTestId("where")).toHaveTextContent(/^\/skills\/loose$/);
       first.unmount();
 
       // Delete: confirm, then back to the agent's Skills tab.

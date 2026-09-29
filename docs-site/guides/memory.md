@@ -92,7 +92,7 @@ Only the distil pass sends memory content anywhere, and only to the model endpoi
 
 ### Change the schedule
 
-Under **Settings → Coffer's model → Automatic upkeep**, each pass has a switch and an interval. On the CLI:
+Under **Settings › General → Coffer's model → Automatic upkeep**, each pass has a switch and an interval. On the CLI:
 
 ```sh
 coffer config list engine.upkeep.
@@ -210,7 +210,7 @@ Triggers are yours: you write them, or you accept the ones Coffer proposes. Noth
 
 A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. It stops on the next turn after you switch the `memory` feature off, and a turn gets no memory header at all when the index is empty. Prompt-time retrieval and triggers are not part of this append.
 
-A turn you send from the [Chat](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
+A turn you send from the [Conversations](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
 
 ### On demand: search the memory root
 
@@ -367,7 +367,7 @@ coffer memory rm payments-api
 
 **A trigger holds a command it should not.** Tighten its `--command` pattern or add an `--unless`: delete the trigger and add it again, or edit its file under `~/.coffer/vault/memory-triggers/`. Until then it costs one held command per session.
 
-**Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings → Coffer's model**; entries distilled after that, by `coffer memory sync` or the next sweep, go through the model.
+**Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings › General → Coffer's model**; entries distilled after that, by `coffer memory sync` or the next sweep, go through the model.
 
 ## Related
 

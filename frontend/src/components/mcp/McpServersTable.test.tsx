@@ -79,9 +79,9 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-// Each row's uid is deliberately unlike its name: the row NAVIGATES by uid and
-// MUTATES by uid while showing the name, and equal strings would hide a cell
-// that used the wrong one.
+// Each row's uid is deliberately unlike its name: the row NAVIGATES by its
+// fixed name and MUTATES by uid, and equal strings would hide a cell that used
+// the wrong one.
 const SAMPLE: ResourceOut[] = [
   {
     uid: "u-local-files",
@@ -246,10 +246,10 @@ describe("McpServersTable", () => {
     // the row underneath it.
     expect(navigateMock).not.toHaveBeenCalled();
 
-    // …while the row itself still navigates — to the UID, because the old
-    // name→uid redirect is gone and a name in the URL would resolve nothing.
+    // …while the row itself still navigates — to the server's fixed name,
+    // which is the detail address (revise-web-ui-ia).
     fireEvent.click(screen.getByText("Local filesystem access"));
-    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/u-local-files");
+    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/files");
   });
 
   test("the status filter narrows the rows by reach", () => {
@@ -294,12 +294,12 @@ describe("list and detail conventions (web-ui)", () => {
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
 
     fireEvent.click(screen.getByText("Remote fetch"));
-    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/u-remote-web");
+    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/web");
 
     // The row is keyboard-operable the same way.
     const row = screen.getByText("Scoped to one agent").closest("tr") as HTMLElement;
     fireEvent.keyDown(row, { key: "Enter" });
-    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/u-notes-store");
+    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/notes");
   });
 
   acceptance("web-ui", "a row action shows its label beside its icon", () => {

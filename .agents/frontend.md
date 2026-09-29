@@ -70,6 +70,23 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
     table, the add form and the detail header.
   - `lib/chat/turnErrors.ts` — copy for a failed chat turn: pure mapping from
     error shape to actionable text, unit-tested without a component.
+- **The app shell** (docs-site `architecture/app-shell.md`) has one home per concern:
+  - `lib/navigation.ts` — the one list of sidebar entries (`NAV_GROUPS`) and
+    Settings tabs (`SETTINGS_TABS`); the sidebar, the palette's Pages group and
+    the Settings modal all read it. A new entry or tab is added here, nowhere else.
+  - `lib/settingsModal.ts` — `useOpenSettings`, `useCloseSettings`,
+    `usePageLocation` (the background page under the modal). Open Settings only
+    through it, never with a hand-built `navigate("/settings/…")`.
+  - `components/palette/` — the palette: navigation only; objects come from
+    each kind's existing list hook, never an aggregate route.
+  - `components/shell/` — `SidebarFooter` (Settings row, daemon state,
+    language); `useDaemonFooterState` reads the same `useDaemonStatus` poll as
+    `DaemonOfflineBanner` (no second timer); `AttentionDot`, fed by
+    `lib/hooks/useAttentionSignals.ts` — a kind that declares an attention
+    signal adds its hook to that map, keyed by its entry's route.
+  - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
+    for every resizable split; widths are per-browser conveniences.
+  - `components/PlaceholderPage` — temporary, for sidebar pages not yet built.
 
 ## 3. State Management
 
@@ -79,20 +96,23 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
 | User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts`             |
 | **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
-| Page-level tab / selected file                                  | the **URL search param** (`?tab=`, `?file=`) via `useSearchParams` |
+| Detail-page tab                                                 | the **path** (`/<kind>/<id>/<tab>`) via `useDetailTab` (`lib/detailTabs.ts`) |
+| Selected file; tab on a page not yet rebuilt                    | the **URL search param** (`?file=`, `?tab=`) via `useSearchParams` |
 
 The API token is deliberately not in that table: it is read from
 `window.__COFFER_TOKEN__`, injected into the served page by whoever served it
 (`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
-The last row matters: anything a user would expect to survive a refresh, deep-link,
-or back-button MUST be a route param (`/chat/:id`, `/agents/:uid`), not local
+The URL rows matter: anything a user would expect to survive a refresh, deep-link,
+or back-button MUST be a route param (`/conversations/:id`, `/agents/:uid`), not local
 state. "Which item is selected" is navigation, not UI state. The same holds one
-level down: which tab a page is on and which file is open in a tree are
-`?tab=` / `?file=` search params read with `useSearchParams`, so a link can land
-on a tab and a reload comes back where it was. The detail pages (Agent, Skill,
-Provider, MCP server, Knowledge), Sync and Activity all follow it; the default
-tab is the absence of the param, never `?tab=overview`.
+level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
+default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
+(`lib/detailTabs.ts`), which also redirects old `?tab=` links; skills and MCP
+servers are keyed by their fixed name, renamable kinds by uid. Skills, MCP
+servers and model providers follow it; Agent, Knowledge, Sync and Activity
+still use `?tab=` until their rebuild, and the open file in a tree is always
+`?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the
 query cache (same query key → same data), not through Context. The only Context
@@ -274,6 +294,25 @@ return useMutation({
 - Keys are nested camelCase dotted paths under a feature namespace
   (`chat.composer.placeholder`). **en and zh stay at exact key parity** — add to
   both in the same change; `src/i18n/locales.test.ts` guards it.
+
+### en/zh glossary
+
+One name per surface everywhere (spec web-ui "Call a surface by one name everywhere"):
+
+| English | 中文 | English | 中文 |
+| --- | --- | --- | --- |
+| Overview | 总览 | Custom tools | 自定义工具 |
+| Agents (group, entry) | 智能体 | Skills | 技能 |
+| Model providers | 模型提供商 | CLIs | 命令行工具 |
+| Run (group) | 运行 | Context (group) | 上下文 |
+| Conversations | 对话 | Knowledge | 知识 |
+| Channels | 消息渠道 | Memory | 记忆 |
+| Capabilities (group) | 能力 | System (group) | 系统 |
+| MCP servers | MCP 服务器 | Secrets | 密钥 |
+| Activity | 活动 | Usage | 用量 |
+| Sync | 同步 | Settings | 设置 |
+
+In zh an agent is always **智能体** — never "Agent" or 代理.
 
 ## 8. Testing
 

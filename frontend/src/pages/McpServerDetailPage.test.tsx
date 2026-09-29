@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { McpServerDetailPage } from "./McpServerDetailPage";
 
 vi.mock("@/lib/api/client", () => ({
@@ -20,12 +20,21 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [] })),
 }));
 
+// The page is addressed by the server's NAME and resolves it to the uid
+// against the MCP servers list; the list is stubbed here so each test's GET
+// mock only has to answer the per-server reads.
+let listed: Array<{ uid: string; name: string }> = [];
+vi.mock("@/lib/hooks/useResources", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useResources")>()),
+  useResources: vi.fn(() => ({ data: listed, isPending: false, error: null })),
+}));
+
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
-// Identity and label, kept deliberately unalike: the page is addressed by the
-// uid in its route and in every request it makes, while everything on screen
-// (the title, the delete confirmation) says "fs".
+// Identity and name, kept deliberately unalike: the page is addressed by the
+// name in its route, every request it makes carries the uid, and everything on
+// screen (the title, the delete confirmation) says "fs".
 const stdioResource = {
   uid: "u-filesystem",
   kind: "mcp_server",
@@ -37,7 +46,15 @@ const stdioResource = {
   updated_at: "2026-05-21T00:00:00Z",
 };
 
-function wrap(ui: React.ReactNode, route = "/mcp-servers/u-filesystem") {
+/** Where the router is now — path and query — for the addressing tests. */
+const where = { url: "" };
+function Probe() {
+  const loc = useLocation();
+  where.url = loc.pathname + loc.search;
+  return null;
+}
+
+function wrap(ui: React.ReactNode, route = "/mcp-servers/fs") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -45,7 +62,15 @@ function wrap(ui: React.ReactNode, route = "/mcp-servers/u-filesystem") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
-          <Route path="/mcp-servers/:uid" element={ui} />
+          <Route
+            path="/mcp-servers/:name/:tab?"
+            element={
+              <>
+                {ui}
+                <Probe />
+              </>
+            }
+          />
           <Route path="/mcp-servers" element={<div data-testid="resources-page">resources</div>} />
         </Routes>
       </MemoryRouter>
@@ -56,6 +81,7 @@ function wrap(ui: React.ReactNode, route = "/mcp-servers/u-filesystem") {
 describe("McpServerDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listed = [stdioResource];
   });
 
   test("renders resource name, description, and config JSON", async () => {
@@ -364,5 +390,66 @@ describe("McpServerDetailPage", () => {
     // The scope card that used to sit below the header is gone — enable/disable
     // and scope now live in the one control.
     expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
+  });
+
+  // revise-web-ui-ia: web-ui "a detail tab lives in the path"
+  test("the open tab lives in the path, under the server's name", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({ data: stdioResource, error: undefined }),
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />, "/mcp-servers/fs/prompts"));
+    const prompts = await screen.findByRole("tab", { name: "Prompts" });
+    expect(prompts).toHaveAttribute("aria-selected", "true");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }));
+    expect(where.url).toBe("/mcp-servers/fs/tools");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
+    expect(where.url).toBe("/mcp-servers/fs");
+  });
+
+  // revise-web-ui-ia: web-ui "an old query-tab address redirects to the path"
+  test("an old ?tab= address redirects to the path", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({ data: stdioResource, error: undefined }),
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />, "/mcp-servers/fs?tab=invocations"));
+    await waitFor(() => expect(where.url).toBe("/mcp-servers/fs/invocations"));
+    expect(screen.getByRole("tab", { name: "Invocations" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  // revise-web-ui-ia: web-ui "an old uid address redirects to the name"
+  test("an old uid address redirects to the name address, keeping the tab", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({ data: stdioResource, error: undefined }),
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />, "/mcp-servers/u-filesystem?tab=tools"));
+    await waitFor(() => expect(where.url).toBe("/mcp-servers/fs/tools"));
+    expect(await screen.findByRole("tab", { name: "Tools" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  test("a name no server has shows the not-found card", async () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn(),
+      POST: vi.fn(),
+      DELETE: vi.fn(),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<McpServerDetailPage />, "/mcp-servers/nope"));
+    expect(await screen.findByText(/resource not found/i)).toBeInTheDocument();
+    expect(where.url).toBe("/mcp-servers/nope");
   });
 });

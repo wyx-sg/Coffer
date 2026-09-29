@@ -137,7 +137,7 @@ acceptance(
     const name = generateUniqueName("e2e002tog");
     try {
       await registerFakeServer(name);
-      await page.goto(`/mcp-servers/${await uidOf(name)}`);
+      await page.goto(`/mcp-servers/${encodeURIComponent(name)}`);
       // Tabs row uses the new design tokens but the role + tab names are
       // unchanged (spec web-ui explicitly requires backwards-compatible
       // selectors here).
@@ -184,7 +184,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/${await uidOf(name)}`);
+      await page.goto(`/mcp-servers/${encodeURIComponent(name)}`);
       await page.getByRole("tab", { name: "Resources" }).click();
 
       // The resource row appears with its URI and is enabled by default
@@ -231,7 +231,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/${await uidOf(name)}`);
+      await page.goto(`/mcp-servers/${encodeURIComponent(name)}`);
       await page.getByRole("tab", { name: "Prompts" }).click();
 
       // The prompt row appears and is enabled by default
@@ -377,7 +377,7 @@ acceptance(
       // Two distinct tools so the search can filter one out
       await registerFakeServer(name, ["--tools", "alpha_tool", "beta_tool"]);
 
-      await page.goto(`/mcp-servers/${await uidOf(name)}`);
+      await page.goto(`/mcp-servers/${encodeURIComponent(name)}`);
       await page.getByRole("tab", { name: "Tools" }).click();
 
       // Both tools visible initially

@@ -198,7 +198,7 @@ The gates are request-time:
 - CLI commands reach the daemon over the gated routes and print one line naming `coffer config set feature.<key> on`, then exit 1.
 - Background passes owned by the feature skip their rounds.
 
-Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with **Settings → General**, `coffer config set feature.<key> on|off`, or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature leaves the registry once it is ready, and its gates are deleted with it. See [Experimental features](/guides/experimental-features).
+Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature leaves the registry once it is ready, and its gates are deleted with it. See [Experimental features](/guides/experimental-features).
 
 ## Code signing and the keychain
 
