@@ -1,8 +1,8 @@
 """Which agents a connection projects into (ADR per-agent-resource-scope).
 
-Five callers, two questions: the switch (``ProviderService``), the per-agent
-key lookup the turn machinery does, the post-import projection reconcile and
-the boot self-heal all want the effective projection; the management surface
+Four callers, two questions: the switch (``ProviderService``), the per-agent
+key lookup the turn machinery does and the projection reconcile target all
+want the effective projection; the management surface
 wants the configured reach. Before scope reached this kind the answer lived in the
 config as ``compatible_agents``; it is now the resource's framework-level
 ``scope``, and this module is the single seam where the agent UIDS it holds are
@@ -48,7 +48,7 @@ Three inputs feed those, each answering something different:
 - ``is_active`` — NOT a narrowing at all, and deliberately not read by either.
   It records whether this is the connection currently *projected* into the
   agents it covers (at most one per agent type), which is a fact about the
-  agent's native config file, not about reach. The boot self-check exists
+  agent's native config file, not about reach. The projection reconcile target exists
   precisely because that flag can disagree with the file. Callers that want
   "the active connection for this agent" intersect the two themselves.
 """

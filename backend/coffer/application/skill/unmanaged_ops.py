@@ -157,15 +157,17 @@ async def adopt_unmanaged(
 ) -> Resource:
     """Adopt an unmanaged skill folder into the master store.
 
-    Copy into master + register + auto-bind (via ``register_from_validated``),
+    Copy into master + register + deliver (via ``register_from_validated``),
     then remove the original folder and deliver the managed link to the
     agent's canonical delivery location ``<config_dir>/skills/<name>`` —
     in-place replacement when adopting from there, consolidation when
     adopting from ``~/.agents/skills`` (the original is removed; Codex reads
     both locations, so the skill stays visible). See spec skill-manager "Adopt an unmanaged skill".
-    Auto-bind inside ``register_from_validated`` skips THIS agent with a
-    TargetConflict while the original folder still occupies the link path —
-    that is why the rmtree happens first and ``enable_for`` runs after it.
+    The delivery pass ``register_from_validated`` asks for leaves THIS agent
+    alone while the original folder still occupies the link path (foreign
+    content is never clobbered) — that is why the rmtree happens first and
+    the link is made after it, directly: adoption links in place even into a
+    disabled agent, which the reconciler would not.
     """
     from coffer.application.skill.lifecycle_ops import register_from_validated
 
@@ -199,15 +201,23 @@ async def adopt_unmanaged(
     # folder (under its own name) is still removed — the folder name was
     # never the skill's identity.
     service._rmtree(entry.path)
-    from coffer.application.skill.binding_ops import enable_skill_for_agent
+    from coffer.application.skill.binding_ops import deliver
 
-    await enable_skill_for_agent(
-        service=service,
-        skill_uid=resource.uid,
-        agent_uid=agent.uid,
-        force=False,
-        actor=actor,
-    )
+    link = service._resolve_agent_skill_dir(agent) / resource.name
+    written = await deliver(service, skill=resource, agent=agent, link=link)
+    if written.created is not None:
+        # Adoption is the one delivery made outside the reconciler (it links
+        # in place even into a disabled agent), so it records its own event.
+        await service._audit.record(
+            AuditEventType.SKILL_BOUND.value,
+            resource=resource,
+            actor=actor,
+            details={
+                "agent": agent.name,
+                "link": str(link),
+                "mode": written.mode.value if written.mode else None,
+            },
+        )
     return resource
 
 

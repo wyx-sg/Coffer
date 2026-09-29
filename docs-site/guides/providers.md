@@ -212,7 +212,7 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
 | Claude Code sends requests without a key | The provider was disabled or reaches no agent, or the helper runs a bare `coffer` that is not on the `PATH` Claude Code runs with | Run the `apiKeyHelper` command from `settings.json` yourself; switch again to rewrite it with the CLI's absolute path. |
 | Codex run from your shell fails to authenticate | `COFFER_PROVIDER_KEY` is not exported there | Export it as shown above. |
-| The agent page shows the built-in login after a restart | The boot self-check found the agent's config no longer carries the projection | Switch again if you still want the provider. |
+| The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and marked the connection inactive rather than re-route the agent | Switch again if you still want the provider. |
 | A `wire_api` other than `responses` is refused | Codex refuses to load any other value | Leave it at `responses`. |
 
 ## Related

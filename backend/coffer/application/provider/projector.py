@@ -35,6 +35,10 @@ from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource
 
+#: The content each file a projection wrote or removed held before it
+#: (``None``: the file did not exist) — what an undo puts back.
+Priors = dict[pathlib.Path, str | None]
+
 
 class ProjectionConfigStore(_Protocol):
     def read_text(self, path: pathlib.Path) -> str | None: ...
@@ -117,6 +121,28 @@ class ProviderProjector:
             reverted.append(agent.name)
         return reverted
 
+    def request_for(
+        self, connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig
+    ) -> ProviderProjectionRequest:
+        """What a projection of ``connection`` into this agent is built from."""
+        return projection_request(connection, cfg, agent_cfg, coffer_cli=self._resolve_cli())
+
+    def project_agent(self, connection: Resource, cfg: ProviderConfig, agent: Resource) -> Priors:
+        """Project ``connection`` into one agent; return the prior content of
+        every file written or removed (``None`` for one that did not exist)."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return {}
+        return self._project(connection, cfg, agent, facet)
+
+    def deproject_agent(self, agent: Resource) -> Priors:
+        """Remove Coffer's projection from one agent; return the prior content
+        of every file written or removed."""
+        facet = self.projection_for(AgentConfig.model_validate(agent.config).type)
+        if facet is None:
+            return {}
+        return self._deproject(agent, facet)
+
     # --- internals -----------------------------------------------------------
 
     def _project(
@@ -125,56 +151,47 @@ class ProviderProjector:
         cfg: ProviderConfig,
         agent: Resource,
         facet: ProviderProjection,
-    ) -> None:
+    ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
-        request = ProviderProjectionRequest(
-            connection_uid=connection.uid,
-            connection_name=connection.name,
-            base_url=cfg.base_url,
-            # Model comes solely from the per-agent binding (spec
-            # provider-switching "Take projected model keys from the agent's
-            # binding"); an unbound agent projects no model.
-            model=agent_cfg.model,
-            fast_model=agent_cfg.fast_model,
-            wire_api=agent_cfg.wire_api,
-            # Only the `text` entries: a model catalogue is the agent's own
-            # picker (spec provider-switching "Offer only text models to chat
-            # pickers").
-            text_models=tuple(cfg.model_ids(Modality.TEXT)),
-            coffer_cli=self._resolve_cli(),
-        )
-        self._perform(spec.path, current, facet.apply(current or "", request, spec.path))
+        request = self.request_for(connection, cfg, agent_cfg)
+        return self._perform(spec.path, current, facet.apply(current or "", request, spec.path))
 
-    def _deproject(self, agent: Resource, facet: ProviderProjection) -> None:
+    def _deproject(self, agent: Resource, facet: ProviderProjection) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
         text = current or ""
         if not text.strip():
-            return  # nothing was ever projected
-        self._perform(spec.path, current, facet.remove(text, spec.path))
+            return {}  # nothing was ever projected
+        return self._perform(spec.path, current, facet.remove(text, spec.path))
 
-    def _perform(self, path: pathlib.Path, current: str | None, plan: ProjectionPlan) -> None:
+    def _perform(self, path: pathlib.Path, current: str | None, plan: ProjectionPlan) -> Priors:
+        priors: Priors = {}
         for side in plan.before:
             if side.text is not None:
                 self._write_if_changed(
-                    side.path, self._config_store.read_text(side.path), side.text
+                    side.path, self._config_store.read_text(side.path), side.text, priors
                 )
-        self._write_if_changed(path, current, plan.text)
+        self._write_if_changed(path, current, plan.text, priors)
         for side in plan.after:
             if side.text is None:
-                self._config_store.delete_with_backup(side.path)
+                before = self._config_store.read_text(side.path)
+                if self._config_store.delete_with_backup(side.path):
+                    priors.setdefault(side.path, before)
             else:
                 self._write_if_changed(
-                    side.path, self._config_store.read_text(side.path), side.text
+                    side.path, self._config_store.read_text(side.path), side.text, priors
                 )
+        return priors
 
-    def _write_if_changed(self, path: pathlib.Path, current: str | None, new: str) -> None:
+    def _write_if_changed(
+        self, path: pathlib.Path, current: str | None, new: str, priors: Priors
+    ) -> None:
         """Write only a real change, and only over the content that was read.
 
-        The sync post-import reconcile re-derives the projection, and touching
+        The reconciler re-derives the projection, and touching
         an agent's config file when nothing differs would churn its mtime — and
         hide, in any file audit, the one case that matters: a projection that
         had actually gone missing.
@@ -189,6 +206,30 @@ class ProviderProjector:
             self._config_store.write_text_atomic(
                 path, new, expected_fingerprint=self._config_store.fingerprint(current)
             )
+            priors.setdefault(path, current)
 
 
-__all__ = ["ProjectionConfigStore", "ProviderProjector"]
+def projection_request(
+    connection: Resource, cfg: ProviderConfig, agent_cfg: AgentConfig, *, coffer_cli: str
+) -> ProviderProjectionRequest:
+    """The one construction of a projection request — what the switch writes
+    and what the reconciler compares an agent's file against."""
+    return ProviderProjectionRequest(
+        connection_uid=connection.uid,
+        connection_name=connection.name,
+        base_url=cfg.base_url,
+        # Model comes solely from the per-agent binding (spec
+        # provider-switching "Take projected model keys from the agent's
+        # binding"); an unbound agent projects no model.
+        model=agent_cfg.model,
+        fast_model=agent_cfg.fast_model,
+        wire_api=agent_cfg.wire_api,
+        # Only the `text` entries: a model catalogue is the agent's own
+        # picker (spec provider-switching "Offer only text models to chat
+        # pickers").
+        text_models=tuple(cfg.model_ids(Modality.TEXT)),
+        coffer_cli=coffer_cli,
+    )
+
+
+__all__ = ["Priors", "ProjectionConfigStore", "ProviderProjector", "projection_request"]

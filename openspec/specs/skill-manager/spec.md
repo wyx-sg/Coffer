@@ -165,26 +165,26 @@ The system MUST provide a `verify` operation — a read-only CLI/REST facility (
 - **WHEN** the user runs `coffer skill verify` (CLI) or calls `POST /skills/verify` (REST) — there is no web UI surface for this,
 - **THEN** the report lists each drift type with a suggested remedy and exits with a non-zero status; asking for the report never itself repairs anything — repair runs only along the separate paths in "opt-in repair re-delivers repairable drift from master" and the boot-heal scenarios below.
 
-### Requirement: Heal safely repairable drift at daemon boot
-The system MUST remediate the drift kinds "Repair repairable drift from master" designates safely repairable automatically at daemon boot, without waiting for a person to act — boot is the point nothing else ever reconciled: delivery reconciliation ("Reconcile deliveries per agent on every trigger") keeps each agent's delivered *set* of skills correct on its own triggers, but never inspects an already-delivered link's on-disk health, so a broken or tampered link (an agent's own installer rewriting its skills directory, a user tidying files, a restore from backup) previously stayed broken until someone happened to run the manual repair by hand. Drift kinds that repair does not consider safely repairable MUST never be auto-remediated, boot included, and stay reported only — logged with skill, agent, drift kind, on-disk path and suggested remedy — for manual action via the on-demand repair path.
+### Requirement: Heal safely repairable drift on every pass
+The system MUST remediate the drift kinds "Repair repairable drift from master" designates safely repairable — a missing link and a tampered link — on every reconcile pass, without waiting for a person to act: at daemon start, on the reconciler's period and whenever a pass is brought forward, so drift that accumulated while the daemon was down, or between any two events, is found on the next pass. Drift kinds that repair does not consider safely repairable — a foreign directory at a link path, a missing master, an orphan master folder — MUST never be auto-remediated and stay reported: in the reconciler's plan (`GET /api/v1/reconcile/plan`), in the attention list and in the log, each with skill, agent, drift kind, on-disk path and a reason, for manual action.
 
 #### Scenario: skill drift self-heals at daemon boot
-- **GIVEN** an agent's delivered skill link is missing (deleted) or tampered (repointed elsewhere) while the daemon is not running,
-- **WHEN** the daemon starts,
-- **THEN** the link is re-created pointing to master exactly as the opt-in repair would do it, the repair is recorded in the audit log with an actor identifying the boot heal rather than a person, and startup completes normally whether or not anything needed repair.
+- **GIVEN** an agent's delivered skill link is missing (deleted) or tampered (repointed elsewhere), whether while the daemon was not running or while it was
+- **WHEN** the next reconcile pass runs — at daemon start or on its period
+- **THEN** the link is re-created pointing to master exactly as the opt-in repair would do it, a tampered one backed up first, and the repair is recorded in the audit log with actor `system`
 
 #### Scenario: boot heal leaves unsafe drift for a human to find
-- **GIVEN** a foreign regular directory occupies a delivered skill's link path, or a binding's master folder no longer exists,
-- **WHEN** the daemon starts,
-- **THEN** neither is touched — the foreign content and the missing master are left exactly as found — and each is logged clearly enough (skill, agent, drift kind, on-disk path, suggested remedy) for a person to find, since this log line is now the only surface residual drift has.
+- **GIVEN** a foreign regular directory occupies a delivered skill's link path, or a binding's master folder no longer exists
+- **WHEN** a reconcile pass runs
+- **THEN** neither is touched — the foreign content and the missing master are left exactly as found — and each is reported as blocked with skill, agent, drift kind, path and reason
 
 #### Scenario: a boot heal failure never blocks startup
-- **GIVEN** the boot heal encounters an error while inspecting or repairing a binding (e.g. a filesystem it cannot read),
-- **WHEN** the daemon starts,
-- **THEN** the error is logged and the daemon still comes up — a boot heal that can crash the daemon would be worse than the drift it exists to fix.
+- **GIVEN** the skill-link target raises while reading its state (e.g. a filesystem it cannot read)
+- **WHEN** the daemon starts
+- **THEN** the failure is reported and logged, the other targets are still reconciled, and the daemon still comes up
 
 ### Requirement: Repair repairable drift from master
-The system MUST provide a drift repair that re-delivers repairable drift — missing link and tampered link — from the master library, and MUST NOT modify foreign/user content (replaced-with-regular), a missing master, or an orphan master; those are left intact and reported as requiring manual action. This repair runs (a) automatically per "Heal safely repairable drift at daemon boot", once at every daemon boot, audited with an actor that identifies the automatic path rather than a person, and never allowed to fail startup; and (b) on demand via the CLI (`coffer skill verify --fix`) and REST (`POST /skills/repair`) for anyone who wants to trigger or inspect a repair directly. Each repair, automatic or on-demand, MUST be audited.
+The system MUST provide a drift repair that re-delivers repairable drift — missing link and tampered link — from the master library, and MUST NOT modify foreign/user content (replaced-with-regular), a missing master, or an orphan master; those are left intact and reported as requiring manual action. This repair runs (a) automatically per "Heal safely repairable drift on every pass", audited with actor `system`, and never allowed to fail startup; and (b) on demand via the CLI (`coffer skill verify --fix`, or `coffer drift repair`) and REST (`POST /skills/repair`, or `POST /api/v1/reconcile/apply`) for anyone who wants to trigger or inspect a repair directly, audited with the caller as actor. Each repair, automatic or on-demand, MUST be audited.
 
 #### Scenario: opt-in repair re-delivers repairable drift from master
 - **GIVEN** an agent skill directory where one enabled binding has a missing Coffer link, another has a tampered Coffer link (a stale link pointing elsewhere), a third binding's path is occupied by a foreign regular directory the user owns, and a fourth binding's master folder no longer exists,
@@ -236,13 +236,18 @@ Users MUST be able to delete an unmanaged entry as an explicit, confirmed action
 - **WHEN** the user deletes it (an explicit, confirmed action),
 - **THEN** the folder is removed from disk, an audit entry is recorded, and no master content or binding is touched.
 
-### Requirement: Reconcile deliveries per agent on every trigger
-The system MUST reconcile deliveries per agent from the predicate of "Deliver a skill only where it is enabled and in scope" alone. A reconcile computes the agent's wanted set as `{s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}` — a free function over the agent alone, with no evaluator object to build and no machine to bind into one. The same skill row can still be wanted here and unwanted on another machine, because the `enabled` flag and the scope this predicate reads are this machine's own, and the round that brought the skill here brought neither. It delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow "Report a foreign target instead of overwriting it" (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
+### Requirement: Reconcile deliveries from state on every pass
+The system MUST keep every agent's delivered set equal to the predicate of "Deliver a skill only where it is enabled and in scope" alone, as the skill-link target of the unified reconciler ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"). An agent's wanted set is `{s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}` for an enabled agent and empty for a disabled one — a free function over the agent alone, with no evaluator object to build and no machine to bind into one. The same skill row can still be wanted here and unwanted on another machine, because the `enabled` flag and the scope this predicate reads are this machine's own, and the round that brought the skill here brought neither. Each wanted delivery is a link at `<agent skill dir>/<skill name>` pointing at the skill's master folder, judged by both paths: a wanted skill the agent does not hold is delivered, a held copy no longer wanted is reclaimed, and a held link whose path no longer matches the agent's skill directory (its `config_dir` moved) is re-delivered at the new path and removed from the old one. Because the reconciler runs on every pass, this holds whatever changed the state — a skill enabled, disabled, rescoped, imported or removed, an agent registered, enabled, disabled or moved, a sync import, or nothing Coffer heard about — and a user's own write runs the pass for skills at once, so the change is visible when the write answers. A disabled agent's copies are reclaimed and restored when it is enabled again. Conflicts at target paths follow "Report a foreign target instead of overwriting it" (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
 
 #### Scenario: import delivers a skill only where its scope grants it
 - **GIVEN** two registered agents, `claude_code` and `codex`,
 - **WHEN** the user imports a skill whose scope names only the `claude_code` agent's uid,
-- **THEN** the post-import reconcile delivers it to `claude_code` only, and `codex` receives nothing.
+- **THEN** the pass that follows delivers it to `claude_code` only, and `codex` receives nothing.
+
+#### Scenario: moving an agent's config directory moves its deliveries
+- **GIVEN** an agent holding a delivered skill, whose `config_dir` is then changed to another existing directory
+- **WHEN** the change is saved
+- **THEN** the skill is linked under the new directory's skills folder, the link under the old one is gone, and the move is recorded as a relink in the audit log
 
 ### Requirement: Remove a skill with all its deliveries
 Removing a skill MUST remove every enabled per-agent symlink, cascade-delete bindings, delete the master folder, and audit the removal with a snapshot. A builtin skill is the one exception, and it is refused before any of this begins (see "Refuse deleting a builtin skill").
@@ -372,6 +377,7 @@ The Skills page is a data table (search, filter, pagination, row multi-select fo
 - **WHEN** the user runs `coffer skill scope <name> --agents <first agent>`, then `coffer skill disable <name>`, then `coffer skill enable <name>`
 - **THEN** after the scope change only the first agent holds a delivered link, after `disable` neither does, and after `enable` the first agent holds it again
 - **AND** each change is recorded in the audit log
+
 ### Requirement: Preview an unmanaged skill read-only
 Users MUST be able to open one unmanaged skill (see "List unmanaged skills in an agent's skill locations") and read it without adopting it: its metadata — name, path, location, `valid` with the failure reason, whether it is a foreign link, and the SKILL.md `description` when the folder validates — a recursive file tree of the folder, and the contents of each file. The entry is found by the same scan the list runs, addressed by the agent, the scan location and the folder name, so a name the scan does not list — a missing folder, a dot-entry, a Coffer-managed link — is not found. The tree and file reads MUST follow the containment, size cap and binary detection of "Show a skill's master folder read-only", rooted at the unmanaged folder: a path that resolves outside it (`..` traversal, an absolute path, an escaping symlink) is rejected with `400` before anything is read. Nothing here writes. An invalid folder MUST still open, with its reason. The preview is on REST (`GET /agents/{uid}/unmanaged-skills/{skill}`, `.../files`, `.../files/content`, each taking `location`), on the web as the unmanaged skill's detail page, and on the CLI as a plain folder: `coffer scan --agent <agent> --json` reports each unmanaged skill's name, absolute path, location, `valid` and reason, and its files are read on disk at that path (see [resource-framework](../resource-framework/spec.md) "Locate file-backed state with coffer path").
 

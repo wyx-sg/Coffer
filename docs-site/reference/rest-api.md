@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 169 operations in 21 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -99,6 +99,7 @@ The daemon mounts 166 operations in 20 groups. Groups follow the order the daemo
 | [audit](#audit) | 1 |
 | [retention](#retention) | 3 |
 | [upkeep](#upkeep) | 1 |
+| [reconcile](#reconcile) | 3 |
 | [credentials](#credentials) | 5 |
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
@@ -162,6 +163,14 @@ The daemon mounts 166 operations in 20 groups. Groups follow the order the daemo
 | Method | Path | Summary |
 | --- | --- | --- |
 | `GET` | `/api/v1/upkeep/runs` | List Runs |
+
+### reconcile
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/reconcile/plan` | Every difference a pass would find now, and what it would do about it. |
+| `POST` | `/api/v1/reconcile/apply` | Apply the named differences now. |
+| `GET` | `/api/v1/attention` | What needs a person now, across every kind whose feature is on — each item with one action, the route its own page calls. |
 
 ### credentials
 

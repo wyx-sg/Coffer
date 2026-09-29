@@ -46,6 +46,10 @@ tags:
     description: Retention policy management
   - name: upkeep
     description: The long, model-driven passes this daemon is running right now
+  - name: reconcile
+    description: >-
+      The unified reconciler's drift plan and apply, and the cross-kind
+      "needs you" list built on it
 
 paths:
   /resources:
@@ -426,6 +430,97 @@ paths:
               schema: { $ref: "#/components/schemas/UpkeepRunListOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /reconcile/plan:
+    get:
+      tags: [reconcile]
+      operationId: getReconcilePlan
+      summary: What a reconcile pass would find and do now (dry-run)
+      description: |
+        Every difference between what Coffer wants outside its database and
+        what is there — Coffer's MCP entry in each agent, delivered skill
+        links, provider projections, the memory delivery hook — with the
+        operation, the file, the safe before/after text and what the target's
+        direction policy says (`repair`, `report`, `blocked`). Computed on
+        request; writes nothing (no file, row, audit event or hint). Before and
+        after never carry a secret value.
+      parameters:
+        - name: target
+          in: query
+          required: false
+          schema: { type: string, nullable: true }
+          description: One target's plan only; an unknown name answers 404.
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, nullable: true }
+          description: Only the items about this resource kind.
+        - name: uid
+          in: query
+          required: false
+          schema: { type: string, nullable: true }
+          description: Only the items about this resource.
+        - name: trigger
+          in: query
+          required: false
+          schema: { type: string, enum: [period, manual], default: period }
+          description: >-
+            `period` is what the next periodic pass would do; `manual` is what
+            a person applying every item would get.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconcilePlanOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /reconcile/apply:
+    post:
+      tags: [reconcile]
+      operationId: applyReconcileItems
+      summary: Apply chosen drift items now, as the caller
+      description: |
+        Runs a pass with the manual trigger over the named ids only. Each
+        repair is audited with the caller (`X-Coffer-Actor`) as actor; one
+        whose audit cannot be recorded is put back and comes back `failed`.
+        An item the policy still will not repair comes back `planned` with its
+        reason; an id that names no current difference is absent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReconcileApplyIn" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconcileApplyOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /attention:
+    get:
+      tags: [reconcile]
+      operationId: getAttention
+      summary: What needs a person now, across every kind
+      description: |
+        The Overview's "needs you" list: open reconciler drift and each kind's
+        own signals, from every source whose experimental feature is on, sorted
+        by severity. Each item has exactly one action — a verb plus the REST
+        route (and body) the kind's own page uses; this list has no write of
+        its own. A source that fails is reported under `errors` beside the
+        others' items. Writes nothing.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttentionOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -759,6 +854,161 @@ components:
           type: string
           format: date-time
           description: When this daemon started the pass.
+
+    ReconcileSubjectOut:
+      type: object
+      required: [kind, uid, title]
+      properties:
+        kind: { type: string }
+        uid: { type: string, nullable: true }
+        title: { type: string }
+
+    ReconcileItemOut:
+      type: object
+      required:
+        [id, target, key, op, disposition, reason_code, reason, subject, file, before, after,
+         changed_params, outcome]
+      properties:
+        id:
+          type: string
+          description: "`<target>:<key>`; what `POST /reconcile/apply` takes."
+        target: { type: string, example: mcp_entry }
+        key: { type: string }
+        op: { type: string, enum: [add, modify, remove] }
+        disposition: { type: string, enum: [repair, report, blocked] }
+        reason_code: { type: string, example: stale_entry }
+        reason: { type: string }
+        subject: { $ref: "#/components/schemas/ReconcileSubjectOut" }
+        file: { type: string, nullable: true }
+        before:
+          type: string
+          nullable: true
+          description: What is there now, rendered safely; null if absent.
+        after:
+          type: string
+          nullable: true
+          description: What Coffer would write; null for a removal.
+        changed_params:
+          type: array
+          items: { type: string }
+        outcome: { type: string, enum: [planned, applied, failed] }
+        error: { type: string, nullable: true }
+        since:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a writing pass first saw this difference.
+
+    ReconcileTargetOut:
+      type: object
+      required: [name, kinds]
+      properties:
+        name: { type: string }
+        kinds:
+          type: array
+          items: { type: string }
+        error:
+          type: string
+          nullable: true
+          description: Set when the target raised.
+
+    ReconcilePassOut:
+      type: object
+      required: [trigger, dry_run, started_at, finished_at, applied, failed, open]
+      properties:
+        trigger: { type: string }
+        dry_run: { type: boolean }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        applied: { type: integer }
+        failed: { type: integer }
+        open: { type: integer }
+
+    ReconcilePlanOut:
+      type: object
+      required: [trigger, generated_at, period_seconds, targets, items, last_pass]
+      properties:
+        trigger: { type: string }
+        generated_at: { type: string, format: date-time }
+        period_seconds: { type: number }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/ReconcileTargetOut" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReconcileItemOut" }
+        last_pass:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/ReconcilePassOut" }]
+
+    ReconcileApplyIn:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string }
+
+    ReconcileApplyOut:
+      type: object
+      required: [started_at, finished_at, items, failures]
+      properties:
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReconcileItemOut" }
+        failures:
+          type: array
+          items: { $ref: "#/components/schemas/ReconcileTargetOut" }
+
+    AttentionActionOut:
+      type: object
+      required: [verb, method, path]
+      properties:
+        verb: { type: string, example: connect }
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+        path: { type: string, example: /api/v1/agents/01J.../coffer-connection }
+        body:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    AttentionItemOut:
+      type: object
+      required: [kind, uid, title, reason_code, reason, severity, since, action]
+      properties:
+        kind: { type: string }
+        uid: { type: string, nullable: true }
+        title: { type: string }
+        reason_code: { type: string, example: agent_partial }
+        reason: { type: string }
+        severity: { type: string, enum: [error, warning, info] }
+        since: { type: string, format: date-time, nullable: true }
+        action: { $ref: "#/components/schemas/AttentionActionOut" }
+
+    AttentionSourceErrorOut:
+      type: object
+      required: [source, error]
+      properties:
+        source: { type: string }
+        error: { type: string }
+
+    AttentionOut:
+      type: object
+      required: [items, errors, counts_by_kind]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttentionItemOut" }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/AttentionSourceErrorOut" }
+        counts_by_kind:
+          type: object
+          additionalProperties: { type: integer }
 
     UpkeepRunListOut:
       type: object

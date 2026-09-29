@@ -37,6 +37,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
+from coffer.domain.reconcile import Disposition, Outcome
 from coffer.domain.skill.builtin import is_builtin
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import BuiltinSource
@@ -49,7 +50,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Audited actor for the seed, matching the other unattended boot work
-#: (``boot_reconcile.BOOT_ACTOR``): this is Coffer acting, not a person.
+#: (the reconciler's boot pass): this is Coffer acting, not a person.
 SEED_ACTOR = "system"
 
 
@@ -165,13 +166,29 @@ class BuiltinSkillSeed:
         return await self._skills._rs.find_by_name("skill", name)
 
     async def _deliver(self, name: str) -> None:
-        """Reconcile every agent's delivered set, so the new row lands."""
-        for agent in await self._skills.list_agents():
-            failures = await self._skills.apply_scope_for_agent(agent.name, actor=SEED_ACTOR)
-            for failure in failures:
+        """Ask for a delivery pass, so the row lands in every agent it is for.
+
+        The pass reconciles every skill, and says what it could not do: an
+        item of this skill it failed or would not write is logged here.
+        """
+        report = await self._skills.reconcile_delivery()
+        row = await self._row(name)
+        if report is None or row is None:
+            return
+        for result in report.results:
+            change = result.change
+            if change.difference.subject.uid != row.uid:
+                continue
+            if result.outcome is Outcome.FAILED or (
+                change.decision.disposition is Disposition.BLOCKED
+            ):
                 logger.warning(
                     "skill.builtin_seed.delivery_conflict",
-                    extra={"skill": name, "agent": agent.name, "detail": failure},
+                    extra={
+                        "skill": name,
+                        "change": change.id,
+                        "detail": result.error or change.decision.reason,
+                    },
                 )
 
 

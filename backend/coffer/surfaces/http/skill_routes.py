@@ -8,6 +8,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, Response, status
 from pydantic import BaseModel, Field
 
+from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.skill import drift_view
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
@@ -15,6 +17,7 @@ from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftEntry
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
 from coffer.surfaces.http.skill_dependencies import get_skill_service
 
@@ -269,17 +272,21 @@ async def delete_skill(
 @router.post("/verify", response_model=DriftReportOut)
 async def verify_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    reconciler: Reconciler = Depends(get_reconciler),  # noqa: B008
 ) -> DriftReportOut:
-    report = await svc.verify()
+    # The ``skill_link`` target's dry-run plan, read as a drift report.
+    report = await drift_view.verify(svc, reconciler)
     return DriftReportOut(entries=[_drift_out(e) for e in report.entries])
 
 
 @router.post("/repair", response_model=RepairReportOut)
 async def repair_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    reconciler: Reconciler = Depends(get_reconciler),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> RepairReportOut:
-    result = await svc.repair_drift(actor=actor)
+    # The plan's repairable drift, applied through the reconciler.
+    result = await drift_view.repair(svc, reconciler, actor=actor)
     return RepairReportOut(
         remediated=[_drift_out(e) for e in result.remediated],
         remaining=DriftReportOut(entries=[_drift_out(e) for e in result.remaining.entries]),

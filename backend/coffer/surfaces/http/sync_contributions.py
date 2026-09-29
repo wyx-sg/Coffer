@@ -11,6 +11,8 @@ lifespan reads.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 
 from coffer.application.sync.ports import (
@@ -29,3 +31,6 @@ class SyncContributions:
     import_gates: list[ImportGate] = field(default_factory=list)
     import_normalisers: list[ImportNormaliser] = field(default_factory=list)
     post_import_hooks: list[PostImportHook] = field(default_factory=list)
+    #: Held across a round's apply and its post-import hooks (the reconciler's
+    #: hold), so no pass judges the imported rows half-applied.
+    apply_guard: Callable[[], AbstractAsyncContextManager[object]] | None = None

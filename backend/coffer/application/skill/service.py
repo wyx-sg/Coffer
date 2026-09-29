@@ -1,4 +1,4 @@
-"""SkillService — import/enable/disable/verify/remove for skills.
+"""SkillService — import / remove / files / unmanaged skills for the skill kind.
 
 Stitches together MasterStore (canonical files), SkillBindingRepo (per-agent
 state), SyncEngine (per-OS link helper), and the kind-agnostic ResourceService
@@ -19,7 +19,7 @@ import contextlib
 import logging
 import pathlib
 import shutil
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
@@ -32,12 +32,9 @@ from coffer.application.skill.ports import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
+from coffer.domain.reconcile import PassReport
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState
-from coffer.domain.skill.drift import (
-    DriftReport,
-    RepairResult,
-)
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
     ValidationFailure,
@@ -60,6 +57,9 @@ AgentSkillDirResolver = Callable[[Resource], pathlib.Path]
 # + coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
 AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 
+#: One ``skill_link`` reconcile pass, as the composition root hands it in.
+DeliveryPass = Callable[[], Awaitable[PassReport]]
+
 
 class SkillService:
     """Skill-kind lifecycle on top of the kind-agnostic Resource framework."""
@@ -77,6 +77,7 @@ class SkillService:
         workspace_scan: WorkspaceScanPort | None = None,
         agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
+        reconcile_delivery: DeliveryPass | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
@@ -92,6 +93,9 @@ class SkillService:
         self._workspace_scan = workspace_scan
         self._resolve_agent_scan_locations = agent_scan_locations_resolver
         self._rmtree = rmtree
+        # Closes over the reconciler at the composition root, so this service
+        # never imports a surface (see ``reconcile_delivery``).
+        self._reconcile_delivery = reconcile_delivery
 
     # ---------- imports ----------
 
@@ -114,71 +118,21 @@ class SkillService:
             overwrite=overwrite,
         )
 
-    # ---------- per-agent bindings ----------
+    # ---------- delivery ----------
 
-    async def enable_for(
-        self,
-        *,
-        skill_uid: str,
-        agent_uid: str,
-        force: bool = False,
-        actor: str = "api",
-    ) -> BindingState:
-        """Deliver a skill to an agent (link + binding row).
+    async def reconcile_delivery(self) -> PassReport | None:
+        """Ask the reconciler for a ``skill_link`` pass now (``Trigger.CHANGE``).
 
-        INTERNAL primitive driven by ``apply_scope_for_agent``, not a
-        user-facing operation: a delivery the predicate does not grant would be
-        reclaimed by the very next reconciliation. Delegates to ``binding_ops``
-        to keep this module under the size limit."""
-        from coffer.application.skill.binding_ops import enable_skill_for_agent
-
-        return await enable_skill_for_agent(
-            service=self, skill_uid=skill_uid, agent_uid=agent_uid, force=force, actor=actor
-        )
-
-    async def disable_for(
-        self, *, skill_uid: str, agent_uid: str, actor: str = "api"
-    ) -> BindingState:
-        """Reclaim a delivered copy: remove the link and spend the binding row.
-
-        INTERNAL primitive, like ``enable_for``. Delivery is decided by the
-        skill's ``enabled`` flag and ``scope``; no surface calls this directly,
-        because the very next reconciliation would undo a hand-made decision.
+        Every front door that changes what an agent should hold — an import,
+        a skill's ``enabled`` / ``scope``, an agent registered, switched or
+        moved, the builtin seed — calls this after its own write, so the
+        delivery is in place when the call returns. Delivery itself is the
+        ``skill_link`` target's (``link_reconcile``); ``None`` when no
+        reconciler is wired (a service built for one isolated test).
         """
-        from coffer.application.skill.binding_ops import disable_skill_for_agent
-
-        return await disable_skill_for_agent(
-            service=self, skill_uid=skill_uid, agent_uid=agent_uid, actor=actor
-        )
-
-    # ---------- delivery reconciliation ----------
-
-    async def apply_scope_for_agent(self, agent_uid: str, *, actor: str = "system") -> list[str]:
-        """Reconcile one agent's delivered set against the delivery predicate.
-
-        Wired as the skill kind's ``on_scope_changed`` / ``on_enabled_changed``
-        hooks (per registered agent), and invoked after an agent registers and
-        by the sync post-import hook. Returns per-skill delivery failures; see
-        ``delivery_ops`` for semantics.
-        """
-        from coffer.application.skill.delivery_ops import apply_scope_for_agent
-
-        return await apply_scope_for_agent(service=self, agent_uid=agent_uid, actor=actor)
-
-    async def verify(self) -> DriftReport:
-        from coffer.application.skill.verify_ops import verify_drift
-
-        return await verify_drift(self)
-
-    async def repair_drift(self, *, actor: str = "api") -> RepairResult:
-        """Opt-in drift repair: re-deliver safely-repairable drift kinds.
-
-        Delegates to ``verify_ops.repair_drift`` to keep this module under the
-        file-size limit.  See that function for full semantics.
-        """
-        from coffer.application.skill.verify_ops import repair_drift
-
-        return await repair_drift(self, actor=actor)
+        if self._reconcile_delivery is None:
+            return None
+        return await self._reconcile_delivery()
 
     async def remove(self, *, uid: str, actor: str = "api") -> None:
         # All on-disk teardown happens inside the awaited on_delete hook,
@@ -213,17 +167,6 @@ class SkillService:
                     self._sync.remove_directory_link(
                         pathlib.Path(b.last_link_path), link_mode=b.link_mode
                     )
-
-    async def relink_for_agent(self, agent_uid: str, *, actor: str = "api") -> None:
-        """Re-deliver an agent's skills after its config_dir changed.
-
-        Wired as the agent kind's on-config-dir-changed hook (see
-        ``agent_skill_wiring``). Delegates to ``lifecycle_ops`` to keep this
-        module under the size limit.
-        """
-        from coffer.application.skill.lifecycle_ops import relink_agent_skills
-
-        await relink_agent_skills(service=self, agent_uid=agent_uid, actor=actor)
 
     # ---------- unmanaged skills ----------
 

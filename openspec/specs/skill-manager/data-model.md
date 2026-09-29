@@ -158,8 +158,9 @@ migration `0058` strips both keys from every stored agent row. There is no
 load-time shim and no back-compat default — a stored row simply no longer has
 them.
 
-`application/skill/delivery_ops.py` holds the reconciler,
-`apply_scope_for_agent(agent_uid)`. A scope's `agents` list holds agent uids
+`application/skill/link_reconcile.py` holds the skill-link target of the
+unified reconciler (spec resource-framework "Converge what Coffer writes outside
+its database with one reconciler"). A scope's `agents` list holds agent uids
 ([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)),
 so the reconciler computes
 
@@ -167,13 +168,18 @@ so the reconciler computes
 wanted = {s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}
 ```
 
-then delivers `wanted - bound` and reclaims `bound - wanted`, where `bound` is
-the set of skills whose `skill_agent_bindings` row says this agent currently
-holds a delivered copy. It runs on: a skill being enabled or disabled, a
-skill's scope being edited, a skill being imported, a skill being removed, an
-agent being registered, an agent's `config_dir` changing, and the sync
-post-import hook. The skill/agent enable and scope edits reach it through the
-kind hooks `on_enabled_changed` and `on_scope_changed`, so skill code still
+for every enabled agent (a disabled agent wants nothing), and states each wanted
+delivery as an item keyed `<skill_uid>@<agent_uid>` with parameters `{link,
+target, state, bound}`: the link path under the agent's skill directory, the
+master folder it points at, the on-disk state (`ok` or a `DriftKind`) and
+whether a `skill_agent_bindings` row records it. Observed items are read from
+the binding rows and the disk in the same shape, so a missing delivery is an
+addition, an unwanted one a removal (reclaim), and a moved `config_dir` or a
+broken link a modification. It runs on every reconcile pass, and a user's own
+write — a skill enabled, disabled, rescoped or imported, an agent registered,
+enabled, disabled or moved, the builtin skill seeded — runs its pass
+synchronously (`Trigger.CHANGE`) through the kind hooks `on_enabled_changed` and
+`on_scope_changed` and the agent service's callbacks, so skill code still
 never imports agent-kind code (Contract 5c).
 
 **Wire shapes.** `SkillOut` gains `scope` (`ScopeOut | None`, always emitted,
@@ -226,7 +232,7 @@ The workspace amendment adds:
 | `skill_adopted`           | An unmanaged skill folder was adopted into the master store (see "Adopt an unmanaged skill")                                       |
 | `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (see "Delete an unmanaged skill on explicit request")                                   |
 | `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
-| `skill_drift_remediated`  | A drift entry was re-delivered from master by repair — on demand or by the boot heal (see "Repair repairable drift from master"); details `{agent, kind}` |
+| `skill_drift_remediated`  | A drift entry was re-delivered from master by repair — on demand or by a reconcile pass (see "Repair repairable drift from master"); details `{agent, kind}` |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
 `ResourceService.delete`, which emits the generic `resource_deleted` event
@@ -295,33 +301,29 @@ Keyword-only arguments; skills and agents are addressed by uid.
 | Method | Purpose |
 | ------ | ------- |
 | `import_local(*, path, actor, overwrite=False) -> Resource` | Validate the folder (`SkillValidationError` → 422 `SKILL_INVALID`), copy to master, register the Resource (or, with `overwrite`, replace the master folder and update the same row, keeping its uid and deliveries), audit, then reconcile a new skill so it lands wherever its scope grants it. |
-| `enable_for(*, skill_uid, agent_uid, force=False, actor) -> BindingState` | INTERNAL delivery primitive driven by `apply_scope_for_agent` and repair: upsert the delivery row, create the symlink (or copy fallback). |
-| `disable_for(*, skill_uid, agent_uid, actor) -> BindingState` | INTERNAL reclaim primitive driven by `apply_scope_for_agent`: remove the link, clear the delivery row. |
-| `apply_scope_for_agent(agent_uid, *, actor) -> list[str]` | Reconcile one agent against the delivery predicate (see "Delivery predicate" above). |
-| `verify() -> DriftReport` | Walk every delivered copy; classify drift per `DriftKind`. |
-| `repair_drift(*, actor) -> RepairResult` | Re-deliver the repairable drift (`missing_link`, `tampered_link`) from master, auditing each as `skill_drift_remediated`; returns what was remediated and the residual report. Backs `verify --fix`, `POST /skills/repair` and the boot heal. |
+| `reconcile_delivery() -> PassReport \| None` | Run the reconciler's skill-link pass now (`Trigger.CHANGE`); the composition root hands in the callable. What every front-door write that changes delivery calls before it answers. |
 | `remove(*, uid, actor) -> None` | Delegate to `ResourceService.delete`; the teardown runs in the skill kind's `on_delete`. |
 | `cleanup_bindings_for_skill(skill) -> None` | The skill kind's `on_delete` hook: remove every binding and link, then delete the master folder. |
 | `move_master_folder(skill, new_name) -> None` | The skill kind's rename hook: move the master folder and re-point every delivered link before the row is renamed. |
 | `cleanup_bindings_for_agent(agent: Resource) -> None` | Called by spec agent-registry's `agent.on_delete` hook; removes all bindings + symlinks for that agent. |
-| `relink_for_agent(agent_uid, *, actor) -> None` | The agent's config-dir-changed hook: re-create the agent's delivered links under its new `<config_dir>/skills`. |
 
 Workspace-amendment additions (implemented as free functions in
-`unmanaged_ops.py` / `delivery_ops.py`, with `binding_ops.py` split out of
-`service.py` for the deliver/reclaim primitives — all conceptually private
-to the skill subpackage, same style as `lifecycle_ops.py`):
+`unmanaged_ops.py`, with `binding_ops.py` holding the `deliver` / `relink` /
+`reclaim` / `undo` writers the skill-link target and adoption use — none of
+them records audit; the reconciler does — all conceptually private to the
+skill subpackage, same style as `lifecycle_ops.py`):
 
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | Read-only scan ("List unmanaged skills in an agent's skill locations") over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
 | `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
 | `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | "Delete an unmanaged skill on explicit request": delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
-| delivery reconciliation (`delivery_ops.py`)                            | "Reconcile deliveries per agent on every trigger": `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
+| skill-link target (`link_reconcile.py`) and drift view (`drift_view.py`) | "Reconcile deliveries from state on every pass": recompute every enabled agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted, relink what moved, repair broken links; `verify` / `repair` are read from the reconciler's plan and apply. |
 
 ### File viewer (`application/skill/file_ops.py`)
 
 Stateless helpers beside `service.py` (same pattern as
-`verify_ops.py`) that expose a skill's master folder to
+`drift_view.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 in-app viewer and surface each node's absolute on-disk path so the UI can offer
 open-in-external-editor / reveal-in-file-manager affordances (spec.md
@@ -409,19 +411,19 @@ from `surfaces/http/agent_skill_wiring.py`, which wires the agent and skill kind
 in lockstep and returns an `AgentSkillWiring`. The wiring function:
 
 1. Builds `SkillBindingRepo`, `MasterStore`, `SyncEngine`, and the `SkillService`,
-   plus the agent services, handing `AgentService` the skill side's
-   `relink_for_agent` as its config-dir-changed hook.
+   plus the agent services, handing `AgentService` a config-dir-changed and a
+   registered hook that each run the reconciler's skill-link pass
+   (`Trigger.CHANGE`), and registers the skill-link target.
 2. Builds the agent `Kind` fresh via `make_agent_kind(on_delete=...,
    on_enabled_changed=...)`, whose `on_delete` awaits
    `skill_svc.cleanup_bindings_for_agent(agent)` before the agent row is removed,
-   and whose `on_enabled_changed` calls
-   `skill_svc.apply_scope_for_agent(agent_uid=..., actor="system")`.
+   and whose `on_enabled_changed` runs the skill-link pass.
 3. Builds the skill `Kind` via `make_skill_kind(cleanup_bindings_for_skill,
    move_master_folder, on_scope_changed=..., on_enabled_changed=...)`, the two
-   hooks re-running delivery for every registered agent.
+   hooks running the skill-link pass.
 4. Registers both into `app.state.kinds["agent"]` / `app.state.kinds["skill"]`.
 5. Returns `AgentSkillWiring` — the agent and skill services, the
-   `boot_heal` and `builtin_seed` the lifespan runs once every kind is wired,
+   `builtin_seed` the lifespan runs once every kind is wired,
    and the transcript reader. Routers are mounted elsewhere (`surfaces/http/routing.py`).
 
 Passing the hooks as callables keeps both kinds independent at the application

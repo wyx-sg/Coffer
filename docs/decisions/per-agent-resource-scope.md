@@ -65,7 +65,7 @@ seam where it already knows the asking agent.
 | Kind | Scope | Where it is enforced |
 | --- | --- | --- |
 | `mcp_server` | yes | The gateway session: `tools/list` / `resources/list` / `prompts/list` are built from the scope-filtered server list (`application/mcp/gateway_scope.py`), and the call seam re-checks before asking the supervisor for a connection (`application/mcp/gateway_handlers.py`), so a guessed `<server>__<tool>` name is refused as `TOOL_DISABLED` and logged as `denied`. Management routes (including the connection test) are not scope-gated. |
-| `skill` | yes | Delivery: a skill reaches an agent iff it is `enabled` and `is_active(scope, agent)`; anything else is reclaimed (`application/skill/delivery_ops.py`). See [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md). |
+| `skill` | yes | Delivery: a skill reaches an agent iff it is `enabled` and `is_active(scope, agent)`; anything else is reclaimed (`application/skill/link_reconcile.py`, the skill-link reconcile target). See [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md). |
 | `channel` | yes, **inverted** | A channel is consumed by no agent, so its scope names the agents it may *drive*; `/agent`, the default agent and adapter start all read it. See [Channel Owner Gate](channel-owner-gate.md). |
 | `provider` | yes | Projection: a connection is written into the config of the agents its scope reaches (`application/provider/targets.py`); `compatible_agents` became this scope plus a `default_scope` pre-fill from the wire. See [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md). |
 | `agent` | no | It *is* the agent; there is nothing for an agent scope to narrow. |

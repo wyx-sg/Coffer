@@ -21,24 +21,19 @@ remote's contribution, and the vault — which equals ``L`` at that moment —
 lands on ``M`` with its own edits intact.
 
 **Why deletion is safe.** A deletion reaches ``D`` only because some machine
-deleted that document relative to a shared base. A machine that merely *lacks*
-a document makes no change relative to its own base, and git reads "unchanged"
-as an assertion about nothing. The previous design could not say this, because
-its export rewrote the tree from local state wholesale.
-
-The round returns a ``ConvergeRun`` for every **outcome**, so the worker's loop
-never decides what is survivable. The two exceptions are refusals rather than
-outcomes — a base that cannot be established (``SYNC_JOIN_AMBIGUOUS``) and a
-remote layout this build does not know (``SYNC_BUNDLE_TOO_NEW``) — and they
-raise, because what the surfaces owe the user there is a code and a next step,
-not a diff. ``ConvergeService.run_once`` records them as failed rounds, so the
-loop is still spared the judgement.
+deleted that document relative to a shared base; a machine that merely *lacks*
+a document makes no change relative to its own base. Every **outcome** returns
+a ``ConvergeRun``; two refusals raise instead — a base that cannot be
+established (``SYNC_JOIN_AMBIGUOUS``) and a remote layout this build does not
+know (``SYNC_BUNDLE_TOO_NEW``) — and ``ConvergeService.run_once`` records them.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 
 from coffer.application.sync.appliers import locked_refs
@@ -104,6 +99,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         branch: str,
         credentials: CredentialSyncPort,
         post_import: Sequence[PostImportHook] = (),
+        apply_guard: Callable[[], AbstractAsyncContextManager[object]] | None = None,
     ) -> None:
         self._mirror = mirror
         self._state = state
@@ -114,6 +110,8 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         self._guard = guard
         self._branch = branch
         self._post_import = list(post_import)
+        # Held over apply + post-import: no pass judges half-imported rows.
+        self._apply_guard = apply_guard or contextlib.nullcontext
         self._credentials = credentials
 
     async def run(
@@ -227,9 +225,10 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
 
         # --- 5 apply -------------------------------------------------------
         not_applicable: list[str] = []
-        failures = await self.apply(applied, not_applicable=not_applicable)
-        failures.extend(await self.apply(retried, not_applicable=not_applicable))
-        failures.extend(await reconcile(self._post_import, applied))
+        async with self._apply_guard():
+            failures = await self.apply(applied, not_applicable=not_applicable)
+            failures.extend(await self.apply(retried, not_applicable=not_applicable))
+            failures.extend(await reconcile(self._post_import, applied))
         # Ciphertext travels whatever the keys; a ref this machine now holds
         # but cannot open is named, never left to fail at first use (spec
         # vault-sync "Report refs without a key as locked"); never fatal.

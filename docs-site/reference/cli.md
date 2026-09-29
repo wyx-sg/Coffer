@@ -36,6 +36,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Group | Description |
 | --- | --- |
 | [`coffer scan`](#coffer-scan) | List what agents hold that Coffer does not manage: agents, skills, MCP entries. |
+| [`coffer attention`](#coffer-attention) | What needs you now, across every kind, with the route that acts on each. |
 | [`coffer daemon`](#coffer-daemon) | Daemon lifecycle |
 | [`coffer open`](#coffer-open) | Open Coffer's web UI in your browser. |
 | [`coffer config`](#coffer-config) | Read and change Coffer's settings (coffer config list shows every key) |
@@ -52,6 +53,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
 | [`coffer sync`](#coffer-sync) | Keep this vault converged with a git remote you own |
+| [`coffer drift`](#coffer-drift) | See and repair drift between Coffer and the agents' own files |
 
 ## coffer scan
 
@@ -68,6 +70,18 @@ With --ref, show that one row in full: an MCP entry's whole configuration (secre
 | `--agent` | option | text |  | Only what this agent holds |
 | `--ref` | option | text |  | Show one row in full: a type, a folder path or &lt;agent&gt;:&lt;entry&gt; |
 | `--source` | option | text |  | With --ref on an mcp row: the config-file key |
+| `--json` | option | flag |  | JSON output for scripts |
+
+## coffer attention
+
+```sh
+coffer attention [OPTIONS]
+```
+
+What needs you now, across every kind, with the route that acts on each.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ## coffer daemon
@@ -1957,3 +1971,40 @@ coffer sync key fingerprint [OPTIONS]
 ```
 
 This machine's key fingerprint, to compare with another machine's.
+
+## coffer drift
+
+```sh
+coffer drift [OPTIONS] COMMAND [ARGS]...
+```
+
+See and repair drift between Coffer and the agents' own files
+
+### drift list
+
+```sh
+coffer drift list [OPTIONS]
+```
+
+List every difference a reconcile pass would find now. Writes nothing.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--target` | option | text |  | One target only |
+| `--kind` | option | text |  | Only items about this kind |
+| `--uid` | option | text |  | Only items about this resource |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### drift repair
+
+```sh
+coffer drift repair [OPTIONS] [IDS]...
+```
+
+Apply drift items now. Each repair is audited with you as the actor.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `IDS` | argument | text (variadic) |  | Item ids from `coffer drift list` |
+| `--all` | option | flag |  | Every item a request would repair |
+| `--json` | option | flag |  | JSON output for scripts |

@@ -14,6 +14,7 @@ from coffer.surfaces.cli import (
     config_cmd,
     credentials_cmd,
     daemon_cmd,
+    drift_cmd,
     knowledge_cmd,
     log_cmd,
     memory_cmd,
@@ -61,6 +62,8 @@ app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(sync_cmd.app, name="sync")
+app.add_typer(drift_cmd.app, name="drift")
+app.command("attention")(drift_cmd.attention)
 
 
 def run() -> None:

@@ -83,11 +83,11 @@ def follow_guide_features(guide: BuiltinGuide, features: FeatureService) -> None
 
 
 async def run_builtin_guide_refresh(guide: BuiltinGuide) -> None:
-    """Boot hook, mirroring ``run_skill_drift_boot_heal``.
+    """Boot hook, run after the reconciler's boot pass.
 
-    Runs after the drift heal, so a link this seed creates is not one the heal
-    then has to reason about, and before the background workers, so the row is
-    in place by the time the first converge round looks at it.
+    The seed's own skill-link pass delivers what it created, and it runs before
+    the background workers, so the row is in place by the time the first
+    converge round looks at it.
     """
     if await guide.refresh():
         _log.info("skill.builtin_guide.updated")

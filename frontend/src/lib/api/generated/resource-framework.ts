@@ -245,6 +245,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reconcile/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a reconcile pass would find and do now (dry-run)
+         * @description Every difference between what Coffer wants outside its database and
+         *     what is there — Coffer's MCP entry in each agent, delivered skill
+         *     links, provider projections, the memory delivery hook — with the
+         *     operation, the file, the safe before/after text and what the target's
+         *     direction policy says (`repair`, `report`, `blocked`). Computed on
+         *     request; writes nothing (no file, row, audit event or hint). Before and
+         *     after never carry a secret value.
+         */
+        get: operations["getReconcilePlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reconcile/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply chosen drift items now, as the caller
+         * @description Runs a pass with the manual trigger over the named ids only. Each
+         *     repair is audited with the caller (`X-Coffer-Actor`) as actor; one
+         *     whose audit cannot be recorded is put back and comes back `failed`.
+         *     An item the policy still will not repair comes back `planned` with its
+         *     reason; an id that names no current difference is absent.
+         */
+        post: operations["applyReconcileItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What needs a person now, across every kind
+         * @description The Overview's "needs you" list: open reconciler drift and each kind's
+         *     own signals, from every source whose experimental feature is on, sorted
+         *     by severity. Each item has exactly one action — a verb plus the REST
+         *     route (and body) the kind's own page uses; this list has no write of
+         *     its own. A source that fails is reported under `errors` beside the
+         *     others' items. Writes nothing.
+         */
+        get: operations["getAttention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -391,6 +466,112 @@ export interface components {
              * @description When this daemon started the pass.
              */
             started_at: string;
+        };
+        ReconcileSubjectOut: {
+            kind: string;
+            uid: string | null;
+            title: string;
+        };
+        ReconcileItemOut: {
+            /** @description `<target>:<key>`; what `POST /reconcile/apply` takes. */
+            id: string;
+            /** @example mcp_entry */
+            target: string;
+            key: string;
+            /** @enum {string} */
+            op: "add" | "modify" | "remove";
+            /** @enum {string} */
+            disposition: "repair" | "report" | "blocked";
+            /** @example stale_entry */
+            reason_code: string;
+            reason: string;
+            subject: components["schemas"]["ReconcileSubjectOut"];
+            file: string | null;
+            /** @description What is there now, rendered safely; null if absent. */
+            before: string | null;
+            /** @description What Coffer would write; null for a removal. */
+            after: string | null;
+            changed_params: string[];
+            /** @enum {string} */
+            outcome: "planned" | "applied" | "failed";
+            error?: string | null;
+            /**
+             * Format: date-time
+             * @description When a writing pass first saw this difference.
+             */
+            since?: string | null;
+        };
+        ReconcileTargetOut: {
+            name: string;
+            kinds: string[];
+            /** @description Set when the target raised. */
+            error?: string | null;
+        };
+        ReconcilePassOut: {
+            trigger: string;
+            dry_run: boolean;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            applied: number;
+            failed: number;
+            open: number;
+        };
+        ReconcilePlanOut: {
+            trigger: string;
+            /** Format: date-time */
+            generated_at: string;
+            period_seconds: number;
+            targets: components["schemas"]["ReconcileTargetOut"][];
+            items: components["schemas"]["ReconcileItemOut"][];
+            last_pass: components["schemas"]["ReconcilePassOut"] | null;
+        };
+        ReconcileApplyIn: {
+            ids: string[];
+        };
+        ReconcileApplyOut: {
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            items: components["schemas"]["ReconcileItemOut"][];
+            failures: components["schemas"]["ReconcileTargetOut"][];
+        };
+        AttentionActionOut: {
+            /** @example connect */
+            verb: string;
+            /** @enum {string} */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            /** @example /api/v1/agents/01J.../coffer-connection */
+            path: string;
+            body?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        AttentionItemOut: {
+            kind: string;
+            uid: string | null;
+            title: string;
+            /** @example agent_partial */
+            reason_code: string;
+            reason: string;
+            /** @enum {string} */
+            severity: "error" | "warning" | "info";
+            /** Format: date-time */
+            since: string | null;
+            action: components["schemas"]["AttentionActionOut"];
+        };
+        AttentionSourceErrorOut: {
+            source: string;
+            error: string;
+        };
+        AttentionOut: {
+            items: components["schemas"]["AttentionItemOut"][];
+            errors: components["schemas"]["AttentionSourceErrorOut"][];
+            counts_by_kind: {
+                [key: string]: number;
+            };
         };
         UpkeepRunListOut: {
             /** @description Every pass in flight, oldest first. Empty means nothing is running. */
@@ -860,6 +1041,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpkeepRunListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getReconcilePlan: {
+        parameters: {
+            query?: {
+                /** @description One target's plan only; an unknown name answers 404. */
+                target?: string | null;
+                /** @description Only the items about this resource kind. */
+                kind?: string | null;
+                /** @description Only the items about this resource. */
+                uid?: string | null;
+                /** @description `period` is what the next periodic pass would do; `manual` is what a person applying every item would get. */
+                trigger?: "period" | "manual";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcilePlanOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    applyReconcileItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileApplyIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileApplyOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttentionOut"];
                 };
             };
             401: components["responses"]["Unauthorized"];

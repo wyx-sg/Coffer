@@ -55,6 +55,8 @@ from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_tes
 from coffer.surfaces.http.memory import routers as memory_routers
 from coffer.surfaces.http.model_routes import router as model_router
 from coffer.surfaces.http.provider_routes import router as provider_router
+from coffer.surfaces.http.reconcile_routes import attention_router
+from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
@@ -73,6 +75,8 @@ def include_all_routers(app: FastAPI) -> None:
         audit_router,
         retention_router,
         upkeep_router,  # what this daemon is rewriting right now (cross-kind)
+        reconcile_router,  # the unified reconciler's plan + apply (cross-kind)
+        attention_router,  # the Overview's "needs you" list (cross-kind)
         credential_router,
         settings_router,
         sync_router,  # spec vault-sync (experimental: vault_sync)

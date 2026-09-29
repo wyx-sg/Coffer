@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from coffer.application.features import FeatureService, FeatureState
-from coffer.application.memory.delivery_switch import memory_switch_subscriber
+from coffer.application.memory.delivery_reconcile import memory_switch_subscriber
 from coffer.domain.features import FeaturePinned, FeatureUnknown
 
 

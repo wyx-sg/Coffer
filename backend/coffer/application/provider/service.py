@@ -15,6 +15,8 @@ that holds the write lock (mirrors ``mcp_entry_service``).
 from __future__ import annotations
 
 import asyncio
+import contextlib
+from collections.abc import Callable
 from typing import Protocol as _Protocol
 from uuid import uuid4
 
@@ -78,6 +80,7 @@ class ProviderService:
         audit: AuditService,
         agent_catalog: AgentCatalog,
         engine: EngineNotifyPort | None = None,
+        hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
@@ -93,6 +96,10 @@ class ProviderService:
         # arrives as a port the composition root satisfies; ``None`` is the
         # test-convenience construction, where there is no engine to tell.
         self._engine = engine
+        # The reconciler's hold: a switch is several writes (project, then move
+        # the flags), and no periodic pass may judge the state in between.
+        # Re-entrant inside a pass, so a repair that switches cannot deadlock.
+        self._hold = hold or contextlib.nullcontext
 
     # --- helpers -------------------------------------------------------------
 
@@ -262,7 +269,8 @@ class ProviderService:
         agents this one does NOT cover so no stale config is left behind. A thin
         delegate; the order of operations lives in ``switch_ops``.
         """
-        return await _activate_op(self, uid, actor=actor)
+        async with self._hold():
+            return await _activate_op(self, uid, actor=actor)
 
     async def deactivate(self, agent_type: AgentType, *, actor: str = "api") -> DeactivateResult:
         """Switch every agent of ``agent_type`` back to its built-in login:
@@ -270,7 +278,8 @@ class ProviderService:
         ``is_active``. A connection reaching multiple agents is reverted as a
         unit (the single ``is_active`` flag is all-or-nothing). Idempotent;
         de-projects before the flip, mirroring :meth:`activate`."""
-        return await _deactivate_op(self, agent_type, actor=actor)
+        async with self._hold():
+            return await _deactivate_op(self, agent_type, actor=actor)
 
     async def resolve_connection_key(self, uid: str) -> str:
         """The decrypted key of ONE specific connection — what Claude Code's

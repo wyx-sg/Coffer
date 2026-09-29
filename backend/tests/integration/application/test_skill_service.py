@@ -1,7 +1,8 @@
 """SkillService end-to-end integration (DB + filesystem + sync engine).
 
-Covers import / enable / disable / verify / remove +
-the cross-kind cleanup hooks.
+Covers import / delivery / reclaim / verify / repair / remove + the
+cross-kind cleanup hooks. Delivery is the ``skill_link`` reconcile target,
+driven the way the composition root drives it (``tests/support/skills``).
 """
 
 from __future__ import annotations
@@ -12,32 +13,17 @@ import textwrap
 
 import pytest
 
-from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.service import AgentService
-from coffer.application.audit_service import AuditService
-from coffer.application.resource_service import ResourceService
-from coffer.application.skill.kind import make_skill_kind
+from coffer.application.skill import drift_view
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    SkillValidationError,
-    TargetConflict,
-)
+from coffer.domain.errors import SkillValidationError
+from coffer.domain.reconcile import Disposition, Outcome, Trigger
 from coffer.domain.resource import Resource
-from coffer.domain.skill.drift import DriftKind
-from coffer.infrastructure.persistence.base import Base
-from coffer.infrastructure.persistence.engine import (
-    create_async_engine_with_pragmas,
-    session_maker,
-)
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
-from coffer.infrastructure.platform import HostPlatform
+from coffer.domain.skill.drift import DriftKind, DriftReport
 from coffer.infrastructure.skill.master_store import MasterStore
-from coffer.infrastructure.skill.persistence import SkillBindingRepo
+from tests.support.skills import SkillGraph, build_skill_graph
 
 
 def _write_skill_folder(folder: pathlib.Path, *, name: str, body: str = "hello") -> pathlib.Path:
@@ -59,54 +45,14 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str, body: str = "hello")
 
 
 async def _setup(tmp_path: pathlib.Path):
-    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    """The skill + agent graph wired like the composition root, with the
+    ``skill_link`` reconcile target every front door asks for a pass."""
+    graph = await build_skill_graph(tmp_path)
+    return graph.skills, graph.agents, graph.audit, graph.store, graph
 
-    binding_repo = SkillBindingRepo(sm)
-    master_store = MasterStore(root=tmp_path / "coffer-skills")
 
-    # Cross-kind resolver — tests are outside the contract scope so we can
-    # import both kinds here without violating Contract 5.
-    from coffer.domain.agent.config import AgentConfig
-
-    def _agent_skill_dir(r: Resource):
-        cfg = AgentConfig.model_validate(r.config)
-        return cfg.resolved_skill_dir()
-
-    # Order: create services first, then kinds (with cross-kind hooks).
-    placeholder_kinds: dict = {}
-    rs = ResourceService(kinds=placeholder_kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
-    from coffer.infrastructure.skill.sync_engine import SyncEngine
-
-    skill_svc = SkillService(
-        resource_service=rs,
-        audit=audit,
-        binding_repo=binding_repo,
-        master_store=master_store,
-        sync_engine=SyncEngine(),
-        agent_skill_dir_resolver=_agent_skill_dir,
-    )
-
-    agent_svc = AgentService(
-        platform=HostPlatform(),
-        resource_service=rs,
-        audit=audit,
-        on_config_dir_changed=skill_svc.relink_for_agent,
-    )
-
-    # CODE21-001 made the agent on_delete hook awaited (not fire-and-forget)
-    # so cleanup happens BEFORE the agent row vanishes; mirror that here so
-    # the test wiring matches the composition root.
-    async def _agent_on_delete(agent: Resource):
-        await skill_svc.cleanup_bindings_for_agent(agent)
-
-    placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
-    placeholder_kinds["skill"] = make_skill_kind(skill_svc.cleanup_bindings_for_skill)
-
-    return skill_svc, agent_svc, audit, master_store, engine
+async def _verify(graph: SkillGraph) -> DriftReport:
+    return await drift_view.verify(graph.skills, graph.reconciler)
 
 
 async def _uid(skill_svc: SkillService, kind: str, name: str) -> str:
@@ -157,7 +103,7 @@ async def _register_agent(
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="import a valid local skill folder")
 async def test_import_valid_skill(tmp_path):
-    skill_svc, _, audit, store, engine = await _setup(tmp_path)
+    skill_svc, _, audit, store, graph = await _setup(tmp_path)
     src = tmp_path / "src"
     _write_skill_folder(src, name="hello-world")
     r = await skill_svc.import_local(path=str(src), actor="cli")
@@ -166,20 +112,20 @@ async def test_import_valid_skill(tmp_path):
     assert store.paths_for("hello-world").skill_md.is_file()
     audited = await audit.query(event_type=AuditEventType.SKILL_IMPORTED.value)
     assert len(audited) == 1
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="reject import of an invalid skill folder")
 async def test_import_rejects_invalid_frontmatter(tmp_path):
-    skill_svc, _, _, store, engine = await _setup(tmp_path)
+    skill_svc, _, _, store, graph = await _setup(tmp_path)
     src = tmp_path / "src"
     src.mkdir()
     (src / "SKILL.md").write_text("no frontmatter")
     with pytest.raises(SkillValidationError):
         await skill_svc.import_local(path=str(src), actor="cli")
     assert not store.root.exists() or not any(store.root.iterdir())
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -187,7 +133,7 @@ async def test_import_rejects_invalid_frontmatter(tmp_path):
     spec="skill-manager", scenario="reject import containing path-escape symlinks"
 )
 async def test_import_rejects_path_escape_symlink(tmp_path):
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    skill_svc, _, _, _, graph = await _setup(tmp_path)
     src = tmp_path / "src"
     _write_skill_folder(src, name="x")
     outside = tmp_path / "secret"
@@ -195,7 +141,7 @@ async def test_import_rejects_path_escape_symlink(tmp_path):
     os.symlink(outside, src / "ev")
     with pytest.raises(SkillValidationError):
         await skill_svc.import_local(path=str(src), actor="cli")
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- delivery / reclaim -----
@@ -204,7 +150,7 @@ async def test_import_rejects_path_escape_symlink(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="deliver a skill to a registered agent")
 async def test_enable_creates_link(tmp_path):
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -213,33 +159,32 @@ async def test_enable_creates_link(tmp_path):
     target = skill_dir / "my-skill"
     assert target.exists()
     assert (target / "SKILL.md").is_file()
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="reclaim a skill from an agent")
 async def test_disable_removes_link_keeps_master(tmp_path):
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
     await skill_svc.import_local(path=str(src), actor="cli")
     target = skill_dir / "my-skill"
     assert target.exists()
-    await skill_svc.disable_for(
-        skill_uid=await _uid(skill_svc, "skill", "my-skill"),
-        agent_uid=await _uid(skill_svc, "agent", "cur"),
-        actor="cli",
-    )
+    # Switching the skill off is what stops delivering it; the pass reclaims.
+    await skill_svc._rs.set_enabled(await _uid(skill_svc, "skill", "my-skill"), False, actor="cli")
     assert not target.exists()
     assert store.paths_for("my-skill").folder.is_dir()
-    await engine.dispose()
+    [unbound] = await audit.query(event_type=AuditEventType.SKILL_UNBOUND.value)
+    assert (unbound.resource_name, unbound.details["agent"]) == ("my-skill", "cur")
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="deliver one skill to multiple agents")
 async def test_enable_for_two_agents(tmp_path):
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
     _, sd2 = await _register_agent(agent_svc, tmp_path, name="cur2", agent_type=AgentType.CODEX)
     src = tmp_path / "src"
@@ -249,13 +194,13 @@ async def test_enable_for_two_agents(tmp_path):
     t2 = sd2 / "my-skill"
     assert t1.is_dir() and t2.is_dir()
     assert (t1 / "SKILL.md").read_bytes() == (t2 / "SKILL.md").read_bytes()
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="refuse to overwrite a non-Coffer target")
 async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -264,28 +209,19 @@ async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
     link.parent.mkdir(parents=True, exist_ok=True)
     link.mkdir()
     (link / "stub").write_text("foreign")
-    # import auto-binds; it must skip this agent due to target conflict (no exception).
+    # The delivery pass the import asks for leaves the foreign dir alone.
     await skill_svc.import_local(path=str(src), actor="cli")
-    # Now try to enable explicitly without force — should raise TargetConflict.
-    skill_uid = await _uid(skill_svc, "skill", "my-skill")
-    agent_uid = await _uid(skill_svc, "agent", "cur")
-    with pytest.raises(TargetConflict):
-        await skill_svc.enable_for(
-            skill_uid=skill_uid, agent_uid=agent_uid, force=False, actor="cli"
-        )
-    # With force, the foreign target is backed up and link is created.
-    binding = await skill_svc.enable_for(
-        skill_uid=skill_uid, agent_uid=agent_uid, force=True, actor="cli"
-    )
-    assert binding.enabled
-    backups = list(skill_dir.glob("my-skill.coffer-backup-*"))
-    assert backups
-    # TEST21-005: pin the backup-name format so the spec's `<path>.coffer-
-    # backup-<ts>` shape (integer unix timestamp suffix) doesn't regress.
-    import re
-
-    assert re.match(r".*\.coffer-backup-\d{10,}$", backups[0].name)
-    await engine.dispose()
+    assert (link / "stub").read_text() == "foreign"
+    # It is a BLOCKED item, and even a person applying it by hand (MANUAL)
+    # does not make the policy clobber it.
+    [result] = (await graph.plan()).results
+    assert result.change.decision.disposition is Disposition.BLOCKED
+    assert result.change.decision.reason_code == "foreign_content"
+    applied = await graph.reconciler.apply([result.change.id], actor="cli")
+    assert [r.outcome for r in applied.results] == [Outcome.PLANNED]
+    assert (link / "stub").read_text() == "foreign"
+    assert not list(skill_dir.glob("my-skill.coffer-backup-*"))
+    await graph.dispose()
 
 
 # ----- verify -----
@@ -294,16 +230,16 @@ async def test_refuse_to_overwrite_non_coffer_target(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="detect drift in agent skill directories")
 async def test_verify_detects_missing_link(tmp_path):
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
     await skill_svc.import_local(path=str(src), actor="cli")
     link = skill_dir / "my-skill"
     link.unlink()
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert any(e.kind is DriftKind.MISSING_LINK for e in report.entries)
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- removal -----
@@ -312,7 +248,7 @@ async def test_verify_detects_missing_link(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="remove a skill cleans up all bindings")
 async def test_remove_skill_cleans_everything(tmp_path):
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
     _, sd2 = await _register_agent(agent_svc, tmp_path, name="cur2", agent_type=AgentType.CODEX)
     src = tmp_path / "src"
@@ -325,7 +261,7 @@ async def test_remove_skill_cleans_everything(tmp_path):
     assert not t1.exists() and not t2.exists()
     assert not store.paths_for("my-skill").folder.exists()
     assert (await skill_svc.list_skills()) == []
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -334,7 +270,7 @@ async def test_kind_agnostic_delete_skill_cleans_everything(tmp_path):
     (the kind-agnostic ``DELETE /api/v1/resources/skill/{name}`` path)
     must trigger the awaited on_delete hook BEFORE the row is removed,
     so symlinks AND the master folder are both gone — not orphaned."""
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -349,7 +285,7 @@ async def test_kind_agnostic_delete_skill_cleans_everything(tmp_path):
     assert not t1.exists()
     assert not store.paths_for("my-skill").folder.exists()
     assert (await skill_svc.list_skills()) == []
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -358,7 +294,7 @@ async def test_kind_agnostic_delete_skill_cleans_everything(tmp_path):
     scenario="removing an agent (per spec agent-registry) cleans up its skill bindings",
 )
 async def test_remove_agent_cleans_its_bindings(tmp_path):
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     a1, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
     _, sd2 = await _register_agent(agent_svc, tmp_path, name="cur2", agent_type=AgentType.CODEX)
     src = tmp_path / "src"
@@ -370,7 +306,7 @@ async def test_remove_agent_cleans_its_bindings(tmp_path):
     assert not t1.exists()
     assert t2.exists()
     assert store.paths_for("my-skill").folder.exists()
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- TEST21-008: agent delete cascade through ResourceService.delete -----
@@ -385,7 +321,7 @@ async def test_agent_delete_via_resource_service_triggers_skill_cleanup(tmp_path
     on_delete hook BEFORE the agent row vanishes, so per-agent symlinks
     are torn down and binding rows are removed without orphaning.
     """
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     _, sd1 = await _register_agent(agent_svc, tmp_path, name="cur1")
     _, sd2 = await _register_agent(agent_svc, tmp_path, name="cur2", agent_type=AgentType.CODEX)
     src = tmp_path / "src"
@@ -404,7 +340,7 @@ async def test_agent_delete_via_resource_service_triggers_skill_cleanup(tmp_path
     assert t2.exists()
     # Master folder is untouched (only the binding cascades on agent delete).
     assert store.paths_for("my-skill").folder.exists()
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- TEST21-010: drift kinds besides MISSING_LINK -----
@@ -413,7 +349,7 @@ async def test_agent_delete_via_resource_service_triggers_skill_cleanup(tmp_path
 @pytest.mark.asyncio
 async def test_verify_detects_replaced_with_regular(tmp_path):
     """Drift kind REPLACED_WITH_REGULAR: link path is a plain dir, not a symlink."""
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -423,15 +359,15 @@ async def test_verify_detects_replaced_with_regular(tmp_path):
     link.unlink()
     link.mkdir()
     (link / "foo").write_text("not from coffer")
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert any(e.kind is DriftKind.REPLACED_WITH_REGULAR for e in report.entries)
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 async def test_verify_detects_tampered_link(tmp_path):
     """Drift kind TAMPERED_LINK: symlink points somewhere other than master."""
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -442,15 +378,15 @@ async def test_verify_detects_tampered_link(tmp_path):
     elsewhere.mkdir()
     link.unlink()
     link.symlink_to(elsewhere, target_is_directory=True)
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert any(e.kind is DriftKind.TAMPERED_LINK for e in report.entries)
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 async def test_verify_detects_missing_master(tmp_path):
     """Drift kind MISSING_MASTER: master folder has been deleted."""
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -461,15 +397,15 @@ async def test_verify_detects_missing_master(tmp_path):
     import shutil
 
     shutil.rmtree(store.paths_for("my-skill").folder)
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert any(e.kind is DriftKind.MISSING_MASTER for e in report.entries)
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="audit skill lifecycle")
 async def test_audit_skill_lifecycle(tmp_path):
-    skill_svc, _, audit, _, engine = await _setup(tmp_path)
+    skill_svc, _, audit, _, graph = await _setup(tmp_path)
     src = tmp_path / "src"
     _write_skill_folder(src, name="aud")
     await skill_svc.import_local(path=str(src), actor="cli")
@@ -477,35 +413,7 @@ async def test_audit_skill_lifecycle(tmp_path):
     imported = await audit.query(event_type=AuditEventType.SKILL_IMPORTED.value)
     deleted = await audit.query(event_type=AuditEventType.RESOURCE_DELETED.value)
     assert len(imported) == 1 and len(deleted) == 1
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_disable_for_unbound_agent_is_noop(tmp_path):
-    """disable_for an agent that was never bound must not write a phantom
-    disabled binding row or a spurious SKILL_UNBOUND audit event."""
-    skill_svc, agent_svc, audit, _, engine = await _setup(tmp_path)
-    await _register_agent(agent_svc, tmp_path, name="bound")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="my-skill")
-    await skill_svc.import_local(path=str(src), actor="cli")
-    # A second agent registered AFTER import is never auto-bound to the skill.
-    await _register_agent(agent_svc, tmp_path, name="never", agent_type=AgentType.CODEX)
-
-    binding = await skill_svc.disable_for(
-        skill_uid=await _uid(skill_svc, "skill", "my-skill"),
-        agent_uid=await _uid(skill_svc, "agent", "never"),
-        actor="cli",
-    )
-    assert binding.enabled is False
-    # No SKILL_UNBOUND event was recorded (nothing was ever bound).
-    unbound = await audit.query(event_type=AuditEventType.SKILL_UNBOUND.value)
-    assert unbound == []
-    # No phantom binding row for the never-bound agent.
-    bindings = await skill_svc.bindings_for(await _uid(skill_svc, "skill", "my-skill"))
-    never = await skill_svc._rs.get_by_name("agent", "never")
-    assert all(b.agent_resource_id != never.id for b in bindings)
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -513,7 +421,7 @@ async def test_config_dir_change_relinks_skills(tmp_path):
     """Changing an agent's config_dir re-delivers its skills: the old link is
     removed and a new one is created under <new_config_dir>/skills, with the
     binding repointed — so verify reports no drift (not a false clean)."""
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     _, old_skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -533,9 +441,9 @@ async def test_config_dir_change_relinks_skills(tmp_path):
     assert not old_link.exists(), "old link should be torn down"
     assert new_link.exists() and (new_link / "SKILL.md").is_file()
     # Binding repointed to the new path → verify finds no drift.
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert report.entries == []
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -544,7 +452,7 @@ async def test_config_dir_change_repoints_binding_even_if_new_target_exists(tmp_
     <name> (e.g. a prior partial run), relink must still repoint the binding row
     to the new path instead of dropping it — a dropped row would dangle at the
     deleted old path and verify would report a false MISSING_LINK forever."""
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, _, store, graph = await _setup(tmp_path)
     _, old_skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -573,17 +481,17 @@ async def test_config_dir_change_repoints_binding_even_if_new_target_exists(tmp_
     assert bindings[0].last_link_path == str(new_skills / "my-skill")
     assert not old_link.exists()
     # Repointed to a correct link → no drift.
-    report = await skill_svc.verify()
+    report = await _verify(graph)
     assert report.entries == []
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
 async def test_config_dir_change_does_not_clobber_foreign_content_at_new_target(tmp_path):
     """Data-loss guard: if FOREIGN content (not a Coffer link) already occupies
     the new <config_dir>/skills/<name>, relink must NOT claim it as the link
-    (no copy_fallback mislabel) and a later teardown must NOT delete it."""
-    skill_svc, agent_svc, _, _, engine = await _setup(tmp_path)
+    (the move is blocked) and a later reclaim must NOT delete it."""
+    skill_svc, agent_svc, _, _, graph = await _setup(tmp_path)
     await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     _write_skill_folder(src, name="my-skill")
@@ -603,22 +511,17 @@ async def test_config_dir_change_does_not_clobber_foreign_content_at_new_target(
         actor="cli",
     )
 
-    # Foreign content untouched and NOT mislabeled as a Coffer copy-fallback.
+    # Foreign content untouched: the move is blocked, not forced.
     assert (foreign / "important.txt").read_text() == "precious user data"
-    bindings = await skill_svc.bindings_for(await _uid(skill_svc, "skill", "my-skill"))
-    assert len(bindings) == 1
-    assert bindings[0].link_mode is None
+    [result] = (await graph.plan()).results
+    assert result.change.decision.reason_code == "foreign_content"
     # verify surfaces the conflict rather than reporting a false clean.
-    report = await skill_svc.verify()
-    assert report.entries
+    report = await _verify(graph)
+    assert [e.kind for e in report.entries] == [DriftKind.REPLACED_WITH_REGULAR]
     # Disabling must NOT delete the user's directory (the data-loss path).
-    await skill_svc.disable_for(
-        skill_uid=await _uid(skill_svc, "skill", "my-skill"),
-        agent_uid=await _uid(skill_svc, "agent", "cur"),
-        actor="cli",
-    )
+    await skill_svc._rs.set_enabled(await _uid(skill_svc, "skill", "my-skill"), False, actor="cli")
     assert (foreign / "important.txt").read_text() == "precious user data"
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -633,7 +536,7 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     ResourceAlreadyExists."""
     from coffer.domain.errors import ResourceAlreadyExists
 
-    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
 
     # --- initial import ---
@@ -679,7 +582,7 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     updated_events = await audit.query(event_type=AuditEventType.SKILL_UPDATED.value)
     assert len(updated_events) == 1
 
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -687,7 +590,7 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
     """An orphan master folder (content on disk, no Resource row —
     DriftKind.ORPHAN_MASTER) plus overwrite must REGISTER the row rather than
     crash on update_config's missing-row lookup."""
-    skill_svc, _agent_svc, audit, store, engine = await _setup(tmp_path)
+    skill_svc, _agent_svc, audit, store, graph = await _setup(tmp_path)
 
     # Create an orphan master folder directly: content on disk, no row.
     orphan_src = tmp_path / "orphan_src"
@@ -710,10 +613,10 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
     imported = await audit.query(event_type=AuditEventType.SKILL_IMPORTED.value)
     assert len(imported) == 1
 
-    await engine.dispose()
+    await graph.dispose()
 
 
-# ----- repair_drift ("Repair repairable drift from master") -----
+# ----- repair ("Repair repairable drift from master") -----
 
 
 @pytest.mark.asyncio
@@ -722,12 +625,12 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
     scenario="opt-in repair re-delivers repairable drift from master",
 )
 async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
-    """repair_drift re-delivers MISSING_LINK + TAMPERED_LINK, leaves
+    """Repair (``verify --fix``) re-delivers MISSING_LINK + TAMPERED_LINK, leaves
     REPLACED_WITH_REGULAR + MISSING_MASTER in the residual report, and records
     a SKILL_DRIFT_REMEDIATED audit row for each repaired entry."""
     import shutil
 
-    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
 
     # Import four skills so we can induce one drift kind each.
@@ -763,7 +666,7 @@ async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
     shutil.rmtree(store.paths_for("s-missing-master").folder)
 
     # Confirm verify sees all four drift kinds before repair.
-    pre_report = await skill_svc.verify()
+    pre_report = await _verify(graph)
     pre_kinds = {e.kind for e in pre_report.entries}
     from coffer.domain.skill.drift import DriftKind
 
@@ -773,7 +676,7 @@ async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
     assert DriftKind.MISSING_MASTER in pre_kinds
 
     # --- run repair ---
-    result = await skill_svc.repair_drift(actor="test")
+    result = await drift_view.repair(skill_svc, graph.reconciler, actor="test")
 
     # Repaired: MISSING_LINK and TAMPERED_LINK only.
     remediated_kinds = {e.kind for e in result.remediated}
@@ -802,17 +705,19 @@ async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
     assert DriftKind.MISSING_LINK not in residual_kinds
     assert DriftKind.TAMPERED_LINK not in residual_kinds
 
-    # A SKILL_DRIFT_REMEDIATED audit row was recorded for each repaired entry.
+    # A SKILL_DRIFT_REMEDIATED audit row was recorded for each repaired entry,
+    # under the person who asked.
     remediated_events = await audit.query(event_type=AuditEventType.SKILL_DRIFT_REMEDIATED.value)
     assert len(remediated_events) == 2  # one per repaired skill
+    assert {ev.actor for ev in remediated_events} == {"test"}
     remediated_skill_names = {ev.resource_name for ev in remediated_events}
     assert "s-missing-link" in remediated_skill_names
     assert "s-tampered" in remediated_skill_names
 
-    await engine.dispose()
+    await graph.dispose()
 
 
-# ----- boot heal (spec-boot-heal) -----
+# ----- boot pass (spec-boot-heal) -----
 
 
 @pytest.mark.asyncio
@@ -821,13 +726,11 @@ async def test_repair_redelivers_repairable_drift_and_leaves_foreign(tmp_path):
     spec="skill-manager", scenario="boot heal leaves unsafe drift for a human to find"
 )
 async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
-    """The boot heal is ``repair_drift`` run from a different trigger (daemon
-    startup instead of a person clicking "repair"): it must re-deliver a
-    missing link, leave foreign content untouched, and audit the repair with
-    an actor that names the boot heal rather than a person."""
-    from coffer.application.skill.boot_reconcile import BOOT_ACTOR, SkillDriftBootHeal
-
-    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    """The boot pass is the same ``skill_link`` target run from a different
+    trigger (daemon startup instead of a person asking): it re-delivers a
+    missing link, leaves foreign content untouched and reported, and audits
+    the repair as the system rather than a person."""
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
 
     for skill_name in ("s-missing", "s-foreign"):
@@ -848,36 +751,36 @@ async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
     foreign_sentinel = link_foreign / "precious.txt"
     foreign_sentinel.write_text("user data — must not be touched")
 
-    heal = SkillDriftBootHeal(skill_service=skill_svc)
-    notes = await heal.heal()
+    report = await graph.run(Trigger.BOOT)
+    by_code = {r.change.decision.reason_code: r for r in report.results}
 
     # The missing link is repaired, pointing back at master.
     master_missing = store.paths_for("s-missing").folder
     assert link_missing.exists(), "MISSING_LINK must self-heal at boot"
     assert link_missing.resolve() == master_missing.resolve()
-    assert any("s-missing" in n and "missing_link" in n for n in notes)
+    assert by_code["missing_link"].outcome is Outcome.APPLIED
 
-    # The foreign directory is completely untouched — never auto-repaired.
+    # The foreign directory is completely untouched — never auto-repaired, and
+    # reported with a sentence a person can act on.
     assert link_foreign.is_dir() and not link_foreign.is_symlink()
     assert foreign_sentinel.read_text() == "user data — must not be touched"
-    assert any("s-foreign" in n and "replaced_with_regular" in n for n in notes), (
-        "residual drift must be logged clearly enough for a human to find, now that "
-        "the only other surface (the UI button) is gone"
-    )
+    blocked = by_code["foreign_content"]
+    assert blocked.outcome is Outcome.PLANNED
+    assert str(link_foreign) in blocked.change.decision.reason
 
     # A second verify pass confirms the residual drift is exactly the foreign one.
-    residual = await skill_svc.verify()
+    residual = await _verify(graph)
     residual_kinds = {e.kind for e in residual.entries}
     assert DriftKind.REPLACED_WITH_REGULAR in residual_kinds
     assert DriftKind.MISSING_LINK not in residual_kinds
 
-    # The repair is audited with the boot heal's own actor, not a person's.
+    # The repair is audited once, as the system, not a person.
     remediated_events = await audit.query(event_type=AuditEventType.SKILL_DRIFT_REMEDIATED.value)
     assert len(remediated_events) == 1
     assert remediated_events[0].resource_name == "s-missing"
-    assert remediated_events[0].actor == BOOT_ACTOR == "system"
+    assert remediated_events[0].actor == "system"
 
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- a fixed name, and a title (ADR names-visible-to-agents-are-fixed) -----
@@ -924,7 +827,7 @@ def _disk_state(store: MasterStore, skill_dir: pathlib.Path, name: str) -> dict[
 async def _deliver_before(tmp_path: pathlib.Path):
     """An imported skill ``before``, delivered to a registered agent, whose
     SKILL.md carries a comment, another frontmatter field and a body."""
-    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     src.mkdir()
@@ -940,14 +843,14 @@ async def _deliver_before(tmp_path: pathlib.Path):
     )
     skill = await skill_svc.import_local(path=str(src), actor="cli")
     assert (skill_dir / "before").exists(), "precondition: the skill is delivered"
-    return skill_svc, audit, store, engine, agent, skill_dir, skill
+    return skill_svc, audit, store, graph, agent, skill_dir, skill
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="refuse changing a registered skill's name")
 @pytest.mark.acceptance(spec="resource-framework", scenario="a fixed name refuses a rename")
 async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
-    skill_svc, audit, store, engine, _agent, skill_dir, skill = await _deliver_before(tmp_path)
+    skill_svc, audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
     disk_before = _disk_state(store, skill_dir, "before")
     trail_before = await audit.query(resource=skill)
     binding_before = (await skill_svc.bindings_for(skill.uid))[0]
@@ -978,10 +881,10 @@ async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
     assert not (skill_dir / "after").exists()
     binding_after = (await skill_svc.bindings_for(skill.uid))[0]
     assert binding_after == binding_before
-    assert (await skill_svc.verify()).entries == []
+    assert (await _verify(graph)).entries == []
     # Nothing was audited.
     assert await audit.query(resource=skill) == trail_before
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -989,7 +892,7 @@ async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
     spec="skill-manager", scenario="a skill's title is edited without touching disk"
 )
 async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
-    skill_svc, _audit, store, engine, _agent, skill_dir, skill = await _deliver_before(tmp_path)
+    skill_svc, _audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
     disk_before = _disk_state(store, skill_dir, "before")
     hash_before = skill.config["version_hash"]
 
@@ -1009,8 +912,8 @@ async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
     assert row.config["version_hash"] == hash_before
     assert _disk_state(store, skill_dir, "before") == disk_before
     assert "Release checklist" not in store.paths_for("before").skill_md.read_text(encoding="utf-8")
-    assert (await skill_svc.verify()).entries == []
-    await engine.dispose()
+    assert (await _verify(graph)).entries == []
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -1019,7 +922,7 @@ async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
     scenario="a refused name change leaves the master folder where it is",
 )
 async def test_a_refused_name_change_then_a_title_leaves_the_master_folder(tmp_path):
-    skill_svc, _audit, store, engine, agent, skill_dir, skill = await _deliver_before(tmp_path)
+    skill_svc, _audit, store, graph, agent, skill_dir, skill = await _deliver_before(tmp_path)
     skill_md_before = store.paths_for("before").skill_md.read_bytes()
     binding_before = (await skill_svc.bindings_for(skill.uid))[0]
 
@@ -1046,7 +949,7 @@ async def test_a_refused_name_change_then_a_title_leaves_the_master_folder(tmp_p
         "version_hash"
     ]
     assert not store.paths_for("after").folder.exists()
-    await engine.dispose()
+    await graph.dispose()
 
 
 @pytest.mark.asyncio
@@ -1061,7 +964,7 @@ async def test_import_refuses_a_frontmatter_name_its_own_skill_md_could_not_carr
     name, so nothing outside the kind would stop it — and Coffer would then
     hold a skill its own importer rejects.
     """
-    skill_svc, _agent_svc, _, store, engine = await _setup(tmp_path)
+    skill_svc, _agent_svc, _, store, graph = await _setup(tmp_path)
 
     for illegal in ("My.Skill", "MySkill", "-leading"):
         src = tmp_path / f"src-{illegal}"
@@ -1071,7 +974,7 @@ async def test_import_refuses_a_frontmatter_name_its_own_skill_md_could_not_carr
         assert not store.paths_for("placeholder").folder.parent.joinpath(illegal).exists()
 
     assert await skill_svc._rs.list(kind="skill") == []
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- config schema -----
@@ -1088,7 +991,7 @@ async def test_skill_config_holds_provenance_and_never_the_name(tmp_path):
     from coffer.domain.errors import ConfigValidationError
     from coffer.domain.skill.config import SkillConfig
 
-    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    skill_svc, _, _, _, graph = await _setup(tmp_path)
     src = tmp_path / "src"
     _write_skill_folder(src, name="provenance")
     skill = await skill_svc.import_local(path=str(src), actor="cli")
@@ -1123,7 +1026,7 @@ async def test_skill_config_holds_provenance_and_never_the_name(tmp_path):
         validated = SkillConfig.model_validate({**stored, "source": source})
         assert validated.model_dump(mode="json")["source"] == {"type": "builtin"}
     assert "skill_md_name" not in (await skill_svc.get_skill(skill.uid)).config
-    await engine.dispose()
+    await graph.dispose()
 
 
 # ----- copy fallback -----
@@ -1147,7 +1050,7 @@ async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch
     from coffer.infrastructure.platform import HostOs
     from coffer.infrastructure.platform import links as platform_links
 
-    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    skill_svc, agent_svc, audit, store, graph = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="fat32")
 
     class _NoLinkOs:
@@ -1187,5 +1090,5 @@ async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch
     assert [e.details["mode"] for e in bound] == ["copy_fallback"]
 
     # A copy is the expected shape of this delivery, not drift.
-    assert (await skill_svc.verify()).entries == []
-    await engine.dispose()
+    assert (await _verify(graph)).entries == []
+    await graph.dispose()

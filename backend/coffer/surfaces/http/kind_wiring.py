@@ -21,6 +21,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.application.platform_port import PlatformPort
+from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -60,6 +61,7 @@ async def wire_resource_kinds(
     sync: SyncContributions,
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
+    reconciler: Reconciler,
 ) -> KindWirings:
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     agent_skill = wire_agent_and_skill_kinds(
@@ -72,12 +74,20 @@ async def wire_resource_kinds(
         sync,
         platform,
         agent_catalog,
+        reconciler,
     )
 
     # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the
     # active profile into each agent's native config (see provider_wiring).
     provider = wire_provider_kind(
-        app, resource_svc, audit, credential_store, agent_skill.agent_service, sync, agent_catalog
+        app,
+        resource_svc,
+        audit,
+        credential_store,
+        agent_skill.agent_service,
+        sync,
+        agent_catalog,
+        reconciler,
     )
 
     # Coffer's own skill carries the knowledge catalogue, so a collection

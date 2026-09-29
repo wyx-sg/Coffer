@@ -269,9 +269,9 @@ The CLI command is silent on every failure. If no daemon is running, or the daem
 
 ### Keeping hooks current
 
-Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. At boot the daemon compares each installed command with the command the running build would install, and rewrites the ones that differ (`DeliveryService.heal_drift`). The repair runs best-effort per agent and never installs a hook for an agent that has none.
+Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. So the hook is a target of the [reconciler](/architecture/reconciler): on every pass — at start, every minute, and soon after any agent changes — it compares each installed hook's event and whole command with what the running build would install, and rewrites the ones that differ. One unreadable settings file is reported as blocked without stopping the others.
 
-The same reconcile follows the `memory` feature switch (`application/memory/delivery_switch.py`). Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — then heals stale commands. Boot with memory on only heals; a connected agent missing the hook reads as needing repair until it is connected again.
+The same target follows the `memory` feature switch. Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — and repairs stale commands. An ordinary pass never installs a hook: a connected agent missing it is reported, and reads as partly connected until it is connected again.
 
 ### Channel turns
 
@@ -318,13 +318,13 @@ Both are on by default. They read the agents' files and write only the derived t
 | Distil pass (routing, plan, write, apply) and worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) and its `distil_*.py` siblings |
 | Index rendering | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
 | Context composition | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
-| Delivery service and feature-switch reconcile | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py), [`delivery_switch.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_switch.py) |
+| Delivery service and the delivery-hook reconcile target | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py), [`delivery_reconcile.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_reconcile.py) |
 | Kind (`converges=False`, no scope) and service | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py), [`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
 | Native-memory readers | [`infrastructure/memory/readers/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/readers) |
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
 | Paths, raw store, note store, digest cache | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
 | Transcript `cwd` lookup shared with the agent kind | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| Wiring, workers, boot heal, the channel-turn composer | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| Wiring, workers, the delivery-hook target, the channel-turn composer | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
 | REST routes | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
 | CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py) |
 

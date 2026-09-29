@@ -122,6 +122,7 @@ backend/coffer/
 │   ├── audit.py            # audit event vocabulary
 │   ├── errors.py           # error hierarchy and codes
 │   ├── features.py         # experimental-feature registry
+│   ├── reconcile.py        # the reconciler's items, differences and pure diff
 │   ├── mcp/                # tool search and tiering, server config
 │   ├── agent/              # agent config, facets, model catalogue
 │   ├── skill/              # skill bundle values
@@ -138,6 +139,8 @@ backend/coffer/
 │   ├── builtin_tools.py    # BuiltinTool and its registry
 │   ├── features.py         # FeatureService: pin, machine setting, channel default
 │   ├── upkeep_runs.py      # passes in flight, in process
+│   ├── attention.py        # the cross-kind "needs you" list and its source port
+│   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
 │   ├── credentials/        # ref-to-secret resolver
 │   ├── engine/             # which model Coffer's own passes run on
 │   ├── fs/                 # browse, pick, open, editor
@@ -148,7 +151,7 @@ backend/coffer/
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
 │   ├── memory/             # aggregate, distil, delivery, session-start context
-│   ├── provider/           # provider service, projection, reconcile
+│   ├── provider/           # provider service, projection, projection target
 │   └── sync/               # converge round, exporter, appliers, worker, ports
 ├── infrastructure/
 │   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic

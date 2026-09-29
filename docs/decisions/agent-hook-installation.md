@@ -136,16 +136,18 @@ one this build would write.**
 - **Audited.** `memory_delivery_installed`, `memory_delivery_removed` and one
   `memory_delivery_fired` per fire. The per-agent status reports installation
   only, never a last-fired time.
-- **Repaired when stale.** `DeliveryService.heal_drift`
-  (`backend/coffer/application/memory/delivery.py`) runs at boot and on every
-  `memory` switch: for each agent with a hook installed whose command differs
-  from `command_for(uid)`, it reinstalls in place. It is best-effort per agent,
+- **Repaired when stale.** The delivery-hook target of the unified reconciler
+  (`backend/coffer/application/memory/delivery_reconcile.py`, ADR
+  [one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md))
+  runs on every pass and on every `memory` switch: for each agent with a hook
+  installed whose command differs from `command_for(uid)`, it reinstalls in
+  place. It is best-effort per agent,
   and it never installs a hook for an agent that has none — that would be a
   silent install.
 - **Follows the `memory` feature.** Switching `memory` off removes every
   Coffer hook and remembers, on this machine, which agents it removed them from;
   switching it on puts them back into exactly those agents, then repairs
-  (`application/memory/delivery_switch.py`).
+  (a reconcile pass with the switch's warrant).
 - **Named by uid.** The command names the agent by its immutable uid, not its
   editable name — a string that sits in someone else's file for months must not
   reference a label.

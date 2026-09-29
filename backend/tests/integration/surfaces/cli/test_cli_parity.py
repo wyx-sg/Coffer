@@ -147,6 +147,12 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "status",
     },
     "sync key": {"export", "import", "fingerprint"},
+    # The unified reconciler's read models (spec resource-framework "Converge
+    # what Coffer writes outside its database with one reconciler"): `list` is
+    # GET /reconcile/plan, `repair` is POST /reconcile/apply.
+    "drift": {"list", "repair"},
+    # GET /attention: the Overview's "needs you" list — a single command.
+    "attention": set(),
     "sync machine": {"list", "rename", "rm"},
     "sync remote": {"set", "clear", "pause", "resume"},
 }
@@ -160,6 +166,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # one direct MCP entry's full configuration without its secrets") or an
     # unmanaged skill (spec skill-manager "Preview an unmanaged skill read-only").
     "scan": {"--agent", "--ref", "--source", "--json"},
+    "attention": {"--json"},
     # A name, a title and a description are edited on every kind (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the

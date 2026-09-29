@@ -23,8 +23,9 @@ The shape is narrower than the question, and the code shows three seams:
   the gateway lists `enabled=True` rows and then filters by scope
   (`application/mcp/gateway_scope.py:33-34`); skill delivery writes
   `s.enabled and is_active(s.scope, agent.uid)`
-  (`application/skill/delivery_ops.py:77`); skill lifecycle does the same twice
-  (`application/skill/lifecycle_ops.py:183`, `:231`). A new site that forgets
+  (then `application/skill/delivery_ops.py:77`, now the skill-link reconcile
+  target); skill lifecycle did the same twice
+  (then `application/skill/lifecycle_ops.py:183`, `:231`). A new site that forgets
   the first half widens reach.
 - **One dimension, and one more on the way.** The agent-facets design
   introduces project-level landing points for delivered assets
