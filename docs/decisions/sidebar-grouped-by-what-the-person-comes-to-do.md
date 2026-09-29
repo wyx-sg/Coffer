@@ -13,7 +13,9 @@
 [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md),
 [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md),
 spec web-ui "Group the sidebar by what the user comes to do",
-spec web-ui "Keep the sidebar to its thirteen entries",
+spec web-ui "Keep the sidebar to its fifteen entries",
+spec web-ui "Manage custom tools on their own page",
+spec web-ui "Show every CLI a skill requires on the CLIs page",
 spec web-ui "Give each listed resource kind one sidebar entry",
 spec web-ui "List only shipped surfaces in the sidebar",
 spec web-ui "Call a surface by one name everywhere",
@@ -31,28 +33,29 @@ The sidebar today holds eleven entries in three role groups — Agents (Agents, 
 Settings) — decided in [The Sidebar Is Grouped by Role](sidebar-grouped-by-role.md). The role
 axis was chosen so that "a new asset kind is one more Resources row and never a new group".
 
-The rebuild makes that promise expensive. Three entries arrive with it: **Overview**, the landing
+The rebuild makes that promise expensive. Five entries arrive with it: **Overview**, the landing
 page; **Secrets**, a page that lists every stored secret with what uses it, which the
 credential store has never had
 ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)
 makes every stored secret listable with its reference count); and **Usage**, token use metered
-at the model proxy and the official remaining quota of subscription agents, which is in 1.0.
-One entry leaves: **Settings** becomes a modal opened from the sidebar footer (argued below).
-That is thirteen. The roadmap after 1.0 already names three more entries, and several additions
-that must *not* become entries:
+at the model proxy and the official remaining quota of subscription agents, which is in 1.0;
+**Custom tools**, the tools Coffer serves itself from a script, an HTTP endpoint or an OpenAPI
+document; and **CLIs**, the command-line tools skills require. One entry leaves: **Settings**
+becomes a modal opened from the sidebar footer (argued below). That is fifteen. The roadmap
+after 1.0 already names three more entries, and several additions that must *not* become
+entries:
 
 | Future addition | Lands as |
 | --- | --- |
 | Workflows, with a Workflows tab and a Runs tab; scheduled tasks are workflows with a schedule trigger | one entry |
 | Rules (instructions projected into each agent's instruction files) | one entry |
 | Sources (read-only git sources a vault subscribes to, for skills and the like) | one entry |
-| Custom tools (`script`, `http` and `openapi` transports of an MCP server) | rows on MCP servers |
 | More agents; agentic development environments (ADEs) as delivery targets | rows on Agents |
 | More channels (IM transports) | rows on Channels |
 
-So the navigation has to hold about **sixteen entries** without being regrouped, and every
+So the navigation has to hold about **eighteen entries** without being regrouped, and every
 kind of growth that is "more of the same" has to land inside a page. The criterion every option
-below is measured against: **at ~16 entries, no group grows past ~5**. Five is where a group
+below is measured against: **at ~18 entries, no group grows past ~5**. Five is where a group
 heading still reads as one idea at a glance; past it, a group becomes a list the eye scans row by
 row, which is what grouping was meant to avoid.
 
@@ -60,7 +63,7 @@ Rules is not in 1.0: projecting rules into each agent's instruction files is def
 entry ships before its feature (web-ui "List only shipped surfaces in the sidebar"). It is
 counted here because the grouping must already have room for it.
 
-Four placement questions have to be answered by whatever grouping wins, because each was
+Five placement questions have to be answered by whatever grouping wins, because each was
 contested while the rebuild was designed:
 
 - **Chat and Channels.** Both put a person in a conversation with an agent; should they be one
@@ -70,29 +73,31 @@ contested while the rebuild was designed:
 - **Secrets.** A secret is cited by MCP servers, model providers, channels and skills; where does
   a page for all of them go, and what stays on Settings › Security?
 - **Settings.** Is Settings a sidebar entry at all?
+- **Custom tools and CLIs.** A custom tool is an MCP server underneath, and a CLI is something a
+  skill needs; do they need entries of their own?
 
 ## Options Considered
 
-Entry counts below are *1.0* (13, with Overview, Secrets and Usage, and Settings as a modal) →
-*at ~16* (with Workflows, Rules and Sources). Overview is ungrouped in every option, for the
+Entry counts below are *1.0* (15, with Overview, Secrets, Usage, Custom tools and CLIs, and
+Settings as a modal) → *at ~18* (with Workflows, Rules and Sources). Overview is ungrouped in every option, for the
 reason given under the Decision, and Settings is a modal in every option, for the reason given
 under the placement questions.
 
 ### Option A — role groups, as today: Agents, Resources, System
 
 Keep [The Sidebar Is Grouped by Role](sidebar-grouped-by-role.md) and add the new entries where
-its rule puts them: Secrets as the last Resources row (a credentialed asset), Usage under
-System, Workflows under Agents (a thing done with agents), Rules and Sources under Resources.
+its rule puts them: Secrets, Custom tools and CLIs as Resources rows, Usage under System,
+Workflows under Agents (a thing done with agents), Rules and Sources under Resources.
 
-| Group | 1.0 | At ~16 |
+| Group | 1.0 | At ~18 |
 | --- | --- | --- |
 | Agents | Agents, Chat (2) | + Workflows (3) |
-| Resources | MCP servers, Skills, Knowledge, Memory, Model providers, Channels, Secrets (7) | + Rules, Sources (9) |
+| Resources | MCP servers, Custom tools, Skills, CLIs, Knowledge, Memory, Model providers, Channels, Secrets (9) | + Rules, Sources (11) |
 | System | Activity, Usage, Sync (3) | 3 |
 
 Pros: no migration of the user's mental map; the rule that places an entry is one question
 ("consumer, asset or tooling?") and has never been hard to answer. Cons: it fails the criterion
-already at 1.0 — seven Resources rows — and reaches nine, more than half the sidebar under one
+already at 1.0 — nine Resources rows — and reaches eleven, more than half the sidebar under one
 heading. "Resource" is the framework's word, not the user's: nobody comes to Coffer to "manage
 resources"; they come to give an agent a tool, to tell it something, or to wire up a bot. The
 role axis also puts Channels, a bot the user sets up occasionally, between Model providers and
@@ -103,17 +108,17 @@ criterion; the one-big-group shape is exactly what the other options try to fix.
 
 Group what the user *does* by intent — a Run group (Chat, Channels, later Workflows) and System
 — and keep one Resources group for everything that is configured: Agents, Model providers, MCP
-servers, Skills, Knowledge, Memory, Secrets.
+servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets.
 
-| Group | 1.0 | At ~16 |
+| Group | 1.0 | At ~18 |
 | --- | --- | --- |
 | Run | Chat, Channels (2) | + Workflows (3) |
-| Resources | Agents, Model providers, MCP servers, Skills, Knowledge, Memory, Secrets (7) | + Rules, Sources (9) |
+| Resources | Agents, Model providers, MCP servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets (9) | + Rules, Sources (11) |
 | System | Activity, Usage, Sync (3) | 3 |
 
 Pros: Chat and Channels sit together, where a user looks for "talking to an agent"; three
 headings stay easy to learn. Cons: it moves the problem rather than solving it — Resources is
-still seven, then nine — and it puts Agents, the subject of the whole product, in the middle of
+nine, then eleven — and it puts Agents, the subject of the whole product, in the middle of
 a list of the things agents use, the mislabelling the role ADR rejected as its own Option B.
 **Loses** on the criterion for the same reason as A.
 
@@ -122,11 +127,11 @@ a list of the things agents use, the mislabelling the role ADR rejected as its o
 Split the configured nouns by what the user comes to do with them, so every group is one
 intent:
 
-| Group | What the user comes to do | 1.0 | At ~16 |
+| Group | What the user comes to do | 1.0 | At ~18 |
 | --- | --- | --- | --- |
 | Agents | set up the agents and the models they run on | Agents, Model providers (2) | 2 |
 | Run | put an agent to work, directly or through an IM bot | Chat, Channels (2) | + Workflows (3) |
-| Capabilities | give agents things they can do | MCP servers, Skills (2) | + Rules, Sources (4) |
+| Capabilities | give agents things they can do | MCP servers, Custom tools, Skills, CLIs (4) | + Rules, Sources (6) |
 | Context | give agents things they know | Knowledge, Memory (2) | 2 |
 | System | look after Coffer and what every part shares | Secrets, Activity, Usage, Sync (4) | 4 |
 
@@ -134,46 +139,50 @@ The group is named **Run** rather than "Work": it is where an agent is set runni
 bot's conversations, later a workflow and its runs — and "work" reads as the user's own job,
 which every group serves.
 
-Pros: it passes the criterion — no group is over four at 1.0 or at sixteen — and the
-growth that is "more of the same" (custom tools, more agents, ADE targets, more channels) adds
-rows inside MCP servers, Agents and Channels and no entry at all. Every heading is a word a user
+Pros: it passes the criterion at 1.0 — no group is over four — and the growth that is "more of
+the same" (more agents, ADE targets, more channels, another custom tool) adds rows inside
+Agents, Channels and Custom tools and no entry at all. At eighteen it is the only option that
+misses by one group rather than by construction: Capabilities reaches six when both Rules and
+Sources land, which under the rules below makes that change revisit Capabilities instead of
+appending. Every heading is a word a user
 would say ("give Claude a new capability", "what context does it have"), not a framework term.
 Each planned entry already has an obvious home, which is the test of a grouping that will not
-be re-argued. Cons: five headings over thirteen entries means four groups of two at 1.0, so the
-sidebar carries more headings than it strictly needs until the planned entries land; the line
+be re-argued. Cons: five headings over fifteen entries means three groups of two at 1.0, so the
+sidebar carries more headings than it strictly needs until the planned entries land;
+Capabilities is the fullest group and is the one to split or trim when Rules and Sources arrive; the line
 between Capabilities and Context ("can do" against "knows") has to be learnt once, and a future
 kind that is both — a skill that is mostly reference text — is filed by its kind, not its
 content. A user of today's sidebar has to relearn where Model providers and Channels live.
-**Wins**: it is the only grouping that meets the criterion at sixteen while keeping every
+**Wins**: it is the only grouping that meets the criterion at 1.0 and stays within one entry of it at eighteen while keeping every
 heading a single intent; the cost is a few lines of heading today, paid back as the groups fill.
 
 ### Option D — one flat list, ordered by how often each entry is used
 
-No headings: the thirteen entries in one list, most-used first (Chat, Agents, Skills, MCP
+No headings: the fifteen entries in one list, most-used first (Chat, Agents, Skills, MCP
 servers, …), Sync last.
 
-| Group | 1.0 | At ~16 |
+| Group | 1.0 | At ~18 |
 | --- | --- | --- |
-| (none) | 13 | 16 |
+| (none) | 15 | 18 |
 
-Pros: fewest pixels, no taxonomy to learn, the daily entries at the top. Cons: sixteen
+Pros: fewest pixels, no taxonomy to learn, the daily entries at the top. Cons: eighteen
 undifferentiated rows is well past what a person scans at a glance — the reason the role ADR's
 own flat option lost at eleven. "Most used" differs per person (a channel operator lives on
 Channels; most people open it once) and shifts as features ship, so the order would either be
 re-argued with every entry or silently wrong for most users. A flat list also hides the
 distinctions the UI depends on: an agent is a consumer, a secret is shared infrastructure.
 Frequency is better served by the command palette and by Overview, both of which the same
-change adds. **Loses**: the criterion is failed by construction — one group of sixteen.
+change adds. **Loses**: the criterion is failed by construction — one group of eighteen.
 
 ### Option E — fewer entries, each a page with tabs
 
 Collapse the sidebar to six entries — Overview, Agents, Run, Capabilities, Context, System —
-each a page whose tabs are today's entries (Capabilities › MCP servers | Skills; System ›
-Secrets | Activity | Usage | Sync).
+each a page whose tabs are today's entries (Capabilities › MCP servers | Custom tools | Skills |
+CLIs; System › Secrets | Activity | Usage | Sync).
 
-| Group | 1.0 | At ~16 |
+| Group | 1.0 | At ~18 |
 | --- | --- | --- |
-| (entries) | 6 | 6, with up to 4 tabs each |
+| (entries) | 6 | 6, with up to 6 tabs each |
 
 Pros: the shortest possible sidebar; growth adds tabs, never entries. Cons: it puts tabs inside
 tabs — Activity already has three, Settings five, Model providers two, and every detail page its
@@ -238,6 +247,18 @@ page underneath — the router has to carry a background location, where a page 
 per tab. A modal with no route would have been cheaper and would break every deep link, from
 the footer's link to Settings › Daemon to the palette's Settings tabs.
 
+**Custom tools and CLIs are entries of their own.** A custom tool is an MCP server whose transport
+is a script, an HTTP endpoint or an OpenAPI document, served by the same gateway machinery, so it
+could have been a filter on MCP servers. It gets its own entry for discoverability: a user who
+wants to turn a script or an API into a tool looks for "custom tools", not for a transport
+option inside a list of servers someone else wrote, and its add flow (choose Script, HTTP
+endpoint or OpenAPI) is unlike adding a server from a README. CLIs is an entry because it has
+data of its own — whether each command a skill requires is installed, which version, whether it
+is logged in — and actions shown nowhere else: install through Homebrew after a confirmation,
+the login command, check again. Folded into Skills it would repeat per skill what is one fact
+per command, and a command several skills need would show its problem in several places. Both
+sit under Capabilities, because both are about what agents can do.
+
 ## Decision
 
 The sidebar is grouped by what the person comes to do, with Overview above the groups under no
@@ -253,7 +274,9 @@ heading:
   Channels                 消息渠道
  CAPABILITIES             能力
   MCP servers              MCP 服务器
+  Custom tools             自定义工具
   Skills                   技能
+  CLIs                     命令行工具
  CONTEXT                  上下文
   Knowledge                知识
   Memory                   记忆
@@ -278,8 +301,8 @@ Rules a future change must respect:
   Capabilities.
 - Settings stays out of the sidebar: machine-level configuration joins a Settings tab, not an
   entry.
-- Growth that is more of an existing thing — another agent, another channel, a custom tool, an
-  ADE as a delivery target — is a row inside the existing page, never an entry.
+- Growth that is more of an existing thing — another agent, another channel, another custom
+  tool, an ADE as a delivery target — is a row inside the existing page, never an entry.
 - No group grows past five entries. A sixth is a reason to revisit this ADR, not to append.
 - A new group needs a new intent, not a new kind.
 - The sidebar still lists only shipped surfaces, and a switched-off experimental feature's entry
@@ -287,7 +310,7 @@ Rules a future change must respect:
 
 ## Consequences
 
-- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its thirteen entries"
+- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fifteen entries"
   and "Group the sidebar by what the user comes to do"; changing either is a spec change.
 - The old rule of one Resources entry per listed resource kind becomes one sidebar entry per
   listed resource kind, filed by intent (spec web-ui "Give each listed resource kind one sidebar
@@ -300,7 +323,12 @@ Rules a future change must respect:
   Settings behind the footer gear. Routes do not move, so no bookmark breaks.
 - The router carries a background location so the Settings modal can be opened over any page
   and closed back to it; that is the price of keeping every Settings tab linkable.
-- Four headings hold two entries each until the planned entries land; that is the accepted price
+- Three headings hold two entries each until the planned entries land; that is the accepted price
   of groups that do not have to be reshuffled when they do.
+- Capabilities holds four entries at 1.0 and would hold six with Rules and Sources, so the change
+  that adds the second of them has to revisit Capabilities rather than append to it.
+- Custom tools and CLIs each get a page of their own (spec web-ui "Manage custom tools on their own
+  page", "Show every CLI a skill requires on the CLIs page"); the MCP servers Add dialog adds
+  servers only.
 - The zh locale's label for agent changes from "Agent" to 智能体 across the UI, and the en/zh
   glossary in the frontend conventions records every group and entry label.

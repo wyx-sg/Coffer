@@ -7,7 +7,7 @@
 - TO: `### Requirement: Explain unreadable pasted input in the dialog`
 
 - FROM: `### Requirement: Keep the sidebar to its eleven entries`
-- TO: `### Requirement: Keep the sidebar to its thirteen entries`
+- TO: `### Requirement: Keep the sidebar to its fifteen entries`
 
 ## REMOVED Requirements
 
@@ -56,12 +56,14 @@ sidebar entry".
 
 ## MODIFIED Requirements
 
-### Requirement: Keep the sidebar to its thirteen entries
+### Requirement: Keep the sidebar to its fifteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and five groups — thirteen today, and no fourteenth without a spec change.
+and five groups — fifteen today, and no sixteenth without a spec change.
 Settings is not an entry: it is a modal opened from the sidebar footer (see
 "Open Settings as a modal from the sidebar footer"). Usage's content is specified
-with the change that meters it; this requirement fixes only its place. An
+with the change that meters it; this requirement fixes only its place. Custom
+tools and CLIs are specified by "Manage custom tools on their own page" and "Show
+every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out — today Knowledge for `knowledge`, Memory for `memory`, Sync for
@@ -78,7 +80,9 @@ on:
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
+  Custom tools     /custom-tools      — tools Coffer serves from a script, an HTTP endpoint or an OpenAPI document
   Skills           /skills            — what Coffer delivers to agents
+  CLIs             /clis              — the command-line tools skills require
  CONTEXT
   Knowledge        /knowledge         — the collections under ~/.coffer/knowledge/
   Memory           /memory            — the partitions aggregated from the agents' own stores
@@ -96,13 +100,13 @@ on:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
 - **AND** no sidebar entry is Settings; the sidebar footer carries the Settings gear beside the daemon status
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** `knowledge` and `vault_sync` switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
+- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Custom tools, Skills, CLIs; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
 
 ### Requirement: Give every scoped resource kind its own list surface
 Every scoped resource kind MUST have its own list surface, so the navigation and
@@ -130,7 +134,9 @@ nothing else:
 | Channels | 消息渠道 |
 | Capabilities (group) | 能力 |
 | MCP servers | MCP 服务器 |
+| Custom tools | 自定义工具 |
 | Skills | 技能 |
+| CLIs | 命令行工具 |
 | Context (group) | 上下文 |
 | Knowledge | 知识 |
 | Memory | 记忆 |
@@ -222,7 +228,9 @@ One recognised server MUST open the manual form prefilled with it; several MUST
 open the review step. The same dialog carries **Import from agents** as a link,
 which lists the direct MCP entries in the agents' own config files to adopt
 ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
-second button on the page.
+second button on the page. The dialog adds MCP servers only: it offers no
+custom tool type (Script, HTTP endpoint, OpenAPI), which is added on the Custom
+tools page (see "Manage custom tools on their own page").
 
 The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
@@ -290,6 +298,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **GIVEN** the MCP servers page
 - **WHEN** it renders and the user opens Add server
 - **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+- **AND** the dialog offers no Script, HTTP endpoint or OpenAPI type
 
 ### Requirement: Explain unreadable pasted input in the dialog
 Input the paste box cannot read as any of the recognised forms — malformed
@@ -335,7 +344,8 @@ groups, under headings in this order:
   provider is the endpoint and key each agent's model is served from.
 - **RUN** — put an agent to work, directly or through an IM bot: Chat, then
   Channels.
-- **CAPABILITIES** — give agents things they can do: MCP servers, then Skills.
+- **CAPABILITIES** — give agents things they can do: MCP servers, Custom tools,
+  Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
 - **SYSTEM** — look after Coffer and what every other part shares: Secrets,
   Activity, Usage, then Sync.
@@ -351,7 +361,7 @@ A new entry MUST join the group that names what the user comes to it for, and no
 group may grow past five entries; growth that is more of an existing thing — one
 more agent, channel or custom tool — is a row inside that thing's page, not an
 entry. A group whose every entry is left out (see "Keep the sidebar to its
-thirteen entries") MUST leave its heading out too, so no heading stands over
+fifteen entries") MUST leave its heading out too, so no heading stands over
 nothing. The decision and the options it was weighed against are in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
 
@@ -359,7 +369,7 @@ nothing. The decision and the options it was weighed against are in
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
 - **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Run holds Chat then Channels, Capabilities holds MCP servers then Skills, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
+- **AND** Agents holds Agents then Model providers, Run holds Chat then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** `knowledge` and `memory` both switched off
@@ -384,6 +394,16 @@ word a user navigates by:
   listed on the Chat page (spec [chat](../chat/spec.md) "Show every conversation on the Chat page").
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
+- **Custom tools** are `mcp_server` resources whose transport is a script, an HTTP
+  endpoint or an OpenAPI document. They share the gateway's machinery with every
+  other server but get their own entry under Capabilities, so a user looking for
+  "make my own tool" finds it; the MCP servers entry lists the other servers and
+  the Custom tools entry these, so each resource still appears under exactly one
+  entry.
+
+**CLIs** is not a resource kind: it lists the commands skills require, with their
+install, version and login state (see "Show every CLI a skill requires on the
+CLIs page"), and sits under Capabilities beside Skills.
 
 Agents are stored as resources of kind `agent` but are the consumers of the
 others, so the Agents entry heads the Agents group and no agent is listed on a
@@ -394,7 +414,8 @@ stored secrets on the Secrets page").
 #### Scenario: each listed resource kind has one sidebar entry
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the entries for resource kinds are read
-- **THEN** MCP servers, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Context, Context, Agents and Run respectively
+- **THEN** MCP servers, Custom tools, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Capabilities, Context, Context, Agents and Run respectively
+- **AND** a custom tool is listed on the Custom tools page and not on the MCP servers page
 - **AND** no heading reads "Resources"
 
 ### Requirement: Open the app on Overview
@@ -610,8 +631,9 @@ It MUST list two groups, filtered together by what the user types:
 - **Pages** — every sidebar entry and every Settings tab, by the names the
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
   Settings tab opens in the Settings modal over the current page.
-- **Objects** — the agents and the resources of every kind with a list surface,
-  matched by title and by name, each opening its detail page.
+- **Objects** — the agents, the resources of every kind with a list surface
+  (custom tools included) and the CLIs, matched by title and by name, each
+  opening its detail page.
 
 A page or object of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
@@ -848,3 +870,74 @@ daemon serves cannot replace the application.
 - **WHEN** the user opens `/settings/about`
 - **THEN** the tab shows the version and says updates are installed by the desktop app
 - **AND** it shows no Check for updates or Download and restart control
+
+### Requirement: Manage custom tools on their own page
+The Custom tools page (`/custom-tools`, under Capabilities) MUST list every
+custom tool — an MCP server Coffer serves itself from a script, an HTTP endpoint
+or an OpenAPI document — grouped by health, the failing ones first, and MUST
+carry one **Add custom tool** action whose first step chooses **Script**, **HTTP
+endpoint** or **OpenAPI** and then opens that type's form. A custom tool's detail
+page MUST carry its **definition** (the script, the endpoint or the document and
+the tools it yields), a **Test** action that calls one of its tools with sample
+arguments and shows the result, its **reach** in the shared reach control, a
+per-tool **on/off** switch for each tool it yields, and its **calls** (the
+Activity calls table scoped to it). Custom tools are served through the same
+gateway as every other MCP server; how each type is defined and run is the
+gateway's, specified with the change that adds these transports.
+
+#### Scenario: the custom tools page groups tools by health
+- **GIVEN** one custom tool whose last call failed and two healthy ones
+- **WHEN** the user opens `/custom-tools`
+- **THEN** the failing tool is listed first under its health group and the two healthy ones under theirs
+- **AND** the page carries one Add custom tool action
+
+#### Scenario: adding a custom tool starts by choosing its type
+- **GIVEN** the Custom tools page
+- **WHEN** the user chooses Add custom tool
+- **THEN** the dialog offers Script, HTTP endpoint and OpenAPI, and choosing OpenAPI opens the form for an OpenAPI document
+
+#### Scenario: a custom tool's detail page tests and switches its tools
+- **GIVEN** a custom tool built from an OpenAPI document that yields three tools
+- **WHEN** the user opens its detail page, tests one tool, and switches another off
+- **THEN** the page shows the definition, the test's result, the reach control and the calls table scoped to that tool
+- **AND** the switched-off tool is no longer offered to agents while the other two are
+
+### Requirement: Show every CLI a skill requires on the CLIs page
+The CLIs page (`/clis`, under Capabilities) MUST list one row per command that
+any skill requires, with the version found beside the minimum the skills ask
+for, the login state where the command has one, and which skills need it,
+problems first — missing, older than the minimum, or not logged in. A CLI's
+detail page MUST offer **Install** only through Homebrew and only after a
+confirmation naming the command it will run, the **login command** to copy, and
+**Check again**, which probes the command afresh. A skill's detail page MUST link
+each requirement it declares to that CLI's page, and Overview MUST show an
+attention item while any required CLI is missing, outdated or not logged in.
+What a skill declares and how a command is probed are specified with the change
+that adds skill requirements; this page shows what they report.
+
+#### Scenario: the CLIs page lists problems first
+- **GIVEN** two skills requiring `gh` (minimum 2.40, found 2.30) and `jq` (found, no minimum), and one requiring `gcloud` (not logged in)
+- **WHEN** the user opens `/clis`
+- **THEN** `gh` and `gcloud` are listed before `jq`, `gh` shows 2.30 against 2.40, `gcloud` shows not logged in, and each row names the skills that need it
+
+#### Scenario: installing a CLI asks first and uses Homebrew only
+- **GIVEN** a required CLI that is missing
+- **WHEN** the user chooses Install on its detail page
+- **THEN** a confirmation names the Homebrew command it will run, and nothing runs until the user confirms
+- **AND** the detail page offers no install method other than Homebrew
+
+#### Scenario: check again after logging in
+- **GIVEN** a CLI's detail page showing not logged in and its login command to copy
+- **WHEN** the user runs the login command in a terminal and chooses Check again
+- **THEN** the page probes the command afresh and shows it as logged in
+
+#### Scenario: a skill's requirement links to its CLI
+- **GIVEN** a skill that requires `gh`
+- **WHEN** the user opens the skill's detail page and chooses the `gh` requirement
+- **THEN** the app opens `/clis/gh`
+
+#### Scenario: overview flags a required CLI that needs attention
+- **GIVEN** a required CLI that is outdated
+- **WHEN** the user opens Overview
+- **THEN** an attention item names the CLI and the problem and opens its page
+- **AND** once every required CLI is present, current and logged in, no such item is shown

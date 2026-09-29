@@ -39,7 +39,9 @@ behind the Secrets page (uncited secrets, the migration assistant).
   Channels         /channels                                            消息渠道
  CAPABILITIES                                                          能力
   MCP servers      /mcp-servers                                         MCP 服务器
+  Custom tools     /custom-tools                                        自定义工具
   Skills           /skills                                              技能
+  CLIs             /clis                                                命令行工具
  CONTEXT                                                               上下文
   Knowledge        /knowledge               experimental: knowledge     知识
   Memory           /memory                  experimental: memory        记忆
@@ -52,14 +54,16 @@ behind the Secrets page (uncited secrets, the migration assistant).
   footer: daemon status · ⚙ Settings (modal)   /settings/<tab>          设置
 ```
 
-Thirteen entries; Settings is not one of them (decision 4). Usage is in 1.0 — the page that shows
+Fifteen entries; Settings is not one of them (decision 4). Custom tools and CLIs are entries of
+their own (decision 12). Usage is in 1.0 — the page that shows
 token use metered at the model proxy and the official remaining quota of subscription agents —
 and its content is specified with the change that meters use; this change fixes only its place. The grouping — by what the user comes to do, not by role — is argued in full,
 against the role groups, one big Resources group, a flat list and fewer entries with tabs, in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
-The criterion it is measured by is that at the ~16 entries the roadmap names (Workflows in Run,
-Rules and Sources in Capabilities) no group passes five; more agents, channels,
-custom tools and ADE targets are rows inside existing pages. Rules is not in 1.0 — projecting
+The criterion it is measured by is that no group passes five: at 1.0 none passes four, and at the
+~18 entries the roadmap names (Workflows in Run, Rules and Sources in Capabilities) only
+Capabilities would reach six, so the change that brings both Rules and Sources revisits it; more
+agents, channels, custom tools and ADE targets are rows inside existing pages. Rules is not in 1.0 — projecting
 rules is deferred — so no Rules entry is specified here.
 
 - **Chat and Channels stay two entries** in one group: Chat is daily conversation, Channels is
@@ -278,21 +282,6 @@ and an Add agent dialog with type, name and title fields — the types are fixed
 cheap enough to run on every load, and a name the user types for an agent whose type already
 names it is one more thing to get wrong.
 
-### 11. Adding an MCP server
-
-One **Add server** action replaces the separate paste-JSON button. Its dialog opens on a paste box
-that recognises the forms a README hands out — an `mcpServers` block or one server object, Codex
-TOML `[mcp_servers.<name>]` tables, a command line (`claude mcp add …`, `codex mcp add …` or a
-plain `npx …`), or a URL — so the user never picks a format before pasting. One server opens the
-manual form prefilled, because a single server is easiest to check field by field; several open
-the existing review step, where secrets move to the credential store, names are normalised and can
-be corrected before they become fixed, and reach is chosen. Unreadable input says what it accepts
-and offers the manual type choice rather than a dead end. Import from agents stays a link in the
-same dialog, not a second page action. *Rejected:* a format picker before the paste box, which
-asks the user a question the text already answers. This is a web UI form over
-[mcp-gateway](../../specs/mcp-gateway/spec.md) registration, so the requirements are web-ui's;
-the gateway's registration rules (fixed names, the 24-character limit) are unchanged.
-
 ### 10. Auto-update
 
 A new version reached a desktop user only if they downloaded a new `.dmg`, and the desktop spec
@@ -316,6 +305,40 @@ updates control and, when a newer version exists, Download and restart.
 
 The update check is a third sanctioned host affordance, reached through the same
 credential-supplier module as Restart and the skew check and rendered only on About.
+
+### 11. Adding an MCP server
+
+One **Add server** action replaces the separate paste-JSON button. Its dialog opens on a paste box
+that recognises the forms a README hands out — an `mcpServers` block or one server object, Codex
+TOML `[mcp_servers.<name>]` tables, a command line (`claude mcp add …`, `codex mcp add …` or a
+plain `npx …`), or a URL — so the user never picks a format before pasting. One server opens the
+manual form prefilled, because a single server is easiest to check field by field; several open
+the existing review step, where secrets move to the credential store, names are normalised and can
+be corrected before they become fixed, and reach is chosen. Unreadable input says what it accepts
+and offers the manual type choice rather than a dead end. Import from agents stays a link in the
+same dialog, not a second page action. *Rejected:* a format picker before the paste box, which
+asks the user a question the text already answers. This is a web UI form over
+[mcp-gateway](../../specs/mcp-gateway/spec.md) registration, so the requirements are web-ui's;
+the gateway's registration rules (fixed names, the 24-character limit) are unchanged.
+
+### 12. Custom tools and CLIs
+
+- **Custom tools get their own entry.** They are `mcp_server` resources with a script, HTTP or
+  OpenAPI transport and share the gateway's machinery, but a user who wants to turn a script or
+  an API into a tool looks for "custom tools", and adding one (choose Script / HTTP endpoint /
+  OpenAPI, then that type's form) is unlike pasting a server from a README. The page lists them
+  grouped by health; the detail page carries the definition, a test call, reach, a per-tool
+  switch and the calls table. The MCP servers list and its Add dialog leave them out, so each
+  server has one home. *Rejected:* a transport filter on MCP servers, which hides the feature.
+- **CLIs get their own entry** because they have data nothing else shows — installed or not,
+  version against the skills' minimum, login state — and actions nothing else offers: install
+  through Homebrew after a confirmation (no other installer, so Coffer never guesses a package
+  manager), the login command to copy, check again. One row per command, however many skills
+  need it, problems first. A skill's requirements link to the CLI, and Overview carries an
+  attention item while one needs the user. *Rejected:* a requirements section on each skill
+  only, which repeats one command's problem on every skill that needs it.
+- What a skill declares, how a command is probed and how custom tools run are specified with
+  the changes that add them; these requirements fix the pages.
 
 ## Implementation notes
 

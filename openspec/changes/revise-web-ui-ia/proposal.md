@@ -11,9 +11,9 @@ Eight decisions change that architecture:
 
 - **The sidebar grouped by what the user comes to do.** Three role groups put seven entries
   under Resources as soon as Secrets arrives, and nine once the planned Rules and Sources do.
-  Five intent groups — Agents, Run, Capabilities, Context, System — hold the thirteen entries
-  of 1.0 (Usage among them) and the roughly sixteen the roadmap names without any group passing
-  five
+  Five intent groups — Agents, Run, Capabilities, Context, System — hold the fifteen entries
+  of 1.0 (Usage, Custom tools and CLIs among them) with no group past four; at the roughly
+  eighteen the roadmap names, Capabilities is the one group that would need revisiting
   ([The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)).
 - **A Secrets page.** A stored secret is cited by MCP servers, providers, channels and skills at
   once, and no page lists them or says what uses each. Secrets becomes its own System entry;
@@ -37,7 +37,7 @@ Eight decisions change that architecture:
 - **Updates found by the app.** A desktop user learns of a new version only by downloading a new
   `.dmg`. The shell checks a signed manifest on GitHub Releases at launch and every six hours,
   and Settings › About shows the result and installs it on request.
-- **A command palette and attention dots.** With thirteen entries and many objects, the user needs
+- **A command palette and attention dots.** With fifteen entries and many objects, the user needs
   one keystroke to reach any page or object, and one mark on the entry that needs them.
 
 This change is the contract step. It ships together with the shell implementation, so it stays
@@ -46,12 +46,21 @@ unarchived until that implementation lands.
 ## What Changes
 
 - The sidebar becomes an ungrouped **Overview** entry above five groups — **Agents** (Agents,
-  Model providers), **Run** (Chat, Channels), **Capabilities** (MCP servers, Skills),
-  **Context** (Knowledge, Memory), **System** (Secrets, Activity, Usage, Sync) — thirteen
-  entries. Usage's page is specified with the change that meters use. Experimental switches hide entries exactly as before, and a group left with no entry
+  Model providers), **Run** (Chat, Channels), **Capabilities** (MCP servers, Custom tools,
+  Skills, CLIs), **Context** (Knowledge, Memory), **System** (Secrets, Activity, Usage, Sync) —
+  fifteen entries. Usage's page is specified with the change that meters use.
+- A **Custom tools** page (`/custom-tools`) lists the tools Coffer serves from a script, an HTTP
+  endpoint or an OpenAPI document, grouped by health, with one Add custom tool action (Script /
+  HTTP endpoint / OpenAPI) and a detail page carrying the definition, a test, reach, a per-tool
+  switch and calls. The MCP servers Add dialog no longer offers these types.
+- A **CLIs** page (`/clis`) lists every command a skill requires with its version against the
+  minimum, login state and the skills that need it, problems first; its detail page installs
+  through Homebrew after a confirmation, shows the login command and checks again. A skill's
+  requirements link there, and Overview flags a required CLI that is missing, outdated or not
+  logged in. Experimental switches hide entries exactly as before, and a group left with no entry
   hides its heading. Routes do not move.
 - One name per surface in both languages, with the zh glossary fixed: 总览 · 智能体（智能体、模型提供商）
-  · 运行（聊天、消息渠道）· 能力（MCP 服务器、技能）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）,
+  · 运行（聊天、消息渠道）· 能力（MCP 服务器、自定义工具、技能、命令行工具）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）,
   and Settings is 设置;
   an agent is 智能体 everywhere in the zh UI.
 - A **Secrets** page (`/secrets`) lists every stored secret with its presence and what uses it,
