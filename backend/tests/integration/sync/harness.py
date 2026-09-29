@@ -77,6 +77,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
 )
 from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
+from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
@@ -493,6 +494,7 @@ class VaultMachine:
         )
         self.mirror = GitMirror(self.worktree)
         self.registry = MachineRegistry(
+            platform=HostPlatform(),
             machine_id=self.machine_id,
             machine_name=self.name,
             derived=True,

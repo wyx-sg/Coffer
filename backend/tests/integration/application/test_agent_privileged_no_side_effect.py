@@ -13,15 +13,15 @@ from __future__ import annotations
 
 import pytest
 
-import coffer.application.agent.service as agent_service_mod
+import coffer.infrastructure.platform.paths as platform_paths
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import PrivilegedPath
 
 
 def _privilege(monkeypatch, root) -> None:
     resolved = str(root.resolve())
-    monkeypatch.setattr(agent_service_mod, "_PRIVILEGED_PREFIXES_POSIX", (resolved,))
-    monkeypatch.setattr(agent_service_mod, "_PRIVILEGED_CARVE_OUTS_POSIX", ())
+    monkeypatch.setattr(platform_paths, "PRIVILEGED_PREFIXES_POSIX", (resolved,))
+    monkeypatch.setattr(platform_paths, "PRIVILEGED_CARVE_OUTS_POSIX", ())
 
 
 async def test_register_into_privileged_dir_creates_nothing(agent_bundle, tmp_path, monkeypatch):

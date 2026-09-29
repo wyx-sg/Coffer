@@ -53,6 +53,7 @@ _PROVIDERS: list[_Provider] = [
         "_audit_service",
         "_retention_service",
         "_internal_engine_config_service",
+        "_platform",
     ),
     # mcp kind
     *_pairs(

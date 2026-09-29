@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
@@ -56,10 +57,11 @@ async def wire_resource_kinds(
     credential_store: EncryptedCredentialStore,
     credential_resolver: Callable[[str], str],
     sync: SyncContributions,
+    platform: PlatformPort,
 ) -> KindWirings:
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     agent_skill = wire_agent_and_skill_kinds(
-        app, resource_svc, audit, sm, builtin_tools, credential_store, sync
+        app, resource_svc, audit, sm, builtin_tools, credential_store, sync, platform
     )
 
     # Provider switching (spec provider-switching) — AFTER the agent kind: it projects the

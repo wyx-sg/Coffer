@@ -21,8 +21,10 @@ from coffer.application.fs.browse_service import FsBrowseService
 from coffer.application.fs.editor_service import EditorDetectService
 from coffer.application.fs.open_service import FsOpenService
 from coffer.application.fs.pick_service import FsPickService
+from coffer.application.platform_port import PlatformPort
 from coffer.surfaces.http.agent_dependencies import get_fs_browse_service
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.dependencies import get_platform
 
 router = APIRouter(
     prefix="/api/v1/fs",
@@ -31,14 +33,18 @@ router = APIRouter(
 )
 
 
-def get_fs_open_service() -> FsOpenService:
+def get_fs_open_service(
+    platform: PlatformPort = Depends(get_platform),  # noqa: B008
+) -> FsOpenService:
     """FastAPI Depends() target — stateless, built per-request (like browse)."""
-    return FsOpenService()
+    return FsOpenService(platform)
 
 
-def get_fs_pick_service() -> FsPickService:
+def get_fs_pick_service(
+    platform: PlatformPort = Depends(get_platform),  # noqa: B008
+) -> FsPickService:
     """FastAPI Depends() target — stateless, built per-request."""
-    return FsPickService()
+    return FsPickService(platform)
 
 
 class FsEntryOut(BaseModel):
@@ -135,9 +141,11 @@ class FsEditorsOut(BaseModel):
     editors: list[EditorOptionOut]
 
 
-def get_editor_detect_service() -> EditorDetectService:
+def get_editor_detect_service(
+    platform: PlatformPort = Depends(get_platform),  # noqa: B008
+) -> EditorDetectService:
     """FastAPI Depends() target — stateless, built per-request."""
-    return EditorDetectService()
+    return EditorDetectService(platform)
 
 
 @router.get("/editors", response_model=FsEditorsOut)

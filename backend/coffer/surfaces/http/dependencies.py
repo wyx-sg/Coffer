@@ -29,6 +29,7 @@ from fastapi import Header, HTTPException, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 
@@ -120,3 +121,19 @@ def get_internal_engine_config_service() -> InternalEngineConfigService:
     if _internal_engine_config_service is None:
         raise RuntimeError("internal engine config service not initialised")
     return _internal_engine_config_service
+
+
+_platform: PlatformPort | None = None
+
+
+def set_platform(platform: PlatformPort) -> None:
+    """Called by the composition root once on startup."""
+    global _platform
+    _platform = platform
+
+
+def get_platform() -> PlatformPort:
+    """FastAPI Depends() target — the host OS adapter the fs services ask."""
+    if _platform is None:
+        raise RuntimeError("platform not initialised")
+    return _platform

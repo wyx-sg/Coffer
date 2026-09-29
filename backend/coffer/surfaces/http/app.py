@@ -49,6 +49,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
@@ -74,6 +75,7 @@ from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
     set_internal_engine_config_service,
+    set_platform,
     set_resource_service,
     set_retention_service,
 )
@@ -183,6 +185,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     set_audit_service(audit)
     set_retention_service(retention_svc)
     set_internal_engine_config_service(internal_engine_config_svc)
+    # The one adapter that knows the host OS (infrastructure/platform); every
+    # application service that needs an OS answer is handed this instance.
+    platform = HostPlatform()
+    set_platform(platform)
 
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill + knowledge can register into it.
@@ -201,6 +207,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store=credential_store,
         credential_resolver=credential_resolver,
         sync=sync_contributions,
+        platform=platform,
     )
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
@@ -289,6 +296,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         master_key=credentials.master_key,
         sync_contributions=sync_contributions,
         features=features,
+        platform=platform,
     )
     # Published for the same reason ``app.state.kinds`` is: a test that asserts
     # the lifespan actually started a worker needs a seam to reach it through,

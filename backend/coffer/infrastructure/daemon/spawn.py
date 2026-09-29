@@ -23,6 +23,11 @@ import sys
 from pathlib import Path
 
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.platform.process import (
+    detached_popen_kwargs,
+    executable_name,
+    has_app_bundles,
+)
 
 #: Where the macOS desktop bundle stages its `coffer-daemon`: the .dmg ships
 #: `coffer-daemon` as a Tauri sidecar (`externalBin` in
@@ -59,14 +64,14 @@ def daemon_spawn_command() -> list[str]:
     if getattr(sys, "frozen", False):
         # PyInstaller sets sys.frozen = True and sys.executable to the
         # frozen binary's path.
-        name = "coffer-daemon.exe" if sys.platform == "win32" else "coffer-daemon"
+        name = executable_name("coffer-daemon")
         sibling = Path(sys.executable).resolve().parent / name
         if sibling.exists():
             return [str(sibling)]
         on_path = shutil.which(name)
         if on_path:
             return [on_path]
-        if sys.platform == "darwin" and _MACOS_APP_BUNDLE_DAEMON.is_file():
+        if has_app_bundles() and _MACOS_APP_BUNDLE_DAEMON.is_file():
             return [str(_MACOS_APP_BUNDLE_DAEMON)]
         return [str(sibling)]
 
@@ -99,13 +104,9 @@ def spawn_detached_daemon() -> subprocess.Popen[bytes]:
         "stdout": log,
         "stderr": log,
         "stdin": subprocess.DEVNULL,
+        # Windows: no console, detached; POSIX: a new session.
+        **detached_popen_kwargs(),
     }
-    if sys.platform == "win32":
-        kwargs["creationflags"] = (
-            subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-        )
-    else:
-        kwargs["start_new_session"] = True
     try:
         return subprocess.Popen(daemon_spawn_command(), **kwargs)  # type: ignore[call-overload,no-any-return]
     except OSError:

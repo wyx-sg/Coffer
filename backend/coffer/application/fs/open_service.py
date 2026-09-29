@@ -19,24 +19,31 @@ string — no interpolation). The daemon never creates anything here.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
+from coffer.application.platform_port import PlatformPort
 from coffer.domain.errors import FsPathNotOpenable
 
 
 class FsOpenService:
-    """Open or reveal an existing absolute path on the host OS."""
+    """Open or reveal an existing absolute path on the host OS.
+
+    Which launcher argv does it is the host's answer (``PlatformPort``); this
+    service owns validation and the detached spawn.
+    """
+
+    def __init__(self, platform: PlatformPort) -> None:
+        self._platform = platform
 
     def open(self, path: str, with_app: str | None = None) -> None:
         """Open ``path`` in ``with_app`` (an app name/path) or the OS default."""
         target = _validated(path)
-        self._spawn(_open_cmd(target, with_app), target)
+        self._spawn(self._platform.open_command(target, with_app), target)
 
     def reveal(self, path: str) -> None:
         """Select / reveal ``path`` in the OS file manager."""
         target = _validated(path)
-        self._spawn(_reveal_cmd(target), target)
+        self._spawn(self._platform.reveal_command(target), target)
 
     @staticmethod
     def _spawn(cmd: list[str], target: Path) -> None:
@@ -61,37 +68,3 @@ def _validated(path: str) -> Path:
     if not target.exists():
         raise FsPathNotOpenable(path, "not_found")
     return target
-
-
-def _open_cmd(target: Path, with_app: str | None) -> list[str]:
-    s = str(target)
-    app = (with_app or "").strip()
-    if sys.platform == "darwin":
-        if app:
-            return ["open", "-a", app, s]
-        # A directory goes to the Finder: `-t` would hand the folder to the
-        # default text editor, which refuses it ("cannot open files in the
-        # folder format").
-        if target.is_dir():
-            return ["open", s]
-        # No editor chosen → `open -t` opens the default *text* editor. Plain
-        # `open <file>` fails (kLSApplicationNotFoundErr) for file types with no
-        # registered default app — common for the extensionless config files
-        # Coffer manages — and the non-zero exit is swallowed, so nothing opens.
-        return ["open", "-t", s]
-    if sys.platform == "win32":
-        # `start` needs an empty title arg; an explicit app is launched directly.
-        return [app, s] if app else ["cmd", "/c", "start", "", s]
-    # Linux / other: a chosen editor is launched directly; otherwise xdg-open.
-    return [app, s] if app else ["xdg-open", s]
-
-
-def _reveal_cmd(target: Path) -> list[str]:
-    s = str(target)
-    if sys.platform == "darwin":
-        return ["open", "-R", s]
-    if sys.platform == "win32":
-        return ["explorer", f"/select,{s}"]
-    # Linux has no portable "select the file" — degrade to opening the folder.
-    folder = target if target.is_dir() else target.parent
-    return ["xdg-open", str(folder)]

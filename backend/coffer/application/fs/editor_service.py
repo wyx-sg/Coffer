@@ -7,12 +7,10 @@ typing it blind is error-prone — so this service enumerates common code editor
 user keeps a "custom" escape hatch for anything unlisted).
 
 Detection is per-OS because the value the open launcher
-(:class:`~coffer.application.fs.open_service.FsOpenService`) expects differs:
-
-* **macOS** — ``open -a <app>`` wants an application *name*; we look for the app
-  bundle under ``/Applications`` and ``~/Applications`` and return the app name.
-* **Linux / Windows** — the launcher runs the value as an executable; we look it
-  up on ``PATH`` with :func:`shutil.which` and return the command.
+(:class:`~coffer.application.fs.open_service.FsOpenService`) expects differs —
+an application-bundle name on macOS, an executable on ``PATH`` elsewhere — so
+each known editor carries both, and the host decides which applies and whether
+it is installed (``PlatformPort.editor_launch_value``).
 
 The returned ``value`` is therefore exactly what ``FsOpenService`` accepts as
 ``with_app``. Terminal-only editors (vim, nano, …) are intentionally omitted:
@@ -21,10 +19,9 @@ the launcher detaches stdio, so a TUI editor would never surface a window.
 
 from __future__ import annotations
 
-import shutil
-import sys
 from dataclasses import dataclass
-from pathlib import Path
+
+from coffer.application.platform_port import PlatformPort
 
 
 @dataclass(frozen=True)
@@ -40,7 +37,7 @@ class _Editor:
     """A known editor and how to detect/launch it on each OS."""
 
     label: str
-    mac_app: str | None  # .app bundle name for `open -a` (None → not on macOS)
+    app_bundle: str | None  # .app bundle name for `open -a` (None → not on macOS)
     command: str | None  # executable on PATH for Linux/Windows (None → GUI-only)
 
 
@@ -64,28 +61,16 @@ _KNOWN: tuple[_Editor, ...] = (
 )
 
 
-def _mac_app_dirs() -> tuple[Path, ...]:
-    return (Path("/Applications"), Path.home() / "Applications")
-
-
-def _mac_app_installed(app_name: str) -> bool:
-    """True if ``<app_name>.app`` exists in a standard macOS applications dir."""
-    return any((root / f"{app_name}.app").is_dir() for root in _mac_app_dirs())
-
-
 class EditorDetectService:
     """Enumerate installed GUI editors for the current OS (stateless)."""
 
+    def __init__(self, platform: PlatformPort) -> None:
+        self._platform = platform
+
     def list_editors(self) -> list[EditorOption]:
-        if sys.platform == "darwin":
-            return [
-                EditorOption(label=ed.label, value=ed.mac_app)
-                for ed in _KNOWN
-                if ed.mac_app is not None and _mac_app_installed(ed.mac_app)
-            ]
-        # Linux / Windows / other: anything resolvable on PATH.
-        return [
-            EditorOption(label=ed.label, value=ed.command)
-            for ed in _KNOWN
-            if ed.command is not None and shutil.which(ed.command) is not None
-        ]
+        options: list[EditorOption] = []
+        for ed in _KNOWN:
+            value = self._platform.editor_launch_value(app_bundle=ed.app_bundle, command=ed.command)
+            if value is not None:
+                options.append(EditorOption(label=ed.label, value=value))
+        return options

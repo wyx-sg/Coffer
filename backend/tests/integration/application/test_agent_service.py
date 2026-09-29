@@ -9,6 +9,7 @@ import stat
 import pytest
 
 from coffer.application.agent.service import assert_skill_dir_usable
+from coffer.application.platform_port import PrivilegedPaths
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
@@ -17,6 +18,13 @@ from coffer.domain.errors import (
     ResourceAlreadyExists,
     SkillDirNotWritable,
 )
+from coffer.infrastructure.platform import HostPlatform
+
+
+def _rules() -> PrivilegedPaths:
+    """This host's privileged-path rules, read when the test runs."""
+    return HostPlatform().privileged_paths()
+
 
 # ---------------------------------------------------------------------------
 # Registration
@@ -281,7 +289,7 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
 def test_privileged_path_rejected(privileged):
     """assert_skill_dir_usable rejects every privileged POSIX prefix."""
     with pytest.raises(PrivilegedPath):
-        assert_skill_dir_usable(pathlib.Path(privileged))
+        assert_skill_dir_usable(pathlib.Path(privileged), _rules())
 
 
 def test_privileged_path_symlink_traversal_rejected(tmp_path):
@@ -302,7 +310,7 @@ def test_privileged_path_symlink_traversal_rejected(tmp_path):
     except OSError:  # pragma: no cover — sandbox without symlink perms
         pytest.skip("symlink creation not permitted in this sandbox")
     with pytest.raises(PrivilegedPath):
-        assert_skill_dir_usable(link)
+        assert_skill_dir_usable(link, _rules())
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +327,7 @@ def test_assert_skill_dir_usable_directory_missing(tmp_path):
     """
     target = tmp_path / "no-such-dir"
     with pytest.raises(SkillDirNotWritable) as ei:
-        assert_skill_dir_usable(target)
+        assert_skill_dir_usable(target, _rules())
     assert ei.value.reason == "directory_missing"
 
 
@@ -328,7 +336,7 @@ def test_assert_skill_dir_usable_not_a_directory(tmp_path):
     f = tmp_path / "skills"
     f.write_text("not a dir")
     with pytest.raises(SkillDirNotWritable) as ei:
-        assert_skill_dir_usable(f)
+        assert_skill_dir_usable(f, _rules())
     assert ei.value.reason == "not_a_directory"
 
 
@@ -340,7 +348,7 @@ def test_assert_skill_dir_usable_existing_dir_not_writable(tmp_path):
     os.chmod(d, stat.S_IRUSR | stat.S_IXUSR)
     try:
         with pytest.raises(SkillDirNotWritable) as ei:
-            assert_skill_dir_usable(d)
+            assert_skill_dir_usable(d, _rules())
         assert ei.value.reason == "not_writable"
     finally:
         os.chmod(d, orig_mode)
@@ -351,23 +359,25 @@ def test_assert_skill_dir_usable_tilde_expansion(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / "skills").mkdir()
     # Should not raise; the path expands to <tmp_path>/skills which exists.
-    assert_skill_dir_usable(pathlib.Path("~/skills"))
+    assert_skill_dir_usable(pathlib.Path("~/skills"), _rules())
 
 
-def test_strip_macos_private_non_darwin_passthrough(monkeypatch):
-    """`_strip_macos_private` is a no-op on non-darwin (covers the platform guard)."""
-    from coffer.application.agent.service import _strip_macos_private
+def test_firmlink_is_left_alone_where_the_host_has_none():
+    """Without a firmlink root (Linux, Windows) ``/private`` is an ordinary path."""
+    from coffer.application.agent.service import _strip_firmlink
 
-    monkeypatch.setattr("sys.platform", "linux")
-    assert _strip_macos_private("/private/var/x") == "/private/var/x"
+    rules = PrivilegedPaths(prefixes=(), carve_outs=(), separator="/", firmlink_root=None)
+    assert _strip_firmlink("/private/var/x", rules) == "/private/var/x"
 
 
-def test_strip_macos_private_handles_exact_private(monkeypatch):
-    """Bare ``/private`` on darwin collapses to ``/`` (covers the equality branch)."""
-    from coffer.application.agent.service import _strip_macos_private
+def test_firmlink_root_itself_collapses_to_slash():
+    """Bare ``/private`` on macOS collapses to ``/`` (covers the equality branch)."""
+    from coffer.application.agent.service import _strip_firmlink
 
-    monkeypatch.setattr("sys.platform", "darwin")
-    assert _strip_macos_private("/private") == "/"
+    rules = PrivilegedPaths(prefixes=(), carve_outs=(), separator="/", firmlink_root="/private")
+    assert _strip_firmlink("/private", rules) == "/"
+    assert _strip_firmlink("/private/etc/x", rules) == "/etc/x"
+    assert _strip_firmlink("/privatefoo", rules) == "/privatefoo"
 
 
 async def test_register_invalid_config_raises_config_validation_error(agent_bundle):

@@ -25,6 +25,7 @@ from coffer.application.agent.sync_reconcile import AgentImportGate
 from coffer.domain.credential_errors import CredentialUnreadable
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, JoinKind
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard
+from coffer.infrastructure.platform import HostPlatform
 from tests.integration.sync.harness import VaultMachine, settle, two_machines
 
 pytestmark = pytest.mark.timeout(120)
@@ -612,7 +613,7 @@ async def test_an_agent_whose_config_dir_is_missing_here_is_not_applicable(
     config directory does not exist on B."""
     a, b = pair
     await settle(a, b)
-    b.use_gate(AgentImportGate())
+    b.use_gate(AgentImportGate(HostPlatform()))
     await a.register(
         "agent",
         "installed-elsewhere",

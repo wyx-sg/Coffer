@@ -42,6 +42,10 @@ A hook or gate must stay fast: a slow one trains people to bypass it.
   case, so a numbered spec cannot be committed. A requirement is cited by
   title, and `scripts/check_spec_citations.py` (also `make lint`) fails on a
   citation whose capability or title does not exist in `openspec/specs/`.
+- `scripts/check_platform_calls.py` (also `make lint`) fails on a
+  `sys.platform` / `platform.system()` / `os.name` check anywhere in
+  `backend/coffer/` outside `infrastructure/platform/` — ask the platform port
+  instead ([Platform port](../docs-site/architecture/platform.md)).
 
 ## How it is tested
 

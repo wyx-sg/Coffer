@@ -32,6 +32,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.http.chat_provider_wiring import agent_home_env_resolver
 
 
@@ -55,7 +56,12 @@ async def test_the_agent_first_by_name_answers_and_a_rename_moves_it(
             repo=SqlAlchemyResourceRepo(sm),
             audit=audit,
         )
-        svc = AgentService(resource_service=rs, audit=audit, config_file_store=ConfigFileStore())
+        svc = AgentService(
+            platform=HostPlatform(),
+            resource_service=rs,
+            audit=audit,
+            config_file_store=ConfigFileStore(),
+        )
         work_dir = tmp_path / "work-cfg"
         home_dir = tmp_path / "home-cfg"
         work_dir.mkdir()

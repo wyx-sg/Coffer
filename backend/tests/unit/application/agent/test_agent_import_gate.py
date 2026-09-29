@@ -15,6 +15,7 @@ import pytest
 from coffer.application.agent.sync_reconcile import AgentImportGate
 from coffer.application.sync.convergence_ops import is_inapplicable
 from coffer.domain.errors import CofferError, SkillDirNotWritable
+from coffer.infrastructure.platform import HostPlatform
 
 
 async def test_a_missing_config_dir_is_refused_as_not_applicable_here(
@@ -22,7 +23,9 @@ async def test_a_missing_config_dir_is_refused_as_not_applicable_here(
 ) -> None:
     missing = tmp_path / "no-such-agent-home"
     with pytest.raises(CofferError) as caught:
-        await AgentImportGate().validate({"type": "claude_code", "config_dir": str(missing)})
+        await AgentImportGate(HostPlatform()).validate(
+            {"type": "claude_code", "config_dir": str(missing)}
+        )
     assert caught.value.code == "AGENT_CONFIG_DIR_MISSING"
     assert is_inapplicable(caught.value)
     # The gate never mkdir's a config dir into being.
@@ -34,7 +37,7 @@ async def test_an_existing_config_dir_passes_and_gets_its_skill_dir(
 ) -> None:
     home = tmp_path / "claude-home"
     home.mkdir()
-    await AgentImportGate().validate({"type": "claude_code", "config_dir": str(home)})
+    await AgentImportGate(HostPlatform()).validate({"type": "claude_code", "config_dir": str(home)})
     assert (home / "skills").is_dir()
 
 
@@ -45,5 +48,7 @@ async def test_an_unusable_skill_dir_is_still_a_retryable_refusal(
     home.mkdir()
     (home / "skills").write_text("a file where the skill dir should be")
     with pytest.raises(SkillDirNotWritable) as caught:
-        await AgentImportGate().validate({"type": "claude_code", "config_dir": str(home)})
+        await AgentImportGate(HostPlatform()).validate(
+            {"type": "claude_code", "config_dir": str(home)}
+        )
     assert not is_inapplicable(caught.value)

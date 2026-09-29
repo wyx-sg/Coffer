@@ -37,6 +37,7 @@ import coffer
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.features import FeatureService
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
     CredentialApplier,
@@ -119,6 +120,7 @@ def wire_sync(
     *,
     models: InternalModelPort,
     credential_resolver: Callable[[str], str],
+    platform: PlatformPort,
     state_providers: Sequence[SyncedStatePort] = (),
     import_gates: Sequence[ImportGate] = (),
     import_normalisers: Sequence[ImportNormaliser] = (),
@@ -145,6 +147,7 @@ def wire_sync(
         coffer_version=coffer.__version__,
         resources=resource_svc,
         key_fingerprint=_key_fingerprint(resolved_key),
+        platform=platform,
     )
     exporter = SyncExporter(resource_svc, cred_sync, state_providers=providers, home=home)
 
@@ -270,6 +273,7 @@ def start_sync(
     *,
     models: InternalModelPort,
     credential_resolver: Callable[[str], str],
+    platform: PlatformPort,
 ) -> SyncWiring:
     """Wire convergence over what the kinds contributed during composition
     (their shared-state providers, import gates and normalisers, and post-import
@@ -287,6 +291,7 @@ def start_sync(
         credential_store,
         models=models,
         credential_resolver=credential_resolver,
+        platform=platform,
         state_providers=tuple(contributions.state_providers),
         import_gates=tuple(contributions.import_gates),
         import_normalisers=tuple(contributions.import_normalisers),

@@ -1,6 +1,10 @@
-"""Unit coverage for FsOpenService command building + validation (spec daemon
-"Open and reveal existing absolute paths", ADR:
-daemon-proxies-os-file-actions)."""
+"""Unit coverage for FsOpenService validation + spawn (spec daemon "Open and
+reveal existing absolute paths", ADR: daemon-proxies-os-file-actions).
+
+The per-OS launcher argv is the platform adapter's answer and is covered in
+``tests/unit/infrastructure/platform/test_desktop.py``; here the port is a fake,
+so these tests say only what the use case does with its answer.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,8 @@ from coffer.application.fs import open_service
 from coffer.application.fs.open_service import FsOpenService
 from coffer.domain.errors import FsPathNotOpenable
 
+from ._fake_platform import FakePlatform
+
 
 @pytest.fixture
 def captured(monkeypatch) -> list[list[str]]:
@@ -20,101 +26,32 @@ def captured(monkeypatch) -> list[list[str]]:
     return calls
 
 
+def _svc() -> FsOpenService:
+    return FsOpenService(FakePlatform())
+
+
 def _file(tmp_path: pathlib.Path) -> str:
     f = tmp_path / "doc.md"
     f.write_text("x", encoding="utf-8")
     return str(f)
 
 
-# --- open: per-platform argv ---------------------------------------------------
-
-
-def test_open_darwin_default(tmp_path, monkeypatch, captured):
-    # System default → open in the default TEXT editor (`open -t`). Plain
-    # `open <file>` fails with kLSApplicationNotFoundErr for file types that
-    # have no registered default app (extensionless config files etc.), and the
-    # non-zero exit is swallowed → a silent no-op. `-t` always resolves to the
-    # default text editor (TextEdit at worst), which is what "open in editor" means.
-    monkeypatch.setattr("sys.platform", "darwin")
+def test_open_spawns_the_platform_argv(tmp_path, captured):
     path = _file(tmp_path)
-    FsOpenService().open(path)
-    assert captured == [["open", "-t", path]]
+    _svc().open(path, with_app="Cursor")
+    assert captured == [["open-with", "Cursor", path]]
 
 
-def test_open_darwin_directory_goes_to_the_file_manager(tmp_path, monkeypatch, captured):
-    # A directory has no "text" to open: `open -t <dir>` hands the folder to the
-    # default text editor, which refuses it ("cannot open files in the folder
-    # format"). Plain `open <dir>` is the Finder, which is what opening a
-    # skill's folder means.
-    monkeypatch.setattr("sys.platform", "darwin")
-    FsOpenService().open(str(tmp_path))
-    assert captured == [["open", str(tmp_path)]]
-
-
-def test_open_darwin_with_editor(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "darwin")
+def test_open_without_editor_asks_for_the_default(tmp_path, captured):
     path = _file(tmp_path)
-    FsOpenService().open(path, with_app="Cursor")
-    assert captured == [["open", "-a", "Cursor", path]]
+    _svc().open(path)
+    assert captured == [["open-with", "<default>", path]]
 
 
-def test_open_linux_default(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "linux")
+def test_reveal_spawns_the_platform_argv(tmp_path, captured):
     path = _file(tmp_path)
-    FsOpenService().open(path)
-    assert captured == [["xdg-open", path]]
-
-
-def test_open_linux_with_editor_launches_it_directly(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "linux")
-    path = _file(tmp_path)
-    FsOpenService().open(path, with_app="code")
-    assert captured == [["code", path]]
-
-
-def test_open_windows_default(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "win32")
-    path = _file(tmp_path)
-    FsOpenService().open(path)
-    assert captured == [["cmd", "/c", "start", "", path]]
-
-
-def test_open_blank_editor_is_treated_as_default(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "darwin")
-    path = _file(tmp_path)
-    FsOpenService().open(path, with_app="   ")
-    assert captured == [["open", "-t", path]]
-
-
-# --- reveal: per-platform argv -------------------------------------------------
-
-
-def test_reveal_darwin_selects_item(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "darwin")
-    path = _file(tmp_path)
-    FsOpenService().reveal(path)
-    assert captured == [["open", "-R", path]]
-
-
-def test_reveal_windows_selects_item(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "win32")
-    path = _file(tmp_path)
-    FsOpenService().reveal(path)
-    assert captured == [["explorer", f"/select,{path}"]]
-
-
-def test_reveal_linux_degrades_to_opening_the_folder(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "linux")
-    path = _file(tmp_path)
-    FsOpenService().reveal(path)
-    # No portable "select the file" on Linux — opens the containing folder.
-    assert captured == [["xdg-open", str(tmp_path)]]
-
-
-def test_reveal_linux_directory_opens_itself(tmp_path, monkeypatch, captured):
-    monkeypatch.setattr("sys.platform", "linux")
-    FsOpenService().reveal(str(tmp_path))
-    assert captured == [["xdg-open", str(tmp_path)]]
+    _svc().reveal(path)
+    assert captured == [["reveal", path]]
 
 
 # --- validation: nothing is spawned for a bad path -----------------------------
@@ -122,32 +59,31 @@ def test_reveal_linux_directory_opens_itself(tmp_path, monkeypatch, captured):
 
 def test_open_rejects_relative_path(tmp_path, captured):
     with pytest.raises(FsPathNotOpenable) as exc:
-        FsOpenService().open("relative/doc.md")
+        _svc().open("relative/doc.md")
     assert exc.value.reason == "not_absolute"
     assert captured == []
 
 
 def test_open_rejects_empty_path(captured):
     with pytest.raises(FsPathNotOpenable):
-        FsOpenService().open("")
+        _svc().open("")
     assert captured == []
 
 
 def test_open_rejects_missing_path(tmp_path, captured):
     with pytest.raises(FsPathNotOpenable) as exc:
-        FsOpenService().open(str(tmp_path / "nope.md"))
+        _svc().open(str(tmp_path / "nope.md"))
     assert exc.value.reason == "not_found"
     assert captured == []
 
 
 def test_reveal_rejects_missing_path(tmp_path, captured):
     with pytest.raises(FsPathNotOpenable):
-        FsOpenService().reveal(str(tmp_path / "gone"))
+        _svc().reveal(str(tmp_path / "gone"))
     assert captured == []
 
 
 def test_launch_failure_becomes_fs_path_not_openable(tmp_path, monkeypatch):
-    monkeypatch.setattr("sys.platform", "darwin")
     path = _file(tmp_path)
 
     def boom(cmd, **_):
@@ -155,18 +91,17 @@ def test_launch_failure_becomes_fs_path_not_openable(tmp_path, monkeypatch):
 
     monkeypatch.setattr(open_service.subprocess, "Popen", boom)
     with pytest.raises(FsPathNotOpenable) as exc:
-        FsOpenService().open(path)
+        _svc().open(path)
     assert exc.value.reason == "launch_failed"
 
 
 def test_spawn_detaches_and_silences_output(tmp_path, monkeypatch):
     """The launcher is detached (start_new_session) with stdout/stderr discarded,
     so a long-lived editor never holds the daemon nor leaks into its streams."""
-    monkeypatch.setattr("sys.platform", "darwin")
     path = _file(tmp_path)
     seen: dict[str, object] = {}
     monkeypatch.setattr(open_service.subprocess, "Popen", lambda cmd, **kw: seen.update(kw))
-    FsOpenService().open(path)
+    _svc().open(path)
     assert seen["start_new_session"] is True
     assert seen["stdout"] == open_service.subprocess.DEVNULL
     assert seen["stderr"] == open_service.subprocess.DEVNULL

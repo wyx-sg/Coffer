@@ -75,6 +75,7 @@ const architecture = [
       { text: 'Design philosophy', link: '/architecture/design-principles' },
       { text: 'Resource framework', link: '/architecture/resource-framework' },
       { text: 'Layering and code layout', link: '/architecture/layering' },
+      { text: 'Platform port', link: '/architecture/platform' },
     ],
   },
   {

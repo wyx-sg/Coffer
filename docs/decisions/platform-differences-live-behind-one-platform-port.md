@@ -62,11 +62,12 @@ legitimate everywhere and the violation is an attribute access, not an import.
 
 ### Option A — One platform port; an AST gate keeps checks out of the upper layers (chosen)
 
-`infrastructure/platform/` implements a set of narrow ports, declared in
-`application/`, and the composition root binds the implementation for the
+`infrastructure/platform/` holds every OS difference, in one themed module
+per area below. The application reaches the areas it needs through one port
+it declares, and the composition root binds the implementation for the
 running OS:
 
-| Port | Covers |
+| Area | Covers |
 | --- | --- |
 | paths | Coffer's home, an agent's default config directory, privileged roots and carve-outs, path comparison rules (the `/private` firmlink) |
 | login service | install / remove / status of the per-user service (launchd today) |
@@ -91,8 +92,9 @@ that OS rather than being deleted.
   Linux branches can be exercised by unit tests on any CI runner; the retry
   rule for atomic replace is written once. The gate makes the rule
   mechanical rather than a review habit.
-- **Cons.** Eight small ports and their fakes; every current site moves. A
-  port for file watching exists before any consumer, which is a mild
+- **Cons.** Every current site moves, and the application's port and its
+  fake grow a method each time a use case needs a new OS answer. An area
+  for file watching is reserved before any consumer, which is a mild
   violation of "extract on the second use", accepted because the reconciler
   names it as a later hint source.
 - **Why it wins.** It keeps the one-platform release honest (only macOS is
@@ -143,32 +145,68 @@ Adopt libraries that abstract the OS and call them directly from any layer.
 
 ## Decision
 
-The foundation does not assume macOS. Every platform-dependent operation —
-path conventions, the login service, opening and picking files, directory
-links (symlink / junction / copy), process spawning and signals, file
-watching, atomic replace with a retry where the platform refuses an open
-target, and machine identity — goes through ports implemented in
-`infrastructure/platform/` and bound at the composition root. An AST gate
-forbids reading the platform, and calling the raw OS primitives listed
-above, anywhere else. Only the macOS implementation is released; other
-implementations may exist and be unit-tested, but are not claimed as
+The foundation does not assume macOS. Every platform-dependent operation
+goes through `backend/coffer/infrastructure/platform/`, the only package that
+reads which OS Coffer runs on. Only the macOS implementation is released;
+the Windows and Linux branches that exist are unit-tested but not claimed as
 supported.
+
+- **One application-facing port.** `application/platform_port.py` declares
+  `PlatformPort`: the OS label, the privileged-path rules (a
+  `PrivilegedPaths` value — prefixes, carve-outs, separator, firmlink root),
+  and the argv for open, reveal and the folder picker, plus how an installed
+  editor is launched. Each method answers a question and runs nothing;
+  spawning, validation and error mapping stay in the application. Its
+  adapter, `HostPlatform`, is built once in the composition root and passed
+  to the services that need it (`AgentService`, `AgentImportGate`,
+  `MachineRegistry`, the three `fs` services). The port grows a method when
+  a use case needs a new answer, not before.
+- **Themed modules inside the package.** `host` (the `HostOs` answer and the
+  OS label), `paths`, `desktop`, `links` (symlink, junction, copy, and
+  classifying an existing link), `process` (executable name, detach flags,
+  app bundles, launchd) and `identity` (the OS-kept machine id).
+  Infrastructure imports these modules directly; the skill delivery engine
+  exposes link inspection to the application through its own
+  `SyncEnginePort.infer_link_mode`. The package is fenced as kind-agnostic.
+- **The gate.** `scripts/check_platform_calls.py`, run by `make lint`, parses
+  every module under `backend/coffer/` and fails on a read of
+  `sys.platform` or `os.name`, a call to an OS-identifying `platform`
+  function (`system`, `release`, `mac_ver`, …), `os.uname`,
+  `sys.getwindowsversion`, or a direct import of those names — in every
+  layer, infrastructure included, outside `infrastructure/platform/`. Tests
+  are not scanned.
+
+**Part 2** — not behind the port yet, and to be moved into the package in a
+later change:
+
+- atomic replace with a bounded retry where the platform refuses an open
+  target, shared by every `os.replace` writer;
+- process signals: stopping the daemon (`SIGTERM`) and the shim's shutdown
+  handlers;
+- the `~/.coffer/bin` symlinks `application/binary_deploy.py` creates and
+  reads;
+- the POSIX shell snippet in the Codex memory guard
+  (`infrastructure/memory/delivery/codex.py`);
+- file watching, when a consumer exists;
+- path conventions: Coffer's home and an agent's default config directory;
+- extending the gate to reject the raw primitives `os.replace`,
+  `os.symlink` and `os.kill` above `infrastructure/`, once those sites have
+  moved.
 
 ## Consequences
 
 - Nothing is superseded. [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md)
-  keeps its link / junction / copy design; its mechanics move behind the
-  links port. [The Daemon Is Resident](daemon-is-a-resident-login-service.md)
+  keeps its link / junction / copy design; its OS mechanics now live in
+  `infrastructure/platform/links.py`. [The Daemon Is Resident](daemon-is-a-resident-login-service.md)
   keeps launchd as the one implemented login service.
-- Hooks Coffer writes into agent config (the Codex guard above) are generated
-  by the platform layer, so a non-POSIX shell is one implementation away
-  rather than a string to find.
-- The gate is a new script beside `scripts/check_response_models.py`, listed
-  in `.agents/harness.md` and run by `make lint`; `import-linter` contracts are
-  unchanged.
-- **Follow-up work:** the port interfaces and fakes; moving every site in the
-  Context table and the unchecked `os.replace` / `os.kill` / `os.symlink`
-  calls behind them; the AST gate, first for `domain/`, `application/` and
-  `surfaces/`, then for `infrastructure/` outside `platform/` once those
-  sites have moved; unit tests that run the non-macOS implementations against
-  a fake filesystem.
+- The application layer contains no OS check, so its use cases are tested
+  with a fixed-answer fake port, and the platform package is tested per OS
+  by pinning `sys.platform`.
+- The gate is a script beside `scripts/check_response_models.py`, listed in
+  `.agents/harness.md` and run by `make lint`; the import-linter contracts
+  gain only the kind-agnostic fence for the two new modules.
+- The Part 2 items are the remaining OS assumptions; each is invisible to
+  the gate today because it carries no platform check, which is why the gate
+  is extended only after they move.
+- The architecture page [Platform port](../../docs-site/architecture/platform.md)
+  explains the port, the wiring and how to add an OS-dependent operation.

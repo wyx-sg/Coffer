@@ -1005,6 +1005,10 @@ source_modules = [
     "coffer.domain.scope",
     "coffer.domain.connection",
     "coffer.infrastructure.net",
+    # The host-OS port and its one adapter answer for every kind, so neither
+    # may import one.
+    "coffer.application.platform_port",
+    "coffer.infrastructure.platform",
     "coffer.infrastructure.agent_files",
     "coffer.infrastructure.persistence.models",
     "coffer.infrastructure.persistence.migrations.env",

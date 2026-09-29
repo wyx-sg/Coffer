@@ -35,6 +35,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 
@@ -90,6 +91,7 @@ async def _setup(tmp_path: pathlib.Path):
     )
 
     agent_svc = AgentService(
+        platform=HostPlatform(),
         resource_service=rs,
         audit=audit,
         on_config_dir_changed=skill_svc.relink_for_agent,
@@ -1134,7 +1136,7 @@ async def test_skill_config_holds_provenance_and_never_the_name(tmp_path):
 async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch):
     """No symlink and no junction on this filesystem: deliver a real copy.
 
-    Drives the real ``make_directory_link`` down its Windows branch with both
+    Drives the real ``make_directory_link`` down the platform's Windows branch with both
     link primitives failing — the FAT32 / network-share case — rather than
     faking the engine.
     """
@@ -1142,7 +1144,8 @@ async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch
     import types
 
     from coffer.domain.skill.binding import LinkMode
-    from coffer.infrastructure.skill import sync_engine
+    from coffer.infrastructure.platform import HostOs
+    from coffer.infrastructure.platform import links as platform_links
 
     skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
     _, skill_dir = await _register_agent(agent_svc, tmp_path, name="fat32")
@@ -1161,10 +1164,10 @@ async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch
     src = tmp_path / "src"
     _write_skill_folder(src, name="copied", body="copied body")
     with monkeypatch.context() as m:
-        m.setattr(sync_engine, "sys", types.SimpleNamespace(platform="win32"))
-        m.setattr(sync_engine, "os", _NoLinkOs())
+        m.setattr(platform_links, "host_os", lambda: HostOs.WINDOWS)
+        m.setattr(platform_links, "os", _NoLinkOs())
         m.setattr(
-            sync_engine,
+            platform_links,
             "subprocess",
             types.SimpleNamespace(
                 run=_no_junction, CalledProcessError=subprocess.CalledProcessError
