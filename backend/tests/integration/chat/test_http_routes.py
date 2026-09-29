@@ -16,6 +16,7 @@ Coverage:
 from __future__ import annotations
 
 from collections.abc import Generator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -34,6 +35,7 @@ from coffer.surfaces.http.chat.dependencies import (
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
+from coffer.surfaces.http.dependencies import get_resource_service
 
 # Reuse the in-memory fakes + wiring helper from the unit conftest.
 from tests.unit.chat.conftest import (
@@ -50,6 +52,18 @@ _TOKEN = "test-token"
 # ---------------------------------------------------------------------------
 
 
+class _NoChannels:
+    """The resource service the conversation routes read channel names from.
+
+    Overridden rather than inherited: the module-level resource service is only
+    set when some earlier test in the same process happened to boot the full
+    app, so relying on it made these tests pass serially and fail alone (or on
+    an xdist worker that ran them first)."""
+
+    async def list(self, **_: object) -> list[Any]:
+        return []
+
+
 def _build_app(
     chat_svc: ChatService,
     orchestrator: TurnOrchestrator,
@@ -62,6 +76,7 @@ def _build_app(
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: orchestrator._registry
     app.dependency_overrides[get_attachment_service] = lambda: make_attachment_service()
+    app.dependency_overrides[get_resource_service] = lambda: _NoChannels()
     return app
 
 
