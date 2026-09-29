@@ -34,6 +34,8 @@ def resolve(client: httpx.Client, kind: str, name: str, *, verbose: bool = False
     """The whole resource called ``name``, for a caller that wants more than the uid."""
     from coffer.surfaces.cli import _client as _cli_client
 
+    if kind == "agent":
+        name = name.replace("_", "-")  # see resolve_ref
     r = client.get("/resources", params={"kind": kind, "name": name})
     _cli_client.check(r, verbose=verbose)
     matches = r.json()["resources"]
@@ -59,6 +61,10 @@ def resolve_ref(
     """
     from coffer.surfaces.cli import _client as _cli_client
 
+    if kind == "agent":
+        # An agent is named by its type (spec agent-registry "Keep one agent per
+        # type, named by it"); the type's value (``claude_code``) reads too.
+        ref = ref.replace("_", "-")
     r = client.get("/resources", params={"kind": kind, "name": ref})
     _cli_client.check(r, verbose=verbose)
     matches = r.json()["resources"]

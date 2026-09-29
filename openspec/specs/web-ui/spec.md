@@ -686,28 +686,6 @@ never stands down on its own.
 - **AND** the card offers no idle-window or stand-down control
 - **AND** when the request fails, the switch goes back to off and the error is shown beside it
 
-### Requirement: Show and edit a title on MCP server and skill pages
-The MCP server and skill list and detail pages MUST show a resource's title in place of its name
-wherever the resource is named — the list row, the detail page header and the delete
-confirmation — and MUST show the name when no title is set
-([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on every resource").
-Where a title is shown, the name MUST stay visible beside it as secondary text, because the name
-is what an agent sees. Each detail page MUST let the user set, change and clear the title, and
-MUST show the name as fixed, with no control that edits it and a note saying the name cannot
-change after registration. The list's search box MUST match both the title and the name.
-
-#### Scenario: a titled server is listed and headed by its title
-- **GIVEN** a registered MCP server with no title
-- **WHEN** the user sets its title on the detail page, and then opens the MCP servers list and searches for its name
-- **THEN** the detail header and the list row show the title, each with the name beside it as secondary text
-- **AND** the search finds the row by its name, and the detail page offers no control that edits the name
-
-#### Scenario: clearing a skill's title shows its name again
-- **GIVEN** a skill whose title is set
-- **WHEN** the user clears the title on the skill's detail page
-- **THEN** the detail header and the skills list show the skill's name
-- **AND** the page still marks the name as fixed
-
 ### Requirement: Read each Activity tab from its record owner's route
 The Activity page MUST add no route of its own: each tab reads the read-only
 route belonging to whichever capability owns that record (see Purpose) — the

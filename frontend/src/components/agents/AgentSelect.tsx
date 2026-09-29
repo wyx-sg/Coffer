@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAgents } from "@/lib/hooks/useAgents";
-import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
   /** Ties the control to its own <Label>. */
@@ -48,7 +47,7 @@ export function AgentSelect({ id, label, value, onChange, disabled }: Props) {
   const { t } = useTranslation();
   const { data: agents } = useAgents();
 
-  const known = (agents ?? []).map((a) => ({ uid: a.uid, name: displayName(a) }));
+  const known = (agents ?? []).map((a) => ({ uid: a.uid, name: a.name }));
   // A stored uid this vault has no agent for still gets an option, labelled
   // with the uid itself — there is no name to print, and printing nothing
   // would hide the binding rather than report it.

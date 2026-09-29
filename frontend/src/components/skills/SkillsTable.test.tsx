@@ -120,7 +120,6 @@ const SAMPLE: SkillOut[] = [
   {
     uid: "sk-7f31",
     name: "hello-skill",
-    title: null,
     description: "Greets the user",
     source: { type: "local_import", original_path: "/tmp/hello" },
     builtin: false,
@@ -144,7 +143,6 @@ const SAMPLE: SkillOut[] = [
   {
     uid: "sk-2b98",
     name: "git-skill",
-    title: null,
     description: "From a repo",
     source: { type: "local_import", original_path: "/tmp/git-skill" },
     builtin: false,
@@ -162,7 +160,6 @@ const SAMPLE: SkillOut[] = [
     // The scope names the agent's UID; the panel below still reads "cc".
     uid: "sk-c40d",
     name: "scoped-skill",
-    title: null,
     description: "Only for cc",
     source: { type: "local_import", original_path: "/tmp/scoped" },
     builtin: false,
@@ -184,7 +181,6 @@ const SAMPLE: SkillOut[] = [
 const BUILTIN: SkillOut = {
   uid: "sk-guide",
   name: "coffer-guide",
-  title: null,
   description: "Coffer's own manual",
   source: { type: "local_import", original_path: "" },
   builtin: true,

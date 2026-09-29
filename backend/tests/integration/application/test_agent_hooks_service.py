@@ -101,7 +101,7 @@ async def test_hooks_from_settings_and_plugins_with_coffers_own_current(
 ) -> None:
     claude = fake_agent_dir(isolated_home, AgentType.CLAUDE_CODE)
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CLAUDE_CODE, name="cc", config_dir=None, actor="t"
+        agent_type=AgentType.CLAUDE_CODE, config_dir=None, actor="t"
     )
     own = _adapter(AgentType.CLAUDE_CODE).install(
         _hooks("PreToolUse", "lint.sh", "Bash"), agent.uid
@@ -144,9 +144,7 @@ async def test_a_marked_hook_with_an_old_command_is_stale_and_fired_time_is_read
     agent_bundle: AgentTestBundle, isolated_home: IsolatedHome
 ) -> None:
     codex = fake_agent_dir(isolated_home, AgentType.CODEX)
-    agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="cx", config_dir=None, actor="t"
-    )
+    agent = await agent_bundle.svc.register(agent_type=AgentType.CODEX, config_dir=None, actor="t")
     legacy = {"type": "command", "command": _legacy_codex_command(agent.uid), "timeout": 10}
     codex.write("hooks", json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [legacy]}]}}))
     await agent_bundle.audit.record(
@@ -171,7 +169,7 @@ async def test_a_missing_hook_and_an_unparseable_file_are_reported(
 ) -> None:
     claude = fake_agent_dir(isolated_home, AgentType.CLAUDE_CODE)
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CLAUDE_CODE, name="cc", config_dir=None, actor="t"
+        agent_type=AgentType.CLAUDE_CODE, config_dir=None, actor="t"
     )
     claude.write("settings", "{broken")
     claude.write("settings_local", _hooks("Stop", "notify.sh"))
@@ -194,9 +192,7 @@ async def test_codex_trust_is_read_from_config_toml_and_never_written(
     command changes — read from ``[hooks.state]`` in ``config.toml``, which
     the listing never writes."""
     codex = fake_agent_dir(isolated_home, AgentType.CODEX)
-    agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="cx", config_dir=None, actor="t"
-    )
+    agent = await agent_bundle.svc.register(agent_type=AgentType.CODEX, config_dir=None, actor="t")
     adapter = _adapter(AgentType.CODEX)
     hooks_path = codex.write("hooks", adapter.install("", agent.uid))
     config = codex.write("config", 'model = "gpt-5"\n')

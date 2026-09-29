@@ -134,12 +134,12 @@ def _approve_in_codex(hooks: pathlib.Path, config: pathlib.Path, adapter: Delive
 
 
 async def _connected_agent_with_stale_hook(
-    rig: _Rig, agent_type: AgentType, name: str
+    rig: _Rig, agent_type: AgentType
 ) -> tuple[Resource, FakeAgentDir, pathlib.Path]:
     """An agent connected to Coffer whose settings file carries Coffer's hook
     with the OLD command, beside foreign hooks on the same and other events."""
     agent_dir = fake_agent_dir(rig.home, agent_type)
-    agent = await rig.agents.register(agent_type=agent_type, name=name, actor="cli")
+    agent = await rig.agents.register(agent_type=agent_type, actor="cli")
     await rig.mcp.install(agent.uid, actor="ui")
     adapter = agent_catalog().delivery_hook(agent_type)
     assert adapter is not None
@@ -177,13 +177,11 @@ async def _connected_agent_with_stale_hook(
     spec="memory",
     scenario="a hook whose command went stale is repaired without being asked",
 )
-@pytest.mark.parametrize(
-    ("agent_type", "name"), [(AgentType.CLAUDE_CODE, "cc"), (AgentType.CODEX, "cx")]
-)
+@pytest.mark.parametrize("agent_type", [AgentType.CLAUDE_CODE, AgentType.CODEX])
 async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
-    rig: _Rig, agent_type: AgentType, name: str
+    rig: _Rig, agent_type: AgentType
 ) -> None:
-    agent, _dir, path = await _connected_agent_with_stale_hook(rig, agent_type, name)
+    agent, _dir, path = await _connected_agent_with_stale_hook(rig, agent_type)
     adapter = agent_catalog().delivery_hook(agent_type)
     assert adapter is not None
 
@@ -245,7 +243,7 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
 async def test_an_audit_that_cannot_be_recorded_puts_the_file_back(
     rig: _Rig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _agent, _dir, path = await _connected_agent_with_stale_hook(rig, AgentType.CLAUDE_CODE, "cc")
+    _agent, _dir, path = await _connected_agent_with_stale_hook(rig, AgentType.CLAUDE_CODE)
     before = path.read_text()
 
     async def _refuse(entry: object) -> None:
@@ -271,8 +269,8 @@ def _fingerprint(root: pathlib.Path) -> dict[str, tuple[int, str, int]]:
 
 
 async def test_a_dry_run_writes_nothing_under_home(rig: _Rig) -> None:
-    await _connected_agent_with_stale_hook(rig, AgentType.CLAUDE_CODE, "cc")
-    await _connected_agent_with_stale_hook(rig, AgentType.CODEX, "cx")
+    await _connected_agent_with_stale_hook(rig, AgentType.CLAUDE_CODE)
+    await _connected_agent_with_stale_hook(rig, AgentType.CODEX)
     assert rig.home.db_path.is_file()
     files_before = _fingerprint(rig.home.root)
     rows_before = await rig.audit_count()

@@ -71,7 +71,6 @@ async def _register_agent(
     config_dir.mkdir()
     agent = await agent_svc.register(
         agent_type=agent_type,
-        name=name,
         config_dir=str(config_dir),
         actor="cli",
     )
@@ -362,7 +361,7 @@ async def test_delete_unmanaged_dir(tmp_path):
     assert not original.exists()
     deleted = await audit.query(event_type=AuditEventType.SKILL_UNMANAGED_DELETED.value)
     assert len(deleted) == 1
-    assert deleted[0].details["agent"] == "cur"
+    assert deleted[0].details["agent"] == "claude-code"
     assert deleted[0].details["path"] == str(original)
     assert deleted[0].details["location"] == "skills"
     await graph.dispose()

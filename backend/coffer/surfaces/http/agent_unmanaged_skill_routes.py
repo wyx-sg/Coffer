@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from coffer.application.skill import file_ops
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 from coffer.surfaces.http.skill_dependencies import get_skill_service
@@ -37,7 +38,7 @@ Location = Literal["skills", "agents_dir"]
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 

@@ -38,13 +38,18 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
 
 
 async def _register_agent(
-    agent_svc: AgentService, tmp_path: pathlib.Path, *, name: str
+    agent_svc: AgentService,
+    tmp_path: pathlib.Path,
+    *,
+    name: str,
+    agent_type: AgentType = AgentType.CLAUDE_CODE,
 ) -> tuple[Resource, pathlib.Path]:
+    # ``name`` labels the config dir only: an agent is named by its type, and
+    # one agent per type, so a test needing two agents registers one of each.
     config_dir = tmp_path / f"{name}-cfg"
     config_dir.mkdir()
     agent = await agent_svc.register(
-        agent_type=AgentType.CLAUDE_CODE,
-        name=name,
+        agent_type=agent_type,
         config_dir=str(config_dir),
         actor="cli",
     )
@@ -85,7 +90,7 @@ async def _delivered_names(skill_svc: SkillService, agent: Resource) -> set[str]
 async def test_unscoped_skill_reaches_every_agent(tmp_path):
     skill_svc, agent_svc, _audit, graph = await _setup(tmp_path)
     a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
-    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
+    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2", agent_type=AgentType.CODEX)
 
     skill = await _import_skill(skill_svc, tmp_path, "shared")
     assert skill.scope is None  # a fresh skill names no agent → every agent
@@ -112,7 +117,7 @@ async def test_dormant_skill_reaches_nobody(tmp_path):
     assert await _delivered_names(skill_svc, a1) == set()
 
     # And a later agent gets nothing either.
-    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
+    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2", agent_type=AgentType.CODEX)
     assert not (dir2 / "dormant").exists()
     assert await _delivered_names(skill_svc, a2) == set()
     await graph.dispose()
@@ -125,7 +130,7 @@ async def test_dormant_skill_reaches_nobody(tmp_path):
 async def test_import_delivers_only_where_scope_grants(tmp_path):
     skill_svc, agent_svc, _audit, graph = await _setup(tmp_path)
     a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
-    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
+    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2", agent_type=AgentType.CODEX)
 
     # Import, then narrow the scope to a1 only.
     only_a1 = await _import_skill(skill_svc, tmp_path, "only-a1")
@@ -152,7 +157,7 @@ async def test_import_delivers_only_where_scope_grants(tmp_path):
 async def test_disabling_a_skill_reclaims_every_copy(tmp_path):
     skill_svc, agent_svc, _audit, graph = await _setup(tmp_path)
     a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
-    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
+    a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2", agent_type=AgentType.CODEX)
     await _import_skill(skill_svc, tmp_path, "everywhere")
     assert (dir1 / "everywhere").is_symlink() and (dir2 / "everywhere").is_symlink()
 
@@ -179,7 +184,9 @@ async def test_a_disabled_agent_is_never_written_into(tmp_path):
     """
     skill_svc, agent_svc, _audit, graph = await _setup(tmp_path)
     live, live_dir = await _register_agent(agent_svc, tmp_path, name="live")
-    off, off_dir = await _register_agent(agent_svc, tmp_path, name="off")
+    off, off_dir = await _register_agent(
+        agent_svc, tmp_path, name="off", agent_type=AgentType.CODEX
+    )
     await skill_svc._rs.set_enabled(off.uid, False, actor="cli")
 
     # Import after the agent was switched off: only the live agent gets it.
@@ -245,7 +252,7 @@ async def test_disabling_an_agent_reclaims_skills_and_leaves_the_catalogue(tmp_p
     assert seen == [None]  # no enabled agent answers for the type any more
     disabled = await audit.query(event_type=AuditEventType.RESOURCE_DISABLED.value)
     assert [(e.resource_kind, e.resource_name, e.actor) for e in disabled] == [
-        ("agent", "solo", "cli")
+        ("agent", "claude-code", "cli")
     ]
     await graph.dispose()
 
@@ -354,7 +361,7 @@ async def test_reconcile_tolerates_target_conflict(tmp_path):
     (foreign / "mine.txt").write_text("user data", encoding="utf-8")
 
     agent = await agent_svc.register(
-        agent_type=AgentType.CLAUDE_CODE, name="a1", config_dir=str(config_dir), actor="cli"
+        agent_type=AgentType.CLAUDE_CODE, config_dir=str(config_dir), actor="cli"
     )
     assert (config_dir / "skills" / "smooth").is_symlink()
     assert (foreign / "mine.txt").read_text(encoding="utf-8") == "user data"  # never clobbered
@@ -375,7 +382,7 @@ async def test_an_occupied_path_is_reported_blocked_not_failed(tmp_path):
     foreign.mkdir()
     (foreign / "mine.txt").write_text("user data", encoding="utf-8")
     await agent_svc.register(
-        agent_type=AgentType.CLAUDE_CODE, name="a1", config_dir=str(config_dir), actor="cli"
+        agent_type=AgentType.CLAUDE_CODE, config_dir=str(config_dir), actor="cli"
     )
 
     report = await graph.run()

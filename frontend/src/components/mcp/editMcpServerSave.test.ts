@@ -57,7 +57,6 @@ function row(over: Partial<CredRow> = {}): CredRow {
 async function save(creds: CredRow[], res = resource()) {
   return saveMcpServerEdit({
     resource: res,
-    title: "",
     description: "",
     configText: JSON.stringify({ transport: { type: "stdio", command: "npx", args: [] } }),
     creds,

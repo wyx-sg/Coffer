@@ -468,7 +468,7 @@ def test_the_knowledge_routes_require_the_daemon_token(client) -> None:  # type:
 
 
 def test_collection_list_carries_the_resource_title(client) -> None:  # type: ignore[no-untyped-def]
-    """spec resource-framework "Carry an optional editable title on every resource":
+    """spec resource-framework "Carry an optional editable title on the kinds that have one":
     the collection list carries the title set through the kind-agnostic update,
     while ``name`` stays the directory name the file routes take."""
     _create_collection(client, "team")

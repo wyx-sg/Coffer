@@ -59,7 +59,15 @@ export interface paths {
         /** List Agents */
         get: operations["list_agents_api_v1_agents_get"];
         put?: never;
-        /** Register Agent */
+        /**
+         * Register Agent
+         * @description Register the one agent of ``type``, named by it.
+         *
+         *     An agent installed but never run here (``installed_never_run``) has no
+         *     config directory yet; registering it at its standard location creates that
+         *     directory with only what Coffer needs (spec agent-registry "Validate the
+         *     config directory at registration"). Any other missing directory is refused.
+         */
         post: operations["register_agent_api_v1_agents_post"];
         delete?: never;
         options?: never;
@@ -76,14 +84,33 @@ export interface paths {
         };
         /**
          * List Candidates
-         * @description Discover the agents on this machine that aren't registered yet (read-only).
-         *
-         *     Each candidate carries its detection state and version (spec agent-registry
-         *     "Detect an agent by its program and its config directory"). The user
-         *     reviews these and adds the installed ones — nothing is registered
-         *     automatically (discovery + confirm).
+         * @description The supported types seen on this machine that aren't registered yet
+         *     (read-only), each with its detection state and version (spec agent-registry
+         *     "Detect an agent by its program and its config directory"). Nothing is
+         *     registered automatically (discovery + confirm).
          */
         get: operations["list_candidates_api_v1_agents_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Types
+         * @description Every supported type with its detection state, registered or not
+         *     (read-only), so a surface can always show one row per type.
+         */
+        get: operations["list_types_api_v1_agents_types_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -429,36 +456,17 @@ export interface components {
             uid: string;
         };
         /**
-         * AgentCandidate
-         * @description An installed-but-unregistered agent the user may choose to add.
+         * AgentCandidatesOut
+         * @description The supported types seen here and not registered yet — at most one per type.
          */
-        AgentCandidate: {
-            /** Config Dir */
-            config_dir: string;
-            /** Default Skill Dir */
-            default_skill_dir: string;
-            /** Display Name */
-            display_name: string;
-            state: components["schemas"]["DetectionState"];
-            /** Suggested Name */
-            suggested_name: string;
-            type: components["schemas"]["AgentType"];
-            /** Version */
-            version: string | null;
-        };
-        /** AgentCandidatesOut */
         AgentCandidatesOut: {
             /** Candidates */
-            candidates: components["schemas"]["AgentCandidate"][];
+            candidates: components["schemas"]["AgentTypeOut"][];
         };
         /** AgentCreate */
         AgentCreate: {
             /** Config Dir */
             config_dir?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Name */
-            name?: string | null;
             type: components["schemas"]["AgentType"];
         };
         /** AgentHooksOut */
@@ -507,8 +515,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Description */
-            description: string | null;
+            /** Display Name */
+            display_name: string;
             /** Fast Model */
             fast_model: string | null;
             /** Model */
@@ -516,8 +524,6 @@ export interface components {
             /** Name */
             name: string;
             state: components["schemas"]["DetectionState"];
-            /** Title */
-            title: string | null;
             type: components["schemas"]["AgentType"];
             /** Uid */
             uid: string;
@@ -535,8 +541,6 @@ export interface components {
         AgentPatch: {
             /** Config Dir */
             config_dir?: string | null;
-            /** Description */
-            description?: string | null;
             /** Fast Model */
             fast_model?: string | null;
             /** Model */
@@ -550,6 +554,39 @@ export interface components {
          * @enum {string}
          */
         AgentType: "claude_code" | "codex";
+        /**
+         * AgentTypeOut
+         * @description One supported type, registered or not — a row the Agents page always
+         *     renders (spec agent-registry "Report every supported type's detection
+         *     state").
+         */
+        AgentTypeOut: {
+            /** Addable */
+            addable: boolean;
+            /** Config Dir */
+            config_dir: string;
+            /** Default Skill Dir */
+            default_skill_dir: string;
+            /** Display Name */
+            display_name: string;
+            /** Name */
+            name: string;
+            /** Other Config Dir */
+            other_config_dir: string | null;
+            /** Standard Config Dir */
+            standard_config_dir: string;
+            state: components["schemas"]["DetectionState"];
+            type: components["schemas"]["AgentType"];
+            /** Uid */
+            uid: string | null;
+            /** Version */
+            version: string | null;
+        };
+        /** AgentTypesOut */
+        AgentTypesOut: {
+            /** Types */
+            types: components["schemas"]["AgentTypeOut"][];
+        };
         /** CofferConnectionOut */
         CofferConnectionOut: {
             /** Parts */
@@ -1228,6 +1265,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCandidatesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_types_api_v1_agents_types_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTypesOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

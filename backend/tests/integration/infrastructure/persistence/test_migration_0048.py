@@ -123,4 +123,5 @@ def test_0048_is_a_no_op_on_a_database_without_removed_rows(tmp_path, monkeypatc
     command.downgrade(cfg, "0047")
     command.upgrade(cfg, "head")
     assert _alembic_version(db_path) == HEAD_REVISION
-    assert _agent_names(db_path) == {"a-claude"}
+    # Kept — and, since 0109, named by its type.
+    assert _agent_names(db_path) == {"claude-code"}

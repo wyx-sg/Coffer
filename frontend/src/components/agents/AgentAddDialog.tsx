@@ -2,7 +2,7 @@
 // One combined "Add agent" dialog. On open it auto-runs candidate detection
 // (discovery + confirm: nothing is registered silently) and lists unregistered
 // agents as a checklist (AgentCandidateList) — the addable ones default ticked,
-// each registered with its own config directory and suggested name. Below that, an
+// each registered with its type and its own config directory. Below that, an
 // "Add manually" disclosure (AgentManualAddForm) reveals the manual form. Both
 // paths register via one useRegisterAgent here; the footer is a single
 // right-aligned row — Cancel plus whichever primary action applies (Add
@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { AgentCreate } from "@/lib/api/agents";
-import { isAddableCandidate } from "@/lib/agents/display";
+import { agentTypeLabel, isAddableCandidate } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentCandidates, useRegisterAgent } from "@/lib/hooks/useAgents";
 
@@ -97,16 +97,12 @@ export function AgentAddDialog({
     const chosen = addable.filter((c) => selected.has(c.config_dir));
     const ok: string[] = [];
     try {
-      // Register each chosen candidate with its own directory and suggested
-      // name, so a directory CLAUDE_CONFIG_DIR / CODEX_HOME named registers as
-      // itself rather than as the type's standard one.
+      // Register each chosen candidate with its own directory, so a directory
+      // CLAUDE_CONFIG_DIR / CODEX_HOME named registers as itself rather than as
+      // the type's standard one.
       for (const c of chosen) {
-        await register.mutateAsync({
-          type: c.type,
-          name: c.suggested_name,
-          config_dir: c.config_dir,
-        });
-        ok.push(c.suggested_name);
+        await register.mutateAsync({ type: c.type, config_dir: c.config_dir });
+        ok.push(c.display_name);
       }
       setAdded(ok);
     } catch (e) {
@@ -122,7 +118,7 @@ export function AgentAddDialog({
   // Manual path: a rejection propagates to the form, which shows it inline.
   const addManual = async (body: AgentCreate) => {
     await register.mutateAsync(body);
-    setAdded([body.name || body.type]);
+    setAdded([agentTypeLabel(body.type)]);
     onCreated();
   };
 

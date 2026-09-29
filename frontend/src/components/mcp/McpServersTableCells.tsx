@@ -18,7 +18,6 @@ import { resourcesKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
 import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
-import { displayName } from "@/lib/resourceTitle";
 import { HealthBadge } from "./HealthBadge";
 
 /** Persisted health (last /test probe or most recent invocation), else "—".
@@ -77,7 +76,7 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <RowDeleteButton
-        ariaLabel={t("mcp.table.deleteAria", { name: displayName(resource) })}
+        ariaLabel={t("mcp.table.deleteAria", { name: resource.name })}
         onDelete={() => setOpen(true)}
       />
       <ConfirmDialog
@@ -86,14 +85,17 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
           setOpen(o);
           if (!o) del.reset();
         }}
-        title={t("mcp.server.deleteConfirmTitle", { name: displayName(resource) })}
+        title={t("mcp.server.deleteConfirmTitle", { name: resource.name })}
         description={t("mcp.server.deleteConfirmBody")}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}
         error={del.error}
         onConfirm={() =>
           // Close only on success so a failure leaves the dialog (and error) up.
-          del.mutate({ kind: resource.kind, uid: resource.uid }, { onSuccess: () => setOpen(false) })
+          del.mutate(
+            { kind: resource.kind, uid: resource.uid },
+            { onSuccess: () => setOpen(false) },
+          )
         }
       />
     </div>

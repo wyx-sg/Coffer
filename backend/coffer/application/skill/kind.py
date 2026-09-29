@@ -19,8 +19,9 @@ A skill's name is fixed (``name_fixed``). It is the directory an agent loads
 the skill from and the ``name:`` its SKILL.md declares, so agents, other skills
 and the user's own notes quote it; a rename would break every one of them
 (ADR names-visible-to-agents-are-fixed). The framework refuses a changed name
-before anything moves, so this kind supplies no rename hook. Its title — what
-the Skills page shows in place of the name — stays editable.
+before anything moves, so this kind supplies no rename hook. It carries no
+title either (``titled=False``): a skill is its fixed name and its SKILL.md
+description.
 """
 
 from __future__ import annotations
@@ -113,6 +114,7 @@ def make_skill_kind(
         # means removing the skill and importing it again.
         name_fixed=True,
         name_fixed_resets="its enabled flag, its scope and its deliveries to agents",
+        titled=False,
         # A builtin skill's row is Coffer's, not the user's: deleting it is a
         # no-op the next boot undoes, so the framework refuses it up front
         # for every surface at once.

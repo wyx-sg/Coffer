@@ -195,9 +195,8 @@ never contains `__`, an upstream tool name may. The `coffer__` prefix is reserve
 Coffer's own tools.
 
 A server's name is fixed once it is registered, because it is the prefix of every tool
-name above and agents' permission rules and skills quote those names. To show a friendlier
-label in Coffer, set the server's `title`; to use a different name, remove the server and
-register it again. A new server's name is at most 24 characters. See
+name above and agents' permission rules and skills quote those names. A server has no
+separate display title; to use a different name, remove the server and register it again. A new server's name is at most 24 characters. See
 [MCP servers](/guides/mcp-servers).
 
 ### Client-visible name length

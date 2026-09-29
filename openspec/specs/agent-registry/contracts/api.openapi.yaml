@@ -110,6 +110,13 @@ paths:
       tags:
       - agents
     post:
+      description: |-
+        Register the one agent of ``type``, named by it.
+
+        An agent installed but never run here (``installed_never_run``) has no
+        config directory yet; registering it at its standard location creates that
+        directory with only what Coffer needs (spec agent-registry "Validate the
+        config directory at registration"). Any other missing directory is refused.
       operationId: register_agent_api_v1_agents_post
       parameters:
       - in: header
@@ -159,12 +166,10 @@ paths:
   /api/v1/agents/candidates:
     get:
       description: |-
-        Discover the agents on this machine that aren't registered yet (read-only).
-
-        Each candidate carries its detection state and version (spec agent-registry
-        "Detect an agent by its program and its config directory"). The user
-        reviews these and adds the installed ones — nothing is registered
-        automatically (discovery + confirm).
+        The supported types seen on this machine that aren't registered yet
+        (read-only), each with its detection state and version (spec agent-registry
+        "Detect an agent by its program and its config directory"). Nothing is
+        registered automatically (discovery + confirm).
       operationId: list_candidates_api_v1_agents_candidates_get
       parameters:
       - in: header
@@ -195,6 +200,43 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Candidates
+      tags:
+      - agents
+  /api/v1/agents/types:
+    get:
+      description: |-
+        Every supported type with its detection state, registered or not
+        (read-only), so a surface can always show one row per type.
+      operationId: list_types_api_v1_agents_types_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTypesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Types
       tags:
       - agents
   /api/v1/agents/{uid}:
@@ -1585,45 +1627,12 @@ components:
       - name
       title: AdoptedOut
       type: object
-    AgentCandidate:
-      description: An installed-but-unregistered agent the user may choose to add.
-      properties:
-        config_dir:
-          title: Config Dir
-          type: string
-        default_skill_dir:
-          title: Default Skill Dir
-          type: string
-        display_name:
-          title: Display Name
-          type: string
-        state:
-          $ref: '#/components/schemas/DetectionState'
-        suggested_name:
-          title: Suggested Name
-          type: string
-        type:
-          $ref: '#/components/schemas/AgentType'
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-      required:
-      - type
-      - display_name
-      - config_dir
-      - default_skill_dir
-      - suggested_name
-      - state
-      - version
-      title: AgentCandidate
-      type: object
     AgentCandidatesOut:
+      description: The supported types seen here and not registered yet — at most one per type.
       properties:
         candidates:
           items:
-            $ref: '#/components/schemas/AgentCandidate'
+            $ref: '#/components/schemas/AgentTypeOut'
           title: Candidates
           type: array
       required:
@@ -1637,19 +1646,6 @@ components:
           - type: string
           - type: 'null'
           title: Config Dir
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        name:
-          anyOf:
-          - maxLength: 64
-            minLength: 1
-            pattern: ^[a-zA-Z0-9_-]+$
-            type: string
-          - type: 'null'
-          title: Name
         type:
           $ref: '#/components/schemas/AgentType'
       required:
@@ -1740,11 +1736,9 @@ components:
           format: date-time
           title: Created At
           type: string
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
+        display_name:
+          title: Display Name
+          type: string
         fast_model:
           anyOf:
           - type: string
@@ -1760,11 +1754,6 @@ components:
           type: string
         state:
           $ref: '#/components/schemas/DetectionState'
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         type:
           $ref: '#/components/schemas/AgentType'
         uid:
@@ -1787,10 +1776,9 @@ components:
       required:
       - uid
       - name
-      - title
+      - display_name
       - type
       - config_dir
-      - description
       - model
       - fast_model
       - wire_api
@@ -1807,11 +1795,6 @@ components:
           - type: string
           - type: 'null'
           title: Config Dir
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
         fast_model:
           anyOf:
           - type: string
@@ -1836,6 +1819,74 @@ components:
       - codex
       title: AgentType
       type: string
+    AgentTypeOut:
+      description: |-
+        One supported type, registered or not — a row the Agents page always
+        renders (spec agent-registry "Report every supported type's detection
+        state").
+      properties:
+        addable:
+          title: Addable
+          type: boolean
+        config_dir:
+          title: Config Dir
+          type: string
+        default_skill_dir:
+          title: Default Skill Dir
+          type: string
+        display_name:
+          title: Display Name
+          type: string
+        name:
+          title: Name
+          type: string
+        other_config_dir:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Other Config Dir
+        standard_config_dir:
+          title: Standard Config Dir
+          type: string
+        state:
+          $ref: '#/components/schemas/DetectionState'
+        type:
+          $ref: '#/components/schemas/AgentType'
+        uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uid
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - type
+      - name
+      - display_name
+      - config_dir
+      - standard_config_dir
+      - default_skill_dir
+      - state
+      - version
+      - uid
+      - addable
+      - other_config_dir
+      title: AgentTypeOut
+      type: object
+    AgentTypesOut:
+      properties:
+        types:
+          items:
+            $ref: '#/components/schemas/AgentTypeOut'
+          title: Types
+          type: array
+      required:
+      - types
+      title: AgentTypesOut
+      type: object
     CofferConnectionOut:
       properties:
         parts:

@@ -1,13 +1,12 @@
 // frontend/src/components/mcp/McpServerDetailHeader.tsx
 //
-// The server's detail header: the shared PageHeader with the title (the name
-// beside it when one is set), the health badge and the fixed-name badge, the description beneath, and the actions in the fixed
+// The server's detail header: the shared PageHeader with the server's name,
+// the health badge and the fixed-name badge, the description beneath, and the actions in the fixed
 // detail-page order — reach, test, edit, delete.
 import { useTranslation } from "react-i18next";
 import { Activity, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { FixedNameBadge } from "@/components/resource/FixedName";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
 import { HealthBadge, type HealthState } from "./HealthBadge";
@@ -49,7 +48,7 @@ export function McpServerDetailHeader({
   return (
     <PageHeader
       back={back}
-      title={<ResourceLabel resource={resource} heading />}
+      title={resource.name}
       subtitle={resource.description || undefined}
       badges={
         <>

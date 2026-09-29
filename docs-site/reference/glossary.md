@@ -26,8 +26,10 @@ entry in the agent's own config, or a skill folder placed in its skills director
 ### Agent
 
 A coding agent installed on this machine and registered with Coffer, such as Claude Code
-(`claude_code`) or Codex (`codex`). An agent is a [resource](#resource) of kind `agent`,
-identified by its config directory. See [Agents](/guides/agents).
+(`claude_code`) or Codex (`codex`). An agent is a [resource](#resource) of kind `agent`.
+There is at most one per type on a machine, and its name is its type (`claude-code`,
+`codex`); its one setting besides the model binding is its config directory. See
+[Agents](/guides/agents).
 
 ### Aggregate pass
 
@@ -367,9 +369,11 @@ findable with `coffer__search_tools`. See [MCP tools](/reference/mcp-tools#tieri
 
 ### Title
 
-A resource's optional display label, at most 80 characters, shown in place of its name by the
-web UI and the CLI and changed with `edit --title`. An MCP server's and a skill's name is
-fixed once registered, because agents quote it, so the title is how you relabel one. See
+An optional display label, at most 80 characters, carried by the kinds that have one —
+model providers, channels, knowledge collections and memory partitions. The web UI and the
+CLI show it in place of the name, and `edit --title` changes it. Agents, MCP servers and
+skills have no title: an agent is named by its type, and an MCP server's or skill's fixed
+name is shown beside its description. See
 [Resource framework](/architecture/resource-framework#identity).
 
 ### Trace id
