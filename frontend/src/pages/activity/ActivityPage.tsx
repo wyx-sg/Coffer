@@ -88,7 +88,7 @@ export function ActivityPage() {
 
   const showNew = () => {
     releaseAll();
-    scrollRef.current?.scrollTo({ top: 0 });
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     setAtTop(true);
   };
 

@@ -19,7 +19,10 @@ export interface DaemonInfo {
  * to /tmp/coffer-e2e-home.path so we can find it here.
  */
 export function readDaemonToken(): DaemonInfo {
-  const homePath = fs.readFileSync("/tmp/coffer-e2e-home.path", "utf-8").trim();
+  // COFFER_E2E_HOME_FILE moves the pointer (start_daemon.sh honours it too),
+  // so a run on spare ports does not read another run's daemon.
+  const pointer = process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path";
+  const homePath = fs.readFileSync(pointer, "utf-8").trim();
   const json = fs.readFileSync(`${homePath}/.coffer/daemon.json`, "utf-8");
   const parsed = JSON.parse(json) as { token: string; port: number };
   return { token: parsed.token, port: parsed.port };
