@@ -389,7 +389,7 @@ async def test_ingest_with_the_adapter_down_is_refused(ctx: _Ctx) -> None:
 
 
 async def test_channel_status_carries_the_resource_title(ctx: _Ctx) -> None:
-    """spec resource-framework "Carry an optional editable title on every resource":
+    """spec resource-framework "Carry an optional editable title on the kinds that have one":
     the status read carries the channel's title beside its unchanged name."""
     async with _client(ctx.app) as c:
         r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")

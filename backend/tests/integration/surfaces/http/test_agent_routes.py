@@ -8,9 +8,10 @@ identity at all.
 
 These tests take the uid straight off the ``POST /api/v1/agents`` response they
 already make, which is also the flow a real client follows: create, keep the
-uid, address everything by it. The name still travels in the payload, as the
-label a person reads, so a test that cares about the label asserts on the body
-rather than on the URL.
+uid, address everything by it. An agent's name is its type's (spec
+agent-registry "Keep one agent per type, named by it"), so a registration
+carries only the type and, optionally, a config directory; the type standing in
+for the uid in a path is covered in ``test_agent_one_per_type.py``.
 """
 
 from __future__ import annotations
@@ -40,22 +41,19 @@ def _client(app) -> TestClient:
     return TestClient(app, headers={"X-Coffer-Token": TOKEN})
 
 
-def _post_codex(c: TestClient, name: str, config_dir: pathlib.Path):
-    """Helper to register one codex agent — keeps line widths reasonable."""
-    return c.post(
-        "/api/v1/agents",
-        json={"type": "codex", "name": name, "config_dir": str(config_dir)},
-    )
+def _post_codex(c: TestClient, config_dir: pathlib.Path):
+    """Register the one codex agent at ``config_dir``."""
+    return c.post("/api/v1/agents", json={"type": "codex", "config_dir": str(config_dir)})
 
 
-def _codex_uid(c: TestClient, name: str, config_dir: pathlib.Path) -> str:
+def _codex_uid(c: TestClient, config_dir: pathlib.Path) -> str:
     """Register one codex agent and return the uid every route addresses it by.
 
     The uid is read off the creation response rather than looked up afterwards:
     the server mints it, the client keeps it, and no second request is needed
     to learn it.
     """
-    r = _post_codex(c, name, config_dir)
+    r = _post_codex(c, config_dir)
     assert r.status_code == 201, r.text
     return r.json()["uid"]
 
@@ -80,25 +78,21 @@ def test_agent_register_post(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        r = c.post(
-            "/api/v1/agents",
-            json={
-                "type": "codex",
-                "name": "cur",
-                "config_dir": str(config_dir),
-                "description": "manual",
-            },
-        )
+        r = _post_codex(c, config_dir)
         assert r.status_code == 201, r.text
         body = r.json()
-        assert body["name"] == "cur"
-        assert body["type"] == "codex"
+        assert (body["name"], body["display_name"], body["type"]) == (
+            "codex",
+            "OpenAI Codex",
+            "codex",
+        )
         # The identity comes back with the creation, minted server-side —
-        # `AgentCreate` has no uid field, so a client cannot choose one. It is
-        # distinct from the label by construction: everything addresses the
-        # agent by this string, and nothing addresses it by "cur".
+        # `AgentCreate` has no uid field, so a client cannot choose one.
         assert body["uid"]
         assert body["uid"] != body["name"]
+        # An agent carries neither a title nor a description.
+        assert "title" not in body
+        assert "description" not in body
         assert "auto_detected" not in body
 
 
@@ -106,8 +100,8 @@ def test_agent_register_post(tmp_path, monkeypatch):
     spec="agent-registry", scenario="register an agent without an explicit name"
 )
 def test_agent_register_without_name_defaults_to_type(tmp_path, monkeypatch):
-    """POST /agents with no name derives a stable default from the type
-    (mirrors discovery's suggested name: claude_code -> claude-code)."""
+    """POST /agents takes only the type: the name is the type's
+    (claude_code -> claude-code), audited as ``resource_created``."""
     app = _app(tmp_path, monkeypatch, 59607)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
@@ -118,6 +112,9 @@ def test_agent_register_without_name_defaults_to_type(tmp_path, monkeypatch):
         )
         assert r.status_code == 201, r.text
         assert r.json()["name"] == "claude-code"
+        uid = r.json()["uid"]
+        audit = c.get("/api/v1/audit", params={"resource_uid": uid}).json()["entries"]
+        assert "resource_created" in [e["event_type"] for e in audit]
 
 
 def test_agent_get_one(tmp_path, monkeypatch):
@@ -126,18 +123,13 @@ def test_agent_get_one(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        r = c.post(
-            "/api/v1/agents",
-            json={"type": "codex", "name": "cur", "config_dir": str(config_dir)},
-        )
-        assert r.status_code == 201, r.text
-        uid = r.json()["uid"]
+        uid = _codex_uid(c, config_dir)
         r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200
         # Both halves of AgentOut's identity contract: the uid the caller
         # addressed, echoed back unchanged, and the label beside it.
         assert r.json()["uid"] == uid
-        assert r.json()["name"] == "cur"
+        assert r.json()["name"] == "codex"
         assert r.json()["config_dir"] == str(config_dir)
         assert "skill_dir" not in r.json()
         assert "skill_dir_override" not in r.json()
@@ -151,7 +143,7 @@ def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cur", config_dir)
+        uid = _codex_uid(c, config_dir)
         r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200, r.text
         assert "capabilities" not in r.json()
@@ -172,12 +164,12 @@ def test_agent_list_after_register(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cur", config_dir)
+        uid = _codex_uid(c, config_dir)
         r = c.get("/api/v1/agents")
         assert r.status_code == 200
         listed = [a for a in r.json()["items"] if a["uid"] == uid]
         assert len(listed) == 1, r.text
-        assert listed[0]["name"] == "cur"
+        assert listed[0]["name"] == "codex"
 
 
 def test_agent_patch_config_dir(tmp_path, monkeypatch):
@@ -188,7 +180,7 @@ def test_agent_patch_config_dir(tmp_path, monkeypatch):
     new_dir = tmp_path / "cfg2"
     new_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cur", config_dir)
+        uid = _codex_uid(c, config_dir)
         r = c.patch(
             f"/api/v1/agents/{uid}",
             json={"config_dir": str(new_dir)},
@@ -207,7 +199,7 @@ def test_agent_patch_model_binding(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cur", config_dir)
+        uid = _codex_uid(c, config_dir)
         ok = c.patch(f"/api/v1/agents/{uid}", json={"model": "gpt-5", "wire_api": "responses"})
         assert ok.status_code == 200, ok.text
         assert ok.json()["model"] == "gpt-5"
@@ -238,7 +230,7 @@ def test_agent_delete_then_404(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cur", config_dir)
+        uid = _codex_uid(c, config_dir)
         r = c.delete(f"/api/v1/agents/{uid}")
         assert r.status_code == 204
         # The uid is retired with the row: it addressed a resource a moment ago
@@ -248,7 +240,7 @@ def test_agent_delete_then_404(tmp_path, monkeypatch):
         assert r.status_code == 404
 
 
-def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
+def test_patch_model_only_preserves_config_dir(tmp_path, monkeypatch):
     """Regression: a PATCH that omits config_dir must not wipe the override.
 
     `AgentPatch.config_dir` defaults to None, so "field absent" and "field
@@ -260,25 +252,14 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
     config_dir.mkdir()
 
     with _client(app) as c:
-        r = c.post(
-            "/api/v1/agents",
-            json={
-                "type": "codex",
-                "name": "cur",
-                "config_dir": str(config_dir),
-                "description": "before",
-            },
-        )
-        assert r.status_code == 201, r.text
-        uid = r.json()["uid"]
-        assert r.json()["config_dir"] == str(config_dir)
+        uid = _codex_uid(c, config_dir)
 
-        # PATCH only the description — config_dir is absent from the body.
-        r = c.patch(f"/api/v1/agents/{uid}", json={"description": "after"})
+        # PATCH only the model — config_dir is absent from the body.
+        r = c.patch(f"/api/v1/agents/{uid}", json={"model": "gpt-5"})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["description"] == "after"
-        # The custom config_dir must survive a description-only PATCH.
+        assert body["model"] == "gpt-5"
+        # The custom config_dir must survive a model-only PATCH.
         assert body["config_dir"] == str(config_dir)
         # And so must the identity: an edit is an edit, not a re-creation.
         assert body["uid"] == uid
@@ -289,47 +270,33 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="keep an agent's uid across a rename")
-def test_uid_survives_a_rename_and_no_name_addresses_the_agent(tmp_path, monkeypatch):
-    """The identity stays put when the label moves — the point of the change.
-
-    Renaming is now an ordinary field on the kind-agnostic
-    ``PATCH /api/v1/resources/{uid}``; there is no per-kind rename route left
-    to call, and an agent never had one. So the rename goes through the
-    framework route while the agent surface is read back at the *same* address
-    as before. Before the uid existed, a rename was a delete plus a create, and
-    everything keyed on the resource — paired chats, capability preferences,
-    the audit trail — went with it
-    (ADR resource-identity-is-an-immutable-uid).
-    """
+def test_uid_survives_a_refused_rename_and_no_name_addresses_the_agent(tmp_path, monkeypatch):
+    """An agent's name is its type's, so a rename through the kind-agnostic
+    ``PATCH /api/v1/resources/{uid}`` is refused with NAME_IMMUTABLE — and the
+    agent is read back at the same uid, name and directory as before."""
     app = _app(tmp_path, monkeypatch, 59611)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "before", config_dir)
+        uid = _codex_uid(c, config_dir)
 
         r = c.patch(f"/api/v1/resources/{uid}", json={"name": "after"})
-        assert r.status_code == 200, r.text
-        assert r.json()["uid"] == uid
-        assert r.json()["name"] == "after"
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "NAME_IMMUTABLE"
 
-        # Same address, new label, everything else untouched.
         r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200, r.text
-        assert r.json()["uid"] == uid
-        assert r.json()["name"] == "after"
-        assert r.json()["config_dir"] == str(config_dir)
+        assert (r.json()["uid"], r.json()["name"], r.json()["config_dir"]) == (
+            uid,
+            "codex",
+            str(config_dir),
+        )
 
-        # Neither name is an address — not the one it just lost, nor the one it
-        # just gained. A name-shaped path segment is simply a uid nothing
-        # answers to.
-        assert c.get("/api/v1/agents/before").status_code == 404
+        # The refused name is not an address, and names nothing.
         assert c.get("/api/v1/agents/after").status_code == 404
-
-        # The one route that goes from a label to a resource answers with the
-        # very uid the caller has been holding all along.
         found = c.get("/api/v1/resources", params={"kind": "agent", "name": "after"})
         assert found.status_code == 200, found.text
-        assert [res["uid"] for res in found.json()["resources"]] == [uid]
+        assert found.json()["resources"] == []
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="discover installed agents as candidates")
@@ -343,15 +310,20 @@ def test_candidates_endpoint_reports_marker_present_agents(tmp_path, monkeypatch
         r = c.get("/api/v1/agents/candidates")
         assert r.status_code == 200, r.text
         cands = r.json()["candidates"]
-        types = {c["type"] for c in cands}
-        assert "codex" in types
-        assert "claude_code" in types
+        by_type = {c_["type"]: c_ for c_ in cands}
+        # At most one candidate per type, named by the type.
+        assert len(cands) == len(by_type)
+        assert by_type["codex"]["name"] == "codex"
+        assert by_type["claude_code"]["name"] == "claude-code"
         # Each candidate carries the fields the UI needs to confirm an add.
         for c_ in cands:
             assert c_["display_name"]
             assert c_["config_dir"]
+            assert c_["standard_config_dir"]
             assert c_["default_skill_dir"]
-            assert c_["suggested_name"]
+            assert c_["uid"] is None
+            assert isinstance(c_["addable"], bool)
+            assert "suggested_name" not in c_
 
         # Discovery is read-only — nothing was registered.
         assert c.get("/api/v1/agents").json()["items"] == []
@@ -400,27 +372,23 @@ def test_error_404_not_found(tmp_path, monkeypatch):
             assert body["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
-def test_error_409_duplicate_name(tmp_path, monkeypatch):
-    """Registering the same name twice yields 409 RESOURCE_ALREADY_EXISTS."""
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject duplicate agent name")
+def test_error_409_second_agent_of_a_type(tmp_path, monkeypatch):
+    """A second agent of a registered type — its name would be the same — is
+    refused with 409 AGENT_TYPE_REGISTERED, even on another directory."""
     app = _app(tmp_path, monkeypatch, 59631)
-    # Distinct config dirs so the only collision is the name (not the
-    # one-agent-per-config-dir rule, which has its own error code).
     first = tmp_path / "cfg1"
     second = tmp_path / "cfg2"
     first.mkdir()
     second.mkdir()
     with _client(app) as c:
-        r = c.post(
-            "/api/v1/agents",
-            json={"type": "codex", "name": "dup", "config_dir": str(first)},
-        )
-        assert r.status_code == 201, r.text
-        r = c.post(
-            "/api/v1/agents",
-            json={"type": "claude_code", "name": "dup", "config_dir": str(second)},
-        )
+        uid = _codex_uid(c, first)
+        r = _post_codex(c, second)
         assert r.status_code == 409, r.text
-        assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+        assert r.json()["error"]["code"] == "AGENT_TYPE_REGISTERED"
+        assert [(a["uid"], a["name"]) for a in c.get("/api/v1/agents").json()["items"]] == [
+            (uid, "codex")
+        ]
 
 
 def test_error_422_skill_dir_not_writable(tmp_path, monkeypatch):
@@ -432,7 +400,7 @@ def test_error_422_skill_dir_not_writable(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "codex", "name": "bad", "config_dir": str(bogus_file)},
+            json={"type": "codex", "config_dir": str(bogus_file)},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SKILL_DIR_NOT_WRITABLE"
@@ -449,25 +417,25 @@ def test_error_422_unprocessable_body(tmp_path, monkeypatch):
         for bad_type in ("claude_desktop", "gemini_cli", "not_a_real_type"):
             r = c.post(
                 "/api/v1/agents",
-                json={"type": bad_type, "name": "x", "config_dir": str(config_dir)},
+                json={"type": bad_type, "config_dir": str(config_dir)},
             )
             assert r.status_code == 422, f"{bad_type}: {r.text}"
 
 
-def test_agent_out_carries_the_resource_title(tmp_path, monkeypatch):
-    """spec resource-framework "Carry an optional editable title on every resource":
-    the agent's own list and detail reads carry the title set through the
-    kind-agnostic update beside the unchanged name."""
+def test_agent_out_carries_no_title(tmp_path, monkeypatch):
+    """spec resource-framework "Carry an optional editable title on the kinds
+    that have one": an agent is not one of them — its reads carry no title, a
+    title through the kind-agnostic update is refused (422), and the generic
+    resource read keeps ``title`` null."""
     app = _app(tmp_path, monkeypatch, 59796)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        uid = _codex_uid(c, "cx", config_dir)
-        assert c.get(f"/api/v1/agents/{uid}").json()["title"] is None
+        uid = _codex_uid(c, config_dir)
+        assert "title" not in c.get(f"/api/v1/agents/{uid}").json()
 
         r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Work Codex"})
-        assert r.status_code == 200, r.text
-        detail = c.get(f"/api/v1/agents/{uid}").json()
-        assert (detail["name"], detail["title"]) == ("cx", "Work Codex")
+        assert r.status_code == 422, r.text
+        assert c.get(f"/api/v1/resources/{uid}").json()["title"] is None
         items = {a["uid"]: a for a in c.get("/api/v1/agents").json()["items"]}
-        assert items[uid]["title"] == "Work Codex"
+        assert "title" not in items[uid]

@@ -1,10 +1,10 @@
 // frontend/src/pages/AgentDetailPage.test.tsx
 //
 // The page is reached as `/agents/:uid`, so the fixture agent's uid (`u-cur`)
-// is deliberately not its name (`cur`): the heading reads the name, and every
-// request the page and its dialogs make is addressed to the uid.
+// is deliberately not its name (`codex`): the heading reads the display name,
+// and every request the page and its dialogs make is addressed to the uid.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AgentDetailPage } from "./AgentDetailPage";
@@ -28,36 +28,22 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   })),
   useAgentConnect: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
-// The edit form renames through the kind-agnostic resource PATCH, so that
-// module is stubbed too. All four writes are declared, not just the rename:
-// a factory that omitted one would fail any render that reached for it.
+// The kind-agnostic resource writes are stubbed too: a factory that omitted one
+// would fail any render that reached for it.
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useSetResourceTitle: vi.fn(() => ({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn().mockResolvedValue({}),
-    reset: vi.fn(),
-    isPending: false,
-    error: null,
-  })),
   useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRenameResource: vi.fn(() => ({
-    mutateAsync: vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: null,
-  })),
 }));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentMock = vi.mocked(hooks.useAgent);
-const resourceHooks = await import("@/lib/hooks/useResourceMutations");
 
 const AGENT = {
   uid: "u-cur",
-  name: "cur",
+  name: "codex",
+  display_name: "OpenAI Codex",
   type: "codex" as const,
   config_dir: "/home/u/.codex",
-  description: null,
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
 };
@@ -156,7 +142,7 @@ describe("AgentDetailPage", () => {
 
     renderAt();
 
-    expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "OpenAI Codex" })).toBeInTheDocument();
 
     // The eight workspace tabs. Plugins is the only one that acts on the agent;
     // Hooks, Memory and Conversations are read-only views of what it keeps on disk.
@@ -208,64 +194,11 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("heading", { name: /edit agent/i })).toBeInTheDocument();
   });
 
-  test("the edit form renames first, then PATCHes the agent's own fields", async () => {
-    // The name is a LABEL now, so the form lets the user change it — and a
-    // rename is the kind-agnostic `PATCH /resources/{uid}` every kind renames
-    // through, not the agent kind's own PATCH. Both are addressed to the uid,
-    // and the rename goes first: it is the one write that can be refused for a
-    // reason the user has to fix, and a refusal must leave the rest unapplied.
+  test("the edit form edits only the config directory", () => {
+    // An agent is one per type and named by it: the form offers no name,
+    // title or description field, and saving with nothing changed sends nothing.
     mockAgentLoaded();
-    const order: string[] = [];
-    const renameAsync = vi.fn(async () => {
-      order.push("rename");
-    });
-    const patchAsync = vi.fn(async () => {
-      order.push("patch");
-    });
-    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
-      mutateAsync: renameAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
-    vi.mocked(hooks.usePatchAgent).mockReturnValue({
-      mutateAsync: patchAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof hooks.usePatchAgent>);
-
-    renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "renamed" } });
-    fireEvent.change(within(dialog).getByLabelText("Description"), {
-      target: { value: "the one I use" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
-
-    expect(renameAsync).toHaveBeenCalledWith({ kind: "agent", uid: "u-cur", name: "renamed" });
-    // The second write only goes out once the rename has resolved, so it is
-    // awaited rather than asserted on the same tick.
-    await waitFor(() =>
-      expect(patchAsync).toHaveBeenCalledWith({
-        uid: "u-cur",
-        body: { description: "the one I use" },
-      }),
-    );
-    expect(order).toEqual(["rename", "patch"]);
-  });
-
-  test("an unchanged name is not sent as a rename", async () => {
-    // Every save would otherwise carry a rename to the name the agent already
-    // has — a write with nothing to write, and a 409 waiting to happen the day
-    // the daemon starts treating "taken by me" as taken.
-    mockAgentLoaded();
-    const renameAsync = vi.fn().mockResolvedValue({});
     const patchAsync = vi.fn().mockResolvedValue({});
-    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
-      mutateAsync: renameAsync,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
     vi.mocked(hooks.usePatchAgent).mockReturnValue({
       mutateAsync: patchAsync,
       isPending: false,
@@ -275,18 +208,11 @@ describe("AgentDetailPage", () => {
     renderAt();
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Description"), {
-      target: { value: "only this changed" },
-    });
+    expect(within(dialog).queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Description")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/title/i)).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
-
-    await waitFor(() =>
-      expect(patchAsync).toHaveBeenCalledWith({
-        uid: "u-cur",
-        body: { description: "only this changed" },
-      }),
-    );
-    expect(renameAsync).not.toHaveBeenCalled();
+    expect(patchAsync).not.toHaveBeenCalled();
   });
 
   test("?tab= opens that tab, so returning from a row's page keeps your place", () => {

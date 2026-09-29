@@ -81,8 +81,11 @@ kind registry and served by the kind-agnostic routes: `list`, `show`, `edit`, `r
 `enable`, `disable` and `scope`. `add` is not one of them: a group offers `add` only when its
 kind supplies one of its own (see "Keep creation a per-kind seam"). A verb the kind does not support MUST be absent from its group
 rather than refused when run (see "Keep creation a per-kind seam" and "Carry a per-agent reach
-on every resource"); a kind that cannot be disabled offers no `enable` or `disable`. `show` MUST resolve either a name or a uid. `edit` MUST take `--title` and
-`--description` on every kind, plus the kind's own flags. Every `list` and `show` MUST support
+on every resource"); a kind that cannot be disabled offers no `enable` or `disable`, and a kind
+with nothing on its record a person may edit — `skill`, whose name is fixed and whose description
+is its SKILL.md's — offers no `edit`. `show` MUST resolve either a name or a uid. `edit` MUST take
+`--description`, and `--title` on a kind that carries one ("Carry an optional editable title on
+the kinds that have one"), plus the kind's own flags. Every `list` and `show` MUST support
 `--json`. A group MAY add commands that are unique to its kind, and MUST NOT add a second
 spelling of a lifecycle verb.
 
@@ -104,7 +107,7 @@ unregistered kind MUST be refused rather than bringing one into being.
 #### Scenario: every kind's group offers the same lifecycle verbs
 - **GIVEN** the CLI's command tree
 - **WHEN** each registered kind's group is read
-- **THEN** each offers `list`, `show`, `edit` and `rm`, offers `enable` and `disable` only where the kind can be disabled, offers `add` only where the kind can be created from that group, and offers `scope` only where the kind supports reach
+- **THEN** each offers `list`, `show` and `rm`, offers `edit` only where the kind has something to edit and `--title` only where it carries a title, offers `enable` and `disable` only where the kind can be disabled, offers `add` only where the kind can be created from that group, and offers `scope` only where the kind supports reach
 - **AND** `coffer <kind> disable <name>` and `coffer <kind> disable <uid>` disable the same resource through the kind-agnostic route, and the change is audited
 
 #### Scenario: a non-toggleable kind refuses to be disabled
@@ -238,13 +241,16 @@ the rename rather than leaving the two disagreeing.
 
 A kind whose name is visible outside Coffer MUST declare its name fixed, because agents and the
 files they read quote that name. Today these are `mcp_server`, whose name prefixes every tool
-name an agent sees, and `skill`, whose name is the folder an agent loads it from. For such a
+name an agent sees, and `skill`, whose name is the folder an agent loads it from. A kind MAY
+also derive the name from the resource's config, which fixes it too: `agent`, whose name is its
+type's ([agent-registry](../agent-registry/spec.md) "Keep one agent per type, named by it"), and
+registration MUST refuse any other name for such a kind as a validation error. For a fixed-name
 kind, an update whose `name` differs from the current one MUST be refused as a conflict with the
 code `NAME_IMMUTABLE`, whichever surface it came through, with nothing moved and nothing
 audited. The refusal message MUST say that the resource has to be deleted and registered again
-under the new name, and MUST name what a re-registration resets. A resource of such a kind that
-wants a different display uses its title (see "Carry an optional editable title on every
-resource").
+under the new name, and MUST name what a re-registration resets — or, for a derived name, that
+the name is the resource's type. None of these kinds carries a title ("Carry an optional
+editable title on the kinds that have one"): the fixed name is what every surface shows.
 
 #### Scenario: renaming a resource is an ordinary edit
 - **GIVEN** a resource of a kind whose name is not fixed, with a reach set, a credential cited by its
@@ -273,7 +279,7 @@ resource").
 - **GIVEN** a registered MCP server and a registered skill
 - **WHEN** the user submits a different name for each through the kind-agnostic update, and through `coffer <kind> edit <name> --name <new>`
 - **THEN** every attempt is refused as a conflict with the code `NAME_IMMUTABLE`, and the command line exits non-zero with a message saying to delete and register the resource again and naming what that resets
-- **AND** each resource keeps its name, its on-disk artifact and its audit trail, no audit entry is written, and a title change on the same resource still succeeds
+- **AND** each resource keeps its name, its on-disk artifact and its audit trail, and no audit entry is written
 
 ### Requirement: Audit every lifecycle change
 The system MUST record an audit entry for every lifecycle change to any resource or
@@ -390,20 +396,23 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 - **WHEN** triggered through the command line,
 - **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
 
-### Requirement: Carry an optional editable title on every resource
-Every resource MUST carry an optional **`title`**: free text of at most 80 characters that a
-person chooses for display, separate from the resource's `name`. The title MUST be editable on
-every kind, including a kind whose name is fixed, through the kind-agnostic update
-(`PATCH /api/v1/resources/{uid}`) and through `coffer <kind> edit <name> --title <text>`. An
-empty title MUST clear it. A title longer than 80 characters MUST be refused as a validation
-error with nothing changed. A title change MUST be audited like any other update. The web UI and
-the CLI MUST show the title in place of the name wherever a resource is listed or shown when a
-title is set, and the name when it is not. The title MUST travel with the resource to the
-user's other machines through vault-sync, and a resource that arrives without one MUST keep
-its title empty.
+### Requirement: Carry an optional editable title on the kinds that have one
+A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
+most 80 characters that a person chooses for display, separate from the resource's `name`. The
+kinds with a title are those whose name is a label a person chose — `provider`, `channel`,
+`knowledge` and `memory`. `agent`, `mcp_server` and `skill` carry none: each is shown by its fixed
+name, and a non-empty title for one MUST be refused as a validation error (422) on registration
+and on update, with nothing changed. On a kind that carries one, the title MUST be editable
+through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`) and through
+`coffer <kind> edit <name> --title <text>`. An empty title MUST clear it. A title longer than 80
+characters MUST be refused as a validation error with nothing changed. A title change MUST be
+audited like any other update. The web UI and the CLI MUST show the title in place of the name
+wherever a resource is listed or shown when a title is set, and the name when it is not. The
+title MUST travel with the resource to the user's other machines through vault-sync, and a
+resource that arrives without one MUST keep its title empty.
 
 #### Scenario: a title is shown in place of the name
-- **GIVEN** a resource with no title
+- **GIVEN** a resource of a kind that carries a title, with no title
 - **WHEN** the user runs `coffer <kind> edit <name> --title "Team search"` and then lists that kind
 - **THEN** the list and `coffer <kind> show` print "Team search" where the name was shown, and `--json` carries both `name` and `title`
 - **AND** the change is audited as an update, and the resource's name, uid, reach and enabled state are unchanged
@@ -413,6 +422,12 @@ its title empty.
 - **WHEN** the user submits a title of 81 characters through the update route, and then an empty title
 - **THEN** the first is refused as a validation error and the stored title is unchanged
 - **AND** the second clears the title, and surfaces show the name again
+
+#### Scenario: a kind without a title refuses one
+- **GIVEN** a registered MCP server, a registered skill and a registered agent
+- **WHEN** the user submits a title for each through the kind-agnostic update, and registers an MCP server with a title
+- **THEN** each is refused as a validation error (422) and nothing is stored
+- **AND** `coffer mcp edit` and `coffer mcp add` offer no `--title`, and `coffer skill` offers no `edit`
 
 ### Requirement: Read the audit log from the command line
 The system MUST let a terminal read the audit log with `coffer log audit`, over the same route

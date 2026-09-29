@@ -50,7 +50,7 @@ _TOKEN = "test-token"
 #: Two registered agents, named the way a user names them. Neither name is the
 #: agent key it maps to, and neither is the uid the vault mints for it — which
 #: is the point: nothing below may pass by comparing a label to anything.
-_AGENTS = {"claude-code": "claude_code", "codex-cli": "codex"}
+_AGENTS = {"claude-code": "claude_code", "codex": "codex"}
 
 
 @dataclass
@@ -142,7 +142,7 @@ async def test_narrowing_past_the_default_agent_is_rejected_not_silently_accepte
 ) -> None:
     # The channel's default_agent is claude-code, so this narrowing would leave
     # it able to drive nothing.
-    r = await env.client.put(env.scope_url, json={"scope": {"agents": [env.uid_of("codex-cli")]}})
+    r = await env.client.put(env.scope_url, json={"scope": {"agents": [env.uid_of("codex")]}})
 
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -151,7 +151,7 @@ async def test_narrowing_past_the_default_agent_is_rejected_not_silently_accepte
     # the owner recognises.
     message = r.json()["error"]["message"]
     assert "claude-code" in message
-    assert "codex-cli" in message
+    assert "codex" in message
     # Rejected BEFORE persistence: the reach the user narrowed away is intact.
     assert (await env.svc.get(env.channel_uid)).scope is None
 
@@ -237,7 +237,7 @@ async def test_the_config_path_still_rejects_a_default_agent_outside_the_scope(e
             "config": {
                 "channel_type": "telegram",
                 "bot_token_ref": "channel/tg/bot",
-                "default_agent": env.uid_of("codex-cli"),
+                "default_agent": env.uid_of("codex"),
             }
         },
     )

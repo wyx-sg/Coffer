@@ -39,24 +39,24 @@ coffer scan
 
 ```text
                           Not managed by Coffer
-┏━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Kind  ┃ Agent       ┃ Ref         ┃ Detail                            ┃
-┡━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ agent │ claude-code │ claude_code │ Claude Code at /Users/you/.claude │
-└───────┴─────────────┴─────────────┴───────────────────────────────────┘
+┏━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Kind  ┃ Agent       ┃ Ref         ┃ Detail                                                                     ┃
+┡━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ agent │ claude-code │ claude-code │ Claude Code at /Users/you/.claude — register: coffer agent add claude-code │
+└───────┴─────────────┴─────────────┴────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ```sh
-coffer agent add claude_code
+coffer agent add claude-code
 ```
 
 ```text
 registered: agent claude-code
 ```
 
-(`coffer scan` lists a detected agent with this same command.) If you leave out `--name`, Coffer uses a default based on the type: `claude_code` becomes `claude-code`. If your Claude Code config is somewhere other than `~/.claude`, pass `--config-dir <path>`.
+(`coffer scan` lists a detected agent with this same command.) There is one agent per type, and its name is its type, `claude-code`. It is registered at `~/.claude`; if your Claude Code config is somewhere else, pass `--config-dir <path>`. Claude Code installed but never run is fine too: registering it creates `~/.claude`.
 
-**In the web UI:** open **Agents**, click **Add agent**, tick Claude Code under **Detected agents**, and click **Add selected (1)**.
+**In the web UI:** open **Agents**, click **Add agent**, and add Claude Code from the list of detected agents.
 
 ## 3. Connect Claude Code to Coffer
 

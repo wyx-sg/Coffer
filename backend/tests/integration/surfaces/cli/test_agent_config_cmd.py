@@ -8,7 +8,7 @@ The config commands live in ``surfaces/cli/agent_config_cmd.py``; a test that
 patches ``click.edit`` reaches into that module, where the command is written.
 
 The in-process app mounts TWO routers. Each of these commands takes the agent's
-NAME and resolves it to the uid the routes address
+TYPE (its name) and resolves it to the uid the routes address
 (ADR resource-identity-is-an-immutable-uid) via
 ``GET /resources?kind=agent&name=``, which lives on the framework's resource
 router rather than on ``/agents``. Serving only ``agent_config_router`` would
@@ -106,9 +106,7 @@ def agent_config_cli(tmp_path, monkeypatch):
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
     loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(
-            agent_svc.register(agent_type=AgentType.CLAUDE_CODE, name="cc", actor="cli")
-        )
+        loop.run_until_complete(agent_svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli"))
     finally:
         loop.close()
 
@@ -119,7 +117,7 @@ def agent_config_cli(tmp_path, monkeypatch):
     # Name → uid resolution runs before every command below and lives here, on
     # the framework's shared router. The SAME ResourceService the AgentService
     # was built on — a second one would have its own session and the resolver
-    # would search a registry ``cc`` was never registered into.
+    # would search a registry the agent was never registered into.
     app.include_router(resource_router)
     # `agent show` reads the record from /agents; the audit route is how the
     # tests read the audit entries a write records.
@@ -169,7 +167,7 @@ def _audit_events(event_type: str) -> list[dict]:
     return list(r.json()["entries"])
 
 
-def _uid(name: str = "cc") -> str:
+def _uid(name: str = "claude-code") -> str:
     client, _info = _cli_client.client_or_exit()
     return str(
         client.get("/resources", params={"kind": "agent", "name": name}).json()["resources"][0][
@@ -188,7 +186,9 @@ def test_config_edit_unknown_key_exit4(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     src = tmp_path / "x.json"
     src.write_text("{}", encoding="utf-8")
-    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "nope", "--from-file", str(src)])
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "edit", "claude-code", "nope", "--from-file", str(src)]
+    )
     assert r.exit_code == 4
     assert "no agent named" not in (r.output + (r.stderr or ""))
 
@@ -211,7 +211,7 @@ def test_edit_a_config_file_from_a_file_on_the_command_line(agent_config_cli):
     good.write_text('{"theme": "dark"}', encoding="utf-8")
 
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(good)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(good)]
     )
     assert r.exit_code == 0, r.output
     assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
@@ -219,12 +219,12 @@ def test_edit_a_config_file_from_a_file_on_the_command_line(agent_config_cli):
         encoding="utf-8"
     ) == '{"theme": "light"}'
     written = _audit_events("agent_config_file_written")
-    assert len(written) == 1 and written[0]["resource_name"] == "cc"
+    assert len(written) == 1 and written[0]["resource_name"] == "claude-code"
 
     bad = tmp_path / "bad.json"
     bad.write_text("{not json", encoding="utf-8")
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(bad)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(bad)]
     )
     assert r.exit_code != 0, r.output
     assert settings.read_text(encoding="utf-8") == '{"theme": "dark"}'
@@ -249,7 +249,7 @@ def test_config_edit_from_file_sends_the_fingerprint_of_its_read(agent_config_cl
 
     monkeypatch.setattr(agent_config_cmd, "_read_source", _read_while_agent_rewrites)
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(src)]
     )
     assert r.exit_code == 5, r.output
     assert settings.read_text(encoding="utf-8") == '{"theme": "agent"}'
@@ -264,7 +264,7 @@ def test_config_edit_from_file_valid(agent_config_cli):
     src.write_text('{"theme": "dark"}', encoding="utf-8")
 
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(src)]
     )
     assert r.exit_code == 0, r.output
     assert ".bak" in r.output
@@ -298,7 +298,7 @@ def test_config_edit_interactive_editor(agent_config_cli, monkeypatch):
 
     monkeypatch.setattr(agent_config_cmd.click, "edit", _fake_edit)
 
-    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
+    r = _runner.invoke(cli_app, ["agent", "config", "edit", "claude-code", "settings"])
     assert r.exit_code == 0, r.output
     assert captured["text"] == '{"theme": "light"}'  # current content seeded
     assert captured["extension"] == ".settings"
@@ -316,7 +316,7 @@ def test_config_edit_interactive_no_changes(agent_config_cli, monkeypatch):
 
     monkeypatch.setattr(agent_config_cmd.click, "edit", lambda text, extension=None: None)
 
-    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
+    r = _runner.invoke(cli_app, ["agent", "config", "edit", "claude-code", "settings"])
     assert r.exit_code == 0, r.output
     assert settings.read_text(encoding="utf-8") == '{"theme": "light"}'  # untouched
     assert not (tmp_path / ".claude" / "settings.json.bak").exists()
@@ -331,7 +331,7 @@ def test_config_edit_from_file_malformed_exit2_unchanged(agent_config_cli):
     src.write_text("{not json", encoding="utf-8")
 
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(src)]
     )
     assert r.exit_code == 2, r.output
     # File untouched.
@@ -355,7 +355,15 @@ def test_config_child_edit_and_rm_roundtrip(agent_config_cli):
 
     r = _runner.invoke(
         cli_app,
-        ["agent", "config", "edit", "cc", "subagents/reviewer.md", "--from-file", str(src)],
+        [
+            "agent",
+            "config",
+            "edit",
+            "claude-code",
+            "subagents/reviewer.md",
+            "--from-file",
+            str(src),
+        ],
     )
     assert r.exit_code == 0, r.output
     assert "saved: subagents/reviewer.md" in r.output
@@ -366,7 +374,9 @@ def test_config_child_edit_and_rm_roundtrip(agent_config_cli):
     subagents = next(i for i in listing if i["key"] == "subagents")
     assert [f["relpath"] for f in subagents["files"]] == ["reviewer.md"]
 
-    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/reviewer.md", "--force"])
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "rm", "claude-code", "subagents/reviewer.md", "--force"]
+    )
     assert r.exit_code == 0, r.output
     assert not child.exists()
     assert child.with_name("reviewer.md.bak").read_text(encoding="utf-8") == "# Reviewer\n"
@@ -381,7 +391,7 @@ def test_config_child_edit_from_stdin(agent_config_cli):
     tmp_path, _shim = agent_config_cli
     r = _runner.invoke(
         cli_app,
-        ["agent", "config", "edit", "cc", "subagents/helper.md", "--from-file", "-"],
+        ["agent", "config", "edit", "claude-code", "subagents/helper.md", "--from-file", "-"],
         input="# Helper\n",
     )
     assert r.exit_code == 0, r.output
@@ -395,13 +405,14 @@ def test_config_child_of_a_plain_file_entry_exits_4(agent_config_cli):
     src = tmp_path / "x.md"
     src.write_text("x", encoding="utf-8")
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings/x.md", "--from-file", str(src)]
+        cli_app,
+        ["agent", "config", "edit", "claude-code", "settings/x.md", "--from-file", str(src)],
     )
     assert r.exit_code == 4, r.output
 
 
 def test_config_rm_needs_a_child(agent_config_cli):
-    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "settings", "--yes"])
+    r = _runner.invoke(cli_app, ["agent", "config", "rm", "claude-code", "settings", "--yes"])
     assert r.exit_code == 2, r.output
 
 
@@ -412,7 +423,9 @@ def test_config_rm_without_force_aborts(agent_config_cli):
     child.parent.mkdir(parents=True, exist_ok=True)
     child.write_text("# Keep\n", encoding="utf-8")
 
-    r = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/keep.md"], input="n\n")
+    r = _runner.invoke(
+        cli_app, ["agent", "config", "rm", "claude-code", "subagents/keep.md"], input="n\n"
+    )
     assert r.exit_code == 1
     assert child.exists()
 
@@ -422,7 +435,7 @@ def test_config_rm_without_force_aborts(agent_config_cli):
 # ---------------------------------------------------------------------------
 
 
-def _show(name: str = "cc") -> dict:
+def _show(name: str = "claude-code") -> dict:
     r = _runner.invoke(cli_app, ["agent", "show", name, "--json"])
     assert r.exit_code == 0, r.output
     return dict(json.loads(r.output))
@@ -433,15 +446,15 @@ def _show(name: str = "cc") -> dict:
 )
 def test_connect_an_agent_to_coffer_from_the_command_line(agent_config_cli):
     tmp_path, shim = agent_config_cli
-    r = _runner.invoke(cli_app, ["agent", "connect", "cc"])
+    r = _runner.invoke(cli_app, ["agent", "connect", "claude-code"])
     assert r.exit_code == 0, r.output
-    assert "connected agent cc to Coffer" in r.output
+    assert "connected agent claude-code to Coffer" in r.output
     assert f"gateway MCP entry: installed ({shim})" in r.output
     mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     entry = mcp_config["mcpServers"]["coffer"]
     assert _uid() in entry["args"]
     installed = _audit_events("agent_mcp_installed")
-    assert len(installed) == 1 and installed[0]["resource_name"] == "cc"
+    assert len(installed) == 1 and installed[0]["resource_name"] == "claude-code"
 
 
 @pytest.mark.acceptance(
@@ -449,33 +462,30 @@ def test_connect_an_agent_to_coffer_from_the_command_line(agent_config_cli):
 )
 def test_disconnect_an_agent_from_coffer_on_the_command_line(agent_config_cli):
     tmp_path, _shim = agent_config_cli
-    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "connect", "claude-code"]).exit_code == 0
 
-    r = _runner.invoke(cli_app, ["agent", "disconnect", "cc"])
+    r = _runner.invoke(cli_app, ["agent", "disconnect", "claude-code"])
     assert r.exit_code == 0, r.output
-    assert "disconnected agent cc from Coffer" in r.output
+    assert "disconnected agent claude-code from Coffer" in r.output
     mcp_config = json.loads((tmp_path / ".claude.json").read_text(encoding="utf-8"))
     assert "coffer" not in mcp_config.get("mcpServers", {})
     assert _show()["coffer_connection"]["state"] == "disconnected"
-    text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    text = _runner.invoke(cli_app, ["agent", "show", "claude-code"]).output
     assert "coffer_connection: not connected" in text
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent show reports the Coffer MCP status")
 def test_agent_show_reports_the_coffer_connection(agent_config_cli):
     tmp_path, _shim = agent_config_cli
-    other_dir = tmp_path / "other-claude"
+    other_dir = tmp_path / "codex-home"
     (other_dir / "skills").mkdir(parents=True)
-    added = _runner.invoke(
-        cli_app,
-        ["agent", "add", "claude_code", "--name", "other", "--config-dir", str(other_dir)],
-    )
+    added = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(other_dir)])
     assert added.exit_code == 0, added.output
-    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "connect", "claude-code"]).exit_code == 0
 
-    assert _show("cc")["coffer_connection"]["state"] == "connected"
-    assert _show("other")["coffer_connection"]["state"] == "disconnected"
-    text = _runner.invoke(cli_app, ["agent", "show", "cc"]).output
+    assert _show("claude-code")["coffer_connection"]["state"] == "connected"
+    assert _show("codex")["coffer_connection"]["state"] == "disconnected"
+    text = _runner.invoke(cli_app, ["agent", "show", "claude-code"]).output
     assert "coffer_connection: connected" in text
     assert "gateway MCP entry: installed" in text
 
@@ -489,28 +499,38 @@ def test_config_and_mcp_commands_mirror_their_rest_routes(agent_config_cli):
     uid = _uid()
     status = f"/agents/{uid}/coffer-connection"
 
-    assert _runner.invoke(cli_app, ["agent", "connect", "cc"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "connect", "claude-code"]).exit_code == 0
     assert client.get(status).json()["state"] == "connected"
     assert _show()["coffer_connection"] == client.get(status).json()
-    assert _runner.invoke(cli_app, ["agent", "disconnect", "cc"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "disconnect", "claude-code"]).exit_code == 0
     assert client.get(status).json()["state"] == "disconnected"
     assert _show()["coffer_connection"] == client.get(status).json()
 
     src = tmp_path / "s.json"
     src.write_text('{"a": 1}', encoding="utf-8")
     r = _runner.invoke(
-        cli_app, ["agent", "config", "edit", "cc", "settings", "--from-file", str(src)]
+        cli_app, ["agent", "config", "edit", "claude-code", "settings", "--from-file", str(src)]
     )
     assert r.exit_code == 0, r.output
     assert client.get(f"/agents/{uid}/config-files/settings").json()["content"] == '{"a": 1}'
 
     child = tmp_path / "c.md"
     child.write_text("# c\n", encoding="utf-8")
-    edit_child = ["agent", "config", "edit", "cc", "subagents/c.md", "--from-file", str(child)]
+    edit_child = [
+        "agent",
+        "config",
+        "edit",
+        "claude-code",
+        "subagents/c.md",
+        "--from-file",
+        str(child),
+    ]
     assert _runner.invoke(cli_app, edit_child).exit_code == 0
     read = client.get(f"/agents/{uid}/config-files/subagents/files/c.md").json()
     assert read["exists"] is True
-    rm = _runner.invoke(cli_app, ["agent", "config", "rm", "cc", "subagents/c.md", "--yes"])
+    rm = _runner.invoke(
+        cli_app, ["agent", "config", "rm", "claude-code", "subagents/c.md", "--yes"]
+    )
     assert rm.exit_code == 0, rm.output
     read = client.get(f"/agents/{uid}/config-files/subagents/files/c.md").json()
     assert read["exists"] is False
@@ -546,7 +566,7 @@ def test_config_edit_refuses_when_the_file_changed_since_its_read(agent_config_c
 
     monkeypatch.setattr(agent_config_cmd.click, "edit", _edit_while_agent_rewrites)
 
-    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
+    r = _runner.invoke(cli_app, ["agent", "config", "edit", "claude-code", "settings"])
     assert r.exit_code == 5, r.output
     assert "changed on disk since last read" in (r.output + (r.stderr or ""))
     assert "saved" not in r.output

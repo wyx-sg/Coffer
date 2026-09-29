@@ -175,6 +175,11 @@ class ResourceApplier:
         # writes the key when there is one, and an older build never did.
         raw_title = doc.get("title")
         title = raw_title if isinstance(raw_title, str) else None
+        # A kind that carries no title (``agent``, ``mcp_server``, ``skill``)
+        # ignores one an older build still wrote, rather than refusing the
+        # whole document over a field this build no longer has.
+        if not self._resources.titled(kind):
+            title = None
         # The normaliser's write to another row (a moved internal default's
         # release) runs only once the gate has passed, and is reverted if this
         # document's own write then fails — so a document that does not land

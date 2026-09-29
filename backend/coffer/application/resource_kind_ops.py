@@ -143,19 +143,39 @@ def check_new_name(kind_def: Kind, name: str) -> None:
             raise ConfigValidationError(str(e)) from e
 
 
-def checked_title(title: str | None) -> str | None:
+def checked_title(kind_def: Kind, title: str | None) -> str | None:
     """The title to store — ``None`` for a blank one — or ``ConfigValidationError``
-    for one over the cap, before any write."""
+    for one over the cap, or for any title on a kind that carries none
+    (``Kind.titled``), before any write."""
     try:
-        return normalise_title(title)
+        wanted = normalise_title(title)
     except ValueError as e:
         raise ConfigValidationError(str(e)) from e
+    if wanted is not None and not kind_def.titled:
+        raise ConfigValidationError(
+            f"the {kind_def.name} kind carries no title: it is shown by its name, which is fixed"
+        )
+    return wanted
+
+
+def check_derived_name(kind_def: Kind, name: str, config: dict[str, Any]) -> None:
+    """Refuse a name other than the one the kind derives from ``config``
+    (``Kind.name_from_config``) — an agent is named by its type."""
+    if kind_def.name_from_config is None:
+        return
+    wanted = kind_def.name_from_config(config)
+    if name != wanted:
+        raise ConfigValidationError(
+            f"the name of this {kind_def.name} is its type's: it must be {wanted!r}, not {name!r}"
+        )
 
 
 __all__ = [
     "Registry",
     "audit_safe_config",
+    "check_derived_name",
     "check_name",
+    "checked_title",
     "converges",
     "converges_row",
     "credential_refs",

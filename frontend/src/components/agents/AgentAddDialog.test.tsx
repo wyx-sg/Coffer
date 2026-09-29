@@ -35,12 +35,16 @@ function renderDialog(ui: ReactNode) {
 
 const CODEX = {
   type: "codex",
+  name: "codex",
   display_name: "OpenAI Codex",
   config_dir: "/home/u/.codex",
+  standard_config_dir: "/home/u/.codex",
   default_skill_dir: "/home/u/.codex/skills",
-  suggested_name: "codex",
   state: "installed_active",
   version: "codex-cli 0.40.0",
+  uid: null,
+  addable: true,
+  other_config_dir: null,
 };
 
 function stub(opts: {
@@ -130,14 +134,10 @@ describe("AgentAddDialog — detected section", () => {
     fireEvent.click(screen.getByRole("button", { name: /add selected/i }));
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(mutateAsync).toHaveBeenCalledWith({
-      type: "codex",
-      name: "codex",
-      config_dir: "/home/u/.codex",
-    });
+    expect(mutateAsync).toHaveBeenCalledWith({ type: "codex", config_dir: "/home/u/.codex" });
     // Result view lists what was added + onCreated refreshes the agents list.
     await waitFor(() => expect(screen.getByText(/added:/i)).toBeInTheDocument());
-    expect(screen.getByText("codex")).toBeInTheDocument();
+    expect(screen.getByText("OpenAI Codex")).toBeInTheDocument();
     expect(onCreated).toHaveBeenCalled();
   });
 
@@ -158,56 +158,56 @@ describe("AgentAddDialog — detected section", () => {
 });
 
 describe("AgentAddDialog — two-signal candidates", () => {
+  // Installed but never run: addable — registering it creates the directory.
   const NEVER_RUN = {
     ...CODEX,
     type: "claude_code",
+    name: "claude-code",
     display_name: "Claude Code",
     config_dir: "/home/u/.claude",
-    suggested_name: "claude-code",
+    standard_config_dir: "/home/u/.claude",
+    default_skill_dir: "/home/u/.claude/skills",
     state: "installed_never_run",
     version: "2.0.1 (Claude Code)",
   };
   const CONFIG_ONLY = {
     ...CODEX,
     config_dir: "/home/u/.codex-old",
-    suggested_name: "codex-codex-old",
     state: "config_only",
     version: null,
+    addable: false,
   };
   // A directory CLAUDE_CONFIG_DIR names in the daemon's environment.
   const ENV_NAMED = {
-    type: "claude_code",
-    display_name: "Claude Code",
+    ...NEVER_RUN,
     config_dir: "/home/u/claude-work",
     default_skill_dir: "/home/u/claude-work/skills",
-    suggested_name: "claude-code-claude-work",
     state: "installed_active",
-    version: "2.0.1 (Claude Code)",
+    other_config_dir: "/home/u/.claude",
   };
 
-  test("only an installed_active candidate can be ticked; the others say why", () => {
-    stub({ data: [CODEX, NEVER_RUN, CONFIG_ONLY] });
+  test("an installed-but-never-run candidate can be ticked; a config-only one says why", () => {
+    stub({ data: [NEVER_RUN, CONFIG_ONLY] });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
-    // One checkbox: the installed + run Codex.
+    // One checkbox: the installed (never run) Claude Code.
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
     expect(screen.getByText(/installed but never run/i)).toBeInTheDocument();
     expect(screen.getByText("Not installed")).toBeInTheDocument();
     // Versions ride beside the names.
-    expect(screen.getByText("codex-cli 0.40.0")).toBeInTheDocument();
     expect(screen.getByText("2.0.1 (Claude Code)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add selected \(1\)/i })).toBeEnabled();
   });
 
   test("with nothing addable there is no Add selected", () => {
-    stub({ data: [NEVER_RUN, CONFIG_ONLY] });
+    stub({ data: [CONFIG_ONLY] });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add selected/i })).not.toBeInTheDocument();
   });
 
-  test("an environment-named directory registers with its own config_dir and name", async () => {
+  test("an environment-named directory registers with its own config_dir", async () => {
     const mutateAsync = vi.fn().mockResolvedValue({});
-    stub({ data: [CODEX, ENV_NAMED, CONFIG_ONLY], mutateAsync });
+    stub({ data: [CODEX, ENV_NAMED], mutateAsync });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: /add selected \(2\)/i }));
@@ -215,13 +215,8 @@ describe("AgentAddDialog — two-signal candidates", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
     expect(mutateAsync).toHaveBeenCalledWith({
       type: "claude_code",
-      name: "claude-code-claude-work",
       config_dir: "/home/u/claude-work",
     });
-    // The config-only directory is never registered.
-    expect(mutateAsync).not.toHaveBeenCalledWith(
-      expect.objectContaining({ config_dir: "/home/u/.codex-old" }),
-    );
   });
 });
 
@@ -235,44 +230,29 @@ describe("AgentAddDialog — manual section", () => {
     expect(screen.getByRole("button", { name: /^register$/i })).toBeInTheDocument();
   });
 
-  test("submitting the manual form registers with the typed name", async () => {
+  test("submitting the manual form registers the chosen type with no name field", async () => {
     const mutateAsync = vi.fn().mockResolvedValue({});
     const onCreated = vi.fn();
     stub({ data: [], mutateAsync });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={onCreated} />);
 
     fireEvent.click(screen.getByRole("button", { name: /add manually/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "my-codex" } });
+    // An agent is named by its type, so the form asks for no name.
+    expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^register$/i }));
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    const body = mutateAsync.mock.calls[0][0];
-    expect(body.name).toBe("my-codex");
     // Default type the form pre-selects is "claude_code".
-    expect(body.type).toBe("claude_code");
+    expect(mutateAsync.mock.calls[0][0]).toEqual({ type: "claude_code", config_dir: null });
     expect(onCreated).toHaveBeenCalled();
-  });
-
-  test("a blank manual name is submitted as null", async () => {
-    const mutateAsync = vi.fn().mockResolvedValue({});
-    stub({ data: [], mutateAsync });
-    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /add manually/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^register$/i }));
-
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    const body = mutateAsync.mock.calls[0][0];
-    expect(body.name).toBeNull();
-    expect(body.type).toBe("claude_code");
   });
 });
 
 describe("AgentAddDialog — register errors", () => {
-  test("a config-dir-registered error renders inline when adding a candidate", async () => {
+  test("a type-registered error renders inline when adding a candidate", async () => {
     const mutateAsync = vi
       .fn()
-      .mockRejectedValue(new ApiError("AGENT_CONFIG_DIR_REGISTERED", "already registered"));
+      .mockRejectedValue(new ApiError("AGENT_TYPE_REGISTERED", "already registered"));
     stub({ data: [CODEX], mutateAsync });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
 
@@ -284,7 +264,7 @@ describe("AgentAddDialog — register errors", () => {
   test("a register error from the manual form renders inline", async () => {
     const mutateAsync = vi
       .fn()
-      .mockRejectedValue(new ApiError("AGENT_CONFIG_DIR_REGISTERED", "already registered"));
+      .mockRejectedValue(new ApiError("AGENT_TYPE_REGISTERED", "already registered"));
     stub({ data: [], mutateAsync });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
 

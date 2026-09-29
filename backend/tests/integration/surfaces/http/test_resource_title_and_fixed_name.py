@@ -1,6 +1,6 @@
-"""A title on every resource, and a name that some kinds fix.
+"""A title on the kinds that carry one, and a name that some kinds fix.
 
-spec resource-framework "Carry an optional editable title on every resource" and
+spec resource-framework "Carry an optional editable title on the kinds that have one" and
 "Treat a resource's name as a mutable label"; spec mcp-gateway "Manage MCP
 servers as resources" for the 24-character cap on a new server name.
 
@@ -49,7 +49,7 @@ _SERVER_CONFIG: dict[str, Any] = {
 }
 
 
-async def _app(tmp_path):
+async def _app(tmp_path, extra_kinds: dict[str, Kind] | None = None):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -59,6 +59,7 @@ async def _app(tmp_path):
             name="plain", display_name="Plain", config_schema=_PlainConfig, supports_scope=True
         ),
         "mcp_server": make_mcp_kind({}),
+        **(extra_kinds or {}),
     }
     svc = ResourceService(
         kinds=kinds,
@@ -213,7 +214,7 @@ async def test_an_mcp_server_name_change_is_refused_before_anything_is_written(t
         # and the other edit is not written either.
         for body in (
             {"name": "search-v2"},
-            {"name": "search-v2", "description": "changed", "title": "Search"},
+            {"name": "search-v2", "description": "changed"},
         ):
             r = await c.patch(f"/api/v1/resources/{uid}", json=body)
             assert r.status_code == 409, r.text
@@ -231,11 +232,75 @@ async def test_an_mcp_server_name_change_is_refused_before_anything_is_written(t
         # Submitting the name it already has is not a change.
         same = await c.patch(f"/api/v1/resources/{uid}", json={"name": "search"})
         assert same.status_code == 200, same.text
+    await engine.dispose()
 
-        # A title change on the same resource still succeeds.
-        titled = await c.patch(f"/api/v1/resources/{uid}", json={"title": "Team search"})
-        assert titled.status_code == 200, titled.text
-        assert (titled.json()["name"], titled.json()["title"]) == ("search", "Team search")
+
+# --- a kind without a title ----------------------------------------------------
+
+
+async def _noop_cleanup(_skill: Any) -> None:
+    return None
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="resource-framework", scenario="a kind without a title refuses one")
+async def test_a_kind_without_a_title_refuses_one(tmp_path):
+    """``mcp_server``, ``skill`` and ``agent`` — each built by its own production
+    kind factory — carry no title: one submitted through the kind-agnostic
+    update, or with an MCP server's registration, is a 422 and nothing is
+    stored. (The CLI half — no ``--title`` on ``coffer mcp add``/``edit`` and no
+    ``coffer skill edit`` — is in ``cli/test_mcp_cmd.py`` and
+    ``cli/test_skill_cmd.py``.)"""
+    from coffer.application.agent.kind import make_agent_kind
+    from coffer.application.skill.kind import make_skill_kind
+
+    c, svc, engine = await _app(
+        tmp_path,
+        extra_kinds={"skill": make_skill_kind(_noop_cleanup), "agent": make_agent_kind()},
+    )
+    server = await svc.register("mcp_server", "search", _SERVER_CONFIG, "test")
+    skill = await svc.register(
+        "skill",
+        "release",
+        {
+            "source": {"type": "builtin"},
+            "skill_md_description": "A skill.",
+            "version_hash": "h1",
+        },
+        "test",
+        allow_lifecycle_kind=True,
+    )
+    agent = await svc.register(
+        "agent", "claude-code", {"type": "claude_code"}, "test", allow_lifecycle_kind=True
+    )
+    trail_before = _audit(tmp_path)
+    async with c:
+        for resource in (server, skill, agent):
+            r = await c.patch(f"/api/v1/resources/{resource.uid}", json={"title": "Team"})
+            assert r.status_code == 422, (resource.kind, r.text)
+            assert r.json()["error"]["code"] == "CONFIG_INVALID"
+            shown = (await c.get(f"/api/v1/resources/{resource.uid}")).json()
+            assert (shown["name"], shown["title"]) == (resource.name, None)
+
+        refused = await c.post(
+            "/api/v1/resources",
+            json={
+                "kind": "mcp_server",
+                "name": "titled",
+                "config": _SERVER_CONFIG,
+                "title": "Titled",
+            },
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["error"]["code"] == "CONFIG_INVALID"
+        names = [
+            row["name"]
+            for row in (await c.get("/api/v1/resources", params={"kind": "mcp_server"})).json()[
+                "resources"
+            ]
+        ]
+        assert names == ["search"]
+    assert _audit(tmp_path) == trail_before, "a refused title stores and audits nothing"
     await engine.dispose()
 
 

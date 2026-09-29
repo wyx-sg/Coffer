@@ -39,7 +39,7 @@ class CollectionOut(BaseModel):
     document_count: int = 0
     pending_count: int = 0
     #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
     title: str | None = None
 

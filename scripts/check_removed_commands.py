@@ -105,6 +105,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer sync rollback", "coffer sync restore"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
+    # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
+    # has a fixed name and no title, and its description is SKILL.md's.
+    ("coffer skill edit", "edit SKILL.md under coffer path skill <name>"),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )

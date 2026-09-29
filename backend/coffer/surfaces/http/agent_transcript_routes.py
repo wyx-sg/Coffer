@@ -35,6 +35,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from coffer.domain.agent.transcripts import SortOrder, TranscriptSort, UnsupportedAgentTypeError
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.workspace_dependencies import get_agent_transcript_service
@@ -42,7 +43,7 @@ from coffer.surfaces.http.workspace_dependencies import get_agent_transcript_ser
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 

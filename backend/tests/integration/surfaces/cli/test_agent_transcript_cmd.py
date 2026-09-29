@@ -48,7 +48,7 @@ from ._real_app import boot, extract_json
 
 _runner = CliRunner()
 
-#: The uid the fake registry hands back for the agent named ``cx``. Opaque on
+#: The uid the fake registry hands back for the agent ``codex``. Opaque on
 #: purpose — nothing in the CLI may derive it from the name.
 CX_UID = "6f1c0b8a4d5e4a1cb2f39e77c0a15d34"
 
@@ -124,7 +124,7 @@ class _FakeClient:
 def _install(monkeypatch, *, get_map=None, agents=None) -> _FakeClient:
     """Install the fake client. ``agents`` defaults to the one agent the
     happy-path tests use; pass ``{}`` for a registry that holds nobody."""
-    client = _FakeClient(get_map or {}, {"cx": CX_UID} if agents is None else agents)
+    client = _FakeClient(get_map or {}, {"codex": CX_UID} if agents is None else agents)
     info = DaemonInfo(
         version=1,
         pid=1,
@@ -153,7 +153,7 @@ def test_transcript_list_json(monkeypatch):
     """`transcripts <name> --json` prints the raw response verbatim."""
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([SESSION], total=3)})
 
-    result = _runner.invoke(cli_app, ["agent", "transcript", "cx", "--json"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "codex", "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {
         "sessions": [SESSION],
@@ -168,7 +168,7 @@ def test_transcript_list_table(monkeypatch):
     monkeypatch.setenv("COLUMNS", "200")  # don't let rich wrap the assertions apart
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([SESSION], total=3)})
 
-    result = _runner.invoke(cli_app, ["agent", "transcript", "cx"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "codex"])
     assert result.exit_code == 0, result.output
     assert "fix the alpha login bug" in result.output
     assert "/proj/alpha" in result.output
@@ -183,7 +183,7 @@ def test_transcript_list_untitled_row_falls_back_to_session_id(monkeypatch):
     untitled = {**SESSION, "title": None, "started_at": None, "last_activity_at": None}
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([untitled])})
 
-    result = _runner.invoke(cli_app, ["agent", "transcript", "cx"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "codex"])
     assert result.exit_code == 0, result.output
     assert "a1" in result.output
 
@@ -203,7 +203,7 @@ def test_transcript_list_forwards_query_sort_and_paging(monkeypatch):
         [
             "agent",
             "transcript",
-            "cx",
+            "codex",
             "-q",
             "alpha",
             "--sort",
@@ -218,7 +218,7 @@ def test_transcript_list_forwards_query_sort_and_paging(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert client.calls == [
-        ("GET", "/resources", {"params": {"kind": "agent", "name": "cx"}}),
+        ("GET", "/resources", {"params": {"kind": "agent", "name": "codex"}}),
         (
             "GET",
             f"/agents/{CX_UID}/transcripts",
@@ -255,7 +255,7 @@ def test_transcript_list_unknown_agent_exits_4(monkeypatch):
 
 def test_transcript_listing_options_refused_with_an_id(monkeypatch):
     _install(monkeypatch)
-    result = _runner.invoke(cli_app, ["agent", "transcript", "cx", "a1", "-q", "alpha"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "codex", "a1", "-q", "alpha"])
     assert result.exit_code == 2, result.output
 
 
@@ -287,25 +287,25 @@ def test_the_command_line_reads_one_transcript_session(
         ts_end="2026-05-04T00:01:00Z",
         user_text="deploy with sk-abcdefghijklmnopqrstuvwx please",
     )
-    added = _runner.invoke(cli_app, ["agent", "add", "codex", "--name", "cx"])
+    added = _runner.invoke(cli_app, ["agent", "add", "codex"])
     assert added.exit_code == 0, added.output
 
-    listed = _runner.invoke(cli_app, ["agent", "transcript", "cx", "--json"])
+    listed = _runner.invoke(cli_app, ["agent", "transcript", "codex", "--json"])
     assert listed.exit_code == 0, listed.output
     assert [s["session_id"] for s in extract_json(listed.output)["sessions"]] == ["s1"]
 
-    one = _runner.invoke(cli_app, ["agent", "transcript", "cx", "s1", "--limit", "1", "--json"])
+    one = _runner.invoke(cli_app, ["agent", "transcript", "codex", "s1", "--limit", "1", "--json"])
     assert one.exit_code == 0, one.output
     body = extract_json(one.output)
     assert len(body["messages"]) == 1 and body["message_count"] == 2
     assert "sk-abcdefghijklmnopqrstuvwx" not in one.output
     assert "[redacted]" in body["messages"][0]["text"]
 
-    text = _runner.invoke(cli_app, ["agent", "transcript", "cx", "s1"], env={"COLUMNS": "200"})
+    text = _runner.invoke(cli_app, ["agent", "transcript", "codex", "s1"], env={"COLUMNS": "200"})
     assert text.exit_code == 0, text.output
     assert "of 2" in text.output
     assert "sk-abcdefghijklmnopqrstuvwx" not in text.output
 
-    missing = _runner.invoke(cli_app, ["agent", "transcript", "cx", "no-such-session"])
+    missing = _runner.invoke(cli_app, ["agent", "transcript", "codex", "no-such-session"])
     assert missing.exit_code != 0
     assert "no such transcript for this agent" in (missing.output + (missing.stderr or ""))

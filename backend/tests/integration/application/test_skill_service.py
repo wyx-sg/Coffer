@@ -88,7 +88,6 @@ async def _register_agent(
     config_dir.mkdir()
     agent = await agent_svc.register(
         agent_type=agent_type,
-        name=name,
         config_dir=str(config_dir),
         actor="cli",
     )
@@ -177,7 +176,7 @@ async def test_disable_removes_link_keeps_master(tmp_path):
     assert not target.exists()
     assert store.paths_for("my-skill").folder.is_dir()
     [unbound] = await audit.query(event_type=AuditEventType.SKILL_UNBOUND.value)
-    assert (unbound.resource_name, unbound.details["agent"]) == ("my-skill", "cur")
+    assert (unbound.resource_name, unbound.details["agent"]) == ("my-skill", "claude-code")
     await graph.dispose()
 
 
@@ -333,7 +332,9 @@ async def test_agent_delete_via_resource_service_triggers_skill_cleanup(tmp_path
 
     # Remove via AgentService — which calls ResourceService.delete, which
     # awaits the on_delete hook, which runs cleanup_bindings_for_agent.
-    await agent_svc.remove(uid=(await skill_svc._rs.get_by_name("agent", "cur1")).uid, actor="cli")
+    await agent_svc.remove(
+        uid=(await skill_svc._rs.get_by_name("agent", "claude-code")).uid, actor="cli"
+    )
 
     # Symlink for cur1 must be gone; the other agent's link is untouched.
     assert not t1.exists()
@@ -432,7 +433,7 @@ async def test_config_dir_change_relinks_skills(tmp_path):
     new_config_dir = tmp_path / "moved-cfg"
     new_config_dir.mkdir()
     await agent_svc.update_config_dir(
-        uid=await _uid(skill_svc, "agent", "cur"),
+        uid=await _uid(skill_svc, "agent", "claude-code"),
         new_config_dir=str(new_config_dir),
         actor="cli",
     )
@@ -470,7 +471,7 @@ async def test_config_dir_change_repoints_binding_even_if_new_target_exists(tmp_
     )
 
     await agent_svc.update_config_dir(
-        uid=await _uid(skill_svc, "agent", "cur"),
+        uid=await _uid(skill_svc, "agent", "claude-code"),
         new_config_dir=str(new_config_dir),
         actor="cli",
     )
@@ -506,7 +507,7 @@ async def test_config_dir_change_does_not_clobber_foreign_content_at_new_target(
     (foreign / "important.txt").write_text("precious user data")
 
     await agent_svc.update_config_dir(
-        uid=await _uid(skill_svc, "agent", "cur"),
+        uid=await _uid(skill_svc, "agent", "claude-code"),
         new_config_dir=str(new_config_dir),
         actor="cli",
     )
@@ -570,7 +571,7 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     # ...and so is its identity: a re-import is an update of the same resource.
     assert r2.uid == r1.uid
     bindings = await skill_svc.bindings_for(r2.uid)
-    agent_resource = await skill_svc._rs.get_by_name("agent", "cur")
+    agent_resource = await skill_svc._rs.get_by_name("agent", "claude-code")
     assert any(b.agent_resource_id == agent_resource.id for b in bindings)
 
     # (d) delivered symlink still resolves to the master (content updated in place)
@@ -892,24 +893,24 @@ async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
     spec="skill-manager", scenario="a skill's title is edited without touching disk"
 )
 async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
-    skill_svc, _audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
+    """A skill carries no title: one submitted is refused and disk is untouched."""
+    skill_svc, audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
     disk_before = _disk_state(store, skill_dir, "before")
     hash_before = skill.config["version_hash"]
+    trail_before = await audit.query(resource=skill)
 
     async with _resource_client(skill_svc) as c:
         r = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "Release checklist"})
-        assert r.status_code == 200, r.text
-        assert r.json()["name"] == "before"
-        assert r.json()["title"] == "Release checklist"
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "CONFIG_INVALID"
         listed = (await c.get("/api/v1/resources", params={"kind": "skill"})).json()
-    assert [(row["name"], row["title"]) for row in listed["resources"]] == [
-        ("before", "Release checklist")
-    ]
+    assert [(row["name"], row["title"]) for row in listed["resources"]] == [("before", None)]
 
-    # The skill's own read carries both, and the title went nowhere near disk.
+    # Nothing was stored or audited, and the request went nowhere near disk.
     row = await skill_svc.get_skill(skill.uid)
-    assert (row.name, row.title) == ("before", "Release checklist")
+    assert (row.name, row.title) == ("before", None)
     assert row.config["version_hash"] == hash_before
+    assert await audit.query(resource=skill) == trail_before
     assert _disk_state(store, skill_dir, "before") == disk_before
     assert "Release checklist" not in store.paths_for("before").skill_md.read_text(encoding="utf-8")
     assert (await _verify(graph)).entries == []
@@ -921,7 +922,7 @@ async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
     spec="skill-manager",
     scenario="a refused name change leaves the master folder where it is",
 )
-async def test_a_refused_name_change_then_a_title_leaves_the_master_folder(tmp_path):
+async def test_a_refused_name_change_then_a_refused_title_leave_the_master_folder(tmp_path):
     skill_svc, _audit, store, graph, agent, skill_dir, skill = await _deliver_before(tmp_path)
     skill_md_before = store.paths_for("before").skill_md.read_bytes()
     binding_before = (await skill_svc.bindings_for(skill.uid))[0]
@@ -931,7 +932,8 @@ async def test_a_refused_name_change_then_a_title_leaves_the_master_folder(tmp_p
         titled = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "After"})
     assert refused.status_code == 409
     assert refused.json()["error"]["code"] == "NAME_IMMUTABLE"
-    assert titled.status_code == 200, titled.text
+    assert titled.status_code == 422, titled.text
+    assert (await skill_svc.get_skill(skill.uid)).title is None
 
     master = store.paths_for("before").folder
     link = skill_dir / "before"

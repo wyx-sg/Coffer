@@ -112,7 +112,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # Exactly spec skill-manager "Cover skill management on REST, the CLI and
     # the web": `add <folder>` is the import, and the master folder is named
     # by `path skill <name>` rather than listed, printed or written here.
-    "skill": {*_LIFECYCLE, "add", "scope", "verify"},
+    # A skill has nothing editable: its name is fixed and it carries no title.
+    "skill": {*_LIFECYCLE - {"edit"}, "add", "scope", "verify"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
     # `path knowledge`. A collection
@@ -167,19 +168,19 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # unmanaged skill (spec skill-manager "Preview an unmanaged skill read-only").
     "scan": {"--agent", "--ref", "--source", "--json"},
     "attention": {"--json"},
-    # A name, a title and a description are edited on every kind (design D1).
+    # A name and a title are edited on the kinds that carry them (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
-    # `model` / `fast_model` / `wire_api` the projector reads.
-    "agent edit": {"--model", "--fast-model", "--clear-fast-model", "--wire-api", "--title"},
+    # `model` / `fast_model` / `wire_api` the projector reads. Its config
+    # directory is the one other thing an agent's edit changes.
+    "agent edit": {"--config-dir", "--model", "--fast-model", "--clear-fast-model", "--wire-api"},
     # A connection's wire is a FIELD of the connection, corrected on the verb
     # that edits it: PATCH /api/v1/providers/{uid} carries `protocol`.
     "provider edit": {"--protocol", "--base-url", "--secret", "--title"},
     # An MCP server's config as the web UI's edit dialog changes it, spelled
     # the way `mcp add` spells it (spec mcp-gateway).
     "mcp edit": {
-        "--title",
         "--stdio",
         "--http",
         "--env",
@@ -191,6 +192,9 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # The group-gating switches of a channel (spec channels).
     "channel edit": {"--require-mention", "--ignore-other-mentions", "--title"},
 }
+
+#: The edit verbs of the kinds that carry no title (agent, mcp_server).
+_UNTITLED_EDITS = ("agent edit", "mcp edit")
 
 #: Every `coffer config` key, paired with where the setting is stored: the
 #: route the key writes through, or the pre-bind settings file for the one key
@@ -371,6 +375,11 @@ def test_cli_covers_every_visual_operation():
         assert expected_opts <= _long_options(path), (
             f"'{path}' is missing options {sorted(expected_opts - _long_options(path))}"
         )
+    # The kinds without a title offer no way to set one, and an agent's name
+    # is its type's.
+    for path in _UNTITLED_EDITS:
+        assert "--title" not in _long_options(path), f"'{path}' offers --title"
+    assert not {"--name", "--description"} & _long_options("agent edit")
 
     # Machine-readable output for scripting: every list and show verb, every
     # kind group's alike.

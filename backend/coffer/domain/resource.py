@@ -53,7 +53,8 @@ def validate_resource_name(name: str) -> None:
 
 
 #: The longest title a resource may carry (spec resource-framework "Carry an
-#: optional editable title on every resource"). Matches ``resources.title``.
+#: optional editable title on the kinds that have one"). Matches
+#: ``resources.title``.
 TITLE_MAX_LEN = 80
 
 
@@ -105,10 +106,9 @@ class Resource:
     # Kind.supports_scope is True may set it (validate_scope).
     scope: Scope | None = None
     #: Optional display text (at most ``TITLE_MAX_LEN`` characters) that
-    #: surfaces show in place of ``name`` when it is set. Unlike the name it is
-    #: never quoted by an agent, so every kind may change it — including one
-    #: whose name is fixed (``Kind.name_fixed``). It travels with the synced
-    #: document; reach does not.
+    #: surfaces show in place of ``name`` when it is set — only on a kind that
+    #: carries one (``Kind.titled``). It travels with the synced document;
+    #: reach does not.
     title: str | None = None
     #: Monotonic revision, bumped by every write to the row; carried by the
     #: reconciler's ``Changed`` hint (ADR one-level-triggered-reconciler).
@@ -173,43 +173,37 @@ class Kind:
     # instead of a table of exceptions — the shape the retired machine-local
     # kind list had.
     converges: bool = True
-    # Optional per-ROW refinement of ``converges`` above: given a row's config,
-    # answer whether THAT row travels. Consulted only when ``converges`` is
-    # True — the flag can withhold a whole kind, this can withhold one row of a
-    # kind that otherwise travels, and neither can put back what the other
-    # held. Absent (the default) means the flag alone decides.
-    #
-    # It exists because a kind can carry both authored rows and derived ones.
-    # `skill` does: almost every skill is a bundle a person imported, and those
-    # are exactly what a second machine is supposed to receive — but Coffer's
-    # own `coffer-guide` is written by the running build from the live
-    # knowledge catalogue and this machine's own switches, re-rendered at every
-    # boot. Publishing it is publishing derived output: two machines with the
-    # same files but a different set of collections enabled render different
-    # bytes, overwrite each other every round, and never stop. The reasoning is
-    # ``memory``'s (spec memory "Keep the memory tree derived and local")
-    # applied to one row instead of a kind,
-    # so it is declared the same way — on the kind, beside the flag it refines
-    # — rather than as a name the sync layer would have to recognise.
-    #
-    # A function of the CONFIG alone, like ``default_scope`` and
-    # ``audit_redactor``, so every caller can ask it with what it already has:
-    # the exporter holds a ``Resource``, while the sync applier holds only a
-    # document that has just arrived and has no row behind it yet.
+    # Optional per-ROW refinement of ``converges``: given a row's config,
+    # answer whether THAT row travels; consulted only when ``converges`` is
+    # True. `skill` uses it to keep Coffer's own `coffer-guide` — re-rendered
+    # from this machine's switches at every boot, so derived output — off the
+    # remote (spec memory "Keep the memory tree derived and local", applied to
+    # one row). A function of the config alone, because the sync applier holds
+    # only a document that has just arrived.
     converges_row: Callable[[dict[str, Any]], bool] | None = None
     # Whether a registered row's NAME may change (ADR
     # names-visible-to-agents-are-fixed). True for a kind whose name is quoted
-    # outside Coffer, where a rename would break what quotes it: `mcp_server`,
-    # whose name prefixes every tool name an agent sees and that the agents'
-    # permission rules cite, and `skill`, whose name is the folder an agent
-    # loads it from. ``ResourceService.rename`` refuses a changed name on such a
-    # kind with ``NameImmutable`` before any hook or write, so there is no
-    # rename hook for it to supply. Its ``title`` stays editable.
+    # outside Coffer — `mcp_server` (it prefixes every tool name an agent sees)
+    # and `skill` (the folder an agent loads it from) — and for `agent`, whose
+    # name is its type. ``ResourceService.rename`` refuses a changed name with
+    # ``NameImmutable`` before any hook or write.
     name_fixed: bool = False
     # What deleting and registering the resource again would reset, for the
     # refusal message of a ``name_fixed`` kind: the user is told the only way
     # to a new name and what it costs. Unused when ``name_fixed`` is False.
     name_fixed_resets: str = ""
+    # Optional: the name a row of this kind MUST carry, derived from its
+    # config. `agent` is one per type, named by it (``claude_code`` →
+    # ``claude-code``, spec agent-registry "Keep one agent per type, named by it"), so
+    # registration refuses any other name rather than storing a label a person
+    # chose. ``None`` leaves the name to the caller.
+    name_from_config: Callable[[dict[str, Any]], str] | None = None
+    # Whether rows of this kind carry the optional display ``title`` (spec
+    # resource-framework "Carry an optional editable title on the kinds that
+    # have one"). False for `agent`, `mcp_server` and `skill`: each
+    # has a fixed name and nothing else to be called — a non-empty title is
+    # refused on register and on edit.
+    titled: bool = True
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 

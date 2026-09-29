@@ -25,14 +25,13 @@ MCP_OFF = PartStatus(key="mcp", installed=False, detail=None)
 HOOK_OFF = PartStatus(key="memory_hook", installed=False, detail=None)
 
 
-def _agent(uid: str, *, enabled: bool = True, title: str | None = None):  # type: ignore[no-untyped-def]
+def _agent(uid: str, *, enabled: bool = True):  # type: ignore[no-untyped-def]
     return resource(
         uid,
         "agent",
         {"type": "claude_code", "config_dir": f"/agents/{uid}"},
         name=f"claude-{uid}",
         enabled=enabled,
-        title=title,
     )
 
 
@@ -69,10 +68,11 @@ def _source(rows, detect: FakeDetect, conn: FakeConnection) -> AgentAttentionSou
 
 async def test_partial_connection_is_a_warning_naming_the_missing_part() -> None:
     conn = FakeConnection({"a": _status(ConnectionState.PARTIAL, MCP_ON, HOOK_OFF)})
-    items = await _source([_agent("a", title="Main")], FakeDetect({}), conn).items()
+    items = await _source([_agent("a")], FakeDetect({}), conn).items()
     assert len(items) == 1
     item = items[0]
-    assert (item.kind, item.uid, item.title) == ("agent", "a", "Main")
+    # Labelled by the product, not the stored name or a title.
+    assert (item.kind, item.uid, item.title) == ("agent", "a", "Claude Code")
     assert item.reason_code == "agent_partial"
     assert item.severity is Severity.WARNING
     assert "memory_hook" in item.reason
@@ -87,7 +87,7 @@ async def test_disconnected_is_info_with_the_connect_action() -> None:
     [item] = await _source([_agent("a")], FakeDetect({}), conn).items()
     assert item.reason_code == "agent_not_connected"
     assert item.severity is Severity.INFO
-    assert item.title == "claude-a"
+    assert item.title == "Claude Code"
     assert item.action.path == "/api/v1/agents/a/coffer-connection"
     assert item.action.method == "POST"
 

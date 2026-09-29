@@ -24,7 +24,7 @@ The framework takes the first half and refuses the second:
 | Pre-write validators may refuse; post-write reactions may not. | A validator decides whether a change happens. A reaction catches up with a change that is already persisted and audited, so letting it raise would pretend to undo something it cannot. |
 | Creation is the one operation not generalised. | A skill needs a master folder, an agent needs a detected config directory. Such kinds set `generic_create_allowed=False` and register through their own service. Everything after creation is generic. |
 | Identity is an immutable `uid`, the name a label. | A synced vault needs an identity every machine agrees on and a rename cannot break. |
-| A name agents quote is fixed; every resource has a `title` for display. | An MCP server's name prefixes every tool name an agent sees, and a skill's name is the folder an agent loads it from. Renaming either would break permission rules, skills and notes Coffer cannot see, so those kinds set `name_fixed` and a person relabels them with `title` instead. |
+| A name agents quote is fixed; only the kinds whose name is free carry a `title`. | An MCP server's name prefixes every tool name an agent sees, and a skill's name is the folder an agent loads it from. Renaming either would break permission rules, skills and notes Coffer cannot see, so those kinds set `name_fixed`. An agent's name is its type, one per machine. None of the three carries a display title: a second label beside a fixed name only hides the name people and agents actually use. Providers, channels, knowledge collections and memory partitions keep an optional `title`. |
 | The framework stores reach; kinds enforce it. | Enforcement belongs where the asking agent is known. A central gate would have to sit on every kind's read path. |
 | The core is tested against a fake kind. | A core that needed a real kind to be testable would already have leaked. An import contract keeps it that way. |
 
@@ -40,7 +40,7 @@ The framework takes the first half and refuses the second:
 | `uid` | The identity. `uuid4().hex`, minted once in `ResourceService.register`, immutable, identical on every machine that holds the resource. |
 | `kind` | The kind name, such as `mcp_server`. |
 | `name` | A label, unique within its kind. Mutable, except on a kind that declares it fixed (`name_fixed`). |
-| `title` | Optional display label, at most 80 characters of free text. Surfaces show it in place of the name when it is set. Editable on every kind, and carried in the synced resource document. |
+| `title` | Optional display label, at most 80 characters of free text, on a kind that carries one (`titled`). Surfaces show it in place of the name when it is set. Carried in the synced resource document. |
 | `description` | Optional free text. |
 | `config` | The kind's configuration, validated against the kind's Pydantic schema. Stored as JSON text in `config_json`. |
 | `enabled` | The on/off switch. Half of the resource's reach. Always true for a kind that is not `toggleable`. |
@@ -65,8 +65,10 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | `toggleable` | `True` | Whether the kind has an enabled switch at all. `knowledge` and `memory` set it to `False`: every one of their resources is enabled and served, and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
 | `converges` | `True` | Whether the kind's rows travel to the sync remote. |
 | `converges_row` | `None` | Per-row refinement of `converges`, a function of the config alone. |
-| `name_fixed` | `False` | Whether the name is fixed once registered because it is quoted outside Coffer. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`; `title` stays editable. |
+| `name_fixed` | `False` | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
 | `name_fixed_resets` | `""` | What deleting and registering again resets, named in the `NAME_IMMUTABLE` message. |
+| `name_from_config` | `None` | The one name a row may carry, derived from its config. `agent` sets it: an agent is named by its type (`claude_code` → `claude-code`), and registration refuses any other name. |
+| `titled` | `True` | Whether rows of the kind carry the optional `title`. `False` for `agent`, `mcp_server` and `skill`; a non-empty title on those is refused with `CONFIG_INVALID` on register and on edit. |
 
 **Pre-write validators — run before persistence; raising rejects the write**
 
@@ -102,9 +104,9 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Kind | Hooks and flags it supplies |
 | --- | --- |
-| `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
-| `agent` | `generic_create_allowed=False`, `on_delete`, `on_enabled_changed` |
-| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `on_delete`, `on_scope_changed`, `on_enabled_changed` |
+| `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `titled=False`, `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
+| `agent` | `generic_create_allowed=False`, `name_from_config` and `name_fixed` (one agent per type, named by it), `titled=False`, `on_delete`, `on_enabled_changed` |
+| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `titled=False`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
 | `knowledge` | `generic_create_allowed=False`, `toggleable=False`, `on_rename` (moves the collection directory), `on_delete` |
 | `memory` | `generic_create_allowed=False`, `toggleable=False`, `converges=False`, `on_rename`, `on_delete` |
 | `channel` | `supports_scope` (inverted, see below), `credential_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
@@ -116,10 +118,10 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Operation | Steps |
 | --- | --- |
-| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus `validate_new_name` when minting the uid) → title rule (at most 80 characters) → schema validation → `validate_config` → probe cited credentials → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
+| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus `validate_new_name` when minting the uid, and the derived name when the kind sets `name_from_config`) → title rule (at most 80 characters, and none on a kind that is not `titled`) → schema validation → `validate_config` → probe cited credentials → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
 | `update_config` | Same generic-create gate → schema → credential probe → `on_update_config` → write → audit `resource_updated` with redacted before and after. |
 | `rename` | No-op if unchanged → refuse a kind with `name_fixed` (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → `on_rename` → write → audit `resource_renamed` with `from` and `to`. |
-| `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation, so every kind's title is editable. |
+| `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters, or any title on a kind that is not `titled`, is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation. |
 | `set_enabled` | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
 | `update_scope` | `validate_scope` against `supports_scope` → `validate_scope_for` → write → audit `resource_scope_updated` → `on_scope_changed`. |
 | `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
@@ -156,7 +158,7 @@ A kind's own route and the generic route call the same service method, so a refu
 | `GET /api/v1/resources?kind=&name=` | List, optionally by kind and exact name. The name filter is how the CLI turns a label into a uid. |
 | `POST /api/v1/resources` | Register a resource of a kind that allows generic creation. |
 | `GET /api/v1/resources/{uid}` | Show one resource. The answer carries the kind's `toggleable`, so a surface can leave the switch out rather than offer one that is refused. |
-| `PATCH /api/v1/resources/{uid}` | Edit `description`, `config`, `title` and `name`. Only fields present in the body change; a rename alone runs no config write, and the rename is applied last so a refused config leaves the name alone. A changed name on a `name_fixed` kind is refused first (`409 NAME_IMMUTABLE`), so nothing in that request is written. |
+| `PATCH /api/v1/resources/{uid}` | Edit `description`, `config`, `title` (on a `titled` kind) and `name`. Only fields present in the body change; a rename alone runs no config write, and the rename is applied last so a refused config leaves the name alone. A changed name on a `name_fixed` kind is refused first (`409 NAME_IMMUTABLE`), so nothing in that request is written. |
 | `DELETE /api/v1/resources/{uid}` | Delete. |
 | `POST /api/v1/resources/{uid}/enable`, `/disable` | Flip `enabled`. Refused with `409 RESOURCE_NOT_TOGGLEABLE` for a kind that is not `toggleable`. |
 | `GET /api/v1/resources/{uid}/scope` | The scope plus `supports_scope`. |
@@ -169,8 +171,9 @@ The CLI mirrors the generic surface with names instead of uids. One factory ([`s
 ```sh
 coffer mcp list
 coffer mcp show github
-coffer mcp edit github --title "GitHub (work)"   # the name itself is fixed
+coffer mcp edit github --description "Work org"  # the name itself is fixed
 coffer channel edit tg --name telegram           # a channel stays renamable
+coffer channel edit tg --title "Team Telegram"   # and carries a title
 coffer skill disable pdf-tools
 coffer mcp scope github --agents claude-code
 coffer skill scope pdf-tools --none              # dormant
@@ -186,11 +189,11 @@ Three values name a resource, and each has one job:
 | Value | Scope | Used for |
 | --- | --- | --- |
 | `uid` | Global and permanent | URLs (`/api/v1/resources/{uid}`, web detail pages), cross-resource references (a scope's agent list, a channel's `default_agent`), the sync bundle path `resources/<kind>/<uid>.yaml`. |
-| `name` | Unique within a kind; mutable unless the kind is `name_fixed` | What people type and what agents quote. The CLI resolves names to uids. |
-| `title` | Optional, free text | What surfaces display in place of the name when it is set. |
+| `name` | Unique within a kind; mutable unless the kind is `name_fixed` | What people type and what agents quote. The CLI resolves names to uids. An agent's name is its type. |
+| `title` | Optional, free text, on the kinds that carry one | What surfaces display in place of the name when it is set. Agents, MCP servers and skills have none. |
 | `id` | One machine's database | Foreign key for `skill_agent_bindings`, `mcp_capability_preferences`, `channel_peers`, `channel_thread_conversations`, and `audit_log.resource_id`. |
 
-A new resource always gets a random `uid`. The one exception is the sync applier, which registers a resource another machine created at the `uid` that machine already gave it. Because references hold uids and the audit log keys on `id`, renaming writes exactly one column and nothing else has to be repointed inside Coffer. What a uid cannot protect is a name quoted outside Coffer: an MCP server's name is the prefix of every tool name an agent sees (`mcp__coffer__<server>__<tool>` in Claude Code), and a skill's name is the directory an agent loads it from. Those two kinds set `name_fixed`; to use a different name you delete the resource and register it again, which resets the server's capability toggles and reach, or the skill's bindings. New MCP server names are capped at 24 characters so that tool names stay within the 64-character limit model provider APIs enforce; each capability row carries `client_name_length` and the **Tools** tab and `coffer mcp cap list` flag rows above 64. See [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md).
+A new resource always gets a random `uid`. The one exception is the sync applier, which registers a resource another machine created at the `uid` that machine already gave it. Because references hold uids and the audit log keys on `id`, renaming writes exactly one column and nothing else has to be repointed inside Coffer. What a uid cannot protect is a name quoted outside Coffer: an MCP server's name is the prefix of every tool name an agent sees (`mcp__coffer__<server>__<tool>` in Claude Code), and a skill's name is the directory an agent loads it from. Those two kinds set `name_fixed`; to use a different name you delete the resource and register it again, which resets the server's capability toggles and reach, or the skill's bindings. An agent's name is fixed for a different reason: there is one agent per type on a machine, so its type is its name. New MCP server names are capped at 24 characters so that tool names stay within the 64-character limit model provider APIs enforce; each capability row carries `client_name_length` and the **Tools** tab and `coffer mcp cap list` flag rows above 64. See [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md).
 
 ## Lifecycle events and audit
 

@@ -126,6 +126,21 @@ def test_every_group_offers_the_same_verbs_and_disable_takes_name_or_uid(
     # and a partition is created only by aggregation.
     assert "add" not in _commands(app, "scoped")
     assert "add" not in _commands(cli_app, "memory")
+    # `edit` only where the kind has something to edit — a skill's name is
+    # fixed, it has no title and its description is its SKILL.md's — and
+    # `--title` only on a kind that carries one.
+    assert "edit" not in _commands(cli_app, "skill")
+    real = typer.main.get_command(cli_app)
+    for group, titled in (
+        ("mcp", False),
+        ("agent", False),
+        ("provider", True),
+        ("channel", True),
+        ("knowledge", True),
+        ("memory", True),
+    ):
+        edit = real.commands[group].commands["edit"]  # type: ignore[attr-defined]
+        assert ("--title" in {o for p in edit.params for o in p.opts}) is titled, group
 
     uid = _register("fake_kind", "alpha", {"foo": 1})
     by_name = _runner.invoke(app, ["fake", "disable", "alpha"])

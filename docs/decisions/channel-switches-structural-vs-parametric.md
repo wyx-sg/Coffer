@@ -142,7 +142,7 @@ Cons: a remote-reachable entrypoint choosing an agent's working directory is a
 boundary that needs its own allow-list, validation and UI, for a need that
 never materialised. It was built and withdrawn in 2026-06: channel turns run in
 the Coffer-managed workspace `~/.coffer/workspace` (spec chat "Ship Claude Code
-and Codex subprocess providers").
+and Codex subprocess providers on the type's one agent").
 
 Loses because the owner can already point an agent at any directory from the
 agent itself; the channel does not need to be a second way.

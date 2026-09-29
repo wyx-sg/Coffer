@@ -18,13 +18,14 @@ from pydantic import BaseModel
 
 from coffer.application.agent.connection_service import AgentConnectionService, ConnectionStatus
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 

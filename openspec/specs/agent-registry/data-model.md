@@ -47,7 +47,7 @@ withdrawing a type means removing it from the enum and the manifest. Each enum
 value still exposes:
 
 - `display_name: str`
-- `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
+- `default_name() -> str` (the name of the type's one agent — underscores become hyphens, e.g. `claude_code` → `claude-code`; there is no other name an agent may carry)
 - `config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
 - `default_skill_dir() -> Path` (`<config_dir()>/skills`, the default skills-delivery directory a discovery candidate reports)
 
@@ -260,10 +260,12 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 
 | Method | Purpose |
 | ------ | ------- |
-| `register(*, agent_type, name, config_dir=None, description=None, actor) -> Resource` | Build and validate `AgentConfig`; reject a second agent on the same resolved config dir with `AgentConfigDirRegistered` (→ 409 `AGENT_CONFIG_DIR_REGISTERED`); auto-create `<config_dir>/skills` and validate it (`assert_skill_dir_usable`); then delegate to `ResourceService.register(kind='agent', ...)`. `name` is required here — the surfaces fill `agent_type.default_name()` (e.g. `claude_code` → `claude-code`) when the user gives none. |
+| `register(*, agent_type, config_dir=None, create_config_dir=False, actor) -> Resource` | Build and validate `AgentConfig`; reject a second agent of the type with `AgentTypeRegistered` (→ 409 `AGENT_TYPE_REGISTERED`) and a second agent on the same resolved config dir with `AgentConfigDirRegistered` (→ 409 `AGENT_CONFIG_DIR_REGISTERED`); when `create_config_dir` (the route's finding that the type is `installed_never_run` and the directory is its standard one) create the missing directory after the privileged-path check; auto-create `<config_dir>/skills` and validate it (`assert_skill_dir_usable`); then delegate to `ResourceService.register(kind='agent', name=agent_type.default_name(), ...)`. |
+| `find_by_type(agent_type) -> Resource \| None` | The type's one agent, found by its name. |
+| `resolve(ref) -> Resource` | The agent `ref` names: its type (`claude-code` or `claude_code`) or its uid; `ResourceNotFound` otherwise. The routers' `resolve_agent_path` dependency does the same for the `{uid}` path segment. |
 | `list() -> list[Resource]` | Delegate to `ResourceService.list(kind='agent')`. |
 | `get(uid) -> Resource` | Delegate to `ResourceService.get`. |
-| `update_config_dir(*, uid, new_config_dir, actor, description=None) -> Resource` | Re-validate the merged config; only when the effective dir changes, auto-create and check its `skills/`. Then `ResourceService.update_config` (`description` updated alongside) and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
+| `update_config_dir(*, uid, new_config_dir, actor) -> Resource` | Re-validate the merged config; only when the effective dir changes, check it is free, auto-create and check its `skills/`. Then `ResourceService.update_config` and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
 | `set_model_binding(*, uid, model=None, fast_model=None, clear_fast_model=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_fast_model` unbinds the fast slot; the merged config is re-validated (a bad `wire_api` → 422). |
 | `remove(*, uid, actor) -> None` | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan. |
 
@@ -271,16 +273,18 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 
 | Method | Purpose |
 | --- | --- |
-| `discover() -> list[AgentCandidate]` | Read-only scan with two signals: for each agent in the bound catalogue, ask its dependency probe for the program and version, and look at its standard config directory plus the directory its environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment. Every such directory with either signal that no registered agent holds is an `AgentCandidate`. Registers nothing and writes nothing. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer scan`. |
+| `types() -> list[AgentTypeDetection]` | Read-only, one row per type in the bound catalogue: ask its dependency probe for the program and version, and look at its standard config directory plus the directory its environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment. A registered type reports its agent's directory; any other reports the standard one unless only the environment's exists, with the other existing directory as `other_config_dir`. Registers nothing and writes nothing. Served by `GET /api/v1/agents/types`. |
+| `discover() -> list[AgentTypeDetection]` | The rows of `types()` with no agent registered and either signal present — at most one candidate per type. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer scan`. |
 | `detect(agent_type, config_dir) -> AgentDetection` | The detection state and version of one agent at one directory — what the agent read model carries. |
 
-`AgentCandidate` is a derived value object (not a SQLite entity, never stored):
-an agent seen on this machine that is not registered. Fields: `type`
-(`AgentType`), `display_name`, `config_dir` (the directory looked at, as a
-string), `default_skill_dir` (`<config_dir>/skills`), `suggested_name` (the
-type's `default_name()`, suffixed with the directory's name for an
-environment-named directory), `state` (`DetectionState`) and `version`. Only an
-`installed_active` candidate is addable.
+`AgentTypeDetection` is a derived value object (not a SQLite entity, never
+stored): what this machine holds of one supported type. Fields: `type`
+(`AgentType`), `display_name`, `config_dir` (as a string), `standard_config_dir`,
+`default_skill_dir` (`<config_dir>/skills`), `state` (`DetectionState`),
+`version`, `uid` (the registered agent's, or `None`) and `other_config_dir`;
+properties `name` (the type's `default_name()`), `addable` (not registered and
+the program installed — `installed_never_run` included, `config_only` not) and
+`is_candidate` (not registered and not `missing`).
 
 ### `AgentHooksService`
 
@@ -480,7 +484,7 @@ satisfied at the composition root. The surfaces are
 ### `AgentModel` + `AgentModelCatalogueService` (`domain/agent/model_catalogue.py`, `application/agent/model_catalogue.py`)
 
 Derived, never stored. One `AgentModel` is one entry of what an installed agent
-can be put on (see "Serve each agent type's model catalogue"): `id` (passed to
+can be put on (see "Serve each agent type's model catalogue from its one agent"): `id` (passed to
 the agent verbatim), `label`, `description`, `efforts: tuple[str, ...]` and
 `default_effort`. The levels sit BESIDE the id rather than inside it (see "Carry
 reasoning-effort levels beside the model id"), so one model is one entry however
@@ -543,6 +547,7 @@ import infrastructure directly).
 - `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
 - `on_enabled_changed=...` — hook invoked when the row's `enabled` flag changes; the composition root passes one that runs the reconciler's skill-link pass (`Trigger.CHANGE`, actor `system`).
 - `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
+- `name_from_config=agent_name_for`, `name_fixed=True`, `titled=False` — the name is the type's (`claude-code`, `codex`), fixed, and there is no title (spec agent-registry "Keep one agent per type, named by it"). Migration 0108 collapsed a database's agents to one per type.
 
 ## Composition root wiring
 
