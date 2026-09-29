@@ -1,21 +1,17 @@
-"""A selection card's life in the chat: put it there, route a tap, keep it honest.
+"""A card's life in the chat after it is sent: route a tap, keep it honest.
 
-A "helper module beside ``commands.py``" like ``content_ops.py`` is to the skill
-service: free functions doing the card's I/O against the binding's adapter, kept
-out of that file so it stays inside the component size cap.
+Why the tap half exists: a card offers choices (``model:``, ``effort:``,
+``dir:``, ``resume:``, ``collection:``) and actions (``cmd:<name>``, which runs
+exactly what typing ``/<name>`` would). Each tap is owner-gated by the
+processor and routed here to the same function the typed command calls (spec
+channels "Offer choices and actions as owner-gated cards").
 
-Why the delivery half exists: a card is a richer payload than text and a
-platform can refuse it outright — SeaTalk answered ``code=102`` to a ``/model``
-card built from a 29-model catalogue. The refusal used to end the command in
-silence. ``deliver_card`` reports whether the card landed so the caller can fall
-back to the plain-text answer it already has.
-
-Why the rewrite half exists: before it, tapping a card switched the agent (or
-the model, or its effort) and posted a confirmation, but left the card itself untouched — still
-showing the old choice ticked and still offering the option the user had just
-taken. Tapping it again was a no-op the card actively invited. SeaTalk's Update
-Message and Telegram's ``editMessageText`` both let the card be rewritten in
-place, so it is.
+Why the rewrite half exists: tapping a card used to post a confirmation and
+leave the card itself untouched — still showing the old choice ticked and still
+offering the option the user had just taken. SeaTalk's Update Message and
+Telegram's ``editMessageText`` both let the card be rewritten in place, so it
+is; the model card's tap goes further and rewrites the card into its effort
+step (spec channels "Switch the model and reasoning effort from chat").
 
 Why the page half exists: the same rewrite turns a bounded card into a browsable
 one. A Prev/Next tap re-renders the SAME message at another window of the same
@@ -26,298 +22,163 @@ routed apart from a choice before any switch code is reached.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from coffer.application.channel import document_save, effort_switch, model_switch
-from coffer.application.channel.agent_routing import (
-    effective_agent,
-    routable_choices,
-    routable_keys,
-)
-from coffer.application.channel.conversation_ops import ensure_conversation
-from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel import document_save, model_switch
+from coffer.application.channel.command_context import deliver_card
+from coffer.application.channel.dir_switch import apply_dir, current_dir_card
+from coffer.application.channel.resume_switch import apply_resume, current_resume_card
 from coffer.application.channel.selection_cards import (
+    KEEP_EFFORT,
     SelectionCard,
-    agent_card,
     collection_card,
-    effort_card,
     is_page_turn,
-    model_card,
     parse_page_turn,
 )
-from coffer.application.channel.store_ports import ChannelPeer
+from coffer.domain.channel.commands import command_name
 
 if TYPE_CHECKING:
-    from coffer.application.channel.commands import ChannelCommands, SafeSend
+    from coffer.application.channel.command_context import CommandContext
+
+__all__ = [
+    "card_as_text",
+    "deliver_card",
+    "dispatch_card_tap",
+    "refresh_selection_card",
+    "turn_card_page",
+]
 
 _logger = logging.getLogger(__name__)
 
-
-async def deliver_card(
-    binding: ChannelBinding,
-    peer: ChannelPeer,
-    card: SelectionCard,
-    *,
-    chat_kind: str,
-    thread_id: str,
-) -> bool:
-    """Send ``card``, reporting whether the user actually got it.
-
-    ``False`` means the caller must still answer some other way: either the card
-    has nothing tappable on it, or the platform refused it. Silence is the one
-    outcome a command must never produce, so the refusal is logged here and
-    handled there rather than raised.
-    """
-    if not card.buttons:
-        return False
-    try:
-        await binding.adapter.send_text(
-            peer.chat_id,
-            card.text,
-            buttons=card.buttons,
-            title=card.title,
-            thread_id=thread_id,
-            chat_kind=chat_kind,
-        )
-    except Exception:
-        _logger.warning(
-            "channel.card.rejected",
-            extra={
-                "channel": binding.resource.name,
-                "card": card.title,
-                "buttons": len(card.buttons),
-            },
-            exc_info=True,
-        )
-        return False
-    return True
+#: The command that summons a fresh card of each kind.
+_COMMAND_FOR = {"collection": "kb", "effort": "model"}
 
 
-async def dispatch_card_tap(
-    commands: ChannelCommands,
-    binding: ChannelBinding,
-    peer: ChannelPeer,
-    data: str,
-    send: SafeSend,
-    *,
-    chat_kind: str,
-    thread_id: str,
-    conversation_thread_id: str,
-    card_message_id: str,
-    session: Any,
-) -> None:
-    """Route one owner-gated tap: a page turn, or a choice.
+async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
+    """Route one owner-gated tap: a page turn, an action, or a choice.
 
-    The page question is asked FIRST and answered exhaustively. A navigation
-    value never reaches ``apply_agent``/``apply_model``/``apply_effort``/
-    ``apply_save_collection``,
-    and a value that merely looks like navigation (``page:`` with a kind or
-    index we do not render) is dropped rather than falling through to the code
-    path that applies a choice.
-
-    ``session`` is only read by the ``collection:`` branch (spec channels "Save a sent
-    document into a collection"): the pending document a `/save` card tap saves lives
-    there, keyed by this same ``(channel, chat, thread)``, exactly like the queue and
-    the running-turn bookkeeping every other tap ignores. ``thread_id`` routes
-    every answer; ``conversation_thread_id`` keys the conversation the choice
-    applies to (see "Key conversation identity by channel, chat and thread").
+    The page question is asked FIRST and answered exhaustively: a navigation
+    value never reaches a switch, and a value that merely looks like
+    navigation (``page:`` with a kind or index we do not render) is dropped.
     """
     turn = parse_page_turn(data)
     if turn is not None:
-        kind, page = turn
-        await turn_card_page(
-            commands,
-            binding,
-            peer,
-            kind,
-            page,
-            send,
-            chat_kind=chat_kind,
-            thread_id=thread_id,
-            conversation_thread_id=conversation_thread_id,
-            card_message_id=card_message_id,
-        )
+        await turn_card_page(ctx, *turn)
+        return
+    if is_page_turn(data):
         return
     kind, _, value = data.partition(":")
-    if kind == "agent":
-        if value not in routable_keys(binding, commands._agents):
-            await send(
-                binding,
-                peer.chat_id,
-                f"Unknown agent '{value}'.",
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
-            return
-        await commands.apply_agent(
-            binding,
-            peer,
-            value,
-            send,
-            chat_kind=chat_kind,
-            thread_id=thread_id,
-            conversation_thread_id=conversation_thread_id,
-        )
-    elif kind == "model" and value:
-        await model_switch.apply_model(
-            commands,
-            binding,
-            peer,
-            value,
-            send,
-            chat_kind=chat_kind,
-            thread_id=thread_id,
-            conversation_thread_id=conversation_thread_id,
-        )
-    elif kind == "effort" and value:
-        # Straight into ``effort_switch`` (no forwarding method on
-        # ``commands``, unlike apply_agent/apply_model) — that file's size
-        # budget, exactly as the ``collection`` branch below does.
-        await effort_switch.apply_effort(
-            commands,
-            binding,
-            peer,
-            value,
-            send,
-            chat_kind=chat_kind,
-            thread_id=thread_id,
-            conversation_thread_id=conversation_thread_id,
-        )
-    elif kind == "collection" and value:
-        # A save is one-shot, not a toggle: nothing to re-tick, so skip the
-        # refresh every other choice falls through to below. Calls
-        # ``document_save`` directly (no method on ``commands``, unlike
-        # apply_agent/apply_model) — that module's own size budget, not this
-        # one's.
-        await document_save.apply_save_collection(
-            commands, binding, peer, value, session, send, chat_kind=chat_kind, thread_id=thread_id
-        )
+    if not value:
         return
+    if kind == "cmd":
+        # Exactly what typing it would do — a name not on the roster is ignored.
+        if command_name(f"/{value}") is not None:
+            await ctx.commands.run(ctx, f"/{value}")
+        return
+    if kind == "collection":
+        # A save is one-shot, not a toggle: nothing to re-tick.
+        await document_save.apply_save_collection(ctx, value)
+        return
+    if kind == "model":
+        await model_switch.apply_model(ctx, value)
+        if await model_switch.after_model_tap(ctx):
+            return
+    elif kind == "effort" and value == KEEP_EFFORT:
+        settings = await ctx.settings()
+        await ctx.say(f"🎚 Effort kept at {settings.effort or 'default'}.")
+        kind = "model"
+    elif kind == "effort":
+        await model_switch.apply_effort(ctx, value)
+    elif kind == "dir":
+        directories = ctx.binding.directories
+        if value == "default":
+            await apply_dir(ctx, None)
+        elif value.isdigit() and int(value) < len(directories):
+            await apply_dir(ctx, directories[int(value)])
+        else:
+            await ctx.say("That directory is no longer allowed — send /dir for the list.")
+            return
+    elif kind == "resume":
+        await apply_resume(ctx, value)
     else:
         return
-    await refresh_selection_card(
-        commands,
-        binding,
-        peer,
-        card_message_id,
-        kind,
-        chat_kind=chat_kind,
-        conversation_thread_id=conversation_thread_id,
-    )
+    await refresh_selection_card(ctx, kind)
 
 
-async def refresh_selection_card(
-    commands: ChannelCommands,
-    binding: ChannelBinding,
-    peer: ChannelPeer,
-    card_message_id: str,
-    kind: str,
-    *,
-    chat_kind: str,
-    conversation_thread_id: str,
-) -> None:
+async def refresh_selection_card(ctx: CommandContext, kind: str) -> None:
     """Rewrite the tapped card so its tick sits on the new choice.
 
     The card is rebuilt with no page given, which lands it on the page holding
-    the choice now in effect — the page the tap came from. A choice therefore
-    leaves the user exactly where they were, with the tick moved.
+    the choice now in effect — the page the tap came from.
 
     Best-effort by design. The switch already happened and was confirmed in
     chat, so a transport that cannot update a card — or an update that fails
     because the card aged past SeaTalk's 7-day window, or the platform
     rate-limited us — must not turn a successful switch into a visible error.
-    It is logged and dropped.
     """
-    caps = binding.adapter.capabilities
-    if not (card_message_id and caps.supports_buttons and caps.supports_card_update):
+    caps = ctx.binding.adapter.capabilities
+    if not (ctx.card_message_id and caps.supports_buttons and caps.supports_card_update):
         return
     try:
-        card = await _current_card(commands, binding, peer, kind, conversation_thread_id)
+        card = await _current_card(ctx, kind)
         if card is None or not card.buttons:
             return
-        await binding.adapter.update_card(
-            peer.chat_id,
-            card_message_id,
+        await ctx.binding.adapter.update_card(
+            ctx.chat_id,
+            ctx.card_message_id,
             card.text,
             card.buttons,
             title=card.title,
-            chat_kind=chat_kind,
+            chat_kind=ctx.chat_kind,
         )
     except Exception:
         _logger.warning(
-            "channel.card.refresh_failed", extra={"channel": binding.resource.name}, exc_info=True
+            "channel.card.refresh_failed",
+            extra={"channel": ctx.binding.resource.name},
+            exc_info=True,
         )
 
 
-async def turn_card_page(
-    commands: ChannelCommands,
-    binding: ChannelBinding,
-    peer: ChannelPeer,
-    kind: str,
-    page: int,
-    send: SafeSend,
-    *,
-    chat_kind: str,
-    thread_id: str,
-    conversation_thread_id: str,
-    card_message_id: str,
-) -> None:
+async def turn_card_page(ctx: CommandContext, kind: str, page: int) -> None:
     """Show another page of the same card, changing nothing else.
 
-    The card is rebuilt from what is CURRENTLY in effect, exactly as a refresh
-    is — a page turn reads state and never writes it, so the tick stays where
-    the last actual choice put it.
-
-    Unlike a refresh, a page turn is not cosmetic: the user asked to see
-    something and must see it. So the failures degrade rather than drop.
-
-    * The card cannot be rewritten in place (no message id, a transport without
-      ``supports_card_update``, an update the platform refused because the card
-      aged past SeaTalk's 7-day window or we were rate-limited) → the page is
-      posted as a FRESH card. The old card stays in the chat showing an older
-      page, which is harmless: a card's page is a view, not a claim about state.
-    * That fresh card is refused too → the page goes out as plain text.
+    The card is rebuilt from what is CURRENTLY in effect — a page turn reads
+    state and never writes it. Unlike a refresh it is not cosmetic, so its
+    failures degrade rather than drop: a card that cannot be rewritten in place
+    is posted fresh, and a fresh card that is refused goes out as text.
     """
     try:
-        card = await _current_card(commands, binding, peer, kind, conversation_thread_id, page=page)
+        card = await _current_card(ctx, kind, page=page)
     except Exception:
         _logger.warning(
-            "channel.card.page_failed", extra={"channel": binding.resource.name}, exc_info=True
+            "channel.card.page_failed", extra={"channel": ctx.binding.resource.name}, exc_info=True
         )
         card = None
     if card is None or not card.buttons:
-        # "collection" is the card's internal namespace; the command that
-        # summons a fresh one is `/save`, not `/collection`.
-        command = "save" if kind == "collection" else kind
-        await send(
-            binding,
-            peer.chat_id,
-            f"Could not turn the page — send /{command} for a fresh card.",
-            chat_kind=chat_kind,
-            thread_id=thread_id,
-        )
+        command = _COMMAND_FOR.get(kind, kind)
+        await ctx.say(f"Could not turn the page — send /{command} for a fresh card.")
         return
-    caps = binding.adapter.capabilities
-    if card_message_id and caps.supports_card_update:
+    caps = ctx.binding.adapter.capabilities
+    if ctx.card_message_id and caps.supports_card_update:
         try:
-            await binding.adapter.update_card(
-                peer.chat_id,
-                card_message_id,
+            await ctx.binding.adapter.update_card(
+                ctx.chat_id,
+                ctx.card_message_id,
                 card.text,
                 card.buttons,
                 title=card.title,
-                chat_kind=chat_kind,
+                chat_kind=ctx.chat_kind,
             )
             return
         except Exception:
             _logger.warning(
                 "channel.card.page_update_failed",
-                extra={"channel": binding.resource.name, "card": card.title, "page": card.page},
+                extra={"channel": ctx.binding.resource.name, "card": card.title, "page": card.page},
                 exc_info=True,
             )
-    if await deliver_card(binding, peer, card, chat_kind=chat_kind, thread_id=thread_id):
+    if await ctx.show(card):
         return
-    await send(binding, peer.chat_id, card_as_text(card), chat_kind=chat_kind, thread_id=thread_id)
+    await ctx.say(card_as_text(card))
 
 
 def card_as_text(card: SelectionCard) -> str:
@@ -340,13 +201,7 @@ def card_as_text(card: SelectionCard) -> str:
 
 
 async def _current_card(
-    commands: ChannelCommands,
-    binding: ChannelBinding,
-    peer: ChannelPeer,
-    kind: str,
-    conversation_thread_id: str,
-    *,
-    page: int | None = None,
+    ctx: CommandContext, kind: str, *, page: int | None = None
 ) -> SelectionCard | None:
     """Re-read what is now in effect and render that card.
 
@@ -354,30 +209,17 @@ async def _current_card(
     is what the card must reflect, and only the store knows whether it landed.
     ``page`` is ``None`` for "the page holding the current choice".
     """
-    row = await commands._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
-    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
-    if kind == "agent":
-        return agent_card(
-            current=agent_key, choices=routable_choices(binding, commands._agents), page=page
-        )
     if kind == "collection":
-        # No conversation/model state to re-read, and nothing agent-specific to
-        # ask either — a collection carries no per-agent reach, so this is the
-        # same whole-catalogue question `/save` itself asks (spec channels
-        # "Save a sent document into a collection").
-        known = await commands._collections.collection_names()
+        # Nothing agent-specific to ask — the same whole-catalogue question
+        # `/kb` itself asks (spec channels "Save a sent document into a collection").
+        known = await ctx.commands._collections.collection_names()
         return collection_card(choices=known, page=page) if known else None
-    if kind not in ("model", "effort"):
-        return None
-    conversation_id = await ensure_conversation(
-        commands._conversations, commands._threads, binding, peer, conversation_thread_id
-    )
-    cfg = await commands._conversations.get_agent_config(conversation_id)
+    if kind == "model":
+        return await model_switch.current_model_card(ctx, page=page)
     if kind == "effort":
-        # Asked against the model in effect, not the agent: the levels belong to
-        # the model, so a card refreshed after a model switch offers that
-        # model's menu rather than the one the old model had.
-        levels = await commands._model_suggestions.efforts(agent_key, cfg.model)
-        return effort_card(current=cfg.effort, levels=levels, page=page) if levels else None
-    labels = await commands._model_suggestions.model_labels(agent_key)
-    return model_card(current=cfg.model, picks=list(labels), labels=labels, page=page)
+        return await model_switch.current_effort_card(ctx, page=page)
+    if kind == "dir":
+        return await current_dir_card(ctx, page=page)
+    if kind == "resume":
+        return await current_resume_card(ctx, page=page)
+    return None

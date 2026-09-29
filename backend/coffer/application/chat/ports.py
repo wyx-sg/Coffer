@@ -17,6 +17,7 @@ from typing import Any, Protocol, TypeVar
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
+from coffer.domain.chat.mirror import MirrorResult, MirrorView
 
 
 class AgentAdapter(Protocol):
@@ -169,4 +170,24 @@ class ChatMediaStore(Protocol):
     async def present(self, attachment: Attachment) -> bool:
         """Whether a persisted reference's bytes are still on disk — a web
         upload's or a channel's, which the same 30-day sweep ages out."""
+        ...
+
+
+class ChannelMirrorPort(Protocol):
+    """A reply typed on the web into a conversation a channel opened, also sent
+    to that channel's chat (spec chat "Mirror a web reply into the channel it
+    came from").
+
+    Declared here, by the kind that consumes it; the channel kind satisfies it
+    and the composition root wires the two, so chat never imports channel code.
+    Absent (``None``) when no channel kind is wired — chat works without it."""
+
+    async def describe(self, conversation_id: str, channel_uid: str) -> MirrorView:
+        """Where a reply on this conversation would also go, and what is still
+        waiting to get there."""
+        ...
+
+    async def mirror(self, conversation_id: str, channel_uid: str, text: str) -> MirrorResult:
+        """Send ``text`` to the chat now, or keep it for later; the result's
+        ``on_start`` is what the reply's turn is queued with."""
         ...

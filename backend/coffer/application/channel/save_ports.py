@@ -1,4 +1,4 @@
-"""Ports for `/save` (spec knowledge "Ingest documents sent to a channel") — split out
+"""Ports for `/kb` (spec knowledge "Ingest documents sent to a channel") — split out
 of ``ports.py`` purely for the file-size budget (that file already sat at the limit);
 these two Protocols are otherwise exactly the kind of seam the rest of that module
 defines, and follow its same shape.
@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 
 class CollectionCatalogPort(Protocol):
-    """The collections a `/save` may confirm against (spec knowledge "Ingest documents
+    """The collections a `/kb` may confirm against (spec knowledge "Ingest documents
     sent to a channel"), reached through this seam rather than an import — the channel
     kind may not reach into the knowledge kind (import-linter contract 5f). Satisfied
     structurally by ``KnowledgeService.collection_names``.

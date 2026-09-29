@@ -160,7 +160,7 @@ abstraction in the way.
 
 Cons: the owner gate, the security boundary, would be written once per
 platform, and a fix to one would not reach the others. Command semantics
-(`/agent`, `/model`, `/stop`) would drift between platforms. The cost of a new
+(`/new`, `/model`, `/stop`) would drift between platforms. The cost of a new
 platform becomes the cost of a whole bot.
 
 Loses because the security boundary and the command vocabulary must be single

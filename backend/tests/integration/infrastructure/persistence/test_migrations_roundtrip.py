@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0108"
+HEAD_REVISION = "0109"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -207,6 +207,11 @@ EXPECTED_TABLES = {
     "chat_messages",
     "channel_peers",
     "channel_thread_conversations",
+    # 0108: every conversation a chat thread opened, and what a channel still
+    # owes a chat (spec channels "Resume an earlier conversation from chat",
+    # spec chat "Mirror a web reply into the channel it came from").
+    "channel_thread_history",
+    "channel_outbox",
     "sync_remotes",
     "sync_convergence_state",
     "sync_held_paths",
@@ -241,6 +246,9 @@ PRE_MERGE_TABLES = (
         "workflow_events",
         "workflow_node_attempts",
         "workflow_approvals",
+        # 0108 created these.
+        "channel_thread_history",
+        "channel_outbox",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and
@@ -476,7 +484,7 @@ def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
     with sqlite3.connect(db_path) as conn:
         names = {r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")}
     # Removed-type rows are gone; kept-type rows survive, named by their type
-    # since 0108 (one agent per type).
+    # since 0109 (one agent per type).
     assert names == {"claude-code", "codex"}
 
     # Downgrade is intentionally lossy — it cannot resurrect the deleted rows;

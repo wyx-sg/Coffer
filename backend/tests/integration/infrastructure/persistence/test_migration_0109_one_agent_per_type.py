@@ -1,4 +1,4 @@
-"""Revision 0108: agents collapse to one per type, named by it; agents, MCP
+"""Revision 0109: agents collapse to one per type, named by it; agents, MCP
 servers and skills lose their titles.
 
 The kept agent is the connected one, then the enabled one, then the most
@@ -40,14 +40,14 @@ def db(tmp_path, monkeypatch):
     (tmp_path / "home").mkdir()
     db_path = tmp_path / "agents.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
-    command.upgrade(_alembic_config(), "0107")
+    command.upgrade(_alembic_config(), "0108")
     return db_path
 
 
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="collapse duplicate agents to one per type on upgrade"
 )
-def test_0108_keeps_one_agent_per_type_and_repoints_references(db, tmp_path, caplog):
+def test_0109_keeps_one_agent_per_type_and_repoints_references(db, tmp_path, caplog):
     work = tmp_path / "work-claude"
     with sqlite3.connect(db) as conn:
         # Two Claude Code agents: the disabled one was touched last, the
@@ -94,9 +94,9 @@ def test_0108_keeps_one_agent_per_type_and_repoints_references(db, tmp_path, cap
         )
 
     with caplog.at_level(logging.WARNING):
-        command.upgrade(_alembic_config(), "0108")
+        command.upgrade(_alembic_config(), "0109")
 
-    assert _alembic_version(db) == "0108"
+    assert _alembic_version(db) == "0109"
     with sqlite3.connect(db) as conn:
         agents = conn.execute(
             "SELECT uid, name, title, description FROM resources WHERE kind = 'agent' ORDER BY name"
@@ -131,7 +131,7 @@ def test_0108_keeps_one_agent_per_type_and_repoints_references(db, tmp_path, cap
     assert f"kept={kept}" in dropped_logs[0]
 
 
-def test_0108_keeps_the_connected_agent_over_a_more_recent_one(db, tmp_path):
+def test_0109_keeps_the_connected_agent_over_a_more_recent_one(db, tmp_path):
     """The agent whose own Coffer MCP entry names its uid wins the tie-break."""
     connected_dir = tmp_path / "connected"
     connected_dir.mkdir()
@@ -150,7 +150,7 @@ def test_0108_keeps_the_connected_agent_over_a_more_recent_one(db, tmp_path):
         f'args = ["--agent-uid", "{connected}"]\n'
     )
 
-    command.upgrade(_alembic_config(), "0108")
+    command.upgrade(_alembic_config(), "0109")
 
     with sqlite3.connect(db) as conn:
         rows = conn.execute("SELECT uid, name FROM resources WHERE kind = 'agent'").fetchall()
@@ -158,13 +158,13 @@ def test_0108_keeps_the_connected_agent_over_a_more_recent_one(db, tmp_path):
     assert recent not in {uid for uid, _ in rows}
 
 
-def test_0108_downgrade_leaves_the_collapsed_rows(db):
+def test_0109_downgrade_leaves_the_collapsed_rows(db):
     with sqlite3.connect(db) as conn:
         uid, _ = _insert(conn, kind="agent", name="cc", config={"type": "claude_code"})
     cfg = _alembic_config()
-    command.upgrade(cfg, "0108")
-    command.downgrade(cfg, "0107")
-    assert _alembic_version(db) == "0107"
+    command.upgrade(cfg, "0109")
+    command.downgrade(cfg, "0108")
+    assert _alembic_version(db) == "0108"
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT name FROM resources WHERE uid = ?", (uid,)).fetchone() == (
             "claude-code",

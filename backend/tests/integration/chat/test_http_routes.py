@@ -475,7 +475,7 @@ def test_send_message_returns_202_fire_and_return() -> None:
             json={"text": "Hi"},
         )
         assert resp.status_code == 202
-        assert resp.json() == {"queued": False}
+        assert resp.json() == {"queued": False, "mirror": None}
 
     set_active_token(None)
 

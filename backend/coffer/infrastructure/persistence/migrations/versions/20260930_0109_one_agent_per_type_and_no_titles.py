@@ -25,7 +25,7 @@ the kinds that have one"):
    Coffer's — its MCP entry, delivered skill links — is left on disk: a
    migration does not write into an agent's files, and the directory is no
    longer an agent Coffer manages. Each dropped row is logged as
-   ``migration.0108.agent_dropped`` with its type, name, uid, directory and the
+   ``migration.0109.agent_dropped`` with its type, name, uid, directory and the
    uid kept in its place.
 
    The kept row is renamed to its type's name and loses its description. A row
@@ -39,8 +39,8 @@ the kinds that have one"):
 The downgrade restores neither dropped rows nor cleared titles: they are not
 recoverable, and an older build reads the collapsed rows as ordinary agents.
 
-Revision ID: 0108
-Revises: 0107
+Revision ID: 0109
+Revises: 0108
 Create Date: 2026-09-30
 """
 
@@ -56,8 +56,8 @@ from typing import Any
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0108"
-down_revision: str | None = "0107"
+revision: str = "0109"
+down_revision: str | None = "0108"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -192,7 +192,7 @@ def _collapse_agents(bind: sa.engine.Connection, *, has_bindings: bool) -> None:
         agent_type = _config(row.config_json).get("type")
         if not isinstance(agent_type, str) or agent_type not in _TYPES:
             logger.warning(
-                "migration.0108.agent_unknown_type; name=%s uid=%s type=%s",
+                "migration.0109.agent_unknown_type; name=%s uid=%s type=%s",
                 row.name,
                 row.uid,
                 agent_type,
@@ -210,7 +210,7 @@ def _collapse_agents(bind: sa.engine.Connection, *, has_bindings: bool) -> None:
                 continue
             replaced[row.uid] = keep.uid
             logger.warning(
-                "migration.0108.agent_dropped; type=%s name=%s uid=%s config_dir=%s kept=%s",
+                "migration.0109.agent_dropped; type=%s name=%s uid=%s config_dir=%s kept=%s",
                 agent_type,
                 row.name,
                 row.uid,
@@ -230,7 +230,7 @@ def _collapse_agents(bind: sa.engine.Connection, *, has_bindings: bool) -> None:
             sa.text("UPDATE resources SET name = :name, description = NULL WHERE id = :id"),
             {"name": _TYPES[agent_type][0], "id": row.id},
         )
-    logger.info("migration.0108.agents; kept=%s dropped=%s", len(kept), len(replaced))
+    logger.info("migration.0109.agents; kept=%s dropped=%s", len(kept), len(replaced))
 
 
 def upgrade() -> None:

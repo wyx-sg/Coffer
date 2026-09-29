@@ -1,14 +1,18 @@
 """The selection cards Coffer offers in a chat, built in one place.
 
-There are a few — pick an agent, pick a model, pick how hard that model thinks,
-pick where a document is saved — and each is built three times:
+There are a few — pick a model and then how hard it thinks, pick a working
+directory, pick an earlier conversation to resume, pick where a document is
+saved — and each is built three times:
 when the user asks for it, when they turn a page, and again after they tap, so
 the card stops offering the option they just took. Building them here rather
 than inline in ``commands.py`` keeps those renderings from drifting apart,
 which is the whole failure the refresh exists to fix: a card that says one
 thing while the system does another.
 
-Pagination lives here too, for both cards rather than for models alone. A card
+The ``cmd:`` buttons a `/status` or `/help` card carries are built here too
+(spec channels "Offer the commands as a help card").
+
+Pagination lives here too, for every card rather than for models alone. A card
 is a window onto a list, not the list: the model catalogue runs to 29 entries
 for ``claude_code`` and SeaTalk refuses a card that long outright
 (``/messaging/v2/single_chat: code=102``). The window is browsed with Prev/Next
@@ -22,6 +26,7 @@ the wire.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -35,11 +40,12 @@ CALLBACK_MAX_BYTES = 64
 #: The namespace a *navigation* payload lives in — ``page:<kind>:<index>``,
 #: e.g. ``page:model:3`` (13 bytes, fixed-size, nowhere near the cap).
 #:
-#: It is deliberately disjoint from the ``agent:`` / ``model:`` namespaces the
-#: *choices* use: a page turn must change nothing, and the one way it could
-#: change something is by being mistaken for a choice. Because the prefix is
-#: read first and a whole page value can never parse as ``model:<id>``, no
-#: catalogue entry — however it is named — can collide with a page turn.
+#: It is deliberately disjoint from the ``model:`` / ``effort:`` / ``dir:`` /
+#: ``resume:`` / ``collection:`` / ``cmd:`` namespaces the *choices* use: a page
+#: turn must change nothing, and the one way it could change something is by
+#: being mistaken for a choice. Because the prefix is read first and a whole
+#: page value can never parse as ``model:<id>``, no catalogue entry — however
+#: it is named — can collide with a page turn.
 PAGE_PREFIX = "page"
 
 #: The most buttons any card carries, navigation included.
@@ -60,6 +66,26 @@ MAX_CARD_BUTTONS = 6
 #: Choices per page. Prev and Next consume button slots of their own, so a
 #: paginated card shows ``MAX_CARD_BUTTONS - 2`` choices and still fits.
 PAGE_SIZE = MAX_CARD_BUTTONS - 2
+
+#: The card kinds that can be paged — closed and explicit, so a page value
+#: naming anything else is dropped rather than re-rendered.
+PAGED_KINDS: frozenset[str] = frozenset({"model", "effort", "collection", "resume", "dir"})
+
+#: The ``effort:`` value of the effort step's "Keep …" button: no change.
+KEEP_EFFORT = "-"
+
+#: The five actions a `/status` and a `/help` card offer, as ``(label, command)``
+#: (spec channels "Report the chat's state as a status card").
+COMMAND_ACTIONS: tuple[tuple[str, str], ...] = (
+    ("Stop", "stop"),
+    ("New", "new"),
+    ("Model", "model"),
+    ("Resume", "resume"),
+    ("Dir", "dir"),
+)
+
+#: A button label longer than this is cut (a resume card's titles).
+_LABEL_MAX = 32
 
 
 def callback_fits(value: str) -> bool:
@@ -84,7 +110,7 @@ def parse_page_turn(value: str) -> tuple[str, int] | None:
     if prefix != PAGE_PREFIX:
         return None
     kind, _, index = rest.partition(":")
-    if kind not in ("agent", "model", "effort", "collection") or not index.isdigit():
+    if kind not in PAGED_KINDS or not index.isdigit():
         return None
     return kind, int(index)
 
@@ -155,7 +181,7 @@ def _paginate(
     """Window ``options`` into one card — the single place the rule lives.
 
     A list that fits is rendered exactly as it always was: no Prev, no Next, no
-    "Page 1/1" footer. ``/agent``'s two choices must look untouched by this.
+    "Page 1/1" footer.
 
     ``page`` is ``None`` for "open on whichever page holds the current choice";
     an explicit index is clamped into range, so a stale Next from an older,
@@ -179,33 +205,6 @@ def _paginate(
         buttons=window + _navigation(kind, index, pages),
         page=index,
         pages=pages,
-    )
-
-
-def agent_card(
-    *, current: str, choices: Sequence[tuple[str, str]], page: int | None = None
-) -> SelectionCard:
-    """Pick which agent answers in this chat/thread.
-
-    ``choices`` is ``(key, display name)``; ``current`` is the key in effect.
-    """
-    options = [
-        ChoiceButton(
-            label=_tick(name, key == current),
-            value=f"agent:{key}",
-            selected=key == current,
-        )
-        for key, name in choices
-        if callback_fits(f"agent:{key}")
-    ]
-    return _paginate(
-        kind="agent",
-        title="Agent",
-        header=f"Current agent: {current}\nTap to switch:",
-        options=options,
-        current_value=f"agent:{current}",
-        current_label=current,
-        page=page,
     )
 
 
@@ -252,23 +251,26 @@ def model_card(
 
 
 def effort_card(
-    *, current: str | None, levels: Sequence[str], page: int | None = None
+    *,
+    current: str | None,
+    levels: Sequence[str],
+    model: str | None = None,
+    page: int | None = None,
 ) -> SelectionCard:
-    """Pick how hard the chosen model thinks next turn.
+    """The effort step of the model card: how hard the chosen model thinks
+    (spec channels "Switch the model and reasoning effort from chat").
 
-    The second half of the model choice, and a card of its own for the same
-    reason the web renders a second picker: the level is not part of the model
-    NAME — both agents take it as their own field (Codex's ``turn/start``,
-    Claude's ``--effort``) — so folding four levels into the model card would
-    multiply one model into four buttons that are the same model.
+    The level is not part of the model NAME — both agents take it as their own
+    field (Codex's ``turn/start``, Claude's ``--effort``) — so it is a second
+    step rather than four buttons per model. A ``Keep …`` button ends the step
+    without changing anything, so a model tap never forces a level choice.
 
-    ``current`` is ``None`` when the conversation pins no level, in which case
-    the agent's own default is in effect and no option carries the tick. The
-    caller only builds this when ``levels`` is non-empty: an agent that reports
-    none has nothing to choose between, and an empty card is worse than the
-    sentence saying so.
+    ``current`` is ``None`` when the conversation pins no level (the agent's
+    own default is in effect, and no level carries the tick). ``model`` is the
+    model's shown name for the header. The caller only builds this when
+    ``levels`` is non-empty.
     """
-    shown = current or "(agent default)"
+    shown = current or "default"
     options = [
         ChoiceButton(
             label=_tick(level, level == current),
@@ -278,10 +280,12 @@ def effort_card(
         for level in dict.fromkeys(levels)
         if callback_fits(f"effort:{level}")
     ]
+    options.append(ChoiceButton(label=f"Keep {shown}", value=f"effort:{KEEP_EFFORT}"))
+    header = f"Model: {model}\n" if model else ""
     return _paginate(
         kind="effort",
         title="Effort",
-        header=f"Current effort: {shown}\nTap a choice (or send /effort <level>):",
+        header=f"{header}Current effort: {shown}\nTap a level (or send /model <level>):",
         options=options,
         current_value=f"effort:{current}" if current else None,
         current_label=shown,
@@ -290,10 +294,10 @@ def effort_card(
 
 
 def collection_card(*, choices: Sequence[str], page: int | None = None) -> SelectionCard:
-    """Pick which collection a pending `/save` document lands in (spec channels
+    """Pick which collection a pending `/kb` document lands in (spec channels
     "Save a sent document into a collection").
 
-    Unlike agent/model there is no "current" choice to tick — every save is a fresh
+    Unlike a model there is no "current" choice to tick — every save is a fresh
     decision, never a toggle a card must show as already in effect. A single-collection
     vault still renders one button rather than acting on it unasked: "Save a sent
     document into a collection" requires the owner confirm, and a lone collection is not
@@ -313,3 +317,81 @@ def collection_card(*, choices: Sequence[str], page: int | None = None) -> Selec
         current_label="",
         page=page,
     )
+
+
+def dir_card(
+    *, current: str | None, directories: Sequence[str], page: int | None = None
+) -> SelectionCard:
+    """Pick the working directory from the channel's allow-list (spec channels
+    "Choose the working directory from chat"). A button carries the entry's
+    index (``dir:<i>``), not its path: a path can outgrow the payload cap and
+    the allow-list is the one place it is resolved against anyway."""
+
+    def base(path: str) -> str:
+        return os.path.basename(os.path.normpath(path)) or path
+
+    options = [
+        ChoiceButton(
+            label=_tick(base(path), path == current), value=f"dir:{i}", selected=path == current
+        )
+        for i, path in enumerate(directories)
+    ]
+    options.append(
+        ChoiceButton(
+            label=_tick("Default", current is None), value="dir:default", selected=current is None
+        )
+    )
+    shown = current or "default"
+    current_value = (
+        "dir:default"
+        if current is None
+        else next((f"dir:{i}" for i, path in enumerate(directories) if path == current), None)
+    )
+    return _paginate(
+        kind="dir",
+        title="Directory",
+        header=f"Current directory: {shown}\nTap one to start a fresh conversation there:",
+        options=options,
+        current_value=current_value,
+        current_label=base(shown),
+        page=page,
+    )
+
+
+def resume_card(
+    *,
+    header: str,
+    entries: Sequence[tuple[str, str]],
+    active: str | None,
+    page: int | None = None,
+) -> SelectionCard:
+    """Pick an earlier conversation of this chat thread to reopen (spec channels
+    "Resume an earlier conversation from chat"). ``entries`` is
+    ``(conversation id, title)``, newest first; ``header`` is the listing."""
+    options = []
+    for n, (conversation_id, title) in enumerate(entries, start=1):
+        label = f"{n}. {title}"
+        if len(label) > _LABEL_MAX:
+            label = label[: _LABEL_MAX - 1].rstrip() + "…"
+        value = f"resume:{conversation_id}"
+        if callback_fits(value):
+            selected = conversation_id == active
+            options.append(
+                ChoiceButton(label=_tick(label, selected), value=value, selected=selected)
+            )
+    return _paginate(
+        kind="resume",
+        title="Resume",
+        header=header,
+        options=options,
+        current_value=f"resume:{active}" if active else None,
+        current_label="the current one",
+        page=page,
+    )
+
+
+def command_card(*, title: str, text: str) -> SelectionCard:
+    """A `/status` or `/help` card: ``text`` under ``title`` with the five
+    ``cmd:`` actions — a tap runs exactly the command it names."""
+    buttons = [ChoiceButton(label=label, value=f"cmd:{name}") for label, name in COMMAND_ACTIONS]
+    return SelectionCard(title=title, text=text, buttons=buttons)

@@ -18,6 +18,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── ignore_other_mentions: bool = False # group gating
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
+│   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
@@ -164,10 +165,14 @@ already running".
 | `chat_id`                | TEXT                                         | the DM, or the group                                                                                         |
 | `thread_id`              | TEXT                                         | `""` is the DM or a group's main chat; each group thread and each parallel thread is its own row             |
 | `active_conversation_id` | TEXT NULL                                    | this thread's current conversation; cleared when the conversation disappears                                  |
-| `preferred_agent`        | TEXT NULL                                    | this thread's sticky `/agent` choice; NULL → the channel's `default_agent`                                    |
+| `preferred_agent`        | TEXT NULL                                    | this thread's sticky agent (`/new <agent>`); NULL → the channel's `default_agent`                                    |
 | `updated_at`             | DATETIME (UTC)                               |                                                                                                              |
 | `parallel_ordinal`       | INTEGER NULL                                 | set on a parallel thread `/thread` opened: its number within the chat; NULL on every other row                |
 | `parallel_title`         | TEXT NULL                                    | that thread's title; its mark `🧵#N title` is built from the two                                              |
+| `chat_kind`              | TEXT NULL                                    | `direct` / `group` — which send path reaches the thread; NULL until a message there records it                |
+| `preferred_model`        | TEXT NULL                                    | the thread's sticky model (`/model`); rides only while the sticky agent is the one in effect                  |
+| `preferred_effort`       | TEXT NULL                                    | the thread's sticky reasoning effort                                                                         |
+| `preferred_cwd`          | TEXT NULL                                    | the thread's sticky working directory (`/dir`), one of the channel's `directories` or beneath one             |
 
 Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
 
@@ -186,7 +191,7 @@ parallel thread (a row with a `parallel_ordinal`), or any private-chat topic on
 a transport whose direct-chat threads are deliberate (Telegram). A casual
 reply-in-thread in a SeaTalk direct chat keys to the chat's `""` row. The
 ordinal is `max + 1` over the chat's rows, so a number is never reused after
-its conversation is replaced ("Open parallel conversations in a direct chat").
+its conversation is replaced ("Open parallel conversations beside a direct chat").
 
 Migration: `20260708_0041_channel_thread_conversations.py` creates it and
 backfills every existing peer's conversation and sticky agent as that peer's
@@ -196,6 +201,55 @@ that already holds the table; reversible by dropping it.
 `parallel_title`, nullable, with no backfill: the direct-chat thread rows that
 exist were casual replies, and leaving them without an ordinal is what folds
 them into the direct chat's conversation. Reversible by dropping both columns.
+`20260930_0108_channel_sticky_settings_history_outbox.py` adds `chat_kind` and
+the three `preferred_*` settings, nullable, no backfill.
+
+A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
+group's defaults from its main chat"): a group thread with no setting of its own
+opens with the group row's, except that a model and effort chosen for another
+agent are not inherited.
+
+## Table: `channel_thread_history`
+
+Every conversation a chat thread opened — what `/resume` lists ("Resume an
+earlier conversation from chat") and what a reply typed on the web is mirrored
+back through (spec chat "Mirror a web reply into the channel it came from").
+
+| column            | type                                         | notes                                     |
+| ----------------- | -------------------------------------------- | ----------------------------------------- |
+| `id`              | INTEGER PK                                   | order of opening                          |
+| `resource_id`     | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                               |
+| `chat_id`         | TEXT                                         | the chat                                  |
+| `thread_id`       | TEXT                                         | the conversation thread (`""` for a DM)   |
+| `conversation_id` | TEXT, UNIQUE                                 | soft reference into `conversations`       |
+| `chat_kind`       | TEXT NULL                                    | `direct` / `group`, when known            |
+| `opened_at`       | DATETIME (UTC)                               |                                           |
+
+Index on `(resource_id, chat_id, thread_id)`. Machine-local, like the thread
+table. Migration 0108 creates it and back-fills each thread's current
+conversation; reversible by dropping it.
+
+## Table: `channel_outbox`
+
+Messages Coffer owes a chat and has not delivered: a web reply (`kind=reply`,
+stored with its `(from Coffer) ` prefix) and the agent's answer collected behind
+it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
+
+| column            | type                                         | notes                                   |
+| ----------------- | -------------------------------------------- | --------------------------------------- |
+| `id`              | INTEGER PK                                   | delivery order                          |
+| `resource_id`     | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                             |
+| `chat_id`         | TEXT                                         |                                         |
+| `thread_id`       | TEXT                                         |                                         |
+| `chat_kind`       | TEXT                                         | `direct` / `group`                      |
+| `conversation_id` | TEXT                                         | the conversation the message belongs to |
+| `kind`            | TEXT                                         | `reply` / `answer`                      |
+| `text`            | TEXT                                         | what is sent                            |
+| `created_at`      | DATETIME (UTC)                               |                                         |
+| `delivered_at`    | DATETIME NULL                                | NULL while pending                      |
+
+Indexes on `(resource_id, delivered_at)` and `conversation_id`. Machine-local.
+Migration 0108 creates it; reversible by dropping it.
 
 ## Migrations that touch a channel's config
 

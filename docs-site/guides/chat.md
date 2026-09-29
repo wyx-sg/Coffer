@@ -116,6 +116,20 @@ A turn never ends silently. If the daemon is killed outright, the text streamed 
 
 If Claude Code is not logged in, the banner says so and tells you to run `claude` and complete `/login`.
 
+## Replying to a channel's conversation
+
+A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Chat page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
+
+- Before you send, the composer says where the reply will also go, for example **Also sends to SeaTalk · 🧵#1 deploy check**.
+- The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.
+- A reply goes only to the chat and thread the conversation belongs to, never anywhere else.
+
+A conversation that lives in a **group's main chat** is never mirrored: the composer says the reply stays in Coffer. A main chat is where the whole room reads, and a reply you typed at your desk, with an answer the room did not ask for, is not something to drop in front of everyone. A direct chat, its parallel threads and a group thread are yours to continue, so they are mirrored.
+
+When the channel cannot send right now — it is not running on this machine, or the platform refused — the reply is not lost. It is marked **not delivered to *channel***, the agent still answers on the page, and the reply and the answer are sent to the chat, in order, once the channel runs again. The mark disappears when they arrive.
+
+Only sending mirrors. **Retry** after a failed turn runs it again on the page but does not post the message to the chat a second time.
+
 ## Attachments
 
 A message holds up to 32,768 characters of text and up to 10 attached files. Attach a file from the composer in any of three ways:
@@ -217,7 +231,7 @@ Events are named `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_d
 
 ## Related
 
-- [Channels](/guides/channels) — drive the same conversations from Telegram or SeaTalk.
+- [Channels](/guides/channels) — drive the same conversations from Telegram or SeaTalk; replies from this page are mirrored back.
 - [Agents](/guides/agents) — register Claude Code and Codex.
 - [Model providers](/guides/providers) — point an agent at a different endpoint.
 - [Chat and turns](/architecture/chat) — the turn platform in depth.

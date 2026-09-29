@@ -7,6 +7,7 @@ factory carries for this kind.
 from __future__ import annotations
 
 import inspect
+import os
 from typing import Any
 
 import typer
@@ -42,6 +43,29 @@ _WAIT_AFTER_FORWARD = typer.Option(
 )
 
 
+# The directories `/dir` may switch into (spec channels "Choose the working
+# directory from chat"). Repeatable; on ``edit`` the list given REPLACES the
+# stored one, and ``--no-dirs`` clears it.
+_DIRS = typer.Option(
+    None,
+    "--dir",
+    help="An absolute directory `/dir` may switch into (repeat for several; replaces the list)",
+)
+_NO_DIRS = typer.Option(
+    False, "--no-dirs", help="Allow no directories for `/dir` (clears the list)"
+)
+
+
+def directories(dirs: list[str] | None, no_dirs: bool) -> list[str] | None:
+    """The allow-list the user passed, or ``None`` when they passed none. Relative
+    paths are made absolute against the current directory, as a shell user means."""
+    if no_dirs:
+        return []
+    if not dirs:
+        return None
+    return [os.path.abspath(os.path.expanduser(d)) for d in dirs]
+
+
 def _settings(
     require_mention: bool | None,
     ignore_other_mentions: bool | None,
@@ -62,12 +86,17 @@ def _settings(
 
 def settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, Any] | None:
     """The stored config with only the settings given changed (``edit``)."""
-    changes = _settings(
-        values.get("require_mention"),
-        values.get("ignore_other_mentions"),
-        values.get("wait_after_text"),
-        values.get("wait_after_forward"),
+    changes: dict[str, Any] = dict(
+        _settings(
+            values.get("require_mention"),
+            values.get("ignore_other_mentions"),
+            values.get("wait_after_text"),
+            values.get("wait_after_forward"),
+        )
     )
+    dirs = directories(values.get("dirs"), bool(values.get("no_dirs")))
+    if dirs is not None:
+        changes["directories"] = dirs
     if not changes:
         return None
     return {**(resource.get("config") or {}), **changes}

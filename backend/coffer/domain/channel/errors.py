@@ -54,7 +54,7 @@ class ChannelSendFailed(CofferError):  # noqa: N818
 
 class ParallelThreadUnavailable(Exception):  # noqa: N818
     """The transport cannot open a parallel thread in this chat right now (see
-    "Open parallel conversations in a direct chat").
+    "Open parallel conversations beside a direct chat").
 
     Not a ``CofferError``: it never crosses the HTTP surface. It carries the one
     sentence ``/thread`` answers with, written for the chat's owner — what to

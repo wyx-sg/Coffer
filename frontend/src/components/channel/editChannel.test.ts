@@ -20,6 +20,7 @@ import { describe, expect, test } from "vitest";
 import {
   honoursRequireMention,
   parseBurstWait,
+  parseDirectories,
   planChannelEdit,
   storedBurstWait,
 } from "./editChannel";
@@ -232,6 +233,47 @@ describe("planChannelEdit", () => {
       expect(parseBurstWait("-1")).toBeNull();
       expect(parseBurstWait("60.5")).toBeNull();
       expect(parseBurstWait("abc")).toBeNull();
+    });
+  });
+
+  describe("directories for /dir", () => {
+    const config = {
+      channel_type: "telegram",
+      bot_token_ref: "channel/tg/bot-token",
+      directories: ["/srv/app"],
+    };
+
+    test("the plan carries the directories trimmed, without a trailing / or blank lines", () => {
+      const { directories } = parseDirectories("  /Users/me/projects/ \n\n/srv/app\n/srv/app/\n/");
+      const plan = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, directories },
+      });
+
+      expect(plan.config.directories).toEqual(["/Users/me/projects", "/srv/app", "/"]);
+    });
+
+    test("an unchanged list is not rewritten, and an empty one clears it", () => {
+      const same = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, directories: ["/srv/app"] },
+      });
+      expect(same.config.directories).toEqual(["/srv/app"]);
+
+      const cleared = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, directories: parseDirectories("\n  \n").directories },
+      });
+      expect(cleared.config.directories).toEqual([]);
+    });
+
+    test("a relative path is rejected", () => {
+      const parsed = parseDirectories("/srv/app\nprojects\n~/code");
+      expect(parsed.invalid).toEqual(["projects", "~/code"]);
+      expect(parsed.directories).toEqual(["/srv/app"]);
     });
   });
 });

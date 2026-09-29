@@ -30,7 +30,7 @@ Every agent router carries `resolve_agent_path`, which rewrites a `{uid}` path p
 
 `AutoDetectService.types()` returns one row per descriptor: the registered agent's directory, or the directory Add would register — the standard one unless only the one the type's environment variable names exists — with the other existing directory as `other_config_dir`. `candidates` is the unregistered rows seen by either signal. `addable` is "not registered and the program is installed", so `installed_never_run` is addable: the route asks detection, and when the type is installed but never run and the target is its standard directory, `AgentService.register` creates it (privileged-path check first) and then the `skills` leaf, as for every agent. Any other missing directory is still refused.
 
-### Migration 0108 keeps the agent the user actually uses
+### Migration 0109 keeps the agent the user actually uses
 
 Per type with duplicates the kept row is, in order: the one whose own Coffer MCP entry carries its `--agent-uid` (read-only, best effort — a read failure counts as not connected), the enabled one, the most recently used (latest of `updated_at` and its newest audit entry), the one on the standard directory, the oldest. Dropped uids are replaced by the kept uid in every `scope_json` agents list (deduplicated, never widened to `NULL`) and in channel `default_agent`; a dropped row's `skill_agent_bindings` go with it. Nothing is written into the dropped agent's directory. The kept row is renamed to its type and loses its description; titles are cleared for the three kinds. The downgrade restores nothing: dropped rows and titles are not recoverable, and the collapsed rows are valid to an older build.
 

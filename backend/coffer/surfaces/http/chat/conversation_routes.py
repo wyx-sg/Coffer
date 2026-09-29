@@ -11,6 +11,7 @@ from dataclasses import replace
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
+from coffer.application.chat.ports import ChannelMirrorPort
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.resource_service import ResourceService
@@ -23,12 +24,18 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from coffer.domain.chat.mirror import MirrorView
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
+from coffer.surfaces.http.chat.dependencies import (
+    get_channel_mirror,
+    get_chat_service,
+    get_turn_orchestrator,
+)
 from coffer.surfaces.http.chat.schemas import (
     AgentConfigOut,
     AgentConfigPatch,
     ChannelBindingOut,
+    ChannelMirrorOut,
     ContentBlockOut,
     ConversationCreate,
     ConversationListOut,
@@ -36,6 +43,7 @@ from coffer.surfaces.http.chat.schemas import (
     ConversationPatch,
     MessageListOut,
     MessageOut,
+    UndeliveredReplyOut,
 )
 from coffer.surfaces.http.dependencies import get_resource_service
 
@@ -61,7 +69,24 @@ async def _channel_names(resources: ResourceService) -> dict[str, str]:
     return {c.uid: c.name for c in await resources.list(kind="channel")}
 
 
-def _conv_out(conv: Conversation, channel_names: Mapping[str, str]) -> ConversationOut:
+def _mirror_out(view: MirrorView) -> ChannelMirrorOut:
+    return ChannelMirrorOut(
+        deliverable=view.deliverable,
+        platform=view.platform,
+        target=view.target,
+        reason=view.reason,
+        undelivered=[
+            UndeliveredReplyOut(kind=u.kind, text=u.text, created_at=u.created_at)  # type: ignore[arg-type]
+            for u in view.undelivered
+        ],
+    )
+
+
+def _conv_out(
+    conv: Conversation,
+    channel_names: Mapping[str, str],
+    mirror: MirrorView | None = None,
+) -> ConversationOut:
     # A conversation "has a channel binding" iff channel_uid is set
     # (ADR chat-single-owner-live-mirror). The row stores the channel's
     # IDENTITY so a renamed channel keeps its conversations; the NAME is
@@ -72,6 +97,7 @@ def _conv_out(conv: Conversation, channel_names: Mapping[str, str]) -> Conversat
             channel_uid=conv.channel_uid,
             channel=channel_names.get(conv.channel_uid),
             chat_id=conv.peer_chat_id or "",
+            mirror=_mirror_out(mirror) if mirror is not None else None,
         )
     return ConversationOut(
         id=conv.id,
@@ -179,10 +205,18 @@ async def get_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationOut:
-    """Get a single conversation by id.  Returns 404 if not found."""
+    """Get a single conversation by id.  Returns 404 if not found.
+
+    A conversation a channel drives also says where a reply typed here would go
+    (``channel_binding.mirror``, spec chat "Mirror a web reply into the channel
+    it came from") — read here only, so the list stays one query."""
     conv = await svc.get_conversation(id)
-    return _conv_out(conv, await _channel_names(resources))
+    view = None
+    if conv.channel_uid is not None and mirror is not None:
+        view = await mirror.describe(conv.id, conv.channel_uid)
+    return _conv_out(conv, await _channel_names(resources), view)
 
 
 @router.patch("/conversations/{id}", response_model=ConversationOut)

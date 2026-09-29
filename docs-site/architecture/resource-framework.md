@@ -234,7 +234,7 @@ An unidentified session — a shim configured by hand without `--agent-uid` — 
 
 ### The inverted scope of channels
 
-For every other kind, scope names the agents a resource is *delivered to*. A channel is consumed by no agent: it is an inbound surface. So a channel's scope names the agents the channel may **drive**. `/agent` in the chat lists, offers and accepts only those agents, and the channel's `default_agent` must stay inside a non-empty scope — enforced on both write paths, by `on_update_config` for the config and by `validate_scope_for` for the scope. A channel with `{"agents": []}` does not start its adapter at all. A dormant channel's config stays editable, so a wrong token can be fixed without reactivating it.
+For every other kind, scope names the agents a resource is *delivered to*. A channel is consumed by no agent: it is an inbound surface. So a channel's scope names the agents the channel may **drive**. `/new <agent>` in the chat names and accepts only those agents, and the channel's `default_agent` must stay inside a non-empty scope — enforced on both write paths, by `on_update_config` for the config and by `validate_scope_for` for the scope. A channel with `{"agents": []}` does not start its adapter at all. A dormant channel's config stays editable, so a wrong token can be fixed without reactivating it.
 
 ### The seven kinds
 
@@ -245,7 +245,7 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and `is_active(scope, agent)`; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
 | `memory` | One partition (a repository, or `global`) under `~/.coffer/memory/`, derived from agents' native memory. Does not converge. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
-| `channel` | Transport config, credential refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/agent` and the default agent) and the channel runtime, which does not start a dormant channel. |
+| `channel` | Transport config, credential refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a dormant channel. |
 | `provider` | Wire protocol, base URL, one `credential_ref`. | Yes, pre-filled by `default_scope` from the wire | The projection seam `application/provider/targets.py`: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them. Each layer is switched as a whole by its experimental feature.

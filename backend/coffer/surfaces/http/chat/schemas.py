@@ -88,6 +88,32 @@ class AgentConfigOut(BaseModel):
     effort: str | None = None
 
 
+class UndeliveredReplyOut(BaseModel):
+    """A message Coffer still owes the channel chat: a web ``reply`` or the
+    agent's ``answer`` to it (spec chat "Mirror a web reply into the channel it
+    came from")."""
+
+    kind: Literal["reply", "answer"]
+    text: str
+    created_at: datetime
+
+
+class ChannelMirrorOut(BaseModel):
+    """Where a reply typed here will also be sent (spec chat "Show where a reply
+    will also be sent").
+
+    ``deliverable`` is False when a reply stays in Coffer; ``reason`` then says
+    why: ``group_main`` (a group's main chat), ``not_located`` / ``chat_kind_unknown``
+    (no chat to write to is known), ``channel_deleted``. ``target`` is the label
+    shown before sending, e.g. ``SeaTalk · 🧵#1 deploy check``."""
+
+    deliverable: bool
+    platform: str
+    target: str
+    reason: str | None = None
+    undelivered: list[UndeliveredReplyOut] = Field(default_factory=list)
+
+
 class ChannelBindingOut(BaseModel):
     """The IM channel a conversation is also driven from (ADR chat-single-owner-live-mirror).
 
@@ -102,6 +128,9 @@ class ChannelBindingOut(BaseModel):
     #: come from a channel), but there is no longer a name to show for it.
     channel: str | None
     chat_id: str
+    #: Where a reply would also go. Filled on the single-conversation read
+    #: only; null in the list, which stays cheap.
+    mirror: ChannelMirrorOut | None = None
 
 
 class ConversationOut(BaseModel):
@@ -187,10 +216,15 @@ class SendMessageAck(BaseModel):
     (ADR chat-single-owner-live-mirror).
 
     ``queued`` is True when the message was enqueued behind an in-flight turn,
-    False when its turn started immediately.
+    False when its turn started immediately. ``mirror`` says what became of
+    the reply in the channel the conversation came from (spec chat "Mirror a
+    web reply into the channel it came from"): ``sent`` to the chat, ``pending``
+    until the channel can send, ``kept`` in Coffer only; null for a conversation
+    no channel drives.
     """
 
     queued: bool
+    mirror: Literal["sent", "pending", "kept"] | None = None
 
 
 class PendingQueueIn(BaseModel):

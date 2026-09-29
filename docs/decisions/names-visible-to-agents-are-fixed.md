@@ -217,7 +217,7 @@ reads, an identifier it calls — must set `name_fixed` in the same change.
 - `coffer mcp add|edit` and `coffer skill add` take no `--title`, and
   `coffer skill edit` does not exist: nothing on a skill's record is editable,
   and its description is changed by editing `SKILL.md`.
-- Migration 0108 clears the titles stored on agents, MCP servers and skills,
+- Migration 0109 clears the titles stored on agents, MCP servers and skills,
   and collapses agents to one per type named by it. A synced document from an
   older build that still carries a title for these kinds is applied with the
   title ignored.

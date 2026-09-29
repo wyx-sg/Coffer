@@ -240,7 +240,7 @@ frontmatter name rule).
     ([Credential References](credential-references.md)).
   - 0100 removes the `workflow:` ref spelling from `workflow_runs.template_ref`.
 - Because every reference holds a uid, collapsing agents to one per type
-  (migration 0108) only had to swap a dropped agent's uid for the kept one in
+  (migration 0109) only had to swap a dropped agent's uid for the kept one in
   reach lists and channel `default_agent`s; the kept row was renamed to its type.
 - The sync bundle's layout schema version was bumped, so a machine on an older
   build refuses the new layout (`domain/sync/manifest.refuse_if_too_new`) and

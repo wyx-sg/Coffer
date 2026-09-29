@@ -11,7 +11,7 @@ MCP servers and skills carry a fixed name that agents see, plus an editable `tit
 - **Every type's detection state, always.** `GET /api/v1/agents/types` lists each supported type — registered or not — with its state (`installed_active`, `installed_never_run`, `config_only`, `missing`), version, directory, standard directory, whether it can be added, and the other directory its environment variable names. Candidates are at most one per type.
 - **An agent installed but never run can be added.** Registering it at its standard directory creates that directory holding only what Coffer needs. A `config_only` type cannot be added.
 - **No title on agents, MCP servers or skills.** A non-empty title on those kinds is refused (422) on every surface; `coffer mcp add|edit` and `coffer skill add` lose `--title`, and `coffer skill edit` is removed because nothing on a skill record is editable. The web UI shows their names. The other kinds keep their titles. A synced document from an older build that still carries a title for these kinds is applied with the title ignored.
-- **Migration 0108** collapses existing agents to one per type — keeping the connected one, then an enabled one, then the most recently used, then the one on the standard directory — re-points every reach list and channel default at the kept agent, renames it to its type, clears the three kinds' titles and agents' descriptions, and logs each dropped duplicate.
+- **Migration 0109** collapses existing agents to one per type — keeping the connected one, then an enabled one, then the most recently used, then the one on the standard directory — re-points every reach list and channel default at the kept agent, renames it to its type, clears the three kinds' titles and agents' descriptions, and logs each dropped duplicate.
 
 ## Capabilities
 
@@ -27,7 +27,7 @@ MCP servers and skills carry a fixed name that agents see, plus an editable `tit
 
 ## Impact
 
-- Backend: `domain/resource.py` (`Kind.titled`, `Kind.name_from_config`), `application/resource_kind_ops.py`, `resource_service.py`, `resource_title_ops.py`, `resource_rename_ops.py`, the agent, MCP and skill kinds, `application/agent/service.py` and `auto_detect.py`, the agent routes and a router dependency that resolves a type to the agent's uid, the sync applier, attention and reconcile subjects (an agent is labelled by its product name), CLI `agent`, `mcp`, `skill`, `scan`, `_kind_verbs`, `_resolve`, error code `AGENT_TYPE_REGISTERED`, migration `0108`.
+- Backend: `domain/resource.py` (`Kind.titled`, `Kind.name_from_config`), `application/resource_kind_ops.py`, `resource_service.py`, `resource_title_ops.py`, `resource_rename_ops.py`, the agent, MCP and skill kinds, `application/agent/service.py` and `auto_detect.py`, the agent routes and a router dependency that resolves a type to the agent's uid, the sync applier, attention and reconcile subjects (an agent is labelled by its product name), CLI `agent`, `mcp`, `skill`, `scan`, `_kind_verbs`, `_resolve`, error code `AGENT_TYPE_REGISTERED`, migration `0109`.
 - Contracts: agent-registry and skill-manager regenerated.
 - Frontend: generated types and minimal compile fixes — add/edit agent forms lose name, title and description; MCP server and skill pages lose the title editor. The two-row Agents page is a separate change.
 - Docs: agents, MCP servers and skills guides, the CLI, REST and error-code references, and a note on the ADR that made MCP and skill names fixed.

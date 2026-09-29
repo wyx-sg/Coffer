@@ -434,6 +434,23 @@ def test_edit_changes_the_quiet_windows(channel_daemon: _Daemon) -> None:
     assert r.exit_code == 2
 
 
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="the channel's directories are edited from the Channels page and the CLI",
+)
+def test_edit_sets_and_clears_the_dir_allow_list(channel_daemon: _Daemon, tmp_path) -> None:
+    assert _register_tg().exit_code == 0
+    one, two = tmp_path / "one", tmp_path / "two"
+    r = runner.invoke(app, ["channel", "edit", "tg", "--dir", str(one), "--dir", f"{two}/"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["directories"] == [str(one), str(two)]
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert f"dir:      {one}" in shown.output
+    r = runner.invoke(app, ["channel", "edit", "tg", "--no-dirs"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["directories"] == []
+
+
 def test_edit_with_no_option_exits_2(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
     r = runner.invoke(app, ["channel", "edit", "tg"])

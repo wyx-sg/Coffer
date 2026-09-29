@@ -15,7 +15,7 @@ agent kind.
 from __future__ import annotations
 
 from coffer.application.chat.attachments import ChatAttachmentService
-from coffer.application.chat.ports import ModelCatalogPort
+from coffer.application.chat.ports import ChannelMirrorPort, ModelCatalogPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -99,3 +99,19 @@ def get_attachment_service() -> ChatAttachmentService:
     if _attachment_service is None:
         raise RuntimeError("chat attachment service not initialised")
     return _attachment_service
+
+
+_channel_mirror: ChannelMirrorPort | None = None
+
+
+def set_channel_mirror(mirror: ChannelMirrorPort | None) -> None:
+    """Called by the channel kind's composition (spec chat "Mirror a web reply
+    into the channel it came from"); ``None`` unwires it."""
+    global _channel_mirror
+    _channel_mirror = mirror
+
+
+def get_channel_mirror() -> ChannelMirrorPort | None:
+    """FastAPI Depends() target. ``None`` when no channel kind is wired — chat
+    then works exactly as before, with nothing mirrored."""
+    return _channel_mirror

@@ -251,7 +251,7 @@ it. The published per-element limits are a card of at most **3 titles, 5
 descriptions, 5 buttons, 3 button groups and 3 images**, with a title of at most
 120 characters and a description of at most 1000. Buttons are therefore laid out
 in **button groups** (an element holding up to three buttons on one line) rather
-than one element each: the parent's six-button bound ([channels](../spec.md) "Offer command choices as owner-gated selection cards")
+than one element each: the parent's six-button bound ([channels](../spec.md) "Offer choices and actions as owner-gated cards")
 always fits in the three group slots and reads as rows rather than a six-high
 stack. A row splits the card's width evenly, so how many buttons share a row
 depends on their labels: a row takes the next button only while every label in
@@ -272,7 +272,7 @@ so a long body degrades to a truncated card instead of a refused one.
 - **THEN** that button sits alone in its button group, while short labels still share one
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
-A card rewrite ([channels](../spec.md) "Switch the conversation's agent from chat", [channels](../spec.md) "Offer command choices as owner-gated selection cards") reaches only
+A card rewrite ([channels](../spec.md) "Switch the conversation's agent from chat", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
 **interactive cards, only within 7 days, only for the sending bot**. Outside that
 window the platform refuses the update, and the card MUST degrade exactly as the
 parent requires: a cosmetic rewrite after a choice is dropped, while a page turn
@@ -497,3 +497,16 @@ conversation ([channels](../spec.md) "Key conversation identity by channel, chat
 - **WHEN** the owner sends `/thread`
 - **THEN** the bot posts a direct-chat message opening with `🧵#1 Task`
 - **AND** a reply under that message is keyed to the new parallel conversation
+
+### Requirement: Mark a main-chat mention as the group's main chat
+A SeaTalk @mention sent in a group's main chat carries no thread id, and the
+reply roots a new thread at the message itself. The transport MUST mark such a
+message as coming from the group's main chat, so the core can treat a command
+sent there as setting the group's defaults (spec channels "Set a group's
+defaults from its main chat"); a mention inside a thread is not marked.
+
+#### Scenario: a main-chat @mention is marked as group main
+- **GIVEN** a SeaTalk channel receiving group @mention events
+- **WHEN** one arrives with no thread id and another arrives inside a thread
+- **THEN** the first is marked as the group's main chat with its own message id as
+  the thread, and the second is not marked

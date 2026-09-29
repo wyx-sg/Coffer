@@ -24,7 +24,7 @@ Telegram is the channel you can set up entirely on your own. It needs no public 
 The token is full control of the bot. Keep it out of chat logs, screenshots and shell history. If it leaks, send `/revoke` to BotFather and rotate it in Coffer (see [Rotate the token](#rotate-the-token)).
 :::
 
-You do not need to set a description or a command list: Coffer registers the bot's command menu on start and fills in an empty description. A description you set yourself in BotFather is left as it is.
+You do not need to set a description or a command list: Coffer registers the bot's command menus on start and fills in an empty description. A description you set yourself in BotFather is left as it is.
 
 ## 2. Register the channel
 
@@ -86,7 +86,7 @@ peer:     not paired
    ```
 
 2. Open the pair link on the phone signed in to your account (**Open the pairing link** on the web page) and tap **Start**. Or open the bot and send `K7QM3XPA` as a message.
-3. The bot confirms the pairing. You are the owner.
+3. The bot confirms the pairing and sends the help once. You are the owner.
 
 The code is single-use, expires after an hour, and is invalidated after 10 wrong guesses. Until you pair, the bot does not answer anyone.
 
@@ -108,10 +108,23 @@ Telegram replies are built from the agent's Markdown.
 - **Rich messages** — where the Bot API server Coffer reaches supports them, a reply with headings, lists, tables or code is sent as a rich message that keeps that structure.
 - **HTML fallback** — otherwise the reply is converted to Telegram's HTML subset and split into messages of at most 4,000 characters on paragraph boundaries. A chunk Telegram refuses as HTML is re-sent as plain text.
 - **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Elsewhere, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent. A quick reply opens no status message at all.
-- **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/agent`, `/model`, `/effort`, `/status` and `/help` are shown only to you.
-- **Selection cards** — `/agent`, `/model` and `/effort` with no argument answer with an inline keyboard. The card's title is a heading or a bold first line.
+- **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help` are shown only to you.
+- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. The card's title is a heading or a bold first line.
 
 Coffer probes each newer Bot API surface (rich messages, drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
+
+## Command menus
+
+Coffer registers the bot's command menus with Telegram every time the channel starts, from the same list the help text uses:
+
+| Where | Commands in the menu |
+| --- | --- |
+| Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb`, `/help` |
+| Groups | `/new`, `/stop`, `/model`, `/status`, `/resume`, `/help` |
+
+Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. `/kb` is listed only while the Knowledge feature is on; switching the feature re-registers the menus. The hidden `/start` is never listed.
+
+A command tapped from a group's menu arrives as `/status@my_coffer_bot`. Coffer treats it as `/status` addressed to the bot, so it answers even when the group requires a mention. A command naming another bot, such as `/status@some_other_bot`, is not for this one and is ignored.
 
 ## Media
 

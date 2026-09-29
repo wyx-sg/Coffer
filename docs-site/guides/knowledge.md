@@ -146,15 +146,15 @@ One file per upload, at most 20 MB. An unsupported type is refused with the type
 
 The material's `title` comes from the document (a `# ` heading on its first line, or else the file name). Its `description` is written by Coffer's model when one is configured, and taken from the document's opening prose when not.
 
-### From your phone: `/save` in a channel
+### From your phone: `/kb` in a channel
 
 If you have a [channel](/guides/channels) paired, send a document to it as an attachment, then send:
 
 ```text
-/save payments
+/kb payments
 ```
 
-Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save.
+Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save. `/kb` is offered in the channel's help and menus only while the Knowledge feature is on.
 
 ### Edit a file yourself
 

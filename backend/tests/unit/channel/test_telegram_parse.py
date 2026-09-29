@@ -355,3 +355,78 @@ def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
     assert built.chat_title == "Ops room"
     # Telegram spells a mention with a display name too, so the reply carries none.
     assert built.sender_mention_id == ""
+
+
+# -- /cmd@botname (spec channels/telegram "Treat a command addressed to this bot
+# by name as the command") ------------------------------------------------------
+
+
+def _command(text: str, *, chat_type: str = "group", **overrides) -> dict:
+    head = text.split()[0]
+    return _message(
+        chat={"id": 555, "type": chat_type},
+        text=text,
+        entities=[
+            {"type": "bot_command", "offset": 0, "length": len(head.encode("utf-16-le")) // 2}
+        ],
+        **overrides,
+    )
+
+
+@pytest.mark.acceptance(spec="channels/telegram", scenario="/cmd@thisbot runs the command")
+def test_a_command_naming_this_bot_is_the_bare_command_and_addressed() -> None:
+    built = _build(_command("/model@MyBot opus"))
+    assert built.text == "/model opus"
+    # Addressed even with no @mention and no reply: require_mention does not drop it.
+    assert built.addressed is True
+    assert built.mentions_others is False
+
+
+def test_a_command_naming_this_bot_in_a_dm_is_the_bare_command() -> None:
+    built = _build(_command("/status@mybot", chat_type="private"))
+    assert (built.text, built.addressed) == ("/status", True)
+
+
+def test_the_bot_name_survives_an_emoji_after_the_command() -> None:
+    # Entity lengths are UTF-16 units; the text after the command keeps its emoji.
+    built = _build(_command("/new@mybot 🚀 go"))
+    assert built.text == "/new 🚀 go"
+
+
+@pytest.mark.acceptance(spec="channels/telegram", scenario="/cmd@otherbot is not for this bot")
+def test_a_command_naming_another_bot_is_not_addressed_to_us() -> None:
+    # A reply to our bot does not win it back: the command says who it is for.
+    built = _build(
+        _command(
+            "/model@otherbot opus",
+            reply_to_message={"from": {"id": BOT_ID, "is_bot": True, "username": "mybot"}},
+        )
+    )
+    assert built.addressed is False
+    assert built.text.endswith("/model@otherbot opus")
+
+
+def test_a_command_naming_another_bot_in_a_dm_is_left_alone() -> None:
+    built = _build(_command("/model@otherbot opus", chat_type="private"))
+    assert (built.text, built.addressed) == ("/model@otherbot opus", True)
+
+
+def test_a_plain_command_in_a_group_keeps_the_mention_rule() -> None:
+    assert _build(_command("/status")).addressed is False
+    assert _build(_command("/status")).text == "/status"
+
+
+def test_a_bot_command_later_in_the_text_is_not_a_command_target() -> None:
+    message = _message(
+        text="try /model@mybot",
+        entities=[{"type": "bot_command", "offset": 4, "length": 12}],
+    )
+    built = _build(message)
+    assert (built.text, built.addressed) == ("try /model@mybot", False)
+
+
+def test_an_unknown_own_username_never_claims_a_named_command() -> None:
+    built = build_inbound_message(
+        _command("/model@mybot"), (), channel="tg", bot_id=None, bot_username=None
+    )
+    assert built.addressed is False

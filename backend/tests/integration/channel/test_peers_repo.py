@@ -377,6 +377,11 @@ def test_migration_0041_creates_thread_table_and_backfills_dm(tmp_path, monkeypa
             # 0104: a parallel thread's number and title.
             "parallel_ordinal",
             "parallel_title",
+            # 0108: the send path and the thread's sticky settings.
+            "chat_kind",
+            "preferred_model",
+            "preferred_effort",
+            "preferred_cwd",
         }
         rows = conn.execute(
             "SELECT resource_id, chat_id, thread_id, active_conversation_id, preferred_agent "

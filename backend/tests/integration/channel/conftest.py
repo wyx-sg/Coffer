@@ -48,6 +48,7 @@ from coffer.domain.channel.envelopes import (
     InboundLifecycle,
     InboundMessage,
 )
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
@@ -152,6 +153,7 @@ def inbound(
     sender_mention_id: str = "",
     attachments: Sequence[InboundAttachment] = (),
     quoted_message_id: str = "",
+    group_main: bool = False,
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -170,6 +172,7 @@ def inbound(
         mentions_others=mentions_others,
         attachments=tuple(attachments),
         quoted_message_id=quoted_message_id,
+        group_main=group_main,
     )
 
 
@@ -255,9 +258,13 @@ class FakeModelSuggestions:
     def __init__(self) -> None:
         self._by_agent: dict[str, list[str]] = {}
         self._efforts: dict[tuple[str, str | None], list[str]] = {}
+        self._labels: dict[str, str] = {}
 
-    def add(self, agent_key: str, models: list[str]) -> None:
+    def add(
+        self, agent_key: str, models: list[str], *, labels: dict[str, str] | None = None
+    ) -> None:
         self._by_agent[agent_key] = models
+        self._labels.update(labels or {})
 
     def add_efforts(self, agent_key: str, levels: list[str], *, model: str | None = None) -> None:
         self._efforts[(agent_key, model)] = levels
@@ -266,8 +273,8 @@ class FakeModelSuggestions:
         return list(self._by_agent.get(agent_key, []))
 
     async def model_labels(self, agent_key: str) -> dict[str, str]:
-        # Unlabelled, so a button shows its bare id as before.
-        return {m: m for m in self._by_agent.get(agent_key, [])}
+        # Unlabelled unless a test names them, so a button shows its bare id.
+        return {m: self._labels.get(m, m) for m in self._by_agent.get(agent_key, [])}
 
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         return list(self._efforts.get((agent_key, model), []))
@@ -277,7 +284,7 @@ class FakeModelSuggestions:
 class FakeIngestedDocument:
     """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels "Save a
     sent document into a collection") — only the two
-    attributes `/save`'s confirmation message reads. ``path`` is ``None`` while
+    attributes `/kb`'s confirmation message reads. ``path`` is ``None`` while
     the upload waits in the collection's inbox to be merged (spec knowledge
     "Submit every entrance's input as material")."""
 
@@ -293,7 +300,7 @@ class FakeCollectionCatalog:
 
     def __init__(self, names: Sequence[str] = ()) -> None:
         self.names = list(names)
-        #: How many times `/save` asked. It takes no agent and the answer does
+        #: How many times `/kb` asked. It takes no agent and the answer does
         #: not vary, so the count is all there is to observe.
         self.calls = 0
 
@@ -304,7 +311,7 @@ class FakeCollectionCatalog:
 
 class FakeIngestService:
     """In-memory ``IngestPort``: records every call, and can be scripted to
-    raise — the one-line-message contract `/save` relies on (never a stack
+    raise — the one-line-message contract `/kb` relies on (never a stack
     trace to the chat) — or to return a scripted document."""
 
     def __init__(self) -> None:
@@ -384,14 +391,18 @@ class StubWebSocketController:
 class ScriptedAgentProvider:
     """``AgentProvider`` whose adapter a test swaps in before sending."""
 
-    def __init__(self, adapter: Any, agent_key: str = "builtin") -> None:
+    def __init__(self, adapter: Any, agent_key: str = "builtin", store: Any = None) -> None:
         self.adapter = adapter
         self.agent_key = agent_key
         self.last_agent_config: dict[str, Any] | None = None
+        #: The conversation store, when set: the config a conversation opens
+        #: with is persisted there, exactly as the real providers do.
+        self.store = store
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         self.last_agent_config = agent_config
-        return None
+        if self.store is not None:
+            await self.store.set_agent_config(conversation_id, AgentConfig.from_json(agent_config))
 
     async def build_adapter(self, conversation_id: str) -> Any:
         return self.adapter
@@ -490,7 +501,9 @@ class ChannelEnv:
 
     def add_agent(self, agent_key: str, reply: str = "from-other") -> ScriptedAgentProvider:
         """Register a second scripted agent so routing tests have a target."""
-        provider = ScriptedAgentProvider(default_reply_adapter(reply), agent_key=agent_key)
+        provider = ScriptedAgentProvider(
+            default_reply_adapter(reply), agent_key=agent_key, store=self.provider.store
+        )
         self.registry.register(provider, display_name=agent_key.title())
         return provider
 
@@ -576,6 +589,7 @@ class ChannelEnv:
         require_mention: bool = True,
         ignore_other_mentions: bool = False,
         agent_scope: Scope | None = None,
+        directories: Sequence[str] = (),
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
@@ -588,6 +602,7 @@ class ChannelEnv:
                 require_mention=require_mention,
                 ignore_other_mentions=ignore_other_mentions,
                 agent_scope=agent_scope,
+                directories=tuple(directories),
             )
         )
         return adapter
@@ -641,11 +656,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
 
-    provider = ScriptedAgentProvider(default_reply_adapter())
+    conversation_repo = ConversationRepo(sm)
+    provider = ScriptedAgentProvider(default_reply_adapter(), store=conversation_repo)
     registry = AgentProviderRegistry()
     registry.register(provider, display_name="Coffer Assistant")
     chat = ChatService(
-        conversations=ConversationRepo(sm),
+        conversations=conversation_repo,
         messages=MessageRepo(sm),
         registry=registry,
     )

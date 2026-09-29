@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.channel.mirror import ChannelMirror
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.runtime import ChannelRuntime
@@ -33,6 +34,7 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
 from coffer.infrastructure.channel.persistence import (
+    ChannelOutboxRepo,
     ChannelPeerRepo,
     ChannelThreadConversationRepo,
 )
@@ -42,6 +44,7 @@ from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
+from coffer.surfaces.http.chat.dependencies import set_channel_mirror
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 from coffer.surfaces.http.sync_contributions import SyncContributions
@@ -98,7 +101,7 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/save` (spec channels "Save a sent document into a collection"): both
+        # `/kb` (spec channels "Save a sent document into a collection"): both
         # already satisfy the channel
         # core's Protocol shape structurally (``CollectionCatalogPort`` /
         # ``IngestPort``), so the knowledge kind's own services go in
@@ -106,7 +109,7 @@ def wire_channel_kind(
         # (import-linter contract 5f).
         collections=knowledge.service,
         ingest=knowledge.ingest_service,
-        # While knowledge is switched off `/save` answers that and saves
+        # While knowledge is switched off `/kb` answers that and saves
         # nothing (spec experimental-features).
         knowledge_enabled=lambda: features.is_enabled("knowledge"),
     )
@@ -119,9 +122,21 @@ def wire_channel_kind(
         parsed = parse_channel_config(dict(config))
         if parsed.channel_type == "telegram":
             token = (await materialize({"token": parsed.bot_token_ref}))["token"]
-            return TelegramAdapter(name, token)
+            return TelegramAdapter(name, token, knowledge_enabled=features.is_enabled("knowledge"))
         secret = (await materialize({"secret": parsed.app_secret_ref}))["secret"]
         return SeaTalkAdapter(name, parsed.app_id, secret)
+
+    # A reply typed on the Chat page into a channel's conversation also goes to
+    # that chat (spec chat "Mirror a web reply into the channel it came from").
+    # Chat reaches it only through its own ``ChannelMirrorPort``, published here.
+    mirror = ChannelMirror(
+        resources=resource_svc,
+        threads=threads,
+        peers=peers,
+        outbox=ChannelOutboxRepo(sm),
+        processor=processor,
+    )
+    set_channel_mirror(mirror)
 
     runtime = ChannelRuntime(
         resources=resource_svc,
@@ -135,6 +150,9 @@ def wire_channel_kind(
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         machine_id=local_machine_id,
+        knowledge_enabled=lambda: features.is_enabled("knowledge"),
+        # Each tick delivers what a running channel still owes its chats.
+        on_tick=mirror.flush,
     )
 
     async def on_delete(channel: Resource) -> None:

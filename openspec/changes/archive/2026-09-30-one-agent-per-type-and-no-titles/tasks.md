@@ -23,7 +23,7 @@
 
 ## 4. Migration
 
-- [x] 4.1 `0108`: collapse agents to one per type (connected → enabled → most recently used → standard directory → oldest), re-point reach lists and channel defaults, drop the duplicates' skill bindings, rename to the type, clear agent descriptions and the three kinds' titles, log each dropped agent
+- [x] 4.1 `0109`: collapse agents to one per type (connected → enabled → most recently used → standard directory → oldest), re-point reach lists and channel defaults, drop the duplicates' skill bindings, rename to the type, clear agent descriptions and the three kinds' titles, log each dropped agent
 - [x] 4.2 Migration tests and `HEAD_REVISION`
 
 ## 5. Contracts, frontend, tests, docs

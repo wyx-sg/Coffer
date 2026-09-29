@@ -26,7 +26,7 @@ from coffer.application.channel.ports import ChannelBinding
 from coffer.domain.channel.commands import is_group_private
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget, InboundMessage
 
-__all__ = ["private_send", "safe_send", "target_for_command"]
+__all__ = ["is_private", "private_send", "safe_send", "target_for_command"]
 
 _logger = logging.getLogger(__name__)
 
@@ -65,6 +65,12 @@ def private_send(send: Any, target: EphemeralTarget | None) -> Any:
     if target is None:
         return send
     return functools.partial(send, ephemeral=target)
+
+
+def is_private(send: Any) -> bool:
+    """Whether ``send`` delivers to one member only (``private_send`` pinned a
+    target). A card cannot go that way, so a private answer is sent as text."""
+    return isinstance(send, functools.partial) and send.keywords.get("ephemeral") is not None
 
 
 async def safe_send(

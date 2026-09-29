@@ -2,7 +2,8 @@
 // Apply plumbing for EditChannelDialog: rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating / message batching), with the title when it changed.
+// group gating / message batching / /dir directories), with the title when it
+// changed.
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
@@ -65,6 +66,51 @@ interface ChannelEditValues {
   wait_after_text_seconds?: number;
   /** Quiet window (seconds) after a forwarded chat record or text-less files. */
   wait_after_forward_seconds?: number;
+  /** The folders `/dir` may switch into, normalised (see parseDirectories).
+   *  Undefined leaves the stored list alone. */
+  directories?: string[];
+}
+
+/** The most folders a channel may list (the backend's cap). */
+export const DIRECTORIES_MAX = 32;
+
+/** The stored `/dir` allow-list, or empty when absent. */
+export function storedDirectories(config: Record<string, unknown>): string[] {
+  const v = config.directories;
+  return Array.isArray(v) ? v.filter((d): d is string => typeof d === "string") : [];
+}
+
+/**
+ * Parse the directories field — one absolute path per line — the way the
+ * backend normalises it (spec channels "Choose the working directory from
+ * chat"): lines trimmed, blank lines dropped, a trailing "/" removed, repeats
+ * dropped. `invalid` lists the lines that are not absolute paths; `tooMany` is
+ * set past the backend's cap. An empty list is valid.
+ */
+export function parseDirectories(text: string): {
+  directories: string[];
+  invalid: string[];
+  tooMany: boolean;
+} {
+  const directories: string[] = [];
+  const invalid: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line === "") continue;
+    if (!line.startsWith("/")) {
+      invalid.push(line);
+      continue;
+    }
+    const path = line.replace(/\/+$/, "") || "/";
+    if (!directories.includes(path)) directories.push(path);
+  }
+  return { directories, invalid, tooMany: directories.length > DIRECTORIES_MAX };
+}
+
+/** Whether the directories field, as typed, is a list the backend accepts. */
+export function directoriesDraftValid(text: string): boolean {
+  const { invalid, tooMany } = parseDirectories(text);
+  return invalid.length === 0 && !tooMany;
 }
 
 /**
@@ -133,7 +179,7 @@ export interface ChannelEditInput {
  * never moves the ref, so the config is unchanged when only a secret changes)
  * and build the full config PATCH preserving every `*_ref` / unknown field
  * while applying the mutable changes (bound agent, SeaTalk app id, group
- * gating, message batching).
+ * gating, message batching, /dir directories).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
  * before any side effect runs. A blank secret value writes no credential.
@@ -165,6 +211,13 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   for (const key of Object.keys(BURST_WAIT_DEFAULTS) as BurstWaitKey[]) {
     const next = values[key];
     if (next !== undefined && next !== storedBurstWait(config, key)) nextConfig[key] = next;
+  }
+  // So is the /dir allow-list (order matters: the chat lists it as given).
+  if (
+    values.directories !== undefined &&
+    values.directories.join("\n") !== storedDirectories(config).join("\n")
+  ) {
+    nextConfig.directories = values.directories;
   }
 
   if (config.channel_type === "telegram") {
