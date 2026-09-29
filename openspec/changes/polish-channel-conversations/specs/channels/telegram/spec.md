@@ -40,3 +40,21 @@ reply's first is sent silently and opens with `(2/3)`.
 - **WHEN** it is delivered as a rich message
 - **THEN** that section is inside a `<details>` block summarised `Details`, and on
   the HTML fallback it is an expandable quotation in a numbered, silent message
+
+### Requirement: Show the working status in a direct chat's thinking block
+Where the Bot API offers `sendRichMessageDraft` (10.1; private chats only), a
+direct chat's draft MUST be a rich draft: the status header ([channels](../spec.md)
+"Show a turn's working state as one status line") in the draft-only
+`<tg-thinking>` block, the narration and step lines under it as a list, and the
+answer written so far as rich markdown. A server that does not know the method
+latches it off (see "Read the bot's identity from getMe and latch off
+unsupported surfaces") and the same snapshot goes out as the plain
+`sendMessageDraft`; a server without rich messages is not asked. Groups have no
+draft and keep the silent status message.
+
+#### Scenario: a direct chat's draft shows the status in its thinking block
+- **GIVEN** a Telegram server that offers rich drafts, and a direct chat's turn
+- **WHEN** its live snapshot is the status block and an answer
+- **THEN** one `sendRichMessageDraft` carries the header in `<tg-thinking>`, the
+  steps as a list and the answer as markdown, with the stop control, and no
+  plain draft is sent

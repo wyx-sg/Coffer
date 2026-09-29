@@ -331,6 +331,11 @@ class TelegramAdapter:
                 channel=self._name,
                 feature=self._features.message_drafts,
                 thread_id=thread_id,
+                # A rich draft needs rich messages: a server refusing those
+                # knows neither.
+                rich=(
+                    self._features.rich_drafts if self._features.rich_messages.available else None
+                ),
             )
         return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 

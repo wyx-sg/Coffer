@@ -1351,3 +1351,46 @@ async def test_a_long_snapshot_keeps_the_draft_alive(fake_telegram: FakeTelegram
     assert len(sent) == 4096
     # The tail is what the reader is watching, not the head they have seen.
     assert sent.startswith("…") and sent.endswith("x")
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram",
+    scenario="a direct chat's draft shows the status in its thinking block",
+)
+async def test_a_rich_draft_puts_the_status_header_in_the_thinking_block(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_drafts = True
+    fake_telegram.supports_rich_drafts = True
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    try:
+        await surface.update(
+            "⏳ Working · 2m 14s · 2 steps\n✅ Read · a.ts\n─\nThe **answer** so far"
+        )
+    finally:
+        await adapter.stop()
+    [draft] = fake_telegram.calls_for("sendRichMessageDraft")
+    assert draft["rich_message"]["markdown"] == (
+        "<tg-thinking>Working · 2m 14s · 2 steps</tg-thinking>\n\n- ✅ Read · a.ts\n\n"
+        "The **answer** so far"
+    )
+    assert draft["can_stop"] is True
+    assert not fake_telegram.calls_for("sendMessageDraft")
+
+
+async def test_a_refused_rich_draft_falls_back_to_the_plain_draft(
+    fake_telegram: FakeTelegram,
+) -> None:
+    fake_telegram.supports_drafts = True  # rich drafts stay unsupported
+    adapter = make_telegram_adapter(fake_telegram)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    surface = await adapter.open_live_text("555")
+    try:
+        await surface.update("⏳ Working · 1s")
+        await surface.update("⏳ Working · 2s")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendRichMessageDraft")) == 1  # latched off after one
+    assert fake_telegram.calls_for("sendMessageDraft")[0]["text"] == "⏳ Working · 1s"
