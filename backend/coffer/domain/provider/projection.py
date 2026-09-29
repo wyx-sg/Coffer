@@ -19,7 +19,10 @@ projects into none: it is internal-only, used by Coffer's own engine):
   Coffer-owned catalogue file so Codex's OWN model picker lists the endpoint's
   models rather than OpenAI's. The catalogue's CONTENT is built here
   (``codex_model_catalog_json``); writing and deleting the file is the
-  application layer's job, like every other projection write.
+  application layer's job, like every other projection write. The same
+  variable is added to ``shell_environment_policy.exclude``: Codex passes its
+  whole environment to the shell commands the agent runs by default, so
+  without it ``env`` in a turn would print the key into the transcript.
 
 Both write ONLY Coffer-managed keys, merging into the user's existing file so
 unrelated content is preserved.
@@ -41,6 +44,10 @@ from coffer.domain.provider.api_key_helper import (
     anthropic_api_key_helper as anthropic_api_key_helper,
 )
 from coffer.domain.provider.api_key_helper import is_managed_api_key_helper
+from coffer.domain.provider.codex_shell_env import (
+    drop_shell_env_exclude,
+    exclude_from_shell_env,
+)
 from coffer.domain.provider.config import Protocol
 
 # --- Codex provider-block identity --------------------------------------------
@@ -287,6 +294,8 @@ def apply_codex_provider(
     unrelated keys preserved). Sets top-level ``model`` + ``model_provider`` and
     the ``[model_providers.<provider_id>]`` table. When ``model`` is ``None`` (an
     unbound agent) the top-level ``model`` is omitted so Codex uses its default.
+    ``env_key`` is also added to ``shell_environment_policy.exclude`` so the key
+    Codex reads from its environment never reaches a shell command it runs.
 
     ``catalog_path`` points ``model_catalog_json`` at the Coffer-owned catalogue
     (see :func:`codex_model_catalog_json`) so Codex's OWN model picker offers the
@@ -318,6 +327,7 @@ def apply_codex_provider(
     block["wire_api"] = wire_api
     block["env_key"] = env_key
     doc["model_providers"][provider_id] = block
+    exclude_from_shell_env(doc, env_key)
     return tomlkit.dumps(doc)
 
 
@@ -348,11 +358,13 @@ def remove_codex_provider(text: str, *, provider_id: str = CODEX_PROVIDER_ID) ->
     points at Coffer (a user-selected provider is left untouched). A
     ``model_catalog_json`` pointing at the Coffer-owned catalogue is dropped too,
     so Codex's own model list comes back; one pointing anywhere else is the user's
-    and stays. Unrelated keys are preserved."""
+    and stays. ``COFFER_PROVIDER_KEY`` is dropped from
+    ``shell_environment_policy.exclude``. Unrelated keys are preserved."""
     if not text.strip():
         return ""
     doc = tomlkit.parse(text)
     _pop_managed_catalog(doc)
+    drop_shell_env_exclude(doc, CODEX_ENV_KEY)
     providers = doc.get("model_providers")
     if isinstance(providers, MutableMapping):
         providers.pop(provider_id, None)

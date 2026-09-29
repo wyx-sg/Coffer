@@ -102,7 +102,7 @@ Coffer never reads these from its own environment; it sets them for child proces
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | Claude Code turns | Points Claude Code at a registered agent's config directory when it is not `~/.claude`. |
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
-| `COFFER_PROVIDER_KEY` | Codex turns | The API key of the model provider Coffer projected into Codex's `config.toml` (`model_providers.coffer.env_key`). The key is never written to disk. |
+| `COFFER_PROVIDER_KEY` | Codex turns | The API key of the model provider Coffer projected into Codex's `config.toml` (`model_providers.coffer.env_key`). The key is never written to disk, and the projection lists the variable in `shell_environment_policy.exclude` so the shell commands Codex runs do not inherit it. |
 | `COFFER_GIT_TOKEN` | `git` during vault sync | The sync remote's token, read by a credential helper at run time so it never appears in `argv` or on disk. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |
 
