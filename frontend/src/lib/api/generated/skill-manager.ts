@@ -154,6 +154,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/stage/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage Archive */
+        post: operations["stage_archive_api_v1_skills_stage_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/stage/folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage Folder */
+        post: operations["stage_folder_api_v1_skills_stage_folder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/stage/git": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage Git */
+        post: operations["stage_git_api_v1_skills_stage_git_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/stage/{staging_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel Stage */
+        delete: operations["cancel_stage_api_v1_skills_stage__staging_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/stage/{staging_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Stage */
+        post: operations["confirm_stage_api_v1_skills_stage__staging_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/verify": {
         parameters: {
             query?: never;
@@ -237,6 +322,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/{uid}/source/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Update */
+        post: operations["apply_update_api_v1_skills__uid__source_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/source/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check Source */
+        post: operations["check_source_api_v1_skills__uid__source_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/source/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare Update */
+        get: operations["compare_update_api_v1_skills__uid__source_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/source/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep Mine */
+        post: operations["keep_mine_api_v1_skills__uid__source_keep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/source/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Update */
+        post: operations["preview_update_api_v1_skills__uid__source_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -248,6 +418,26 @@ export interface components {
              * @enum {string}
              */
             location: "skills" | "agents_dir";
+        };
+        /**
+         * ArchiveImportSourceOut
+         * @description A skill unpacked from an uploaded archive; both fields are informational.
+         */
+        ArchiveImportSourceOut: {
+            /** Archive Name */
+            archive_name: string;
+            /** Folder */
+            folder: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "archive_import";
+        };
+        /** Body_stage_archive_api_v1_skills_stage_archive_post */
+        Body_stage_archive_api_v1_skills_stage_archive_post: {
+            /** File */
+            file: string;
         };
         /**
          * BuiltinSourceOut
@@ -320,6 +510,27 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
         };
         /**
+         * GitImportSourceOut
+         * @description A skill copied from a folder of a Git repository at one pinned commit.
+         */
+        GitImportSourceOut: {
+            /** Commit */
+            commit: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Ref */
+            ref: string | null;
+            /** Subpath */
+            subpath: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "git_import";
+            /** Url */
+            url: string;
+        };
+        /**
          * LinkMode
          * @description How a binding's target was realised on disk.
          * @enum {string}
@@ -381,6 +592,33 @@ export interface components {
             /** Last Linked At */
             last_linked_at: string | null;
             link_mode: components["schemas"]["LinkMode"] | null;
+        };
+        /** SkillCommitOut */
+        SkillCommitOut: {
+            /** Id */
+            id: string;
+            /** Subject */
+            subject: string;
+        };
+        /** SkillFileChangeOut */
+        SkillFileChangeOut: {
+            /** Additions */
+            additions: number;
+            /** Binary */
+            binary: boolean;
+            /** Deletions */
+            deletions: number;
+            /** Diff */
+            diff: string;
+            /** Path */
+            path: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "removed" | "modified";
+            /** Truncated */
+            truncated: boolean;
         };
         /** SkillFileContentOut */
         SkillFileContentOut: {
@@ -475,9 +713,12 @@ export interface components {
             master_path: string;
             /** Name */
             name: string;
+            /** Requires */
+            requires: components["schemas"]["SkillRequirementOut"][];
             scope: components["schemas"]["ScopeOut"] | null;
             /** Source */
-            source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
+            source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["ArchiveImportSourceOut"] | components["schemas"]["GitImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
+            source_status: components["schemas"]["SkillSourceStatusOut"] | null;
             /** Uid */
             uid: string;
             /**
@@ -502,6 +743,175 @@ export interface components {
             name: string;
             /** Uid */
             uid: string;
+        };
+        /**
+         * SkillRequirementOut
+         * @description One command the skill's SKILL.md says it needs.
+         */
+        SkillRequirementOut: {
+            /** Command */
+            command: string;
+            /** Min Version */
+            min_version: string | null;
+        };
+        /**
+         * SkillSourceStatusOut
+         * @description What this machine last learned about a Git-imported skill's source.
+         */
+        SkillSourceStatusOut: {
+            /** Checked At */
+            checked_at: string | null;
+            /** Commits Ahead */
+            commits_ahead: number;
+            /** Dismissed Commit */
+            dismissed_commit: string | null;
+            /** Error */
+            error: string | null;
+            /** Files Changed */
+            files_changed: number;
+            /** Last Success At */
+            last_success_at: string | null;
+            /** Latest Commit */
+            latest_commit: string | null;
+            /** Update Available */
+            update_available: boolean;
+        };
+        /** SkillStageFolderRequest */
+        SkillStageFolderRequest: {
+            /** Path */
+            path: string;
+        };
+        /** SkillStageGitRequest */
+        SkillStageGitRequest: {
+            /** Path */
+            path?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * SkillStagingConfirmOut
+         * @description The skills a confirm added (or replaced), as the read model shows them.
+         */
+        SkillStagingConfirmOut: {
+            /** Items */
+            items: components["schemas"]["SkillOut"][];
+        };
+        /** SkillStagingConfirmRequest */
+        SkillStagingConfirmRequest: {
+            /** Replace */
+            replace?: string[];
+            /** Skills */
+            skills: string[];
+        };
+        /**
+         * SkillStagingOut
+         * @description What a staged folder, archive or repository holds. Nothing is written
+         *     until ``POST /skills/stage/{staging_id}/confirm``.
+         */
+        SkillStagingOut: {
+            /** Commit */
+            commit: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "folder" | "archive" | "git";
+            /** Label */
+            label: string;
+            /** Ref */
+            ref: string | null;
+            /** Skills */
+            skills: components["schemas"]["StagedSkillOut"][];
+            /** Staging Id */
+            staging_id: string;
+            /** Subpath */
+            subpath: string;
+        };
+        /** SkillTextVersionOut */
+        SkillTextVersionOut: {
+            /** Binary */
+            binary: boolean;
+            /** Text */
+            text: string | null;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** SkillUpdateApplyRequest */
+        SkillUpdateApplyRequest: {
+            /**
+             * Discard Local Edits
+             * @default false
+             */
+            discard_local_edits?: boolean;
+            /** Staging Id */
+            staging_id: string;
+        };
+        /**
+         * SkillUpdateCompareOut
+         * @description One file in the master folder, the pinned commit and the new commit.
+         */
+        SkillUpdateCompareOut: {
+            incoming: components["schemas"]["SkillTextVersionOut"];
+            local: components["schemas"]["SkillTextVersionOut"];
+            /** Path */
+            path: string;
+            pinned: components["schemas"]["SkillTextVersionOut"];
+        };
+        /** SkillUpdateKeepRequest */
+        SkillUpdateKeepRequest: {
+            /** Commit */
+            commit?: string | null;
+        };
+        /**
+         * SkillUpdatePreviewOut
+         * @description What taking the source's newest commit would do. Staged until
+         *     ``apply`` or ``DELETE /skills/stage/{staging_id}``.
+         */
+        SkillUpdatePreviewOut: {
+            /** Changes */
+            changes: components["schemas"]["SkillFileChangeOut"][];
+            /** Commits */
+            commits: components["schemas"]["SkillCommitOut"][];
+            /** Conflict */
+            conflict: boolean;
+            /** From Commit */
+            from_commit: string;
+            /** Local Changes */
+            local_changes: components["schemas"]["SkillFileChangeOut"][];
+            /** Staging Id */
+            staging_id: string;
+            /** To Commit */
+            to_commit: string;
+            /** Up To Date */
+            up_to_date: boolean;
+        };
+        /**
+         * StagedSkillOut
+         * @description One skill a stage found.
+         */
+        StagedSkillOut: {
+            /** Description */
+            description: string | null;
+            /** File Count */
+            file_count: number;
+            /** Folder */
+            folder: string;
+            /** Message */
+            message: string | null;
+            /** Name */
+            name: string | null;
+            /** Protected */
+            protected: boolean;
+            /** Reason */
+            reason: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Taken */
+            taken: boolean;
+            /** Valid */
+            valid: boolean;
         };
         /** UnmanagedListOut */
         UnmanagedListOut: {
@@ -957,6 +1367,225 @@ export interface operations {
             };
         };
     };
+    stage_archive_api_v1_skills_stage_archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_stage_archive_api_v1_skills_stage_archive_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillStagingOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stage_folder_api_v1_skills_stage_folder_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillStageFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillStagingOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stage_git_api_v1_skills_stage_git_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillStageGitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillStagingOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_stage_api_v1_skills_stage__staging_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                staging_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    confirm_stage_api_v1_skills_stage__staging_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                staging_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillStagingConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillStagingConfirmOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     verify_skills_api_v1_skills_verify_post: {
         parameters: {
             query?: never;
@@ -1191,6 +1820,228 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillFileContentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_update_api_v1_skills__uid__source_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillUpdateApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_source_api_v1_skills__uid__source_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillSourceStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    compare_update_api_v1_skills__uid__source_compare_get: {
+        parameters: {
+            query: {
+                staging_id: string;
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillUpdateCompareOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    keep_mine_api_v1_skills__uid__source_keep_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillUpdateKeepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillSourceStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_update_api_v1_skills__uid__source_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillUpdatePreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

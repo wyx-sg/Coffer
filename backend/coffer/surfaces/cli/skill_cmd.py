@@ -5,8 +5,9 @@ management on REST, the CLI and the web").
 kind shares (``_kind_verbs``). ``list`` and ``show`` are the skill's own,
 because they read ``/skills``, which carries what the generic resource
 document does not — the source, the version hash, the master folder and the
-per-agent deliveries. ``add`` takes a folder, because importing one is how a
-skill comes to exist. ``verify`` reports drift.
+per-agent deliveries. ``add`` takes a folder, an archive or a Git URL, because
+importing one is how a skill comes to exist; ``update`` takes a Git-imported
+skill's newer commits (``skill_source_cmd``). ``verify`` reports drift.
 
 A skill's name is fixed once registered (spec skill-manager "Register each
 skill as a resource with a SKILL.md-safe name") and it carries no display
@@ -32,11 +33,13 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import skill_source_cmd
 from coffer.surfaces.cli._kind_verbs import (
     KindVerbs,
     register_kind_verbs,
     verbose_of,
 )
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
@@ -141,18 +144,45 @@ def show(
 @app.command("add")
 def add(
     ctx: typer.Context,
-    folder: str = typer.Argument(..., help="Local path to an existing skill folder"),
+    source: str = typer.Argument(
+        ..., metavar="SOURCE", help="A skill folder, a .zip / .skill archive, or a Git URL"
+    ),
     force: bool = typer.Option(
         False, "--force", "-f", help="Replace an existing skill of the same name"
     ),
+    ref: str | None = typer.Option(None, "--ref", help="Git: branch, tag or commit"),
+    subpath: str | None = typer.Option(None, "--path", help="Git: folder inside the repository"),
+    names: list[str] = typer.Option(  # noqa: B008
+        [], "--skill", help="Which skill to add when there are several (repeatable)"
+    ),
+    all_: bool = typer.Option(False, "--all", help="Add every valid skill found"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Add without asking"),
 ) -> None:
-    """Import a skill from a local folder; its name comes from SKILL.md."""
+    """Add a skill from a folder, an archive or a Git repository; its name comes from SKILL.md.
+
+    A folder is imported at once. An archive or a repository is staged first:
+    the command prints what it found and asks before adding anything.
+    """
+    if skill_source_cmd.looks_like_git_url(source):
+        skill_source_cmd.add_git(
+            ctx, source, ref=ref, subpath=subpath, names=names, all_=all_, yes=yes, force=force
+        )
+        return
+    if ref or subpath:
+        typer.echo("--ref and --path apply to a Git repository only", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    if skill_source_cmd.looks_like_archive(source):
+        skill_source_cmd.add_archive(ctx, source, names=names, all_=all_, yes=yes, force=force)
+        return
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/skills/import", json={"path": folder, "overwrite": force})
+        r = c.post("/skills/import", json={"path": source, "overwrite": force})
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"added: skill {r.json()['name']}")
+
+
+skill_source_cmd.register(app)
 
 
 register_kind_verbs(

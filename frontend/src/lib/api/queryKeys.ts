@@ -100,9 +100,11 @@ export const agentProviderModelsKey = (agentKey: string) =>
 // ---------------------------------------------------------------------------
 
 export const skillsKey = ["skills"] as const;
-export const skillKey = (uid: string) => ["skills", uid] as const;
 export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
 export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file", path] as const;
+/** One file's three versions in a staged update (local, pinned, incoming). */
+export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
+  ["skills", uid, "compare", stagingId, path] as const;
 
 // ---------------------------------------------------------------------------
 // mcp — per-server discovery, health and invocation log
@@ -264,7 +266,7 @@ export const internalEngineKey = ["settings", "internalEngine"] as const;
 
 /**
  * Some kinds are read through their OWN list key rather than the generic
- * resource list — `useSkill` reads `skillKey(uid)`, `useProvider` reads
+ * resource list — the Skills page reads `skillsKey`, `useProvider` reads
  * `providerKey(uid)`, agents read `agentKey(uid)`. Invalidating only
  * `resourcesKey` leaves those surfaces rendering the pre-write state (a skill
  * detail page would keep showing "enabled" after a successful disable), so a

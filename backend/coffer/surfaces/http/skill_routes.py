@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -12,15 +13,36 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.skill import drift_view
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.application.skill.service import SkillService
+from coffer.application.skill.source_service import SkillSourceService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftEntry, DriftKind
-from coffer.domain.skill.source import BuiltinSource, LocalImportSource
+from coffer.domain.skill.requires import requires_from_skill_md
+from coffer.domain.skill.source import (
+    ArchiveImportSource,
+    BuiltinSource,
+    GitImportSource,
+    LocalImportSource,
+)
+from coffer.domain.skill.source_status import SourceStatus
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
-from coffer.surfaces.http.skill_dependencies import get_skill_service
+from coffer.surfaces.http.skill_dependencies import (
+    get_optional_skill_source_service,
+    get_skill_service,
+)
+from coffer.surfaces.http.skill_source_schemas import (
+    ArchiveImportSourceOut,
+    GitImportSourceOut,
+    SkillRequirementOut,
+    SkillSourceStatusOut,
+    archive_source_out,
+    git_source_out,
+    requirement_out,
+    status_out,
+)
 
 router = APIRouter(
     prefix="/api/v1/skills",
@@ -74,14 +96,21 @@ class BuiltinSourceOut(BaseModel):
     type: Literal["builtin"]
 
 
-SkillSourceOut = Annotated[LocalImportSourceOut | BuiltinSourceOut, Field(discriminator="type")]
+SkillSourceOut = Annotated[
+    LocalImportSourceOut | ArchiveImportSourceOut | GitImportSourceOut | BuiltinSourceOut,
+    Field(discriminator="type"),
+]
 
 
 def _source_out(
-    source: LocalImportSource | BuiltinSource,
-) -> LocalImportSourceOut | BuiltinSourceOut:
+    source: LocalImportSource | ArchiveImportSource | GitImportSource | BuiltinSource,
+) -> LocalImportSourceOut | ArchiveImportSourceOut | GitImportSourceOut | BuiltinSourceOut:
     if isinstance(source, LocalImportSource):
         return LocalImportSourceOut(type="local_import", original_path=source.original_path)
+    if isinstance(source, ArchiveImportSource):
+        return archive_source_out(source)
+    if isinstance(source, GitImportSource):
+        return git_source_out(source)
     return BuiltinSourceOut(type="builtin")
 
 
@@ -111,6 +140,13 @@ class SkillOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     bindings: list[SkillBindingOut]
+    #: The commands its SKILL.md declares it needs, read from the master folder
+    #: on each request (spec skill-manager "Show the commands a skill declares
+    #: it needs").
+    requires: list[SkillRequirementOut]
+    #: A Git-imported skill's last update check on this machine; null for
+    #: every other source.
+    source_status: SkillSourceStatusOut | None
 
 
 class SkillListOut(BaseModel):
@@ -190,14 +226,31 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
     )
 
 
+def _requires(svc: SkillService, name: str) -> list[SkillRequirementOut]:
+    try:
+        text = (pathlib.Path(svc.master_path(name)) / "SKILL.md").read_text("utf-8")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    return [requirement_out(q) for q in requires_from_skill_md(text)]
+
+
 async def _to_skill_out(
     svc: SkillService,
     r: Resource,
     agents_by_id: dict[int, Resource],
     *,
     bindings_by_skill: dict[int, list[BindingState]] | None = None,
+    sources: SkillSourceService | None = None,
+    statuses: dict[int, SourceStatus] | None = None,
 ) -> SkillOut:
     cfg = SkillConfig.model_validate(r.config)
+    source_status: SkillSourceStatusOut | None = None
+    if isinstance(cfg.source, GitImportSource):
+        if statuses is not None:
+            status = statuses.get(r.id)
+        else:
+            status = await sources.status(r) if sources is not None else None
+        source_status = status_out(status, cfg.source.commit)
     # Single-skill handlers (get / import) take the per-skill round-trip —
     # list handlers prebuild the map once via
     # ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
@@ -221,6 +274,8 @@ async def _to_skill_out(
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
         bindings=[_binding_out(b, agents_by_id) for b in bindings if b.enabled],
+        requires=_requires(svc, r.name),
+        source_status=source_status,
     )
 
 
@@ -250,14 +305,19 @@ def _binding_out(b: BindingState, agents_by_id: dict[int, Resource]) -> SkillBin
 @router.get("", response_model=SkillListOut)
 async def list_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillListOut:
     rs = await svc.list_skills()
     agents_by_id = await _agents_by_id(svc)
     # Prebuild the binding lookup once — collapses what was a 2N+2 query
     # pattern (one ``list_for_skill`` + one ``get`` per skill) into ~3.
     bindings_by_skill = await svc.bindings_grouped_by_skill()
+    statuses = await sources.statuses() if sources is not None else {}
     items = [
-        await _to_skill_out(svc, r, agents_by_id, bindings_by_skill=bindings_by_skill) for r in rs
+        await _to_skill_out(
+            svc, r, agents_by_id, bindings_by_skill=bindings_by_skill, statuses=statuses
+        )
+        for r in rs
     ]
     return SkillListOut(items=items)
 
@@ -276,9 +336,10 @@ async def import_skill(
 async def get_skill(
     uid: str,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillOut:
     r = await svc.get_skill(uid)
-    return await _to_skill_out(svc, r, await _agents_by_id(svc))
+    return await _to_skill_out(svc, r, await _agents_by_id(svc), sources=sources)
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

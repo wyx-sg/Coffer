@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 204 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 214 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -118,7 +118,7 @@ The daemon mounts 204 operations in 24 groups. Groups follow the order the daemo
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
-| [skills](#skills) | 9 |
+| [skills](#skills) | 19 |
 | [mcp](#mcp) | 10 |
 | [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 16 |
@@ -320,6 +320,16 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `DELETE` | `/api/v1/skills/{uid}` | Delete Skill |
 | `POST` | `/api/v1/skills/verify` | Verify Skills |
 | `POST` | `/api/v1/skills/repair` | Repair Skills |
+| `POST` | `/api/v1/skills/stage/folder` | Stage Folder |
+| `POST` | `/api/v1/skills/stage/archive` | Stage Archive |
+| `POST` | `/api/v1/skills/stage/git` | Stage Git |
+| `POST` | `/api/v1/skills/stage/{staging_id}/confirm` | Confirm Stage |
+| `DELETE` | `/api/v1/skills/stage/{staging_id}` | Cancel Stage |
+| `POST` | `/api/v1/skills/{uid}/source/check` | Check Source |
+| `POST` | `/api/v1/skills/{uid}/source/preview` | Preview Update |
+| `GET` | `/api/v1/skills/{uid}/source/compare` | Compare Update |
+| `POST` | `/api/v1/skills/{uid}/source/apply` | Apply Update |
+| `POST` | `/api/v1/skills/{uid}/source/keep` | Keep Mine |
 | `GET` | `/api/v1/skills/{uid}/files` | Return the skill's master folder as a read-only file tree. |
 | `GET` | `/api/v1/skills/{uid}/files/content` | Read a single file's contents from the skill's master folder. |
 | `PUT` | `/api/v1/skills/{uid}/files/content` | Overwrite one existing text file in the skill's master folder. |

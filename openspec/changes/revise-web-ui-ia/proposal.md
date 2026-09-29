@@ -136,6 +136,9 @@ unarchived until that implementation lands.
   commit, with Update available, a previewed diff and a conflict view when the skill was edited
   locally) — each showing what it found before anything is written. Archives are checked for
   zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
+  The skill-manager requirements for these sources, the Skills page and the skill detail tabs are
+  carried by the `add-skill-sources` change (archived with that work); this change keeps only the
+  agent Skills tab's side of unmanaged skills.
 - **Knowledge:** the collection page's web surface — one term, Curate / Curation (整理); an Inbox
   node with a count and the only Curate now; a header status line; Add a document (an item); a
   body-only editor with Reload / Compare on a stale save; no curation controls without Coffer's
@@ -211,10 +214,9 @@ unarchived until that implementation lands.
   the owner filter and per-kind actions, instructions files under Config files; the Agents list's
   two fixed rows with automatic detection, previewed Add / Connect / Repair, Add both and the
   row menu's config directory.
-- `skill-manager`: skills are added from a folder, an archive or a Git repository, with
-  `archive_import` and `git_import` sources; unmanaged skills are reached and adopted only from the agent's Skills tab, and
-  the Skills page lists managed skills only; a skill's detail page has Files (opening on a
-  rendered `SKILL.md` with Preview / Source and Edit), Delivery, Requires and History tabs.
+- `skill-manager`: unmanaged skills are reached and adopted only from the agent's Skills tab
+  (the skill sources, the Skills page and the detail tabs moved to the `add-skill-sources`
+  change).
 - `provider-switching`: the Claude Code and Codex projections write the model keys above and
   revert every key Coffer wrote; the Model tab's fields, tier suggestions, per-model context window
   and effort levels, and local model connections; Model providers sits in the Agents group as one table with no tabs,

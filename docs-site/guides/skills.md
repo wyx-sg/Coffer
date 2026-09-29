@@ -1,11 +1,11 @@
 ---
 title: Skills
-description: Keep one library of AgentSkills-standard skills in Coffer and deliver each one into the skill directories of the agents you choose.
+description: Keep one library of AgentSkills-standard skills in Coffer — added from a folder, an archive or a Git repository — and deliver each one into the skill directories of the agents you choose.
 ---
 
 # Skills
 
-Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers importing and adopting skills, choosing which agents a skill reaches, editing skill files, skill names, repairing drift, and Coffer's own built-in `coffer-guide` skill.
+Coffer keeps one master library of skills on your machine and links each skill into the skill directory of every agent that should have it. This page covers adding skills from a folder, an archive or a Git repository, updating a skill from its repository, adopting skills an agent already has, choosing which agents a skill reaches, editing skill files, the commands a skill needs, skill names, checking agents' copies, and Coffer's own built-in `coffer-guide` skill. How it works underneath is on the [Skills architecture](/architecture/skills) page.
 
 ## What skills are for
 
@@ -18,6 +18,7 @@ Coffer manages skills in the open [AgentSkills](https://agentskills.io) format. 
 ## Prerequisites
 
 - The Coffer daemon is running (see [Running the daemon](/guides/daemon)).
+- To add from a Git repository, `git` is installed on this machine.
 - At least one agent is registered (see [Agents](/guides/agents)). Coffer delivers skills to Claude Code and Codex.
 
 ## The skill format
@@ -60,9 +61,26 @@ A folder that breaks a rule is refused with the reason, and nothing is written t
 
 Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/skills/<name>/` edits the master, and every other agent sees the change on its next read. Deleting a file there deletes it from the master too.
 
-## Import a skill
+## The Skills page
 
-Import copies a local skill folder into the master library. Coffer records the path it came from, but does not track it afterwards: a later change to the source folder is not picked up until you import again.
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and description, or what needs your attention — **Built-in**, **Off**, **Copied**, **Update available**, **Source unreachable**. Tick rows to set the reach of several skills at once or to delete them.
+
+Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
+
+| Tab | What it shows |
+| --- | --- |
+| **Files** | The skill's folder as a tree, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. |
+| **Delivery** | Every agent and the state of its copy: linked, copied, different from the master (after **Check again**), or not delivered and why. The reach button is here too. |
+| **Requires** | The commands the skill says it needs, each linking to its page on the CLIs page. |
+| **History** | The folder's past versions, once the vault records them; until then the tab says so. |
+
+The Skills page lists only the skills Coffer manages. Skills an agent has that Coffer does not manage are on that agent's **Skills** tab, where you can adopt them (see [below](#adopt-skills-an-agent-already-has)).
+
+## Add a skill
+
+A skill comes from one of three places. Whichever you use, Coffer first shows what it found — the skill or skills, their names and descriptions, any that cannot be added and why, and any whose name is already taken — and adds nothing until you confirm. Closing the dialog leaves nothing behind.
+
+### From a folder
 
 ::: code-group
 
@@ -71,20 +89,97 @@ coffer skill add ~/src/team-skills/release-checklist
 ```
 
 ```text [Web UI]
-Skills → Add skill → paste the path, or Browse… to choose the folder, under "Local path" → Import
+Skills → Add skill → From a folder → paste the path, or Choose… → Add skill
 ```
 
 :::
 
-Coffer reads the skill's name from its `SKILL.md` frontmatter and creates `~/.coffer/skills/release-checklist/`. Its name and its description both come from that file (see [Skill names and descriptions](#skill-names-and-descriptions)). A freshly imported skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
+Coffer reads the skill's name from its `SKILL.md` frontmatter and copies the folder to `~/.coffer/skills/release-checklist/`. It records the path it came from, but does not track it afterwards: a later change to the source folder is not picked up until you add it again. In the web UI, a folder whose top has no `SKILL.md` but whose subfolders do offers those subfolders as a choice. On the command line, naming the folder is the confirmation, so it is added at once.
 
-Importing a folder whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, import again with `--force` (in the web UI, confirm **Replace** in the dialog that asks). The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
+### From an archive
+
+::: code-group
+
+```sh [CLI]
+coffer skill add ~/Downloads/release-notes.skill
+coffer skill add ~/Downloads/team-skills.zip --skill review --skill triage
+coffer skill add ~/Downloads/team-skills.zip --all --yes
+```
+
+```text [Web UI]
+Skills → Add skill → From an archive → Choose file… (or drop a .zip or .skill file) → Add skill
+```
+
+:::
+
+A `.zip` or `.skill` archive holds a skill when its `SKILL.md` is at the top of the archive or one folder down. An archive holding several skills lists them all, and you pick which to add — on the command line with `--skill <name>` (repeat it) or `--all`. The command prints what it found and asks before adding; `--yes` skips the question.
+
+Coffer refuses the whole archive, naming the entries, before unpacking any of it when an entry has an absolute path or a `..` in its path, when an entry is a symlink, or when it would unpack to more than 50 MB. An archive with no `SKILL.md` at the top or one folder down is refused with that message.
+
+### From a Git repository
+
+::: code-group
+
+```sh [CLI]
+coffer skill add https://github.com/acme/agent-skills --path skills/review
+coffer skill add https://github.com/acme/agent-skills --ref v1.2 --path skills/review --yes
+coffer skill add https://github.com/acme/agent-skills/tree/main/terraform-plan
+```
+
+```text [Web UI]
+Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder → Add skill
+```
+
+:::
+
+Coffer clones the repository with this machine's own `git`, resolves the branch, tag or commit you gave (the default branch when you gave none) to one commit, and looks for skills in the folder you named by the same rule as an archive. A GitHub folder address such as `https://github.com/acme/agent-skills/tree/main/terraform-plan` is read as the repository, the branch and the folder.
+
+The skill is **pinned** to the commit it was copied from. It does not change when the repository does; see [Update a skill from its repository](#update-a-skill-from-its-repository).
+
+::: info Which repositories Coffer can reach
+Git runs without a prompt, and Coffer gives it no credential and stores none. A public repository always works. A private one works when this machine's git can already clone it — through a credential helper such as the macOS keychain, or SSH keys — because Coffer uses your own git configuration. If git would ask for a password, the add fails with git's message instead.
+:::
+
+### When the name is taken
+
+Adding a skill whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, choose **Replace** on that row in the dialog, or pass `--force` on the command line. The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
 
 ```sh
 coffer skill add --force ~/src/team-skills/release-checklist
 ```
 
-Re-importing is the only way to update a skill from an outside source. Coffer does not import from a URL or a git repository; clone it first, then import the folder.
+A freshly added skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
+
+## Update a skill from its repository
+
+A skill added from a Git repository shows its source on its page: the repository, the folder, the pinned commit and whether an update is waiting. Coffer checks the repository every six hours, and you can check at any time.
+
+::: code-group
+
+```sh [CLI]
+coffer skill update terraform-plan --check
+coffer skill update terraform-plan
+```
+
+```text [Web UI]
+Skills → the skill → Check now, then Review update… when an update is available
+```
+
+:::
+
+When the branch or tag has new commits that change the skill's folder, the skill shows **Update available** with the commits since the pin. Reviewing it lists the files the update adds, removes and changes, with a diff, and applies nothing until you confirm. Applying replaces the folder with the new commit's content, moves the pin, and keeps the skill's reach and links; every agent sees the new files at once. On the command line, `coffer skill update <name>` prints the same preview and asks before applying (`--yes` skips the question).
+
+If you edited the skill since its pinned commit, the update is a **conflict**:
+
+| Choice | Web UI | CLI | What happens |
+| --- | --- | --- | --- |
+| Keep mine | **Keep my edits** | `--keep-mine` | Nothing changes. Coffer stops offering this update and tells you again when a newer commit arrives. |
+| Take theirs | **Take the update** | `--take-theirs` | The new commit is applied and your edits are discarded. |
+| Compare | **Compare** | — | Each changed file side by side: your folder, the pinned commit and the new commit. |
+
+If the repository can no longer be reached, the skill keeps working from its pinned copy. Its page shows git's message and when the last check succeeded, and nothing changes until a check succeeds again.
+
+A skill added from a folder or an archive has no source to update from: add it again with **Replace** (`--force`).
 
 ## Adopt skills an agent already has
 
@@ -269,6 +364,20 @@ The Files tab also offers **Open in editor** and **Reveal in Finder** (your syst
 
 Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Re-read the file and apply your change again. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
 
+## Commands a skill needs
+
+A skill can say which command-line tools it relies on with `requires` in its frontmatter:
+
+```yaml
+---
+name: gh-triage
+description: Label new issues, find duplicates, ask for missing details.
+requires: [jq, "gh>=2.40", uv]
+---
+```
+
+Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `requires: {commands: [...]}` and entries like `{command: gh, version: "2.40"}` are read too. The skill's **Requires** tab lists them, each linking to its page on the CLIs page, and `coffer skill show <name> --json` carries them as `requires`. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
+
 ## Skill names and descriptions
 
 A skill's name comes from the `name` line of its `SKILL.md` and is fixed once the skill is registered. It is the name of the directory an agent loads the skill from and the identifier an agent invokes it by, so instructions, other skills and permission rules that quote it would break on a rename. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, remove the skill and add it again under the new name, which resets its reach and delivered links (its bindings). The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
@@ -314,7 +423,9 @@ To repair the repairable kinds now instead of at the next start:
 coffer skill verify --fix
 ```
 
-`--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `<path>.coffer-backup-<timestamp>`, then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains. Drift checking has no web UI.
+`--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `<path>.coffer-backup-<timestamp>`, then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains.
+
+In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent, the path and what to do. **Repair** fixes the missing and tampered links; the rest stay listed for you. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
 
 ## The built-in `coffer-guide` skill
 
@@ -385,7 +496,11 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 **An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent: `coffer skill scope <name>`. Check that the agent itself is enabled. Then run `coffer skill verify` to see whether its link is missing or blocked by a foreign folder.
 
-**Import is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
+**Adding a skill from Git fails.** The dialog and the command show git's own message. `could not read Username` or `Permission denied (publickey)` means this machine's git has no credential for that repository: check that `git clone <url>` works in a terminal first. A ref or folder that does not exist is named in the message too.
+
+**An archive is refused.** The message names the entries that could write outside the archive, the symlinks, or the size cap it would pass. Re-create the archive from the skill's folder itself.
+
+**Adding a skill is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
 
 **A skill shows the Copied badge.** The agent's filesystem does not support links (this happens only on Windows). The copy does not follow edits to the master. After editing, trigger a new delivery, for example by disabling and re-enabling the skill.
 

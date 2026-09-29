@@ -121,7 +121,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # the web": `add <folder>` is the import, and the master folder is named
     # by `path skill <name>` rather than listed, printed or written here.
     # A skill has nothing editable: its name is fixed and it carries no title.
-    "skill": {*_LIFECYCLE - {"edit"}, "add", "scope", "verify"},
+    # `add` also takes an archive or a Git URL, and `update` is a Git-imported
+    # skill's upstream updates (check, preview, apply, keep mine).
+    "skill": {*_LIFECYCLE - {"edit"}, "add", "update", "scope", "verify"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
     # `path knowledge`. A collection

@@ -6,7 +6,8 @@
 // delivers it to the in-scope agent) → disable the skill (which reclaims the
 // delivered copy) → remove. State is provisioned via the daemon's REST API
 // (not by clicking through forms) so the test stays robust against UI churn,
-// but the table + delete control are exercised against the real DOM.
+// but the library, the open skill's tabs and its Delete are exercised against
+// the real DOM.
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -121,13 +122,29 @@ acceptance(
       // The agent-side symlink exists on disk after a successful delivery.
       expect(fs.existsSync(deliveredSkill)).toBe(true);
 
-      // 4. Reload + the page lists the skill name + binding cell.
+      // 4. Reload: the library lists the skill, and opening its row shows
+      //    the skill beside the list, on its Files tab with SKILL.md open.
       await page.reload();
-      // Exact match: the table also renders the skill's description, which
-      // embeds the skill name — a substring match would be ambiguous.
-      await expect(page.getByText(skillName, { exact: true })).toBeVisible({
-        timeout: 10_000,
-      });
+      const library = page.getByRole("list", { name: "Library" });
+      const row = library.getByRole("link", { name: new RegExp(skillName) });
+      await expect(row).toBeVisible({ timeout: 10_000 });
+      await row.click();
+      await expect(page).toHaveURL(new RegExp(`/skills/${skillName}$`));
+      await expect(
+        page.getByRole("heading", { level: 2, name: skillName }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("tab", { name: "Files", selected: true }),
+      ).toBeVisible();
+
+      // 4b. The Delivery tab shows the agent's copy as linked.
+      await page.getByRole("tab", { name: "Delivery" }).click();
+      await expect(page).toHaveURL(
+        new RegExp(`/skills/${skillName}/delivery$`),
+      );
+      await expect(
+        page.getByTestId(`skill-delivery-${agentName}`),
+      ).toContainText("Linked");
 
       // 5. Disable the SKILL via the API — delivery is decided on the skill
       //    (enabled + scope), so disabling it reclaims every copy and the
@@ -148,19 +165,20 @@ acceptance(
       expect(disableResp.status).toBe(200);
       expect(fs.existsSync(deliveredSkill)).toBe(false);
 
-      // 6. Remove the skill through the UI: the row's Delete button opens a
+      // 6. Remove the skill through the UI: the open skill's Delete opens a
       //    styled confirm dialog (no window.confirm); confirm via its
       //    destructive Delete button.
-      const row = page.locator("tr", { hasText: skillName });
-      await row.getByRole("button", { name: /delete/i }).click();
+      await page.reload();
+      await page.getByRole("button", { name: /^delete$/i }).click();
       const confirmDialog = page.getByRole("dialog");
       await expect(confirmDialog).toBeVisible();
       await confirmDialog.getByRole("button", { name: /^delete$/i }).click();
 
-      // 7. The row vanishes from the table.
-      await expect(page.getByText(skillName, { exact: true })).toHaveCount(0, {
-        timeout: 10_000,
-      });
+      // 7. The row vanishes from the library and the page returns to /skills.
+      await expect(page).toHaveURL(/\/skills$/, { timeout: 10_000 });
+      await expect(
+        library.getByRole("link", { name: new RegExp(skillName) }),
+      ).toHaveCount(0);
     } finally {
       // Best-effort teardown — leaks would compound across runs because the
       // e2e DB is shared.

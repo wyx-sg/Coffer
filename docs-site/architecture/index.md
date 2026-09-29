@@ -107,7 +107,7 @@ You send a message on the **Chat** page, or a paired owner sends one from Telegr
 
 ### A skill delivery
 
-A skill is a master folder under `~/.coffer/skills/<name>/` and a `skill` resource row. It reaches an agent if and only if the skill is enabled and the agent is inside its scope. Any change to either — enabling, disabling, widening or narrowing the scope — reconciles every agent: Coffer links the master folder into `<config_dir>/skills/` (symlink, junction or copy fallback), or reclaims a copy that is no longer in reach. A boot-time drift check repairs links someone broke by hand. Coffer's own manual, `coffer-guide`, is delivered by exactly the same code. Details: [Skills](/guides/skills).
+A skill is a master folder under `~/.coffer/skills/<name>/` and a `skill` resource row. It reaches an agent if and only if the skill is enabled and the agent is inside its scope. Any change to either — enabling, disabling, widening or narrowing the scope — reconciles every agent: Coffer links the master folder into `<config_dir>/skills/` (symlink, junction or copy fallback), or reclaims a copy that is no longer in reach. A boot-time drift check repairs links someone broke by hand. Coffer's own manual, `coffer-guide`, is delivered by exactly the same code. A skill enters the library from a folder, an archive or a Git repository, staged and confirmed first; one from Git stays pinned to its commit until you take an update. Details: [Skills](/architecture/skills).
 
 ### A sync round
 

@@ -1,0 +1,340 @@
+// frontend/src/components/skills/SkillDetailPane.test.tsx
+// The open skill in the Skills page's reading pane (spec skill-manager "Cover
+// skill management on REST, the CLI and the web", "Show the commands a skill
+// declares it needs"): its four tabs at their own paths, the Files tab opening
+// on SKILL.md, each agent's copy on Delivery, the declared commands on
+// Requires, the History placeholder, and the built-in skill's refusals. The
+// page is mounted the way the router mounts it; only the api modules are
+// mocked.
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+
+import type { AgentOut } from "@/lib/api/agents";
+import type { SkillFileNode, SkillOut } from "@/lib/api/skills";
+import { acceptance } from "@/test/acceptance";
+import { BUILTIN_SKILL, makeAgent, makeSkill, renderSkillsPage, where } from "@/test/skillsPageKit";
+
+const h = vi.hoisted(() => ({
+  skills: [] as SkillOut[],
+  agents: [] as AgentOut[],
+  /** The generic agent resources, each with its own on/off switch. */
+  agentResources: [] as { uid: string; enabled: boolean }[],
+}));
+
+vi.mock("@/lib/api/skills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/skills")>()),
+  skillsApi: {
+    list: vi.fn(async () => ({ items: h.skills })),
+    remove: vi.fn(async () => undefined),
+    filesTree: vi.fn(),
+    fileContent: vi.fn(),
+    writeFileContent: vi.fn(),
+    verify: vi.fn(),
+    repair: vi.fn(),
+    cancelStage: vi.fn(async () => undefined),
+  },
+}));
+vi.mock("@/lib/api/agents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/agents")>()),
+  agentsApi: { list: vi.fn(async () => ({ items: h.agents })) },
+}));
+vi.mock("@/lib/api/client", () => ({
+  getApiClient: () => ({
+    GET: async () => ({
+      data: {
+        resources: h.agentResources.map((r) => ({ ...r, kind: "agent", scope: null })),
+      },
+      error: undefined,
+    }),
+  }),
+}));
+
+const { skillsApi } = await import("@/lib/api/skills");
+
+const CC = makeAgent();
+const CODEX = makeAgent({
+  uid: "ag-cx",
+  name: "codex",
+  display_name: "Codex",
+  type: "codex",
+  config_dir: "/Users/me/.codex",
+});
+
+const TREE: SkillFileNode = {
+  name: "hello",
+  path: "",
+  type: "dir",
+  size: null,
+  abs_path: "/Users/me/.coffer/skills/hello",
+  folder_abs_path: "/Users/me/.coffer/skills/hello",
+  truncated: false,
+  children: [
+    {
+      name: "SKILL.md",
+      path: "SKILL.md",
+      type: "file",
+      size: 40,
+      abs_path: "/Users/me/.coffer/skills/hello/SKILL.md",
+      folder_abs_path: "/Users/me/.coffer/skills/hello",
+      truncated: false,
+      children: [],
+    },
+    {
+      name: "run.sh",
+      path: "run.sh",
+      type: "file",
+      size: 10,
+      abs_path: "/Users/me/.coffer/skills/hello/run.sh",
+      folder_abs_path: "/Users/me/.coffer/skills/hello",
+      truncated: false,
+      children: [],
+    },
+  ],
+};
+const SKILL_MD = "# Say hello\n\nGreet the user by name.";
+
+beforeEach(() => {
+  h.skills = [makeSkill()];
+  h.agents = [CC, CODEX];
+  h.agentResources = [
+    { uid: CC.uid, enabled: true },
+    { uid: CODEX.uid, enabled: true },
+  ];
+  vi.mocked(skillsApi.filesTree).mockResolvedValue({ root: TREE });
+  vi.mocked(skillsApi.fileContent).mockImplementation(async (_uid, path) => ({
+    path,
+    abs_path: `/Users/me/.coffer/skills/hello/${path}`,
+    folder_abs_path: "/Users/me/.coffer/skills/hello",
+    content: path === "SKILL.md" ? SKILL_MD : "echo hi",
+    binary: false,
+    truncated: false,
+    size: 40,
+    fingerprint: "fp-1",
+  }));
+});
+afterEach(() => vi.clearAllMocks());
+
+/** Radix tabs activate on mousedown, not click. */
+function openTab(name: string) {
+  fireEvent.mouseDown(screen.getByRole("tab", { name }));
+}
+
+acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered", async () => {
+  renderSkillsPage("/skills/hello");
+  const tabs = await screen.findAllByRole("tab");
+  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
+  expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
+  // SKILL.md is open and rendered, not raw.
+  expect(await screen.findByRole("heading", { name: "Say hello" })).toBeInTheDocument();
+  expect(skillsApi.fileContent).toHaveBeenCalledWith("sk-11aa", "SKILL.md");
+
+  // Source shows the raw text.
+  fireEvent.click(screen.getByRole("button", { name: "Source" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("heading", { name: "Say hello" })).not.toBeInTheDocument(),
+  );
+  expect(document.body.textContent).toContain("# Say hello");
+
+  // Edit, then Save, writes through the conditional save.
+  vi.mocked(skillsApi.writeFileContent).mockResolvedValue({
+    path: "SKILL.md",
+    abs_path: "/Users/me/.coffer/skills/hello/SKILL.md",
+    folder_abs_path: "/Users/me/.coffer/skills/hello",
+    content: "# Hi",
+    binary: false,
+    truncated: false,
+    size: 4,
+    fingerprint: "fp-2",
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+  fireEvent.change(screen.getByRole("textbox", { name: /SKILL\.md/ }), {
+    target: { value: "# Hi" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+  await waitFor(() =>
+    expect(skillsApi.writeFileContent).toHaveBeenCalledWith("sk-11aa", {
+      path: "SKILL.md",
+      content: "# Hi",
+      expected_fingerprint: "fp-1",
+    }),
+  );
+});
+
+acceptance("skill-manager", "the delivery tab shows each agent's copy", async () => {
+  h.skills = [
+    makeSkill({
+      scope: { agents: [CC.uid] },
+      bindings: [
+        {
+          agent_uid: CC.uid,
+          agent_name: CC.name,
+          last_linked_at: "2026-09-29T10:00:00Z",
+          last_link_path: "/Users/me/.claude/skills/hello",
+          link_mode: "symlink",
+        },
+      ],
+    }),
+  ];
+  renderSkillsPage("/skills/hello/delivery");
+  const first = await screen.findByTestId("skill-delivery-claude-code");
+  expect(first).toHaveTextContent("Linked");
+  expect(first).toHaveTextContent("~/.claude/skills/hello");
+  const second = screen.getByTestId("skill-delivery-codex");
+  expect(second).toHaveTextContent("Not delivered");
+  expect(second).toHaveTextContent("Outside the skill’s reach.");
+});
+
+acceptance("skill-manager", "the history tab says versions are not recorded yet", async () => {
+  renderSkillsPage("/skills/hello/history");
+  expect(await screen.findByText("Versions are not recorded yet")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /restore/i })).not.toBeInTheDocument();
+});
+
+acceptance("skill-manager", "a skill's requires tab links each command", async () => {
+  h.skills = [
+    makeSkill({
+      requires: [
+        { command: "jq", min_version: null },
+        { command: "gh", min_version: "2.40" },
+      ],
+    }),
+  ];
+  renderSkillsPage("/skills/hello/requires");
+  const jq = await screen.findByRole("link", { name: /^jq/ });
+  expect(jq).toHaveAttribute("href", "/clis/jq");
+  const gh = screen.getByRole("link", { name: /^gh/ });
+  expect(gh).toHaveTextContent("≥ 2.40");
+  expect(gh).toHaveAttribute("href", "/clis/gh");
+  fireEvent.click(gh);
+  // The route for /clis/:command renders in the Skills page's place.
+  expect(await screen.findByText("cli page")).toBeInTheDocument();
+});
+
+acceptance(
+  "skill-manager",
+  "the skills surface marks the built-in skill and offers no delete",
+  async () => {
+    h.skills = [BUILTIN_SKILL, makeSkill()];
+    renderSkillsPage("/skills/coffer-guide");
+    const header = (await screen.findByRole("heading", { name: "coffer-guide", level: 2 }))
+      .parentElement as HTMLElement;
+    expect(within(header).getByTestId("skill-builtin-badge")).toHaveTextContent("Built-in");
+    expect(within(header).getByRole("button", { name: /delete/i })).toBeDisabled();
+    expect(screen.getByTestId("skill-builtin-banner")).toHaveTextContent(
+      "Coffer writes this skill itself",
+    );
+    // Its row wears the mark too, and offers no box for the bulk delete.
+    const list = screen.getByRole("list", { name: "Library" });
+    expect(within(list).getByTestId("skill-builtin-badge")).toBeInTheDocument();
+    expect(within(list).queryByRole("checkbox", { name: /coffer-guide/ })).not.toBeInTheDocument();
+    // Its files are read-only.
+    expect(await screen.findByRole("heading", { name: "Say hello" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+  },
+);
+
+describe("SkillDetailPane", () => {
+  test("each tab lives in the path, Files at the bare address", async () => {
+    renderSkillsPage("/skills/hello");
+    await screen.findAllByRole("tab");
+    openTab("Delivery");
+    await waitFor(() => expect(where.url).toBe("/skills/hello/delivery"));
+    expect(screen.getByRole("tab", { name: "Delivery" })).toHaveAttribute("aria-selected", "true");
+    openTab("Files");
+    await waitFor(() => expect(where.url).toBe("/skills/hello"));
+  });
+
+  test("an old uid address lands on the name address, on the same tab", async () => {
+    renderSkillsPage("/skills/sk-11aa/requires");
+    await waitFor(() => expect(where.url).toBe("/skills/hello/requires"));
+  });
+
+  test("?tab=files is the bare Files address", async () => {
+    renderSkillsPage("/skills/hello?tab=files");
+    await waitFor(() => expect(where.url).toBe("/skills/hello"));
+  });
+
+  test("the open file is kept in ?file=", async () => {
+    renderSkillsPage("/skills/hello?file=run.sh");
+    await waitFor(() => expect(skillsApi.fileContent).toHaveBeenCalledWith("sk-11aa", "run.sh"));
+    fireEvent.click(await screen.findByRole("button", { name: "SKILL.md" }));
+    await waitFor(() => expect(where.url).toBe("/skills/hello"));
+  });
+
+  test("the header shows name, master path, source and when it changed", async () => {
+    renderSkillsPage("/skills/hello");
+    expect(await screen.findByTestId("skill-master-path")).toHaveTextContent(
+      "~/.coffer/skills/hello",
+    );
+    expect(screen.getByTestId("skill-detail-source")).toHaveTextContent("From /tmp/hello");
+    expect(screen.getByText(/^Updated /)).toBeInTheDocument();
+  });
+
+  test("Delete asks first, then removes the skill and returns to the library", async () => {
+    renderSkillsPage("/skills/hello");
+    const header = (await screen.findByRole("heading", { name: "hello", level: 2 }))
+      .parentElement as HTMLElement;
+    fireEvent.click(within(header).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledWith("sk-11aa"));
+    await waitFor(() => expect(where.url).toBe("/skills"));
+  });
+
+  test("delivery says why a copy is missing: the skill is off, or the agent is", async () => {
+    h.agentResources = [
+      { uid: CC.uid, enabled: true },
+      { uid: CODEX.uid, enabled: false },
+    ];
+    renderSkillsPage("/skills/hello/delivery");
+    await waitFor(() =>
+      expect(screen.getByTestId("skill-delivery-codex")).toHaveTextContent(
+        "The agent is switched off.",
+      ),
+    );
+  });
+
+  test("delivery shows a copy that differs from master after Check again", async () => {
+    h.skills = [
+      makeSkill({
+        bindings: [
+          {
+            agent_uid: CODEX.uid,
+            agent_name: CODEX.name,
+            last_linked_at: null,
+            last_link_path: "/Users/me/.codex/skills/hello",
+            link_mode: "symlink",
+          },
+        ],
+      }),
+    ];
+    vi.mocked(skillsApi.verify).mockResolvedValue({
+      entries: [
+        {
+          skill_name: "hello",
+          agent_name: "codex",
+          kind: "tampered_link",
+          target_path: "/Users/me/.codex/skills/hello",
+          suggested_remedy: "Relink it to the master.",
+        },
+      ],
+    });
+    renderSkillsPage("/skills/hello/delivery");
+    const row = await screen.findByTestId("skill-delivery-codex");
+    expect(row).toHaveTextContent("Linked");
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(row).toHaveTextContent("Points elsewhere"));
+    expect(row).toHaveTextContent("Relink it to the master.");
+  });
+
+  test("a skill that declares no commands says so on Requires", async () => {
+    renderSkillsPage("/skills/hello/requires");
+    expect(await screen.findByText("This skill declares no commands")).toBeInTheDocument();
+  });
+
+  test("an unknown name says there is no such skill", async () => {
+    renderSkillsPage("/skills/nope");
+    expect(await screen.findByText("No skill named “nope”")).toBeInTheDocument();
+  });
+});
