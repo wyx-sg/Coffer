@@ -26,7 +26,7 @@ type ListQuery = NonNullable<
 >;
 
 export type TranscriptSort = NonNullable<ListQuery["sort"]>;
-export type SortOrder = NonNullable<ListQuery["order"]>;
+type SortOrder = NonNullable<ListQuery["order"]>;
 
 /** @ui-only The listing's query as the page builds it; every field maps to a
  *  query parameter of the route. */

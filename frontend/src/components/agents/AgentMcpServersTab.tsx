@@ -1,221 +1,159 @@
-// frontend/src/components/agents/AgentMcpServersTab.tsx
-// "MCP servers" tab on the agent detail page, in two sections:
+// src/components/agents/AgentMcpServersTab.tsx — the agent's MCP servers tab: Coffer's gateway servers and its direct entries, in one table.
 //
-//   A. Via Coffer gateway — Coffer's shim install status plus a link to the
-//      standalone MCP servers page (the exposed servers are managed there, not
-//      re-listed here). Extracted to AgentGatewayMcpSection.tsx to keep this
-//      file inside the size cap.
-//
-//   B. Direct servers — the agent's own MCP entries read from its config
-//      files (spec agent-registry "List the MCP entries in the agent's own config
-//      files"). The name links to the entry's read-only detail page
-//      (AgentMcpEntryPage). Name, description, and two
-//      actions: adopt the entry into Coffer, or delete it from the agent's own
-//      config file (behind a confirm — the daemon writes a .bak).
-//
-//      The description IS the transport: an MCP config entry carries no
-//      description field in either format, and the command line (or URL) is the
-//      only text on it that says what the server actually is. `source` and
-//      `enabled` stay on the wire type — the CLI prints them, and adopt/delete
-//      still carry `source` — but neither earns a column: `enabled` is not
-//      editable here, and `source` only ever disambiguates the one case where
-//      it can, `claude_code` carrying the SAME entry name in both of its config
-//      files. So it renders as a badge beside the name for duplicated names
-//      only. Entries that duplicate an existing Coffer resource get an inline
-//      hint. Config files that failed to parse are surfaced in a banner; their
-//      entries can't be listed, so the banner is the only signal.
-import { useState } from "react";
+// Board 2.1.23, spec agent-registry "Filter an agent's installed kinds by
+// owner". Coffer's rows are the registered MCP servers that reach this agent
+// through the gateway; Connected means the agent's Coffer connection carries
+// the gateway entry. The agent's own rows are the direct entries in its config
+// files ("List the MCP entries in the agent's own config files"): Adopt moves
+// one into Coffer (AgentAdoptMcpDialog), and Remove duplicate takes out an
+// entry Coffer's gateway already serves, so the tab then lists the server once,
+// as Coffer's. A config file that fails to parse is named above the table and
+// its entries stay read-only.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Import } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Server } from "lucide-react";
 
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
-import { AgentGatewayMcpSection } from "@/components/agents/AgentGatewayMcpSection";
-import { AgentMcpServersBulkActions } from "@/components/agents/AgentMcpServersBulkActions";
-import { DataTable, type Column } from "@/components/DataTable";
-import { RowDeleteButton } from "@/components/table/RowDeleteButton";
-import { TableActionButton } from "@/components/table/TableActionButton";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { AgentMcpTable } from "@/components/agents/mcp/AgentMcpTable";
+import { McpParseErrorAlert } from "@/components/agents/mcp/McpParseErrorAlert";
+import { buildMcpRows, singleSource, type OwnMcpRow } from "@/components/agents/mcp/mcpRows";
+import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { translateApiError } from "@/lib/api/errors";
-import type { AgentOut, McpEntryOut } from "@/lib/api/agents";
-import { useAgentMcpEntries, useRemoveMcpEntry } from "@/lib/hooks/useAgents";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { countByOwner } from "@/lib/agents/owner";
+import type { AgentOut } from "@/lib/api/agents";
+import {
+  useAgentConfigFiles,
+  useAgentConnection,
+  useAgentMcpEntries,
+  useRemoveMcpEntry,
+} from "@/lib/hooks/useAgents";
+import { useResources } from "@/lib/hooks/useResources";
 
 export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
+  const servers = useResources("mcp_server");
   const entries = useAgentMcpEntries(agent.uid);
+  const connection = useAgentConnection(agent.uid);
+  const configFiles = useAgentConfigFiles(agent.uid);
   const removeEntry = useRemoveMcpEntry(agent.uid);
-  const [adoptTarget, setAdoptTarget] = useState<McpEntryOut | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<McpEntryOut | null>(null);
+  const [adoptTarget, setAdoptTarget] = useState<OwnMcpRow | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<OwnMcpRow | null>(null);
+  const agentLabel = agentTypeLabel(agent.type);
 
-  // The `coffer` entry IS the gateway hookup — it's section A's concern, so
-  // the direct list only shows the agent's other (non-Coffer) servers.
-  const directEntries = (entries.data?.items ?? []).filter((e) => !e.is_coffer);
-  const parseErrors = entries.data?.parse_errors ?? [];
-  // Entry names are unique per file, not across files: only `claude_code` can
-  // list the same name twice (~/.claude.json and settings.json). Badge the
-  // source on exactly those rows, so the user can tell which is which before
-  // adopting or deleting one — and nowhere else.
-  const duplicated = new Set(
-    directEntries.map((e) => e.name).filter((n, i, all) => all.indexOf(n) !== i),
+  const parseErrors = useMemo(() => entries.data?.parse_errors ?? [], [entries.data]);
+  const rows = useMemo(
+    () =>
+      buildMcpRows(
+        agent.uid,
+        servers.data ?? [],
+        entries.data?.items ?? [],
+        new Set(parseErrors.map((pe) => pe.source)),
+      ),
+    [agent.uid, servers.data, entries.data, parseErrors],
   );
+  const counts = countByOwner(rows);
+  const connected = connection.data
+    ? connection.data.parts.some((p) => p.key === "mcp" && p.installed)
+    : undefined;
 
-  const directColumns: Column<McpEntryOut>[] = [
-    {
-      key: "name",
-      header: t("resources.cols.name"),
-      className: "whitespace-nowrap",
-      cell: (e) => (
-        <div className="space-y-1">
-          <span className="flex items-center gap-2">
-            {/* The name opens the entry's read-only detail page; the state
-                carries the way back to this tab under the agent's name. */}
-            <Link
-              to={`/agents/${encodeURIComponent(agent.uid)}/mcp-servers/${encodeURIComponent(
-                e.name,
-              )}?source=${encodeURIComponent(e.source)}`}
-              state={{
-                backTo: `/agents/${encodeURIComponent(agent.uid)}?tab=mcpServers`,
-                backLabel: agent.name,
-              }}
-              className="font-medium hover:underline"
-            >
-              {e.name}
-            </Link>
-            {duplicated.has(e.name) && <Badge variant="secondary">{e.source}</Badge>}
-          </span>
-          {e.matches_resource !== null && (
-            <p className="text-xs text-muted-foreground">
-              {t("agents.workspace.mcp.alreadyInCoffer", { name: e.matches_resource })}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "description",
-      header: t("resources.cols.description"),
-      cell: (e) => (
-        <span className="flex items-center gap-2">
-          <Badge variant="outline">{e.transport}</Badge>
-          <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
-            {e.transport === "stdio"
-              ? [e.command, ...e.args].filter(Boolean).join(" ")
-              : (e.url ?? "")}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      className: "text-right",
-      cell: (e) => (
-        <span className="flex justify-end gap-2">
-          <TableActionButton
-            icon={Import}
-            label={t("agents.workspace.mcp.adopt")}
-            onClick={() => setAdoptTarget(e)}
-          />
-          <RowDeleteButton
-            ariaLabel={`${t("common.delete")}: ${e.name}`}
-            onDelete={() => setDeleteTarget(e)}
-          />
-        </span>
-      ),
-    },
-  ];
+  // A direct entry's file, home-relative; the key itself until the listing is read.
+  const whereLabel = (source: string) => {
+    const path =
+      configFiles.data?.find((f) => f.key === source)?.path ??
+      parseErrors.find((pe) => pe.source === source)?.path;
+    return path ? abbreviateHomePath(path) : source;
+  };
+  const oneFile = singleSource(rows);
+  const summaryFile = oneFile ? whereLabel(oneFile) : t("agents.mcpTab.ownConfig");
 
   return (
-    <div className="space-y-6">
-      {/* A. Via Coffer gateway — renders its own card (install status or the
-          shared "open the MCP servers page" link). */}
-      <AgentGatewayMcpSection agentUid={agent.uid} />
-
-      {/* B. Direct servers (the agent's own config entries) */}
-      <Card className="space-y-3 p-4">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          {t("agents.workspace.mcp.directTitle")}
-        </h3>
-
-        {parseErrors.length > 0 && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              <p className="font-medium">{t("agents.workspace.mcp.parseError")}</p>
-              <ul className="mt-1 space-y-0.5">
-                {parseErrors.map((pe) => (
-                  <li key={`${pe.source}:${pe.path}`} className="font-mono text-xs">
-                    {pe.source}: {pe.error}
-                  </li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
+    <>
+      <AgentKindTab
+        rows={rows}
+        summary={t("agents.mcpTab.summary", {
+          count: rows.length,
+          coffer: counts.coffer,
+          own: counts.own,
+          file: summaryFile,
+        })}
+        searchPlaceholder={t("agents.mcpTab.search")}
+        searchText={(row) =>
+          row.owner === "own"
+            ? `${row.name} ${row.entry.command ?? ""} ${row.entry.args.join(" ")} ${row.entry.url ?? ""}`
+            : row.name
+        }
+        isLoading={servers.isPending || entries.isPending}
+        error={entries.error ?? servers.error}
+        onRetry={() => {
+          void servers.refetch();
+          void entries.refetch();
+        }}
+        empty={{
+          icon: Server,
+          title: t("agents.mcpTab.emptyTitle", { agent: agentLabel }),
+          description: t("agents.mcpTab.emptyDescription", { agent: agentLabel }),
+        }}
+        footnote={t("agents.mcpTab.footnote")}
+      >
+        {(visible) => (
+          <>
+            {parseErrors.map((pe) => (
+              <McpParseErrorAlert
+                key={`${pe.source}:${pe.path}`}
+                agentType={agent.type}
+                error={pe}
+              />
+            ))}
+            <AgentMcpTable
+              agentType={agent.type}
+              rows={visible}
+              connected={connected}
+              whereLabel={whereLabel}
+              onAdopt={setAdoptTarget}
+              onRemoveDuplicate={setRemoveTarget}
+            />
+          </>
         )}
+      </AgentKindTab>
 
-        {entries.isPending ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : entries.error ? (
-          <p className="text-sm text-destructive">{translateApiError(t, entries.error)}</p>
-        ) : (
-          <DataTable
-            rows={directEntries}
-            columns={directColumns}
-            rowKey={(e) => `${e.source}:${e.name}`}
-            search={{
-              accessor: (e) => e.name,
-              placeholder: t("agents.workspace.mcp.searchPlaceholder"),
-            }}
-            selection={{
-              ariaSelectAll: t("common.bulk.selectAll"),
-              ariaSelectRow: (e) => `${t("common.bulk.selectRow")}: ${e.name}`,
-              bulkLabel: (count) => t("common.bulk.selected", { count }),
-              clearLabel: t("common.clear"),
-              renderBulkActions: ({ selectedRows, clear }) => (
-                <AgentMcpServersBulkActions
-                  agentUid={agent.uid}
-                  agentName={agent.name}
-                  rows={selectedRows}
-                  clear={clear}
-                />
-              ),
-            }}
-            emptyMessage={t("agents.workspace.mcp.empty")}
-          />
-        )}
-      </Card>
-
-      {adoptTarget && (
+      {adoptTarget ? (
         <AgentAdoptMcpDialog
           agentUid={agent.uid}
           agentName={agent.name}
-          entry={adoptTarget}
+          agentLabel={agentLabel}
+          fileLabel={whereLabel(adoptTarget.entry.source)}
+          entry={adoptTarget.entry}
           open
-          onOpenChange={(open) => {
-            if (!open) setAdoptTarget(null);
+          onOpenChange={(next) => {
+            if (!next) setAdoptTarget(null);
           }}
         />
-      )}
+      ) : null}
 
       <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+        open={removeTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setRemoveTarget(null);
         }}
-        title={t("agents.removeConfirmTitle", { name: deleteTarget?.name ?? "" })}
-        description={t("agents.workspace.mcp.deleteConfirm")}
-        confirmLabel={removeEntry.isPending ? t("common.deleting") : t("common.delete")}
+        title={t("agents.mcpTab.removeTitle", {
+          name: removeTarget?.name ?? "",
+          file: removeTarget ? whereLabel(removeTarget.entry.source) : "",
+        })}
+        description={t("agents.mcpTab.removeDuplicateBody", {
+          agent: agentLabel,
+          name: removeTarget?.entry.matches_resource ?? "",
+        })}
+        confirmLabel={t("agents.mcpTab.remove")}
         pending={removeEntry.isPending}
         onConfirm={() => {
-          if (!deleteTarget) return;
+          if (!removeTarget) return;
           removeEntry.mutate(
-            { entry: deleteTarget.name, source: deleteTarget.source },
-            { onSuccess: () => setDeleteTarget(null) },
+            { entry: removeTarget.name, source: removeTarget.entry.source },
+            { onSuccess: () => setRemoveTarget(null) },
           );
         }}
       />
-    </div>
+    </>
   );
 }

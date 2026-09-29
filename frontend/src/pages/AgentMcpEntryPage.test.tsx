@@ -1,14 +1,14 @@
-// frontend/src/pages/AgentMcpEntryPage.test.tsx
+// src/pages/AgentMcpEntryPage.test.tsx — one direct MCP server of an agent, at /agents/:type/mcp-servers/:entry.
 //
-// A direct (unmanaged) MCP server's detail page: what the agent's own config
-// file holds for the entry, read-only, with secret values never shown; the
+// What the agent's own config file holds for the entry, read-only, with secret
+// values never shown; the header naming it a direct server of the agent; the
 // way back to the agent's MCP servers tab; and the two writes — adopt (then on
-// to the new managed server) and delete (then back to the tab).
+// to the new managed server) and remove (then back to the tab).
 //
 // The API module is mocked at its boundary (`agentsApi`), and the fs actions
-// too (their own suite covers the transport). The agent's uid (`u-cc`) and
-// name (`cc`) are kept apart so the page is seen to address by one and label
-// by the other.
+// too (their own suite covers the transport). The page is addressed by the
+// agent's TYPE and the REST reads by its uid (`u-cc`), found through the
+// per-type listing.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,9 +19,17 @@ import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import type { AgentOut, McpEntryDetailOut } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
 
+// The MCP servers tab also lists Coffer's registered servers; none here.
+vi.mock("@/lib/api/client", () => ({
+  getApiClient: () => ({
+    GET: vi.fn(() => Promise.resolve({ data: { resources: [] }, error: undefined })),
+  }),
+}));
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
+    types: vi.fn(),
     get: vi.fn(),
+    listConfigFiles: vi.fn(),
     connection: vi.fn(),
     mcpEntries: vi.fn(),
     mcpEntry: vi.fn(),
@@ -45,7 +53,8 @@ const AGENT: AgentOut = {
   config_dir: "/home/u/.claude",
   display_name: "Claude Code",
   model: null,
-  fast_model: null,
+  effort: null,
+  tier_models: null,
   wire_api: null,
   version: null,
   state: "installed_active",
@@ -82,24 +91,38 @@ function Landed() {
   return <div data-testid="landed">{`${loc.pathname}${loc.search}`}</div>;
 }
 
+const TYPE_ROW = {
+  type: "claude_code",
+  uid: "u-cc",
+  name: "claude_code",
+  display_name: "Claude Code",
+  state: "installed_active",
+  addable: true,
+  config_dir: "/home/u/.claude",
+  standard_config_dir: "/home/u/.claude",
+  other_config_dir: null,
+  default_skill_dir: "/home/u/.claude/skills",
+  version: null,
+} as const;
+
 function stub(entry: Partial<McpEntryDetailOut> = {}) {
+  api.types.mockResolvedValue({ types: [TYPE_ROW] });
   api.get.mockResolvedValue(AGENT);
+  api.listConfigFiles.mockResolvedValue({ items: [] });
   api.mcpEntry.mockResolvedValue({ ...ENTRY, ...entry });
   api.removeMcpEntry.mockResolvedValue(undefined);
 }
 
-function renderAt(url = `/agents/u-cc/mcp-servers/skynet?source=global`, state?: unknown) {
+function renderAt(url = `/agents/claude_code/mcp-servers/skynet?source=global`) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter
-        initialEntries={[
-          { pathname: url.split("?")[0], search: `?${url.split("?")[1] ?? ""}`, state },
-        ]}
+        initialEntries={[{ pathname: url.split("?")[0], search: `?${url.split("?")[1] ?? ""}` }]}
       >
         <Routes>
-          <Route path="/agents/:uid/mcp-servers/:entry" element={<AgentMcpEntryPage />} />
-          <Route path="/agents/:uid" element={<Landed />} />
+          <Route path="/agents/:type/mcp-servers/:entry" element={<AgentMcpEntryPage />} />
+          <Route path="/agents/:type/mcp-servers" element={<Landed />} />
           <Route path="/mcp-servers/:name/:tab?" element={<Landed />} />
         </Routes>
       </MemoryRouter>
@@ -124,10 +147,13 @@ describe("AgentMcpEntryPage", () => {
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       render(
         <QueryClientProvider client={qc}>
-          <MemoryRouter initialEntries={["/agents/u-cc?tab=mcpServers"]}>
+          <MemoryRouter initialEntries={["/agents/claude_code/mcp-servers"]}>
             <Routes>
-              <Route path="/agents/:uid" element={<AgentMcpServersTab agent={AGENT} />} />
-              <Route path="/agents/:uid/mcp-servers/:entry" element={<AgentMcpEntryPage />} />
+              <Route
+                path="/agents/:type/mcp-servers"
+                element={<AgentMcpServersTab agent={AGENT} />}
+              />
+              <Route path="/agents/:type/mcp-servers/:entry" element={<AgentMcpEntryPage />} />
             </Routes>
           </MemoryRouter>
         </QueryClientProvider>,
@@ -137,7 +163,7 @@ describe("AgentMcpEntryPage", () => {
       // The detail page reads that one entry, addressed by uid + name + file.
       await screen.findByText(CONFIG_PATH);
       expect(api.mcpEntry).toHaveBeenCalledWith("u-cc", "skynet", "global");
-      expect(screen.getByText("Direct server of cc")).toBeInTheDocument();
+      expect(screen.getByText("Direct server of Claude Code")).toBeInTheDocument();
       expect(screen.getByText("skynet-mcp")).toBeInTheDocument();
       expect(screen.getByText("--mcp=skynet-base")).toBeInTheDocument();
       expect(screen.getByText("/srv/skynet")).toBeInTheDocument();
@@ -149,23 +175,21 @@ describe("AgentMcpEntryPage", () => {
       expect(screen.getByText("bearer_token")).toBeInTheDocument();
       expect(screen.getByText("hidden")).toBeInTheDocument();
       expect(screen.getByText("30")).toBeInTheDocument();
-      // The way back is the agent's MCP servers tab, labelled with its name.
-      expect(screen.getByRole("link", { name: /Back to cc/ })).toHaveAttribute(
+      // The way back is the agent's MCP servers tab, addressed by its type.
+      expect(screen.getByRole("link", { name: /Back to MCP servers/ })).toHaveAttribute(
         "href",
-        "/agents/u-cc?tab=mcpServers",
+        "/agents/claude_code/mcp-servers",
       );
     },
   );
 
-  test("without router state the back link is rebuilt to the agent's MCP tab", async () => {
+  test("an old uid address is replaced by the type address", async () => {
     stub();
-    renderAt();
+    renderAt("/agents/u-cc/mcp-servers/skynet?source=global");
     await screen.findByText(CONFIG_PATH);
-    await waitFor(() =>
-      expect(screen.getByRole("link", { name: /Back to cc/ })).toHaveAttribute(
-        "href",
-        "/agents/u-cc?tab=mcpServers",
-      ),
+    expect(screen.getByRole("link", { name: /Back to MCP servers/ })).toHaveAttribute(
+      "href",
+      "/agents/claude_code/mcp-servers",
     );
   });
 
@@ -203,7 +227,7 @@ describe("AgentMcpEntryPage", () => {
   test("an equivalent managed server is named under the title", async () => {
     stub({ matches_resource: "skynet-managed" });
     renderAt();
-    expect(await screen.findByText("Already in Coffer as skynet-managed")).toBeInTheDocument();
+    expect(await screen.findByText("Duplicate of skynet-managed in Coffer")).toBeInTheDocument();
   });
 
   test("adopting moves on to the new managed server's page", async () => {
@@ -212,9 +236,9 @@ describe("AgentMcpEntryPage", () => {
     renderAt();
     await screen.findByText(CONFIG_PATH);
     await waitFor(() => expect(api.get).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Adopt" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt into Coffer" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
     await waitFor(() =>
       // Addressed by the server's fixed name, not its uid (revise-web-ui-ia).
       expect(screen.getByTestId("landed")).toHaveTextContent(/^\/mcp-servers\/skynet$/),
@@ -222,30 +246,28 @@ describe("AgentMcpEntryPage", () => {
     expect(api.adoptMcpEntry).toHaveBeenCalledWith("u-cc", "skynet", { source: "global" });
   });
 
-  test("deleting (after the confirm) returns to the agent's MCP servers tab", async () => {
+  test("removing (after the confirm) returns to the agent's MCP servers tab", async () => {
     stub();
-    renderAt("/agents/u-cc/mcp-servers/skynet?source=global", {
-      backTo: "/agents/u-cc?tab=mcpServers",
-      backLabel: "cc",
-    });
+    renderAt();
     await screen.findByText(CONFIG_PATH);
-    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Remove/ }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(within(dialog).getByText("Remove skynet from ~/.claude.json?")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() =>
-      expect(screen.getByTestId("landed")).toHaveTextContent("/agents/u-cc?tab=mcpServers"),
+      expect(screen.getByTestId("landed")).toHaveTextContent("/agents/claude_code/mcp-servers"),
     );
     expect(api.removeMcpEntry).toHaveBeenCalledWith("u-cc", "skynet", "global");
   });
 
   test("a failed read says why, and still offers the way back", async () => {
-    api.get.mockResolvedValue(AGENT);
+    stub();
     api.mcpEntry.mockRejectedValue(new Error("MCP entry not found"));
     renderAt();
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Back to/ })).toHaveAttribute(
       "href",
-      "/agents/u-cc?tab=mcpServers",
+      "/agents/claude_code/mcp-servers",
     );
   });
 });

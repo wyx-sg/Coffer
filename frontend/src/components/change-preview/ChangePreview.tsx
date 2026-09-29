@@ -39,6 +39,12 @@ interface ChangePreviewProps {
   onRetry?(failedIds: string[]): void;
   /** "View in Activity" on the applied state. */
   activityHref?: string;
+  /** The confirm button while reviewing; defaults to "Apply N changes". */
+  applyLabel?: string;
+  /** Tint the confirm button as destructive (a disconnect, say). */
+  applyDestructive?: boolean;
+  /** The note beside the review footer; defaults to the "only these lines" reassurance. */
+  note?: string;
 }
 
 const NO_SUMMARIES: ChangeSummaryLine[] = [];
@@ -63,6 +69,9 @@ export function ChangePreview({
   onApply,
   onRetry,
   activityHref,
+  applyLabel,
+  applyDestructive = false,
+  note,
 }: ChangePreviewProps) {
   const { t } = useTranslation();
   const locked = state === "applying";
@@ -105,10 +114,14 @@ export function ChangePreview({
       break;
     case "ready":
       footer = (
-        <Footer note={t("changePreview.reassurance")}>
+        <Footer note={note ?? t("changePreview.reassurance")}>
           {cancel}
-          <Button onClick={onApply} disabled={items.length === 0}>
-            {t("changePreview.applyCount", { count: items.length })}
+          <Button
+            onClick={onApply}
+            disabled={items.length === 0}
+            variant={applyDestructive ? "destructive" : "default"}
+          >
+            {applyLabel ?? t("changePreview.applyCount", { count: items.length })}
           </Button>
         </Footer>
       );

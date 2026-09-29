@@ -11,7 +11,7 @@ import {
 } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  agentCandidatesKey,
+  agentTypesKey,
   agentConfigChildKey,
   agentConfigFileKey,
   agentConfigFilesKey,
@@ -89,12 +89,17 @@ export function useRemoveAgent() {
   });
 }
 
-// Read-only discovery of installed-but-unregistered agents; gated on `enabled`.
-export function useAgentCandidates(enabled: boolean) {
+/** Every supported type with its detection state and — when added — its uid:
+ *  the Agents page's two fixed rows and the type → uid step of every page
+ *  under /agents/:type. Detection is automatic (spec agent-registry "Expose
+ *  agent discovery on every surface"): read on load, when the window regains
+ *  focus, and every few minutes, never behind a Detect action. */
+export function useAgentTypes() {
   return useQuery({
-    queryKey: agentCandidatesKey,
-    queryFn: async () => (await agentsApi.candidates()).candidates,
-    enabled,
+    queryKey: agentTypesKey,
+    queryFn: async () => (await agentsApi.types()).types,
+    refetchOnWindowFocus: true,
+    refetchInterval: 3 * 60_000,
   });
 }
 

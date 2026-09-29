@@ -52,7 +52,7 @@ describe("objectItem", () => {
     expect(item.haystack).toEqual(["claude"]);
   });
 
-  test("every kind has a detail route: by name where it is fixed, by uid where it is not", () => {
+  test("every kind has a detail route: an agent by type, by name where it is fixed, by uid where it is not", () => {
     const o = (uid: string) => ({ uid, name: `${uid}-name` });
     expect(objectPath("mcpServer", o("m1"))).toBe("/mcp-servers/m1-name");
     expect(objectPath("skill", o("s1"))).toBe("/skills/s1-name");
@@ -61,5 +61,6 @@ describe("objectItem", () => {
     expect(objectPath("memory", o("m"))).toBe("/memory/m");
     expect(objectPath("channel", o("c"))).toBe("/channels/c");
     expect(objectPath("agent", o("a"))).toBe("/agents/a");
+    expect(objectPath("agent", { ...o("a"), type: "claude_code" })).toBe("/agents/claude_code");
   });
 });

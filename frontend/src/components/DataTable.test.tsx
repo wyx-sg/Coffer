@@ -363,4 +363,26 @@ describe("DataTable", () => {
     fireEvent.click(screen.getByRole("button", { name: /select all 3/i }));
     expect(screen.getByText(/^3 selected$/)).toBeInTheDocument();
   });
+  test("rowFooter renders a full-width row under a row, and isRowClickable gates the click", () => {
+    const onRowClick = vi.fn();
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        onRowClick={onRowClick}
+        isRowClickable={(r) => r.id !== "2"}
+        rowFooter={(r) => (r.id === "2" ? <span>notice-for-beta</span> : null)}
+        emptyMessage="none"
+      />,
+    );
+    const footer = screen.getByText("notice-for-beta").closest("td");
+    expect(footer).toHaveAttribute("colspan", "1");
+    // One footer row only: alpha and gamma return null.
+    expect(document.querySelectorAll("[data-row-footer]")).toHaveLength(1);
+    fireEvent.click(screen.getByText("beta"));
+    expect(onRowClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("alpha"));
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
+  });
 });

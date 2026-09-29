@@ -1,68 +1,67 @@
-// frontend/src/pages/AgentPluginPage.tsx — spec agent-registry
-// "Read one installed plugin's detail read-only" and "Expose every agent
-// operation through REST, CLI and the Agents page".
-// One of the agent's installed plugins, reached by clicking its name on the
-// Plugins tab: the manifest metadata, where it came from and where it is
-// installed, and everything its package contributes. The two writes the tab
-// offers — the enabled switch and uninstall — sit in the header; a successful
-// uninstall returns to the Plugins tab, since the page's subject is gone.
+// src/pages/AgentPluginPage.tsx — one of the agent's installed plugins, opened from its Plugins tab.
 //
-// The plugin is addressed by its `<name>@<marketplace>` id in the path,
-// URL-encoded (the `@` and any `/` survive as one segment); the router hands
-// the decoded id back.
+// Spec agent-registry "Read one installed plugin's detail read-only" and
+// "Expose every agent operation through REST, CLI and the Agents page": the
+// manifest metadata, where the plugin came from and where it is installed, and
+// everything its package contributes. The two writes the tab offers — the
+// enabled switch and Uninstall — sit in the header; a successful uninstall
+// returns to the Plugins tab, since the page's subject is gone, and so does the
+// back link. Addressed as `/agents/<type>/plugins/<name>@<marketplace>`, the id
+// URL-encoded as one segment; the router hands it back decoded.
 import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Puzzle, Trash2 } from "lucide-react";
+import { ArrowLeft, PackageMinus, Puzzle } from "lucide-react";
 
 import { PluginContentsCard, PluginOverviewCard } from "@/components/agents/AgentPluginSections";
+import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
+import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { agentTabPath } from "@/lib/agents/routes";
+import type { PluginOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
+import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
 import { useAgentPlugin, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
 
 export function AgentPluginPage() {
   const { t } = useTranslation();
-  const { uid = "", pluginId = "" } = useParams<{ uid: string; pluginId: string }>();
+  const { pluginId = "" } = useParams<{ pluginId: string }>();
   const navigate = useNavigate();
-  // The Plugins tab passes its own location as the return target (mirrors
-  // SkillDetailPage); a page opened from a bookmark falls back to the same tab.
-  const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
+  const route = useAgentRoute();
+  const type = route.type ?? "";
   const back = {
-    to: backState?.backTo ?? `/agents/${encodeURIComponent(uid)}?tab=plugins`,
-    label: t("common.backTo", {
-      label: backState?.backLabel ?? t("agents.workspace.plugins"),
-    }),
+    to: agentTabPath(type, "plugins"),
+    label: t("common.backTo", { label: t("agents.workspace.plugins") }),
   };
-  const { data, isPending, error } = useAgentPlugin(uid, pluginId);
-  const toggle = useTogglePlugin(uid);
-  const uninstall = useUninstallPlugin(uid);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { data, isPending, error } = useAgentPlugin(route.uid, pluginId);
+  const toggle = useTogglePlugin(route.uid);
+  const uninstall = useUninstallPlugin(route.uid);
+  const [target, setTarget] = useState<PluginOut | null>(null);
 
-  if (isPending) {
+  if (route.redirecting || route.isPending || (route.uid && isPending)) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {t("common.loading")}
-        </CardContent>
-      </Card>
+      <div className="space-y-4" aria-busy="true" aria-label={t("common.loading")}>
+        <Skeleton className="h-10 w-1/3" />
+        <Skeleton className="h-40 w-full" />
+      </div>
     );
   }
-  if (error || !data) {
+  const failure = route.error ?? error;
+  if (failure || !data) {
     return (
       <EmptyState
         icon={Puzzle}
+        tone={failure ? "error" : "default"}
         title={t("agents.pluginDetail.loadFailed")}
-        description={error ? translateApiError(t, error) : undefined}
+        description={failure ? translateApiError(t, failure) : undefined}
         action={
           <Button variant="outline" asChild>
             <Link to={back.to}>
-              <ArrowLeft className="mr-1 size-4" />
+              <ArrowLeft className="mr-1 size-4" aria-hidden />
               {back.label}
             </Link>
           </Button>
@@ -79,12 +78,9 @@ export function AgentPluginPage() {
         title={p.name}
         subtitle={<span className="font-mono text-xs">{p.id}</span>}
         badges={
-          <>
-            <Badge variant="secondary">{p.marketplace}</Badge>
-            {p.cache_present === false ? (
-              <Badge variant="destructive">{t("agents.workspace.pluginsTab.cacheMissing")}</Badge>
-            ) : null}
-          </>
+          p.cache_present === false ? (
+            <StatusWord tone="warn">{t("agents.pluginsTab.cacheMissing")}</StatusWord>
+          ) : null
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
@@ -93,23 +89,23 @@ export function AgentPluginPage() {
                 checked={p.enabled}
                 disabled={toggle.isPending}
                 onCheckedChange={(checked) => toggle.mutate({ id: p.id, enabled: checked })}
-                aria-label={`${t("agents.workspace.pluginsTab.enabled")}: ${p.name}`}
+                aria-label={t("agents.pluginsTab.enabledAria", { name: p.name })}
               />
-              {t("agents.workspace.pluginsTab.enabled")}
+              {t("common.enabled")}
             </label>
             {data.can_uninstall ? (
               <Button
                 variant="outline"
                 size="sm"
                 className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => setConfirmOpen(true)}
+                onClick={() => setTarget(p)}
               >
-                <Trash2 className="mr-1.5 size-3.5" />
-                {t("agents.workspace.pluginsTab.uninstall")}
+                <PackageMinus className="mr-1.5 size-3.5" aria-hidden />
+                {t("agents.pluginsTab.uninstall")}
               </Button>
             ) : (
-              <span className="text-xs text-muted-foreground">
-                {t("agents.workspace.pluginsTab.claudeUninstallHint")}
+              <span className="text-xs text-text-muted">
+                {t("agents.pluginsTab.footnote.claudeNoCli")}
               </span>
             )}
           </div>
@@ -119,19 +115,17 @@ export function AgentPluginPage() {
       <PluginOverviewCard detail={data} />
       <PluginContentsCard detail={data} />
 
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={t("agents.workspace.pluginsTab.uninstallConfirmTitle", { name: p.name })}
-        description={t("agents.workspace.pluginsTab.uninstallConfirm")}
-        confirmLabel={t("agents.workspace.pluginsTab.uninstall")}
+      <PluginUninstallDialog
+        agentType={type}
+        plugin={target}
+        onClose={() => setTarget(null)}
         pending={uninstall.isPending}
-        onConfirm={() =>
+        onConfirm={(plugin) =>
           uninstall.mutate(
-            { id: p.id },
+            { id: plugin.id },
             {
               onSuccess: () => {
-                setConfirmOpen(false);
+                setTarget(null);
                 navigate(back.to);
               },
             },
