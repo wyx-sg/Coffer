@@ -292,7 +292,7 @@ The session subscribes lazily to each upstream it touches:
 
 ## Invocation logging
 
-Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`) and from which session. Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
+Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`), from which session, and for which agent when the session reported one (`agent_uid`). Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
 
 The row's columns, the exact meaning of each status, the buffered writer and retention are described once, in [Observability](/architecture/observability#the-mcp-invocation-log). You read the log per server (`coffer log mcp --server <server>`) or across all servers (`coffer log mcp`); see [Activity and audit](/guides/activity).
 

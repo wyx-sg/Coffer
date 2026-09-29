@@ -103,7 +103,7 @@ export function useRemoveSkill() {
 | Anything from the daemon | TanStack Query, through a `useX` hook |
 | Ephemeral UI (open, collapsed, draft input) | `useState` in the component |
 | A preference that survives reload | `src/lib/preferences.ts` (`localStorage`) |
-| Which item is open | A route parameter: `/chat/:id`, `/agents/:uid` |
+| Which item is open | A route parameter: `/conversations/:id`, `/agents/:type` |
 | Which tab or file is selected | A search parameter (`?tab=`, `?file=`) through `useSearchParams`. The default tab is the absence of the parameter |
 
 Anything a user expects to survive a refresh, a deep link or the back button belongs in the URL.

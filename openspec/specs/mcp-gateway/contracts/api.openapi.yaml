@@ -75,6 +75,16 @@ paths:
             type: string
           - type: 'null'
           title: Status
+      - description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
+        in: query
+        name: agent_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
+          title: Agent Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -331,6 +341,16 @@ paths:
             type: string
           - type: 'null'
           title: Status
+      - description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
+        in: query
+        name: agent_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
+          title: Agent Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -591,13 +611,23 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        total:
+          description: How many rows match the filters, across every page; the cursor does not change it.
+          title: Total
+          type: integer
       required:
       - invocations
       - next_cursor
+      - total
       title: InvocationListOut
       type: object
     InvocationOut:
       properties:
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
         capability_key:
           title: Capability Key
           type: string
@@ -616,6 +646,9 @@ components:
           - type: string
           - type: 'null'
           title: Error Message
+        id:
+          title: Id
+          type: integer
         resource_name:
           anyOf:
           - type: string
@@ -642,6 +675,7 @@ components:
           title: Timestamp
           type: string
       required:
+      - id
       - timestamp
       - resource_uid
       - resource_name
@@ -651,6 +685,7 @@ components:
       - status
       - error_message
       - session_id
+      - agent_uid
       title: InvocationOut
       type: object
     MCPPromptView:

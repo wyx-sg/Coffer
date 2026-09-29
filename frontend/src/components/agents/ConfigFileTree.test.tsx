@@ -1,51 +1,90 @@
 // frontend/src/components/agents/ConfigFileTree.test.tsx
-// Each config entry shows its display name + mono path. The "what is this file
-// for" description was moved to the right-hand editor pane (ConfigEditorPane),
-// so the tree itself renders no description copy for any key.
+// The config tree names each file by its own name and what it is for, groups
+// by the directory it lives in, marks a missing file, and folds a directory.
 import { describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+
 import { ConfigFileTree } from "./ConfigFileTree";
 import type { ConfigFileInfo } from "@/lib/api/agents";
-import en from "@/i18n/locales/en.json";
+import "@/i18n";
 
-function noop() {}
+const entry = (over: Partial<ConfigFileInfo>): ConfigFileInfo => ({
+  key: "config",
+  display_name: "Config (config.toml)",
+  path: "/home/u/.codex/config.toml",
+  folder_path: "/home/u/.codex",
+  kind: "file",
+  format: "toml",
+  exists: true,
+  files: null,
+  size: 1,
+  modified_at: null,
+  ...over,
+});
 
-function renderTree(files: ConfigFileInfo[]) {
-  return render(
+function renderTree(files: ConfigFileInfo[], collapsed: Record<string, boolean> = {}) {
+  const handlers = {
+    onSelectFile: vi.fn(),
+    onSelectDirectory: vi.fn(),
+    onSelectChild: vi.fn(),
+  };
+  render(
     <ConfigFileTree
       files={files}
       selectedKey={null}
       selectedChild={null}
-      expandedDirs={{}}
-      onSelectFile={noop}
-      onSelectDirectory={noop}
-      onSelectChild={vi.fn()}
+      collapsed={collapsed}
+      {...handlers}
     />,
   );
+  return handlers;
 }
 
-const SETTINGS: ConfigFileInfo = {
-  key: "settings",
-  display_name: "User settings",
-  path: "/home/u/.claude/settings.json",
-  folder_path: "/home/u/.claude",
-  kind: "file",
-  format: "json",
-  exists: true,
-  files: null,
-  size: 17,
-  modified_at: "2026-05-22T00:00:00Z",
-};
-
 describe("ConfigFileTree", () => {
-  test("renders the display name and mono path for an entry", () => {
-    renderTree([SETTINGS]);
-    expect(screen.getByText("User settings")).toBeInTheDocument();
-    expect(screen.getByText(SETTINGS.path)).toBeInTheDocument();
+  test("rows are the file's name and role; unknown keys fall back to the listing's name", () => {
+    const h = renderTree([
+      entry({}),
+      entry({ key: "hooks", path: "/home/u/.codex/hooks.json", exists: false }),
+      entry({ key: "future", display_name: "Something new", path: "/home/u/.codex/new.md" }),
+    ]);
+    expect(screen.getByText("config.toml")).toBeInTheDocument();
+    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("not created")).toBeInTheDocument();
+    expect(screen.getByText("Something new")).toBeInTheDocument();
+    expect(screen.getByText("~/.codex")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("config.toml"));
+    expect(h.onSelectFile).toHaveBeenCalledWith("config");
   });
 
-  test("does not render the description line in the tree (moved to the pane)", () => {
-    renderTree([SETTINGS]);
-    expect(screen.queryByText(en.agents.config.desc.settings)).not.toBeInTheDocument();
+  test("a folded directory hides its files; an open one lists them", () => {
+    const dir = entry({
+      key: "subagents",
+      path: "/home/u/.claude/agents",
+      folder_path: "/home/u/.claude",
+      kind: "directory",
+      files: [{ relpath: "a.md", size: 1, modified_at: "2026-09-01T00:00:00Z" }],
+    });
+    const h = renderTree([dir]);
+    fireEvent.click(screen.getByText("a.md"));
+    expect(h.onSelectChild).toHaveBeenCalledWith("subagents", "a.md");
+    expect(screen.getByRole("button", { name: /agents\// })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  test("a folded directory shows no children", () => {
+    renderTree(
+      [
+        entry({
+          key: "subagents",
+          path: "/home/u/.claude/agents",
+          kind: "directory",
+          files: [{ relpath: "a.md", size: 1, modified_at: "2026-09-01T00:00:00Z" }],
+        }),
+      ],
+      { subagents: true },
+    );
+    expect(screen.queryByText("a.md")).not.toBeInTheDocument();
   });
 });

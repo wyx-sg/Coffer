@@ -7,8 +7,7 @@
 // entry and one plugin, then walk the detail page's tabs and assert each
 // workspace facet renders real (file-derived) data:
 //   - MCP servers tab shows the seeded direct entry,
-//   - Skills tab shows the "Managed by Coffer" pointer at the Skills page
-//     (delivery is decided there, on each skill's enable state + scope),
+//   - Skills tab lists the built-in skill Coffer delivers to every agent,
 //   - Plugins tab shows the plugin parsed out of the same config.toml, with
 //     the "cache missing" badge its absent cache dir earns it.
 //
@@ -72,7 +71,7 @@ async function deleteAgentByApi(name: string): Promise<void> {
   }
 }
 
-test("agent workspace tabs render MCP entries, plugins and the Skills-page pointer", async ({
+test("agent workspace tabs render MCP entries, plugins and the delivered skill", async ({
   page,
 }) => {
   const { token, port } = readDaemonToken();
@@ -95,31 +94,29 @@ test("agent workspace tabs render MCP entries, plugins and the Skills-page point
     });
     expect(createResp.status).toBe(201);
 
-    // Open the agent detail page. The route addresses the agent's uid, which
-    // the creating response does not have to have told us — the test knows the
-    // name it asked for, and looks the identity up the way the CLI does.
+    // Open the agent detail page by its uid — an address from before the
+    // rebuild — and land on today's, which names the agent by its type.
     const uid = await resolveResourceUid("agent", name);
     expect(uid).not.toBeNull();
     await page.goto(`/agents/${uid}`);
-    await expect(page.getByRole("tab", { name: /mcp servers/i })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(page).toHaveURL(/\/agents\/codex$/, { timeout: 10_000 });
 
     // MCP servers tab — the direct entry parsed from config.toml renders.
-    await page.getByRole("tab", { name: /mcp servers/i }).click();
+    await page.getByRole("tab", { name: /^mcp servers/i }).click();
+    await expect(page).toHaveURL(/\/agents\/codex\/mcp-servers$/);
     await expect(page.getByText("e2e-direct", { exact: true })).toBeVisible({
       timeout: 10_000,
     });
 
-    // Skills tab — the tab manages nothing; it points at the Skills page,
-    // where a skill's enable state + scope decide who it reaches.
-    await page.getByRole("tab", { name: /^skills$/i }).click();
-    await expect(
-      page.getByRole("button", { name: /open the skills page/i }),
-    ).toBeVisible({ timeout: 10_000 });
+    // Skills tab — Coffer's built-in manual skill is delivered to every agent,
+    // so it is listed as Coffer's.
+    await page.getByRole("tab", { name: /^skills/i }).click();
+    await expect(page.getByRole("link", { name: "coffer-guide" })).toBeVisible({
+      timeout: 10_000,
+    });
 
-    // Plugins tab — the plugin table parsed from the same config.toml renders.
-    await page.getByRole("tab", { name: /^plugins$/i }).click();
+    // Plugins tab — the plugin parsed out of the same config.toml renders.
+    await page.getByRole("tab", { name: /^plugins/i }).click();
     await expect(page.getByText("e2e-plugin", { exact: true })).toBeVisible({
       timeout: 10_000,
     });

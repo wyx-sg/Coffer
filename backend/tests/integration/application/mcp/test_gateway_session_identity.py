@@ -216,3 +216,49 @@ async def test_a_built_in_call_gets_the_handshake_identity_or_none(
                 assert "agent" not in schema.get("required", []), tool["name"]
     finally:
         await h.close()
+
+
+# revise-web-ui-ia: mcp-gateway "the invocation log names the calling agent" — the
+# acceptance marker is added when the change is archived.
+@pytest.mark.asyncio
+async def test_the_invocation_log_records_the_session_agent_uid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every row a session writes — an upstream call and a built-in one alike —
+    carries the uid the session reported on ``initialize``, and a session that
+    reported none writes rows naming no agent. Filtering by ``agent_uid`` then
+    selects the first session's calls alone."""
+    install_in_memory_keyring(monkeypatch)
+    h = _Harness(tmp_path)
+    await h.start()
+    try:
+        agent = await h.rsvc.register(kind="agent", name="claude-code", config={}, actor="t")
+        await h.rsvc.register(kind="mcp_server", name="fs", config=_stdio("read_file"), actor="t")
+
+        identified = await h.session({"coffer/agent-uid": agent.uid})
+        unidentified = await h.session({})
+        await identified.handle_request(
+            "tools/call", {"name": "fs__read_file", "arguments": {"path": "/x"}}
+        )
+        await identified.handle_request(
+            "tools/call", {"name": "coffer__echo", "arguments": {"text": "hi"}}
+        )
+        await unidentified.handle_request(
+            "tools/call", {"name": "fs__read_file", "arguments": {"path": "/y"}}
+        )
+
+        rows = await h.invocations.query()
+        by_session = {(r.session_id, r.capability_key): r.agent_uid for r in rows}
+        assert by_session == {
+            ("s0", "read_file"): agent.uid,
+            ("s0", "echo"): agent.uid,
+            ("s1", "read_file"): None,
+        }
+
+        mine = await h.invocations.query(agent_uid=agent.uid)
+        assert sorted(r.capability_key for r in mine) == ["echo", "read_file"]
+        assert {r.session_id for r in mine} == {"s0"}
+        assert await h.invocations.count(agent_uid=agent.uid) == 2
+        assert await h.invocations.count() == 3
+    finally:
+        await h.close()

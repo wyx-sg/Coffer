@@ -27,7 +27,7 @@ import { FILE_PANE_SCROLL } from "@/components/filePane";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
 import { splitTurnText } from "@/lib/transcriptText";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 function UserTurnText({ text }: { text: string }) {
   const { t } = useTranslation();
@@ -38,7 +38,7 @@ function UserTurnText({ text }: { text: string }) {
       {harness ? (
         <details className="mb-2">
           <summary className="cursor-pointer text-xs text-muted-foreground">
-            {t("agents.conversationDetail.harnessPrefix")}
+            {t("agents.sessionsTab.harnessPrefix")}
           </summary>
           <p className="mt-1.5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
             {harness.trim()}
@@ -56,16 +56,24 @@ function UserTurnText({ text }: { text: string }) {
   );
 }
 
-function Turn({ message, index }: { message: TranscriptMessage; index: number }) {
+function Turn({
+  message,
+  index,
+  agentName,
+}: {
+  message: TranscriptMessage;
+  index: number;
+  agentName: string;
+}) {
   const { t } = useTranslation();
   const isUser = message.role === "user";
-  // Only the two roles a transcript actually uses get a translated label; an
-  // unrecognised one shows verbatim rather than as a missing-key placeholder,
+  // The person is "You" and the agent is named; an unrecognised role shows
+  // verbatim rather than as a missing-key placeholder,
   // since a future agent format may introduce roles this build has not heard of.
   const label = isUser
-    ? t("agents.conversationDetail.roleUser")
+    ? t("agents.sessionsTab.roleUser")
     : message.role === "assistant"
-      ? t("agents.conversationDetail.roleAssistant")
+      ? agentName
       : message.role;
   return (
     <li className="space-y-1.5 scroll-mt-2" id={turnDomId(index)}>
@@ -77,7 +85,7 @@ function Turn({ message, index }: { message: TranscriptMessage; index: number })
         </span>
         {message.timestamp ? (
           <span className="text-xs text-muted-foreground">
-            {new Date(message.timestamp).toLocaleString()}
+            {formatDateTime(message.timestamp).slice(11, 16)}
           </span>
         ) : null}
       </div>
@@ -95,7 +103,7 @@ function Turn({ message, index }: { message: TranscriptMessage; index: number })
         )}
         {message.truncated ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            {t("agents.conversationDetail.turnTruncated")}
+            {t("agents.sessionsTab.turnTruncated")}
           </p>
         ) : null}
       </div>
@@ -103,13 +111,20 @@ function Turn({ message, index }: { message: TranscriptMessage; index: number })
   );
 }
 
-export function AgentTranscriptView({ messages }: { messages: TranscriptMessage[] }) {
+export function AgentTranscriptView({
+  messages,
+  agentName,
+}: {
+  messages: TranscriptMessage[];
+  /** The agent's product name, labelling its turns. */
+  agentName: string;
+}) {
   const { t } = useTranslation();
 
   if (messages.length === 0) {
     return (
       <div className="flex h-40 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
-        {t("agents.conversationDetail.noTurns")}
+        {t("agents.sessionsTab.noTurns")}
       </div>
     );
   }
@@ -130,7 +145,7 @@ export function AgentTranscriptView({ messages }: { messages: TranscriptMessage[
         // Index-keyed on purpose: a turn has no id of its own, and its position
         // in the file IS its identity — the list is append-only and never
         // reordered, so the usual index-key hazard cannot arise here.
-        <Turn key={index} index={index} message={message} />
+        <Turn key={index} index={index} message={message} agentName={agentName} />
       ))}
     </ul>
   );

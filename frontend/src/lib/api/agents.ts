@@ -17,10 +17,6 @@ type Schemas = components["schemas"];
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = Schemas["AgentType"];
 
-/** `installed_active` (program + config dir), `installed_never_run` (program
- *  only), `config_only` (dir only — not installed), `missing` (neither). */
-export type DetectionState = Schemas["DetectionState"];
-
 export type ConfigFileInfo = Schemas["ConfigFileInfoOut"];
 
 export type ConfigFileListOut = Schemas["ConfigFileListOut"];
@@ -51,9 +47,6 @@ export type AgentPatch = Schemas["AgentPatch"];
  *  registering it now would succeed. */
 export type AgentTypeOut = Schemas["AgentTypeOut"];
 export type AgentTypesOut = Schemas["AgentTypesOut"];
-export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
-/** A discovered, not-yet-registered agent type — an `AgentTypeOut` row. */
-export type AgentCandidate = AgentTypeOut;
 
 /** Every hook in the agent's native config, plus Coffer's own hook's health. */
 export type AgentHooksOut = Schemas["AgentHooksOut"];
@@ -103,8 +96,6 @@ export const agentsApi = {
   patch: (uid: string, body: AgentPatch) =>
     call<AgentOut>(`/agents/${enc(uid)}`, { method: "PATCH", body }),
   remove: (uid: string) => call<void>(`/agents/${enc(uid)}`, { method: "DELETE" }),
-  // Read-only discovery: installed-but-unregistered agents the user can add.
-  candidates: () => call<AgentCandidatesOut>("/agents/candidates"),
   // One row per supported type, registered or not.
   types: () => call<AgentTypesOut>("/agents/types"),
 

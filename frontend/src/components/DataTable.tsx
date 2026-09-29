@@ -49,6 +49,10 @@ interface Props<T> extends ListLoading {
   };
   filters?: FilterDef<T>[];
   onRowClick?: (row: T) => void;
+  /** Rows returning false do not open on click (default: all do). */
+  isRowClickable?: (row: T) => boolean;
+  /** A full-width row under a row — a notice about it; null renders nothing. */
+  rowFooter?: (row: T) => ReactNode;
   /** When set, rows expand to a full-width detail sub-row (excludes onRowClick). */
   getRowDetail?: (row: T) => ReactNode;
   /** When set, a leading checkbox column + bulk action bar are rendered. */
@@ -70,6 +74,8 @@ export function DataTable<T>({
   search,
   filters = [],
   onRowClick,
+  isRowClickable,
+  rowFooter,
   getRowDetail,
   selection,
   isSelectable,
@@ -192,6 +198,8 @@ export function DataTable<T>({
                 rowKey={rowKey}
                 colCount={colCount}
                 onRowClick={onRowClick}
+                isRowClickable={isRowClickable}
+                rowFooter={rowFooter}
                 getRowDetail={getRowDetail}
                 expanded={expanded}
                 onToggleExpand={toggleExpand}

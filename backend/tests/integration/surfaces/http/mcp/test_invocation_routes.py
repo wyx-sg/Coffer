@@ -49,6 +49,7 @@ def _make_invocation(
     duration_ms: int = 10,
     offset_seconds: int = 0,
     session_id: str | None = None,
+    agent_uid: str | None = None,
 ) -> MCPInvocation:
     return MCPInvocation(
         id=None,
@@ -60,6 +61,7 @@ def _make_invocation(
         status=status,  # type: ignore[arg-type]
         error_message="boom" if status == "error" else None,
         session_id=session_id,
+        agent_uid=agent_uid,
     )
 
 
@@ -134,7 +136,7 @@ async def test_empty_invocations_list(inv_client: tuple) -> None:
     client, _engine, _repo, _rsvc, uids = inv_client
     r = await client.get(f"/api/v1/resources/mcp_server/{uids['fs']}/invocations")
     assert r.status_code == 200, r.text
-    assert r.json() == {"invocations": [], "next_cursor": None}
+    assert r.json() == {"invocations": [], "next_cursor": None, "total": 0}
 
 
 @pytest.mark.asyncio
@@ -308,6 +310,10 @@ async def test_invocation_response_shape(inv_client: tuple) -> None:
     assert inv["status"] == "ok"
     assert inv["session_id"] == "sess-123"
     assert inv["error_message"] is None
+    # The row id is the log's own, and a session that reported no agent names none.
+    [stored] = await repo.query(resource_uid=uids["fs"])
+    assert inv["id"] == stored.id
+    assert inv["agent_uid"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -467,3 +473,92 @@ async def test_name_resolution_is_one_lookup_for_the_whole_page(
     r = await client.get("/api/v1/mcp/invocations")
     assert len(r.json()["invocations"]) == 24
     assert len(calls) == 1, f"expected one resource lookup for the page, got {len(calls)}"
+
+
+# ---------------------------------------------------------------------------
+# Calling agent (spec mcp-gateway "Record invocations without content")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_agent_uid_is_carried_and_filters_both_routes(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    await repo.insert(_make_invocation(fs, capability_key="mine", agent_uid="agent-a"))
+    await repo.insert(_make_invocation(fs, capability_key="theirs", agent_uid="agent-b"))
+    await repo.insert(_make_invocation(fs, capability_key="nobody"))
+    await repo.insert(_make_invocation(uids["jira"], capability_key="jira", agent_uid="agent-a"))
+
+    everything = (await client.get("/api/v1/mcp/invocations")).json()
+    by_key = {inv["capability_key"]: inv["agent_uid"] for inv in everything["invocations"]}
+    assert by_key == {"mine": "agent-a", "theirs": "agent-b", "nobody": None, "jira": "agent-a"}
+
+    agg = (await client.get("/api/v1/mcp/invocations?agent_uid=agent-a")).json()
+    assert {inv["capability_key"] for inv in agg["invocations"]} == {"mine", "jira"}
+    assert agg["total"] == 2
+
+    per_server = await client.get(
+        f"/api/v1/resources/mcp_server/{fs}/invocations?agent_uid=agent-a"
+    )
+    assert [inv["capability_key"] for inv in per_server.json()["invocations"]] == ["mine"]
+    assert per_server.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_is_bound_to_the_agent_filter(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    for i in range(3):
+        await repo.insert(
+            _make_invocation(uids["fs"], capability_key=f"t{i}", offset_seconds=i, agent_uid="a")
+        )
+
+    issued = (await client.get("/api/v1/mcp/invocations?limit=1")).json()["next_cursor"]
+    assert issued is not None
+    refused = await client.get(
+        "/api/v1/mcp/invocations", params={"limit": 1, "agent_uid": "a", "cursor": issued}
+    )
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["error"]["code"] == "CURSOR_INVALID"
+
+    bound = (await client.get("/api/v1/mcp/invocations?limit=1&agent_uid=a")).json()
+    follow = await client.get(
+        "/api/v1/mcp/invocations",
+        params={"limit": 1, "agent_uid": "a", "cursor": bound["next_cursor"]},
+    )
+    assert follow.status_code == 200, follow.text
+    assert [inv["capability_key"] for inv in follow.json()["invocations"]] == ["t1"]
+
+
+# ---------------------------------------------------------------------------
+# Total (spec resource-framework "Count a log's matching rows beside each page")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_total_counts_every_matching_row_on_every_page(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    for i in range(5):
+        await repo.insert(
+            _make_invocation(fs, capability_key=f"err{i}", status="error", offset_seconds=i)
+        )
+    await repo.insert(_make_invocation(fs, capability_key="fine", status="ok"))
+    await repo.insert(_make_invocation(uids["jira"], capability_key="j", status="error"))
+
+    first = (await client.get("/api/v1/mcp/invocations?status=error&limit=2")).json()
+    assert len(first["invocations"]) == 2
+    assert first["total"] == 6
+    second = (
+        await client.get(
+            "/api/v1/mcp/invocations",
+            params={"status": "error", "limit": 2, "cursor": first["next_cursor"]},
+        )
+    ).json()
+    assert len(second["invocations"]) == 2
+    assert second["total"] == 6
+
+    per_server = (
+        await client.get(f"/api/v1/resources/mcp_server/{fs}/invocations?status=error&limit=2")
+    ).json()
+    assert per_server["total"] == 5
+    assert (await client.get("/api/v1/mcp/invocations")).json()["total"] == 7

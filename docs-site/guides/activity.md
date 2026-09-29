@@ -13,25 +13,30 @@ Coffer keeps three records of itself: an audit log of what changed in the vault,
 | --- | --- | --- | --- |
 | Audit log | What changed, and who changed it? | `audit_log` table in `coffer.db` | **Activity → Changes**, `coffer log audit` |
 | MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → MCP calls**, `coffer log mcp` |
-| Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon**, `coffer log daemon`, `coffer path logs` |
+| Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon log**, `coffer log daemon`, `coffer path logs` |
 
 All three stay on the machine that wrote them. [Vault sync](/guides/vault-sync) never publishes them, and Coffer sends them nowhere.
 
 ## The Activity page
 
-Open **Activity** in the sidebar. It has one tab per record: **Changes**, **MCP calls** and **Daemon**, each newest first with its own filters. The active tab is part of the URL (`/activity?tab=mcp`, `/activity?tab=daemon`), so you can bookmark or share a link that lands on the daemon log. Each tab loads up to 500 rows for the chosen time range; the search box then narrows them in the page. There is no refresh button: switching tab, changing a filter or returning to the window reloads the data.
+Open **Activity** in the sidebar. It has four tabs, each with the number of records it holds in the chosen time range:
 
-### Changes
+- **Everything** — the default: changes, MCP calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
+- **Changes** — the audit log: **Time**, **Event** (the change as a sentence, such as "Stored a credential") and **By** (who made it).
+- **MCP calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**. A server's own **Invocations** tab reads the same log for that one server.
+- **Daemon log** — the tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. Open it when Coffer itself misbehaves rather than something it proxied.
 
-The audit log, in three columns: **Time**, **Activity** and **Actor**. The Activity column renders the event as a sentence ("Stored a credential", "Updated reach for work-jira"); expand a row to see the stored record, including its `details`. Filter by **Actor**, time range and free text.
+The active tab is part of the URL (`/activity?tab=mcp`, `/activity?tab=daemon`; Everything is `/activity`), so a link can land on the daemon log.
 
-### MCP calls
+**Filters.** Every tab filters by time range (the last hour by default) and free text; press `/` to jump to the text box. The tabs add what their records carry: **Agent** — an agent, or a person, the CLI or Coffer itself — on Everything, Changes and MCP calls; **Server** on Everything and MCP calls; **Kind** on Everything (calls, changes by kind of resource, daemon records) and Changes; **Status** on MCP calls; a level (**All**, **Info**, **Warnings**, **Errors**) and **Logger** on the Daemon log.
 
-One row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Server**, **Type**, **Key**, **Duration** and **Status**. It is the same table as the **Invocations** tab on an MCP server's own page, across every server. Filter by status, time range and free text.
+**Details.** Select a row to open it in a drawer beside the list. A failed call leads with its error; a change shows what it changed as a diff of the configuration before and after (secret values are never recorded); a daemon record shows its message and traceback. Below come the facts — agent, session, server and tool, how long it took, the call's id — the records written around the same time, and the raw record. The arrows step to the previous or next record.
 
-### Daemon
+**New records arrive on their own.** While you are at the top of the list with nothing open, new records appear at the top as they are written. Once you scroll down or open a record the list holds still, and an **↑ N new** button counts what is waiting; choose it, or scroll back to the top, to bring them in. There is no pause or refresh button. The newest records of each log are re-read every few seconds, and a change the daemon announces on its [event stream](/architecture/event-stream) brings the audit log's in at once.
 
-The tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. The level control is a floor: **All levels**, **Debug and above**, **Info and above**, **Warnings and errors**, **Errors only**. Open this tab when Coffer itself misbehaves rather than something it proxied.
+**Older records.** Each tab loads 200 records at a time; **Load older** at the bottom fetches the next page by the log's cursor, until the time range is exhausted.
+
+**Export.** The **⋯** menu next to the title has **Export as JSON** and **Export as CSV**. Either writes every record of the visible tab that matches its current filters — not just the ones loaded — up to 10,000 records, to a file you save.
 
 ## What an audit entry records
 
@@ -113,7 +118,7 @@ coffer log daemon --json
 coffer path logs                            # the log directory and its daemon.log
 ```
 
-`coffer log daemon` reads the tail of `daemon.log` normalised the way the **Daemon** tab shows it. `--limit` accepts 1–500. `coffer path logs` prints where the file is (`COFFER_LOG_DIR` moves it), so you can `grep` it directly.
+`coffer log daemon` reads the tail of `daemon.log` normalised the way the **Daemon log** tab shows it. `--limit` accepts 1–500. `coffer path logs` prints where the file is (`COFFER_LOG_DIR` moves it), so you can `grep` it directly.
 
 ## Let an agent look into Coffer
 

@@ -1,6 +1,6 @@
 // e2e/visual/specs/routes.visual.spec.ts
 //
-// Visual baseline: each sidebar route and the Settings modal, in light and dark, on a fresh
+// Visual baseline: each sidebar route, the Settings modal and every agent detail tab, in light and dark, on a fresh
 // daemon, compared against the committed screenshot for this platform.
 // Pages behind an experimental gate render their gate notice — that notice is
 // the baseline for them until the feature is on by default.
@@ -63,6 +63,10 @@ function daemonToken(): string {
 
 test.beforeEach(async ({ context }) => {
   const token = daemonToken();
+  // The daemon's change feed is a stream that never ends, so the page would
+  // never reach network idle; refuse it, and the pages fall back to their
+  // "not live" mark, the same in every run.
+  await context.route("**/api/v1/events", (route) => route.abort());
   // An init script, not page.addStyleTag: the Vite dev server reloads the page
   // once when it first optimises dependencies, and a tag added after goto
   // would be gone after that reload.
@@ -98,6 +102,24 @@ function timeDependent(page: Page): Locator[] {
     page.getByText(/\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/),
     page.getByText(/\b\d{1,2}:\d{2}(:\d{2})?\s?(AM|PM)?\b/),
     page.getByText(/\buptime\b/i),
+    // Records and counts that differ from one fresh daemon to the next (the
+    // daemon's own log lines, how many were written) — marked by the page.
+    page.locator("[data-visual-volatile]"),
+    // Dates as the UI formats them ("30 Sep 2026", "Sep 30, 2026").
+    page.getByText(/\b(\d{1,2} [A-Z][a-z]{2} \d{4}|[A-Z][a-z]{2} \d{1,2}, \d{4})\b/),
+  ];
+}
+
+/** Text that changes with the machine or the run, never with the design. */
+function runDependent(page: Page): Locator[] {
+  return [
+    // An installed program's version ("v2.1.281", "Installed · v0.41.0").
+    // Exactly three parts, so an address like 127.0.0.1 is not taken for one.
+    page.getByText(/(?<![\d.])v?\d+\.\d+\.\d+(?![.\d])/),
+    // A uid minted by this run's daemon (32 hex digits).
+    page.getByText(/^[0-9a-f]{32}$/),
+    // A date on its own ("Registered 2026-09-29").
+    page.getByText(/^\d{4}-\d{2}-\d{2}$/),
   ];
 }
 
@@ -116,6 +138,24 @@ async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("networkidle");
 }
 
+/**
+ * Stand-in `claude` and `codex` programs in the visual HOME's `bin`, which
+ * start_daemon.sh puts first on the daemon's PATH, so both agents read as
+ * installed (never run) on every machine — a real install would make the
+ * Agents page differ between a dev Mac and CI.
+ */
+test.beforeAll(() => {
+  const bin = path.join(VISUAL_HOME, "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  const programs: Record<string, string> = {
+    claude: "2.1.281 (Claude Code)",
+    codex: "codex-cli 0.41.0",
+  };
+  for (const [name, version] of Object.entries(programs)) {
+    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho "${version}"\n`, { mode: 0o755 });
+  }
+});
+
 for (const route of ROUTES) {
   for (const theme of THEMES) {
     test(`${route.name} (${theme})`, async ({ page }) => {
@@ -130,8 +170,55 @@ for (const route of ROUTES) {
 
       await expect(page).toHaveScreenshot(`${route.name}-${theme}.png`, {
         fullPage: false,
-        mask: timeDependent(page),
+        mask: [...timeDependent(page), ...runDependent(page)],
       });
     });
   }
 }
+
+/** The agent detail page, one route per tab, for a Claude Code agent added on the fresh daemon. */
+const AGENT_TABS = [
+  ["overview", ""],
+  ["model", "/model"],
+  ["skills", "/skills"],
+  ["mcp-servers", "/mcp-servers"],
+  ["plugins", "/plugins"],
+  ["hooks", "/hooks"],
+  ["config", "/config"],
+  ["memory", "/memory"],
+  ["sessions", "/sessions"],
+] as const;
+
+test.describe("agent detail", () => {
+  test.beforeAll(async () => {
+    const json = fs.readFileSync(path.join(VISUAL_HOME, ".coffer", "daemon.json"), "utf-8");
+    const { token, port } = JSON.parse(json) as { token: string; port: number };
+    const headers = { "Content-Type": "application/json", "X-Coffer-Token": token };
+    const listed = await fetch(`http://127.0.0.1:${port}/api/v1/agents/types`, { headers });
+    const { types } = (await listed.json()) as { types: { type: string; uid: string | null }[] };
+    if (types.some((row) => row.type === "claude_code" && row.uid)) return;
+    const created = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ type: "claude_code" }),
+    });
+    expect(created.status).toBe(201);
+  });
+
+  for (const [tab, suffix] of AGENT_TABS) {
+    for (const theme of THEMES) {
+      test(`agent-${tab} (${theme})`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+        await page.goto(`/agents/claude_code${suffix}`);
+        await expect(page).toHaveURL(new RegExp(`/agents/claude_code${suffix}$`));
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await expect(page.getByRole("tab")).toHaveCount(9);
+        await settle(page);
+        await expect(page).toHaveScreenshot(`agent-${tab}-${theme}.png`, {
+          fullPage: false,
+          mask: [...timeDependent(page), ...runDependent(page)],
+        });
+      });
+    }
+  }
+});

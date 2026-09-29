@@ -89,3 +89,7 @@ class MCPInvocation:
     status: Literal["ok", "error", "timeout", "denied"]
     error_message: str | None = None
     session_id: str | None = None
+    #: The agent whose session made the call, as the uid its shim reported on
+    #: ``initialize``. ``None`` when the session reported none (a hand-configured
+    #: shim, a bare MCP client): the log records what it was told, never a guess.
+    agent_uid: str | None = None

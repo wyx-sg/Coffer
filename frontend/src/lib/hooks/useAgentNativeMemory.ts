@@ -7,7 +7,7 @@
 // rows share one directory and must therefore share one cache entry).
 import { useQuery } from "@tanstack/react-query";
 
-import { agentNativeMemoryApi } from "@/lib/api/agentNativeMemory";
+import { agentNativeMemoryApi, type NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
 import { agentNativeMemoryKey } from "@/lib/api/queryKeys";
 
 export function useAgentNativeMemory(agentUid: string) {
@@ -38,4 +38,10 @@ export function useNativeMemoryFileContent(agentUid: string, dir: string, path: 
     queryFn: () => agentNativeMemoryApi.fileContent(agentUid, dir, path),
     enabled: !!agentUid && !!dir && !!path,
   });
+}
+
+/** How many files a (sub)tree holds. */
+export function countMemoryFiles(node: NativeMemoryFileNode): number {
+  if (node.type !== "dir") return 1;
+  return node.children.reduce((n, child) => n + countMemoryFiles(child), 0);
 }

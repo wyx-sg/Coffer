@@ -68,6 +68,8 @@ interface RowsProps<T> {
   rowKey: (row: T) => string;
   colCount: number;
   onRowClick?: (row: T) => void;
+  isRowClickable?: (row: T) => boolean;
+  rowFooter?: (row: T) => ReactNode;
   getRowDetail?: (row: T) => ReactNode;
   expanded: Set<string>;
   onToggleExpand: (key: string) => void;
@@ -83,6 +85,8 @@ export function DataRows<T>({
   rowKey,
   colCount,
   onRowClick,
+  isRowClickable,
+  rowFooter,
   getRowDetail,
   expanded,
   onToggleExpand,
@@ -99,9 +103,10 @@ export function DataRows<T>({
         const isOpen = expanded.has(key);
         const activate = expandable
           ? () => onToggleExpand(key)
-          : onRowClick
+          : onRowClick && (isRowClickable?.(row) ?? true)
             ? () => onRowClick(row)
             : undefined;
+        const footer = rowFooter?.(row);
         return (
           <Fragment key={key}>
             <TableRow
@@ -148,6 +153,13 @@ export function DataRows<T>({
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={colCount} className="bg-surface-sunken p-0">
                   {getRowDetail!(row)}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {footer ? (
+              <TableRow className="hover:bg-transparent" data-row-footer={key}>
+                <TableCell colSpan={colCount} className="px-4 pb-3 pt-0">
+                  {footer}
                 </TableCell>
               </TableRow>
             ) : null}
