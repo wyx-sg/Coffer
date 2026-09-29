@@ -18,6 +18,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── ignore_other_mentions: bool = False # group gating
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
+│   ├── show_steps: bool = True             # step lines under the live status line
+│   ├── notify_after_seconds: float = 90.0  # long-turn ping threshold (0–3600; 0 = off)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig

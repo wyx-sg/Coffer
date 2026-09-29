@@ -83,9 +83,43 @@ Pairing again from a different account replaces the owner. The previous owner's 
 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
 
-- A 👀 reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
-- The reply grows in place while the agent works, with one progress line per tool call, such as `⏳ Bash · list the desktop` and `✅ Read · wedding.json`.
+- A reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
+- While the agent works, one status line sits at the top of the live reply, and its clock keeps moving even during a long silent tool:
+
+  ```
+  ⏳ Working · 2m 14s · 7 steps
+  💬 Checking the deploy logs
+  +4 earlier
+  ✅ Read · checkout.spec.ts
+  ✅ Bash · rerun the 3DS test
+  ⏳ Grep · retry in e2e/
+  ─
+  The failure is the 3DS step: the sandbox answered after 30 s and…
+  ```
+
+  The `💬` line is what the agent last said before a tool call; the answer grows under the rule. The final reply keeps everything the agent wrote, one paragraph per stretch of text.
 - A turn that fails, is stopped, or hits the tool-iteration limit ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
+
+### What the reply looks like
+
+Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it for a reply shaped for a phone: the outcome in the first sentence (it is what the notification shows), no step-by-step narration, anything long under a `## Details` heading, and diagrams as images. Coffer then fits the reply to the chat:
+
+- **Details** — on Telegram, a `## Details` section arrives collapsed. On SeaTalk, the reply carries the part before it and a card follows with the outcome as its title and **Details** and **As file** buttons: **Details** posts the section as a reply in the card's thread, **As file** sends it as a `.md` file.
+- **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
+- **Long replies** — are never cut inside a code block, and every message after the first starts with its place, `(2/3)`. On Telegram those continuations arrive silently; only the first one notifies.
+
+### Questions for you
+
+When the agent needs a yes or a choice before it goes on — a change it is about to make, say — it ends with a question, and Coffer sends it as its own message with a button per option: **Yes** / **No**, or up to four choices. Tapping one is the same as typing that answer: it goes into the conversation as your reply. In a group, only the channel's owner can answer; anyone else's tap is refused. After a tap the card shows your answer and offers nothing more. On a platform without buttons the question stays at the end of the reply.
+
+### When a long turn finishes
+
+A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`, `❓ Needs you · …`. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
+
+Two per-channel settings shape this, on the Channels page under **Edit** → **Replies**, or from the CLI:
+
+- `coffer channel edit <name> --hide-steps` (or `--show-steps`) — keep only the status header and the 💬 line, without the step list. Useful in a busy group.
+- `coffer channel edit <name> --notify-after <seconds>` — the long-turn threshold, 0 to 3600; 0 turns the done line off.
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
 
