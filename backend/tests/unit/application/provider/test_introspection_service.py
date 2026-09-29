@@ -57,6 +57,7 @@ async def test_list_models_degrades_on_error() -> None:
     result = await _svc(port).list_models(provider="openai", base_url=None, credential_ref="ref-x")
     assert result.models == []
     assert "boom" in result.message  # never raises — the surface shows the message
+    assert result.reachable is False
 
 
 async def test_list_models_empty_message() -> None:
@@ -66,6 +67,8 @@ async def test_list_models_empty_message() -> None:
     # A true statement of what happened — no surface offers free-text model
     # entry (spec provider-switching "Choose a model from a fixed list").
     assert result.message == "the endpoint listed no models"
+    # It answered, so it is reachable — callers tell the two apart by this, not the text.
+    assert result.reachable is True
 
 
 async def test_test_connection_ok_and_fail() -> None:
