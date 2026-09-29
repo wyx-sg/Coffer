@@ -18,7 +18,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
 from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.source import LocalImportSource
+from coffer.domain.skill.source import ImportedSource
 from coffer.domain.skill.validator import ValidationOk
 
 if TYPE_CHECKING:
@@ -51,10 +51,11 @@ async def register_from_validated(
     service: SkillService,
     src: pathlib.Path,
     validation: ValidationOk,
-    source_meta: LocalImportSource,
+    source_meta: ImportedSource,
     event: AuditEventType,
     actor: str,
     overwrite: bool = False,
+    audit_details: dict[str, object] | None = None,
 ) -> Resource:
     name = validation.frontmatter.name
     # Duplicate check before copying any bytes. A skill's name is a label, but
@@ -134,7 +135,7 @@ async def register_from_validated(
         audit_event.value,
         resource=r,
         actor=actor,
-        details={"version_hash": validation.skill_md_sha256},
+        details={"version_hash": validation.skill_md_sha256, **(audit_details or {})},
     )
     # Deliver to every agent the skill's own state grants (spec skill-manager
     # "Deliver a skill only where it is enabled and in scope"). An overwrite

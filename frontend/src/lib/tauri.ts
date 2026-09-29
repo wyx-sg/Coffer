@@ -3,7 +3,8 @@
 // One frontend build serves two hosts. In a browser every helper here returns
 // a safe fallback or throws. Inside the Tauri WebView the page can ask the
 // shell where the daemon is, to spawn one, whether its version pairs with this
-// build, to label the tray in the chosen language — and for the presence-gated
+// build, to label the tray in the chosen language, to check for and install an
+// update (`shellUpdates.ts`, through `shellInvoke`) — and for the presence-gated
 // actions (reveal a secret, write a key backup, approve an approval), each
 // behind a Touch ID / password check in the shell. In a browser those reject
 // and the page offers "Open in Coffer app". Components ask
@@ -23,6 +24,16 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && window.__TAURI_INTERNALS__ !== undefined;
 }
 
+/**
+ * Invoke one of the shell's own commands. Callers decide first whether they
+ * are in the shell — through `isTauri()` here, or a predicate this module
+ * exports — so nothing outside this module imports the Tauri API.
+ */
+export async function shellInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return args === undefined ? invoke<T>(command) : invoke<T>(command, args);
+}
+
 export interface DaemonInfo {
   /** `http://127.0.0.1:<port>/api/v1` */
   baseUrl: string;
@@ -40,11 +51,8 @@ export interface DaemonInfo {
  * credential path with two suppliers. Throws outside Tauri.
  */
 export async function getDaemonInfo(): Promise<DaemonInfo> {
-  if (!isTauri()) {
-    throw new Error("get_daemon_info is only available inside the Tauri app");
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<DaemonInfo>("get_daemon_info");
+  if (!isTauri()) throw new Error("get_daemon_info is only available inside the Tauri app");
+  return shellInvoke<DaemonInfo>("get_daemon_info");
 }
 
 /**
@@ -91,20 +99,14 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
  * Keep asking the shell for a connection until it gives one, then hand control
  * back to `onConnected`.
  *
- * Retrying is the whole point. A handshake is one attempt at a thing with a
- * deadline — the shell gives a daemon it started a bounded time to answer —
+ * Retrying is the whole point. A handshake is one attempt with a deadline,
  * and a real vault's daemon spends seconds unpacking, migrating and starting
- * its upstreams before it accepts a request. When an attempt lost that race
- * the page was left with no address to call and no way to get one: its own
- * status poll had nothing to poll, so the offline banner stayed up over a
- * daemon that had been serving happily for a minute, and the only way out was
- * the banner's Restart button — which worked purely because it ran the
- * handshake again. This does that, without the user.
- *
- * It does not stop trying. Each attempt is cheap when a daemon is up (the
- * shell probes and attaches), and the shell refuses to start a second daemon
- * beside a running one, so a loop that settles at one attempt every thirty
- * seconds is also the recovery for "the user has just fixed their install".
+ * its upstreams before it answers. An attempt that lost that race used to leave
+ * the page with no address and the offline banner up over a serving daemon,
+ * until the user pressed Restart — which only worked because it ran the
+ * handshake again. This does that, without the user, and never stops: each
+ * attempt is cheap when a daemon is up, and the shell refuses to start a
+ * second one beside it, so it is also the recovery for a fixed install.
  *
  * Outside Tauri there is nothing to ask: the browser hosts were credentialed
  * by whoever served the document.
@@ -145,18 +147,13 @@ export interface RestartResult extends DaemonInfo {
  * the daemon, so a daemon that is down cannot serve the button that would
  * restart it. Throws outside Tauri.
  *
- * The shell waits for the replacement to answer and returns its connection
- * with the PID, so the caller installs that rather than handshaking again. A
- * second handshake here is what used to start a second daemon: it arrived
- * before the new one had bound a port, and the handshake answers "no daemon"
- * by spawning one.
+ * The shell waits for the replacement and returns its connection with the
+ * PID; the caller installs that rather than handshaking again, which used to
+ * arrive before the new daemon had bound and so spawn a second one.
  */
 export async function restartDaemon(): Promise<RestartResult> {
-  if (!isTauri()) {
-    throw new Error("restart_daemon is only available inside the Tauri app");
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<RestartResult>("restart_daemon");
+  if (!isTauri()) throw new Error("restart_daemon is only available inside the Tauri app");
+  return shellInvoke<RestartResult>("restart_daemon");
 }
 
 /**
@@ -172,8 +169,7 @@ export async function daemonVersionMatches(daemonVersion: string): Promise<boole
   if (!isTauri()) {
     return true;
   }
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<boolean>("daemon_version_matches", { daemonVersion });
+  return shellInvoke<boolean>("daemon_version_matches", { daemonVersion });
 }
 
 /** The slice of an i18next instance `followLanguageInShell` uses. */
@@ -190,8 +186,7 @@ export interface LanguageSource {
  */
 export async function setShellLanguage(language: string): Promise<void> {
   if (!isTauri()) return;
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("set_ui_language", { language });
+  await shellInvoke("set_ui_language", { language });
 }
 
 /**
@@ -244,15 +239,13 @@ export interface PresenceMode {
 /** Ask the shell whether the daemon is a development build. Throws outside it. */
 export async function presenceMode(): Promise<PresenceMode> {
   if (!isTauri()) throw new PresenceUnavailableError("presence_mode");
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<PresenceMode>("presence_mode");
+  return shellInvoke<PresenceMode>("presence_mode");
 }
 
 /** Reveal one secret's plaintext after a presence check. Throws outside the shell. */
 export async function revealSecret(secretRef: string): Promise<string> {
   if (!isTauri()) throw new PresenceUnavailableError("reveal_secret");
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<string>("reveal_secret", { secretRef });
+  return shellInvoke<string>("reveal_secret", { secretRef });
 }
 
 /** Where the shell wrote a master key backup, and the key it holds. */
@@ -264,36 +257,42 @@ export interface MasterKeyBackup {
 /** Write a master key backup after a presence check; the key never reaches the page. */
 export async function exportMasterKeyBackup(): Promise<MasterKeyBackup> {
   if (!isTauri()) throw new PresenceUnavailableError("export_master_key_backup");
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<MasterKeyBackup>("export_master_key_backup");
+  return shellInvoke<MasterKeyBackup>("export_master_key_backup");
 }
 
 /** Approve one pending approval after a presence check. Throws outside the shell. */
 export async function approvePending(approvalId: string): Promise<Approval> {
   if (!isTauri()) throw new PresenceUnavailableError("approve_pending");
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<Approval>("approve_pending", { approvalId });
+  return shellInvoke<Approval>("approve_pending", { approvalId });
 }
 
 /** The event the shell emits when it sees a pending approval it has not announced. */
 export const APPROVALS_EVENT = "coffer://approvals";
 
-/** Call `callback` on each approval the shell announces; a no-op outside the shell. */
-export function onApprovalsEvent(callback: () => void): () => void {
+/**
+ * Call `callback` with each payload the shell emits on `event`; a no-op
+ * outside the shell. Returns the unsubscribe.
+ */
+export function onShellEvent<T>(event: string, callback: (payload: T) => void): () => void {
   if (!isTauri()) return () => {};
   let unlisten: (() => void) | null = null;
   let cancelled = false;
   void import("@tauri-apps/api/event")
-    .then(({ listen }) => listen(APPROVALS_EVENT, () => callback()))
+    .then(({ listen }) => listen<T>(event, (e) => callback(e.payload)))
     .then((stop) => {
       if (cancelled) stop();
       else unlisten = stop;
     })
     .catch((e: unknown) => {
-      console.error("Coffer: could not listen for approvals from the desktop shell", e);
+      console.error(`Coffer: could not listen for ${event} from the desktop shell`, e);
     });
   return () => {
     cancelled = true;
     unlisten?.();
   };
+}
+
+/** Call `callback` on each approval the shell announces; a no-op outside the shell. */
+export function onApprovalsEvent(callback: () => void): () => void {
+  return onShellEvent(APPROVALS_EVENT, () => callback());
 }

@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { credentialDesktopHost, followLanguageInShell } from "./lib/tauri";
+import { followUpdatePreferenceInShell } from "./lib/shellUpdates";
 import { initTheme } from "./lib/theme";
 import i18n from "./i18n"; // Initialises i18next before render
 import "./index.css";
@@ -41,6 +42,9 @@ function bootstrap(): void {
   // The desktop tray is labelled in the interface language; it cannot read
   // the choice itself, so the page reports it now and on every switch.
   followLanguageInShell(i18n);
+  // Likewise whether the shell checks for updates on its own ("Check
+  // automatically" on Settings › About), which the page keeps.
+  followUpdatePreferenceInShell();
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>

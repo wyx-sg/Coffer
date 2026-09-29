@@ -9,7 +9,7 @@ framework from spec resource-framework.
 ### `SkillSource` (`domain/skill/source.py`)
 
 Pydantic models recording where a managed skill came from.
-`SkillSource = Annotated[LocalImportSource | BuiltinSource, Field(discriminator="type")]`.
+`SkillSource = Annotated[LocalImportSource | ArchiveImportSource | GitImportSource | BuiltinSource, Field(discriminator="type")]`.
 
 #### `LocalImportSource`
 
@@ -17,6 +17,25 @@ Pydantic models recording where a managed skill came from.
 | --------------- | ------------------------- | ----------------------------------------------------- |
 | `type`          | `Literal["local_import"]` | source type                                           |
 | `original_path` | `str`                     | informational only; not retained as a live dependency |
+
+#### `ArchiveImportSource`
+
+| Field          | Type                        | Notes                                                                 |
+| -------------- | --------------------------- | --------------------------------------------------------------------- |
+| `type`         | `Literal["archive_import"]` | source type                                                           |
+| `archive_name` | `str`                       | the uploaded archive's file name; informational                       |
+| `folder`       | `str`                       | where in the archive the skill's `SKILL.md` sat; `""` for the top     |
+
+#### `GitImportSource`
+
+| Field          | Type                    | Notes                                                                                   |
+| -------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `type`         | `Literal["git_import"]` | source type                                                                             |
+| `url`          | `str`                   | the repository URL git clones                                                           |
+| `ref`          | `str \| None`           | the branch, tag or commit asked for; `None` = the default branch                        |
+| `subpath`      | `str`                   | the skill's own folder inside the repository (after discovery); `""` for the top         |
+| `commit`       | `str`                   | the full commit the content was copied from — the pin                                    |
+| `content_hash` | `str`                   | SHA-256 of the folder's content at `commit` (`domain/skill/content_hash.py`); the master differing from it means "edited since the pin" |
 
 #### `BuiltinSource`
 
@@ -39,7 +58,7 @@ once renaming arrived ([Resource Identity Is an Immutable
 
 | Field                        | Type               | Notes                                               |
 | ---------------------------- | ------------------ | --------------------------------------------------- |
-| `source`                     | `LocalImportSource \| BuiltinSource` | discriminated on `type`             |
+| `source`                     | `SkillSource`      | discriminated on `type`                             |
 | `skill_md_description`       | `str`              | frontmatter `description`                           |
 | `version_hash`               | `str`              | sha256 of SKILL.md content at last sync             |
 | `last_synced_from_source_at` | `datetime \| None` | UTC; set on import                                  |
@@ -209,6 +228,34 @@ Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`
 
 Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "which skills does this agent currently hold" queries.
 
+### `skill_source_status`
+
+Migration `20260930_0114_skill_source_status.py` (revision `0114`). One row per
+Git-imported skill: what this machine last learned about its repository (spec
+skill-manager "Update a Git-imported skill from its source"). Observation, not
+vault state — vault sync never carries it; the pin itself is in the skill's
+config.
+
+| Column              | Type        | Constraints / notes                                                       |
+| ------------------- | ----------- | ------------------------------------------------------------------------- |
+| `skill_resource_id` | `int`       | PK, FK → `resources(id)` ON DELETE CASCADE                                |
+| `checked_at`        | `timestamp` | nullable; the last check, successful or not                               |
+| `last_success_at`   | `timestamp` | nullable; the last check that reached the repository                      |
+| `error`             | `text`      | nullable; git's message from the last check                               |
+| `latest_commit`     | `text`      | nullable; what the ref pointed at when the last check succeeded           |
+| `commits_ahead`     | `int`       | not null, default 0; commits after the pin that change the skill's folder |
+| `files_changed`     | `int`       | not null, default 0; files those commits change                           |
+| `dismissed_commit`  | `text`      | nullable; the commit the user chose Keep mine against                     |
+
+An update is available when `latest_commit` differs from the pin and from
+`dismissed_commit` and `commits_ahead > 0`.
+
+### Staged sources (in memory)
+
+A staged folder, archive, Git checkout or update preview is held in the
+daemon's memory (`application/skill/staging.py`) with a directory under the
+system's temp space, for at most an hour. Nothing about a stage is persisted.
+
 ### Reuse of existing tables
 
 - `resources`: new rows with `kind='skill'`. No schema change.
@@ -220,8 +267,8 @@ Add to `AuditEventType`:
 
 | Value                  | When emitted                                                               |
 | ---------------------- | -------------------------------------------------------------------------- |
-| `skill_imported`       | Local-path import succeeds; or the built-in seed registered a Coffer-generated skill for the first time (actor `system`, details: `version_hash`, `builtin: true`) |
-| `skill_updated`        | An overwrite re-import replaced the skill (details: the new `version_hash`), or an in-app file save changed one file (details: `path`, `edited_file: true`); or the built-in seed rewrote a Coffer-generated skill whose text changed (actor `system`, details: the new `version_hash`, `builtin: true`) |
+| `skill_imported`       | Local-path import succeeds, or a staged folder, archive or Git skill is confirmed (details: `source` = `folder` / `archive` / `git`); or the built-in seed registered a Coffer-generated skill for the first time (actor `system`, details: `version_hash`, `builtin: true`) |
+| `skill_updated`        | An overwrite re-import replaced the skill (details: the new `version_hash`, and `source` for a staged import), a Git-imported skill took an update (details: `from_commit`, `to_commit`, `discarded_local_edits`), or an in-app file save changed one file (details: `path`, `edited_file: true`); or the built-in seed rewrote a Coffer-generated skill whose text changed (actor `system`, details: the new `version_hash`, `builtin: true`) |
 | `skill_bound`          | A copy was delivered to an agent (symlink created)                         |
 | `skill_unbound`        | A delivered copy was reclaimed from an agent (symlink removed)             |
 

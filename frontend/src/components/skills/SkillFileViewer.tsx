@@ -7,11 +7,16 @@
 // agent without re-delivery. The <FileActions> bar still opens / reveals the
 // file for edits that want a real editor.
 //
+// A Markdown file opens rendered; the Preview / Source switch shows its raw
+// text instead (spec skill-manager "Cover skill management on REST, the CLI
+// and the web", the Files tab).
+//
 // Binary files, and files the read truncated, stay read-only: saving a partial
 // read would cut the file short on disk. So does every file of a builtin skill,
 // and it says why — Coffer rewrites that folder at every start, so an edit would
 // not survive (spec skill-manager "Regenerate Coffer's builtin skill from the
 // build").
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
@@ -19,6 +24,7 @@ import { FileEditor } from "@/components/FileEditor";
 import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
+import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { skillsApi } from "@/lib/api/skills";
 import { translateApiError } from "@/lib/api/errors";
 import { useFileDraft } from "@/lib/hooks/useFileDraft";
@@ -39,6 +45,7 @@ export function SkillFileViewer({
 }) {
   const { t } = useTranslation();
   const content = useSkillFileContent(uid, path);
+  const [view, setView] = useState<"preview" | "source">("preview");
   const draft = useFileDraft({
     loaded: content.data?.content,
     fingerprint: content.data?.fingerprint,
@@ -70,8 +77,24 @@ export function SkillFileViewer({
   // row below it — <FileEditor> renders them left of Edit / Save / Cancel, the
   // same as the agent config viewer (ConfigEditorPane). A binary file has no
   // editor, so it shows the actions on their own.
+  const markdown = isMarkdown(path) && !content.data?.binary;
   const header = (
-    <span className="block shrink-0 truncate font-mono text-xs text-muted-foreground">{path}</span>
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+        {path}
+      </span>
+      {markdown && !draft.editing ? (
+        <SkillSegmented
+          label={t("skills.files.viewLabel")}
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "preview", label: t("skills.files.preview") },
+            { value: "source", label: t("skills.files.source") },
+          ]}
+        />
+      ) : null}
+    </div>
   );
 
   if (content.data?.binary) {
@@ -118,7 +141,7 @@ export function SkillFileViewer({
       >
         {/* The preview takes the rest of the pane, down to the bottom of the
             window, and scrolls inside (components/filePane.ts). */}
-        {isMarkdown(path) ? (
+        {markdown && view === "preview" ? (
           <FindableMarkdown fill className="rounded-md border bg-background p-3">
             {text}
           </FindableMarkdown>

@@ -66,6 +66,7 @@ from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
+from coffer.surfaces.http.skill_source_routes import router as skill_source_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 from coffer.surfaces.http.usage_routes import router as usage_router
@@ -101,6 +102,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_unmanaged_skill_router,
         fs_router,
         skill_router,
+        skill_source_router,
         skill_file_router,
         # MCP
         mcp_protocol_router,

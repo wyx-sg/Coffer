@@ -18,8 +18,8 @@ interface ResourceWriteInput {
 }
 
 /** A kind-agnostic write refreshes the generic list AND the kind's own list
- *  key, where it has one (`ownListKeyForKind`) — the skill detail page reads
- *  `skillKey(uid)`, not `resourcesKey`, and would otherwise keep rendering the
+ *  key, where it has one (`ownListKeyForKind`) — the Skills page reads
+ *  `skillsKey`, not `resourcesKey`, and would otherwise keep rendering the
  *  pre-toggle state. */
 function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): void {
   void qc.invalidateQueries({ queryKey: resourcesKey });

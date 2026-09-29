@@ -57,6 +57,7 @@ from coffer.surfaces.http.agent_dependencies import (
     set_auto_detect_service,
 )
 from coffer.surfaces.http.skill_dependencies import set_skill_service
+from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_hooks_service,
@@ -94,6 +95,8 @@ class AgentSkillWiring:
     #: connection, which ``agent_connection_wiring`` composes once the memory
     #: kind (the other part's owner) is wired too.
     mcp_service: AgentMcpService
+    #: Archive and Git sources, and the six-hourly update check; stopped at shutdown.
+    skill_sources: SkillSources
 
 
 def wire_agent_and_skill_kinds(
@@ -285,6 +288,7 @@ def wire_agent_and_skill_kinds(
     set_skill_service(skill_svc)
 
     return AgentSkillWiring(
+        skill_sources=wire_skill_sources(skill_svc, sm),
         agent_service=agent_svc,
         skill_service=skill_svc,
         builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),

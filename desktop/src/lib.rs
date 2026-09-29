@@ -49,6 +49,12 @@ mod sync_presentation;
 mod sync_watch;
 mod tray;
 mod tray_locale;
+mod tray_nav;
+mod tray_state;
+mod tray_watch;
+mod update_relaunch;
+mod update_state;
+mod updater;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -72,6 +78,9 @@ pub fn run() {
     // restart asked from the tray that failed — are a user's only account of a
     // daemon that never came up. See `logging.rs` for the file they go to.
     logging::install();
+    // Before the handshake can run: whether an update relaunched this process,
+    // in which case the daemon it finds is the previous version's.
+    update_relaunch::note_at_startup();
 
     // No `dialog` / `opener` plugins: the frontend reaches OS file actions
     // through daemon HTTP routes in both hosts, so registering them here would
@@ -90,6 +99,10 @@ pub fn run() {
     // well would put two processes in a race to write that directory.
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        // The updater runs in Rust only; the webview holds none of its
+        // permissions (`capabilities/default.json`). A native plugin the
+        // daemon cannot stand in for: no loopback route can replace the app.
+        .plugin(updater::plugin())
         .invoke_handler(tauri::generate_handler![
             daemon::restart_daemon,
             daemon::get_daemon_info,
@@ -99,6 +112,10 @@ pub fn run() {
             secrets::reveal_secret,
             secrets::export_master_key_backup,
             secrets::approve_pending,
+            updater::update_status,
+            updater::check_for_updates,
+            updater::install_update,
+            updater::set_update_auto_check,
         ])
         .setup(|app| {
             // The window is configured hidden and revealed by the handshake
@@ -121,11 +138,13 @@ pub fn run() {
                     }
                 }
             });
-            let tray_menu = tray::build_tray(app.handle())?;
-            // The watcher puts the Sync entry into the menu while `vault_sync`
-            // is on, renames it, badges the tray and the Dock, and raises one
-            // notification per transition into an attention state.
-            sync_watch::start(app.handle().clone(), tray_menu);
+            // The updater's record first: the menu bar's update entry is
+            // labelled from it. Then the menu bar item, then the poll that
+            // keeps it true — which also drives the sync alert (spec vault-sync
+            // "Say a vault needs a human where the user already is").
+            updater::start(app.handle());
+            tray::build_tray(app.handle(), updater::status(app.handle()))?;
+            tray_watch::start(app.handle().clone());
             // One notification per secret waiting on a person's approval
             // (spec desktop-app "Release plaintext and approvals only after a
             // presence check in the shell").

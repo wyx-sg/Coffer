@@ -10,8 +10,11 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import { McpServerDetailTabs } from "@/components/mcp/McpServerDetailTabs";
-import { SkillDetailPage } from "./SkillDetailPage";
+import { SkillDetailPane } from "@/components/skills/SkillDetailPane";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { SkillOut } from "@/lib/api/skills";
+import { useDetailTab } from "@/lib/detailTabs";
+import { SKILL_TABS } from "@/lib/skills/tabs";
 
 // What the tabs SHOW belongs to each kind; stub the heavy bodies so this test
 // is about the tab layout alone.
@@ -22,8 +25,6 @@ vi.mock("@/components/mcp/InvocationsTable", () => ({
   InvocationsTable: () => <div>invocations</div>,
 }));
 vi.mock("@/lib/hooks/useSkills", () => ({
-  useSkills: vi.fn(() => ({ data: [SKILL], isPending: false, error: null })),
-  useSkill: vi.fn(),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -45,8 +46,6 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
-const skillHooks = await import("@/lib/hooks/useSkills");
-
 const SKILL: SkillOut = {
   uid: "sk-1",
   name: "hello",
@@ -61,7 +60,19 @@ const SKILL: SkillOut = {
   created_at: "2026-05-26T00:00:00Z",
   updated_at: "2026-05-26T00:00:00Z",
   bindings: [],
+  requires: [],
+  source_status: null,
 };
+
+/** The skill's reading pane, its tab addressed the way the Skills page does. */
+function SkillTabs() {
+  const [tab, setTab] = useDetailTab(SKILL_TABS, "files", "/skills/hello");
+  return (
+    <TooltipProvider>
+      <SkillDetailPane skill={SKILL} tab={tab} onTabChange={setTab} onDeleted={vi.fn()} />
+    </TooltipProvider>
+  );
+}
 
 const where = { url: "" };
 function Probe() {
@@ -125,16 +136,11 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
   const mcpClass = mcpStrip.list.className;
   mcp.unmount();
 
-  // A skill's detail page, opened on Files by the path.
-  vi.mocked(skillHooks.useSkill).mockReturnValue({
-    data: SKILL,
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof skillHooks.useSkill>);
-  renderRoute("/skills/hello/files", "/skills/:name/:tab?", <SkillDetailPage />);
+  // A skill's detail pane, opened on History by the path.
+  renderRoute("/skills/hello/history", "/skills/:name/:tab?", <SkillTabs />);
   const skillStrip = strip();
-  expect(skillStrip.selected).toHaveTextContent("Files");
-  fireEvent.mouseDown(within(skillStrip.list).getByRole("tab", { name: "Overview" }));
+  expect(skillStrip.selected).toHaveTextContent("History");
+  fireEvent.mouseDown(within(skillStrip.list).getByRole("tab", { name: "Files" }));
   // The default tab is the bare address on both pages.
   expect(where.url).toBe("/skills/hello");
 

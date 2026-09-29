@@ -472,6 +472,216 @@ paths:
       summary: Repair Skills
       tags:
       - skills
+  /api/v1/skills/stage/archive:
+    post:
+      operationId: stage_archive_api_v1_skills_stage_archive_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_stage_archive_api_v1_skills_stage_archive_post'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillStagingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Stage Archive
+      tags:
+      - skills
+  /api/v1/skills/stage/folder:
+    post:
+      operationId: stage_folder_api_v1_skills_stage_folder_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillStageFolderRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillStagingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Stage Folder
+      tags:
+      - skills
+  /api/v1/skills/stage/git:
+    post:
+      operationId: stage_git_api_v1_skills_stage_git_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillStageGitRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillStagingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Stage Git
+      tags:
+      - skills
+  /api/v1/skills/stage/{staging_id}:
+    delete:
+      operationId: cancel_stage_api_v1_skills_stage__staging_id__delete
+      parameters:
+      - in: path
+        name: staging_id
+        required: true
+        schema:
+          title: Staging Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Cancel Stage
+      tags:
+      - skills
+  /api/v1/skills/stage/{staging_id}/confirm:
+    post:
+      operationId: confirm_stage_api_v1_skills_stage__staging_id__confirm_post
+      parameters:
+      - in: path
+        name: staging_id
+        required: true
+        schema:
+          title: Staging Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillStagingConfirmRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillStagingConfirmOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Confirm Stage
+      tags:
+      - skills
   /api/v1/skills/verify:
     post:
       operationId: verify_skills_api_v1_skills_verify_post
@@ -737,6 +947,240 @@ paths:
       summary: Write Skill File
       tags:
       - skills
+  /api/v1/skills/{uid}/source/apply:
+    post:
+      operationId: apply_update_api_v1_skills__uid__source_apply_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillUpdateApplyRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Apply Update
+      tags:
+      - skills
+  /api/v1/skills/{uid}/source/check:
+    post:
+      operationId: check_source_api_v1_skills__uid__source_check_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillSourceStatusOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Source
+      tags:
+      - skills
+  /api/v1/skills/{uid}/source/compare:
+    get:
+      operationId: compare_update_api_v1_skills__uid__source_compare_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: query
+        name: staging_id
+        required: true
+        schema:
+          minLength: 1
+          title: Staging Id
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillUpdateCompareOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Compare Update
+      tags:
+      - skills
+  /api/v1/skills/{uid}/source/keep:
+    post:
+      operationId: keep_mine_api_v1_skills__uid__source_keep_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillUpdateKeepRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillSourceStatusOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Keep Mine
+      tags:
+      - skills
+  /api/v1/skills/{uid}/source/preview:
+    post:
+      operationId: preview_update_api_v1_skills__uid__source_preview_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillUpdatePreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Update
+      tags:
+      - skills
 components:
   schemas:
     AdoptBody:
@@ -750,6 +1194,35 @@ components:
       required:
       - location
       title: AdoptBody
+      type: object
+    ArchiveImportSourceOut:
+      description: A skill unpacked from an uploaded archive; both fields are informational.
+      properties:
+        archive_name:
+          title: Archive Name
+          type: string
+        folder:
+          title: Folder
+          type: string
+        type:
+          const: archive_import
+          title: Type
+          type: string
+      required:
+      - type
+      - archive_name
+      - folder
+      title: ArchiveImportSourceOut
+      type: object
+    Body_stage_archive_api_v1_skills_stage_archive_post:
+      properties:
+        file:
+          contentMediaType: application/octet-stream
+          title: File
+          type: string
+      required:
+      - file
+      title: Body_stage_archive_api_v1_skills_stage_archive_post
       type: object
     BuiltinSourceOut:
       description: |-
@@ -852,6 +1325,39 @@ components:
       - error
       title: ErrorResponse
       type: object
+    GitImportSourceOut:
+      description: A skill copied from a folder of a Git repository at one pinned commit.
+      properties:
+        commit:
+          title: Commit
+          type: string
+        content_hash:
+          title: Content Hash
+          type: string
+        ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref
+        subpath:
+          title: Subpath
+          type: string
+        type:
+          const: git_import
+          title: Type
+          type: string
+        url:
+          title: Url
+          type: string
+      required:
+      - type
+      - url
+      - ref
+      - subpath
+      - commit
+      - content_hash
+      title: GitImportSourceOut
+      type: object
     LinkMode:
       description: How a binding's target was realised on disk.
       enum:
@@ -948,6 +1454,56 @@ components:
       - last_link_path
       - link_mode
       title: SkillBindingOut
+      type: object
+    SkillCommitOut:
+      properties:
+        id:
+          title: Id
+          type: string
+        subject:
+          title: Subject
+          type: string
+      required:
+      - id
+      - subject
+      title: SkillCommitOut
+      type: object
+    SkillFileChangeOut:
+      properties:
+        additions:
+          title: Additions
+          type: integer
+        binary:
+          title: Binary
+          type: boolean
+        deletions:
+          title: Deletions
+          type: integer
+        diff:
+          title: Diff
+          type: string
+        path:
+          title: Path
+          type: string
+        status:
+          enum:
+          - added
+          - removed
+          - modified
+          title: Status
+          type: string
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - status
+      - diff
+      - binary
+      - additions
+      - deletions
+      - truncated
+      title: SkillFileChangeOut
       type: object
     SkillFileContentOut:
       properties:
@@ -1115,6 +1671,11 @@ components:
         name:
           title: Name
           type: string
+        requires:
+          items:
+            $ref: '#/components/schemas/SkillRequirementOut'
+          title: Requires
+          type: array
         scope:
           anyOf:
           - $ref: '#/components/schemas/ScopeOut'
@@ -1122,13 +1683,21 @@ components:
         source:
           discriminator:
             mapping:
+              archive_import: '#/components/schemas/ArchiveImportSourceOut'
               builtin: '#/components/schemas/BuiltinSourceOut'
+              git_import: '#/components/schemas/GitImportSourceOut'
               local_import: '#/components/schemas/LocalImportSourceOut'
             propertyName: type
           oneOf:
           - $ref: '#/components/schemas/LocalImportSourceOut'
+          - $ref: '#/components/schemas/ArchiveImportSourceOut'
+          - $ref: '#/components/schemas/GitImportSourceOut'
           - $ref: '#/components/schemas/BuiltinSourceOut'
           title: Source
+        source_status:
+          anyOf:
+          - $ref: '#/components/schemas/SkillSourceStatusOut'
+          - type: 'null'
         uid:
           title: Uid
           type: string
@@ -1153,6 +1722,8 @@ components:
       - created_at
       - updated_at
       - bindings
+      - requires
+      - source_status
       title: SkillOut
       type: object
     SkillRefOut:
@@ -1174,6 +1745,338 @@ components:
       - uid
       - name
       title: SkillRefOut
+      type: object
+    SkillRequirementOut:
+      description: One command the skill's SKILL.md says it needs.
+      properties:
+        command:
+          title: Command
+          type: string
+        min_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Version
+      required:
+      - command
+      - min_version
+      title: SkillRequirementOut
+      type: object
+    SkillSourceStatusOut:
+      description: What this machine last learned about a Git-imported skill's source.
+      properties:
+        checked_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Checked At
+        commits_ahead:
+          title: Commits Ahead
+          type: integer
+        dismissed_commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dismissed Commit
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        files_changed:
+          title: Files Changed
+          type: integer
+        last_success_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Success At
+        latest_commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest Commit
+        update_available:
+          title: Update Available
+          type: boolean
+      required:
+      - checked_at
+      - last_success_at
+      - error
+      - latest_commit
+      - commits_ahead
+      - files_changed
+      - dismissed_commit
+      - update_available
+      title: SkillSourceStatusOut
+      type: object
+    SkillStageFolderRequest:
+      properties:
+        path:
+          minLength: 1
+          title: Path
+          type: string
+      required:
+      - path
+      title: SkillStageFolderRequest
+      type: object
+    SkillStageGitRequest:
+      properties:
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref
+        url:
+          minLength: 1
+          title: Url
+          type: string
+      required:
+      - url
+      title: SkillStageGitRequest
+      type: object
+    SkillStagingConfirmOut:
+      description: The skills a confirm added (or replaced), as the read model shows them.
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SkillOut'
+          title: Items
+          type: array
+      required:
+      - items
+      title: SkillStagingConfirmOut
+      type: object
+    SkillStagingConfirmRequest:
+      properties:
+        replace:
+          items:
+            type: string
+          title: Replace
+          type: array
+        skills:
+          items:
+            type: string
+          minItems: 1
+          title: Skills
+          type: array
+      required:
+      - skills
+      title: SkillStagingConfirmRequest
+      type: object
+    SkillStagingOut:
+      description: |-
+        What a staged folder, archive or repository holds. Nothing is written
+        until ``POST /skills/stage/{staging_id}/confirm``.
+      properties:
+        commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit
+        kind:
+          enum:
+          - folder
+          - archive
+          - git
+          title: Kind
+          type: string
+        label:
+          title: Label
+          type: string
+        ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ref
+        skills:
+          items:
+            $ref: '#/components/schemas/StagedSkillOut'
+          title: Skills
+          type: array
+        staging_id:
+          title: Staging Id
+          type: string
+        subpath:
+          title: Subpath
+          type: string
+      required:
+      - staging_id
+      - kind
+      - label
+      - ref
+      - subpath
+      - commit
+      - skills
+      title: SkillStagingOut
+      type: object
+    SkillTextVersionOut:
+      properties:
+        binary:
+          title: Binary
+          type: boolean
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - text
+      - binary
+      - truncated
+      title: SkillTextVersionOut
+      type: object
+    SkillUpdateApplyRequest:
+      properties:
+        discard_local_edits:
+          default: false
+          title: Discard Local Edits
+          type: boolean
+        staging_id:
+          minLength: 1
+          title: Staging Id
+          type: string
+      required:
+      - staging_id
+      title: SkillUpdateApplyRequest
+      type: object
+    SkillUpdateCompareOut:
+      description: One file in the master folder, the pinned commit and the new commit.
+      properties:
+        incoming:
+          $ref: '#/components/schemas/SkillTextVersionOut'
+        local:
+          $ref: '#/components/schemas/SkillTextVersionOut'
+        path:
+          title: Path
+          type: string
+        pinned:
+          $ref: '#/components/schemas/SkillTextVersionOut'
+      required:
+      - path
+      - local
+      - pinned
+      - incoming
+      title: SkillUpdateCompareOut
+      type: object
+    SkillUpdateKeepRequest:
+      properties:
+        commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit
+      title: SkillUpdateKeepRequest
+      type: object
+    SkillUpdatePreviewOut:
+      description: |-
+        What taking the source's newest commit would do. Staged until
+        ``apply`` or ``DELETE /skills/stage/{staging_id}``.
+      properties:
+        changes:
+          items:
+            $ref: '#/components/schemas/SkillFileChangeOut'
+          title: Changes
+          type: array
+        commits:
+          items:
+            $ref: '#/components/schemas/SkillCommitOut'
+          title: Commits
+          type: array
+        conflict:
+          title: Conflict
+          type: boolean
+        from_commit:
+          title: From Commit
+          type: string
+        local_changes:
+          items:
+            $ref: '#/components/schemas/SkillFileChangeOut'
+          title: Local Changes
+          type: array
+        staging_id:
+          title: Staging Id
+          type: string
+        to_commit:
+          title: To Commit
+          type: string
+        up_to_date:
+          title: Up To Date
+          type: boolean
+      required:
+      - staging_id
+      - from_commit
+      - to_commit
+      - up_to_date
+      - commits
+      - changes
+      - conflict
+      - local_changes
+      title: SkillUpdatePreviewOut
+      type: object
+    StagedSkillOut:
+      description: One skill a stage found.
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        file_count:
+          title: File Count
+          type: integer
+        folder:
+          title: Folder
+          type: string
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        protected:
+          title: Protected
+          type: boolean
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        size_bytes:
+          title: Size Bytes
+          type: integer
+        taken:
+          title: Taken
+          type: boolean
+        valid:
+          title: Valid
+          type: boolean
+      required:
+      - folder
+      - name
+      - description
+      - file_count
+      - size_bytes
+      - valid
+      - reason
+      - message
+      - taken
+      - protected
+      title: StagedSkillOut
       type: object
     UnmanagedListOut:
       properties:
