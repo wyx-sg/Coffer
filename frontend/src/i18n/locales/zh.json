@@ -191,7 +191,8 @@
       "searchPlaceholder": "搜索名称",
       "statusFilter": "状态",
       "toggleAria": "切换 {{kind}} {{key}}",
-      "noSchema": "无输入结构。",
+      "noSchema": "该工具未声明参数。",
+      "fromCache": "这个上游已停用或暂时连不上，下面是上次记录的开关；启用并连上后点「刷新功能列表」才会显示描述和参数。",
       "schemaLabel": "输入结构",
       "header": {
         "name": "名称",

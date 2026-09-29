@@ -5,7 +5,8 @@ Spec vault-sync "Converge knowledge files and the skill store".
 The mirrored trees are the vault's own directories, so almost everything under
 them is source of truth — but not a symlink, whose target is not the vault's,
 and not a nested ``.git``, which is another repository's internals. Both are
-left out of the working tree and reported, never followed.
+left out of the working tree and reported, never followed. Python bytecode is
+left out too, silently, and any copy already in the working tree is removed.
 """
 
 from __future__ import annotations
@@ -87,6 +88,40 @@ def test_mirror_tree_never_copies_a_symlink_target_and_reports_it(
     assert (dst / "notes" / "kept.md").read_text() == "kept\n"
     assert not (dst / "notes" / "leak.md").exists()
     assert skipped == ["notes/leak.md"]
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="Python bytecode beside a skill's scripts is not published",
+)
+def test_mirror_tree_leaves_python_bytecode_out(tmp_path: pathlib.Path) -> None:
+    live = tmp_path / "live"
+    _write(live, "demo/scripts/tool.py", "print(1)\n")
+    _write(live, "demo/scripts/__pycache__/tool.cpython-312.pyc", "bytes")
+    _write(live, "demo/scripts/stray.pyc", "bytes")
+    dst = tmp_path / "worktree" / "skills"
+
+    skipped = _mirror_tree(live, dst)
+
+    assert {p.as_posix() for p in _tree_files(dst)} == {"demo/scripts/tool.py"}
+    assert skipped == []
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="Python bytecode beside a skill's scripts is not published",
+)
+def test_mirror_tree_removes_bytecode_an_older_build_published(tmp_path: pathlib.Path) -> None:
+    live = tmp_path / "live"
+    _write(live, "demo/scripts/tool.py", "print(1)\n")
+    _write(live, "demo/scripts/__pycache__/tool.cpython-312.pyc", "bytes")
+    dst = tmp_path / "worktree" / "skills"
+    _write(dst, "demo/scripts/tool.py", "print(1)\n")
+    _write(dst, "demo/scripts/__pycache__/tool.cpython-312.pyc", "bytes")
+
+    _mirror_tree(live, dst)
+
+    assert {p.as_posix() for p in _tree_files(dst)} == {"demo/scripts/tool.py"}
 
 
 def test_a_symlink_already_in_the_destination_is_not_treated_as_a_file(

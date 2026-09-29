@@ -94,6 +94,30 @@ describe("CapabilityList", () => {
     });
   });
 
+  test("a tool whose schema declares no parameters shows the no-parameters copy, not {}", async () => {
+    const tools = [{ ...sampleTools[0], input_schema: {} }];
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={tools} />));
+
+    fireEvent.click(screen.getByText("read_file").closest("tr")!);
+
+    // The only tool has no parameters, so the table stays flat — no {} detail.
+    expect(document.querySelector(".cm-content")).toBeNull();
+    const withObjectOnly = [sampleTools[0], { ...sampleTools[1], input_schema: { type: "object" } }];
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={withObjectOnly} />));
+    fireEvent.click(screen.getByText("write_file").closest("tr")!);
+    expect(await screen.findByText("This tool declares no parameters.")).toBeInTheDocument();
+  });
+
+  test("a list rebuilt from cache says so and offers no schema detail", () => {
+    render(
+      wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} fromCache />),
+    );
+
+    expect(screen.getByText(/disabled or can't be reached/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("read_file").closest("tr")!);
+    expect(document.querySelector(".cm-content")).toBeNull();
+  });
+
   test("toggle switch calls enable mutation when switching from disabled to enabled", async () => {
     const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     getApiClientMock.mockReturnValue({
