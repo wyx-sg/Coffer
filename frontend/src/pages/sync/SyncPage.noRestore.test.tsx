@@ -23,7 +23,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useRunConverge: vi.fn(),
   usePreviewJoin: vi.fn(),
   useAdoptRemote: vi.fn(),
-  useExportMasterKey: vi.fn(),
+  useExportMasterKeyBackup: vi.fn(),
   useImportMasterKey: vi.fn(),
   useKeyFingerprint: vi.fn(),
 }));
@@ -103,7 +103,7 @@ function seed() {
     sync.useRunConverge,
     sync.usePreviewJoin,
     sync.useAdoptRemote,
-    sync.useExportMasterKey,
+    sync.useExportMasterKeyBackup,
     sync.useImportMasterKey,
     machines.useRenameSelf,
     machines.useRetireMachine,

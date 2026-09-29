@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from coffer.application.channel.supervision_ports import WebSocketControllerPort
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import SecretDestination, channel_destination
 
 _logger = logging.getLogger(__name__)
 
@@ -39,7 +40,10 @@ FAILURE_RETRY_SECONDS = 30.0
 # and a tuple that exists only to carry a subset of a row is a place for the
 # subset to fall behind the row.
 Desired = dict[str, Resource]
-MaterializeFn = Callable[[dict[str, str]], Awaitable[dict[str, str]]]
+#: ``(refs, destination) -> secrets``: the guarded resolver's async path. The
+#: destination names the channel and the app the secret is sent as, so the
+#: boundary can hold a secret nobody approved for it.
+MaterializeFn = Callable[[dict[str, str], SecretDestination], Awaitable[dict[str, str]]]
 
 
 #: What the reconciler below keys its controller by: the channel's **uid**,
@@ -94,6 +98,7 @@ async def reconcile_websockets(
     no public URL.
     """
     refs: dict[str, tuple[str, str]] = {}
+    names: dict[str, str] = {}
     if materialize is not None:
         for resource in desired.values():
             config = resource.config
@@ -103,6 +108,7 @@ async def reconcile_websockets(
             secret_ref = str(config.get("app_secret_ref") or "")
             if app_id and secret_ref:
                 refs[resource.uid] = (app_id, secret_ref)
+                names[resource.uid] = resource.name
     # Always drop connections for channels no longer wanted (disabled or
     # deleted), even in a steady state.
     for uid in websockets.active() - set(refs):
@@ -115,8 +121,9 @@ async def reconcile_websockets(
     credentials: dict[str, tuple[str, str]] = {}
     for uid, (app_id, secret_ref) in refs.items():
         assert materialize is not None  # refs is empty otherwise
+        destination = channel_destination(uid, names[uid], "seatalk", app_id)
         try:
-            secret = (await materialize({"secret": secret_ref}))["secret"]
+            secret = (await materialize({"secret": secret_ref}, destination))["secret"]
         except Exception:
             latch.failed()
             _logger.exception("channel.websocket.secret_failed", extra={"channel_uid": uid})

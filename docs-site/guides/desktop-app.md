@@ -1,11 +1,11 @@
 ---
 title: Desktop app
-description: Install and use Coffer's macOS desktop app — a native window and tray over the same web UI, which finds or starts the daemon for you.
+description: Install and use Coffer's macOS desktop app — a native window and tray over the same web UI, which finds or starts the daemon for you and is the only place a secret is revealed, the master key is backed up, or an approval is given.
 ---
 
 # Desktop app
 
-The Coffer desktop app is a macOS application that hosts Coffer's web UI in a native window, with a Dock icon and a menu-bar tray, and finds or starts the daemon for you. This page covers installing it, what it adds over a browser tab, how it connects to the daemon, and how quitting the app relates to the daemon's lifetime.
+The Coffer desktop app is a macOS application that hosts Coffer's web UI in a native window, with a Dock icon and a menu-bar tray, and finds or starts the daemon for you. It is also the only place where you see a secret's value, back up the master key, or approve sending a secret somewhere new. This page covers installing it, what it adds over a browser tab, presence checks and approvals, how it connects to the daemon, and how quitting the app relates to the daemon's lifetime.
 
 ## What it adds
 
@@ -16,6 +16,8 @@ The app shows the same UI as `coffer open` — built from the same `frontend/dis
 - **Recovery without a terminal.** **Restart daemon** in the tray and on the offline banner. A browser page cannot offer this: a daemon that is down cannot serve the page the button would live on.
 - **A version check.** It warns when it has attached to a daemon left running by an earlier version.
 - **Sync alerts where you look.** When [vault sync](/guides/vault-sync) needs you, the tray entry, the Dock badge and a notification say so.
+- **Presence checks.** Revealing or copying a secret, backing up the master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
+- **Approval alerts.** When a secret waits to be sent somewhere new, the app posts a notification and opens a sheet to answer it.
 
 Everything else — opening files in your editor, choosing folders — goes through the daemon's HTTP routes exactly as it does in a browser.
 
@@ -54,6 +56,28 @@ The app itself never writes to `~/.coffer/bin`; the daemon does it, so the two n
 ### Update
 
 There is no auto-update. To update, install the new `.dmg` over the old app, clear the quarantine flag again, and restart the daemon from the tray so the app and the daemon run the same version.
+
+## Presence checks and approvals
+
+Coffer's [secret boundary](/guides/secrets) keeps a secret's value, and the decision to send it somewhere new, with a person at this Mac. The app is where that person acts:
+
+| Action | Where | What it does |
+| --- | --- | --- |
+| **Reveal** or **copy** a secret | the secret, in the app | Shows or copies that one value. Audited as `credential_revealed`. |
+| **Back up the master key** | the app | Writes `coffer-master-key-<fingerprint>.key` (mode `0600`) into a folder you pick. Audited as `master_key_exported`. See [Credentials → Back up the key](/guides/credentials#back-up-the-key). |
+| **Approve** | the approval sheet | Lets a secret go to a new destination or target, applies a replaced value, or switches the protection off. |
+
+Each action runs its own check, with nothing remembered in between:
+
+1. macOS asks for **Touch ID or your login password**. The prompt names what you are approving — "reveal the secret github/token", or the approval's own description — so read it before you touch.
+2. Only then does the app ask the daemon for a one-time challenge for that action, sign it, and send the request. Cancelling sends nothing.
+3. The next reveal or approval asks again.
+
+**Approvals come to you.** The app checks the daemon every 15 seconds, whether or not its window is open. For each new pending approval it posts one notification, **Coffer needs your approval**, whose text names the change, and the window opens its approval sheet. From there, approve (with the check above) or reject (no check needed). A command that waits prints `waiting for approval in the Coffer app`; see [Secrets → Approvals](/guides/secrets#approvals) for what triggers one.
+
+::: warning Development builds
+Every build today is a development build: the app is not signed with an Apple Developer ID, the master key is a file any program running as you can read, and a same-user program could forge what the app signs. The app says **Development build** on every prompt. On a Mac without Touch ID or LocalAuthentication, a development build asks you to confirm in a dialog in its own window instead. See [Security model → Development builds](/architecture/security#development-builds).
+:::
 
 ## Launch
 
@@ -119,7 +143,7 @@ If the app attaches to a daemon whose version differs from its own — typically
 
 The window loads the UI from the app bundle, not from the daemon's address. That is why a slow or absent daemon produces a banner instead of a browser connection error, and why the port never appears anywhere.
 
-Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. The app stores no credential of its own.
+Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. The app stores no credential of its own: for a presence-gated action it reads the master key at the moment it signs, and keeps neither the key nor anything derived from it.
 
 The window's content policy allows network requests only to loopback addresses (any port) and to the app's own IPC channel; scripts and styles come only from the bundle.
 
@@ -163,6 +187,8 @@ grep coffer.desktop ~/.coffer/logs/daemon.log | tail
 
 - [Web UI](/guides/web-ui) — the pages the app hosts.
 - [Running the daemon](/guides/daemon) — ports, the login service and lifecycle.
+- [Secrets](/guides/secrets) — the secret boundary, approvals and key backups.
+- [Security model](/architecture/security) — why these actions live only in the app.
 - [Install](/start/install) — the CLI install tier.
 - [Distribution and releases](/architecture/distribution)
 - [Spec: desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md)

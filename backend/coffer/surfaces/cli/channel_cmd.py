@@ -17,6 +17,7 @@ from typing import Any
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._channel_options import (
     _DIRS,
     _IGNORE_OTHER_MENTIONS,
@@ -101,6 +102,7 @@ def add(
     dirs: list[str] | None = _DIRS,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
+    wait: bool = WAIT_OPTION,
 ) -> None:
     """Register a channel.
 
@@ -172,10 +174,12 @@ def add(
         body = {"kind": "channel", "name": name, "config": config, "description": description}
         r = c.post("/resources", json=body)
         _cli_client.check(r, verbose=verbose)
+        uid = r.json()["uid"]
         if title:
-            r = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
+            r = c.patch(f"/resources/{uid}", json={"title": title})
             _cli_client.check(r, verbose=verbose)
-    typer.echo(f"added: channel {name}")
+        typer.echo(f"added: channel {name}")
+        settle(c, pending_for(c, uid, verbose=verbose), wait=wait, verbose=verbose)
 
 
 def pair(

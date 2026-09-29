@@ -46,6 +46,17 @@ _STATUS: dict[str, int] = {
     # store is unusable until the key comes back, not a bad request.
     "MASTER_KEY_MISSING": 503,
     "CREDENTIAL_UNREADABLE": 500,
+    # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
+    # somewhere-new): a destination nobody approved yet is a state that waits
+    # for a person, not a bad request; a grant that does not verify is refused.
+    "SECRET_BINDING_PENDING": 409,
+    "MASTER_KEY_CONFLICT": 503,
+    "APPROVAL_PENDING": 202,
+    "PRESENCE_GRANT_INVALID": 403,
+    "APPROVAL_NOT_FOUND": 404,
+    "APPROVAL_NOT_PENDING": 409,
+    "SECRET_NAME_INVALID": 422,
+    "SECRET_NOT_FOUND": 404,
     "UPSTREAM_UNAVAILABLE": 503,
     "UPSTREAM_TIMEOUT": 504,
     "TOOL_DISABLED": 403,
@@ -262,6 +273,11 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     feature = getattr(exc, "feature", None)
     if feature:
         out["feature"] = feature
+    # The secret boundary names the approvals a refusal waits on, so the CLI
+    # can wait for them and the UI can point at them.
+    approval_ids = getattr(exc, "approval_ids", None)
+    if approval_ids:
+        out["approval_ids"] = list(approval_ids)
     # An error that carries its own machine-readable context (a stale save's
     # disk version, the document an undo would overwrite) hands it over whole.
     extra = getattr(exc, "error_details", None)

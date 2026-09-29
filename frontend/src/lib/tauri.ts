@@ -1,12 +1,13 @@
 // The desktop shell, seen from the page it hosts.
 //
-// One frontend build serves two hosts. In a browser — daemon-served or the
-// Vite dev server — none of this applies and every helper here returns a safe
-// fallback or throws, so the browser path never depends on a shell being
-// there. Inside the Tauri WebView the same build gets a native host, and these
-// are the four things it can ask that host for: where the daemon is, spawn one,
-// whether the one answering is the version this build pairs with, and to label
-// its tray in the interface language the user chose.
+// One frontend build serves two hosts. In a browser every helper here returns
+// a safe fallback or throws. Inside the Tauri WebView the page can ask the
+// shell where the daemon is, to spawn one, whether its version pairs with this
+// build, to label the tray in the chosen language — and for the presence-gated
+// actions (reveal a secret, write a key backup, approve an approval), each
+// behind a Touch ID / password check in the shell. In a browser those reject
+// and the page offers "Open in Coffer app". Components ask
+// `presenceAvailable()`, never `isTauri()` directly.
 //
 // Keep this list short. The shell owns only what a browser cannot do for
 // itself; native file dialogs and "reveal in Finder" deliberately do NOT live
@@ -15,6 +16,7 @@
 
 import { setDaemonConnection } from "./auth";
 import { resetApiClient } from "./api/client";
+import type { components } from "./api/generated/credentials";
 
 export function isTauri(): boolean {
   // @ts-expect-error — Tauri injects __TAURI_INTERNALS__ in its WebView
@@ -209,4 +211,89 @@ export function followLanguageInShell(
   };
   if (i18n.language) tell(i18n.language);
   i18n.on("languageChanged", tell);
+}
+
+// ---------------------------------------------------------------------------
+// Presence-gated actions (spec desktop-app "Release plaintext and approvals
+// only after a presence check in the shell")
+// ---------------------------------------------------------------------------
+
+/** A change waiting for a present human — what `approve_pending` answers. */
+type Approval = components["schemas"]["ApprovalOut"];
+
+/** Thrown by every presence-gated action outside the desktop shell. */
+export class PresenceUnavailableError extends Error {
+  constructor(action: string) {
+    super(`${action} is only available in the Coffer desktop app`);
+    this.name = "PresenceUnavailableError";
+  }
+}
+
+/** True only in the desktop shell: show the control, else "Open in Coffer app". */
+export function presenceAvailable(): boolean {
+  return isTauri();
+}
+
+/** What `presence_mode` reports about the daemon the shell signs for. */
+export interface PresenceMode {
+  /** A development build keeps its master key in a file any local process can
+   *  read, so a grant can be forged there and the boundary does not hold. */
+  development: boolean;
+}
+
+/** Ask the shell whether the daemon is a development build. Throws outside it. */
+export async function presenceMode(): Promise<PresenceMode> {
+  if (!isTauri()) throw new PresenceUnavailableError("presence_mode");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<PresenceMode>("presence_mode");
+}
+
+/** Reveal one secret's plaintext after a presence check. Throws outside the shell. */
+export async function revealSecret(secretRef: string): Promise<string> {
+  if (!isTauri()) throw new PresenceUnavailableError("reveal_secret");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<string>("reveal_secret", { secretRef });
+}
+
+/** Where the shell wrote a master key backup, and the key it holds. */
+export interface MasterKeyBackup {
+  path: string;
+  fingerprint: string;
+}
+
+/** Write a master key backup after a presence check; the key never reaches the page. */
+export async function exportMasterKeyBackup(): Promise<MasterKeyBackup> {
+  if (!isTauri()) throw new PresenceUnavailableError("export_master_key_backup");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<MasterKeyBackup>("export_master_key_backup");
+}
+
+/** Approve one pending approval after a presence check. Throws outside the shell. */
+export async function approvePending(approvalId: string): Promise<Approval> {
+  if (!isTauri()) throw new PresenceUnavailableError("approve_pending");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<Approval>("approve_pending", { approvalId });
+}
+
+/** The event the shell emits when it sees a pending approval it has not announced. */
+export const APPROVALS_EVENT = "coffer://approvals";
+
+/** Call `callback` on each approval the shell announces; a no-op outside the shell. */
+export function onApprovalsEvent(callback: () => void): () => void {
+  if (!isTauri()) return () => {};
+  let unlisten: (() => void) | null = null;
+  let cancelled = false;
+  void import("@tauri-apps/api/event")
+    .then(({ listen }) => listen(APPROVALS_EVENT, () => callback()))
+    .then((stop) => {
+      if (cancelled) stop();
+      else unlisten = stop;
+    })
+    .catch((e: unknown) => {
+      console.error("Coffer: could not listen for approvals from the desktop shell", e);
+    });
+  return () => {
+    cancelled = true;
+    unlisten?.();
+  };
 }

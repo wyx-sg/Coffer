@@ -234,7 +234,8 @@ coffer log prune
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. | `coffer config set credentials.storage file\|keychain` |
+| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set credentials.storage file\|keychain` |
+| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target, and so does a new value for a secret in use. When off, both are approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). | `coffer config set secrets.require_approval on\|off` |
 
 ## Related
 

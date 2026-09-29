@@ -153,6 +153,18 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
   or switch off **Store master key in OS keychain** in **Settings → Security**.
 - Find credentials that are cited but missing with `coffer credentials list`, then store each one with `coffer credentials set <ref>`.
 
+### A command exits 9: "waiting for approval in the Coffer app"
+
+**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — or replaces a value something already uses, or switches `secrets.require_approval` off. The change is saved; the secret is held until you approve it. An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`.
+
+**Fix.** Open the desktop app and answer the approval it shows (or look with `coffer credentials approvals`). Approve only a target you recognise; refuse the rest with `coffer credentials reject <id>`. Rerun the command with `--wait` to have it wait for your answer. See [Secrets → Approvals](/guides/secrets#approvals).
+
+### There is no way to print a secret from the terminal
+
+**Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer credentials get` only confirms a value is stored.
+
+**Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password. To give a value to a command, store it as a standalone secret and run the command with `coffer run --secret <name> -- <command>`. See [Secrets](/guides/secrets).
+
 See [Credentials](/guides/credentials).
 
 ## Vault sync

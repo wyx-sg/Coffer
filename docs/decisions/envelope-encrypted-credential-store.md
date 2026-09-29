@@ -66,7 +66,10 @@ keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in ex
   (spec credentials "Keep blocking store calls off the event loop").
 - **Audited lifecycle.** `credential_set`, `credential_read`,
   `credential_deleted`, `credential_migrated` and `master_key_relocated`, each
-  carrying the ref and never the value.
+  carrying the ref and never the value. Since 2026-09-30 no route reads a value
+  back, so `credential_read` is no longer written; a reveal in the desktop app
+  is `credential_revealed`
+  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 - **One-time legacy migration.** At startup, keychain secrets from the earlier
   design that registered resources still cite are encrypted into the store
   (`run_legacy_keychain_migration`); a locked keychain skips and retries on the
@@ -156,8 +159,9 @@ it.
   (spec credentials "Confine key management to the credentials package"). A
   further contract, "CLI does not access the keychain directly", keeps
   `coffer.surfaces.cli` away from `coffer.infrastructure.credentials`.
-- Carrying the key to another machine is a separate, out-of-band act —
-  `coffer sync key export|import` — owned by
+- Carrying the key to another machine is a separate, out-of-band act — a key
+  backup and `coffer sync key import`; the backup has been written only by the
+  desktop app, behind a presence check, since 2026-09-30 — owned by
   [Credentials Across Machines](credentials-across-machines.md); an import
   never overwrites a different key without first keeping a
   `master.key.bak-*` copy.

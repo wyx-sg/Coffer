@@ -6,55 +6,47 @@
 // ciphertext only, so another machine can read what this one publishes exactly
 // when it holds this same key.
 //
-// It uses the browser's own file mechanisms rather than a native dialog driven
-// by the daemon:
+// The two directions go through different hosts:
 //
-//   Export → ask the daemon for the key MATERIAL, wrap it in a Blob and click a
-//            hidden `<a download>`, so the file lands wherever the browser puts
-//            downloads.
+//   Export → only in the desktop app. The shell runs a presence check (Touch ID
+//            or the login password) and writes the backup file itself, so the
+//            key never reaches the page; the card shows where it went and its
+//            fingerprint. No daemon route returns the key, so a browser offers
+//            "Open in Coffer app" in the button's place.
 //   Import → a hidden `<input type="file">`; its change handler reads
 //            `file.text()`, asks the user to confirm — a different key makes
 //            every credential stored under the current one unreadable — and
-//            only then POSTs the material.
+//            only then POSTs the material. Any host may do this.
 //
-// The browser hands us contents directly, so no absolute path has to survive a
-// round-trip through the daemon, and the key is never written into the synced
-// repository under any setting.
+// The key is never written into the synced repository under any setting.
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useExportMasterKey, useImportMasterKey, useKeyFingerprint } from "@/lib/hooks/useSync";
-
-const DEFAULT_KEY_NAME = "coffer-master.key";
-
-/** Save `text` to the user's downloads as `filename`, via a transient anchor. */
-function downloadText(text: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/octet-stream" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+import { HelpTip } from "@/components/HelpTip";
+import {
+  useExportMasterKeyBackup,
+  useImportMasterKey,
+  useKeyFingerprint,
+} from "@/lib/hooks/useSync";
+import { presenceAvailable, type MasterKeyBackup } from "@/lib/tauri";
 
 export function SyncMasterKeyCard() {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
   // Local status lines: the mutations toast transport errors, but an empty
   // file never reaches the daemon, so that one is validated here.
-  const [exported, setExported] = useState<string | null>(null);
+  const [exported, setExported] = useState<MasterKeyBackup | null>(null);
   const [imported, setImported] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   // Key material read from the picked file, held while the confirmation is
   // open. Never persisted anywhere on the page; cleared as soon as it closes.
   const [pendingMaterial, setPendingMaterial] = useState<string | null>(null);
   const importKey = useImportMasterKey();
-  const exportKey = useExportMasterKey();
+  const exportKey = useExportMasterKeyBackup();
+  const inShell = presenceAvailable();
   const fingerprint = useKeyFingerprint();
 
   const reset = () => {
@@ -66,10 +58,7 @@ export function SyncMasterKeyCard() {
   const onExport = () => {
     reset();
     exportKey.mutate(undefined, {
-      onSuccess: (res) => {
-        downloadText(res.material, DEFAULT_KEY_NAME);
-        setExported(DEFAULT_KEY_NAME);
-      },
+      onSuccess: (backup) => setExported(backup),
     });
   };
 
@@ -119,9 +108,18 @@ export function SyncMasterKeyCard() {
           </p>
         ) : null}
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={onExport} disabled={exportKey.isPending}>
-            {t("sync.key.export")}
-          </Button>
+          {inShell ? (
+            <Button variant="secondary" onClick={onExport} disabled={exportKey.isPending}>
+              {t("sync.key.export")}
+            </Button>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <Button variant="secondary" disabled>
+                {t("sync.key.exportInApp")}
+              </Button>
+              <HelpTip>{t("sync.key.exportInAppHint")}</HelpTip>
+            </span>
+          )}
           <Button
             variant="secondary"
             onClick={() => fileInput.current?.click()}
@@ -146,7 +144,7 @@ export function SyncMasterKeyCard() {
         </div>
         {exported ? (
           <p className="text-xs text-status-ok" role="status">
-            {t("sync.key.exported", { name: exported })}
+            {t("sync.key.exported", { path: exported.path, fingerprint: exported.fingerprint })}
           </p>
         ) : null}
         {imported ? (

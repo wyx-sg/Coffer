@@ -267,6 +267,60 @@ class CredentialModel(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class SecretBindingModel(Base):
+    """A secret approved for one slot of one destination, at one target.
+
+    Written by the credentials package's sync store (stdlib sqlite3), like
+    ``credentials``. The target is kept only as its fingerprint: a changed
+    target is a new destination and needs a new approval (ADR
+    only-a-present-human-sees-a-secret-or-sends-it-somewhere-new)."""
+
+    __tablename__ = "secret_bindings"
+
+    ref: Mapped[str] = mapped_column(String, primary_key=True)
+    destination_kind: Mapped[str] = mapped_column(String, primary_key=True)
+    destination_uid: Mapped[str] = mapped_column(String, primary_key=True)
+    slot: Mapped[str] = mapped_column(String, primary_key=True)
+    target_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    approved_at: Mapped[str] = mapped_column(String, nullable=False)
+    approval_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class SecretApprovalModel(Base):
+    """A change waiting for a present human in the desktop app. A pending
+    value replacement waits as ciphertext, never as plaintext."""
+
+    __tablename__ = "secret_approvals"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    op: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    requested_by: Mapped[str] = mapped_column(String, nullable=False)
+    ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    destination_kind: Mapped[str | None] = mapped_column(String, nullable=True)
+    destination_uid: Mapped[str | None] = mapped_column(String, nullable=True)
+    destination_label: Mapped[str | None] = mapped_column(String, nullable=True)
+    slot: Mapped[str | None] = mapped_column(String, nullable=True)
+    target: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_fingerprint: Mapped[str | None] = mapped_column(String, nullable=True)
+    pending_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    decided_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (Index("idx_secret_approvals_status", "status"),)
+
+
+class SecretBoundarySettingModel(Base):
+    """The boundary's own switches (``require_approval``) and its one-time
+    adoption marker, as key/value rows."""
+
+    __tablename__ = "secret_boundary_settings"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class InternalEngineConfigModel(Base):
     """The single, global internal-engine model selection (one row, ``id`` = 1).
 

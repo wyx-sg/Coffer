@@ -67,7 +67,7 @@ export async function saveMcpServerEdit({
   creds,
   timeouts,
   t,
-}: SaveArgs): Promise<{ orphanWarnings: string[] }> {
+}: SaveArgs): Promise<{ orphanWarnings: string[]; awaitingApproval: boolean }> {
   let config: Record<string, unknown>;
   try {
     config = JSON.parse(configText) as Record<string, unknown>;
@@ -95,6 +95,9 @@ export async function saveMcpServerEdit({
   const originalRefSet = new Set(Object.values(credentialRefsOf(resource.config)));
   const credentialRefs: Record<string, string> = {};
   const newlyWrittenRefs: string[] = [];
+  // Set when the daemon answered 202: a new value replaces one in use, so it is
+  // stored sealed and waits for approval in the Coffer app.
+  let awaitingApproval = false;
   for (const row of creds) {
     const name = row.name.trim();
     if (name === "") continue;
@@ -108,10 +111,11 @@ export async function saveMcpServerEdit({
         row.originalRef && row.originalName === name
           ? row.originalRef
           : mintCredentialRef("mcp_server", name);
-      const { error: e } = await client.POST("/credentials", {
+      const { data: written, error: e } = await client.POST("/credentials", {
         body: { ref, value: row.value },
       });
       if (e) throwApiError(e, "INTERNAL_ERROR", "credential write failed");
+      if (written?.approval !== undefined) awaitingApproval = true;
       credentialRefs[name] = ref;
       if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
     } else if (row.originalRef) {
@@ -166,5 +170,5 @@ export async function saveMcpServerEdit({
       }
     }
   }
-  return { orphanWarnings };
+  return { orphanWarnings, awaitingApproval };
 }

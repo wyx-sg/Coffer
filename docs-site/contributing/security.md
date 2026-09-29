@@ -59,7 +59,8 @@ Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exi
 
 - Store a **credential reference**, never a secret, in any other table, config file, resource spec or API response.
 - Never let plaintext reach the database, a log line, the audit log or any structured event. Watch exception messages and `repr`s that might include a request header or an environment block.
-- The Fernet master key is managed only by `coffer.infrastructure.credentials`. By default it is a `0600` file beside the database, or it lives in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through the explicit key export and import.
+- The Fernet master key is managed only by `coffer.infrastructure.credentials`, behind a storage port the build chooses: a signed release keeps it in a Keychain access group only Coffer's signed binaries can read; a development build keeps it in a `0600` file beside the database, or in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through a key backup the desktop app writes behind a presence check, and `coffer sync key import`.
+- No route, command or MCP tool returns a secret's plaintext or the master key. The only exceptions are the desktop app's presence-gated reveal and key backup, and `coffer run`'s resolve of standalone `secret/` names. A new path that returns a value is a defect however it is audited ([Security model](/architecture/security)).
 - Credential material leaves the machine only as ciphertext, and only when the user explicitly asks.
 
 The `secrets-scan` CI job runs gitleaks over the full git history. A committed secret fails the pull request even if a later commit removes it. Use obviously fake values in tests and fixtures.

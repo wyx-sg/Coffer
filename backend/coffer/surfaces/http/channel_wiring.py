@@ -31,9 +31,9 @@ from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.channel.sync_state import ChannelPeerSyncState
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.persistence import (
     ChannelOutboxRepo,
     ChannelPeerRepo,
@@ -47,7 +47,9 @@ from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
 from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
+from coffer.surfaces.http.credential_composition import boundary_resolver
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
+from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 if TYPE_CHECKING:
@@ -117,14 +119,20 @@ def wire_channel_kind(
 
     # ``materialize_async`` is the resolver's own off-the-loop path;
     # hand-rolling ``to_thread`` here is how the two drifted apart before.
-    materialize = CredentialResolver(credential_store).materialize_async
+    materialize = boundary_resolver(credential_store).materialize_async
+    register_resource_destination("channel", _channel_secret_destination)
 
     async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
         parsed = parse_channel_config(dict(config))
+        # The boundary is keyed by the channel's uid, which a rename keeps.
+        row = await resource_svc.find_by_name("channel", name)
+        uid = row.uid if row is not None else f"name:{name}"
         if parsed.channel_type == "telegram":
-            token = (await materialize({"token": parsed.bot_token_ref}))["token"]
+            dest = channel_destination(uid, name, "telegram")
+            token = (await materialize({"token": parsed.bot_token_ref}, dest))["token"]
             return TelegramAdapter(name, token, knowledge_enabled=features.is_enabled("knowledge"))
-        secret = (await materialize({"secret": parsed.app_secret_ref}))["secret"]
+        dest = channel_destination(uid, name, "seatalk", parsed.app_id)
+        secret = (await materialize({"secret": parsed.app_secret_ref}, dest))["secret"]
         return SeaTalkAdapter(name, parsed.app_id, secret)
 
     # A reply typed on the Chat page into a channel's conversation also goes to
@@ -213,3 +221,15 @@ def wire_channel_kind(
     # silently does not converge.
     sync.state_providers.append(ChannelPeerSyncState(resource_svc, peers))
     return runtime
+
+
+def _channel_secret_destination(
+    resource: Resource,
+) -> tuple[SecretDestination, dict[str, str]] | None:
+    """Where a channel's credential goes, for the secret boundary's listing."""
+    parsed = parse_channel_config(dict(resource.config))
+    if parsed.channel_type == "telegram":
+        dest = channel_destination(resource.uid, resource.name, "telegram")
+        return dest, {"token": parsed.bot_token_ref}
+    dest = channel_destination(resource.uid, resource.name, "seatalk", parsed.app_id)
+    return dest, {"secret": parsed.app_secret_ref}

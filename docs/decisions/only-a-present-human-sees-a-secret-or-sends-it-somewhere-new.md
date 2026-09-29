@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Audit every read of a secret value", spec credentials "Redact a secret on the command line unless asked", spec credentials "Hold plaintext only in memory at the moment of use", spec daemon "Require a token on every management call", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec desktop-app "Reimplement no daemon route in the shell", PR #464
+**Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Return no plaintext on any route, command or tool" (replacing the former audit-every-read and redact-unless-asked requirements), spec credentials "Release plaintext only to a present human in the desktop app", spec credentials "Hold a secret for a new destination until a person approves it", spec credentials "Hold plaintext only in memory at the moment of use", spec daemon "Require a token on every management call", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec desktop-app "Reimplement no daemon route in the shell", PR #464
 
 ## Context
 
@@ -347,3 +347,62 @@ Rules a future change must respect:
   reveal, so no release has neither.
 - **Docs.** The security architecture page's threat table is rewritten from
   this ADR's Context and residual risks, and `SECURITY.md` states the same.
+
+## Implementation notes (2026-09-30)
+
+How the OpenSpec change `add-secret-boundary` built this decision; its
+`design.md` has the details.
+
+- **The grant.** The daemon issues a one-time challenge bound to one operation
+  (`reveal`, `approve`, `export_master_key`) and one target (the ref, the
+  approval id, the folder). It lives two minutes and is consumed by its first
+  redeem whether or not the signature verifies. The desktop app runs the
+  LocalAuthentication check first — a fresh context per operation, policy
+  `deviceOwnerAuthentication`, the prompt naming the operation and its target —
+  and only then fetches the challenge and signs it with HMAC-SHA256 under a
+  grant key that is itself an HMAC of the master key with a fixed label. The
+  grant key is derived when needed and never stored. A cancelled check sends
+  nothing.
+- **The daemon releases plaintext; the app does not decrypt.** Option A says
+  the desktop app decrypts the ciphertext itself. As built, the daemon releases
+  the one value to the app through presence-gated routes
+  (`POST /api/v1/credentials/presence/reveal`, and
+  `.../presence/master-key-export`, which writes the backup into the chosen
+  folder and answers only its path and fingerprint), and applies an approval
+  only against a grant that verifies. This keeps one decryption path, and the
+  shell needs no access to the store; the protection is the same, because the
+  routes act only on a grant that only a holder of the master key can sign.
+- **"A binding whose secret value was supplied in the same call"** is
+  implemented as: the ref has never been bound anywhere, is not a standalone
+  `secret/` name, and was stored within the last five minutes. Every surface
+  that registers a resource with a pasted secret stores it first and cites it
+  seconds later; a secret stored long ago, already sent elsewhere, or kept for
+  `coffer run`, is not fresh.
+- **Adoption at upgrade.** The first start of the daemon that has the boundary
+  approves every binding in use, once, through the same enumeration that
+  computes targets at use, so upgrading breaks nothing that worked. Bindings
+  are evaluated at the moment of use (spawn, adapter start, push), which also
+  catches changes that reach the vault behind Coffer's back.
+- **Destinations wired now:** an MCP server's environment variable (stdio) and
+  header (HTTP), a Telegram or SeaTalk channel's credential, and the sync
+  remote's push token. The provider connection's key and a custom tool's
+  authentication are to call the same service when they are built. Replacing a
+  value in use and switching `secrets.require_approval` off wait for an
+  approval; rejecting needs no grant. The CLI prints "waiting for approval in
+  the Coffer app" and exits `9`, or waits with `--wait`.
+- **Development builds do not hold the boundary.** Until the Developer-ID
+  signed build exists, the master key is the `0600` file (or the legacy
+  keychain item) and the shell derives the grant key from it, so any same-user
+  process can forge a grant. The daemon reports `development: true` and the
+  shell titles every presence prompt "Development build"; on a Mac without
+  LocalAuthentication a development build falls back to a modal confirmation
+  in the app window. The boundary holds only in a signed release
+  ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](master-key-lives-in-the-macos-keychain.md),
+  "Open questions").
+- **Provider connections** are a destination whose target is the base URL:
+  the local model proxy and the internal engine receive a key only for an
+  approved URL (the proxy state is rebuilt when an approval is applied), and a
+  key replaced through the provider edit waits sealed like any value in use.
+  `coffer provider key` went with the proxy.
+- **Not yet built:** per-agent tokens (rule 6) and hardened-runtime signing and
+  notarisation (rule 7).

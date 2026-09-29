@@ -32,6 +32,7 @@ from coffer.application.provider.internal_default_ops import (
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.secret_gate import ProviderSecretBoundary, require_key
 from coffer.application.provider.switch_ops import activate as _activate_op
 from coffer.application.provider.switch_ops import deactivate as _deactivate_op
 from coffer.application.provider.targets import projection_targets
@@ -110,6 +111,11 @@ class ProviderService:
         # the flags), and no periodic pass may judge the state in between.
         # Re-entrant inside a pass, so a repair that switches cannot deadlock.
         self._hold = hold or contextlib.nullcontext
+        # The secret boundary (``secret_gate``), set by the composition root.
+        self._boundary: ProviderSecretBoundary | None = None
+
+    def set_secret_boundary(self, boundary: ProviderSecretBoundary) -> None:
+        self._boundary = boundary
 
     # --- helpers -------------------------------------------------------------
 
@@ -297,11 +303,13 @@ class ProviderService:
         async with self._hold():
             return await _deactivate_op(self, agent_type, actor=actor)
 
-    async def _key_of(self, cfg: ProviderConfig, *, label: str) -> str:
-        """The decrypted key of one connection, for the model proxy's state."""
+    async def _key_of(self, cfg: ProviderConfig, *, label: str, uid: str) -> str:
+        """The decrypted key of one connection, for the model proxy's state —
+        only once its base URL is an approved destination (``secret_gate``)."""
         ref = cfg.credential_ref
         if ref is None:
             raise NoActiveProvider(label)
+        await require_key(self, uid, label, cfg)
         value = await asyncio.to_thread(self._credentials.get, ref)
         if value is None:
             raise CredentialMissing(ref)

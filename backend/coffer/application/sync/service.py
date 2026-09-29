@@ -38,6 +38,7 @@ from coffer.application.sync.service_machines import MachinesMixin
 from coffer.application.sync.service_remote import RemoteMixin
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
+from coffer.domain.secrets import sync_remote_destination
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
 from coffer.domain.sync.errors import MasterKeyFileInvalid
@@ -311,8 +312,14 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
         """
         if not remote.credential_ref:
             return None
+        # The remote's URL is the target the token is approved for: pointing an
+        # existing token at a new URL waits for the desktop app (spec
+        # credentials "Hold a secret for a new destination until a person
+        # approves it").
         resolved = await asyncio.to_thread(
-            self._credentials.materialize, {_TOKEN_KEY: remote.credential_ref}
+            self._credentials.materialize,
+            {_TOKEN_KEY: remote.credential_ref},
+            sync_remote_destination(remote.url),
         )
         token = resolved.get(_TOKEN_KEY)
         return str(token) if token is not None else None
@@ -326,13 +333,6 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
         """
         key = self._master_key.export_key()
         return hashlib.sha256(key).hexdigest()[:12] if key else None
-
-    async def export_key(self) -> str:
-        key = self._master_key.export_key()
-        if key is None:
-            raise MasterKeyFileInvalid("<export>", "no master key on this machine to export")
-        await self._audit.record(AuditEventType.MASTER_KEY_EXPORTED.value, actor="sync")
-        return key.decode("utf-8")
 
     async def import_key(self, material: str) -> list[str]:
         raw = material.strip().encode("utf-8")

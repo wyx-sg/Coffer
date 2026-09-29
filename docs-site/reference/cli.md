@@ -36,6 +36,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Group | Description |
 | --- | --- |
 | [`coffer scan`](#coffer-scan) | List what agents hold that Coffer does not manage: agents, skills, MCP entries. |
+| [`coffer run`](#coffer-run) | Run a command with secrets set only in its environment. |
 | [`coffer attention`](#coffer-attention) | What needs you now, across every kind, with the route that acts on each. |
 | [`coffer daemon`](#coffer-daemon) | Daemon lifecycle |
 | [`coffer open`](#coffer-open) | Open Coffer's web UI in your browser. |
@@ -73,6 +74,22 @@ With --ref, show that one row in full: an MCP entry's whole configuration (secre
 | `--ref` | option | text |  | Show one row in full: a type, a folder path or &lt;agent&gt;:&lt;entry&gt; |
 | `--source` | option | text |  | With --ref on an mcp row: the config-file key |
 | `--json` | option | flag |  | JSON output for scripts |
+
+## coffer run
+
+```sh
+coffer run [OPTIONS]
+```
+
+Run a command with secrets set only in its environment.
+
+Each resolution is audited. Output is masked: exact secret values print as \*\*\*. This guards against accidents — a value landing in a transcript, a file or git — and does not hide a secret from an agent that runs the command: the agent is the command's parent and can read its environment.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--secret` | option | text (repeatable) |  | NAME or ENV=NAME of a standalone secret (repeatable) |
+| `--env-file` | option | path |  | KEY=VALUE file; coffer://secret/&lt;name&gt; values are resolved |
+| `--no-masking` | option | flag |  | Pass the child's output through unfiltered |
 
 ## coffer attention
 
@@ -497,6 +514,8 @@ coffer mcp add [OPTIONS] NAME
 
 Register a new MCP server (stdio OR http; pick one).
 
+A --credential citing a secret that already goes somewhere else waits for approval in the Coffer app before the server receives it; the command says so and exits 9, or waits with --wait.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Server name (fixed once registered, ≤24 chars) |
@@ -504,6 +523,7 @@ Register a new MCP server (stdio OR http; pick one).
 | `--http` | option | text |  | HTTP MCP server URL |
 | `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
 | `--description` | option | text |  |  |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### mcp list
 
@@ -543,6 +563,7 @@ Change an MCP server's description, transport, env, headers, credential refs or 
 | `NAME` | argument | text | required | Name or uid |
 | `--name` | option | text |  | Refused: this kind's name is fixed once registered |
 | `--description` | option | text |  |  |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 | `--stdio` | option | text |  | New command line, quoted as one string (stdio transport) |
 | `--http` | option | text |  | New URL (http transport) |
 | `--env` | option | text (repeatable) |  | Plain env var KEY=VALUE for a stdio server (repeatable) |
@@ -696,6 +717,7 @@ Without --value the secret is read from stdin, or prompted for. --value still st
 | --- | --- | --- | --- | --- |
 | `REF` | argument | text | required | Credential reference key |
 | `--value` | option | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### credentials get
 
@@ -703,14 +725,13 @@ Without --value the secret is read from stdin, or prompted for. --value still st
 coffer credentials get [OPTIONS] REF
 ```
 
-Retrieve a secret from the encrypted credential store (via the daemon).
+Check that a secret is stored, without its value.
 
-Without --show it only checks that the secret exists: no value leaves the daemon and nothing is audited. --show prints the value, and that read is recorded in the audit log.
+Prints [redacted] when it is, exits 4 when it is not. No value leaves the daemon and nothing is audited. To see a value, open the Coffer desktop app: it asks for Touch ID or your password each time.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `REF` | argument | text | required | Credential reference key |
-| `--show` | option | flag |  | Print the actual value (default: redacted) |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### credentials list
@@ -719,9 +740,9 @@ Without --show it only checks that the secret exists: no value leaves the daemon
 coffer credentials list [OPTIONS]
 ```
 
-List every credential ref a registered resource cites, with its presence.
+List every stored secret and every ref a resource cites.
 
-The daemon enumerates refs from every kind (MCP servers, channels, model providers, ...) and reports whether the store holds each one; no secret value crosses the API.
+Shows whether the store holds each one, what uses it (resources, skills citing coffer://secret/&lt;name&gt;), unreferenced ones, and whether another process on this Mac can read it where Coffer puts it. No value crosses the API.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -741,6 +762,63 @@ Asks first unless --force is given.
 | --- | --- | --- | --- | --- |
 | `REF` | argument | text | required | Credential reference key |
 | `--force, -f` | option | flag |  | Skip confirmation prompt |
+
+### credentials approvals
+
+```sh
+coffer credentials approvals [OPTIONS]
+```
+
+List what waits for approval in the Coffer app.
+
+Approving takes Touch ID or your password in the desktop app; the terminal can only list and reject.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--all` | option | flag |  | Include decided approvals |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### credentials reject
+
+```sh
+coffer credentials reject [OPTIONS] APPROVAL_ID
+```
+
+Refuse a pending approval. Refusing needs no presence check.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `APPROVAL_ID` | argument | text | required | Approval id (see `coffer credentials approvals`) |
+
+### credentials scan
+
+```sh
+coffer credentials scan [OPTIONS]
+```
+
+Find plaintext secrets in ~/.coffer/secrets/ and in your skills.
+
+Prints where each one is and the name it would get — never the value. Move them into the encrypted store with `coffer credentials import`.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### credentials import
+
+```sh
+coffer credentials import [OPTIONS]
+```
+
+Move plaintext secrets into the encrypted store, leaving references.
+
+Each value is stored as coffer://secret/&lt;name&gt;, read back and compared, and only then replaced in its file by the reference. No plaintext backup is kept.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--id` | option | text (repeatable) |  | Only this finding (repeatable; default: every finding) |
+| `--dry-run` | option | flag |  | Print the plan and write nothing |
+| `--yes, -y` | option | flag |  | Skip the confirmation prompt |
 
 ## coffer agent
 
@@ -1100,6 +1178,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### channel edit
 
@@ -1115,6 +1194,7 @@ Change a channel's name, title, description, group gating, quiet windows, live s
 | `--name` | option | text |  | New name |
 | `--title` | option | text |  | Display title (≤80 chars); empty clears it |
 | `--description` | option | text |  |  |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 | `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
@@ -1392,6 +1472,7 @@ Rename a collection (its directory moves with it) or set its title.
 | `NAME` | argument | text | required | Name or uid |
 | `--name` | option | text |  | New name |
 | `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### knowledge rm
 
@@ -1553,6 +1634,7 @@ Change a partition's title, description or settings.
 | `--name` | option | text |  | New name |
 | `--title` | option | text |  | Display title (≤80 chars); empty clears it |
 | `--description` | option | text |  |  |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### memory rm
 
@@ -2002,6 +2084,7 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `--with-credentials / --without-credentials` | option | boolean |  | Carry credential ciphertext (never the master key); default off |
 | `--credential-ref` | option | text |  | Name of the push credential in the credential store ('' removes it) |
 | `--worktree` | option | text |  | Absolute path of the git working tree, outside the vault (default ~/.coffer/sync) |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### sync remote clear
 
@@ -2079,23 +2162,9 @@ Remove a retired machine's descriptor from the registry.
 coffer sync key [OPTIONS] COMMAND [ARGS]...
 ```
 
-Move the master key between your machines, out of band
+Install a master key brought from another machine, or compare fingerprints. Exporting a key backup is done in the Coffer desktop app.
 
-Subcommands: `export`, `import`, `fingerprint`.
-
-### sync key export
-
-```sh
-coffer sync key export [OPTIONS] PATH
-```
-
-Write this machine's master key out, to carry to another machine yourself.
-
-It never travels through the remote — that is what "out of band" means.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | File to write the key material into (mode 0600) |
+Subcommands: `import`, `fingerprint`.
 
 ### sync key import
 

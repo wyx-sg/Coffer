@@ -32,6 +32,7 @@ from rich.table import Table
 
 from coffer.domain.resource import TITLE_MAX_LEN
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
 
@@ -226,6 +227,7 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
             if kwargs.get(key) is not None:
                 body[key] = kwargs[key]
         values = {n: kwargs.get(n) for n in extra_names}
+        wait = bool(kwargs.get("wait"))
         c, _info = _cli_client.client_or_exit()
         with c:
             current = resolve_ref(c, spec.kind, ref, verbose=verbose)
@@ -238,7 +240,11 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
                 raise typer.Exit(2)
             r = c.patch(f"/resources/{current['uid']}", json=body)
             _cli_client.check(r, verbose=verbose)
-        typer.echo(f"updated: {spec.noun} {label(r.json())}")
+            typer.echo(f"updated: {spec.noun} {label(r.json())}")
+            # A secret sent somewhere new waits for the Coffer app (spec
+            # credentials "Hold a secret for a new destination until a person
+            # approves it"): say so, and exit 9 unless --wait.
+            settle(c, pending_for(c, current["uid"], verbose=verbose), wait=wait, verbose=verbose)
 
     base = [
         inspect.Parameter("ctx", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=typer.Context),
@@ -258,6 +264,7 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
         )
     if spec.edit_description:
         base.append(_param("description", str | None, typer.Option(None, "--description")))
+    base.append(_param("wait", bool, WAIT_OPTION))
     edit.__signature__ = inspect.Signature([*base, *extra])  # type: ignore[attr-defined]
     what = "title, description or settings" if spec.titled else "description or settings"
     edit.__doc__ = spec.help.get("edit", f"Change a {spec.noun}'s {what}.")
