@@ -128,6 +128,10 @@ unarchived until that implementation lands.
   levels. A local model connection reads its window from the runtime (a required field when it
   cannot, a warning below 64k) and sets Claude Code's compatibility key. Switching back to the
   built-in login removes every key Coffer wrote.
+- **Adding a skill** offers three sources — a folder, an archive (`.zip` / `.skill`, uploaded or
+  `coffer skill add <file.zip>`) and a Git repository (URL, optional ref and subpath, pinned to a
+  commit) — each showing what it found before anything is written. Archives are checked for
+  zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -170,7 +174,8 @@ unarchived until that implementation lands.
   the owner filter and per-kind actions, instructions files under Config files; the Agents list's
   two fixed rows with automatic detection, previewed Add / Connect / Repair, Add both and the
   row menu's config directory.
-- `skill-manager`: unmanaged skills are reached and adopted only from the agent's Skills tab, and
+- `skill-manager`: skills are added from a folder, an archive or a Git repository, with
+  `archive_import` and `git_import` sources; unmanaged skills are reached and adopted only from the agent's Skills tab, and
   the Skills page lists managed skills only; a skill's detail page has Files (opening on a
   rendered `SKILL.md` with Preview / Source and Edit), Delivery, Requires and History tabs.
 - `provider-switching`: the Claude Code and Codex projections write the model keys above and

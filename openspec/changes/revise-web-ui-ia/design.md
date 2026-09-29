@@ -448,3 +448,18 @@ that configure them. The decisions:
   stays internal-only ("Keep ollama connections internal-only").
 - **Back to built-in removes every key Coffer wrote**, so stale pins never redirect tiers on the
   subscription; a value the user has since changed through `/model` or `/effort` is theirs.
+
+### 16. Adding a skill
+
+Three sources in one Add skill dialog: a folder (today's import), an archive and a Git repository.
+Each stages what it read outside the master store and shows the skills it found before anything is
+copied or registered, because an archive or a repository can hold several skills, a name that is
+taken, or something that should never be unpacked. Archives are the untrusted input: an entry with
+an absolute path or `..`, a symlink, or an uncompressed size past the 50 MB skill cap rejects the
+whole archive, judged as entries are read rather than on the sizes the archive declares. A skill is
+a folder with `SKILL.md` at the top or one folder down, the two layouts skill archives are shipped
+in. A Git import is a point-in-time copy pinned to the commit it came from; following a repository
+is Sources, a later entry, and taking a newer commit is adding again with Replace. *Rejected:* a
+"create a new skill" form, which was drawn but never built — a skill is authored in the user's
+editor, and a form would be a worse editor. The dialog is specified in skill-manager because that
+spec owns the Skills page.
