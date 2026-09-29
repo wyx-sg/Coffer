@@ -27,6 +27,7 @@ import { CofferLogo } from "./brand/CofferLogo";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 import { FloatingBanners } from "./FloatingBanners";
 import { SidebarNav } from "./SidebarNav";
+import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
 import { SidebarFooter } from "./shell/SidebarFooter";
@@ -124,6 +125,9 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         <FloatingBanners>
           <DaemonOfflineBanner />
         </FloatingBanners>
+        {/* Once for the whole app: a secret change waiting for a present
+            human is answered wherever the user is, not on one page. */}
+        <PendingApprovalsSheet />
         <aside
           className={cn(
             "flex shrink-0 flex-col gap-3 bg-surface-sidebar",

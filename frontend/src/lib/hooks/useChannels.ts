@@ -22,7 +22,7 @@ import { createChannel } from "@/components/channel/registerChannel";
 import type { ChannelEditPlan, ChannelPlan } from "@/components/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
-import { channelStatusKey, resourcesKey } from "@/lib/api/queryKeys";
+import { channelStatusKey, pendingApprovalsKey, resourcesKey } from "@/lib/api/queryKeys";
 
 export const CHANNEL_KIND = "channel";
 
@@ -77,10 +77,17 @@ export function useUpdateChannel() {
     // The apply hands back the channel it wrote: the uid to refresh the status
     // under, and the name to put in the toast. Two answers, two fields — the
     // one string that used to serve both is exactly what this change split.
-    onSuccess: ({ uid, name }) => {
+    onSuccess: ({ uid, name, awaitingApproval }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
-      toast.success(t("channels.edit.saved", { name }));
+      if (awaitingApproval) {
+        // The new secret is stored sealed; the channel keeps the old one until
+        // someone approves in the Coffer app.
+        void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
+        toast.info(t("credentials.savedAwaitingApproval"));
+      } else {
+        toast.success(t("channels.edit.saved", { name }));
+      }
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

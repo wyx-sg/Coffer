@@ -1,9 +1,16 @@
 """coffer credentials — manage encrypted credentials (via the daemon).
 
-Secrets are Fernet-encrypted into coffer's database; the master key lives in
-``~/.coffer/master.key`` or, opt-in, the OS keychain.  Every subcommand goes
+Secrets are Fernet-encrypted into coffer's database; the master key lives in a
+signed release's Keychain access group (in a development build, in
+``~/.coffer/master.key`` or, opt-in, the OS keychain).  Every subcommand goes
 through the daemon's HTTP API; secrets never appear in logs / audit /
 structured events.
+
+No command prints a secret's value (spec credentials "Return no plaintext on
+any route, command or tool"): revealing one takes a present human in the
+Coffer desktop app. Writing one stays open — a caller that supplies a value
+already has it — except that replacing a value something already receives
+waits for approval in the app.
 
 The daemon is the sole credential owner (creator = reader → silent
 reads within an app version). The CLI here imports no credential/keyring code.
@@ -22,6 +29,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, settle
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Manage encrypted credentials.")
@@ -49,6 +57,7 @@ def set_secret(
             "(UNSAFE — visible in shell history; prefer stdin)"
         ),
     ),
+    wait: bool = WAIT_OPTION,
 ) -> None:
     """Store a secret in the encrypted credential store (via the daemon).
 
@@ -74,6 +83,11 @@ def set_secret(
     with c:
         r = c.post("/credentials", json={"ref": ref, "value": secret})
         _cli_client.check(r, verbose=verbose)
+        if r.status_code == 202:
+            # The value replaces one an approved destination receives: it waits,
+            # sealed, for the Coffer app (spec credentials "Hold a replaced
+            # value in use until a person approves it").
+            settle(c, [r.json()["approval"]], wait=wait, verbose=verbose)
     typer.echo(f"stored: {ref}")
 
 
@@ -81,45 +95,29 @@ def set_secret(
 def get_secret(
     ctx: typer.Context,
     ref: str = typer.Argument(..., help="Credential reference key"),
-    show: bool = typer.Option(
-        False,
-        "--show",
-        help="Print the actual value (default: redacted)",
-    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Retrieve a secret from the encrypted credential store (via the daemon).
+    """Check that a secret is stored, without its value.
 
-    Without --show it only checks that the secret exists: no value leaves the
-    daemon and nothing is audited. --show prints the value, and that read is
-    recorded in the audit log.
+    Prints [redacted] when it is, exits 4 when it is not. No value leaves the
+    daemon and nothing is audited. To see a value, open the Coffer desktop app:
+    it asks for Touch ID or your password each time.
 
     \f
-    Without ``--show`` only presence is checked (cheap ``/exists`` probe, no
-    value leaves the daemon and no read is audited). ``--show`` fetches the
-    value via the audited read route.
+    Spec credentials "Check a secret's presence on the command line".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        if show:
-            r = c.get(f"/credentials/{ref}")
-            if r.status_code == 404:
-                typer.echo(f"not found: {ref}", err=True)
-                raise typer.Exit(int(ExitCode.NOT_FOUND))
-            _cli_client.check(r, verbose=verbose)
-            rendered = r.json()["value"]
-        else:
-            r = c.get(f"/credentials/{ref}/exists")
-            _cli_client.check(r, verbose=verbose)
-            if not r.json()["present"]:
-                typer.echo(f"not found: {ref}", err=True)
-                raise typer.Exit(int(ExitCode.NOT_FOUND))
-            rendered = "[redacted]"
+        r = c.get(f"/credentials/{ref}/exists")
+        _cli_client.check(r, verbose=verbose)
+        if not r.json()["present"]:
+            typer.echo(f"not found: {ref}", err=True)
+            raise typer.Exit(int(ExitCode.NOT_FOUND))
     if output_json:
-        typer.echo(_json.dumps({"ref": ref, "value": rendered}))
+        typer.echo(_json.dumps({"ref": ref, "present": True, "value": "[redacted]"}))
     else:
-        typer.echo(rendered)
+        typer.echo("[redacted]")
 
 
 @app.command("list")
@@ -127,11 +125,12 @@ def list_refs(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List every credential ref a registered resource cites, with its presence.
+    """List every stored secret and every ref a resource cites.
 
-    The daemon enumerates refs from every kind (MCP servers, channels, model
-    providers, ...) and reports whether the store holds each one; no secret
-    value crosses the API.
+    Shows whether the store holds each one, what uses it (resources, skills
+    citing coffer://secret/<name>), unreferenced ones, and whether another
+    process on this Mac can read it where Coffer puts it. No value crosses
+    the API.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     try:
@@ -152,14 +151,24 @@ def list_refs(
     if not refs:
         typer.echo("(no credential refs registered in any resource)")
         return
-    table = Table(title="Known credential refs")
+    table = Table(title="Credentials")
     table.add_column("Ref")
     table.add_column("Present in store")
-    table.add_column("Cited by")
+    table.add_column("Used by")
+    table.add_column("Readable by local processes")
     for entry in refs:
         cited_by = entry.get("cited_by", [])
-        citers = ", ".join(f"{citer['kind']} {citer['name']}" for citer in cited_by)
-        table.add_row(entry["ref"], "yes" if entry.get("present") else "no", citers)
+        used = [f"{citer['kind']} {citer['name']}" for citer in cited_by]
+        used += [f"skill {name}" for name in entry.get("mentioned_by_skills", [])]
+        pending = [b for b in entry.get("bindings", []) if b.get("status") == "pending"]
+        if pending:
+            used.append(f"{len(pending)} waiting for approval")
+        table.add_row(
+            entry["ref"],
+            "yes" if entry.get("present") else "no",
+            ", ".join(used) or "(unreferenced)",
+            "yes" if entry.get("readable_by_local_processes") else "no",
+        )
     _console.print(table)
 
 
@@ -184,3 +193,116 @@ def delete_secret(
         r = c.delete(f"/credentials/{ref}")
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"deleted: {ref}")
+
+
+@app.command("approvals")
+def list_approvals(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="Include decided approvals"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """List what waits for approval in the Coffer app.
+
+    Approving takes Touch ID or your password in the desktop app; the terminal
+    can only list and reject.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        params = {} if all_ else {"status": "pending"}
+        r = c.get("/credentials/approvals", params=params)
+        _cli_client.check(r, verbose=verbose)
+        rows: list[dict[str, Any]] = r.json().get("approvals", [])
+    if output_json:
+        typer.echo(_json.dumps({"approvals": rows}))
+        return
+    if not rows:
+        typer.echo("(nothing waits for approval)")
+        return
+    table = Table(title="Approvals")
+    for col in ("Id", "Status", "What", "Requested by"):
+        table.add_column(col)
+    for a in rows:
+        table.add_row(a["id"], a["status"], a["description"], a["requested_by"])
+    _console.print(table)
+
+
+@app.command("reject")
+def reject_approval(
+    ctx: typer.Context,
+    approval_id: str = typer.Argument(..., help="Approval id (see `coffer credentials approvals`)"),
+) -> None:
+    """Refuse a pending approval. Refusing needs no presence check."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/credentials/approvals/{approval_id}/reject")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"rejected: {approval_id}")
+
+
+@app.command("scan")
+def scan_plaintext(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """Find plaintext secrets in ~/.coffer/secrets/ and in your skills.
+
+    Prints where each one is and the name it would get — never the value.
+    Move them into the encrypted store with `coffer credentials import`.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/credentials/scan")
+        _cli_client.check(r, verbose=verbose)
+        body = r.json()
+    if output_json:
+        typer.echo(_json.dumps(body))
+        return
+    findings = body.get("findings", [])
+    if not findings:
+        typer.echo("(no plaintext secrets found)")
+    else:
+        table = Table(title="Plaintext secrets")
+        for col in ("Id", "File", "Key", "Would become"):
+            table.add_column(col)
+        for f in findings:
+            where = f"{f['path']}:{f['line']}" if f["line"] else f["path"]
+            table.add_row(f["id"], where, f["key"], f"coffer://secret/{f['proposed_name']}")
+        _console.print(table)
+    for m in body.get("mentions", []):
+        typer.echo(
+            f"skill {m['skill']} still reads {m['mention']} ({m['path']}:{m['line']}) — "
+            "move its command to `coffer run --env-file`"
+        )
+
+
+@app.command("import")
+def import_plaintext(
+    ctx: typer.Context,
+    ids: list[str] = typer.Option(  # noqa: B008
+        [], "--id", help="Only this finding (repeatable; default: every finding)"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the plan and write nothing"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt"),
+) -> None:
+    """Move plaintext secrets into the encrypted store, leaving references.
+
+    Each value is stored as coffer://secret/<name>, read back and compared,
+    and only then replaced in its file by the reference. No plaintext backup
+    is kept.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    if not dry_run and not yes and not typer.confirm("Move these secrets into the store?"):
+        raise typer.Exit(int(ExitCode.GENERIC))
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/credentials/import", json={"ids": ids or None, "dry_run": dry_run})
+        _cli_client.check(r, verbose=verbose)
+        body = r.json()
+    verb = "would move" if dry_run else "moved"
+    for m in body.get("moved", []):
+        typer.echo(f"{verb}: {m['path']} → {m['uri']}")
+    for sk in body.get("skipped", []):
+        typer.echo(f"skipped: {sk['path']} ({sk['reason']})", err=True)

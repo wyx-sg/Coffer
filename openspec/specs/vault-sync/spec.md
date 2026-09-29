@@ -1377,8 +1377,10 @@ without aborting").
 
 ### Requirement: Never write the master key into the repository
 The master key MUST never be written into the repository. It is bootstrapped
-onto another machine out-of-band with `coffer sync key export` /
-`coffer sync key import`.
+onto another machine out-of-band: a backup is written only by the desktop app,
+behind a presence check ([credentials](../credentials/spec.md) "Release
+plaintext only to a present human in the desktop app"), and installed on the
+other machine with `coffer sync key import`.
 
 #### Scenario: the master key never enters the repository
 - **GIVEN** a remote configured to carry credential ciphertext,
@@ -1463,8 +1465,9 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 — and its administration:
 `remote set <url> [--branch] [--interval <seconds>] [--with-credentials|--without-credentials] [--credential-ref] [--worktree <path>]`,
 `remote clear`, `remote pause`, `remote resume`, `machine list`,
-`machine rename <name>`, `machine rm <id>`, `key export <file>`,
-`key import <file>`, `key fingerprint`. An option `remote set` is not given
+`machine rename <name>`, `machine rm <id>`,
+`key import <file>`, `key fingerprint`. There is no `key export`: a key backup
+leaves a machine only through the desktop app. An option `remote set` is not given
 keeps the stored remote's value, the working tree included. `remote pause` and
 `remote resume` switch the remote's `enabled` switch off and on (see "Pause a
 configured remote without forgetting it") and change nothing else.
@@ -1480,7 +1483,7 @@ something here (see "Snapshot before applying and roll back from it").
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
 - **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with an optional `--at`, `confirm`, `reject` and `rebuild` with `--yes`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials`, `--credential-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key export`, `key import` and `key fingerprint`
+- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials`, `--credential-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
 
 #### Scenario: pause and resume a remote from the command line
 - **GIVEN** a configured, enabled sync remote
@@ -1501,7 +1504,7 @@ The HTTP API MUST cover the same operations under `/api/v1/sync`:
 `POST /sync/confirm`, `POST /sync/reject`, `POST /sync/rebuild`,
 `POST /sync/rollback`, `GET /sync/machines`, `PATCH /sync/machines/self`,
 `DELETE /sync/machines/{id}`, `GET /sync/key/fingerprint`,
-`POST /sync/key/export`, `POST /sync/key/import`.
+`POST /sync/key/import`. No sync route returns the master key.
 
 #### Scenario: the HTTP API serves every sync operation
 - **GIVEN** the daemon's HTTP application
@@ -1654,3 +1657,21 @@ actionable in only one.
 - **WHEN** the user opens the Sync page
 - **THEN** it has exactly three tabs, Runs, Setup and Machines, and opens on Runs
 - **AND** a link to a tab that no longer exists lands on Runs
+
+### Requirement: Hold a push token pointed at a new URL until approved
+Setting the remote MUST resolve its push token for the remote's URL through the
+secret boundary ([credentials](../credentials/spec.md) "Hold a secret for a new
+destination until a person approves it"). An existing token pointed at a URL it
+was not approved for MUST NOT be sent: the remote is saved without the
+reachability probe, so the approval has a destination to name; the answer is
+`SECRET_BINDING_PENDING` naming the approval, and `coffer sync remote set`
+prints "waiting for approval in the Coffer app" and exits `9`, or with
+`--wait` sets (and probes) the remote once the approval is applied. A round
+MUST send the token only to the URL it is approved for, and fails with the same
+refusal until then.
+
+#### Scenario: a push token pointed at a new URL waits for approval
+- **GIVEN** a push token already approved for one remote URL
+- **WHEN** the remote is set to another URL citing the same token
+- **THEN** the token is not sent and the answer names a pending approval for the new URL
+- **AND** after the approval is applied, setting the remote again succeeds

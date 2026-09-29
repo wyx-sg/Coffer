@@ -1,4 +1,4 @@
-"""Revision 0112: ``mcp_invocations`` gains a nullable ``agent_uid`` column and
+"""Revision 0113: ``mcp_invocations`` gains a nullable ``agent_uid`` column and
 its ``(agent_uid, timestamp)`` index (spec mcp-gateway "Record invocations
 without content"). A row written before the revision keeps reading and names
 no agent; the downgrade drops the column and the index again.
@@ -35,7 +35,7 @@ def test_agent_uid_is_added_null_for_old_rows_and_dropped_on_downgrade(  # type:
     db_path = tmp_path / "invocations.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
-    command.upgrade(cfg, "0111")
+    command.upgrade(cfg, "0112")
     with sqlite3.connect(db_path) as conn:
         assert "agent_uid" not in _columns(conn)
         conn.execute(
@@ -45,14 +45,14 @@ def test_agent_uid_is_added_null_for_old_rows_and_dropped_on_downgrade(  # type:
         )
         conn.commit()
 
-    command.upgrade(cfg, "0112")
+    command.upgrade(cfg, "0113")
     with sqlite3.connect(db_path) as conn:
         assert "agent_uid" in _columns(conn)
         assert _INDEX in _indexes(conn)
         rows = conn.execute(f"SELECT capability_key, agent_uid FROM {_TABLE}").fetchall()
         assert rows == [("read_file", None)]
 
-    command.downgrade(cfg, "0111")
+    command.downgrade(cfg, "0112")
     with sqlite3.connect(db_path) as conn:
         assert "agent_uid" not in _columns(conn)
         assert _INDEX not in _indexes(conn)

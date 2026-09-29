@@ -211,7 +211,7 @@ flowchart LR
 - **State documents** (`StateApplier`) are handed to the `SyncedStatePort` that claims the area, with `${HOME}` expanded. Each area defines what deleting its document means: an un-pairing, capabilities re-enabled, engine settings back to defaults, or nothing at all for the plugin inventory. An area this build does not know is skipped rather than failed.
 - **Credential blobs** (`CredentialApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
 
-After the apply, the round lists credential refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band with `coffer sync key export` and `coffer sync key import`.
+After the apply, the round lists credential refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band: the desktop app writes a key backup behind a presence check, and `coffer sync key import` installs it on the other machine.
 
 ### Kinds reach sync through ports
 

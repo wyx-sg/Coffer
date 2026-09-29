@@ -17,7 +17,12 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 
 machine_app = typer.Typer(help="The machines sharing this vault")
-key_app = typer.Typer(help="Move the master key between your machines, out of band")
+key_app = typer.Typer(
+    help=(
+        "Install a master key brought from another machine, or compare fingerprints. "
+        "Exporting a key backup is done in the Coffer desktop app."
+    )
+)
 
 _console = Console()
 
@@ -95,28 +100,6 @@ def machine_remove(ctx: typer.Context, machine_id: str = typer.Argument(...)) ->
 
 
 # --- master key -------------------------------------------------------------
-
-
-@key_app.command("export")
-def key_export(
-    ctx: typer.Context,
-    path: str = typer.Argument(..., help="File to write the key material into (mode 0600)"),
-) -> None:
-    """Write this machine's master key out, to carry to another machine yourself.
-
-    It never travels through the remote — that is what "out of band" means.
-    """
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/sync/key/export", json={})
-        _cli_client.check(r, verbose=verbose)
-        payload = r.json()
-    target = pathlib.Path(path).expanduser()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(payload["material"], encoding="utf-8")
-    target.chmod(0o600)
-    _console.print(f"[green]wrote[/green] {target} (mode 0600) — move it by a channel you trust")
 
 
 @key_app.command("import")

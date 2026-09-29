@@ -52,6 +52,7 @@ const telegramResource = {
   scope: null,
   enabled: true,
   toggleable: true,
+  secrets_readable_by_local_processes: false,
   config: {
     channel_type: "telegram",
     bot_token_ref: "channel/tg/bot-token",

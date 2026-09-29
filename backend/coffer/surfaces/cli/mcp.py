@@ -27,6 +27,7 @@ import httpx
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._kind_verbs import (
     DEFAULT_VERBS,
     Column,
@@ -60,8 +61,14 @@ def add(
         [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
     ),
     description: str | None = typer.Option(None, "--description"),
+    wait: bool = WAIT_OPTION,
 ) -> None:
-    """Register a new MCP server (stdio OR http; pick one)."""
+    """Register a new MCP server (stdio OR http; pick one).
+
+    A --credential citing a secret that already goes somewhere else waits for
+    approval in the Coffer app before the server receives it; the command says
+    so and exits 9, or waits with --wait.
+    """
     verbose = verbose_of(ctx)
     if (stdio is None) == (http is None):
         typer.echo("specify exactly one of --stdio or --http", err=True)
@@ -105,7 +112,9 @@ def add(
             typer.echo(f"config invalid: {r.json()['error']}", err=True)
             raise typer.Exit(6)
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"registered: mcp_server {name}")
+        uid = r.json()["uid"]
+        typer.echo(f"registered: mcp_server {name}")
+        settle(c, pending_for(c, uid, verbose=verbose), wait=wait, verbose=verbose)
 
 
 def _transport(item: dict[str, Any]) -> str:

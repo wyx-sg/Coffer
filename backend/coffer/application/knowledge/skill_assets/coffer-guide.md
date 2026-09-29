@@ -101,10 +101,39 @@ suspended call, no pending state to wait on: the developer driving this session
 is the trust boundary, and Coffer does not re-ask them per call.
 
 When a call cannot proceed — a capability they disabled, a server not in scope
-for you — it comes back in the same turn as an ordinary error result with the
-reason in it. Read the reason and adjust. Do not retry the identical call hoping
-it clears, and do not tell the developer you are waiting on an approval: there
-is nothing to approve.
+for you, a server whose secret is still waiting for the developer's approval —
+it comes back in the same turn as an ordinary error result with the reason in
+it. Read the reason and adjust. Do not retry the identical call hoping
+it clears. A tool call itself never waits on an approval; the one thing in
+Coffer that does is a secret going somewhere new, below.
+
+## Secrets: you use them, you never see them
+
+Coffer holds the developer's secrets and never prints one — not through a tool,
+not through the `coffer` CLI, not through its API. `coffer credentials get
+<ref>` only says `[redacted]` or exits `4`; there is no option that shows the
+value, and nothing to work around. Only the developer sees a value, in the
+Coffer desktop app.
+
+When a command needs a secret, run it through `coffer run`, which sets the value
+only in that command's environment and prints it as `***` in its output:
+
+```sh
+coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+coffer run --env-file connection.env -- ./query.sh
+```
+
+A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
+cited in files as `coffer://secret/<name>`. Write that reference into skills,
+scripts and env files — never the value. `coffer credentials list` shows what
+exists; `coffer credentials scan` finds plaintext secrets left in files.
+
+You may configure Coffer freely, but a secret that would go somewhere it has not
+gone before — a new MCP server citing an existing token, a changed command line
+or URL, a replaced value — waits for the developer. The command prints `waiting
+for approval in the Coffer app` and exits `9`. That is not an error to retry or
+to route around: tell the developer what you set up and that it is waiting for
+their approval in the Coffer app.
 
 ## When Coffer itself misbehaves
 

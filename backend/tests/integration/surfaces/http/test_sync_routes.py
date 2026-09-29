@@ -859,20 +859,20 @@ async def test_key_fingerprint_is_short_and_is_not_the_key(client, fleet) -> Non
     assert fingerprint == a.key_fingerprint()
 
 
-async def test_key_export_hands_back_material_and_import_takes_it_again(client, fleet) -> None:
-    """The key crosses as material, not as a path the daemon writes: a browser
-    has no path to hand over, and the caller decides where the bytes land."""
+async def test_no_sync_route_exports_the_master_key(client, fleet) -> None:
+    """The key leaves only through the desktop app's presence-gated export (spec
+    credentials "Return no plaintext on any route, command or tool"); import
+    still takes material in."""
     a, _b = fleet
 
     exported = await client.post("/api/v1/sync/key/export", json={})
 
-    assert exported.status_code == 200
-    material = exported.json()["material"]
+    assert exported.status_code in (404, 405)
     key = a.master_key.export_key()
     assert key is not None
-    assert material == key.decode("utf-8")
+    assert key.decode("utf-8") not in exported.text
 
-    imported = await client.post("/api/v1/sync/key/import", json={"material": material})
+    imported = await client.post("/api/v1/sync/key/import", json={"material": key.decode()})
 
     assert imported.status_code == 200
     assert imported.json() == {"locked_refs": []}
@@ -1063,7 +1063,6 @@ _SYNC_OPERATIONS = {
     ("PATCH", "/machines/self"),
     ("DELETE", "/machines/{id}"),
     ("GET", "/key/fingerprint"),
-    ("POST", "/key/export"),
     ("POST", "/key/import"),
 }
 

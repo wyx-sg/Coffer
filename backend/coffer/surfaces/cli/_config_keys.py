@@ -20,8 +20,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import typer
+
 from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.surfaces.cli._approvals import WAITING
 from coffer.surfaces.cli._config_engine import TRANSCRIBE_MODEL, engine_settings
 from coffer.surfaces.cli._config_registry import (
     Family,
@@ -34,6 +37,7 @@ from coffer.surfaces.cli._config_registry import (
     switch,
     text,
 )
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_uid
 
 # --- daemon.port -------------------------------------------------------------------
@@ -156,6 +160,38 @@ CREDENTIALS_STORAGE = Setting(
 )
 
 
+# --- secrets.require_approval ------------------------------------------------------------
+
+
+def _approval_write(s: Session, on: bool) -> list[str]:
+    now = s.send("PUT", "/settings/secret-boundary", {"require_approval": on})
+    if now.get("pending_approval_id"):
+        # Switching it off widens where secrets may go, so it waits for the
+        # desktop app like any new destination (spec credentials "Turn the
+        # protection off only through the desktop app").
+        typer.echo(
+            f"{WAITING}: turn off approval for new secret destinations "
+            f"(approval {now['pending_approval_id']})",
+            err=True,
+        )
+        raise typer.Exit(int(ExitCode.APPROVAL_PENDING))
+    return [f"secrets.require_approval: {'on' if now['require_approval'] else 'off'}"]
+
+
+SECRETS_REQUIRE_APPROVAL = Setting(
+    "secrets.require_approval",
+    "on|off",
+    "Hold a secret for approval in the Coffer app before it goes somewhere new",
+    "PUT /settings/secret-boundary",
+    switch("secrets.require_approval"),
+    lambda s: Reading(
+        "on" if s.get("/settings/secret-boundary")["require_approval"] else "off", "on"
+    ),
+    _approval_write,
+    lambda s: _approval_write(s, True),
+)
+
+
 # --- feature.<key> ------------------------------------------------------------------
 
 _SOURCE_LABEL = {
@@ -242,6 +278,7 @@ def static_settings() -> list[Setting]:
         TRANSCRIBE_PROVIDER,
         TRANSCRIBE_MODEL,
         CREDENTIALS_STORAGE,
+        SECRETS_REQUIRE_APPROVAL,
     ]
 
 

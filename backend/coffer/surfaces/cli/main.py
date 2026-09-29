@@ -22,6 +22,7 @@ from coffer.surfaces.cli import (
     path_cmd,
     provider_cmd,
     proxy_cmd,
+    run_cmd,
     scan_cmd,
     skill_cmd,
     sync_cmd,
@@ -57,6 +58,11 @@ app.add_typer(scan_cmd.adopt_app, name="adopt")
 app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(mcp_cmd.app, name="mcp")
 app.add_typer(credentials_cmd.app, name="credentials")
+# `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
+app.command(
+    "run",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)(run_cmd.run)
 app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")

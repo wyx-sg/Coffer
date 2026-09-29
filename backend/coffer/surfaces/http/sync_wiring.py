@@ -27,7 +27,7 @@ import asyncio
 import hashlib
 import logging
 import pathlib
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import NamedTuple
@@ -36,7 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
@@ -60,6 +59,7 @@ from coffer.application.sync.ports import (
 )
 from coffer.application.sync.service import ConvergeService
 from coffer.application.sync.worker import ConvergeWorker
+from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.sync.backup import DEFAULT_WORKTREE
 from coffer.domain.sync.diff import DeletionGuard
 from coffer.domain.sync.models import ExportSummary
@@ -84,6 +84,7 @@ from coffer.infrastructure.sync.paths import (
     non_converging_tree_paths,
     skills_root,
 )
+from coffer.surfaces.http.credential_composition import boundary_resolver
 from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
@@ -257,7 +258,7 @@ def wire_sync(
         # tree, so it needs a bundle over it without running a round.
         bundle_factory=lambda worktree: Bundle(worktree),
         set_machine_name=write_machine_name,
-        credentials=CredentialResolver(credential_store),
+        credentials=boundary_resolver(credential_store),
         credential_store=cred_sync,
         master_key=resolved_key,
         audit=audit,
@@ -361,3 +362,17 @@ async def stop_converge_worker(worker: ConvergeWorker) -> None:
         _log.warning("sync.converge_worker.stop_timed_out", extra={"timeout_s": 2.0})
     except asyncio.CancelledError:
         _log.debug("sync.converge_worker.stop_cancelled")
+
+
+def sync_remote_secret_source(
+    sm: async_sessionmaker[AsyncSession],
+) -> Callable[[], Awaitable[list[tuple[SecretDestination, Mapping[str, str], str]]]]:
+    """Where the push token goes right now, for the secret boundary's listing."""
+
+    async def current() -> list[tuple[SecretDestination, Mapping[str, str], str]]:
+        remote = await SqlAlchemySyncRemoteRepo(sm).get()
+        if remote is None or not remote.credential_ref:
+            return []
+        return [(sync_remote_destination(remote.url), {"token": remote.credential_ref}, "user")]
+
+    return current

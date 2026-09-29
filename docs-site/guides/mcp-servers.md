@@ -83,6 +83,8 @@ coffer mcp test brave
 coffer mcp cap list brave
 ```
 
+A secret you stored moments before registering the server is used at once. Citing a secret that already goes somewhere else, or later changing the server's command line or URL, holds the secret until you approve it in the desktop app: `coffer mcp add` and `coffer mcp edit` print `waiting for approval in the Coffer app` and exit `9` (or wait with `--wait`), and Coffer does not start the server until then. Coffer also marks a stdio server whose environment carries a secret as readable by other processes on this Mac, because any program running as you can read a process's environment. See [Secrets → Approvals](/guides/secrets#approvals).
+
 The stored config holds only the reference:
 
 ```json

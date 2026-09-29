@@ -33,6 +33,16 @@ class AuditEventType(StrEnum):
     CREDENTIAL_DELETED = "credential_deleted"
     CREDENTIAL_MIGRATED = "credential_migrated"
     MASTER_KEY_RELOCATED = "master_key_relocated"
+    # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
+    # somewhere-new): a value shown to a present human in the desktop app, a
+    # standalone secret resolved into one `coffer run` child, the approvals a
+    # new destination waits on, and plaintext secret files moved into the store.
+    CREDENTIAL_REVEALED = "credential_revealed"
+    SECRET_RESOLVED = "secret_resolved"
+    SECRET_APPROVAL_REQUESTED = "secret_approval_requested"
+    SECRET_APPROVAL_APPROVED = "secret_approval_approved"
+    SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
+    SECRET_IMPORTED = "secret_imported"
     # spec agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"

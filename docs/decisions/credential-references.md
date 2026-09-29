@@ -70,7 +70,11 @@ The lifecycle is kept whole around the ref:
 - **Reads leave a trail.** A deliberate read of a value
   (`GET /api/v1/credentials/{ref}`, `coffer credentials get --show`) is audited
   as `credential_read` with the ref only; the presence probe decrypts nothing
-  and audits nothing (spec credentials "Audit every read of a secret value").
+  and audits nothing (the credentials spec's former requirement to audit every read).
+  *Since 2026-09-30 neither the route nor `--show` exists: a value is seen only
+  in the desktop app behind a presence check (`credential_revealed`), and citing
+  a ref from a new destination waits for an approval
+  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).*
 
 Refs are **minted opaque**: `provider/<uuid4 hex>/key` in the backend
 (`application/provider/service.py`), `<kind>/<uuid4 hex>/<logical key>` for

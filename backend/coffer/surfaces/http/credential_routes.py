@@ -12,21 +12,32 @@ credential ref.
 Every lifecycle change is audited (spec resource-framework "Audit every lifecycle
 change"). The audit row records the `ref` only — secret values never appear in
 the audit log.
+
+No route here returns a value (spec credentials "Return no plaintext on any
+route, command or tool"). A value leaves the daemon only through the
+presence-gated reveal in ``credential_boundary_routes``, for the desktop app.
 """
 
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
+from fastapi.responses import JSONResponse
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CredentialInUse
+from coffer.domain.resource import Resource
+from coffer.domain.secrets import secret_uri, standalone_name
+from coffer.infrastructure.credentials.plaintext_scan import skills_citing_secrets
+from coffer.infrastructure.sync.paths import skills_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import get_credential_store
+from coffer.surfaces.http.credential_schemas import CredentialWriteOut
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
@@ -34,13 +45,14 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.schemas import (
+    CredentialBindingOut,
     CredentialCiterOut,
     CredentialExistsOut,
-    CredentialGetOut,
     CredentialListOut,
     CredentialRefOut,
     CredentialSetIn,
 )
+from coffer.surfaces.http.secret_boundary_wiring import approval_out, get_secret_boundary
 
 router = APIRouter(
     prefix="/api/v1/credentials",
@@ -53,6 +65,7 @@ router = APIRouter(
     "",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
+    responses={202: {"model": CredentialWriteOut, "description": "Waiting for approval"}},
 )
 async def set_secret(
     body: CredentialSetIn,
@@ -60,10 +73,28 @@ async def set_secret(
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Store `value` under `ref` in the encrypted credential store."""
+    """Store `value` under `ref` in the encrypted credential store.
+
+    A new ref — or one nothing was ever sent to — is written at once (204).
+    Replacing the value of a secret an approved destination receives, or of a
+    standalone secret, waits for the desktop app (202, the value held as
+    ciphertext): the new value changes what that destination gets (spec
+    credentials "Hold a replaced value in use until a person approves it").
+    """
+    boundary = get_secret_boundary()
     # to_thread: the store write blocks on SQLite's busy_timeout; on the
     # event loop it would freeze the coroutine holding the write lock.
-    await asyncio.to_thread(store.set, body.ref, body.value)
+    approval = await asyncio.to_thread(boundary.write, body.ref, body.value, actor=actor)
+    if approval is not None:
+        await audit.record(
+            AuditEventType.SECRET_APPROVAL_REQUESTED.value,
+            actor=actor,
+            details={"approval_id": approval.id, "op": approval.op, "ref": body.ref},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=CredentialWriteOut(approval=approval_out(approval)).model_dump(),
+        )
     await audit.record(
         AuditEventType.CREDENTIAL_SET.value,
         actor=actor,
@@ -73,37 +104,99 @@ async def set_secret(
 
 
 @router.get("", response_model=CredentialListOut)
-async def list_cited_refs(
+async def list_refs(
     store: Any = Depends(get_credential_store),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CredentialListOut:
-    """Every credential ref a registered resource cites, with its presence.
+    """Every stored ref and every ref a resource cites, with who references it.
 
-    Refs come from every kind's credential extractor (MCP server headers,
-    channel bot tokens, provider API keys, ...), so a vault restored without
-    its secrets can say which ones are missing. Presence only — no value is
-    decrypted, so nothing is audited.
+    Refs come from the store's own enumeration and from every kind's credential
+    extractor (MCP server headers, channel bot tokens, provider API keys, ...),
+    so a vault restored without its secrets can say which ones are missing and
+    a secret nothing references any more shows up as ``unreferenced``. A
+    standalone ``secret/<name>`` also lists the skills whose files cite its
+    ``coffer://secret/<name>``. Presence only — no value is decrypted, so
+    nothing is audited.
     """
     cited = await resources.cited_credential_refs()
+    stored = {ref for ref, _c, _u in await asyncio.to_thread(store.list_refs)}
+    mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
+    boundary = get_secret_boundary()
+    bindings = await asyncio.to_thread(boundary.bindings)
+    pending = await asyncio.to_thread(lambda: boundary.list(status="pending"))
+    exposed = {
+        ref
+        for ref, citers in cited.items()
+        for r in citers
+        if r.kind == "mcp_server" and _stdio_carries(r, ref)
+    }
     out: list[CredentialRefOut] = []
-    for ref in sorted(cited):
-        # to_thread: see secret_exists — a store read can wait on the write lock.
-        present = await asyncio.to_thread(store.exists, ref)
+    for ref in sorted(stored | set(cited)):
+        name = standalone_name(ref)
+        skills = sorted(mentions.get(name, set())) if name else []
+        rows = [
+            CredentialBindingOut(
+                destination_kind=b.destination_kind,
+                destination_uid=b.destination_uid,
+                slot=b.slot,
+                status="approved",
+            )
+            for b in bindings
+            if b.ref == ref
+        ] + [
+            CredentialBindingOut(
+                destination_kind=a.destination_kind or "",
+                destination_uid=a.destination_uid or "",
+                slot=a.slot or "",
+                status="pending",
+                approval_id=a.id,
+            )
+            for a in pending
+            if a.op == "bind" and a.ref == ref
+        ]
         out.append(
             CredentialRefOut(
                 ref=ref,
-                present=present,
+                present=ref in stored,
                 cited_by=[
-                    CredentialCiterOut(uid=r.uid, kind=r.kind, name=r.name) for r in cited[ref]
+                    CredentialCiterOut(uid=r.uid, kind=r.kind, name=r.name)
+                    for r in cited.get(ref, [])
                 ],
+                uri=secret_uri(name) if name else None,
+                mentioned_by_skills=skills,
+                unreferenced=not cited.get(ref) and not skills,
+                bindings=rows,
+                # A standalone secret reaches a `coffer run` child's
+                # environment; a stdio server's secret its initial environment.
+                readable_by_local_processes=bool(name) or ref in exposed,
             )
         )
     return CredentialListOut(refs=out)
 
 
-# NOTE: /exists is declared BEFORE the value route — both use `{ref:path}`
-# (refs may contain slashes, e.g. channel tokens), so declaration order is
-# what keeps `/x/exists` from being swallowed by the value route.
+def _skill_folder(name: str) -> Resource:
+    epoch = datetime.fromtimestamp(0, tz=UTC)
+    return Resource(
+        id=0,
+        uid="",
+        kind="skill",
+        name=name,
+        description=None,
+        config={},
+        enabled=True,
+        created_at=epoch,
+        updated_at=epoch,
+    )
+
+
+def _stdio_carries(resource: Resource, ref: str) -> bool:
+    transport = resource.config.get("transport") or {}
+    refs = transport.get("credential_refs") or {}
+    return transport.get("type") == "stdio" and ref in refs.values()
+
+
+# There is deliberately no `GET /{ref:path}`: no route returns a value (spec
+# credentials "Return no plaintext on any route, command or tool").
 @router.get("/{ref:path}/exists", response_model=CredentialExistsOut)
 async def secret_exists(
     ref: str,
@@ -118,29 +211,6 @@ async def secret_exists(
     # to_thread: a store read opens its own SQLite connection and can wait on
     # the write lock; on the loop that stalls every other request meanwhile.
     return CredentialExistsOut(present=await asyncio.to_thread(store.exists, ref))
-
-
-@router.get("/{ref:path}", response_model=CredentialGetOut)
-async def get_secret(
-    ref: str,
-    store: Any = Depends(get_credential_store),  # noqa: B008
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> CredentialGetOut:
-    """Return the secret value stored under `ref`.
-
-    Reading a value out is audited (ref only — the value never reaches the
-    audit row), so explicit secret reads leave a trail. 404 when absent.
-    """
-    value = await asyncio.to_thread(store.get, ref)
-    if value is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    await audit.record(
-        AuditEventType.CREDENTIAL_READ.value,
-        actor=actor,
-        details={"ref": ref},
-    )
-    return CredentialGetOut(value=value)
 
 
 @router.delete(
@@ -164,6 +234,16 @@ async def delete_secret(
     citing resources so the user knows what to detach first.
     """
     citations = await resources.find_credential_citations(ref)
+    name = standalone_name(ref)
+    if name:
+        # A standalone secret's citers are mostly files: a skill that still
+        # cites its URI would break the next command it runs.
+        mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
+        for skill in sorted(mentions.get(name, set())):
+            row = await resources.find_by_name("skill", skill)
+            # A master folder with no row yet still cites it; the refusal only
+            # needs its kind and name to say what to edit first.
+            citations.append(row if row is not None else _skill_folder(skill))
     if citations:
         # The error composes the reference strings itself, from the rows. It is
         # NOT given a list of strings built here: ``find_credential_citations``
@@ -187,6 +267,7 @@ async def delete_secret(
     # 204 either way, but only a real removal is a lifecycle change worth an
     # audit row (spec credentials "Delete a credential idempotently").
     if removed:
+        await asyncio.to_thread(get_secret_boundary().forget, ref)
         await audit.record(
             AuditEventType.CREDENTIAL_DELETED.value,
             actor=actor,

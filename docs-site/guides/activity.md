@@ -45,7 +45,7 @@ Each entry holds:
 | Field | Meaning |
 | --- | --- |
 | `timestamp` | When it happened, in UTC. |
-| `event_type` | What happened, for example `resource_created`, `resource_scope_updated`, `credential_read`, `skill_bound`, `provider_switched`, `sync_run`, `token_rotated`. |
+| `event_type` | What happened, for example `resource_created`, `resource_scope_updated`, `credential_revealed`, `skill_bound`, `provider_switched`, `sync_run`, `token_rotated`. |
 | `resource_kind`, `resource_name` | The resource it happened to, as it was named at that moment. |
 | `resource_id` | The resource's stable row id, so its history survives a rename. |
 | `actor` | Who did it (below). |
@@ -63,14 +63,14 @@ The **actor** is one of:
 | `channel` | Channel | An action taken from a chat channel. |
 | an agent's name | the name | An agent's own action, such as its session-start memory hook firing (`memory_delivery_fired`). |
 
-Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a credential read, a master-key export), or that current state cannot reveal later (a retention window). Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
+Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup), or that current state cannot reveal later (a retention window). Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
 
 ## Query the audit log from the CLI
 
 ```sh
 coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
-coffer log audit --event-type credential_read --since 2026-09-01T00:00:00Z
+coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
 coffer log audit --event-type memory_delivery_fired --limit 20
 coffer log audit --json
 ```

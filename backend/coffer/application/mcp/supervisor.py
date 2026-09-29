@@ -24,6 +24,7 @@ from coffer.domain.errors import (
     UpstreamTimeout,
     UpstreamUnavailable,
 )
+from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import (
     HttpTransport,
     MCPServerConfig,
@@ -276,8 +277,13 @@ class SubprocessSupervisor:
             # store read (sqlite, or the OS keychain in legacy setups).
             # Offload to a thread so a slow read can't freeze the whole
             # event loop and stall every other concurrent session.
+            # Named destination: the boundary injects nothing into a target
+            # nobody approved (spec credentials "Hold a secret for a new
+            # destination until a person approves it").
             overlay = await asyncio.to_thread(
-                self._credentials.materialize, config.transport.credential_refs
+                self._credentials.materialize,
+                config.transport.credential_refs,
+                mcp_destination(resource.uid, resource.name, config),
             )
             return self._upstream_factory(
                 config.transport,

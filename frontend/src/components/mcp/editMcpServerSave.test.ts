@@ -153,3 +153,21 @@ function patchedRefs(): Record<string, string> {
   };
   return body.body.config.transport.credential_refs;
 }
+
+describe("a rotation that waits for approval", () => {
+  test("a 202 answer is reported as saved and awaiting approval", async () => {
+    // The daemon stores the replacement sealed and keeps sending the old value
+    // until someone approves in the Coffer app; the save itself went through.
+    api.POST.mockResolvedValue({ data: { approval: { id: "apr-1" } }, error: undefined });
+    const out = await save([row({ value: "ghp_new" })]);
+
+    expect(out.awaitingApproval).toBe(true);
+    expect(api.PATCH).toHaveBeenCalled();
+  });
+
+  test("a plain 204 store is not", async () => {
+    const out = await save([row({ value: "ghp_new" })]);
+
+    expect(out.awaitingApproval).toBe(false);
+  });
+});

@@ -1,41 +1,45 @@
 // frontend/src/pages/sync/SyncMasterKeyCard.test.tsx
 //
-// Master-key export/import (spec vault-sync) through the browser's own file
-// mechanisms. Export asks the daemon for the key material and saves it via a
-// transient `<a download>`; import reads a picked File with `file.text()` and
-// POSTs the material. Neither path names a host path, so there is no native
-// dialog to mock and no typed-path fallback to reveal.
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+// Master-key export/import (spec vault-sync). Export runs only in the desktop
+// app: the shell checks presence and writes the backup itself, and the card
+// shows where it went; a browser gets "Open in Coffer app" in its place.
+// Import reads a picked File with `file.text()` and POSTs the material from
+// any host. Neither path names a host path the page typed.
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { ApiError } from "@/lib/api/errors";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
 vi.mock("@/lib/hooks/useSync", () => ({
-  useExportMasterKey: vi.fn(),
+  useExportMasterKeyBackup: vi.fn(),
   useImportMasterKey: vi.fn(),
   useKeyFingerprint: vi.fn(),
 }));
-const { useExportMasterKey, useImportMasterKey, useKeyFingerprint } =
+let inShell = false;
+vi.mock("@/lib/tauri", () => ({ presenceAvailable: () => inShell }));
+const { useExportMasterKeyBackup, useImportMasterKey, useKeyFingerprint } =
   await import("@/lib/hooks/useSync");
-const useExportMock = vi.mocked(useExportMasterKey);
+const useExportMock = vi.mocked(useExportMasterKeyBackup);
 const useImportMock = vi.mocked(useImportMasterKey);
 const useFingerprintMock = vi.mocked(useKeyFingerprint);
 
 const exportMutate = vi.fn();
 const importMutate = vi.fn();
 
-/** Stub both mutations. `exportResult` is what a successful export returns. */
+const BACKUP = { path: "/Users/me/Backups/coffer-master.key", fingerprint: "abc123def456" };
+
+/** Stub both mutations. `exportResult` is what a successful backup returns. */
 function stub(
   opts: {
-    exportResult?: { material: string };
+    exportResult?: { path: string; fingerprint: string };
     exportError?: unknown;
     importError?: unknown;
   } = {},
 ) {
   exportMutate.mockImplementation((_vars, handlers) => {
     if (opts.exportError) return;
-    handlers?.onSuccess?.(opts.exportResult ?? { material: "FERNET-KEY-MATERIAL" });
+    handlers?.onSuccess?.(opts.exportResult ?? BACKUP);
   });
   importMutate.mockImplementation((_material, handlers) => {
     if (opts.importError) return;
@@ -45,7 +49,7 @@ function stub(
     mutate: exportMutate,
     isPending: false,
     error: opts.exportError ?? null,
-  } as unknown as ReturnType<typeof useExportMasterKey>);
+  } as unknown as ReturnType<typeof useExportMasterKeyBackup>);
   useImportMock.mockReturnValue({
     mutate: importMutate,
     isPending: false,
@@ -56,26 +60,9 @@ function stub(
   } as unknown as ReturnType<typeof useKeyFingerprint>);
 }
 
-/** jsdom has no object-URL support; record what the anchor was handed. */
-let createObjectURL: ReturnType<typeof vi.fn>;
-let revokeObjectURL: ReturnType<typeof vi.fn>;
-let clicked: HTMLAnchorElement[];
-
-beforeEach(() => {
-  clicked = [];
-  createObjectURL = vi.fn(() => "blob:mock");
-  revokeObjectURL = vi.fn();
-  vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
-  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
-    this: HTMLAnchorElement,
-  ) {
-    clicked.push(this);
-  });
-});
-
 afterEach(() => {
+  inShell = false;
   vi.clearAllMocks();
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -104,23 +91,28 @@ describe("SyncMasterKeyCard", () => {
     expect(screen.getByTestId("key-fingerprint")).toBeInTheDocument();
   });
 
-  test("export downloads the returned key material as coffer-master.key", async () => {
-    stub({ exportResult: { material: "FERNET-KEY-MATERIAL" } });
+  test("in the desktop app, export writes a backup through the shell and says where", async () => {
+    inShell = true;
+    stub();
     render(<SyncMasterKeyCard />);
 
-    fireEvent.click(screen.getByRole("button", { name: /export key/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^export key$/i }));
 
-    await waitFor(() => expect(clicked).toHaveLength(1));
     expect(exportMutate).toHaveBeenCalled();
-    expect(clicked[0].download).toBe("coffer-master.key");
-    expect(clicked[0].getAttribute("href")).toBe("blob:mock");
-    // The Blob carries the material, and the object URL is released again.
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
-    // The anchor is transient — it must not be left in the document.
-    expect(document.querySelector("a[download]")).toBeNull();
-    expect(await screen.findByRole("status")).toHaveTextContent(/coffer-master\.key/);
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(BACKUP.path);
+    expect(status).toHaveTextContent(BACKUP.fingerprint);
+  });
+
+  test("in a browser, export is replaced by Open in Coffer app", () => {
+    stub();
+    render(<SyncMasterKeyCard />);
+
+    expect(screen.queryByRole("button", { name: /^export key$/i })).not.toBeInTheDocument();
+    const inApp = screen.getByRole("button", { name: /open in coffer app/i });
+    expect(inApp).toBeDisabled();
+    fireEvent.click(inApp);
+    expect(exportMutate).not.toHaveBeenCalled();
   });
 
   test("import reads the picked file's contents, confirms, then posts the material", async () => {
@@ -196,13 +188,14 @@ describe("SyncMasterKeyCard", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  test("a failed export downloads nothing", () => {
-    stub({ exportError: new ApiError("MASTER_KEY_FILE_INVALID", "no master key to export") });
+  test("a failed or cancelled backup claims nothing", () => {
+    inShell = true;
+    stub({ exportError: new Error("presence check cancelled") });
     render(<SyncMasterKeyCard />);
 
-    fireEvent.click(screen.getByRole("button", { name: /export key/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^export key$/i }));
 
-    expect(clicked).toHaveLength(0);
+    expect(exportMutate).toHaveBeenCalled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 

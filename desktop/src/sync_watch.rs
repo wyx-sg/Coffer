@@ -28,6 +28,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
 
+use crate::daemon_http::fetch_ok as fetch_json;
 use crate::discovery::read_daemon_info;
 use crate::sync_alert::{next_action, parse_sync_status, AlertAction};
 use crate::sync_gate::{parse_vault_sync, plan_tick, MenuChange};
@@ -165,72 +166,6 @@ fn read_feature() -> Option<(u16, String, bool)> {
     Some((port, token, vault_sync))
 }
 
-/// `GET <path>` with the daemon's token — required by every route but the
-/// daemon's own status probe, and harmless there. Raw HTTP/1.1 over
-/// `TcpStream`, for the reason `discovery.rs` gives: an HTTP-client dependency
-/// is not worth a loopback request.
-fn fetch_json(port: u16, token: &str, path: &str) -> Option<String> {
-    use std::io::{Read, Write};
-    use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
-
-    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-    let mut stream = TcpStream::connect_timeout(&addr.into(), Duration::from_millis(500)).ok()?;
-    stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
-        .ok()?;
-    stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
-    let req = format!(
-        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
-         X-Coffer-Token: {token}\r\nAccept: application/json\r\n\
-         Connection: close\r\n\r\n"
-    );
-    stream.write_all(req.as_bytes()).ok()?;
-    let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).ok()?;
-    http_json_body(&String::from_utf8_lossy(&raw))
-}
-
-/// The body of a `200` response, or `None` for anything else — a `401` from a
-/// rotated token and a `404` from an older daemon both mean "no answer", never
-/// "the vault is fine".
-fn http_json_body(response: &str) -> Option<String> {
-    let (head, body) = response.split_once("\r\n\r\n")?;
-    let mut lines = head.lines();
-    let status_line = lines.next()?;
-    if !status_line.starts_with("HTTP/1.1 200") && !status_line.starts_with("HTTP/1.0 200") {
-        return None;
-    }
-    let chunked = lines.any(|line| {
-        let line = line.to_ascii_lowercase();
-        line.starts_with("transfer-encoding:") && line.contains("chunked")
-    });
-    if chunked {
-        dechunk(body)
-    } else {
-        Some(body.to_owned())
-    }
-}
-
-/// Reassemble a `Transfer-Encoding: chunked` body. The daemon sends a
-/// `Content-Length` today; this is here so a server change that switches to
-/// chunking degrades to a parse failure a tick later rather than to a feature
-/// that silently stopped reporting anything.
-fn dechunk(body: &str) -> Option<String> {
-    let mut out = String::new();
-    let mut rest = body;
-    loop {
-        let (size_line, tail) = rest.split_once("\r\n")?;
-        let size = usize::from_str_radix(size_line.split(';').next()?.trim(), 16).ok()?;
-        if size == 0 {
-            return Some(out);
-        }
-        // `get` rather than an index: a chunk boundary that falls inside a
-        // multi-byte character would panic on a slice.
-        out.push_str(tail.get(..size)?);
-        rest = tail.get(size + 2..)?;
-    }
-}
-
 /// Perform one decision. Every failure here is logged and swallowed: a tray
 /// that could not be repainted must not take the poll thread down with it.
 fn apply(app: &AppHandle, action: &AlertAction) {
@@ -296,51 +231,6 @@ fn set_dock_badge(_app: &AppHandle, _label: Option<&str>) {}
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn http_json_body_reads_a_content_length_response() {
-        let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-                   Content-Length: 21\r\n\r\n{\"configured\": false}";
-        assert_eq!(
-            http_json_body(raw).as_deref(),
-            Some("{\"configured\": false}")
-        );
-    }
-
-    #[test]
-    fn http_json_body_rejects_a_non_200() {
-        // A rotated token gives 401, an older daemon 404. Neither is news
-        // about the vault, and treating either as one would clear a real mark.
-        for head in ["HTTP/1.1 401 Unauthorized", "HTTP/1.1 404 Not Found"] {
-            let raw = format!("{head}\r\nContent-Length: 2\r\n\r\n{{}}");
-            assert_eq!(http_json_body(&raw), None);
-        }
-    }
-
-    #[test]
-    fn http_json_body_rejects_a_response_with_no_header_terminator() {
-        assert_eq!(http_json_body("HTTP/1.1 200 OK\r\n"), None);
-        assert_eq!(http_json_body(""), None);
-    }
-
-    #[test]
-    fn http_json_body_reassembles_a_chunked_response() {
-        let raw = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n\
-                   c\r\n{\"configured\r\n9\r\n\": false}\r\n0\r\n\r\n";
-        assert_eq!(
-            http_json_body(raw).as_deref(),
-            Some("{\"configured\": false}")
-        );
-    }
-
-    #[test]
-    fn dechunk_gives_up_on_a_truncated_body_instead_of_panicking() {
-        // Length says 20 bytes, four arrive.
-        assert_eq!(dechunk("14\r\nshor"), None);
-        assert_eq!(dechunk("not-hex\r\n"), None);
-        // A chunk boundary inside a multi-byte character.
-        assert_eq!(dechunk("1\r\né\r\n0\r\n\r\n"), None);
-    }
 
     #[test]
     fn the_navigation_script_targets_the_sync_route() {

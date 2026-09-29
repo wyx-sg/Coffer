@@ -13,22 +13,35 @@ in EXACTLY one of two places:
 Resolution is file-first so a crash mid-relocation can never split brain:
 ``relocate("keychain")`` deletes the file LAST, so an interrupted move
 resolves back to "file" with a stale-but-identical keychain copy.
+
+That pair is the **development** arrangement. A signed release hands the
+manager a ``vault`` — the Keychain access-group backend of
+:mod:`master_key_backends` — and then the key lives there and nowhere else
+(ADR master-key-lives-in-the-macos-keychain): a key found in the file or the
+legacy keychain item is moved into the vault at the first start, written, read
+back and compared before its source is deleted, and relocating back to a file
+is refused. Which arrangement a daemon runs is decided by how it was built
+(``build_identity``), never by a setting.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import pathlib
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal, Protocol
 
 from cryptography.fernet import Fernet
 
+from coffer.domain.credential_errors import MasterKeyConflict
 from coffer.domain.errors import CredentialLocked, MasterKeyMissing
+from coffer.infrastructure.credentials.master_key_backends import MasterKeyBackend
 
 KEYCHAIN_REF = "master-key"
 
-StorageLocation = Literal["file", "keychain"]
+StorageLocation = Literal["file", "keychain", "keychain_access_group"]
 
 
 class _KeyringLike(Protocol):
@@ -40,15 +53,37 @@ class _KeyringLike(Protocol):
 class MasterKeyManager:
     """Find, create, and relocate the Fernet master key."""
 
-    def __init__(self, key_path: pathlib.Path, keyring: _KeyringLike) -> None:
+    def __init__(
+        self,
+        key_path: pathlib.Path,
+        keyring: _KeyringLike,
+        *,
+        vault: MasterKeyBackend | None = None,
+        vault_backup: Callable[[str], MasterKeyBackend] | None = None,
+    ) -> None:
         self._key_path = key_path
         self._keyring = keyring
+        self._vault = vault
+        self._vault_backup = vault_backup
         self._location: StorageLocation | None = None
+        self._key: bytes | None = None
+        #: Where a key was moved from into the vault at this start, if it was.
+        self.migrated_from: str | None = None
 
     @property
     def location(self) -> StorageLocation | None:
-        """Where the key was found ("file" | "keychain"), None before resolve()."""
+        """Where the key was found, None before resolve()."""
         return self._location
+
+    @property
+    def development(self) -> bool:
+        """True unless the key lives in the signed build's access group."""
+        return self._vault is None
+
+    @property
+    def current(self) -> bytes | None:
+        """The key this daemon resolved, held for its lifetime (never written)."""
+        return self._key
 
     def resolve(self, *, allow_create: bool) -> bytes | None:
         """Locate the master key, creating one in the file when allowed.
@@ -72,8 +107,10 @@ class MasterKeyManager:
                 raise
             key = None
         if key is not None or not allow_create:
+            self._key = key
             return key
-        return self._create()
+        self._key = self._create()
+        return self._key
 
     def lookup(self) -> bytes | None:
         """The key, or None when this machine genuinely holds none.
@@ -84,6 +121,8 @@ class MasterKeyManager:
         ``OSError``. A caller that must tell "no key" from "unknown" (spec
         vault-sync "Report refs without a key as locked") uses this.
         """
+        if self._vault is not None:
+            return self._lookup_vault(self._vault)
         if self._key_path.exists():
             key = self._key_path.read_bytes().strip()
             self._location = "file"
@@ -94,8 +133,47 @@ class MasterKeyManager:
             return stored.encode()
         return None
 
+    def _lookup_vault(self, vault: MasterKeyBackend) -> bytes | None:
+        """The vault's key, moving a development-era key into it first.
+
+        A source that agrees with the vault is simply deleted (an earlier move
+        was interrupted after the write); one that disagrees stops the start,
+        naming both fingerprints, rather than choosing between two keys.
+        """
+        in_vault = vault.read()
+        file_key = self._key_path.read_bytes().strip() if self._key_path.exists() else None
+        legacy = self._keyring.get(KEYCHAIN_REF)
+        legacy_key = legacy.encode() if legacy else None
+        for source, key in (("file", file_key), ("keychain", legacy_key)):
+            if key is None:
+                continue
+            if in_vault is None:
+                vault.write(key)
+                if vault.read() != key:
+                    raise CredentialLocked(
+                        "the Keychain write of the master key could not be verified"
+                    )
+                in_vault = key
+                self.migrated_from = source
+            elif in_vault != key:
+                raise MasterKeyConflict(
+                    f"two different master keys: the Keychain holds {_fp(in_vault)}, the "
+                    f"{source} holds {_fp(key)}; restore the one that opens your secrets"
+                )
+            if source == "file":
+                self._key_path.unlink(missing_ok=True)
+            else:
+                self._keyring.delete(KEYCHAIN_REF)
+        if in_vault is not None:
+            self._location = "keychain_access_group"
+        return in_vault
+
     def _create(self) -> bytes:
         key = Fernet.generate_key()
+        if self._vault is not None:
+            self._vault.write(key)
+            self._location = "keychain_access_group"
+            return key
         self._write_file(key)
         self._location = "file"
         return key
@@ -124,7 +202,11 @@ class MasterKeyManager:
         """
         key = key.strip()
         Fernet(key)  # raises ValueError on a malformed key
+        if self._vault is not None:
+            self._install_in_vault(self._vault, key)
+            return
         existing = self._key_path.read_bytes().strip() if self._key_path.exists() else b""
+        self._key = key
         if existing == key:
             self._location = "file"
             return
@@ -137,10 +219,29 @@ class MasterKeyManager:
         self._write_file(key)
         self._location = "file"
 
+    def _install_in_vault(self, vault: MasterKeyBackend, key: bytes) -> None:
+        """Install an imported key; a different key already there is kept as a
+        second Keychain item, never as a file."""
+        existing = vault.read()
+        if existing and existing != key:
+            if self._vault_backup is None:
+                raise CredentialLocked(
+                    "a different master key is installed and cannot be backed up"
+                )
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+            self._vault_backup(stamp).write(existing)
+        vault.write(key)
+        self._key = key
+        self._location = "keychain_access_group"
+
     def relocate(self, to: StorageLocation) -> None:
         """Move the key between file and keychain. Old copy removed last."""
         if to == self._location:
             return
+        if self._vault is not None:
+            raise CredentialLocked(
+                "this signed build keeps the master key only in its Keychain access group"
+            )
         if to == "keychain":
             key = self._key_path.read_bytes().strip()
             self._keyring.set(KEYCHAIN_REF, key.decode())
@@ -160,3 +261,7 @@ class MasterKeyManager:
         fd = os.open(self._key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(key)
+
+
+def _fp(key: bytes) -> str:
+    return hashlib.sha256(key).hexdigest()[:12]

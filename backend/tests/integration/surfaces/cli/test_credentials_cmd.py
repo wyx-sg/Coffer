@@ -155,16 +155,20 @@ def test_set_from_stdin_stores_without_warning(daemon):
     assert "pipedsecret" not in result.output
 
 
-def test_get_show_reads_through_daemon(daemon):
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="the command line confirms presence and has no way to print a value",
+)
+def test_get_has_no_show_flag(daemon):
     daemon.store["my_token"] = "supersecret"
     result = runner.invoke(app, ["credentials", "get", "my_token", "--show"])
-    assert result.exit_code == 0, result.output
-    assert "supersecret" in result.output
+    assert result.exit_code == 2, result.output
+    assert "supersecret" not in result.output
 
 
 @pytest.mark.acceptance(
     spec="credentials",
-    scenario="the command line redacts a secret unless asked, and an asked-for read is audited",
+    scenario="the command line confirms presence and has no way to print a value",
 )
 def test_get_without_show_redacts(daemon):
     daemon.store["tok"] = "s3cr3t"
@@ -186,14 +190,6 @@ def test_get_json(daemon):
     data = json.loads(result.output)
     assert data["ref"] == "k"
     assert data["value"] == "[redacted]"
-
-
-def test_get_json_show(daemon):
-    daemon.store["k2"] = "myval"
-    result = runner.invoke(app, ["credentials", "get", "k2", "--json", "--show"])
-    assert result.exit_code == 0
-    data = json.loads(result.output)
-    assert data["value"] == "myval"
 
 
 # ---------------------------------------------------------------------------

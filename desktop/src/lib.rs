@@ -21,14 +21,26 @@
 //   * `sync_gate` — whether the sync surfaces exist (`vault_sync` feature)
 //   * `tray`      — system tray icon + close-to-tray logic
 //   * `tray_locale` — the interface language the tray labels itself in
+//   * `daemon_http` — JSON over loopback HTTP to the daemon
+//   * `presence_grant` — the HMAC that tells the daemon a person approved one operation
+//   * `master_key` — where the key that grant is signed with is read from
+//   * `presence`  — the LocalAuthentication check before every grant
+//   * `secrets`   — the reveal / approve / master-key-backup IPC commands
+//   * `approval_watch` — one notification per approval waiting on a person
 
+mod approval_watch;
 mod daemon;
+mod daemon_http;
 mod discovery;
 mod env_path;
 mod logging;
+mod master_key;
+mod presence;
+mod presence_grant;
 mod ready;
 mod resolve;
 mod restart;
+mod secrets;
 mod sidecar;
 mod spawn;
 mod sync_alert;
@@ -83,6 +95,10 @@ pub fn run() {
             daemon::get_daemon_info,
             daemon::daemon_version_matches,
             tray::set_ui_language,
+            secrets::presence_mode,
+            secrets::reveal_secret,
+            secrets::export_master_key_backup,
+            secrets::approve_pending,
         ])
         .setup(|app| {
             // The window is configured hidden and revealed by the handshake
@@ -110,6 +126,10 @@ pub fn run() {
             // is on, renames it, badges the tray and the Dock, and raises one
             // notification per transition into an attention state.
             sync_watch::start(app.handle().clone(), tray_menu);
+            // One notification per secret waiting on a person's approval
+            // (spec desktop-app "Release plaintext and approvals only after a
+            // presence check in the shell").
+            approval_watch::start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
