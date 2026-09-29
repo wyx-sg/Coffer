@@ -23,8 +23,8 @@ from coffer.application.provider.projector import ProviderProjector
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.agent_projection import CodexProviderProjection
+from coffer.domain.provider.api_key_helper import proxy_token_helper
 from coffer.domain.provider.projection import (
-    anthropic_api_key_helper,
     apply_anthropic_settings,
     apply_codex_provider,
 )
@@ -38,6 +38,8 @@ _BASE_URL = "https://gateway.example/v1"
 _AGENT_UID = "8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f"
 _CONNECTION_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 _CLI = "/Users/me/.coffer/bin/coffer"
+#: Where the proxy-form projection points Claude Code (the default port).
+_PROXY_URL = "http://127.0.0.1:8001/anthropic"
 
 
 def _resource(
@@ -138,12 +140,14 @@ def _settings(config_dir: pathlib.Path) -> pathlib.Path:
 
 
 def _projected_settings(helper: str | None = None) -> str:
+    """What the proxy-form projection writes: the local proxy's Anthropic
+    route and the agent's own token helper, never the upstream or its key."""
     return apply_anthropic_settings(
         "",
-        base_url=_BASE_URL,
+        base_url=_PROXY_URL,
         model=None,
-        fast_model=None,
-        api_key_helper=helper or anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI),
+        api_key_helper=helper or proxy_token_helper(_AGENT_UID, coffer_cli=_CLI),
+        loopback_proxy=True,
     )
 
 
@@ -204,7 +208,7 @@ async def test_a_flag_the_agent_config_confirms_is_left_alone(tmp_path: pathlib.
         # What Coffer wrote before the CLI was named by absolute path: still
         # Coffer's, so a file carrying only this is still a live projection.
         f"coffer provider key --connection-uid {_CONNECTION_UID}",
-        # The absolute form, with a path a shell needs quoted.
+        # The key-helper form before the proxy, with a path a shell needs quoted.
         f"'/Users/me/My Apps/coffer' provider key --connection-uid {_CONNECTION_UID}",
     ],
     ids=["bare", "quoted-absolute"],
@@ -220,7 +224,7 @@ async def test_either_helper_form_counts_as_projected(tmp_path: pathlib.Path, he
     assert results[0].change.difference.changed_params == ("apiKeyHelper",)
     assert results[0].outcome is Outcome.APPLIED
     doc = json.loads(store.files[_settings(tmp_path)])
-    assert doc["apiKeyHelper"] == anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
+    assert doc["apiKeyHelper"] == proxy_token_helper(_AGENT_UID, coffer_cli=_CLI)
 
 
 async def test_an_inactive_connection_is_not_touched(tmp_path: pathlib.Path) -> None:

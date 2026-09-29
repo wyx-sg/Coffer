@@ -235,6 +235,31 @@ def build_prunable_registry() -> PrunableRegistry:
             "(with their messages).",
         )
     )
+    # Usage metering (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-
+    # only-official-quota): the per-request detail is a run log like the MCP
+    # calls and follows THEIR window rather than growing a setting of its own;
+    # the daily rollup the Usage page charts is kept for a year. The rollup's
+    # ``day`` is a local ``YYYY-MM-DD`` string, which compares against the
+    # cutoff instant as text — to the day, which is the rollup's resolution.
+    registry.register(
+        PrunableTable(
+            name="usage_requests",
+            timestamp_column="started_at",
+            default_retention_days=None,
+            display_name="Usage Requests",
+            description="Per-request model usage recorded by the model proxy.",
+            policy_name="mcp_invocations",
+        )
+    )
+    registry.register(
+        PrunableTable(
+            name="usage_daily",
+            timestamp_column="day",
+            default_retention_days=365,
+            display_name="Daily Usage",
+            description="Daily model usage and estimated cost per agent, connection and model.",
+        )
+    )
     return registry
 
 

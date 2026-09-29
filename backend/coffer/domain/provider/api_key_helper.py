@@ -23,6 +23,9 @@ import shlex
 #: them, and a file Coffer wrote is a file Coffer has to be able to clean up.
 _CLI_NAME = "coffer"
 _KEY_COMMAND = ["provider", "key"]
+#: What Coffer writes now: the agent's local proxy token, never a provider key
+#: (ADR api-key-providers-are-reached-through-a-separate-local-model-proxy).
+_TOKEN_COMMAND = ["proxy", "token"]
 
 
 def anthropic_api_key_helper(connection_uid: str, *, coffer_cli: str) -> str:
@@ -45,10 +48,25 @@ def anthropic_api_key_helper(connection_uid: str, *, coffer_cli: str) -> str:
     return f"{shlex.quote(coffer_cli)} provider key --connection-uid {connection_uid}"
 
 
+def proxy_token_args(agent_uid: str) -> tuple[str, ...]:
+    """The ``coffer`` arguments that print an agent's local proxy token —
+    what Claude Code's ``apiKeyHelper`` and Codex's provider ``auth`` run."""
+    return (*_TOKEN_COMMAND, "--agent-uid", agent_uid)
+
+
+def proxy_token_helper(agent_uid: str, *, coffer_cli: str) -> str:
+    """The ``apiKeyHelper`` Coffer projects for Claude Code: print the agent's
+    local proxy token. Keyed by the agent's uid, which no rename moves; the
+    CLI by absolute path, quoted, for the reason :func:`anthropic_api_key_helper`
+    gives."""
+    return " ".join([shlex.quote(coffer_cli), *proxy_token_args(agent_uid)])
+
+
 def is_managed_api_key_helper(helper: object) -> bool:
     """Whether ``helper`` is an ``apiKeyHelper`` Coffer wrote: a command whose
     program is the ``coffer`` CLI (bare, or by any path, quoted or not) and
-    whose first two arguments are ``provider key``."""
+    whose first two arguments are ``proxy token`` — or ``provider key``, the
+    form earlier builds wrote, which de-projection still has to recognise."""
     if not isinstance(helper, str):
         return False
     try:
@@ -56,5 +74,7 @@ def is_managed_api_key_helper(helper: object) -> bool:
     except ValueError:  # unbalanced quotes: not a line Coffer wrote
         return False
     return (
-        len(argv) >= 3 and pathlib.PurePath(argv[0]).name == _CLI_NAME and argv[1:3] == _KEY_COMMAND
+        len(argv) >= 3
+        and pathlib.PurePath(argv[0]).name == _CLI_NAME
+        and argv[1:3] in (_KEY_COMMAND, _TOKEN_COMMAND)
     )

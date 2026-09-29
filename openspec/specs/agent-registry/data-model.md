@@ -76,7 +76,8 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
 | `config_dir`        | `str \| None`  | optional absolute-path override, stored as a string (`~` expanded before the absolute-path check); `resolved_config_dir()` returns the `Path`, defaulting to `type.config_dir()` |
 | `model`             | `str \| None`  | the model this agent runs on; `None` = the agent's own default (see "Carry the model binding on the agent record")                                                              |
-| `fast_model`        | `str \| None`  | the binding's fast slot; an explicit null unbinds it                                                                       |
+| `effort`            | `str \| None`  | the binding's reasoning effort; an explicit null unbinds it                                                                |
+| `tier_models`       | `dict \| None` | Claude Code only: `opus` / `sonnet` / `haiku` / `fable` → model id; an explicit null unbinds it                            |
 | `wire_api`          | `str \| None`  | the binding's wire; only `responses` is accepted (agent-registry/codex "Accept only responses as Codex's wire_api")                                                       |
 
 Those are the whole schema — the model is `extra="forbid"` and declares nothing
@@ -266,7 +267,7 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 | `list() -> list[Resource]` | Delegate to `ResourceService.list(kind='agent')`. |
 | `get(uid) -> Resource` | Delegate to `ResourceService.get`. |
 | `update_config_dir(*, uid, new_config_dir, actor) -> Resource` | Re-validate the merged config; only when the effective dir changes, check it is free, auto-create and check its `skills/`. Then `ResourceService.update_config` and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
-| `set_model_binding(*, uid, model=None, fast_model=None, clear_fast_model=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_fast_model` unbinds the fast slot; the merged config is re-validated (a bad `wire_api` → 422). |
+| `set_model_binding(*, uid, model=None, effort=None, clear_effort=False, tier_models=None, clear_tiers=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_effort` / `clear_tiers` unbind; the merged config is re-validated (a bad `wire_api` → 422). |
 | `remove(*, uid, actor) -> None` | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan. |
 
 ### `AutoDetectService`

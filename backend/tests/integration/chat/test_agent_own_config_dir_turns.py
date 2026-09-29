@@ -91,21 +91,15 @@ async def _claude_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str,
         await engine.dispose()
 
 
-async def _codex_turn_env(
-    tmp_path: pathlib.Path, agents: _Agents, *, key: str | None = None
-) -> dict[str, str] | None:
+async def _codex_turn_env(tmp_path: pathlib.Path, agents: _Agents) -> dict[str, str] | None:
     repo, engine = await _repo(tmp_path)
     try:
         conv = await repo.create(_conv("codex"))
         factory, _server = _codex_factory()
 
-        async def resolve_key() -> str | None:
-            return key
-
         provider = CodexAppServerProvider(
             conversations=repo,
             session_factory=factory,
-            resolve_key=resolve_key,
             resolve_home_env=agent_home_env_resolver(AgentType.CODEX, lambda: agents),
         )
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
@@ -166,12 +160,13 @@ async def test_codex_turn_runs_against_the_agents_own_codex_home(
     custom.mkdir()
     agents = _Agents([_agent(AgentType.CODEX, custom, uid="c" * 32)])
 
-    env = await _codex_turn_env(tmp_path, agents, key="sk-codex")
+    env = await _codex_turn_env(tmp_path, agents)
 
     assert env is not None
     assert env["CODEX_HOME"] == str(custom)
-    # Merged with the daemon env and the projected key, never replacing them.
-    assert env["COFFER_PROVIDER_KEY"] == "sk-codex"
+    # Merged with the daemon env, never replacing it; and no provider key rides
+    # it (the model proxy injects the real key upstream).
+    assert "COFFER_PROVIDER_KEY" not in env
     assert "PATH" in env
 
 

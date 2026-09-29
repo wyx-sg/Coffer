@@ -363,8 +363,8 @@ coffer agent models claude_code
 The agent record carries the model binding that provider projection writes into the agent's config:
 
 ```sh
-coffer agent edit claude-code --model sonnet --fast-model haiku
-coffer agent edit claude-code --clear-fast-model
+coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
+coffer agent edit claude-code --clear-tiers
 coffer agent edit codex --model gpt-5.5 --wire-api responses
 ```
 

@@ -38,7 +38,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from coffer.application.provider.projector import Priors, ProviderProjector
+from coffer.application.provider.projector import Priors, ProviderProjector, binding_of
 from coffer.application.provider.targets import projection_targets
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
 from coffer.domain.agent.config import AgentConfig
@@ -207,7 +207,7 @@ class ProviderProjectionTarget:
         fmt = spec.format.value
         current = self._store.read_text(spec.path) or ""
         cur = flatten(parse_document(fmt, current))
-        stripped = facet.remove(current, spec.path)
+        stripped = facet.remove(current, spec.path, binding_of(cfg))
         base = flatten(parse_document(fmt, stripped.text))
         present = facet.is_present(current)
 
@@ -216,7 +216,7 @@ class ProviderProjectionTarget:
         want_files: dict[str, str | None] = {}
         if connection is not None:
             conn, ccfg = connection
-            request = self._projector.request_for(conn, ccfg, cfg)
+            request = self._projector.request_for(conn, ccfg, row)
             plan = facet.apply(current, request, spec.path)
             want_flat = flatten(parse_document(fmt, plan.text))
             want_files = {f"file:{s.path.name}": digest(s.text) for s in plan.before + plan.after}
@@ -259,6 +259,12 @@ class ProviderProjectionTarget:
             if k != "connection" and isinstance(v, str) and any(n in v for n in labels)
         ]
         if naming and all(have.get(k) == want[k] for k in naming):
+            return uid
+        # A file that names no connection at all — the proxy form, where the
+        # agent calls the local proxy and the proxy decides the upstream — is
+        # on the wanted connection exactly when every key Coffer owns holds
+        # what projecting it would write.
+        if not naming and all(have.get(k) == v for k, v in want.items() if k != "connection"):
             return uid
         return None
 
