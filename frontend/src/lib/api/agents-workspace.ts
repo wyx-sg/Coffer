@@ -43,6 +43,10 @@ export type PluginsResponse = Schemas["PluginsOut"];
  * location. Taken from the contract, so it is the two names and not `string`. */
 export type UnmanagedSkillOut = SkillManager["schemas"]["UnmanagedSkillOut"];
 
+/** One unmanaged skill for its read-only detail page: the list entry plus the
+ *  SKILL.md `description` (null when the folder does not validate). */
+export type UnmanagedSkillDetailOut = SkillManager["schemas"]["UnmanagedSkillDetailOut"];
+
 export interface UnmanagedSkillsResponse {
   items: UnmanagedSkillOut[];
 }

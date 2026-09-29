@@ -462,6 +462,45 @@ def test_skill_rm_without_force_aborts(skill_cli_daemon):
 
 
 # ---------------------------------------------------------------------------
+# an unmanaged skill, previewed on disk
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="read an unmanaged skill's files from the command line"
+)
+def test_scan_names_an_unmanaged_folder_that_is_then_read_on_disk(skill_cli_daemon):
+    """`coffer scan --agent --json` reports the unmanaged folder with its absolute
+    path; its files are read there, and reading adopts nothing."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    folder = _write_skill_folder(skills_dir / "loose-skill", name="loose-skill")
+    (folder / "refs").mkdir()
+    (folder / "refs" / "a.txt").write_text("alpha\n", encoding="utf-8")
+
+    def skill_rows() -> list[dict]:
+        r = _runner.invoke(cli_app, ["scan", "--agent", "cur", "--json"])
+        assert r.exit_code == 0, r.output
+        return [
+            row for row in json.loads(_extract_json(r.output))["rows"] if row["kind"] == "skill"
+        ]
+
+    (row,) = skill_rows()
+    assert row["name"] == "loose-skill"
+    assert row["valid"] is True
+    root = pathlib.Path(row["ref"])
+    assert root.is_absolute()
+    assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == [
+        "SKILL.md",
+        "refs",
+        "refs/a.txt",
+    ]
+    assert (root / "refs" / "a.txt").read_text(encoding="utf-8") == "alpha\n"
+
+    # Still unmanaged: reading adopted nothing.
+    assert [r["name"] for r in skill_rows()] == ["loose-skill"]
+
+
+# ---------------------------------------------------------------------------
 # skill verify --fix
 # ---------------------------------------------------------------------------
 

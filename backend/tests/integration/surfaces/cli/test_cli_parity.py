@@ -228,6 +228,10 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
     "GET /agents/{uid}/native-memory": "path agent <name> memory",
     "GET /agents/{uid}/native-memory/files": "path agent <name> memory",
     "GET /agents/{uid}/native-memory/files/content": "path agent <name> memory",
+    # An unmanaged skill folder is named by the scan row that lists it
+    # (spec skill-manager "Preview an unmanaged skill read-only").
+    "GET /agents/{uid}/unmanaged-skills/{skill}/files": "scan --agent <name>",
+    "GET /agents/{uid}/unmanaged-skills/{skill}/files/content": "scan --agent <name>",
 }
 
 #: File-shaped routes that are NOT answered by `coffer path`, because they
@@ -416,6 +420,10 @@ def test_file_backed_routes_are_answered_by_coffer_path(api_routes: set[str]):
 
     for route, target in _FILE_BACKED_ROUTES.items():
         words = target.split()
+        if words[0] == "scan":
+            # `coffer scan` is option-only; its rows carry each folder's path.
+            assert "scan" in _subcommands(""), (route, target)
+            continue
         assert words[0] == "path" and words[1] in _subcommands("path"), (route, target)
     for route, command in _FILE_ROUTES_WITH_A_COMMAND.items():
         group, verb = command.rsplit(" ", 1)

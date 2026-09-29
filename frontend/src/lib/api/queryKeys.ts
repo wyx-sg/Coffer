@@ -51,6 +51,18 @@ export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"
 export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
+/** One unmanaged folder's preview — nested under the list key, so adopting or
+ *  deleting (which invalidate the list) also drops the preview. */
+export const agentUnmanagedSkillKey = (uid: string, location: string, name: string) =>
+  ["agents", uid, "unmanaged-skills", location, name] as const;
+export const agentUnmanagedSkillFilesKey = (uid: string, location: string, name: string) =>
+  ["agents", uid, "unmanaged-skills", location, name, "files"] as const;
+export const agentUnmanagedSkillFileKey = (
+  uid: string,
+  location: string,
+  name: string,
+  path: string,
+) => ["agents", uid, "unmanaged-skills", location, name, "file", path] as const;
 export const agentNativeMemoryKey = (uid: string) => ["agents", uid, "native-memory"] as const;
 /** One page of an agent's transcript list; `params` omitted = the whole
  *  subtree, for invalidation. */
@@ -81,8 +93,7 @@ export const agentProviderModelsKey = (agentKey: string) =>
 export const skillsKey = ["skills"] as const;
 export const skillKey = (uid: string) => ["skills", uid] as const;
 export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
-export const skillFileKey = (uid: string, path: string) =>
-  ["skills", uid, "file", path] as const;
+export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file", path] as const;
 
 // ---------------------------------------------------------------------------
 // mcp — per-server discovery, health and invocation log

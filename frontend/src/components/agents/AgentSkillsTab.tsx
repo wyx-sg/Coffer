@@ -11,8 +11,9 @@
 //      that table decided nothing and duplicated the Skills page — the page it
 //      already points at — so it's gone; the button is the whole answer.
 //   2. An "Unmanaged skills" section (UnmanagedSkillsSection) listing skills
-//      found on disk that Coffer does not manage, with open-folder, adopt and
-//      delete. That one stays: those skills exist nowhere else in the UI.
+//      found on disk that Coffer does not manage, with adopt and delete; a row
+//      opens that folder's read-only detail page. That one stays: those skills
+//      exist nowhere else in the UI.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 

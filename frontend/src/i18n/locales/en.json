@@ -993,6 +993,14 @@
       "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its reach.",
       "openSkillsPage": "Open the Skills page",
       "unmanagedTitle": "Unmanaged skills",
+      "unmanagedBadge": "Unmanaged",
+      "unmanagedDetail": {
+        "invalidTitle": "Not a valid skill — Coffer can't adopt this folder as it is",
+        "path": "Path",
+        "location": "Location",
+        "readOnlyHint": "Coffer doesn't manage this folder, so this preview is read-only. Adopt it to manage it in Coffer, or open the folder to change it yourself.",
+        "notFound": "This unmanaged skill is no longer in the agent's skill locations."
+      },
       "adopt": "Adopt",
       "adoptDisabledInvalid": "SKILL.md is invalid — cannot adopt",
       "adoptDisabledForeign": "Foreign symlink — cannot adopt",

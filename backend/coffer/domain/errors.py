@@ -257,9 +257,31 @@ class SkillValidationError(CofferError):
     code = "SKILL_INVALID"
 
     def __init__(self, reason: str, details: dict[str, object] | None = None) -> None:
-        super().__init__(f"skill folder invalid: {reason}")
         self.reason = reason
         self.details = details or {}
+        super().__init__(f"skill folder invalid: {reason}{_describe_skill_details(self.details)}")
+
+
+def _describe_skill_details(details: dict[str, object]) -> str:
+    """The part of a skill-validation message that says what is actually wrong.
+
+    The reason code alone ("skill_md_frontmatter_invalid") leaves the author to
+    rediscover which field broke which rule; the validator already holds that.
+    """
+    errors = details.get("errors")
+    if isinstance(errors, list) and errors:
+        parts = []
+        for e in errors:
+            if not isinstance(e, dict):
+                continue
+            loc = ".".join(str(p) for p in e.get("loc", ())) or "frontmatter"
+            parts.append(f"{loc}: {e.get('msg', 'invalid')}")
+        if parts:
+            return " — " + "; ".join(parts)
+    path = details.get("path")
+    if isinstance(path, str) and path:
+        return f" ({path})"
+    return ""
 
 
 class UpkeepAlreadyRunning(CofferError):  # noqa: N818

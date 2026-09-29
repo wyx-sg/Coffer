@@ -114,6 +114,25 @@ Agents → choose the agent → Skills tab → Unmanaged skills
 
 On the CLI, `coffer scan` lists unmanaged skills in one table with detected agents and MCP entries that Coffer does not manage yet; skill rows have kind `skill`. Each entry shows its name, path, location and whether its `SKILL.md` is valid. An invalid entry shows the reason. The **Ref** column of a skill row is the folder's path, which is what `coffer adopt skill` and `coffer discard skill` take.
 
+### Preview one
+
+Read an unmanaged skill before you decide what to do with it. Nothing here changes the folder.
+
+::: code-group
+
+```sh [CLI]
+coffer scan --agent codex --json   # each skill row's "ref" is the folder's absolute path
+cat <that path>/SKILL.md           # read it with your own tools
+```
+
+```text [Web UI]
+Agents → choose the agent → Skills tab → click the row
+```
+
+:::
+
+The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Open folder** (the folder in your file manager), **Adopt** and **Delete**, and its back link returns to the agent's Skills tab. File reads stay inside the folder, as they do for a managed skill.
+
 ### Adopt one
 
 Adopting moves the folder into `~/.coffer/skills/<name>/`, registers it as a skill, and puts a managed link where the agent expects it.
@@ -129,10 +148,12 @@ coffer adopt skill ~/.agents/skills/pdf-tools
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Adopt on the row
+Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the skill's page
 ```
 
 :::
+
+Adopting from the skill's page takes you on to the new managed skill's page.
 
 - A folder adopted from `<config_dir>/skills/` is replaced in place by the link.
 - A folder adopted from `~/.agents/skills/` is moved out of that directory and the link is placed in `<config_dir>/skills/`. Codex reads both locations, so it keeps seeing the skill.
@@ -152,7 +173,7 @@ coffer discard skill ~/.codex/skills/old-experiment --force
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → select the row → Delete
+Agents → choose the agent → Skills tab → Delete on the row, or Delete on the skill's page
 ```
 
 :::
@@ -364,7 +385,7 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 **An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent: `coffer skill scope <name>`. Check that the agent itself is enabled. Then run `coffer skill verify` to see whether its link is missing or blocked by a foreign folder.
 
-**Import is refused.** The error names the rule the folder broke. The most common causes are a `name` with uppercase letters or dots, a missing `description`, or a symlink inside the folder that points outside it.
+**Import is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
 
 **A skill shows the Copied badge.** The agent's filesystem does not support links (this happens only on Windows). The copy does not follow edits to the master. After editing, trigger a new delivery, for example by disabling and re-enabling the skill.
 

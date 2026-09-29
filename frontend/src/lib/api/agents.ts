@@ -123,6 +123,7 @@ export type {
   PluginOut,
   PluginsResponse,
   SkillRefOut,
+  UnmanagedSkillDetailOut,
   UnmanagedSkillOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
@@ -132,8 +133,10 @@ import type {
   McpEntriesResponse,
   PluginsResponse,
   SkillRefOut,
+  UnmanagedSkillDetailOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
+import type { SkillFileContentOut, SkillFileTreeOut } from "./skills";
 
 // A directory-entry child is addressed by a POSIX relpath, so each SEGMENT is
 // encoded but the separators are kept — `enc` would escape the slashes and the
@@ -213,6 +216,22 @@ export const agentsApi = {
       method: "POST",
       body: { location },
     }),
+  // Read-only preview of one unmanaged folder (spec skill-manager "Preview an
+  // unmanaged skill read-only") — the same tree/content shapes as a managed
+  // skill's Files tab, addressed by folder name + scan location.
+  unmanagedSkill: (uid: string, skill: string, location: string) =>
+    call<UnmanagedSkillDetailOut>(
+      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`,
+    ),
+  unmanagedSkillFiles: (uid: string, skill: string, location: string) =>
+    call<SkillFileTreeOut>(
+      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/files?location=${enc(location)}`,
+    ),
+  unmanagedSkillFileContent: (uid: string, skill: string, location: string, path: string) =>
+    call<SkillFileContentOut>(
+      `/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/files/content` +
+        `?location=${enc(location)}&path=${enc(path)}`,
+    ),
   deleteUnmanagedSkill: (uid: string, skill: string, location: string) =>
     call<void>(`/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`, {
       method: "DELETE",

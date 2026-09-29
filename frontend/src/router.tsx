@@ -77,6 +77,15 @@ export const routes: RouteObject[] = [
         path: "agents/:uid/conversations",
         element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
       },
+      // An unmanaged skill folder, reached from the agent's Skills tab. It has
+      // no uid of its own, so the scan's location and the folder name name it.
+      {
+        path: "agents/:uid/skills/unmanaged/:location/:name",
+        element: lazyPage(
+          () => import("./pages/UnmanagedSkillDetailPage"),
+          "UnmanagedSkillDetailPage",
+        ),
+      },
       {
         path: "agents/:uid/memory",
         element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),

@@ -1,11 +1,14 @@
 // frontend/src/components/skills/SkillFileTree.tsx
-// Two-pane file browser for a skill's master folder (the Files tab): a recursive
-// left tree (expand/collapse dirs, click a file to select it) and a right
-// content pane (SkillFileViewer) that renders Markdown nicely and shows other
-// text files raw, editable behind an explicit Edit — except a builtin skill's,
-// which the viewer keeps read-only because Coffer rewrites them at every start.
+// Two-pane file browser for a skill folder (the Files tab): a recursive left
+// tree (expand/collapse dirs, click a file to select it) and a right content
+// pane. `SkillFileBrowser` is the shape, fed a tree query and a renderer for the
+// selected file; `SkillFileTree` binds it to a managed skill's master folder,
+// whose viewer (SkillFileViewer) renders Markdown nicely, shows other text files
+// raw, and edits behind an explicit Edit — except a builtin skill's, which it
+// keeps read-only because Coffer rewrites them at every start. The unmanaged
+// preview (UnmanagedSkillFiles) binds the same browser to a read-only viewer.
 // Mirrors the AgentConfigFilesEditor layout.
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
@@ -17,8 +20,30 @@ import { useSkillFiles } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
 
 export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?: boolean }) {
-  const { t } = useTranslation();
   const tree = useSkillFiles(uid);
+  return (
+    <SkillFileBrowser
+      tree={tree}
+      renderFile={(path) => <SkillFileViewer uid={uid} path={path} builtin={builtin} />}
+    />
+  );
+}
+
+/** The tree query's state, whichever route it came from. */
+export interface SkillFileTreeQuery {
+  isPending: boolean;
+  error: unknown;
+  data: SkillFileNode | undefined;
+}
+
+export function SkillFileBrowser({
+  tree,
+  renderFile,
+}: {
+  tree: SkillFileTreeQuery;
+  renderFile: (path: string) => ReactNode;
+}) {
+  const { t } = useTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   return (
@@ -45,10 +70,10 @@ export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?:
         ) : null}
       </div>
 
-      {/* Right: rendered/editable content of the selected file. */}
+      {/* Right: content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <SkillFileViewer uid={uid} path={selectedPath} builtin={builtin} />
+          renderFile(selectedPath)
         ) : (
           <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}

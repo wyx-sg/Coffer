@@ -182,7 +182,14 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * One unmanaged skill's metadata, for its read-only detail page
+         * @description The entry is found by the same scan the list runs, so only a folder
+         *     the list would show can be addressed; anything else is 404 ("Preview
+         *     an unmanaged skill read-only"). `description` is the SKILL.md
+         *     frontmatter's when the folder validates, and null otherwise.
+         */
+        get: operations["getUnmanagedSkill"];
         put?: never;
         post?: never;
         /**
@@ -192,6 +199,61 @@ export interface paths {
          *     `skill_unmanaged_deleted`.
          */
         delete: operations["deleteUnmanagedSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{uid}/unmanaged-skills/{skill}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable uid. */
+                uid: string;
+                /** @description Unmanaged skill folder name as reported by the scan. */
+                skill: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List an unmanaged skill folder as a read-only file tree
+         * @description The same tree, walk and containment as `GET /skills/{uid}/files`,
+         *     rooted at the unmanaged folder instead of a master folder ("Preview
+         *     an unmanaged skill read-only").
+         */
+        get: operations["listUnmanagedSkillFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{uid}/unmanaged-skills/{skill}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable uid. */
+                uid: string;
+                /** @description Unmanaged skill folder name as reported by the scan. */
+                skill: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a single file of an unmanaged skill folder
+         * @description Read-only: there is no write counterpart. A path resolving outside the
+         *     folder (`..`, an absolute path, an escaping symlink) is rejected with
+         *     400 before anything is read. Size cap and binary detection match
+         *     `GET /skills/{uid}/files/content`.
+         */
+        get: operations["readUnmanagedSkillFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -383,6 +445,26 @@ export interface components {
             reason: string | null;
             /** @description True for symlinks whose target resolves outside the master store; surfaced to the user but never adoptable (origin is unknown). */
             foreign_link: boolean;
+        };
+        /** @description One unmanaged skill for its read-only detail page: the list entry plus its SKILL.md description. */
+        UnmanagedSkillDetailOut: {
+            /** @description Folder name. */
+            name: string;
+            /** @description Absolute path on disk. */
+            path: string;
+            /**
+             * @description Which scan location the entry was found in.
+             * @enum {string}
+             */
+            location: "skills" | "agents_dir";
+            /** @description Whether the folder passes AgentSkills validation. */
+            valid: boolean;
+            /** @description Validation failure reason when `valid` is false; null otherwise. */
+            reason: string | null;
+            /** @description True for symlinks whose target resolves outside the master store. */
+            foreign_link: boolean;
+            /** @description The SKILL.md frontmatter description when the folder validates; null when it does not. */
+            description: string | null;
         };
         UnmanagedAdoptRequest: {
             /**
@@ -747,6 +829,37 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getUnmanagedSkill: {
+        parameters: {
+            query: {
+                /** @description Where the folder was discovered, as reported by the scan. */
+                location: "skills" | "agents_dir";
+            };
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
+                uid: string;
+                /** @description Unmanaged skill folder name as reported by the scan. */
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmanagedSkillDetailOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     deleteUnmanagedSkill: {
         parameters: {
             query: {
@@ -773,6 +886,71 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listUnmanagedSkillFiles: {
+        parameters: {
+            query: {
+                /** @description Where the folder was discovered, as reported by the scan. */
+                location: "skills" | "agents_dir";
+            };
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable uid. */
+                uid: string;
+                /** @description Unmanaged skill folder name as reported by the scan. */
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileTreeOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    readUnmanagedSkillFile: {
+        parameters: {
+            query: {
+                /** @description Where the folder was discovered, as reported by the scan. */
+                location: "skills" | "agents_dir";
+                /** @description Path to the file, relative to the unmanaged folder. */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable uid. */
+                uid: string;
+                /** @description Unmanaged skill folder name as reported by the scan. */
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileContentOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     adoptUnmanagedSkill: {
