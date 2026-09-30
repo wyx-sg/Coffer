@@ -124,7 +124,8 @@ test("the old Settings addresses land on a live tab", async () => {
     ["/settings/sync", "/sync"],
   ] as const) {
     const location = renderAt(from);
-    await waitFor(() => expect(location.pathname).toBe(to));
+    // The Settings modal is code-split; its first load can take a while.
+    await waitFor(() => expect(location.pathname).toBe(to), { timeout: 5_000 });
   }
 });
 
