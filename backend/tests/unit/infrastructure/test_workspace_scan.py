@@ -101,6 +101,21 @@ def test_symlink_inside_master_subpath_is_managed(tmp_path):
     assert classify(WorkspaceScan().scan_dir(root), master_root=master) == []
 
 
+def test_a_link_into_the_derived_root_is_managed(tmp_path):
+    """Coffer's own skill is derived output (``derived/skills/``), outside the
+    master store: its delivery link is still Coffer's, never unmanaged."""
+    master = (tmp_path / "vault" / "skills").resolve()
+    master.mkdir(parents=True)
+    derived = (tmp_path / "derived" / "skills").resolve()
+    (derived / "coffer-guide").mkdir(parents=True)
+    root = tmp_path / "skills"
+    root.mkdir()
+    os.symlink(derived / "coffer-guide", root / "coffer-guide")
+    entries = WorkspaceScan().scan_dir(root)
+    assert classify(entries, master_root=master, also_managed=(derived,)) == []
+    assert [u.name for u in classify(entries, master_root=master)] == ["coffer-guide"]
+
+
 def test_entries_are_one_level_only(tmp_path):
     root = tmp_path / "skills"
     nested = root / "outer" / "inner"

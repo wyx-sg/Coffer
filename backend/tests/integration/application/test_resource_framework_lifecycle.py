@@ -21,15 +21,13 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 
 class _Config(BaseModel):
@@ -65,7 +63,7 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
                 generic_create_allowed=False,
             ),
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     app = FastAPI()
@@ -160,7 +158,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
                 on_delete=on_delete,
             ),
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
         credentials=creds,
     )

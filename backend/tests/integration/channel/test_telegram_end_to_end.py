@@ -207,7 +207,7 @@ async def test_a_forum_topic_mention_is_answered_in_the_topic(env: ChannelEnv) -
     assert history_reads == []
     readers = {"getChatHistory", "getMessages", "forwardMessages", "copyMessages"}
     assert not {m for m, _ in fake.calls} & readers
-    assert resource.id
+    assert resource.uid
 
 
 @pytest.mark.acceptance(
@@ -224,7 +224,7 @@ async def test_a_telegram_channel_stores_the_token_reference_only(env: ChannelEn
         actor="cli",
     )
     [listed] = await env.resources.list(kind="channel")
-    assert listed.id == created.id
+    assert listed.uid == created.uid
     assert listed.config["bot_token_ref"] == "channel/tg/bot-token"
     # The token itself lives in the credential store, never in the config.
     assert token not in repr(listed.config)

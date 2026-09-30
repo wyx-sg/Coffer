@@ -29,14 +29,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http.agent_dependencies import get_agent_service, get_auto_detect_service
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.support.facets import agent_catalog, installed
+from tests.support.vault_stores import make_resource_repo
 
 TOKEN = "test-token-one-per-type"
 
@@ -155,7 +153,7 @@ async def test_registering_an_agent_under_another_name_is_refused(tmp_path) -> N
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(
         kinds={"agent": make_agent_kind(on_delete=None)},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     config = {"type": "codex", "config_dir": str(tmp_path)}

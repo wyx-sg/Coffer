@@ -8,9 +8,9 @@ not an identity. Everything that has to keep pointing at the same resource
 across a rename — a cross-resource reference, a synced document, a URL — holds
 the uid.
 
-``id`` is the integer surrogate primary key. It is the foreign key four
-kind-owned tables hold, it never leaves the process, and it is NOT the uid: it
-is a row number, so two machines allocate the same one to different resources.
+There is no integer surrogate any more: a resource is a file whose ``uid``
+is written inside it, and every table that used to hold a row number holds the
+uid (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from coffer.domain.scope import Scope
+from coffer.domain.vault.layout import StorageClass
 
 #: A name is one safe path segment: three kinds (`skill`, `knowledge`,
 #: `memory`) turn it into a directory, so the rule survives as a label rule.
@@ -84,8 +85,6 @@ class Resource:
     lives in services keyed off the `kind` field.
     """
 
-    #: Integer surrogate primary key — internal, per-machine, never serialised.
-    id: int
     #: The identity: opaque, immutable, the same value on every machine that
     #: holds this resource. Everything outside the process addresses this.
     uid: str
@@ -110,8 +109,9 @@ class Resource:
     #: carries one (``Kind.titled``). It travels with the synced document;
     #: reach does not.
     title: str | None = None
-    #: Monotonic revision, bumped by every write to the row; carried by the
-    #: reconciler's ``Changed`` hint (ADR one-level-triggered-reconciler).
+    #: Monotonic revision, bumped whenever the resource's file or its reach
+    #: changes (a derived per-uid counter, not stored in the file); carried by
+    #: the reconciler's ``Changed`` hint (ADR one-level-triggered-reconciler).
     rev: int = 0
 
 
@@ -137,7 +137,7 @@ class Kind:
     config_schema: type[BaseModel]
     # Whether the kind-agnostic POST /api/v1/resources endpoint may create this
     # kind. Kinds that own creation invariants beyond config validation — a
-    # skill's master folder under ~/.coffer/skills/, an agent's on-disk
+    # skill's master folder under ~/.coffer/vault/skills/, an agent's on-disk
     # detection — set this False so the generic path cannot create a row with
     # no backing artifact. Their dedicated services still create rows by
     # passing ``allow_lifecycle_kind=True`` to ResourceService.register
@@ -161,26 +161,27 @@ class Kind:
     # resource-framework "Address every resource by an immutable uid through
     # one kind-agnostic surface").
     toggleable: bool = True
-    # Whether this kind's rows converge with the sync remote (spec vault-sync).
-    # True for everything the user authored — the rows a second machine is
-    # supposed to receive. False for a kind whose rows are DERIVED from what is
-    # installed on one machine: publishing those produces, at the other end, a
-    # row naming something that machine does not have, with nothing behind it,
-    # which the next local pass would recompute away anyway. `memory` is the
-    # only kind that sets it False today (spec memory "Keep the memory tree
-    # derived and local"). Declared here
-    # rather than listed in the exporter so the sync layer keeps one rule
-    # instead of a table of exceptions — the shape the retired machine-local
-    # kind list had.
-    converges: bool = True
-    # Optional per-ROW refinement of ``converges``: given a row's config,
-    # answer whether THAT row travels; consulted only when ``converges`` is
-    # True. `skill` uses it to keep Coffer's own `coffer-guide` — re-rendered
-    # from this machine's switches at every boot, so derived output — off the
-    # remote (spec memory "Keep the memory tree derived and local", applied to
-    # one row). A function of the config alone, because the sync applier holds
-    # only a document that has just arrived.
-    converges_row: Callable[[dict[str, Any]], bool] | None = None
+    # Which storage class this kind's resources are filed in (ADR
+    # storage-is-five-classes-by-nature): ``vault`` for everything a person
+    # authored (``vault/resources/<kind>/``, committed, synced when a remote is
+    # configured); ``local`` for a kind that is true of this machine only —
+    # `agent`, which names a config directory on this disk
+    # (``local/resources/agent/``, never committed); ``derived`` for a kind
+    # rebuilt from other state — `memory`, whose partitions each pass
+    # recomputes (``derived/resources/memory/``). The directory is the policy:
+    # nothing else decides whether a resource travels.
+    storage: StorageClass = StorageClass.VAULT
+    # Optional per-ROW refinement of ``storage``, given the row's config at
+    # creation. `skill` uses it to file Coffer's own `coffer-guide` — rendered
+    # from this machine's switches at every boot, so derived output — under
+    # ``derived/`` while every imported skill stays in the vault. A function of
+    # the config alone, so the store can answer it for a row it is creating.
+    storage_row: Callable[[dict[str, Any]], StorageClass] | None = None
+    # Config flags at most one resource of the kind may hold (``provider``'s
+    # ``internal_default``). The service keeps every write it makes to one
+    # holder; the vault validator refuses any commit — a hand edit, a merge —
+    # that would leave two, which is what a unique index did in SQL.
+    exclusive_flags: tuple[str, ...] = ()
     # Whether a registered row's NAME may change (ADR
     # names-visible-to-agents-are-fixed). True for a kind whose name is quoted
     # outside Coffer — `mcp_server` (it prefixes every tool name an agent sees)

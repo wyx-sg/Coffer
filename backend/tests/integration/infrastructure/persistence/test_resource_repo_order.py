@@ -15,22 +15,20 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
-    session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 async def _repo(tmp_path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    return SqlAlchemyResourceRepo(session_maker(engine)), engine
+    return make_resource_repo(), engine
 
 
 def _resource(name: str, *, kind: str = "mcp_server") -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        id=0,
         # The uid is the identity, but it is deliberately NOT what the list is
         # ordered by: a reader scans the name column, and an opaque identity
         # sorts into an order nobody can predict.

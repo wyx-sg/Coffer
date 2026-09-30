@@ -97,7 +97,7 @@ async def test_a_name_the_owner_gave_outranks_the_message(env: ChannelEnv) -> No
     resource, adapter = await env.paired_channel()
     conv = await env.chat.create_conversation(agent_key="builtin")
     await env.chat.rename_conversation(conv.id, new_title="Tax questions")
-    await env.threads.set_active_conversation(resource.id, "owner", "", conv.id)
+    await env.threads.set_active_conversation(resource.uid, "owner", "", conv.id)
 
     await env.processor.on_message(inbound("tg", "owner", "and one more thing"))
     await wait_until(lambda: "Hello world" in adapter.texts())

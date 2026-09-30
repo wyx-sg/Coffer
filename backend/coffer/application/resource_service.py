@@ -16,7 +16,7 @@ Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `resource_scope_ops`, `set_enabled`'s in `resource_enable_ops`, `rename`'s in
 `resource_rename_ops`, `set_title`'s in `resource_title_ops`, `delete`'s
 credential-release step in `resource_delete_ops`, and every question about what
-a kind *declares* — what converges, what redacts, what cites a credential, what
+a kind *declares* — where it is stored, what redacts, what cites a credential, what
 it will accept as a name — in `resource_kind_ops`.
 """
 
@@ -36,6 +36,7 @@ from pydantic import ValidationError
 from coffer.application import resource_kind_ops
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
+from coffer.application.resource_actor import acting_as
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
@@ -46,6 +47,7 @@ from coffer.domain.errors import (
 )
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
+from coffer.domain.vault.layout import StorageClass
 
 _logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ class ResourceService:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
 
         Called BEFORE persisting a Resource so a missing credential never
-        leaves a partial row in the resources table. Skipped if no credential
+        leaves a partial resource file behind. Skipped if no credential
         store is wired (back-compat for tests that don't need credential checks).
 
         The store's ``get`` is a blocking SQLite read, so it runs in a worker
@@ -101,13 +103,10 @@ class ResourceService:
             raise UnknownKind(kind)
         return self._kinds[kind]
 
-    def converges(self, kind: str) -> bool:
-        """Whether this kind's rows travel to the sync remote (spec vault-sync)."""
-        return resource_kind_ops.converges(self._kinds, kind)
-
-    def converges_row(self, kind: str, config: Mapping[str, Any]) -> bool:
-        """Whether **this one row** travels to the sync remote (spec vault-sync)."""
-        return resource_kind_ops.converges_row(self._kinds, kind, config)
+    def storage_of(self, kind: str, config: Mapping[str, Any]) -> StorageClass:
+        """The storage class a resource of ``kind`` with ``config`` is filed in
+        (ADR storage-is-five-classes-by-nature)."""
+        return resource_kind_ops.storage_of(self._kinds, kind, config)
 
     def supports_scope(self, kind: str) -> bool:
         """Whether the kind carries a per-agent activation scope (ADR per-agent-resource-scope).
@@ -191,33 +190,32 @@ class ResourceService:
         # servers as resources" requires registration to fail naming the missing ref.
         await self._probe_credentials(kind_def, validated)
         now = datetime.now(tz=UTC)
-        created = await self._repo.create(
-            Resource(
-                # 0 is the surrogate key's placeholder — the repo assigns it.
-                # The uid is NOT a placeholder: it is the identity, minted here
-                # so it is decided before anything is written.
-                id=0,
-                uid=uid or uuid.uuid4().hex,
-                kind=kind,
-                name=name,
-                description=description,
-                config=validated,
-                enabled=True,
-                created_at=now,
-                updated_at=now,
-                title=title,
-                # A freshly registered resource is unscoped (ADR per-agent-resource-scope) —
-                # active for every agent until the user narrows it — UNLESS the
-                # kind supplies a starting scope. Only `provider` does: "every
-                # agent" would widen a new connection past the wire default its
-                # projection targets used to come from.
-                scope=(
-                    kind_def.default_scope(validated)
-                    if kind_def.default_scope is not None
-                    else None
-                ),
+        with acting_as(actor):
+            created = await self._repo.create(
+                Resource(
+                    # The identity, minted here so it is decided before anything
+                    # is written; the store files it inside the resource's file.
+                    uid=uid or uuid.uuid4().hex,
+                    kind=kind,
+                    name=name,
+                    description=description,
+                    config=validated,
+                    enabled=True,
+                    created_at=now,
+                    updated_at=now,
+                    title=title,
+                    # A freshly registered resource is unscoped (ADR per-agent-resource-scope) —
+                    # active for every agent until the user narrows it — UNLESS the
+                    # kind supplies a starting scope. Only `provider` does: "every
+                    # agent" would widen a new connection past the wire default its
+                    # projection targets used to come from.
+                    scope=(
+                        kind_def.default_scope(validated)
+                        if kind_def.default_scope is not None
+                        else None
+                    ),
+                )
             )
-        )
         await self._audit.record(
             AuditEventType.RESOURCE_CREATED.value,
             resource=created,
@@ -300,7 +298,8 @@ class ResourceService:
             hook_result = kind_def.on_update_config(before, validated)
             if inspect.isawaitable(hook_result):
                 await hook_result
-        updated = await self._repo.update_config(uid, validated, description)
+        with acting_as(actor):
+            updated = await self._repo.update_config(uid, validated, description)
         await self._audit.record(
             AuditEventType.RESOURCE_UPDATED.value,
             resource=updated,
@@ -380,7 +379,8 @@ class ResourceService:
             result = kind_def.on_delete(snapshot)
             if inspect.isawaitable(result):
                 await result
-        await self._repo.delete(uid)
+        with acting_as(actor):
+            await self._repo.delete(uid)
         await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,

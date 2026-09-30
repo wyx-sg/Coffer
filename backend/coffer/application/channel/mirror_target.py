@@ -82,11 +82,11 @@ async def resolve_target(
         return MirrorTarget(None, None, "", "", "channel_deleted")
     platform = platform_label(str(resource.config.get("channel_type", "")))
     loc = await threads.locate(conversation_id)
-    if loc is None or loc.resource_id != resource.id:
+    if loc is None or loc.resource_uid != resource.uid:
         return MirrorTarget(resource, None, platform, platform, "not_located")
     if loc.chat_kind not in ("direct", "group"):
         return MirrorTarget(resource, None, platform, platform, "chat_kind_unknown")
-    row = await threads.get(loc.resource_id, loc.chat_id, loc.thread_id)
+    row = await threads.get(loc.resource_uid, loc.chat_id, loc.thread_id)
     label = _place(platform, loc, row.parallel_mark if row is not None else None)
     if loc.chat_kind == "group" and loc.thread_id == "":
         return MirrorTarget(resource, None, platform, label, "group_main")

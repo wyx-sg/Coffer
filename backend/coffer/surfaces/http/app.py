@@ -3,7 +3,7 @@
 For the lifecycle-managed daemon process, `coffer.infrastructure.daemon.entry`
 acquires the port + token before uvicorn binds. The lifespan here reads
 daemon.json back to set the auth token + port, runs Alembic migrations,
-wires services, and starts the background workers.
+builds the vault's stores, wires services, and starts the background workers.
 
 Every wiring step below RETURNS what it built, and the next step takes it as
 a parameter: the order the lifespan reads in is the dependency order, and a
@@ -46,11 +46,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
+from coffer.infrastructure.vault.home import runs_db_path
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
@@ -101,13 +99,12 @@ from coffer.surfaces.http.reconcile_wiring import (
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.vault_composition import build_vault_stores
 
 
 def _db_url() -> str:
-    return os.environ.get(
-        "COFFER_DB_URL",
-        f"sqlite+aiosqlite:///{pathlib.Path.home()}/.coffer/coffer.db",
-    )
+    """The history database (``runs.db``); ``COFFER_DB_URL`` names another."""
+    return os.environ.get("COFFER_DB_URL", f"sqlite+aiosqlite:///{runs_db_path()}")
 
 
 _logger = logging.getLogger(__name__)
@@ -150,21 +147,21 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     engine = create_async_engine_with_pragmas(_db_url())
     sm = session_maker(engine)
+    # The vault repository, the resource files, derived.db and the one
+    # validator every vault write passes (ADR storage-is-five-classes-by-nature).
+    vault = await build_vault_stores(app.state.kinds)
 
     db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    credentials = await init_credential_store(engine, db_path)
+    credentials = await init_credential_store(resource_repo=vault.resources)
     credential_store = credentials.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
     # ingest, the curation pass, the memory distil pass, the sync conflict
     # resolver) shares one resolver rather than each re-wrapping the store.
     credential_resolver = make_credential_resolver(credential_store)
 
-    audit_repo = SqlAlchemyAuditRepo(sm)
-    resource_repo = SqlAlchemyResourceRepo(sm)
-
     # ``AuditService.record`` is handed the ``Resource`` the event is about, so
-    # the id it stores is read off that row, never looked back up by label.
-    audit = AuditService(audit_repo)
+    # the uid it stores is read off it, never looked back up by label.
+    audit = AuditService(SqlAlchemyAuditRepo(sm))
     # What each kind contributes to vault convergence (spec vault-sync),
     # collected as wiring proceeds and handed to ``start_sync`` at the end.
     sync_contributions = SyncContributions()
@@ -173,9 +170,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # hints both, and so each kind below can register the targets it supplies.
     reconciler = build_reconciler(audit, sync_contributions)
     events = build_event_stream(reconciler)
+    # A change another writer makes to a resource file (a hand edit settled,
+    # a sync checkout, a restore) is hinted exactly like an API write.
+    vault.resources.set_change_sink(events.hint_sink)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
-        repo=HintingResourceRepo(resource_repo, events.hint_sink),
+        repo=HintingResourceRepo(vault.resources, events.hint_sink),
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
         # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
@@ -186,8 +186,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # Also registers the engine-settings synced state area.
-    internal_engine_config_svc = build_config_services(sm, audit, sync_contributions)
+    internal_engine_config_svc = build_config_services(audit)
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
@@ -215,6 +214,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         sm=sm,
+        vault=vault,
         builtin_tools=builtin_tools,
         credential_store=credential_store,
         credential_resolver=credential_resolver,
@@ -250,11 +250,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # drives turns through the chat platform's handles, and `/kb` through the
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
+        app, resource_svc, audit, sm, vault, credential_store, chat, kinds.knowledge
     )
 
     # Legacy keychain move + one-time adoption of the secret bindings in use.
-    await run_credential_startup(app.state.kinds, sm, credential_store, audit, resource_svc)
+    await run_credential_startup(app.state.kinds, credential_store, audit, resource_svc)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.
@@ -312,10 +312,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Published like ``app.state.kinds``: a test asserting the lifespan started
     # a worker needs a seam to reach it through.
     app.state.background_workers = workers
-    # Same seam, for the same reason. An area that forgets to register its
-    # state provider does not fail — it just silently stops converging, which
-    # is how channel pairings went a whole release without syncing. A test that
-    # can read the collected set is what makes that visible.
     app.state.sync_contributions = sync_contributions
 
     # Channel adapter reconciler (spec channels): Telegram polling and the
@@ -359,6 +355,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 engine=engine,
             )
         )
+        await _best_effort("derived_db", vault.derived_engine.dispose())
 
 
 def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:

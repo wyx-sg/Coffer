@@ -79,7 +79,7 @@ def _now() -> datetime:
 
 
 async def _status(svc: SkillSourceService, skill: Resource) -> SourceStatus:
-    return await svc.status_repo.get(skill.id) or SourceStatus(skill_resource_id=skill.id)
+    return await svc.status_repo.get(skill.uid) or SourceStatus(skill_uid=skill.uid)
 
 
 def _edited(svc: SkillSourceService, skill: Resource, source: GitImportSource) -> bool:
@@ -137,7 +137,7 @@ async def check_due(svc: SkillSourceService, *, now: datetime | None = None) -> 
             git_source_of(skill)
         except SkillNotFromGit:
             continue
-        last = statuses.get(skill.id)
+        last = statuses.get(skill.uid)
         if (
             last is not None
             and last.checked_at is not None

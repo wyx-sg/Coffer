@@ -32,10 +32,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 MACHINE = "machine-under-test"
 
@@ -75,7 +73,7 @@ async def _service(tmp_path):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
 
     async def agent_names() -> dict[str, str]:
         return {r.uid: r.name for r in await repo.list() if r.kind == "agent"}

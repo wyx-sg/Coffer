@@ -70,6 +70,9 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         display_name="Provider",
         config_schema=ProviderConfig,
         credential_ref_extractor=_provider_credential_ref_extractor,
+        # spec provider-switching "Keep at most one internal-engine default":
+        # the vault refuses a file that would make a second one.
+        exclusive_flags=("internal_default",),
         # Per-agent scope: a connection's scope names the agents it projects
         # into — the reach this kind used to carry itself, as
         # ``compatible_agents`` inside its config, before the framework grew

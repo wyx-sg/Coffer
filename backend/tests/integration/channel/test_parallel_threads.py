@@ -135,7 +135,7 @@ async def test_thread_in_a_group_opens_nothing(env: ChannelEnv) -> None:
     )
     assert adapter.opened_threads == []
     assert adapter.texts()[-1] == GROUP_ANSWER
-    assert await env.threads.list_parallel(resource.id, "grp-1") == []
+    assert await env.threads.list_parallel(resource.uid, "grp-1") == []
 
 
 async def test_thread_that_cannot_be_opened_says_why_and_records_nothing(
@@ -145,12 +145,12 @@ async def test_thread_that_cannot_be_opened_says_why_and_records_nothing(
     adapter.open_thread_fails_with = ParallelThreadUnavailable("turn topics on")
     await env.processor.on_message(inbound("tg", "owner", "/thread"))
     assert adapter.texts()[-1] == "turn topics on"
-    assert await env.threads.list_parallel(resource.id, "owner") == []
+    assert await env.threads.list_parallel(resource.uid, "owner") == []
 
     adapter.open_thread_fails_with = RuntimeError("socket closed")
     await env.processor.on_message(inbound("tg", "owner", "/thread"))
     assert adapter.texts()[-1] == "⚠️ Could not open a thread — try /thread again."
-    assert await env.threads.list_parallel(resource.id, "owner") == []
+    assert await env.threads.list_parallel(resource.uid, "owner") == []
 
 
 @pytest.mark.acceptance(

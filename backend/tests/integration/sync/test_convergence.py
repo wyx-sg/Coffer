@@ -20,8 +20,8 @@ from __future__ import annotations
 import pathlib
 
 import pytest
-
 from coffer.application.agent.sync_reconcile import AgentImportGate
+
 from coffer.domain.credential_errors import CredentialUnreadable
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, JoinKind
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard

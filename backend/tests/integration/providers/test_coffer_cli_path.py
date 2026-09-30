@@ -92,7 +92,6 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
     agent_uid = "8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f"
     connection_uid = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
     agent = Resource(
-        id=1,
         uid=agent_uid,
         kind="agent",
         name="claude-code",
@@ -108,7 +107,6 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
         "credential_ref": "gw-key",
     }
     connection = Resource(
-        id=2,
         uid=connection_uid,
         kind="provider",
         name="gw",

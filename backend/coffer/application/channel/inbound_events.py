@@ -87,7 +87,7 @@ class InboundEvents:
             # sender_id) and route the refusal back into the group/thread, not a
             # DM. A tap never bootstraps a group peer row — only the owner's
             # first @mention does — so an unrecorded group is ignored silently.
-            owner = await self.peers.owner_sender_id(binding.resource.id)
+            owner = await self.peers.owner_sender_id(binding.resource.uid)
             if owner is None:
                 return
             if not cb.sender_id or cb.sender_id != owner:
@@ -99,11 +99,11 @@ class InboundEvents:
                     chat_kind="group",
                 )
                 return
-            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.uid, cb.chat_id)
             if peer is None:
                 return
         else:
-            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.uid, cb.chat_id)
             if peer is None:
                 return
             if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
@@ -153,7 +153,7 @@ class InboundEvents:
         paired, so there is nothing to tear down or warn about), are both
         ignored in silence.
         """
-        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.uid, event.chat_id)
         if peer is None:
             return
         if event.kind == "removed_from_group":
@@ -213,7 +213,7 @@ class InboundEvents:
         press from a chat that was never paired is ignored in silence rather than
         answered, which would confirm to a stranger that this channel exists.
         """
-        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.uid, event.chat_id)
         if peer is None:
             return
         await self.commands.interrupt(

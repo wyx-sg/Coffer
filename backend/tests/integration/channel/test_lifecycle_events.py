@@ -42,7 +42,7 @@ async def _paired_group(env: ChannelEnv, name: str = "st") -> tuple[FakeChannelA
         )
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
-    return adapter, resource.id
+    return adapter, resource.uid
 
 
 @pytest.mark.acceptance(

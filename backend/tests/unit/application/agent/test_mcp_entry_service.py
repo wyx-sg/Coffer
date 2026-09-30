@@ -67,7 +67,6 @@ _CX_UID = "5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c"
 
 def _agent_resource(uid: str, name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind="agent",
         name=name,
@@ -160,7 +159,6 @@ class FakeResourceService:
         self.sequence.append("register")
         self.register_calls.append((kind, name, config, actor))
         r = Resource(
-            id=len(self.resources) + 100,
             uid=f"mcp-uid-{len(self.resources) + 100}",
             kind=kind,
             name=name,
@@ -209,7 +207,7 @@ class FakeAuditRepo:
         *,
         kind=None,
         name=None,
-        resource_id=None,
+        resource_uid=None,
         event_type=None,
         event_prefix=None,
         since=None,
@@ -345,7 +343,6 @@ async def test_list_annotates_matches_resource(svc, store, rs):
     """
     rs.resources.append(
         Resource(
-            id=7,
             uid="e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
             kind="mcp_server",
             name="alpha-registered",

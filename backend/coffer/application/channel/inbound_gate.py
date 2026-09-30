@@ -35,7 +35,7 @@ async def group_peer(
         # reply), before the owner gate, so a bot in a busy group never butts in
         # regardless of who sent it.
         return None
-    owner = await peers.owner_sender_id(binding.resource.id)
+    owner = await peers.owner_sender_id(binding.resource.uid)
     if owner is None:
         # The channel has never been paired (no DM/group has a known
         # owner sender id yet) — a group @mention cannot bootstrap
@@ -56,13 +56,13 @@ async def group_peer(
             chat_kind="group",
         )
         return None
-    peer = await peers.get_by_chat(binding.resource.id, msg.chat_id)
+    peer = await peers.get_by_chat(binding.resource.uid, msg.chat_id)
     if peer is None:
         # First @mention from the owner in this group/thread — record
         # a peer row for it so future turns (and /commands) resolve a
         # conversation scoped to this chat, not the owner's DM.
         peer = ChannelPeer(
-            resource_id=binding.resource.id,
+            resource_uid=binding.resource.uid,
             chat_id=msg.chat_id,
             display_name=msg.sender_display,
             paired_at=datetime.now(tz=UTC),

@@ -2,23 +2,17 @@
 
 See spec resource-framework "Treat a resource's name as a mutable label".
 
-The point of the identity change is that a rename costs nothing: the row keeps
-its uid, so every reference to it — a kind-owned table's foreign key, the audit
-trail, the credential its config cites — keeps pointing at the same thing and
-nothing has to be rewritten. This file asserts that by renaming a resource that
-has one of each and checking that none of them moved.
-
-``mcp_capability_preferences`` stands in for "a table the kind owns". It is
-imported for its side effect on ``Base.metadata`` and then written directly:
-going through the MCP service would test the MCP service, and what is under
-test here is that a rename does not disturb a row joined by the integer id.
+The point of the identity change is that a rename costs nothing: the file keeps
+its uid, so every reference to it — reach, the audit trail, the credential its
+config cites — keeps pointing at the same thing and nothing has to be
+rewritten. This file asserts that by renaming a resource that has one of each
+and checking that none of them moved.
 """
 
 from __future__ import annotations
 
 import pytest
 from pydantic import BaseModel
-from sqlalchemy import text
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -26,18 +20,13 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError, ResourceAlreadyExists
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
-from coffer.infrastructure.mcp.persistence import (  # noqa: F401  (registers the table)
-    MCPCapabilityPreferenceModel,
-)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 class _Config(BaseModel):
@@ -84,7 +73,7 @@ async def _service(tmp_path, *, on_rename=None):
     store.values["thing/secret"] = "s3cret"
     svc = ResourceService(
         kinds=kinds,
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
         credentials=store,
     )
@@ -95,7 +84,7 @@ async def _service(tmp_path, *, on_rename=None):
     spec="resource-framework", scenario="renaming a resource is an ordinary edit"
 )
 async def test_rename_moves_the_label_and_nothing_else(tmp_path):
-    svc, audit, store, engine, sm = await _service(tmp_path)
+    svc, audit, store, engine, _sm = await _service(tmp_path)
     try:
         created = await svc.register(
             kind="thing",
@@ -105,24 +94,10 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         )
         await svc.update_scope(created.uid, Scope(agents=["agent-uid-1"]), actor="test")
         await svc.set_enabled(created.uid, False, actor="test")
-        # A row in a table the kind owns, joined by the INTEGER id.
-        async with sm() as session:
-            await session.execute(
-                text(
-                    "INSERT INTO mcp_capability_preferences "
-                    "(resource_id, capability_type, capability_key, enabled,"
-                    " first_seen_at, last_seen_at) "
-                    "VALUES (:rid, 'tool', 'search', 0, :ts, :ts)"
-                ),
-                {"rid": created.id, "ts": created.created_at},
-            )
-            await session.commit()
-
         renamed = await svc.rename(created.uid, "after", actor="test")
 
         # Same resource: the identity did not move, only the label.
         assert renamed.uid == created.uid
-        assert renamed.id == created.id
         assert renamed.name == "after"
 
         # Reach untouched — a rename is not a decision about who may reach it.
@@ -132,20 +107,6 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         # The credential is still in the store and still cited by this resource.
         assert store.exists("thing/secret")
         assert [r.uid for r in await svc.find_credential_citations("thing/secret")] == [created.uid]
-
-        # The kind-owned row did not cascade away, because it was never keyed
-        # on the name.
-        async with sm() as session:
-            rows = (
-                await session.execute(
-                    text(
-                        "SELECT resource_id FROM mcp_capability_preferences "
-                        "WHERE resource_id = :rid"
-                    ),
-                    {"rid": created.id},
-                )
-            ).fetchall()
-        assert len(rows) == 1
 
         # The trail comes back whole, and the earlier rows still say what the
         # resource was called when they were written.

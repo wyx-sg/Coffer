@@ -26,7 +26,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
@@ -78,7 +78,7 @@ _STATUS_LOOKBACK = 20
 async def _capability_list(
     resource: Resource,
     discovery: CapabilityDiscovery,
-    prefs: MCPCapabilityPreferenceRepo,
+    prefs: MCPCapabilityPreferenceStore,
 ) -> CapabilityListOut:
     """The live (cache-aware) capability list for one already-resolved server.
 
@@ -140,7 +140,7 @@ async def _capability_list(
 async def list_capabilities(
     uid: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CapabilityListOut:
     """Return the live (cache-aware) capability list for one MCP server.
@@ -158,7 +158,7 @@ async def list_capabilities(
 async def get_server_status(
     uid: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
 ) -> McpServerStatusOut:
@@ -179,7 +179,7 @@ async def get_server_status(
         health_status, _ = health
         return McpServerStatusOut(status=health_status, missing_runner=runner)
 
-    caps = await prefs.list_for(resource.id)
+    caps = await prefs.list_for(resource.uid)
     # Health is read from the most recent call that says something about the
     # SERVER. A ``denied`` row never reached it (a disabled capability, an
     # out-of-scope session), so it is skipped. An ``error`` the upstream
@@ -207,11 +207,11 @@ async def _toggle_capability(
     enabled: bool,
     actor: str,
     resource_service: ResourceService,
-    prefs: MCPCapabilityPreferenceRepo,
+    prefs: MCPCapabilityPreferenceStore,
     audit: AuditService,
 ) -> Response:
     resource = await require_mcp_server(uid, resource_service)
-    updated = await prefs.set_enabled(resource.id, capability_type, capability_key, enabled)
+    updated = await prefs.set_enabled(resource.uid, capability_type, capability_key, enabled)
     if updated is None:
         raise HTTPException(
             status_code=404,
@@ -242,7 +242,7 @@ async def enable_capability(
     capability_type: CapabilityType,
     body: CapabilityKeyBody = Body(...),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
@@ -269,7 +269,7 @@ async def disable_capability(
     capability_type: CapabilityType,
     body: CapabilityKeyBody = Body(...),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
@@ -290,7 +290,7 @@ async def disable_capability(
 async def refresh_capabilities(
     uid: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CapabilityListOut:
     """Invalidate the discovery cache for this server and re-query upstream.

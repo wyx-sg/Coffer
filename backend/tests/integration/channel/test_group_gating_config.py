@@ -37,7 +37,7 @@ async def test_require_mention_on_drops_unaddressed_group_message(env: ChannelEn
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -63,7 +63,7 @@ async def test_require_mention_off_admits_unaddressed_owner_message(env: Channel
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
 
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is not None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is not None
 
 
 @pytest.mark.acceptance(
@@ -93,7 +93,7 @@ async def test_ignore_other_mentions_drops_message_mentioning_a_human(env: Chann
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -123,4 +123,4 @@ async def test_ignore_other_mentions_off_still_answers_when_mentioned_with_a_hum
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
 
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is not None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is not None

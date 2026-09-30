@@ -27,7 +27,7 @@ from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
@@ -36,11 +36,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 _N_RUNS = 30
@@ -110,7 +108,7 @@ async def test_gateway_overhead_under_50ms_median(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -131,7 +129,7 @@ async def test_gateway_overhead_under_50ms_median(
         resource_service=rsvc,
         credential_resolver=CredentialResolver(KeyringAdapter()),
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
         resource_service=rsvc,

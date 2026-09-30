@@ -1,8 +1,8 @@
 """Coffer's own engine, built for the app lifespan.
 
 The engine's settings: which model Coffer runs on its own behalf, and whether
-it may tidy unattended. Building the service also registers its synced state
-area, so the settings travel with the vault.
+it may tidy unattended. They are one vault document
+(``state/settings/internal-engine.json``), so they travel with the vault.
 
 This is also where the engine's two seams onto the provider kind are tied,
 because only a composition root may see both: the guard the provider kind
@@ -16,32 +16,20 @@ Split out of :mod:`coffer.surfaces.http.app` for the file-size budget.
 
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from coffer.application.audit_service import AuditService
 from coffer.application.engine.internal_default import InternalDefaultModelGuard
 from coffer.application.engine.resolve import (
     InternalDefaultConnectionPort,
     InternalEngineConnection,
 )
-from coffer.application.engine_settings_sync import EngineSettingsSyncState
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
-from coffer.infrastructure.persistence.repos import SqlAlchemyInternalEngineConfigRepo
+from coffer.infrastructure.persistence.internal_engine_repo import VaultInternalEngineConfigRepo
 from coffer.surfaces.http.dependencies import get_internal_engine_config_service
-from coffer.surfaces.http.sync_contributions import SyncContributions
 
 
-def build_config_services(
-    sm: async_sessionmaker[AsyncSession],
-    audit: AuditService,
-    sync: SyncContributions,
-) -> InternalEngineConfigService:
-    """Build the internal-engine config service and register its synced state
-    area (spec vault-sync slice 7) before ``start_sync`` snapshots."""
-    internal_repo = SqlAlchemyInternalEngineConfigRepo(sm)
-    internal_svc = InternalEngineConfigService(repo=internal_repo, audit=audit)
-    sync.state_providers.append(EngineSettingsSyncState(internal_svc, internal_repo=internal_repo))
-    return internal_svc
+def build_config_services(audit: AuditService) -> InternalEngineConfigService:
+    """Build the internal-engine config service over its vault document."""
+    return InternalEngineConfigService(repo=VaultInternalEngineConfigRepo(), audit=audit)
 
 
 async def read_internal_engine_timeout() -> int | None:

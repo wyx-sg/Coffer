@@ -102,7 +102,7 @@ async def _remember(ctx: CommandContext, **values: str | None) -> None:
     fresh conversation while its agent is the sticky one."""
     settings = await ctx.settings()
     await ctx.commands._threads.set_preferences(
-        ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, agent=settings.agent, **values
+        ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, agent=settings.agent, **values
     )
 
 

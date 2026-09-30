@@ -64,8 +64,6 @@ _ROOMY = 5
 @pytest.fixture
 async def fleet(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     """Two whole vaults, ``a`` being the one the routes are wired to."""
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "pinned-knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "pinned-skills"))
     a, b = await two_machines(tmp_path)
     try:
         yield a, b

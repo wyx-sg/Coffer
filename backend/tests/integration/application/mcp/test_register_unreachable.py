@@ -23,10 +23,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 @pytest.mark.asyncio
@@ -39,7 +37,7 @@ async def test_register_succeeds_for_unreachable_upstream(tmp_path: Path) -> Non
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     rsvc = ResourceService(
         kinds={

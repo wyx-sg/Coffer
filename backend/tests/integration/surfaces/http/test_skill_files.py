@@ -1,7 +1,7 @@
 """HTTP coverage for the skill file viewer + editor (spec skill-manager).
 
 Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
-master store lands under ``tmp_path/.coffer/skills`` and a temp SQLite DB.
+master store lands under ``tmp_path/.coffer/vault/skills`` and a temp SQLite DB.
 Imports a skill with a nested folder, then exercises the endpoints:
 
 - ``GET /skills/{uid}/files`` — tree shape
@@ -15,7 +15,7 @@ Imports a skill with a nested folder, then exercises the endpoints:
 
 The skill is addressed by its ``uid``, taken straight off the import response
 (ADR resource-identity-is-an-immutable-uid). Its NAME still appears in the
-assertions, because the master folder on disk is ``~/.coffer/skills/<name>/``:
+assertions, because the master folder on disk is ``~/.coffer/vault/skills/<name>/``:
 the uid finds the row, the row's current name says where its bytes are, and the
 ``path`` parameter — still relative, still guarded by ``file_ops`` — says which
 file inside it. Three different questions; the tests keep them apart.
@@ -97,9 +97,9 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
         assert root["path"] == ""
 
         # The route was addressed by uid, but the master folder is still keyed
-        # by NAME on disk (~/.coffer/skills/<name>/, HOME=tmp_path): the tree
+        # by NAME on disk (~/.coffer/vault/skills/<name>/, HOME=tmp_path): the tree
         # the uid produced must be rooted at the folder the name points to.
-        master = (tmp_path / ".coffer" / "skills" / "tree-skill").resolve()
+        master = (tmp_path / ".coffer" / "vault" / "skills" / "tree-skill").resolve()
         # The read-only viewer backs open/reveal with absolute paths:
         # the root node's abs_path IS the master folder; its folder is the parent.
         assert root["abs_path"] == str(master)
@@ -156,7 +156,7 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
         assert body["size"] == len("print('hi')\n")
         # Absolute path + containing folder for the read-only viewer's
         # open/reveal affordances.
-        master = (tmp_path / ".coffer" / "skills" / "read-skill").resolve()
+        master = (tmp_path / ".coffer" / "vault" / "skills" / "read-skill").resolve()
         assert body["abs_path"] == str(master / "scripts" / "run.py")
         assert body["folder_abs_path"] == str(master / "scripts")
 
@@ -307,7 +307,7 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59790)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="stale-skill")
-    master = tmp_path / ".coffer" / "skills" / "stale-skill"
+    master = tmp_path / ".coffer" / "vault" / "skills" / "stale-skill"
 
     with _client(app) as c:
         uid = _import(c, src)["uid"]
@@ -364,7 +364,7 @@ def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59800)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="uncond-skill")
-    master = tmp_path / ".coffer" / "skills" / "uncond-skill"
+    master = tmp_path / ".coffer" / "vault" / "skills" / "uncond-skill"
 
     with _client(app) as c:
         uid = _import(c, src)["uid"]
@@ -499,7 +499,7 @@ def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
         after = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
         assert after.json()["content"] == before.json()["content"]
         assert after.json()["fingerprint"] == before.json()["fingerprint"]
-        master = tmp_path / ".coffer" / "skills" / "coffer-guide" / "SKILL.md"
+        master = tmp_path / ".coffer" / "derived" / "skills" / "coffer-guide" / "SKILL.md"
         assert "hijacked" not in master.read_text(encoding="utf-8")
 
         # An imported skill is the user's own: still writable.

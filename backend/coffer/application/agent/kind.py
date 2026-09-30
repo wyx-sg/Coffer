@@ -13,6 +13,7 @@ from typing import Any
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.vault.layout import StorageClass
 
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 # Both hooks are handed the agent ROW rather than an identifier to look it up
@@ -67,4 +68,8 @@ def make_agent_kind(
         name_from_config=agent_name_for,
         name_fixed=True,
         titled=False,
+        # An agent names a config directory on THIS disk: it is true of this
+        # machine only, so it is filed under ``local/`` and never travels
+        # (ADR storage-is-five-classes-by-nature).
+        storage=StorageClass.LOCAL,
     )

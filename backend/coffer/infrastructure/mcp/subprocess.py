@@ -9,6 +9,7 @@ The lifecycle is:
 from __future__ import annotations
 
 import asyncio
+import weakref
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
 from pathlib import Path
@@ -34,7 +35,23 @@ NotificationCallback = Callable[[Any], Awaitable[None]]
 # spawns from different sessions can interleave their before/after snapshots
 # and mis-attribute (or miss) each other's child PID. Held only around the
 # narrow spawn window, never across MCP initialize.
-_SPAWN_SNAPSHOT_LOCK = asyncio.Lock()
+#
+# One lock per event loop: an ``asyncio.Lock`` binds to the loop of its first
+# contended acquire, so a single module-level lock would refuse every later
+# loop (a test's, or the daemon's after a restart in-process) with
+# "bound to a different event loop". The daemon runs one loop, so it still
+# has exactly one lock.
+_SPAWN_SNAPSHOT_LOCKS: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _spawn_snapshot_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _SPAWN_SNAPSHOT_LOCKS.get(loop)
+    if lock is None:
+        lock = _SPAWN_SNAPSHOT_LOCKS[loop] = asyncio.Lock()
+    return lock
 
 
 class StdioUpstreamConnection:
@@ -131,7 +148,7 @@ class StdioUpstreamConnection:
             # interleave the snapshot window and steal/miss each other's PID.
             # We hold the lock only across the spawn itself (not initialize).
             self_proc = psutil.Process()
-            async with _SPAWN_SNAPSHOT_LOCK:
+            async with _spawn_snapshot_lock():
                 children_before = {c.pid for c in self_proc.children(recursive=False)}
 
                 # Give this upstream its own stderr file. The SDK's default

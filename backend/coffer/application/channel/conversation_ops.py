@@ -93,18 +93,18 @@ async def open_conversation(
     (resolver) and make it the thread's active conversation (see "Key conversation
     identity by channel, chat and thread").
 
-    Conversation identity is per ``(resource_id, chat_id, thread_id)`` — a DM
+    Conversation identity is per ``(resource_uid, chat_id, thread_id)`` — a DM
     (``thread_id=""``) and each group thread open independently, so concurrent
     turns in different threads never collide on one conversation. A group
     thread with no setting of its own takes the group's defaults, which live on
     the group's ``""`` row (see "Set a group's defaults from its main chat").
     The conversation is recorded in the thread's history, which `/resume` lists
     and a web reply is mirrored back through."""
-    row = await threads.get(binding.resource.id, peer.chat_id, thread_id)
+    row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     kind = chat_kind or (row.chat_kind if row is not None else None)
     group = None
     if thread_id and kind == "group":
-        group = await threads.get(binding.resource.id, peer.chat_id, "")
+        group = await threads.get(binding.resource.uid, peer.chat_id, "")
 
     def pick(field: str) -> str | None:
         return inherited_setting(row, group, field)
@@ -136,10 +136,10 @@ async def open_conversation(
         # and before it becomes the thread's active one, so nothing that finds
         # it through the thread ever sees it untitled.
         await conversations.rename_conversation(str(conv.id), new_title=mark)
-    await threads.record_history(binding.resource.id, peer.chat_id, thread_id, str(conv.id), kind)
+    await threads.record_history(binding.resource.uid, peer.chat_id, thread_id, str(conv.id), kind)
     if chat_kind and (row is None or row.chat_kind != chat_kind):
-        await threads.note_chat_kind(binding.resource.id, peer.chat_id, thread_id, chat_kind)
-    await threads.set_active_conversation(binding.resource.id, peer.chat_id, thread_id, conv.id)
+        await threads.note_chat_kind(binding.resource.uid, peer.chat_id, thread_id, chat_kind)
+    await threads.set_active_conversation(binding.resource.uid, peer.chat_id, thread_id, conv.id)
     return str(conv.id)
 
 
@@ -157,7 +157,7 @@ async def ensure_conversation(
     ``chat_kind`` (when the caller knows it) is remembered on the thread and on
     the conversation's history row, so a reply typed on the web knows which of
     the platform's send paths reaches this thread."""
-    row = await threads.get(binding.resource.id, peer.chat_id, thread_id)
+    row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     if row is not None and row.active_conversation_id is not None:
         try:
             await conversations.get_conversation(row.active_conversation_id)
@@ -166,10 +166,10 @@ async def ensure_conversation(
         else:
             if chat_kind and row.chat_kind != chat_kind:
                 await threads.note_chat_kind(
-                    binding.resource.id, peer.chat_id, thread_id, chat_kind
+                    binding.resource.uid, peer.chat_id, thread_id, chat_kind
                 )
                 await threads.record_history(
-                    binding.resource.id,
+                    binding.resource.uid,
                     peer.chat_id,
                     thread_id,
                     row.active_conversation_id,

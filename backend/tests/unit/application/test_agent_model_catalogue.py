@@ -28,7 +28,6 @@ def _agent(
     enabled: bool = True,
 ) -> Resource:
     return Resource(
-        id=1,
         uid=f"uid-{name}",
         kind="agent",
         name=name,

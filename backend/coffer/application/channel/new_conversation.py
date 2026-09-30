@@ -53,7 +53,7 @@ async def cmd_new(ctx: CommandContext, text: str) -> None:
         # is the agent's workplace and follows regardless.
         cleared = {"model": None, "effort": None} if changed else {}
         await ctx.commands._threads.set_preferences(
-            ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, agent=key, **cleared
+            ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, agent=key, **cleared
         )
         if ctx.group_main:
             name = agent_display(ctx.commands._agents, key)

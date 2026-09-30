@@ -36,7 +36,7 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.cli.main import app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -46,6 +46,7 @@ from coffer.surfaces.http.channel_routes import (
 from coffer.surfaces.http.channel_routes import set_channel_service
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 runner = CliRunner()
 _TOKEN = "test-token-channel"
@@ -139,7 +140,7 @@ class _Daemon:
         self.run(
             self.peers.upsert(
                 ChannelPeer(
-                    resource_id=resource.id,
+                    resource_uid=resource.uid,
                     chat_id=chat_id,
                     display_name="Yu",
                     paired_at=dt.now(tz=UTC),
@@ -165,6 +166,7 @@ def channel_daemon(tmp_path, monkeypatch):
     async def _agent_names() -> dict[str, str]:
         return {a.uid: a.name for a in await resources.list(kind="agent")}
 
+    resource_repo = make_resource_repo()
     resources = ResourceService(
         # The `agent` kind is wired in as well, which it did not need to be
         # before: a channel's ``default_agent`` holds an agent UID
@@ -172,7 +174,7 @@ def channel_daemon(tmp_path, monkeypatch):
         # register --agent <name>` has a name to resolve and the kind's own
         # "is that a registered agent" check has a registry to ask.
         kinds={"channel": make_channel_kind(agent_names=_agent_names), "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=resource_repo,
         audit=audit,
         credentials=keyring,
     )
@@ -187,7 +189,8 @@ def channel_daemon(tmp_path, monkeypatch):
             allow_lifecycle_kind=True,
         )
     )
-    peers = ChannelPeerRepo(sm)
+    peers = ChannelPeerRepo(name_of=resource_repo.name_of)
+    resource_repo.add_follower(peers.documents.follow)
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
     runtime = _StubRuntime()
@@ -521,7 +524,7 @@ def test_a_channels_lifecycle_and_reach_run_from_its_own_group(channel_daemon: _
     removed = runner.invoke(app, ["channel", "rm", "tg", "--yes"])
     assert removed.exit_code == 0, removed.output
     assert _listed_names(channel_daemon) == []
-    assert channel_daemon.run(channel_daemon.peers.list_by_resource(before.id)) == []
+    assert channel_daemon.run(channel_daemon.peers.list_by_resource(before.uid)) == []
 
     events = [
         e.event_type

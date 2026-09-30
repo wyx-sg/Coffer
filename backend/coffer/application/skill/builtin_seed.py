@@ -1,13 +1,13 @@
 """Seeding Coffer's own skill into the master store as a real skill resource.
 
 Coffer ships a manual for itself and keeps it in the same place every other
-skill lives: one master folder under ``~/.coffer/skills/``, one ``skill``
-resource row, delivered by the same predicate and the same links as any
-imported skill. It is not a second delivery mechanism bolted beside the first,
-which is what the rendered knowledge skill used to be — its own writer, its own
-per-agent copies, invisible to the skills surface, unreachable by scope, and
-outside every piece of machinery (drift verification, repair, reclaim) the skill
-kind already had.
+skill lives: one folder of the skill store (derived output, so under
+``~/.coffer/derived/skills/``), one ``skill`` resource, delivered by the same
+predicate and the same links as any imported skill. It is not a second
+delivery mechanism bolted beside the first, which is what the rendered
+knowledge skill used to be — its own writer, its own per-agent copies,
+invisible to the skills surface, unreachable by scope, and outside every piece
+of machinery (drift verification, repair, reclaim) the skill kind already had.
 
 What makes it Coffer's rather than the user's is the ``builtin`` source on its
 config: the folder's bytes are rewritten from the running build at every boot

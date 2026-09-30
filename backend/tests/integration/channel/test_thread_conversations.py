@@ -2,7 +2,7 @@
 lock), and the foundation of "Drive every managed agent from one bot" — one bot
 runs a different agent in each thread.
 
-Conversation identity is keyed ``(resource_id, chat_id, thread_id)``: two
+Conversation identity is keyed ``(resource_uid, chat_id, thread_id)``: two
 threads of one group (same ``chat_id``, the group id) resolve to two different
 conversations, so concurrent turns in different threads never collide on a
 single conversation ("a turn is already running").

@@ -25,6 +25,7 @@ from coffer.application.memory.distil_worker import DistilWorker
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, inbox
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 async def _enabled() -> bool:
@@ -42,7 +43,6 @@ class _Collections:
     async def collection(self, uid: str) -> Resource:
         now = datetime.now(tz=UTC)
         return Resource(
-            id=0,
             uid=uid,
             kind="knowledge",
             name=uid.removeprefix("uid-"),
@@ -63,11 +63,10 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     with nothing pending is skipped before the registry is ever consulted —
     which would make a busy/free test pass for the wrong reason.
     """
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     for name in ("busy", "free"):
         fs.create_collection_dir(name)
         inbox.submit_material(name, title="Session", description="d", body="b", actor="user")
-    return tmp_path / "knowledge"
+    return _knowledge_root()
 
 
 async def test_distil_worker_skips_a_partition_already_being_distilled() -> None:

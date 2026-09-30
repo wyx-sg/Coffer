@@ -27,6 +27,7 @@ from coffer.domain.features import EXPERIMENTAL_FEATURES
 from coffer.domain.memory.delivery import MARKER
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
@@ -43,8 +44,6 @@ runner = CliRunner()
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pathlib.Path]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59780")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
@@ -308,11 +307,11 @@ def test_switching_knowledge_off_and_on_keeps_the_collections(home: pathlib.Path
         assert r.status_code == 201, r.text
         before = c.get("/api/v1/knowledge/collections").json()
         tree_before = c.get("/api/v1/knowledge/tree").json()
-        files_before = sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*"))
+        files_before = sorted(p.relative_to(home) for p in knowledge_root().rglob("*"))
 
         _switch(c, "knowledge", False)
         _assert_disabled(c.get("/api/v1/knowledge/collections"), "knowledge")
-        assert sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*")) == files_before
+        assert sorted(p.relative_to(home) for p in knowledge_root().rglob("*")) == files_before
 
         _switch(c, "knowledge", True)
         assert c.get("/api/v1/knowledge/collections").json() == before
@@ -397,7 +396,7 @@ def test_a_boot_with_memory_off_removes_a_hook_left_in_place(home: pathlib.Path)
 
 
 def _guide(home: pathlib.Path) -> str:
-    return (home / ".coffer" / "skills" / GUIDE_SKILL_NAME / "SKILL.md").read_text()
+    return (home / ".coffer" / "derived" / "skills" / GUIDE_SKILL_NAME / "SKILL.md").read_text()
 
 
 @pytest.mark.acceptance(

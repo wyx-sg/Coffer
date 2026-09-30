@@ -80,7 +80,6 @@ class _Resources:
     def __init__(self, *, enabled: bool = True) -> None:
         now = datetime.now(tz=UTC)
         self.row = Resource(
-            id=1,
             uid="0f1e2d3c4b5a69788796a5b4c3d2e1f0",
             kind="mcp_server",
             name="fs",

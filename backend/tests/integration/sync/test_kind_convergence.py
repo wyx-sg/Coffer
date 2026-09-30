@@ -25,8 +25,6 @@ _NON_CONVERGING = {"memory"}
 def kinds(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59810")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59819")
     from starlette.testclient import TestClient

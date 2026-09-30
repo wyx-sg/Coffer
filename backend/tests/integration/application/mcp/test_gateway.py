@@ -23,7 +23,7 @@ from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -31,11 +31,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -80,7 +78,7 @@ async def _setup(
 ) -> tuple[
     MCPGatewaySession,
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     object,  # engine
 ]:
@@ -100,7 +98,7 @@ async def _setup(
                 supports_scope=True,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(home=tmp_path),
         audit=audit,
     )
     for name, cfg in server_configs.items():
@@ -113,7 +111,7 @@ async def _setup(
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays
     supervisor = SubprocessSupervisor(upstream_factory=build_upstream, **sup_kwargs)
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
         resource_service=resource_svc,
@@ -518,7 +516,7 @@ async def test_tools_call_disabled_rejected_with_denied_invocation(
         await session.handle_request("tools/list")
         # Disable write_file
         resource = await rsvc.get_by_name("mcp_server", "fs")
-        await prefs_repo.set_enabled(resource.id, "tool", "write_file", False)
+        await prefs_repo.set_enabled(resource.uid, "tool", "write_file", False)
         # Attempted call should raise + record denied
         with pytest.raises(ToolDisabled):
             await session.handle_request(
@@ -1011,7 +1009,7 @@ async def _build_crash_harness(
     server_config: dict,  # type: ignore[type-arg]
 ) -> tuple[
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     _SpySupervisor,
     object,  # engine — caller must dispose
@@ -1032,7 +1030,7 @@ async def _build_crash_harness(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -1041,7 +1039,7 @@ async def _build_crash_harness(
         config=server_config,
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
 
     boom_conn = AsyncMock()
@@ -1068,7 +1066,7 @@ async def _build_simple_harness_with_supervisor(
     supervisor: object,
 ) -> tuple[
     ResourceService,
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     object,  # engine
 ]:
@@ -1094,7 +1092,7 @@ async def _build_simple_harness_with_supervisor(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     await rsvc.register(
@@ -1103,7 +1101,7 @@ async def _build_simple_harness_with_supervisor(
         config={"transport": transport},
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
     return rsvc, prefs, inv, engine
 
@@ -1164,7 +1162,7 @@ async def test_handler_disabled_records_denied_invocation(
         resource = await rsvc.get_by_name("mcp_server", "fs")
         now = datetime.now(tz=UTC)
         await prefs.insert(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             capability_type=capability_type,  # type: ignore[arg-type]
             capability_key=capability_key,
             enabled=False,

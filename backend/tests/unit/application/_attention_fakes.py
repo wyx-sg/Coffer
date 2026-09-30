@@ -20,7 +20,6 @@ def resource(
     title: str | None = None,
 ) -> Resource:
     return Resource(
-        id=abs(hash(uid)) % 10_000,
         uid=uid,
         kind=kind,
         name=name or uid,

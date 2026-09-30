@@ -157,8 +157,10 @@ async def test_messages_sent_mid_turn_run_as_consecutive_turns_in_order(env: Cha
 
     await env.processor.on_message(inbound("tg", "owner", "A"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-    await env.processor.on_message(inbound("tg", "owner", "B"))
-    await env.processor.on_message(inbound("tg", "owner", "C"))
+    # Each message is released before the next arrives: this is about the
+    # queue behind a running turn, not about a burst merging into one.
+    await env.send(inbound("tg", "owner", "B"))
+    await env.send(inbound("tg", "owner", "C"))
 
     gated.release.set()
     await wait_until(lambda: "echo:C" in adapter.texts())

@@ -91,12 +91,12 @@ def _is_transport_failure(e: BaseException) -> bool:
 
 async def check_capability_enabled(
     prefs: MCPCapabilityPreferenceRepoPort,
-    resource_id: int,
+    resource_uid: str,
     capability_type: CapabilityType,
     capability_key: str,
 ) -> None:
-    """Raise ToolDisabled if the preference row exists and is disabled."""
-    pref = await prefs.find(resource_id, capability_type, capability_key)
+    """Raise ToolDisabled if the capability is switched off."""
+    pref = await prefs.find(resource_uid, capability_type, capability_key)
     # Missing row → default to enabled (matches CapabilityDiscovery's behaviour).
     if pref is not None and not pref.enabled:
         raise ToolDisabled(f"{capability_type}:{capability_key!r} is disabled on this server")
@@ -184,8 +184,8 @@ async def _invoke(
     # from the server's name (``<server>__<tool>``), which is the one vocabulary
     # that side of the wire has. From the resolved row onward everything
     # PERSISTED or COMPARED uses the identity — ``resource.uid`` for the
-    # invocation log, ``resource.scope`` for the reach gate, ``resource.id`` for
-    # the preference rows. The name survives only as the key of this session's
+    # invocation log and the capability switches, ``resource.scope`` for the
+    # reach gate. The name survives only as the key of this session's
     # live connection (``supervisor``/``ensure_subscribed``), which is
     # in-process, rebuilt per session, and deliberately the same key the client
     # addressed.
@@ -240,7 +240,7 @@ async def _invoke(
         raise ToolDisabled(f"{server_name!r} is not in scope here")
 
     try:
-        await check_capability_enabled(prefs, resource.id, spec.capability_type, original)
+        await check_capability_enabled(prefs, resource.uid, spec.capability_type, original)
     except ToolDisabled:
         await _record("denied")
         raise

@@ -17,10 +17,11 @@ class LinkMode(StrEnum):
 
 @dataclass
 class BindingState:
-    """One row from the `skill_agent_bindings` table."""
+    """One row from the derived `skill_agent_bindings` table, keyed by the
+    skill's and the agent's uids."""
 
-    skill_resource_id: int
-    agent_resource_id: int
+    skill_uid: str
+    agent_uid: str
     enabled: bool
     last_linked_at: datetime | None = None
     last_link_path: str | None = None

@@ -17,6 +17,7 @@ import dataclasses
 import inspect
 from typing import TYPE_CHECKING
 
+from coffer.application.resource_actor import acting_as
 from coffer.application.resource_kind_ops import check_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import NameImmutable, ResourceAlreadyExists
@@ -78,7 +79,8 @@ async def rename(
         raise ResourceAlreadyExists(before.kind, new_name)
     await _fire(kind_def, before, new_name)
     try:
-        renamed = await service._repo.rename(uid, new_name)
+        with acting_as(actor):
+            renamed = await service._repo.rename(uid, new_name)
     except ResourceAlreadyExists:
         # The racing writer the pre-check cannot exclude. The hook has already
         # moved the kind's directory, so ask it to move it back before the

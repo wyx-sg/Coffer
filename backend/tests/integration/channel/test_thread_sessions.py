@@ -68,12 +68,12 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_thre
     env: ChannelEnv,
 ) -> None:
     """``ensure_conversation`` binds the conversation to the per-thread row
-    keyed ``(resource_id, chat_id, thread_id)``: opening one thread's
+    keyed ``(resource_uid, chat_id, thread_id)``: opening one thread's
     conversation must not disturb another chat's/thread's."""
     resource = await env.register_channel("tg")
     env.bind(resource)
     group = ChannelPeer(
-        resource_id=resource.id,
+        resource_uid=resource.uid,
         chat_id="group-1",
         display_name="Group",
         paired_at=datetime.now(tz=UTC),
@@ -84,12 +84,12 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_thre
     assert binding is not None
     conversation_id = await ensure_conversation(env.chat, env.threads, binding, group, "")
 
-    bound = await env.threads.get(resource.id, "group-1", "")
+    bound = await env.threads.get(resource.uid, "group-1", "")
     assert bound is not None
     assert bound.active_conversation_id == conversation_id
 
     # A different chat's DM thread has no binding conjured for it.
-    assert await env.threads.get(resource.id, "dm-1", "") is None
+    assert await env.threads.get(resource.uid, "dm-1", "") is None
 
 
 # ---------------------------------------------------------------------------

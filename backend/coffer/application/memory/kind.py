@@ -26,15 +26,12 @@ whole purpose: memory aggregated from several agents exists precisely so each of
 can read what the others learned. It was never a boundary either, because a note is a
 file the agent is handed the path to. So the reach is gone rather than re-defaulted.
 
-``converges`` is False, and this is the only kind that sets it (spec memory "Keep the
-memory tree derived and local"). A partition row is derived from the agents installed on
-THIS machine, so publishing it to the sync remote puts on the second machine a partition
-naming a repository it may not have cloned, with no notes behind it — the derived tree
-under ``~/.coffer/memory/`` is not mirrored either — until that machine's own next pass
-recomputes it away. That requirement names that exact sequence as the reason the layer
-must not converge; the flag is what makes the sync layer honour it, and it is declared
-here because it is a property of this kind rather than a case for the exporter to
-special-case.
+``storage`` is ``derived``, the only kind filed there as a whole (spec memory "Keep the
+memory tree derived and local"). A partition is derived from the agents installed on
+THIS machine, so a copy on another machine would name a repository it may not have
+cloned, with no notes behind it, until that machine's own next pass recomputed it away.
+Filing it under ``derived/resources/memory/`` means it is never committed, never
+synced, and deleting it only costs the next pass (ADR storage-is-five-classes-by-nature).
 
 ``on_delete`` removes the whole partition directory — index, notes, retirement record
 and ``.raw/`` — and that is safe for the same reason everything else here is: the tree
@@ -58,6 +55,7 @@ from coffer.application.memory.service import KIND_MEMORY, MemoryPartitionConfig
 from coffer.domain.errors import ConfigValidationError, ResourceAlreadyExists
 from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.vault.layout import StorageClass
 
 _logger = logging.getLogger(__name__)
 
@@ -116,5 +114,5 @@ def make_memory_kind(service: MemoryService) -> Kind:
         on_rename=_on_rename,
         generic_create_allowed=False,
         toggleable=False,
-        converges=False,
+        storage=StorageClass.DERIVED,
     )

@@ -62,12 +62,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
 from tests.support.channel import FakeLiveText as FakeLiveText
+from tests.support.vault_stores import make_resource_repo
 from tests.unit.chat.conftest import FakeAgentAdapter
 
 #: The agent key this fixture's own scripted provider is registered under, and
@@ -85,7 +83,6 @@ def channel_row(name: str, config: dict[str, Any], *, id: int = 1) -> Resource:
     """
     now = datetime.now(tz=UTC)
     return Resource(
-        id=id,
         uid=f"uid-of-{name}",
         kind="channel",
         name=name,
@@ -570,7 +567,7 @@ class ChannelEnv:
         self, resource: Resource, chat_id: str = "owner", *, sender_id: str | None = None
     ) -> ChannelPeer:
         peer = ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
@@ -622,13 +619,13 @@ class ChannelEnv:
         per-thread binding ("Key conversation identity by channel, chat and
         thread"), which replaced ``peer.active_conversation_id``
         as the source of truth."""
-        row = await self.threads.get(resource.id, chat_id, thread_id)
+        row = await self.threads.get(resource.uid, chat_id, thread_id)
         return row.active_conversation_id if row is not None else None
 
     async def thread_preferred_agent(
         self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
     ) -> str | None:
-        row = await self.threads.get(resource.id, chat_id, thread_id)
+        row = await self.threads.get(resource.uid, chat_id, thread_id)
         return row.preferred_agent if row is not None else None
 
     async def audit_entries(
@@ -649,10 +646,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     keyring = FakeKeyring()
     kinds: dict[str, Any] = {}
-    resources = ResourceService(
-        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
-    )
-    peers = ChannelPeerRepo(sm)
+    resource_repo = make_resource_repo()
+    resources = ResourceService(kinds=kinds, repo=resource_repo, audit=audit, credentials=keyring)
+    # As channel_wiring builds them: the pairings document is named after its
+    # channel and goes with the channel's rename and delete.
+    peers = ChannelPeerRepo(name_of=resource_repo.name_of)
+    resource_repo.add_follower(peers.documents.follow)
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
 

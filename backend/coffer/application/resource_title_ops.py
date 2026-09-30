@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.resource_actor import acting_as
 from coffer.application.resource_kind_ops import checked_title
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource
@@ -40,7 +41,8 @@ async def set_title(
     if wanted == before.title:
         # Idempotent and silent, like a rename to the name it already has.
         return before
-    updated = await service._repo.set_title(uid, wanted)
+    with acting_as(actor):
+        updated = await service._repo.set_title(uid, wanted)
     # Audited as the update it is. ``details`` says which field moved, so the
     # trail does not read as a config edit with identical before and after.
     await service._audit.record(

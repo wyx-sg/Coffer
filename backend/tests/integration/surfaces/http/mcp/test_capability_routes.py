@@ -23,7 +23,7 @@ from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
@@ -32,10 +32,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.credential_composition import get_credential_store
@@ -52,6 +49,7 @@ from coffer.surfaces.http.mcp.dependencies import (
 )
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
 
@@ -103,7 +101,7 @@ async def _build_app(
     resources: list[str] | None = None,
     prompts: list[str] | None = None,
     server_name: str = "fs",
-) -> tuple[FastAPI, Any, ResourceService, MCPCapabilityPreferenceRepo, SubprocessSupervisor, str]:
+) -> tuple[FastAPI, Any, ResourceService, MCPCapabilityPreferenceStore, SubprocessSupervisor, str]:
     """Build a fully-wired FastAPI app for capability route tests.
 
     Hands back the registered server's ``uid`` alongside everything else,
@@ -128,7 +126,7 @@ async def _build_app(
                 supports_scope=True,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
 
@@ -139,7 +137,7 @@ async def _build_app(
     config = _stdio_config_with_resources_prompts(_tools, _resources, _prompts)
     server = await rsvc.register(kind="mcp_server", name=server_name, config=config, actor="test")
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
 
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
@@ -158,7 +156,7 @@ async def _build_app(
     err_handlers.register(app)
     app.include_router(capability_router)
     app.include_router(server_test_router)
-    health_repo = MCPServerHealthRepo(sm)
+    health_repo = MCPServerHealthRepo(derived_sm())
 
     app.dependency_overrides[get_resource_service] = lambda: rsvc
     app.dependency_overrides[get_audit_service] = lambda: audit
@@ -262,7 +260,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     toolsonly = await rsvc.register(
@@ -287,7 +285,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
         actor="test",
     )
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
@@ -308,7 +306,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
     app.dependency_overrides[get_capability_discovery] = lambda: discovery
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
-    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(derived_sm())
     app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport = ASGITransport(app=app)
@@ -716,7 +714,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     bad = await rsvc.register(
@@ -732,7 +730,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
         actor="test",
     )
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
@@ -754,7 +752,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     app.dependency_overrides[get_capability_discovery] = lambda: discovery
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
-    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(derived_sm())
     app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport_transport = ASGITransport(app=app)
@@ -808,14 +806,14 @@ async def test_enable_capability_creates_audit_event(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     config = _stdio_config("read_file", "write_file")
     server = await rsvc.register(kind="mcp_server", name="fs", config=config, actor="test")
     uid = server.uid
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
@@ -836,7 +834,7 @@ async def test_enable_capability_creates_audit_event(
     app.dependency_overrides[get_capability_discovery] = lambda: discovery
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
-    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
+    app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(derived_sm())
     app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
     transport = ASGITransport(app=app)
@@ -889,7 +887,7 @@ async def test_server_status_unknown_then_healthy(client_and_ctx) -> None:
     # Persisting a discovered capability flips the server to healthy.
     resource = await rsvc.get(uid)
     now = datetime.now(tz=UTC)
-    await prefs_repo.insert(resource.id, "tool", "read_file", True, now, now)
+    await prefs_repo.insert(resource.uid, "tool", "read_file", True, now, now)
 
     r1 = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
     assert r1.json()["status"] == "healthy"
@@ -1202,7 +1200,7 @@ async def test_test_endpoint_http_transport(
                     config_schema=MCPServerConfig,
                 )
             },
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
         )
         http_svc = await rsvc.register(
@@ -1212,7 +1210,7 @@ async def test_test_endpoint_http_transport(
             actor="test",
         )
 
-        prefs_repo = MCPCapabilityPreferenceRepo(sm)
+        prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
@@ -1223,7 +1221,7 @@ async def test_test_endpoint_http_transport(
             supervisor=supervisor,
             preferences=prefs_repo,
         )
-        health_repo = MCPServerHealthRepo(sm)
+        health_repo = MCPServerHealthRepo(derived_sm())
 
         set_active_token("test-token")
         app = FastAPI()

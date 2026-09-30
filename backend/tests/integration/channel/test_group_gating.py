@@ -71,7 +71,7 @@ async def test_unaddressed_group_message_is_ignored(env: ChannelEnv) -> None:
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -106,7 +106,7 @@ async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     # No turn was started and no peer row was created for the unverified sender.
     assert await env.chat.list_conversations() == []
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a non-owner @mention in a group is refused")
@@ -134,7 +134,7 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     assert await env.chat.list_conversations() == []
     # No peer row was created for the intruder's turn attempt.
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
 
 
 @pytest.mark.acceptance(
@@ -168,7 +168,7 @@ async def test_owner_mention_in_group_main_drives_a_turn_and_creates_a_peer(
     assert thread_id == "pm-1"
     assert chat_kind == "group"
 
-    peer = await env.peers.get_by_chat(resource.id, "grp-1")
+    peer = await env.peers.get_by_chat(resource.uid, "grp-1")
     assert peer is not None
     assert peer.sender_id == "owner-1"
 
@@ -332,7 +332,7 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
     code, _expires = env.pairing.issue("tg")
 
     await env.processor.on_message(inbound("tg", "owner", code, sender_display="Owner"))
-    peer = await env.peers.get_by_chat(resource.id, "owner")
+    peer = await env.peers.get_by_chat(resource.uid, "owner")
     assert peer is not None
     assert adapter.sent[0][1].startswith("✅ Paired.")
 

@@ -19,12 +19,25 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.knowledge.paths import knowledge_root
+from coffer.infrastructure.memory.paths import memory_root
 from tests.integration.surfaces.http import test_feature_gates as gates
 
 home = gates.home
 _assert_disabled = gates._assert_disabled
 _client = gates._client
 _switch = gates._switch
+
+
+def _names_memory(told: str) -> bool:
+    """Whether a text an agent is handed says where the memory notes are: the
+    guide names the root in its ``~`` form; the handshake names it absolutely,
+    or — when that would break its length cap, as a test HOME's long path does
+    — the command that prints it."""
+    return any(
+        root in told
+        for root in ("~/.coffer/derived/memory", str(memory_root()), "coffer path memory")
+    )
 
 
 def _collection(c: TestClient, name: str) -> str:
@@ -45,7 +58,7 @@ def _collection(c: TestClient, name: str) -> str:
 def test_a_switched_off_features_resources_are_out_of_reach(home: pathlib.Path) -> None:
     with _client() as c:
         uid = _collection(c, "research")
-        folder = home / "knowledge" / "research"
+        folder = knowledge_root() / "research"
         assert folder.is_dir()
 
         _switch(c, "knowledge", False)
@@ -108,7 +121,6 @@ def _instructions(c: TestClient) -> str:
     scenario="agents are told only about the tools they have",
 )
 def test_agents_are_told_only_about_the_tools_they_have(home: pathlib.Path) -> None:
-    memory_root = str(home / "memory")
     daemon_config.write_feature_setting("knowledge", False)
     daemon_config.write_feature_setting("memory", False)
     with _client() as c:
@@ -116,16 +128,16 @@ def test_agents_are_told_only_about_the_tools_they_have(home: pathlib.Path) -> N
         guide = gates._guide(home)
         for told in (text, guide):
             assert "coffer__write" not in told
-            assert memory_root not in told
-            assert "~/.coffer/knowledge" not in told
-            assert str(home / "knowledge") not in told
+            assert not _names_memory(told)
+            assert "~/.coffer/vault/knowledge" not in told
+            assert str(knowledge_root()) not in told
         assert "coffer__search_tools" in text
         assert "<!--" not in guide
 
         _switch(c, "memory", True)
-        assert memory_root in gates._guide(home)
+        assert _names_memory(gates._guide(home))
         assert "coffer__write" not in gates._guide(home)
-        assert memory_root in _instructions(c)
+        assert _names_memory(_instructions(c))
         assert "coffer__write" not in _instructions(c)
 
         _switch(c, "knowledge", True)
@@ -142,6 +154,6 @@ def test_with_every_feature_on_agents_are_told_about_both_tools(home: pathlib.Pa
             assert tool in told
         for retired in ("coffer__recall", "coffer__diagnose"):
             assert retired not in told
-        assert str(home / "memory") in told
+        assert _names_memory(told)
         assert "coffer log" in told
         assert "coffer path logs" in told

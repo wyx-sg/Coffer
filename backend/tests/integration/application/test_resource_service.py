@@ -17,10 +17,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -42,7 +40,7 @@ async def _service(tmp_path, *, kinds=None, on_delete=None):
                 on_delete=on_delete,
             ),
         }
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     return ResourceService(kinds=kinds, repo=repo, audit=audit), audit, engine
 
@@ -57,7 +55,7 @@ async def test_register_persists_and_audits(tmp_path):
         description="test resource",
         actor="cli",
     )
-    assert r.id != 0
+    assert r.uid
     # register MINTS the identity, and it is not derived from anything the user
     # can change: two resources with the same name in different kinds, or one
     # renamed later, never collide here.
@@ -143,7 +141,7 @@ async def test_generic_register_rejects_lifecycle_kind(tmp_path):
             actor="skill-service",
             allow_lifecycle_kind=True,
         )
-        assert r.id != 0
+        assert r.uid
 
         # The same guard covers UPDATE: a generic PATCH must not rewrite a
         # lifecycle kind's config behind its owning service (the row would
@@ -202,7 +200,7 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
         # Missing credential → probe fails before any DB write.
         svc_missing = ResourceService(
             kinds=kinds,
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
             credentials=_FakeKeyring(present=set()),
         )
@@ -214,7 +212,7 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
         # Present credential → succeeds; audit drops the redacted field.
         svc_ok = ResourceService(
             kinds=kinds,
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
             credentials=_FakeKeyring(present={"k1"}),
         )
@@ -278,7 +276,7 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
     try:
         svc = ResourceService(
             kinds=kinds,
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
             credentials=_FakeKeyring(),
         )
@@ -343,7 +341,7 @@ async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
     try:
         svc = ResourceService(
             kinds=kinds,
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
             credentials=_FakeKeyring(),
         )
@@ -523,7 +521,7 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
     try:
         svc = ResourceService(
             kinds={KIND_KNOWLEDGE: kind},
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
             credentials=_EmptyKeyring(),
         )
@@ -581,9 +579,7 @@ async def test_delete_releases_credentials_only_it_cited(tmp_path):
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     store = _FakeStore(present={"only-mine", "shared"})
-    svc = ResourceService(
-        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=store
-    )
+    svc = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit, credentials=store)
     try:
         a = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "t")
         b = await svc.register("vault", "b", {"secret_ref": "shared"}, "t")
@@ -623,7 +619,7 @@ async def test_delete_without_credential_store_is_unaffected(tmp_path):
     sm = session_maker(engine)
     svc = ResourceService(
         kinds=kinds,
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     try:
@@ -667,7 +663,7 @@ async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None
     try:
         svc = ResourceService(
             kinds=kinds,
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
             credentials=_RecordingStore(),
         )

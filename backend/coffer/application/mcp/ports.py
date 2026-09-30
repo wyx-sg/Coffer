@@ -49,22 +49,23 @@ class UpstreamConnectionPort(Protocol):
 
 
 class MCPCapabilityPreferenceRepoPort(Protocol):
-    """Persisted user preferences (enabled/disabled per capability)."""
+    """The person's switch per capability of one server (by the server's
+    uid), and when this machine saw each one."""
 
     async def find(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
     ) -> MCPCapabilityPreference | None: ...
     async def list_for(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType | None = None,
     ) -> list[MCPCapabilityPreference]: ...
     async def insert(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
@@ -73,14 +74,14 @@ class MCPCapabilityPreferenceRepoPort(Protocol):
     ) -> MCPCapabilityPreference: ...
     async def set_enabled(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
     ) -> MCPCapabilityPreference | None: ...
     async def reconcile(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         current_keys: list[str],
         *,

@@ -188,4 +188,4 @@ async def test_telegram_thread_explains_how_to_enable_topics(env: ChannelEnv) ->
     assert "message_thread_id" not in answer
     assert TOPICS_OFF.startswith("Telegram topics are off")
     # Nothing was created or recorded.
-    assert await env.threads.list_parallel(resource.id, str(_OWNER_ID)) == []
+    assert await env.threads.list_parallel(resource.uid, str(_OWNER_ID)) == []

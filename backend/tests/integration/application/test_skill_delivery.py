@@ -72,11 +72,11 @@ async def _import_skill(skill_svc: SkillService, tmp_path: pathlib.Path, name: s
 
 
 async def _delivered_names(skill_svc: SkillService, agent: Resource) -> set[str]:
-    names_by_id = {s.id: s.name for s in await skill_svc.list_skills()}
+    names_by_id = {s.uid: s.name for s in await skill_svc.list_skills()}
     return {
-        names_by_id[b.skill_resource_id]
-        for b in await skill_svc._bindings.list_for_agent(agent.id)
-        if b.enabled and b.skill_resource_id in names_by_id
+        names_by_id[b.skill_uid]
+        for b in await skill_svc._bindings.list_for_agent(agent.uid)
+        if b.enabled and b.skill_uid in names_by_id
     }
 
 
@@ -340,7 +340,7 @@ async def test_master_removal_cleans_up_delivered_copies(tmp_path):
     await skill_svc.remove(uid=doomed.uid, actor="cli")
     assert not (skill_dir / "doomed").exists()
     assert not (skill_dir / "doomed").is_symlink()
-    assert await skill_svc._bindings.list_for_agent(agent.id) == []
+    assert await skill_svc._bindings.list_for_agent(agent.uid) == []
     await graph.dispose()
 
 

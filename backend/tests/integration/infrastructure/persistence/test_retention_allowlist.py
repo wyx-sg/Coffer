@@ -21,7 +21,7 @@ from coffer.application.retention_registry import (
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.retention_repo import (
-    SqlAlchemyRetentionRepo,
+    FileRetentionRepo,
     allowlist_from_registry,
 )
 
@@ -56,7 +56,7 @@ async def _repo(tmp_path, allowlist):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    return SqlAlchemyRetentionRepo(session_maker(engine), allowlist=allowlist), engine
+    return FileRetentionRepo(session_maker(engine), allowlist=allowlist), engine
 
 
 @pytest.mark.asyncio

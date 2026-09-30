@@ -33,12 +33,13 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 
 @dataclass
@@ -84,11 +85,11 @@ class SkillGraph:
 
     async def delivered(self, agent: Resource) -> set[str]:
         """The names of the skills a binding row says ``agent`` holds."""
-        names = {s.id: s.name for s in await self.skills.list_skills()}
+        names = {s.uid: s.name for s in await self.skills.list_skills()}
         return {
-            names[b.skill_resource_id]
-            for b in await self.skills._bindings.list_for_agent(agent.id)
-            if b.enabled and b.skill_resource_id in names
+            names[b.skill_uid]
+            for b in await self.skills._bindings.list_for_agent(agent.uid)
+            if b.enabled and b.skill_uid in names
         }
 
     async def dispose(self) -> None:
@@ -137,11 +138,11 @@ async def build_skill_graph(
         return await reconciler.run(targets=[TARGET], trigger=Trigger.CHANGE)
 
     kinds: dict[str, Any] = {}
-    rs = ResourceService(kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
+    rs = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit)
     skills = SkillService(
         resource_service=rs,
         audit=audit,
-        binding_repo=SkillBindingRepo(sm),
+        binding_repo=SkillBindingRepo(derived_sm()),
         master_store=store,
         sync_engine=SyncEngine(),
         agent_skill_dir_resolver=_skill_dir,

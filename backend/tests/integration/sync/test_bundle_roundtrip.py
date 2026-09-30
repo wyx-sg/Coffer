@@ -66,8 +66,6 @@ def _pinned_tree_roots(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) 
     that forgets the argument would otherwise mirror — and converge deletions
     onto — the developer's live vault.
     """
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "roots" / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "roots" / "skills"))
 
 
 @pytest.fixture
@@ -281,7 +279,6 @@ async def test_every_production_state_area_reaches_the_working_tree(
     monkeypatch.setenv("COFFER_DB_URL", db_url)
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "61330")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "61339")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))

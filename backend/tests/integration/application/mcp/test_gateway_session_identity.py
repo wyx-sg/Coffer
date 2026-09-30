@@ -33,7 +33,7 @@ from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -41,11 +41,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -89,10 +87,10 @@ class _Harness:
                 ),
                 "agent": Kind(name="agent", display_name="Agent", config_schema=_AgentStub),
             },
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
         )
-        self.prefs = MCPCapabilityPreferenceRepo(sm)
+        self.prefs = MCPCapabilityPreferenceStore(derived_sm())
         self.invocations = MCPInvocationRepo(sm)
 
         async def echo(args: dict[str, Any]) -> dict[str, Any]:

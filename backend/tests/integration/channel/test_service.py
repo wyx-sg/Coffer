@@ -29,7 +29,7 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
         config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token"},
         actor="cli",
     )
-    assert created.id != 0
+    assert created.uid
 
     listed = await env.resources.list(kind="channel")
     assert [r.name for r in listed] == ["tg"]
@@ -113,7 +113,7 @@ async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> No
     # Paired group-first, so insertion order disagrees with pairing order.
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="team-group",
             display_name="Team",
             paired_at=datetime.now(tz=UTC),
@@ -121,7 +121,7 @@ async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> No
     )
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="owner-dm",
             display_name="Owner",
             paired_at=datetime.now(tz=UTC) - timedelta(days=2),
@@ -140,7 +140,7 @@ async def test_notify_can_name_a_paired_chat_explicitly(env: ChannelEnv) -> None
     await env.pair(resource, chat_id="owner-dm")
     await env.peers.upsert(
         ChannelPeer(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id="team-group",
             display_name="Team",
             paired_at=datetime.now(tz=UTC),

@@ -1,9 +1,9 @@
 """ResourceService.update_scope end-to-end persistence (ADR per-agent-resource-scope).
 
 Colocated with `test_resource_service.py` (no unit-level ResourceService test
-module exists — the real ResourceService tests already run against a real
-SQLite-backed `SqlAlchemyResourceRepo`, matching the `_service()` helper style
-used there) so the update_scope round-trip is proven through the real repo.
+module exists — the real ResourceService tests already run against the real
+file resource store, matching the `_service()` helper style used there) so the
+update_scope round-trip is proven through the real store.
 """
 
 import pytest
@@ -20,10 +20,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -62,7 +60,7 @@ async def _service(tmp_path, *, kinds=None):
                 generic_create_allowed=False,
             ),
         }
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     return ResourceService(kinds=kinds, repo=repo, audit=audit), audit, engine
 

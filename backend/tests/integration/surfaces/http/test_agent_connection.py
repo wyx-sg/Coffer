@@ -11,7 +11,9 @@ for the memory hook.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
+import shutil
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
@@ -39,8 +41,6 @@ runner = CliRunner()
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pathlib.Path]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59830")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59839")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
@@ -81,7 +81,7 @@ def _hook_installed(home: pathlib.Path) -> bool:
 
 
 def _audit_types(c: TestClient, uid: str) -> list[str]:
-    r = c.get("/api/v1/audit", params={"resource_id": uid, "limit": 200})
+    r = c.get("/api/v1/audit", params={"resource_uid": uid, "limit": 200})
     assert r.status_code == 200, r.text
     return [e["event_type"] for e in r.json()["entries"]]
 
@@ -123,7 +123,7 @@ def test_connect_installs_the_gateway_entry_and_the_memory_hook(home: pathlib.Pa
         events = _audit_types(c, uid)
         assert events.count("agent_mcp_installed") == 1
         assert events.count("memory_delivery_installed") == 1
-        entries = c.get("/api/v1/audit", params={"resource_id": uid, "limit": 200}).json()
+        entries = c.get("/api/v1/audit", params={"resource_uid": uid, "limit": 200}).json()
         actors = {
             e["actor"]
             for e in entries["entries"]
@@ -252,7 +252,10 @@ def test_connect_without_a_shim_is_refused_and_writes_nothing(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(home / "absent-shim"))
-    monkeypatch.setenv("PATH", str(home / "empty-bin"))
+    # Nothing on PATH but git, which the daemon needs to open the vault.
+    git = shutil.which("git")
+    assert git is not None
+    monkeypatch.setenv("PATH", os.pathsep.join([str(home / "empty-bin"), os.path.dirname(git)]))
     monkeypatch.setattr(
         "coffer.application.agent.mcp_service.sysconfig.get_path", lambda _name: None
     )

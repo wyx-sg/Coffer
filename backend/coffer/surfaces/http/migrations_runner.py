@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import pathlib
 import shutil
+from collections.abc import Callable
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -152,10 +153,42 @@ def backup_before_migrate(
     return dest
 
 
+#: The last revision whose tables still hold the pre-vault state, and the
+#: first one that drops them (ADR storage-is-five-classes-by-nature).
+PRE_LAYOUT_REVISION = "0114"
+LAYOUT_REVISION = "0116"
+
+_PRE_LAYOUT_HOOKS: list[Callable[[str], None]] = []
+
+
+def register_pre_layout_hook(hook: Callable[[str], None]) -> None:
+    """Run ``hook(db_url)`` when a database crosses into the vault layout.
+
+    Called with the database at :data:`PRE_LAYOUT_REVISION`, before the
+    revision that drops the tables whose state moved into files: the hook
+    reads those tables and writes the files. A hook that raises stops the
+    upgrade with the database still at the pre-layout revision.
+    """
+    _PRE_LAYOUT_HOOKS.append(hook)
+
+
+def _below(cfg: AlembicConfig, current: str | None, revision: str) -> bool:
+    """Whether ``current`` is an ancestor of ``revision`` (``None``: empty)."""
+    from alembic.script import ScriptDirectory
+
+    if current is None:
+        return True
+    script = ScriptDirectory.from_config(cfg)
+    ancestors = {r.revision for r in script.iterate_revisions(revision, "base")}
+    return current in ancestors and current != revision
+
+
 def run_migrations(db_url: str) -> pathlib.Path | None:
     """Guard against a too-new schema, back the file up if an upgrade is due,
-    then ``alembic upgrade head``. Returns the backup path, or ``None`` when
-    the schema was already current or the database is not a file."""
+    then ``alembic upgrade head`` — stopping at :data:`PRE_LAYOUT_REVISION`
+    for the pre-layout hooks when the database has not crossed into the vault
+    layout yet. Returns the backup path, or ``None`` when the schema was
+    already current or the database is not a file."""
     from alembic.script import ScriptDirectory
 
     cfg = _alembic_config(db_url)
@@ -165,5 +198,10 @@ def run_migrations(db_url: str) -> pathlib.Path | None:
     db_path = sqlite_file(db_url)
     if db_path is not None and current != head:
         backup = backup_before_migrate(db_path, current)
+    # A fresh database has nothing to export: it goes straight to head.
+    if current is not None and _below(cfg, current, LAYOUT_REVISION):
+        command.upgrade(cfg, PRE_LAYOUT_REVISION)
+        for hook in list(_PRE_LAYOUT_HOOKS):
+            hook(db_url)
     command.upgrade(cfg, "head")
     return backup

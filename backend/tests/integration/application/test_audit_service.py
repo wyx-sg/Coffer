@@ -26,7 +26,6 @@ def _resource(
     """
     now = datetime.now(tz=UTC)
     return Resource(
-        id=row_id,
         uid=uid or f"uid-{row_id}",
         kind=kind,
         name=name,
@@ -59,9 +58,9 @@ async def test_record_decomposes_the_resource(tmp_path):
     assert len(entries) == 1
     e = entries[0]
     assert e.event_type == "resource_created"
-    # Two different things, kept on purpose: the id ties the event to the
+    # Two different things, kept on purpose: the uid ties the event to the
     # resource, and kind/name record the LABEL it carried at that moment.
-    assert e.resource_id == 1
+    assert e.resource_uid == "uid-1"
     assert e.resource_kind == "mcp_server"
     assert e.resource_name == "filesystem"
     assert e.actor == "cli"
@@ -76,7 +75,7 @@ async def test_record_without_a_resource_uses_system_actor_default(tmp_path):
     svc, engine = await _service(tmp_path)
     await svc.record(AuditEventType.TOKEN_ROTATED.value, details={"port": 8000})
     entries = await svc.query()
-    assert entries[0].resource_id is None
+    assert entries[0].resource_uid is None
     assert entries[0].resource_kind is None
     assert entries[0].resource_name is None
     assert entries[0].actor == "system"

@@ -178,7 +178,7 @@ class ChannelCommands:
         running on the previous conversation, and stopping the bound (idle) one
         would claim "Stopping…" while the real turn ran on.
         """
-        row = await self._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
+        row = await self._threads.get(binding.resource.uid, peer.chat_id, conversation_thread_id)
         bound = row.active_conversation_id if row is not None else None
         running = session.running_conversation_id if session is not None else None
         target = running or bound

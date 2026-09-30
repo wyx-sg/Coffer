@@ -71,8 +71,8 @@ AGENT_DIR_MISSING = "agent_dir_missing"
 class _World:
     """One read of Coffer's own state, shared by a desired/observe pair."""
 
-    skills: dict[int, Resource]
-    agents: dict[int, Resource]
+    skills: dict[str, Resource]
+    agents: dict[str, Resource]
     #: Agent uid → its skills directory, for agents whose config parses.
     skill_dirs: dict[str, pathlib.Path]
     bindings: list[BindingState]
@@ -130,8 +130,8 @@ class SkillLinkTarget:
 
     async def _world(self) -> _World:
         rs = self._svc._rs
-        skills = {s.id: s for s in await rs.list(kind="skill")}
-        agents = {a.id: a for a in await rs.list(kind="agent")}
+        skills = {s.uid: s for s in await rs.list(kind="skill")}
+        agents = {a.uid: a for a in await rs.list(kind="agent")}
         skill_dirs: dict[str, pathlib.Path] = {}
         for agent in agents.values():
             try:
@@ -167,8 +167,8 @@ class SkillLinkTarget:
         items: list[Item] = []
         seen: set[str] = set()
         for b in world.bindings:
-            skill = world.skills.get(b.skill_resource_id)
-            agent = world.agents.get(b.agent_resource_id)
+            skill = world.skills.get(b.skill_uid)
+            agent = world.agents.get(b.agent_uid)
             if not b.enabled or skill is None or agent is None:
                 continue
             key = key_for(skill, agent)

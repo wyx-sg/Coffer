@@ -33,7 +33,7 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, write
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
@@ -42,12 +42,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-    SqlAlchemyRetentionRepo,
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
 )
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.cli.main import app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -72,6 +71,7 @@ from coffer.surfaces.http.mcp.invocation_routes import router as invocation_rout
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _runner = CliRunner()
 _TOKEN = "test-token-mcp"
@@ -108,7 +108,7 @@ class _StubDiscovery:
             return True
         resources, prefs = self.repos
         resource = await resources.find_by_name("mcp_server", server_name)
-        pref = None if resource is None else await prefs.find(resource.id, capability_type, key)
+        pref = None if resource is None else await prefs.find(resource.uid, capability_type, key)
         return True if pref is None else bool(pref.enabled)
 
     def invalidate(self, server_name: str) -> None:
@@ -195,7 +195,7 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
     )
     kinds = {"mcp_server": mcp_kind}
 
-    resource_repo = SqlAlchemyResourceRepo(sm)
+    resource_repo = make_resource_repo()
     audit_repo = SqlAlchemyAuditRepo(sm)
     audit_svc = AuditService(audit_repo)
     resource_svc = ResourceService(kinds=kinds, repo=resource_repo, audit=audit_svc)
@@ -210,17 +210,17 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
             description="Resource lifecycle events.",
         )
     )
-    retention_repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
+    retention_repo = FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     retention_svc = RetentionService(registry=registry, repo=retention_repo, audit=audit_svc)
     loop.run_until_complete(retention_svc.initialize_defaults())
     loop.close()
 
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    prefs_repo = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     stub_discovery = _StubDiscovery()
     stub_discovery.repos = (resource_repo, prefs_repo)
     STUB["discovery"] = stub_discovery
-    health_repo = MCPServerHealthRepo(sm)
+    health_repo = MCPServerHealthRepo(derived_sm())
 
     fapp = FastAPI()
     err_handlers.register(fapp)
@@ -807,23 +807,13 @@ def _seed_pref(uid: str, capability_type: str, key: str) -> None:
     row to flip (the stub discovery writes none)."""
     from datetime import UTC, datetime
 
-    from coffer.infrastructure.persistence.engine import (
-        create_async_engine_with_pragmas,
-        session_maker,
-    )
-    from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
-
-    engine = create_async_engine_with_pragmas(os.environ["COFFER_DB_URL"])
-
     async def _seed() -> None:
-        sm = session_maker(engine)
-        resource = await SqlAlchemyResourceRepo(sm).find(uid)
+        resource = await make_resource_repo().find(uid)
         assert resource is not None
         now = datetime.now(tz=UTC)
-        await MCPCapabilityPreferenceRepo(sm).insert(
-            resource.id, capability_type, key, True, now, now
+        await MCPCapabilityPreferenceStore(derived_sm()).insert(
+            resource.uid, capability_type, key, True, now, now
         )
-        await engine.dispose()
 
     loop = asyncio.new_event_loop()
     loop.run_until_complete(_seed())

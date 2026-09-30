@@ -39,11 +39,12 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 _TOKEN = "test-token"
 
@@ -92,7 +93,7 @@ async def env(tmp_path) -> AsyncIterator[_Env]:
     kind = make_channel_kind(agent_names=_agent_names)
     svc = ResourceService(
         kinds={"channel": kind, "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     agent_uids: dict[str, str] = {}

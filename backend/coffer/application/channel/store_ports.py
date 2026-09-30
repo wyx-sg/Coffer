@@ -1,12 +1,11 @@
 """The two tables a channel owns, and how they are read and written.
 
-A channel keeps exactly two rows of its own: ``channel_peers``, which says
-which chats on the platform belong to the owner, and
-``channel_thread_conversations``, which says what each of those chats is in the
-middle of. Both hang off ``resources.id`` — the integer surrogate key, not the
-uid — because they are this machine's rows about this machine's channel, and
-the FK cascade that drops them with the channel is the whole reason that column
-exists (ADR resource-identity-is-an-immutable-uid).
+A channel keeps two kinds of state of its own: its pairings (which chats on the
+platform belong to the owner), a vault document per channel
+(``state/channel-peers/<channel name>.json``) because the pairing is the
+person's and travels; and ``channel_thread_conversations``, what each of those
+chats is in the middle of, history in ``runs.db``. Both name the channel by its
+uid (ADR identity-is-the-uid-inside-the-file).
 
 Split from ``ports``, which describes the TRANSPORT: what an adapter must do,
 what a live binding carries, what the core may ask of the chat platform. This
@@ -27,7 +26,7 @@ from typing import Any, Protocol
 class ChannelPeer:
     """The paired owner of a channel (one row in channel_peers)."""
 
-    resource_id: int
+    resource_uid: str
     chat_id: str
     display_name: str
     paired_at: datetime
@@ -40,28 +39,26 @@ class ChannelPeer:
 class ChannelPeerRepoPort(Protocol):
     """Persistence for peer bindings."""
 
-    async def owner_peer(self, resource_id: int) -> ChannelPeer | None:
+    async def owner_peer(self, resource_uid: str) -> ChannelPeer | None:
         """The channel's OWNER chat — the one a notification addressed to the
         channel rather than to a conversation belongs in.
 
-        A channel may hold several peer rows: its DM plus every group it has
-        been paired to (``UniqueConstraint("resource_id", "chat_id")``). This
+        A channel may hold several peers: its DM plus every group it has
+        been paired to (one per chat). This
         returns the earliest-paired one, which under the single-owner premise is
         the owner's DM: pairing the DM is how a channel starts working at all,
         and a group can only be added to a channel that already does.
 
-        The order matters, not just the determinism. The predecessor of this
-        method selected on ``resource_id`` with no ``ORDER BY``, so ``notify``
-        could put a private message into a group chat depending on what SQLite
-        happened to return first.
+        The order matters, not just the determinism: an answer that depended on
+        storage order could put a private message into a group chat.
         """
         ...
 
-    async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
+    async def get_by_chat(self, resource_uid: str, chat_id: str) -> ChannelPeer | None: ...
 
-    async def list_by_resource(self, resource_id: int) -> list[ChannelPeer]: ...
+    async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]: ...
 
-    async def owner_sender_id(self, resource_id: int) -> str | None:
+    async def owner_sender_id(self, resource_uid: str) -> str | None:
         """The first non-null ``sender_id`` paired for this channel, across
         all its peer rows (DM + any groups/threads). ``None`` when the
         channel has no peer with a known sender identity."""
@@ -77,13 +74,11 @@ class ChannelPeerRepoPort(Protocol):
         so a failure between them cannot leave the channel with no owner."""
         ...
 
-    async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
+    async def delete_by_chat(self, resource_uid: str, chat_id: str) -> None:
         """Drop one chat's pairing, leaving the channel's other chats alone.
 
         Un-pairing one chat, not deleting the channel — the channel's own
-        deletion takes every peer with it through the FK cascade. Exists for
-        the synced pairing area, where another machine's un-pair arrives as the
-        deletion of one document."""
+        deletion takes its pairing document with it in the same commit."""
         ...
 
 
@@ -91,7 +86,7 @@ class ChannelPeerRepoPort(Protocol):
 class ChannelThreadConversation:
     """The per-thread conversation binding (one row in
     ``channel_thread_conversations``): conversation identity is keyed by
-    ``(resource_id, chat_id, thread_id)`` (see "Key conversation identity by channel,
+    ``(resource_uid, chat_id, thread_id)`` (see "Key conversation identity by channel,
     chat and thread"), not by the peer alone.
 
     ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
@@ -101,7 +96,7 @@ class ChannelThreadConversation:
     recorded (``channel_peers`` carried a second, never-written copy of both
     until 0084 dropped them)."""
 
-    resource_id: int
+    resource_uid: str
     chat_id: str
     thread_id: str
     active_conversation_id: str | None
@@ -151,7 +146,7 @@ class ChannelThreadLocation:
     opened it, and which send path reaches them (one ``channel_thread_history``
     row)."""
 
-    resource_id: int
+    resource_uid: str
     chat_id: str
     thread_id: str
     chat_kind: str | None
@@ -168,23 +163,23 @@ class ChannelThreadConversationRepoPort(Protocol):
     by channel, chat and thread").
 
     The source of truth for driving a turn: which conversation a
-    ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it
+    ``(resource_uid, chat_id, thread_id)`` resolves to, and the sticky agent it
     opens with. Two threads of one group therefore never collide on a single
     conversation (the "a turn is already running" error)."""
 
     async def get(
-        self, resource_id: int, chat_id: str, thread_id: str
+        self, resource_uid: str, chat_id: str, thread_id: str
     ) -> ChannelThreadConversation | None: ...
 
     async def set_active_conversation(
-        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, conversation_id: str | None
     ) -> None:
         """Upsert the thread's active conversation, leaving ``preferred_agent``
         untouched (creating the row if this thread has none yet)."""
         ...
 
     async def set_preferred_agent(
-        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, preferred_agent: str | None
     ) -> None:
         """Upsert the thread's sticky agent, leaving ``active_conversation_id``
         untouched (creating the row if this thread has none yet)."""
@@ -192,7 +187,7 @@ class ChannelThreadConversationRepoPort(Protocol):
 
     async def set_preferences(
         self,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         *,
@@ -206,7 +201,7 @@ class ChannelThreadConversationRepoPort(Protocol):
         ...
 
     async def note_chat_kind(
-        self, resource_id: int, chat_id: str, thread_id: str, chat_kind: str
+        self, resource_uid: str, chat_id: str, thread_id: str, chat_kind: str
     ) -> None:
         """Record which send path reaches this thread (upserting the row), so a
         reply typed on the web can be mirrored into it."""
@@ -214,7 +209,7 @@ class ChannelThreadConversationRepoPort(Protocol):
 
     async def record_history(
         self,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         conversation_id: str,
@@ -225,7 +220,7 @@ class ChannelThreadConversationRepoPort(Protocol):
         ...
 
     async def history(
-        self, resource_id: int, chat_id: str, thread_id: str, *, limit: int = 20
+        self, resource_uid: str, chat_id: str, thread_id: str, *, limit: int = 20
     ) -> list[str]:
         """The conversations this thread opened, newest first."""
         ...
@@ -236,7 +231,7 @@ class ChannelThreadConversationRepoPort(Protocol):
         from")."""
         ...
 
-    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
+    async def next_parallel_ordinal(self, resource_uid: str, chat_id: str) -> int:
         """The number the chat's next parallel thread gets: ``max + 1`` over the
         chat's rows, so a number is never reused after a conversation is replaced
         (see "Open parallel conversations beside a direct chat"). Read before the
@@ -244,14 +239,14 @@ class ChannelThreadConversationRepoPort(Protocol):
         ...
 
     async def open_parallel(
-        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
+        self, resource_uid: str, chat_id: str, thread_id: str, ordinal: int, title: str
     ) -> None:
         """Record ``thread_id`` as parallel thread ``ordinal`` of this chat
         (upserting the row, leaving its conversation and agent untouched)."""
         ...
 
     async def list_parallel(
-        self, resource_id: int, chat_id: str
+        self, resource_uid: str, chat_id: str
     ) -> list[ChannelThreadConversation]:
         """The chat's parallel threads, newest (highest ordinal) first."""
         ...
@@ -264,7 +259,7 @@ class OutboxEntry:
     while the channel could not send (``kind="answer"``)."""
 
     id: int
-    resource_id: int
+    resource_uid: str
     chat_id: str
     thread_id: str
     chat_kind: str
@@ -282,7 +277,7 @@ class ChannelOutboxRepoPort(Protocol):
     async def add(
         self,
         *,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         chat_kind: str,
@@ -291,7 +286,7 @@ class ChannelOutboxRepoPort(Protocol):
         text: str,
     ) -> int: ...
 
-    async def pending(self, resource_id: int) -> list[OutboxEntry]:
+    async def pending(self, resource_uid: str) -> list[OutboxEntry]:
         """The channel's undelivered messages, oldest first."""
         ...
 

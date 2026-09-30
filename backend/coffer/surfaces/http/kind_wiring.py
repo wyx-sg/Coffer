@@ -35,6 +35,7 @@ from coffer.surfaces.http.secret_boundary_wiring import register_destination_sou
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import sync_remote_secret_source
 from coffer.surfaces.http.usage_wiring import UsageWiring, wire_model_usage
+from coffer.surfaces.http.vault_composition import VaultStores
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ async def wire_resource_kinds(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
     credential_store: EncryptedCredentialStore,
     credential_resolver: Callable[[str], str],
@@ -77,10 +79,9 @@ async def wire_resource_kinds(
         app,
         resource_svc,
         audit,
-        sm,
+        vault,
         builtin_tools,
         credential_store,
-        sync,
         platform,
         agent_catalog,
         reconciler,
@@ -139,7 +140,7 @@ async def wire_resource_kinds(
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
-    mcp = wire_mcp_kind(app, resource_svc, audit, sm, credential_store, builtin_tools, sync)
+    mcp = wire_mcp_kind(app, resource_svc, audit, sm, vault, credential_store, builtin_tools)
 
     # Last, because it needs both ends: the knowledge kind's renderer and the
     # skill kind's seed. The lifespan refreshes it once every kind is up.

@@ -32,7 +32,7 @@ from coffer.infrastructure.channel.persistence import (
 )
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import (
@@ -42,6 +42,7 @@ from coffer.surfaces.http.channel_routes import (
 from coffer.surfaces.http.channel_routes import (
     router as channel_router,
 )
+from tests.support.vault_stores import make_resource_repo
 
 _TOKEN = "test-token"
 _PAIRING_ALPHABET = set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -102,8 +103,6 @@ class _Ctx:
     # so both spellings are kept: a test pairs by ``*_id`` and calls by ``*_uid``.
     tg_uid: str = ""
     st_uid: str = ""
-    tg_id: int = 0
-    st_id: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -115,9 +114,9 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
-        kinds={"channel": make_channel_kind()}, repo=SqlAlchemyResourceRepo(sm), audit=audit
+        kinds={"channel": make_channel_kind()}, repo=make_resource_repo(), audit=audit
     )
-    peers = ChannelPeerRepo(sm)
+    peers = ChannelPeerRepo()
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
     runtime = _StubRuntime()
@@ -161,8 +160,6 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         resources=resources,
         tg_uid=tg.uid,
         st_uid=st.uid,
-        tg_id=tg.id,
-        st_id=st.id,
     )
     set_channel_service(None)
     set_active_token(None)
@@ -174,17 +171,17 @@ def _client(app: FastAPI, *, token: str | None = _TOKEN) -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app), base_url="http://t", headers=headers)
 
 
-async def _pair(ctx: _Ctx, resource_id: int, *, chat_id: str = "emp-1") -> None:
+async def _pair(ctx: _Ctx, resource_uid: str, *, chat_id: str = "emp-1") -> None:
     await ctx.peers.upsert(
         ChannelPeer(
-            resource_id=resource_id,
+            resource_uid=resource_uid,
             chat_id=chat_id,
             display_name="Yu",
             paired_at=datetime.now(tz=UTC),
         )
     )
     # The conversation pointer lives on the DM's thread row, not on the peer.
-    await ctx.threads.set_active_conversation(resource_id, chat_id, "", "conv-9")
+    await ctx.threads.set_active_conversation(resource_uid, chat_id, "", "conv-9")
 
 
 async def test_channel_routes_require_token(ctx: _Ctx) -> None:
@@ -252,7 +249,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
 async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) -> None:
     ctx.runtime.adapters["st"] = _StubAdapter()
     ctx.runtime.websockets[ctx.st_uid] = ("connected", None)
-    await _pair(ctx, ctx.st_id)
+    await _pair(ctx, ctx.st_uid)
     async with _client(ctx.app) as c:
         issued = await c.post(f"/api/v1/channels/{ctx.st_uid}/pairing-code")
         assert issued.status_code == 200
@@ -298,7 +295,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
         actor="test",
     )
     ctx.runtime.adapters["mg"] = _StubAdapter()  # adapter live -> healthy
-    await _pair(ctx, mg.id)
+    await _pair(ctx, mg.uid)
 
     # The list view mirrors the MCP-server/memory/skill surfaces: each row is a
     # resource carrying its enabled status and the routed agent.
@@ -321,7 +318,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
 async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
     adapter = _StubAdapter()
     ctx.runtime.adapters["tg"] = adapter
-    await _pair(ctx, ctx.tg_id, chat_id="555")
+    await _pair(ctx, ctx.tg_uid, chat_id="555")
     async with _client(ctx.app) as c:
         r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "build green"})
     assert r.status_code == 200
@@ -338,7 +335,7 @@ async def test_notify_unpaired_channel_is_409(ctx: _Ctx) -> None:
 
 
 async def test_notify_with_adapter_down_is_409(ctx: _Ctx) -> None:
-    await _pair(ctx, ctx.tg_id)  # paired, but no adapter running
+    await _pair(ctx, ctx.tg_uid)  # paired, but no adapter running
     async with _client(ctx.app) as c:
         r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "hi"})
     assert r.status_code == 409

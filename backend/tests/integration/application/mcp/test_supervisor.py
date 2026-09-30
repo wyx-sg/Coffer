@@ -29,11 +29,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.fixtures.keyring import InMemoryKeyring, install_in_memory_keyring
+from tests.support.vault_stores import make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -47,7 +45,7 @@ async def _make_services(tmp_path, *, register_servers: list[tuple[str, dict]]):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     kinds = {
         "mcp_server": Kind(

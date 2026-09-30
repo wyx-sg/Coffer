@@ -27,12 +27,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.http.chat_provider_wiring import agent_home_env_resolver
+from tests.support.vault_stores import make_resource_repo
 
 
 @pytest.mark.acceptance(spec="chat", scenario="a disabled agent does not answer for its type")
@@ -45,7 +43,7 @@ async def test_a_disabled_agent_does_not_answer_for_its_type(tmp_path: pathlib.P
         audit = AuditService(SqlAlchemyAuditRepo(sm))
         rs = ResourceService(
             kinds={"agent": make_agent_kind(on_delete=None)},
-            repo=SqlAlchemyResourceRepo(sm),
+            repo=make_resource_repo(),
             audit=audit,
         )
         svc = AgentService(

@@ -29,7 +29,6 @@ from coffer.domain.skill_source_errors import (
     SkillSourceUnreachable,
     SkillUpdateConflict,
 )
-from coffer.infrastructure.persistence.engine import session_maker
 from coffer.infrastructure.skill.archive_reader import ZipArchiveReader
 from coffer.infrastructure.skill.git_source import GitSource
 from coffer.infrastructure.skill.source_status_repo import SkillSourceStatusRepo
@@ -72,7 +71,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[Env]:
         skills=graph.skills,
         git=GitSource(timeout_s=60),
         archives=ZipArchiveReader(),
-        status_repo=SkillSourceStatusRepo(session_maker(graph.engine)),
+        status_repo=SkillSourceStatusRepo(),
         staging=StagingRegistry(root=staging_root),
     )
     yield Env(graph, svc, staging_root, tmp_path)

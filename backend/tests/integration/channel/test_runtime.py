@@ -58,7 +58,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     adapter = env.created_adapters[0]
     await env.pair(resource, chat_id="owner")
     env.pairing.issue("tg")
-    assert (await env.peers.owner_peer(resource.id)) is not None
+    assert (await env.peers.owner_peer(resource.uid)) is not None
 
     await env.resources.delete(resource.uid, actor="cli")
 
@@ -70,7 +70,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     # The resource row is gone and the peer row went with it (FK cascade).
     with pytest.raises(ResourceNotFound):
         await env.resources.get(resource.uid)
-    assert await env.peers.owner_peer(resource.id) is None
+    assert await env.peers.owner_peer(resource.uid) is None
 
 
 async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> None:

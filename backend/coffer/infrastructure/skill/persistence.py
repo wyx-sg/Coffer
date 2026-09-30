@@ -1,60 +1,24 @@
-"""Skill-kind ORM models + repos.
+"""Skill delivery bindings, in ``derived/derived.db``.
+
+Which skill copies are delivered into which agent is an observation of this
+machine's disk that the ``skill_link`` pass makes again, so the table is
+derived (``coffer.infrastructure.persistence.derived_db``), keyed by the
+skill's and the agent's uids. A resource's deletion does not cascade into it
+(there is no resource table to cascade from): the skill and agent kinds
+remove their rows in their own delete hooks, as they always did first.
 
 Per Contract 5, this module must not import any other kind subpackage.
-The `skill_agent_bindings` table FKs reference `resources(id)` for both
-skill and agent — the FK is to the kind-agnostic core, not to either
-kind-specific module, so the contract is upheld.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import (
-    TIMESTAMP,
-    Boolean,
-    ForeignKey,
-    Index,
-    Integer,
-    PrimaryKeyConstraint,
-    String,
-    Text,
-    select,
-)
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.skill.binding import BindingState, LinkMode
-from coffer.infrastructure.persistence.base import Base
-
-
-class SkillAgentBindingModel(Base):
-    __tablename__ = "skill_agent_bindings"
-
-    skill_resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    agent_resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    last_linked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    last_link_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    link_mode: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        PrimaryKeyConstraint(
-            "skill_resource_id",
-            "agent_resource_id",
-            name="pk_skill_agent_bindings",
-        ),
-        Index("idx_bindings_agent", "agent_resource_id", "enabled"),
-        Index("idx_bindings_skill", "skill_resource_id", "enabled"),
-    )
+from coffer.infrastructure.persistence.derived_db import SkillAgentBindingModel
 
 
 def _tz(dt: datetime | None) -> datetime | None:
@@ -65,8 +29,8 @@ def _tz(dt: datetime | None) -> datetime | None:
 
 def _row_to_domain(row: SkillAgentBindingModel) -> BindingState:
     return BindingState(
-        skill_resource_id=row.skill_resource_id,
-        agent_resource_id=row.agent_resource_id,
+        skill_uid=row.skill_uid,
+        agent_uid=row.agent_uid,
         enabled=row.enabled,
         last_linked_at=_tz(row.last_linked_at),
         last_link_path=row.last_link_path,
@@ -75,128 +39,85 @@ def _row_to_domain(row: SkillAgentBindingModel) -> BindingState:
 
 
 class SkillBindingRepo:
-    """CRUD for `skill_agent_bindings`."""
+    """CRUD for the derived `skill_agent_bindings` table."""
 
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = sm
 
-    async def find(self, skill_id: int, agent_id: int) -> BindingState | None:
+    async def find(self, skill_uid: str, agent_uid: str) -> BindingState | None:
         async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.skill_resource_id == skill_id,
-                SkillAgentBindingModel.agent_resource_id == agent_id,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await session.get(SkillAgentBindingModel, (skill_uid, agent_uid))
             return _row_to_domain(row) if row else None
 
-    async def list_for_skill(self, skill_id: int) -> list[BindingState]:
+    async def _where(self, *clauses: object) -> list[BindingState]:
         async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.skill_resource_id == skill_id
-            )
+            stmt = select(SkillAgentBindingModel).where(*clauses)  # type: ignore[arg-type]
             rows = (await session.execute(stmt)).scalars().all()
             return [_row_to_domain(r) for r in rows]
 
-    async def list_for_agent(self, agent_id: int) -> list[BindingState]:
-        async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.agent_resource_id == agent_id
-            )
-            rows = (await session.execute(stmt)).scalars().all()
-            return [_row_to_domain(r) for r in rows]
+    async def list_for_skill(self, skill_uid: str) -> list[BindingState]:
+        return await self._where(SkillAgentBindingModel.skill_uid == skill_uid)
+
+    async def list_for_agent(self, agent_uid: str) -> list[BindingState]:
+        return await self._where(SkillAgentBindingModel.agent_uid == agent_uid)
 
     async def list_enabled(self) -> list[BindingState]:
-        async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(SkillAgentBindingModel.enabled.is_(True))
-            rows = (await session.execute(stmt)).scalars().all()
-            return [_row_to_domain(r) for r in rows]
+        return await self._where(SkillAgentBindingModel.enabled.is_(True))
 
     async def list_all(self) -> list[BindingState]:
-        """One-shot read of every binding row.
-
-        Surfaces use this to build a ``skill_id -> [bindings]`` map in
-        memory and avoid issuing one query per skill in list endpoints
-        (an N+1 pattern in /api/v1/skills).
-        """
-        async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel)
-            rows = (await session.execute(stmt)).scalars().all()
-            return [_row_to_domain(r) for r in rows]
+        """One-shot read of every binding row, so a list endpoint builds its
+        ``skill_uid -> [bindings]`` map without one query per skill."""
+        return await self._where()
 
     async def upsert(
         self,
         *,
-        skill_id: int,
-        agent_id: int,
+        skill_uid: str,
+        agent_uid: str,
         enabled: bool,
         last_linked_at: datetime | None = None,
         last_link_path: str | None = None,
         link_mode: LinkMode | None = None,
     ) -> BindingState:
         async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.skill_resource_id == skill_id,
-                SkillAgentBindingModel.agent_resource_id == agent_id,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await session.get(SkillAgentBindingModel, (skill_uid, agent_uid))
             if row is None:
-                row = SkillAgentBindingModel(
-                    skill_resource_id=skill_id,
-                    agent_resource_id=agent_id,
-                    enabled=enabled,
-                    last_linked_at=last_linked_at,
-                    last_link_path=last_link_path,
-                    link_mode=link_mode.value if link_mode else None,
-                )
+                row = SkillAgentBindingModel(skill_uid=skill_uid, agent_uid=agent_uid)
                 session.add(row)
-            else:
-                # Always overwrite — including writing ``None`` to clear
-                # ``last_link_path`` / ``link_mode`` on disable. A previous
-                # ``if x is not None: row.x = x`` guard left stale paths
-                # behind on the row after disable, which then leaked into
-                # verify drift output as phantom "missing link" entries.
-                row.enabled = enabled
-                row.last_linked_at = last_linked_at
-                row.last_link_path = last_link_path
-                row.link_mode = link_mode.value if link_mode else None
+            # Always overwrite — including writing ``None`` to clear
+            # ``last_link_path`` / ``link_mode`` on disable, so a disabled
+            # binding never reports a stale path as a missing link.
+            row.enabled = enabled
+            row.last_linked_at = last_linked_at
+            row.last_link_path = last_link_path
+            row.link_mode = link_mode.value if link_mode else None
             await session.commit()
             await session.refresh(row)
             return _row_to_domain(row)
 
-    async def delete(self, skill_id: int, agent_id: int) -> None:
+    async def delete(self, skill_uid: str, agent_uid: str) -> None:
         async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.skill_resource_id == skill_id,
-                SkillAgentBindingModel.agent_resource_id == agent_id,
+            await session.execute(
+                delete(SkillAgentBindingModel).where(
+                    SkillAgentBindingModel.skill_uid == skill_uid,
+                    SkillAgentBindingModel.agent_uid == agent_uid,
+                )
             )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is not None:
-                await session.delete(row)
-                await session.commit()
-
-    async def delete_for_skill(self, skill_id: int) -> int:
-        async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.skill_resource_id == skill_id
-            )
-            rows = (await session.execute(stmt)).scalars().all()
-            for r in rows:
-                await session.delete(r)
             await session.commit()
-            return len(rows)
 
-    async def delete_for_agent(self, agent_id: int) -> int:
+    async def _delete_where(self, *clauses: object) -> int:
         async with self._sm() as session:
-            stmt = select(SkillAgentBindingModel).where(
-                SkillAgentBindingModel.agent_resource_id == agent_id
+            result = await session.execute(
+                delete(SkillAgentBindingModel).where(*clauses)  # type: ignore[arg-type]
             )
-            rows = (await session.execute(stmt)).scalars().all()
-            for r in rows:
-                await session.delete(r)
             await session.commit()
-            return len(rows)
+            return int(result.rowcount or 0)
+
+    async def delete_for_skill(self, skill_uid: str) -> int:
+        return await self._delete_where(SkillAgentBindingModel.skill_uid == skill_uid)
+
+    async def delete_for_agent(self, agent_uid: str) -> int:
+        return await self._delete_where(SkillAgentBindingModel.agent_uid == agent_uid)
 
 
-# The skill kind's other table rides the same metadata, so every place that
-# builds the schema from ``Base.metadata`` (the test graphs) gets it too.
-from coffer.infrastructure.skill import source_status_repo as _source_status  # noqa: E402, F401
+__all__ = ["SkillBindingRepo"]

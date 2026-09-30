@@ -384,7 +384,7 @@ async def test_full_prune_sweeps_chat_media_by_age(
 ) -> None:
     # The composition root resolves both media dirs from HOME.
     monkeypatch.setenv("HOME", str(tmp_path))
-    store = FileChatMediaStore(tmp_path / ".coffer" / "chat-media")
+    store = FileChatMediaStore(tmp_path / ".coffer" / "content" / "chat-media")
     stale = await store.save(data=b"old", filename="old.txt", mime="text/plain")
     fresh = await store.save(data=b"new", filename="new.txt", mime="text/plain")
     now = datetime.now(tz=UTC)

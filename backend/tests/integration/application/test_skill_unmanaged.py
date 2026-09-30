@@ -181,7 +181,7 @@ async def test_adopt_happy_path(tmp_path):
     assert original.resolve() == store.paths_for("hand-made").folder.resolve()
     # Binding enabled for this agent.
     bindings = await skill_svc.bindings_for(r.uid)
-    assert any(b.agent_resource_id == agent.id and b.enabled for b in bindings)
+    assert any(b.agent_uid == agent.uid and b.enabled for b in bindings)
     # Audit trail.
     adopted = await audit.query(event_type=AuditEventType.SKILL_ADOPTED.value)
     assert len(adopted) == 1
@@ -273,7 +273,7 @@ async def test_adopt_from_codex_agents_dir(tmp_path):
     assert delivered.is_symlink()
     assert delivered.resolve() == store.paths_for("side-skill").folder.resolve()
     bindings = await skill_svc.bindings_for((await _by_name(skill_svc, "side-skill")).uid)
-    assert any(b.agent_resource_id == agent.id and b.enabled for b in bindings)
+    assert any(b.agent_uid == agent.uid and b.enabled for b in bindings)
     await graph.dispose()
 
 
@@ -312,7 +312,7 @@ async def test_adopt_from_a_disabled_agent_links_in_place(tmp_path):
     assert original.resolve() == store.paths_for("kept-here").folder.resolve()
     assert "still mine" in (original / "SKILL.md").read_text()
     bindings = await skill_svc.bindings_for(r.uid)
-    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, True)]
+    assert [(b.agent_uid, b.enabled) for b in bindings] == [(agent.uid, True)]
     adopted = await audit.query(event_type=AuditEventType.SKILL_ADOPTED.value)
     assert [e.resource_name for e in adopted] == ["kept-here"]
     await graph.dispose()
@@ -336,14 +336,14 @@ async def test_a_skill_adopted_from_a_disabled_agent_is_reclaimed_then_restored(
 
     assert not original.exists() and not original.is_symlink()
     bindings = await skill_svc.bindings_for(r.uid)
-    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, False)]
+    assert [(b.agent_uid, b.enabled) for b in bindings] == [(agent.uid, False)]
 
     await skill_svc._rs.set_enabled(agent.uid, True, actor="cli")
     await graph.run()
 
     assert original.resolve() == store.paths_for("kept-here").folder.resolve()
     bindings = await skill_svc.bindings_for(r.uid)
-    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, True)]
+    assert [(b.agent_uid, b.enabled) for b in bindings] == [(agent.uid, True)]
     await graph.dispose()
 
 

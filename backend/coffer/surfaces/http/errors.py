@@ -23,6 +23,16 @@ _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
+    # The vault's one write path (ADR every-vault-write-is-a-validated-commit-
+    # naming-its-writer): a file changed under the write, a document the
+    # validator refused, a path outside the vault; git failing or missing is
+    # Coffer's fault, not the request's.
+    "VAULT_FILE_STALE": 409,
+    "VAULT_FILE_INVALID": 422,
+    "VAULT_PATH_INVALID": 400,
+    "VAULT_VERSION_NOT_FOUND": 404,
+    "VAULT_GIT_FAILED": 500,
+    "GIT_MISSING": 500,
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "AGENT_TYPE_REGISTERED": 409,
@@ -174,6 +184,13 @@ _STATUS: dict[str, int] = {
     "SYNC_NOTHING_TO_ROLL_BACK": 409,
     "SYNC_JOIN_AMBIGUOUS": 409,
     "SYNC_CANNOT_RETIRE_SELF": 422,
+    # The thin sync round (spec vault-sync): no round waiting for this answer,
+    # a hand merge that still has markers, a remote git would refuse, and a
+    # remote that refused us (upstream, like GIT_MIRROR_FAILED).
+    "SYNC_NOTHING_STOPPED": 409,
+    "SYNC_CONFLICT_MARKERS_LEFT": 422,
+    "SYNC_REMOTE_INVALID": 422,
+    "SYNC_REMOTE_FAILED": 502,
     # provider switching (spec provider-switching)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
     # Not 422: the patch is well-formed, and the same patch succeeds once the

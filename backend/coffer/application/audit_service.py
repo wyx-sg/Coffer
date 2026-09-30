@@ -19,7 +19,7 @@ class AuditService:
 
     ``record`` generates the timestamp and decomposes the ``Resource`` the
     event is about, so callers don't repeat that. Each row keeps two different
-    things on purpose: ``resource_id`` ties the event to the resource, and
+    things on purpose: ``resource_uid`` ties the event to the resource, and
     ``resource_kind``/``resource_name`` record the LABEL it carried at that
     moment. That is what lets a rename leave the trail alone — the history says
     what the thing was called when each event happened, and still reads as one
@@ -44,8 +44,8 @@ class AuditService:
     ) -> None:
         """File one audit row.
 
-        ``resource`` is a row in ``resources``, and passing the whole object is
-        what lets this file its **id** alongside the label — which is what makes
+        ``resource`` is the resource itself, and passing the whole object is
+        what lets this file its **uid** alongside the label — which is what makes
         the history survive a rename, and what makes "this resource's history"
         a question about one object rather than about a name two objects may
         have worn in turn. It is optional because some events name no resource
@@ -59,7 +59,7 @@ class AuditService:
                 id=None,
                 timestamp=datetime.now(tz=UTC),
                 event_type=event_type,
-                resource_id=resource.id if resource else None,
+                resource_uid=resource.uid if resource else None,
                 resource_kind=resource.kind if resource else None,
                 resource_name=resource.name if resource else None,
                 actor=actor,
@@ -105,12 +105,12 @@ class AuditService:
 
         Passing ``resource`` asks for that resource's trail and gets it whole,
         including the rows written under a name it no longer has: the filter is
-        its id, not its current label. ``kind`` alone is the coarser filter the
+        its uid, not its current label. ``kind`` alone is the coarser filter the
         activity page uses.
         """
         return await self._repo.query(
             kind=kind,
-            resource_id=resource.id if resource else None,
+            resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
             since=since,
@@ -145,7 +145,7 @@ class AuditService:
         after = time_and_id(decode_cursor(cursor, list_tag="audit", filters=filters), int)
         rows = await self._repo.query(
             kind=kind,
-            resource_id=resource.id if resource else None,
+            resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
             since=since,
@@ -175,7 +175,7 @@ class AuditService:
         """
         return await self._repo.count(
             kind=kind,
-            resource_id=resource.id if resource else None,
+            resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
             since=since,

@@ -2,9 +2,10 @@
 
 Spec skill-manager "Update a Git-imported skill from its source". A check's
 result is an observation made here — when it ran, whether git reached the
-repository, what the ref points at now — so it lives in its own table and is
-never carried by vault sync; the pin itself (the commit the skill's content
-came from) is part of the skill's config and does travel.
+repository, what the ref points at now — so it is local state
+(``local/skill-source-status.json``) and never carried by vault sync; the pin
+itself (the commit the skill's content came from) is part of the skill's
+config and does travel.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class SourceStatus:
-    skill_resource_id: int
+    skill_uid: str
     checked_at: datetime | None = None
     #: The last check that reached the repository; kept through failures so
     #: an unreachable source can say when it last answered.

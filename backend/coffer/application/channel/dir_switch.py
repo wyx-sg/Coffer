@@ -95,7 +95,7 @@ async def apply_dir(ctx: CommandContext, path: str | None) -> None:
     """Stick ``path`` (``None`` = the channel's default) on the thread and open
     a fresh conversation there. Shared by the typed form and a card tap."""
     await ctx.commands._threads.set_preferences(
-        ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, cwd=path
+        ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, cwd=path
     )
     shown = path or "the default"
     if ctx.group_main:

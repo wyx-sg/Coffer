@@ -24,10 +24,10 @@ import pathlib
 import subprocess
 
 import pytest
-from starlette.testclient import TestClient
-
 from coffer.application.engine_settings_sync import AREA as SETTINGS_AREA
 from coffer.application.engine_settings_sync import DOC as SETTINGS_DOC
+from starlette.testclient import TestClient
+
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -41,8 +41,6 @@ _HEADERS = {"X-Coffer-Token": _TOKEN}
 def app(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "skills"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59320")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59329")
     return create_app()

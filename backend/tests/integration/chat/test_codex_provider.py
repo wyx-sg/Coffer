@@ -131,9 +131,9 @@ async def test_init_conversation_defaults_missing_cwd_to_workspace(
 
     await provider.init_conversation(conv.id, {})
     stored = await repo.get_agent_config(conv.id)
-    expected = str(tmp_path / ".coffer" / "workspace")
+    expected = str(tmp_path / ".coffer" / "content" / "workspace")
     assert stored.cwd == expected
-    assert (tmp_path / ".coffer" / "workspace").is_dir()
+    assert (tmp_path / ".coffer" / "content" / "workspace").is_dir()
 
     await engine.dispose()
 

@@ -1,22 +1,25 @@
 """The internal engine's settings over the real app (spec internal-engine).
 
 Every test here boots the real ``create_app()`` against a throwaway ``HOME`` and
-SQLite file and talks to it over ASGI, so what is asserted is what a surface
-really gets back: the route, the service, the singleton row and the audit trail
-the composition root wires together.
+talks to it over ASGI, so what is asserted is what a surface really gets back:
+the route, the service, the vault document
+(``state/settings/internal-engine.json``) and the audit trail the composition
+root wires together.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import pathlib
-import sqlite3
 from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
+from coffer.infrastructure.vault.home import vault_root
+from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -32,8 +35,6 @@ async def api(
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "61310")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "61319")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     app = create_app()
     set_active_token(_TOKEN)
     async with (
@@ -69,24 +70,26 @@ async def _config(c: AsyncClient) -> dict:
     return r.json()
 
 
-def _store_timeout(tmp_path: pathlib.Path, seconds: int) -> None:
-    conn = sqlite3.connect(tmp_path / "c.db", timeout=30)
-    try:
-        conn.execute("UPDATE internal_engine_config SET model_timeout_s = ?", (seconds,))
-        conn.commit()
-    finally:
-        conn.close()
+_DOC = "state/settings/internal-engine.json"
 
 
-def _row(tmp_path: pathlib.Path) -> dict:
-    conn = sqlite3.connect(tmp_path / "c.db")
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute("SELECT * FROM internal_engine_config").fetchall()
-    finally:
-        conn.close()
-    assert len(rows) == 1
-    return dict(rows[0])
+def _store_timeout(seconds: int) -> None:
+    """A hand edit of the vault document, settled the way the scanner would."""
+    path = vault_root() / _DOC
+    doc = json.loads(path.read_text())
+    doc["model_timeout_s"] = seconds
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([_DOC])
+
+
+def _doc() -> dict:
+    """The settings document at HEAD; absent means every default."""
+    raw = vault_writer().repo.read("HEAD", _DOC)
+    return json.loads(raw) if raw is not None else {}
+
+
+def _upkeep(doc: dict, name: str) -> dict:
+    return (doc.get("upkeep") or {}).get(name) or {}
 
 
 @pytest.mark.acceptance(
@@ -191,11 +194,10 @@ async def test_an_unchosen_interval_is_reported_beside_its_default(
         assert upkeep[name]["interval_s"] is None
         assert upkeep[name]["default_interval_s"] == int(DEFAULT_INTERVALS[name])
 
-    # The default lives in the worker's module, not in the vault's row.
-    row = _row(tmp_path)
-    assert row["aggregate_interval_s"] is None
-    assert row["distil_interval_s"] is None
-    assert row["curate_interval_s"] is None
+    # The default lives in the worker's module, not in the vault's document.
+    doc = _doc()
+    for name in _PASSES:
+        assert _upkeep(doc, name).get("interval_s") is None
 
 
 @pytest.mark.acceptance(
@@ -227,16 +229,13 @@ async def test_a_fresh_vault_ships_every_pass_switched_on(
     upkeep = (await _config(api))["upkeep"]
     assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True, True]
 
-    # The first write carries only a model; the row it creates still runs all three.
+    # The first write carries only a model; the document it creates still runs all three.
     assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 200
     upkeep = (await _config(api))["upkeep"]
     assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True, True]
-    row = _row(tmp_path)
-    assert (
-        bool(row["auto_aggregate_enabled"]),
-        bool(row["auto_distil_enabled"]),
-        bool(row["auto_curate_enabled"]),
-    ) == (True, True, True)
+    doc = _doc()
+    assert doc["model"] == "m"
+    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True, True, True]
 
 
 @pytest.mark.acceptance(
@@ -253,13 +252,13 @@ async def test_a_stored_bound_out_of_range_is_clamped_by_a_pass_and_refused_at_t
     )
     from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 
-    # A row a surface would never have written — an older build, a hand edit.
+    # A value a surface would never have written — an older build, a hand edit.
     assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 200
     for stored, runs_under in ((1, MIN_MODEL_TIMEOUT_S), (6000, MAX_MODEL_TIMEOUT_S)):
         # Off the event loop: the app's own background passes write this file
         # through the loop, and a blocking write here would wait on a lock only
         # the loop it is blocking can release.
-        await asyncio.to_thread(_store_timeout, tmp_path, stored)
+        await asyncio.to_thread(_store_timeout, stored)
         assert await read_internal_engine_timeout() == stored
         # The reader the passes are wired with, read per call: clamped, not raised.
         assert await resolve_timeout(read_internal_engine_timeout) == float(runs_under)

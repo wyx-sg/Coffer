@@ -248,7 +248,6 @@ def test_update_on_a_dormant_channel_is_allowed():
 
 def _channel(config: dict, *, scope: Scope | None = None) -> Resource:
     return Resource(
-        id=1,
         uid="uid-of-the-channel",
         kind="channel",
         name="tg",

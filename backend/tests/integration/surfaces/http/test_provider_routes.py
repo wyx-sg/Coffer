@@ -644,20 +644,19 @@ def test_set_internal_default_clears_previous(tmp_path, monkeypatch):
 async def test_a_second_internal_default_cannot_be_written_behind_the_service(
     tmp_path, monkeypatch
 ):
-    """The single-internal-default invariant is enforced by the DATABASE, not
+    """The single-internal-default invariant is enforced by the vault, not
     only by ``set_internal_default``.
 
     A live vault was found with two connections flagged, because the flag is an
-    ordinary config field and the generic resource-update path writes it without
-    clearing anything. A partial unique index makes the second row
-    unrepresentable, whatever writes it.
-
-    The raw statements below still go by ``name``: this is reaching BEHIND every
-    surface into the table, and the name column is what makes the fixture
-    readable there. Nothing about the invariant depends on it — the index is on
-    the config flag.
+    ordinary config field and a write that goes round the service sets it
+    without clearing anything. The vault's validator refuses any commit that
+    would leave two, whatever writes it: here a hand edit of the second
+    connection's file, which stays uncommitted and flagged while ``HEAD`` keeps
+    one default.
     """
-    import sqlite3
+    from coffer.domain.vault.findings import FindingCode
+    from coffer.infrastructure.vault.home import vault_root
+    from coffer.infrastructure.vault.instance import vault_writer
 
     app = _app(tmp_path, monkeypatch, 59872)
     with _client(app) as c:
@@ -673,24 +672,19 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
         )
         c.post(f"/api/v1/providers/{first}/internal-default")
 
-    conn = sqlite3.connect(tmp_path / "c.db")
-    try:
-        with pytest.raises(sqlite3.IntegrityError):
-            conn.execute(
-                "UPDATE resources SET config_json = "
-                "json_set(config_json, '$.internal_default', json('true')) "
-                "WHERE kind = 'provider' AND name = 'second'"
-            )
-        flagged = [
-            r[0]
-            for r in conn.execute(
-                "SELECT name FROM resources WHERE kind = 'provider' "
-                "AND json_extract(config_json, '$.internal_default') = 1"
-            )
-        ]
+        path = "resources/provider/second.json"
+        doc = json.loads((vault_root() / path).read_text())
+        doc["config"]["internal_default"] = True
+        (vault_root() / path).write_text(json.dumps(doc, indent=2) + "\n")
+        vault_writer().settle([path])
+
+        codes = [f.code for f in vault_writer().problems()[path]]
+        assert codes == [FindingCode.CONFIG_INVALID]
+        head = json.loads(vault_writer().repo.read("HEAD", path) or b"{}")
+        assert head["config"].get("internal_default") is not True
+        listed = c.get("/api/v1/providers").json()["providers"]
+        flagged = [p["name"] for p in listed if p["internal_default"]]
         assert flagged == ["first"]
-    finally:
-        conn.close()
 
 
 @pytest.mark.asyncio

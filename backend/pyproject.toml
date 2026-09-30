@@ -1075,7 +1075,6 @@ source_modules = [
     "coffer.application.engine",
     "coffer.application.engine_ports",
     "coffer.application.internal_engine_config_service",
-    "coffer.application.engine_settings_sync",
     "coffer.application.upkeep_schedule",
     "coffer.surfaces.http.internal_engine_routes",
     "coffer.domain.resource",

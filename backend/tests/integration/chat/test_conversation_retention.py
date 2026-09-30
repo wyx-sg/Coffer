@@ -27,8 +27,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyRetentionRepo
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
+)
 from coffer.surfaces.http.app_mcp_composition import build_prunable_registry
 from tests.unit.chat.conftest import FakeAgentAdapter, make_registry
 
@@ -56,7 +59,7 @@ def _retention(sm) -> RetentionService:  # type: ignore[no-untyped-def]
     registry = build_prunable_registry()
     return RetentionService(
         registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
+        repo=FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
 

@@ -72,7 +72,7 @@ class ChannelMirror:
         self._outbox = outbox
         self._processor = processor
         self._clock = clock
-        self._failed_at: dict[int, float] = {}
+        self._failed_at: dict[str, float] = {}
         # Collector tasks, held so they are not garbage-collected mid-turn.
         self._collectors: set[asyncio.Task[None]] = set()
 
@@ -101,7 +101,7 @@ class ChannelMirror:
         resource = target.resource
         body = FROM_COFFER + text
         binding = self._processor.binding(resource.name)
-        peer = await self._peers.get_by_chat(resource.id, loc.chat_id)
+        peer = await self._peers.get_by_chat(resource.uid, loc.chat_id)
         owed = await self._outbox.pending_for_conversation(conversation_id)
         if binding is not None and peer is not None and not owed:
             try:
@@ -124,7 +124,7 @@ class ChannelMirror:
                 sink = self._processor.turn_driver.render_sink(binding, peer, item, conversation_id)
                 return MirrorResult("sent", sink)
         await self._outbox.add(
-            resource_id=resource.id,
+            resource_uid=resource.uid,
             chat_id=loc.chat_id,
             thread_id=loc.thread_id,
             chat_kind=loc.chat_kind,
@@ -163,7 +163,7 @@ class ChannelMirror:
             return
         try:
             await self._outbox.add(
-                resource_id=loc.resource_id,
+                resource_uid=loc.resource_uid,
                 chat_id=loc.chat_id,
                 thread_id=loc.thread_id,
                 chat_kind=loc.chat_kind or "direct",
@@ -177,12 +177,12 @@ class ChannelMirror:
     async def flush(self, binding: ChannelBinding) -> None:
         """Deliver a running channel's owed messages, oldest first, stopping at
         the first one the platform refuses (the rest keep their order)."""
-        resource_id = binding.resource.id
-        failed = self._failed_at.get(resource_id)
+        resource_uid = binding.resource.uid
+        failed = self._failed_at.get(resource_uid)
         if failed is not None and self._clock() - failed < FLUSH_BACKOFF_SECONDS:
             return
-        for entry in await self._outbox.pending(resource_id):
-            if await self._peers.get_by_chat(resource_id, entry.chat_id) is None:
+        for entry in await self._outbox.pending(resource_uid):
+            if await self._peers.get_by_chat(resource_uid, entry.chat_id) is None:
                 # The chat was un-paired since: Coffer owes it nothing it may send,
                 # and the reply stays listed as undelivered rather than being
                 # pushed into a chat that no longer belongs to the owner.
@@ -195,7 +195,7 @@ class ChannelMirror:
                     chat_kind=entry.chat_kind,
                 )
             except Exception:
-                self._failed_at[resource_id] = self._clock()
+                self._failed_at[resource_uid] = self._clock()
                 _logger.warning(
                     "channel.mirror.flush_failed",
                     extra={"channel": binding.resource.name},
@@ -203,4 +203,4 @@ class ChannelMirror:
                 )
                 return
             await self._outbox.mark_delivered(entry.id)
-        self._failed_at.pop(resource_id, None)
+        self._failed_at.pop(resource_uid, None)

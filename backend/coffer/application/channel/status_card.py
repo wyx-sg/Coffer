@@ -47,7 +47,7 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
         await ctx.say(await _group_status(ctx))
         return
     settings = await ctx.settings()
-    row = await ctx.commands._threads.get(ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id)
+    row = await ctx.commands._threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
     bound = row.active_conversation_id if row is not None else None
     conversation = settings.conversation
     mark = row.parallel_mark if row is not None else None

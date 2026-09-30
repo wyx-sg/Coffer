@@ -39,7 +39,6 @@ _CODEX_UID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 def _agent(uid: str, agent_type: AgentType, *, enabled: bool = True) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind="agent",
         name=agent_type.default_name(),
@@ -65,7 +64,6 @@ def _connection(
     if protocol != "ollama":
         config["credential_ref"] = "provider/x/key"
     resource = Resource(
-        id=1,
         uid="cccccccccccccccccccccccccccccccc",
         kind="provider",
         name="gw",

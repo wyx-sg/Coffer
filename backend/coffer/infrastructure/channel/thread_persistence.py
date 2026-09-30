@@ -14,12 +14,12 @@ from typing import Any
 
 from sqlalchemy import (
     TIMESTAMP,
-    ForeignKey,
     Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    delete,
     func,
     select,
 )
@@ -44,11 +44,7 @@ class ChannelThreadConversationModel(Base):
     __tablename__ = "channel_thread_conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
     # "" is the DM (or a group's main chat); each group thread is its own row.
     thread_id: Mapped[str] = mapped_column(String, nullable=False, default="")
@@ -69,12 +65,12 @@ class ChannelThreadConversationModel(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "resource_id",
+            "resource_uid",
             "chat_id",
             "thread_id",
             name="uq_channel_thread_conv_resource_chat_thread",
         ),
-        Index("idx_channel_thread_conv_resource", "resource_id"),
+        Index("idx_channel_thread_conv_resource", "resource_uid"),
     )
 
 
@@ -84,11 +80,7 @@ class ChannelThreadHistoryModel(Base):
     __tablename__ = "channel_thread_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
     thread_id: Mapped[str] = mapped_column(String, nullable=False, default="")
     conversation_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -97,7 +89,7 @@ class ChannelThreadHistoryModel(Base):
 
     __table_args__ = (
         UniqueConstraint("conversation_id", name="uq_channel_thread_history_conversation"),
-        Index("idx_channel_thread_history_thread", "resource_id", "chat_id", "thread_id"),
+        Index("idx_channel_thread_history_thread", "resource_uid", "chat_id", "thread_id"),
     )
 
 
@@ -108,7 +100,7 @@ def _tz(dt: datetime) -> datetime:
 
 def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConversation:
     return ChannelThreadConversation(
-        resource_id=row.resource_id,
+        resource_uid=row.resource_uid,
         chat_id=row.chat_id,
         thread_id=row.thread_id,
         active_conversation_id=row.active_conversation_id,
@@ -128,7 +120,7 @@ class ChannelThreadConversationRepo:
 
     See "Key conversation identity by channel, chat and thread".
 
-    Conversation identity is keyed by ``(resource_id, chat_id, thread_id)`` so
+    Conversation identity is keyed by ``(resource_uid, chat_id, thread_id)`` so
     each group thread (and the DM, ``thread_id=""``) drives its own conversation
     with its own turn lock. Every write upserts only the fields it names,
     leaving the rest of the row untouched — a thread's sticky settings survive
@@ -139,25 +131,25 @@ class ChannelThreadConversationRepo:
         self._sm = session_maker
 
     async def get(
-        self, resource_id: int, chat_id: str, thread_id: str
+        self, resource_uid: str, chat_id: str, thread_id: str
     ) -> ChannelThreadConversation | None:
         async with self._sm() as session:
-            row = await self._row(session, resource_id, chat_id, thread_id)
+            row = await self._row(session, resource_uid, chat_id, thread_id)
             return _thread_to_domain(row) if row is not None else None
 
     async def set_active_conversation(
-        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, conversation_id: str | None
     ) -> None:
-        await self._upsert(resource_id, chat_id, thread_id, active_conversation_id=conversation_id)
+        await self._upsert(resource_uid, chat_id, thread_id, active_conversation_id=conversation_id)
 
     async def set_preferred_agent(
-        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
+        self, resource_uid: str, chat_id: str, thread_id: str, preferred_agent: str | None
     ) -> None:
-        await self._upsert(resource_id, chat_id, thread_id, preferred_agent=preferred_agent)
+        await self._upsert(resource_uid, chat_id, thread_id, preferred_agent=preferred_agent)
 
     async def set_preferences(
         self,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         *,
@@ -173,25 +165,25 @@ class ChannelThreadConversationRepo:
             "preferred_cwd": cwd,
         }
         await self._upsert(
-            resource_id,
+            resource_uid,
             chat_id,
             thread_id,
             **{key: value for key, value in fields.items() if value is not KEEP},
         )
 
     async def note_chat_kind(
-        self, resource_id: int, chat_id: str, thread_id: str, chat_kind: str
+        self, resource_uid: str, chat_id: str, thread_id: str, chat_kind: str
     ) -> None:
-        await self._upsert(resource_id, chat_id, thread_id, chat_kind=chat_kind)
+        await self._upsert(resource_uid, chat_id, thread_id, chat_kind=chat_kind)
 
-    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
+    async def next_parallel_ordinal(self, resource_uid: str, chat_id: str) -> int:
         # Over every row of the chat, not only live ones: a number stays taken
         # after its conversation is replaced, so a mark never names two threads.
         async with self._sm() as session:
             highest = (
                 await session.execute(
                     select(func.max(ChannelThreadConversationModel.parallel_ordinal)).where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
+                        ChannelThreadConversationModel.resource_uid == resource_uid,
                         ChannelThreadConversationModel.chat_id == chat_id,
                     )
                 )
@@ -199,21 +191,21 @@ class ChannelThreadConversationRepo:
             return int(highest or 0) + 1
 
     async def open_parallel(
-        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
+        self, resource_uid: str, chat_id: str, thread_id: str, ordinal: int, title: str
     ) -> None:
         await self._upsert(
-            resource_id, chat_id, thread_id, parallel_ordinal=ordinal, parallel_title=title
+            resource_uid, chat_id, thread_id, parallel_ordinal=ordinal, parallel_title=title
         )
 
     async def list_parallel(
-        self, resource_id: int, chat_id: str
+        self, resource_uid: str, chat_id: str
     ) -> list[ChannelThreadConversation]:
         async with self._sm() as session:
             rows = (
                 await session.execute(
                     select(ChannelThreadConversationModel)
                     .where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
+                        ChannelThreadConversationModel.resource_uid == resource_uid,
                         ChannelThreadConversationModel.chat_id == chat_id,
                         ChannelThreadConversationModel.parallel_ordinal.is_not(None),
                     )
@@ -226,7 +218,7 @@ class ChannelThreadConversationRepo:
 
     async def record_history(
         self,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         conversation_id: str,
@@ -247,7 +239,7 @@ class ChannelThreadConversationRepo:
                 return
             session.add(
                 ChannelThreadHistoryModel(
-                    resource_id=resource_id,
+                    resource_uid=resource_uid,
                     chat_id=chat_id,
                     thread_id=thread_id,
                     conversation_id=conversation_id,
@@ -258,14 +250,14 @@ class ChannelThreadConversationRepo:
             await session.commit()
 
     async def history(
-        self, resource_id: int, chat_id: str, thread_id: str, *, limit: int = 20
+        self, resource_uid: str, chat_id: str, thread_id: str, *, limit: int = 20
     ) -> list[str]:
         async with self._sm() as session:
             rows = (
                 await session.execute(
                     select(ChannelThreadHistoryModel.conversation_id)
                     .where(
-                        ChannelThreadHistoryModel.resource_id == resource_id,
+                        ChannelThreadHistoryModel.resource_uid == resource_uid,
                         ChannelThreadHistoryModel.chat_id == chat_id,
                         ChannelThreadHistoryModel.thread_id == thread_id,
                     )
@@ -290,24 +282,31 @@ class ChannelThreadConversationRepo:
             if chat_kind is None:
                 # Recorded before the thread's kind was known; the thread row may
                 # have learnt it since from a later message.
-                thread = await self._row(session, row.resource_id, row.chat_id, row.thread_id)
+                thread = await self._row(session, row.resource_uid, row.chat_id, row.thread_id)
                 chat_kind = thread.chat_kind if thread is not None else None
             return ChannelThreadLocation(
-                resource_id=row.resource_id,
+                resource_uid=row.resource_uid,
                 chat_id=row.chat_id,
                 thread_id=row.thread_id,
                 chat_kind=chat_kind,
                 opened_at=_tz(row.opened_at),
             )
 
+    async def delete_for_channel(self, resource_uid: str) -> None:
+        """Drop every thread row and history row of a deleted channel."""
+        async with self._sm() as session:
+            for model in (ChannelThreadConversationModel, ChannelThreadHistoryModel):
+                await session.execute(delete(model).where(model.resource_uid == resource_uid))
+            await session.commit()
+
     # -- helpers ---------------------------------------------------------------
 
-    async def _upsert(self, resource_id: int, chat_id: str, thread_id: str, **fields: Any) -> None:
+    async def _upsert(self, resource_uid: str, chat_id: str, thread_id: str, **fields: Any) -> None:
         async with self._sm() as session:
-            row = await self._row(session, resource_id, chat_id, thread_id)
+            row = await self._row(session, resource_uid, chat_id, thread_id)
             if row is None:
                 row = ChannelThreadConversationModel(
-                    resource_id=resource_id, chat_id=chat_id, thread_id=thread_id
+                    resource_uid=resource_uid, chat_id=chat_id, thread_id=thread_id
                 )
                 session.add(row)
             for key, value in fields.items():
@@ -317,12 +316,12 @@ class ChannelThreadConversationRepo:
 
     @staticmethod
     async def _row(
-        session: Any, resource_id: int, chat_id: str, thread_id: str
+        session: Any, resource_uid: str, chat_id: str, thread_id: str
     ) -> ChannelThreadConversationModel | None:
         row: ChannelThreadConversationModel | None = (
             await session.execute(
                 select(ChannelThreadConversationModel).where(
-                    ChannelThreadConversationModel.resource_id == resource_id,
+                    ChannelThreadConversationModel.resource_uid == resource_uid,
                     ChannelThreadConversationModel.chat_id == chat_id,
                     ChannelThreadConversationModel.thread_id == thread_id,
                 )

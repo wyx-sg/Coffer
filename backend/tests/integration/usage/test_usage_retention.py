@@ -10,8 +10,11 @@ from sqlalchemy import select, text
 from coffer.application.audit_service import AuditService
 from coffer.application.retention_registry import PrunableRegistry, PrunableTable
 from coffer.application.retention_service import RetentionService
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyRetentionRepo
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
+)
 from coffer.infrastructure.persistence.usage_models import UsageDailyModel, UsageRequestModel
 from coffer.infrastructure.persistence.usage_repo import SqlAlchemyUsageRepo
 from coffer.surfaces.http.app_mcp_composition import build_prunable_registry
@@ -25,7 +28,7 @@ def _retention(sm) -> RetentionService:  # type: ignore[no-untyped-def]
     registry = build_prunable_registry()
     return RetentionService(
         registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
+        repo=FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
 

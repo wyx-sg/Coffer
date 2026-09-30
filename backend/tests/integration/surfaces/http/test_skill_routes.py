@@ -416,7 +416,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
 
         # And a master folder no resource row claims — ORPHAN_MASTER, the one
         # drift kind with no identity on either side.
-        (tmp_path / ".coffer" / "skills" / "adopted-by-nobody").mkdir(parents=True)
+        (tmp_path / ".coffer" / "vault" / "skills" / "adopted-by-nobody").mkdir(parents=True)
 
         # Verify first: the report a client reads before deciding to repair.
         r = c.post("/api/v1/skills/verify")

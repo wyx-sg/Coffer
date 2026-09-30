@@ -1,47 +1,39 @@
-"""MCP-kind ORM models + repos.
+"""MCP capability switches: a vault document per server, seen-times derived
+(plan D13; spec vault-storage).
 
-Models register against the shared ``Base.metadata`` so Alembic finds them
-in one place. Per Contract 5 (cross-kind imports forbidden), this module
-must NOT import from any other kind module.
+Whether a person switched a capability off is theirs, and travels: it is
+``state/mcp-preferences/<server name>.json``::
 
-Historically this file held every MCP-side model and repo. To keep
-individual modules under the 400-line guideline, the invocation log and
-the server-health record now live in sibling modules:
+    {"server_uid": "<uid>", "format_version": 1, "disabled": {"tool": ["delete_repo"]}}
 
-* :mod:`coffer.infrastructure.mcp.invocation_writer` — buffered writer
-  repo + ``MCPInvocationModel``.
-* :mod:`coffer.infrastructure.mcp.health_repo` — health upsert/query repo
-  + ``MCPServerHealthModel``.
+Only the switched-off capabilities are listed — a capability nobody touched
+is on, so a new upstream tool writes nothing into the vault. When this machine
+first and last saw each capability is an observation it makes again, so those
+times are in ``derived/derived.db`` (``mcp_capability_seen``) and never
+committed.
 
-This module remains the canonical import point: it re-exports the
-public names from those modules so existing call sites (``from
-coffer.infrastructure.mcp.persistence import …``) keep working without
-edits.
+The document follows its server: deleted with it in the same commit (the
+server's name is fixed, so it is never renamed; the follower handles a rename
+anyway).
+
+The invocation log and the server-health record live in sibling modules and
+are re-exported here, so ``persistence`` stays the one import for the kind.
+Per Contract 5 (cross-kind imports forbidden), this module must NOT import
+from any other kind module.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
-from sqlalchemy import (
-    TIMESTAMP,
-    Boolean,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    UniqueConstraint,
-    select,
-    update,
-)
+from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
-from coffer.domain.mcp.capability import (
-    CapabilityType,
-    MCPCapabilityPreference,
-)
+from coffer.domain.mcp.capability import CapabilityType, MCPCapabilityPreference
 from coffer.infrastructure.mcp.health_repo import (
     HealthStatus,
     MCPServerHealthModel,
@@ -51,48 +43,25 @@ from coffer.infrastructure.mcp.invocation_writer import (
     MCPInvocationModel,
     MCPInvocationRepo,
 )
-from coffer.infrastructure.persistence.base import Base
+from coffer.infrastructure.persistence.derived_db import MCPCapabilitySeenModel
+from coffer.infrastructure.vault.state_documents import StateDocuments
 
 __all__ = [
+    "AREA",
     "HealthStatus",
-    "MCPCapabilityPreferenceModel",
-    "MCPCapabilityPreferenceRepo",
+    "MCPCapabilityPreferenceStore",
     "MCPInvocationModel",
     "MCPInvocationRepo",
     "MCPServerHealthModel",
     "MCPServerHealthRepo",
 ]
 
-
-class MCPCapabilityPreferenceModel(Base):
-    __tablename__ = "mcp_capability_preferences"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    capability_type: Mapped[str] = mapped_column(String, nullable=False)
-    capability_key: Mapped[str] = mapped_column(String, nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    first_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    last_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint(
-            "resource_id",
-            "capability_type",
-            "capability_key",
-            name="uq_mcp_prefs_resource_type_key",
-        ),
-        Index(
-            "idx_prefs_resource",
-            "resource_id",
-            "capability_type",
-            "enabled",
-        ),
-    )
+#: ``state/mcp-preferences/``.
+AREA = "mcp-preferences"
+_OWNER = "server_uid"
+#: What a capability the person switched off, but this machine has never
+#: seen, reports as its seen-times: nothing was observed here.
+_NEVER = datetime.fromtimestamp(0, tz=UTC)
 
 
 def _tz(dt: datetime) -> datetime:
@@ -100,162 +69,201 @@ def _tz(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
-def _pref_to_domain(row: MCPCapabilityPreferenceModel) -> MCPCapabilityPreference:
-    return MCPCapabilityPreference(
-        id=row.id,
-        resource_id=row.resource_id,
-        capability_type=row.capability_type,  # type: ignore[arg-type]
-        capability_key=row.capability_key,
-        enabled=row.enabled,
-        first_seen_at=_tz(row.first_seen_at),
-        last_seen_at=_tz(row.last_seen_at),
-    )
+def _disabled(doc: dict[str, Any] | None) -> dict[str, set[str]]:
+    raw = (doc or {}).get("disabled")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(t): {k for k in keys if isinstance(k, str)}
+        for t, keys in raw.items()
+        if isinstance(keys, list)
+    }
 
 
-class MCPCapabilityPreferenceRepo:
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
+class MCPCapabilityPreferenceStore:
+    """``MCPCapabilityPreferenceRepoPort``: switches in the vault, seen-times
+    in ``derived.db``."""
 
-    async def find(
+    def __init__(
         self,
-        resource_id: int,
-        capability_type: CapabilityType,
-        capability_key: str,
-    ) -> MCPCapabilityPreference | None:
-        async with self._sm() as session:
-            stmt = select(MCPCapabilityPreferenceModel).where(
-                MCPCapabilityPreferenceModel.resource_id == resource_id,
-                MCPCapabilityPreferenceModel.capability_type == capability_type,
-                MCPCapabilityPreferenceModel.capability_key == capability_key,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            return _pref_to_domain(row) if row else None
+        derived_sm: async_sessionmaker,  # type: ignore[type-arg]
+        *,
+        name_of: Callable[[str], str | None] = lambda _uid: None,
+        home: Path | None = None,
+    ) -> None:
+        self._sm = derived_sm
+        self._name_of = name_of
+        self.documents = StateDocuments(AREA, _OWNER, home=home)
 
-    async def list_for(
-        self,
-        resource_id: int,
-        capability_type: CapabilityType | None = None,
-    ) -> list[MCPCapabilityPreference]:
+    def _off(self, server_uid: str) -> dict[str, set[str]]:
+        return _disabled(self.documents.get(server_uid))
+
+    def _save(self, server_uid: str, off: dict[str, set[str]], summary: str) -> None:
+        listed = {t: sorted(keys) for t, keys in sorted(off.items()) if keys}
+        if not listed:
+            self.documents.remove(server_uid, summary=summary)
+            return
+        name = self._name_of(server_uid) or server_uid
+        self.documents.put(server_uid, name, {"disabled": listed}, summary=summary)
+
+    async def _seen(
+        self, server_uid: str, capability_type: CapabilityType | None
+    ) -> list[MCPCapabilitySeenModel]:
         async with self._sm() as session:
-            stmt = select(MCPCapabilityPreferenceModel).where(
-                MCPCapabilityPreferenceModel.resource_id == resource_id
+            stmt = select(MCPCapabilitySeenModel).where(
+                MCPCapabilitySeenModel.server_uid == server_uid
             )
             if capability_type is not None:
-                stmt = stmt.where(MCPCapabilityPreferenceModel.capability_type == capability_type)
-            rows = (await session.execute(stmt)).scalars().all()
-            return [_pref_to_domain(r) for r in rows]
+                stmt = stmt.where(MCPCapabilitySeenModel.capability_type == capability_type)
+            return list((await session.execute(stmt)).scalars().all())
+
+    async def find(
+        self, resource_uid: str, capability_type: CapabilityType, capability_key: str
+    ) -> MCPCapabilityPreference | None:
+        for pref in await self.list_for(resource_uid, capability_type):
+            if pref.capability_key == capability_key:
+                return pref
+        return None
+
+    async def list_for(
+        self, resource_uid: str, capability_type: CapabilityType | None = None
+    ) -> list[MCPCapabilityPreference]:
+        """Every capability seen here, and every one switched off anywhere."""
+        off = self._off(resource_uid)
+        out: dict[tuple[str, str], MCPCapabilityPreference] = {}
+        for row in await self._seen(resource_uid, capability_type):
+            ctype: Any = row.capability_type
+            out[(row.capability_type, row.capability_key)] = MCPCapabilityPreference(
+                resource_uid=resource_uid,
+                capability_type=ctype,
+                capability_key=row.capability_key,
+                enabled=row.capability_key not in off.get(row.capability_type, set()),
+                first_seen_at=_tz(row.first_seen_at),
+                last_seen_at=_tz(row.last_seen_at),
+            )
+        for ctype_name, keys in off.items():
+            if capability_type is not None and ctype_name != capability_type:
+                continue
+            for key in keys:
+                if (ctype_name, key) not in out:
+                    ct: Any = ctype_name
+                    out[(ctype_name, key)] = MCPCapabilityPreference(
+                        resource_uid=resource_uid,
+                        capability_type=ct,
+                        capability_key=key,
+                        enabled=False,
+                        first_seen_at=_NEVER,
+                        last_seen_at=_NEVER,
+                    )
+        return [out[k] for k in sorted(out)]
+
+    async def _touch(
+        self, server_uid: str, capability_type: str, keys: list[str], when: datetime
+    ) -> list[str]:
+        """Record ``keys`` as seen at ``when``; answer the ones new here."""
+        if not keys:
+            return []
+        async with self._sm() as session:
+            existing = set(
+                (
+                    await session.execute(
+                        select(MCPCapabilitySeenModel.capability_key).where(
+                            MCPCapabilitySeenModel.server_uid == server_uid,
+                            MCPCapabilitySeenModel.capability_type == capability_type,
+                            MCPCapabilitySeenModel.capability_key.in_(keys),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if existing:
+                await session.execute(
+                    update(MCPCapabilitySeenModel)
+                    .where(
+                        MCPCapabilitySeenModel.server_uid == server_uid,
+                        MCPCapabilitySeenModel.capability_type == capability_type,
+                        MCPCapabilitySeenModel.capability_key.in_(existing),
+                    )
+                    .values(last_seen_at=when)
+                )
+            new_keys = [k for k in dict.fromkeys(keys) if k not in existing]
+            if new_keys:
+                await session.execute(
+                    sqlite_insert(MCPCapabilitySeenModel)
+                    .values(
+                        [
+                            {
+                                "server_uid": server_uid,
+                                "capability_type": capability_type,
+                                "capability_key": key,
+                                "first_seen_at": when,
+                                "last_seen_at": when,
+                            }
+                            for key in new_keys
+                        ]
+                    )
+                    .on_conflict_do_nothing()
+                )
+            await session.commit()
+            return new_keys
 
     async def insert(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
         first_seen_at: datetime,
         last_seen_at: datetime,
     ) -> MCPCapabilityPreference:
-        async with self._sm() as session:
-            row = MCPCapabilityPreferenceModel(
-                resource_id=resource_id,
-                capability_type=capability_type,
-                capability_key=capability_key,
-                enabled=enabled,
-                first_seen_at=first_seen_at,
-                last_seen_at=last_seen_at,
-            )
-            session.add(row)
-            await session.commit()
-            await session.refresh(row)
-            return _pref_to_domain(row)
+        await self._touch(resource_uid, capability_type, [capability_key], last_seen_at)
+        if not enabled:
+            off = self._off(resource_uid)
+            off.setdefault(capability_type, set()).add(capability_key)
+            self._save(resource_uid, off, f"Switched off {capability_type} {capability_key}")
+        found = await self.find(resource_uid, capability_type, capability_key)
+        assert found is not None
+        return found
 
     async def set_enabled(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         capability_key: str,
         enabled: bool,
     ) -> MCPCapabilityPreference | None:
-        async with self._sm() as session:
-            stmt = select(MCPCapabilityPreferenceModel).where(
-                MCPCapabilityPreferenceModel.resource_id == resource_id,
-                MCPCapabilityPreferenceModel.capability_type == capability_type,
-                MCPCapabilityPreferenceModel.capability_key == capability_key,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                return None
-            row.enabled = enabled
-            await session.commit()
-            await session.refresh(row)
-            return _pref_to_domain(row)
+        if await self.find(resource_uid, capability_type, capability_key) is None:
+            return None
+        off = self._off(resource_uid)
+        keys = off.setdefault(capability_type, set())
+        if enabled:
+            keys.discard(capability_key)
+        else:
+            keys.add(capability_key)
+        verb = "on" if enabled else "off"
+        self._save(resource_uid, off, f"Switched {verb} {capability_type} {capability_key}")
+        return await self.find(resource_uid, capability_type, capability_key)
 
     async def reconcile(
         self,
-        resource_id: int,
+        resource_uid: str,
         capability_type: CapabilityType,
         current_keys: list[str],
         *,
         default_enabled: bool,
         when: datetime,
     ) -> list[str]:
-        """Insert new keys + touch last_seen for existing keys in one session.
+        """Record every key as seen now; answer the ones first seen here.
 
-        Returns the list of keys that were newly inserted; the caller treats
-        it as informational (a first sighting is recorded as the row's
-        ``first_seen_at``, not as an audit row). Race-safe via
-        ``INSERT … ON CONFLICT DO NOTHING``: two concurrent reconcile() calls
-        from independent sessions cannot both insert the same row, so the
-        UniqueConstraint never fires.
+        A new key is on unless ``default_enabled`` is False, in which case it
+        is switched off in the server's document. Keys that disappeared
+        upstream keep their switch, so a capability that comes back comes back
+        as the person left it.
         """
-        if not current_keys:
-            return []
-        async with self._sm() as session:
-            # Step 1: find which of `current_keys` already exist for this
-            # (resource_id, capability_type). One query instead of N.
-            existing_stmt = select(MCPCapabilityPreferenceModel.capability_key).where(
-                MCPCapabilityPreferenceModel.resource_id == resource_id,
-                MCPCapabilityPreferenceModel.capability_type == capability_type,
-                MCPCapabilityPreferenceModel.capability_key.in_(current_keys),
-            )
-            existing_keys = set((await session.execute(existing_stmt)).scalars().all())
-
-            # Step 2: batch UPDATE last_seen_at for existing rows.
-            if existing_keys:
-                await session.execute(
-                    update(MCPCapabilityPreferenceModel)
-                    .where(
-                        MCPCapabilityPreferenceModel.resource_id == resource_id,
-                        MCPCapabilityPreferenceModel.capability_type == capability_type,
-                        MCPCapabilityPreferenceModel.capability_key.in_(existing_keys),
-                    )
-                    .values(last_seen_at=when)
-                )
-
-            # Step 3: INSERT … ON CONFLICT DO NOTHING for net-new keys.
-            new_keys = [k for k in current_keys if k not in existing_keys]
-            if new_keys:
-                payload = [
-                    {
-                        "resource_id": resource_id,
-                        "capability_type": capability_type,
-                        "capability_key": key,
-                        "enabled": default_enabled,
-                        "first_seen_at": when,
-                        "last_seen_at": when,
-                    }
-                    for key in new_keys
-                ]
-                await session.execute(
-                    sqlite_insert(MCPCapabilityPreferenceModel)
-                    .values(payload)
-                    .on_conflict_do_nothing(
-                        index_elements=[
-                            "resource_id",
-                            "capability_type",
-                            "capability_key",
-                        ],
-                    )
-                )
-
-            await session.commit()
-            return new_keys
+        new_keys = await self._touch(resource_uid, capability_type, current_keys, when)
+        if new_keys and not default_enabled:
+            off = self._off(resource_uid)
+            off.setdefault(capability_type, set()).update(new_keys)
+            self._save(resource_uid, off, f"Switched off {len(new_keys)} new {capability_type}s")
+        return new_keys

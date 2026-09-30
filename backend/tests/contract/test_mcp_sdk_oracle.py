@@ -14,7 +14,6 @@ the test fails — so the SDK's own validation is the oracle.
 
 from __future__ import annotations
 
-import os
 import re
 import socket
 import sys
@@ -28,6 +27,7 @@ import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.fixtures.net import free_port
 
@@ -93,14 +93,13 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     REST registration call from within the fixture body. ``root`` is the
     knowledge tree this daemon writes into — it comes back because the layer
     has no read tool any more, so confirming a write means looking at the
-    directory. It is read out of the environment rather than guessed from
-    ``HOME``: the suite-wide ``_isolated_knowledge_root`` fixture pins it, and
-    that is the value the daemon in this process resolves.
+    directory. It is resolved from ``HOME`` exactly as the daemon in this
+    process resolves it.
     """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    knowledge_root = Path(os.environ["COFFER_KNOWLEDGE_ROOT"])
+    knowledge_root = _knowledge_root()
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     # Port range must not clash with other parallel test processes
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59600")

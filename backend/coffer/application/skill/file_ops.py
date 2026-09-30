@@ -1,6 +1,6 @@
 """Read-only file-tree + file-content helpers for a skill's master folder.
 
-A skill's canonical master folder lives at ``~/.coffer/skills/<name>/`` and is
+A skill's canonical master folder lives at ``~/.coffer/vault/skills/<name>/`` and is
 Coffer-owned (see ``infrastructure/skill/master_store.py``). Surfaces show that
 folder as a file tree, let the user read individual files, and let them save an
 edited file back (``write_skill_file``).

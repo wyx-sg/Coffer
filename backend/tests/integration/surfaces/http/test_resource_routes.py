@@ -14,14 +14,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -51,7 +49,7 @@ async def _client(tmp_path):
             supports_scope=True,
         ),
     }
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(kinds=kinds, repo=repo, audit=audit)
 
@@ -130,7 +128,7 @@ async def test_generic_register_rejects_lifecycle_kind_returns_409(tmp_path):
     }
     svc = ResourceService(
         kinds=kinds,
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     app = FastAPI()
@@ -422,7 +420,7 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
     # The production Kind wires the credential-ref extractor + audit redactor
     # that drive probing/redaction; build it the real way.
     kinds = {"mcp_server": make_mcp_kind({})}
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = ResourceService(kinds=kinds, repo=repo, audit=audit, credentials=keyring)
 

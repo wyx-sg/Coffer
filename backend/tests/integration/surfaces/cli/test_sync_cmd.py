@@ -84,8 +84,6 @@ class Fleet:
 
 @pytest.fixture
 def fleet(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Fleet]:
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "pinned-knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "pinned-skills"))
     # Rich wraps at 80 columns by default, which folds a tmp path mid-word.
     monkeypatch.setenv("COLUMNS", "200")
 
