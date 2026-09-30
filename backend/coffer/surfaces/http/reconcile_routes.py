@@ -120,7 +120,7 @@ async def get_attention(
     return attention_out(await service.report())
 
 
-@attention_router.put("/ignored/{key:path}", status_code=204)
+@attention_router.put("/ignored/{key:path}", status_code=204, response_class=Response)
 async def ignore_attention_item(
     key: str,
     actor: str = Depends(get_actor),
@@ -133,7 +133,7 @@ async def ignore_attention_item(
     return Response(status_code=204)
 
 
-@attention_router.delete("/ignored/{key:path}", status_code=204)
+@attention_router.delete("/ignored/{key:path}", status_code=204, response_class=Response)
 async def unignore_attention_item(
     key: str,
     actor: str = Depends(get_actor),
