@@ -176,6 +176,8 @@ A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Cl
 
 **Web UI:** in **Add provider**, choose **Ollama**. Coffer looks on each runtime's default port (or at the loopback address you type, then **Detect**) and lists what answered — the runtime, its version, the protocols it serves and its models. Pick one and the protocol to use: **Anthropic-compatible** or **OpenAI-compatible** when the runtime serves it, or **Ollama API** for Coffer's engine only. The next step starts with the models that can call tools ticked, each showing its context window.
 
+If nothing answers, the dialog says so and offers a prompt for your agent (**Copy prompt**, or **Ask an agent**) to set a runtime up on this machine: it names the machine, the runtimes and default ports Coffer probes, and the versions that serve both agents' protocols, prefers Ollama or LM Studio, and asks for one tool-calling model that fits your memory. Press **Detect** once it is running. Installing a runtime yourself works just as well — start it on its default port, or type the address of one that is already running. `coffer provider detect-local` prints the same prompt when it finds nothing.
+
 **CLI:**
 
 ```sh

@@ -20,6 +20,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from coffer.application.agent.install_handoff import (
+    MachineFacts,
+    agent_install_handoff,
+    agent_program_handoff,
+)
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.descriptor import AgentDescriptor
 from coffer.domain.agent.detection import DetectionState, ProgramInfo, classify
@@ -106,11 +111,45 @@ class AutoDetectService:
         catalog: AgentCatalog,
         environ: Callable[[], dict[str, str]] = lambda: dict(os.environ),
         dir_exists: Callable[[pathlib.Path], bool] = _is_dir,
+        machine: Callable[[], str] = lambda: "unknown",
+        lookup_path: Callable[[], str] = lambda: os.environ.get("PATH", ""),
     ) -> None:
         self._agents = agent_service
         self._catalog = catalog
         self._environ = environ
         self._dir_exists = dir_exists
+        # What an install prompt says about this machine: its OS and
+        # architecture, and the PATH the dependency probes look programs up on.
+        self._machine = machine
+        self._lookup_path = lookup_path
+
+    async def _facts(self) -> MachineFacts:
+        # The first ask of the lookup PATH may start the login shell.
+        return MachineFacts(
+            machine=self._machine(), lookup_path=await asyncio.to_thread(self._lookup_path)
+        )
+
+    async def install_handoff(self, rows: list[AgentTypeDetection]) -> str | None:
+        """The prompt that installs one of the supported types, while none of
+        ``rows`` is installed; ``None`` once one is."""
+        if not rows or any(row.state.installed for row in rows):
+            return None
+        return agent_install_handoff(rows, await self._facts())
+
+    async def program_handoff(
+        self, agent_type: AgentType, config_dir: str, state: DetectionState, *, registered: bool
+    ) -> str | None:
+        """The prompt that installs (or reinstalls) ``agent_type``'s program
+        while it is not found; ``None`` while it is."""
+        if state.installed:
+            return None
+        return agent_program_handoff(
+            agent_type,
+            config_dir=config_dir,
+            state=state,
+            registered=registered,
+            facts=await self._facts(),
+        )
 
     def _program(self, descriptor: AgentDescriptor) -> ProgramInfo:
         probe = descriptor.dependency_probe

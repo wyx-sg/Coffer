@@ -81,7 +81,7 @@ def discovery(
     """An adapter whose PATH lookup resolves to ``tmp_path/claude``."""
     binary = tmp_path / "claude"
     monkeypatch.setattr(
-        "coffer.infrastructure.agent.claude_binary_models.shutil.which",
+        "coffer.infrastructure.agent.claude_binary_models.which_on_user_path",
         lambda name: str(binary) if binary.exists() else None,
     )
     return ClaudeBinaryModelDiscovery()

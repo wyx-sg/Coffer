@@ -268,7 +268,6 @@
     }
   },
   "mcp": {
-    "missingRunnerHint": "Install {{runner}}, then refresh",
     "server": {
       "tabs": {
         "overview": "Overview",
@@ -521,8 +520,7 @@
       "testExit": " · exit code {{code}} after listing",
       "testListed": "Listed {{tools}} tools, {{resources}} resources, {{prompts}} prompts — the same set agents see now. Nothing to update.",
       "offBodyAgents": "Coffer doesn't start it for any session. Turning it on gives it back to {{agents}}, the agents you chose last time.",
-      "openInClis": "Open in CLIs",
-      "launcherBodyWho": "Coffer starts this server with {{runner}}. Install it, then test again — {{who}} can't call {{tools}} until then.",
+      "launcherBodyWho": "Coffer starts this server with {{runner}}, which isn't found on this machine — {{who}} can't call {{tools}} until it is. Hand the install to an agent, then test again.",
       "failingBodyWho": "{{who}} can't call {{tools}} until it answers again.",
       "lastSuccessAt": "Last successful call {{at}}.",
       "colTool": "Tool",
@@ -619,7 +617,7 @@
       "last24h": "Last 24 hours",
       "lastErrorAt": "Last error at {{at}}",
       "lastSuccess": "Last successful call {{at}}, {{tool}}.",
-      "launcherTitle": "{{runner}} is not installed on this Mac",
+      "launcherTitle": "{{runner}} isn't found on this machine",
       "listed": "Listed",
       "listedDirectly": "Listed directly",
       "log": {
@@ -827,6 +825,7 @@
       "skill_unbound": "Unbound skill {{resource}} from {{key}}",
       "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
       "skill_updated": "Updated skill {{resource}}",
+      "skill_update_merged": "Recorded an update merged into skill {{resource}}",
       "sync_confirmed": "Confirmed a held converge round",
       "sync_machine_removed": "Retired a machine from the sync registry",
       "sync_rejected": "Rejected a held converge round",
@@ -834,6 +833,7 @@
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
       "daemon_residency_updated": "Daemon residency changed",
+      "daemon_restarted": "Daemon restarted from the web UI",
       "knowledge_curated": "Curated {{resource}}: folded new items into its documents",
       "secret_revealed": "Revealed a secret in the Coffer app",
       "secret_resolved": "Handed a secret to a coffer run command",
@@ -1187,7 +1187,11 @@
         "channel": "Default for the {{channel}} channel"
       },
       "offTitle": "{{name}} is switched off",
-      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on from the command line: coffer config set feature.{{key}} on."
+      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on and this page opens right away.",
+      "offPinned": "{{name}} is an experimental feature, held off by COFFER_FEATURES where the daemon is started, so it can't be switched on here. Nothing it holds was removed.",
+      "switchOn": "Switch on",
+      "switchingOn": "Switching on…",
+      "openSettings": "Open Settings"
     },
     "retention": {
       "keepForever": "Keep forever",
@@ -1278,7 +1282,7 @@
         "whatsNew": "What's new",
         "auto": "Check automatically",
         "autoHelp": "Checks at launch and every 6 hours, and asks before installing.",
-        "browser": "Updates are installed by the Coffer desktop app. In a browser, Coffer is updated by installing a new version of the command-line tools.",
+        "browser": "Updates are installed by the Coffer desktop app. Here in a browser, hand the upgrade to an agent: the prompt says how this copy of Coffer was installed.",
         "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
       },
       "diagnosticsCopied": "Diagnostics copied — paste them into your bug report.",
@@ -1445,7 +1449,7 @@
       "offlineBrowser": "A page the daemon serves can't start it. Run this in a terminal, then reload:",
       "restart": "Restart",
       "restartNow": "Restart now",
-      "browserRestart": "To restart it from a browser, run this in a terminal. This page reconnects when it is back.",
+      "restartTimedOut": "The daemon did not come back within 90 seconds. Check Activity › Daemon log once it answers, or start it again.",
       "copyCommand": "Copy {{command}}",
       "port": "Port",
       "portHelp": "{{min}}–{{max}}, default 8000. Bookmarks and agent connections follow it.",
@@ -1665,7 +1669,7 @@
     "RESOURCE_NOT_TOGGLEABLE": "This kind of resource is always on and can't be enabled or disabled",
     "RESOURCE_PROTECTED": "This resource is managed by Coffer and can't be deleted",
     "SCOPE_INVALID": "That reach isn't valid for this resource kind",
-    "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
+    "SHIM_NOT_FOUND": "Couldn’t find coffer-mcp-shim, the program an agent starts to reach Coffer. An agent can find or reinstall it; then try again.",
     "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable — check its permissions",
     "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
@@ -1713,6 +1717,7 @@
     "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
     "SKILL_SOURCE_UNREACHABLE": "Git could not reach the skill's repository.",
     "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
+    "SKILL_UPDATE_NOT_PENDING": "That commit is not the update waiting for this skill. Open the update again.",
     "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
     "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
     "PORT_IN_USE": "That port is in use by another program. Pick another one.",
@@ -1749,18 +1754,17 @@
       "enable": "Enable",
       "add": "Add",
       "moreActions": "More actions for {{name}}",
-      "copyCommand": "Copy command",
       "notAdded": {
         "title": "{{name}} isn’t added yet",
         "body": "Coffer found {{name}} at {{dir}}. Add it and it gets your MCP servers, skills and memory through one entry and one hook — you review the exact lines first."
       },
       "notInstalled": {
         "title": "{{name}} isn’t installed",
-        "body": "Install it with {{command}}. Coffer finds it on its own once it is on PATH."
+        "body": "Hand installing it to an agent with the prompt. Coffer finds it on its own once it is on PATH."
       },
       "leftBehind": {
         "title": "{{name}}’s config is left behind",
-        "body": "{{dir}} is still here but the program isn’t on PATH. Reinstall with {{command}} and it comes back on its own."
+        "body": "{{dir}} is still here but the program isn’t on PATH. Hand reinstalling it to an agent with the prompt, and it comes back on its own."
       },
       "checkAgain": "Check again",
       "repair": "Repair",
@@ -2153,6 +2157,7 @@
         "skills_one": "Its {{count}} bundled skill goes with it.",
         "skills_other": "Its {{count}} bundled skills go with it."
       },
+      "programMissing": "{{agent}}’s program isn’t found on this machine, so Uninstall can’t run. An agent can reinstall it.",
       "footnote": {
         "claude": "Coffer shows plugins read-only; Uninstall runs Claude Code’s own plugin command.",
         "claudeNoCli": "Uninstall runs Claude Code’s own claude plugin command, which isn’t on PATH here.",
@@ -2285,7 +2290,6 @@
       "problem": {
         "checkAgain": "Check again",
         "waysToFix": "Ways to fix it",
-        "copyCommand": "Copy command",
         "leftBehind": {
           "title": "{{name}}’s config is left behind — the program isn’t installed",
           "body": "Checked at {{time}}: <code>{{dir}}</code> is still here with <code>{{files}}</code>, but there is no <code>{{program}}</code> on PATH. Coffer can’t connect an agent that isn’t installed, and leaves the folder as it is.",
@@ -2294,10 +2298,6 @@
         "install": {
           "title": "Install {{name}}",
           "body": "Then check again. Coffer finds the program and your existing config; Connect turns back on."
-        },
-        "path": {
-          "title": "Runs in your terminal but not here?",
-          "body": "Coffer looks on the PATH it was started with. Restart Coffer after installing, then check again."
         },
         "onPurpose": {
           "title": "Uninstalled it on purpose?",
@@ -2587,10 +2587,12 @@
         "found": "{{dir}} found · not connected",
         "notCreatedYet": "{{dir}} not created yet",
         "gone": "{{dir}} and its program are gone",
-        "disabled": "Switched off in Coffer"
+        "disabled": "Switched off in Coffer",
+        "installByAgent": "An agent can install it — copy the prompt",
+        "reinstallByAgent": "{{dir}} is kept · an agent can reinstall it"
       },
       "leftBehind": {
-        "body": "<code>{{dir}}</code> is still here but there is no <code>{{program}}</code> on PATH, so Coffer can’t connect it. Reinstall with <code>{{command}}</code> and it comes back on its own.",
+        "body": "<code>{{dir}}</code> is still here but there is no <code>{{program}}</code> on PATH, so Coffer can’t connect it. Reinstall it and it comes back on its own.",
         "reveal": "Reveal folder",
         "remove": "Remove from list"
       }
@@ -2602,7 +2604,6 @@
       "reveal": "Reveal config directory",
       "revealFailed": "Couldn’t reveal the folder.",
       "copyUid": "Copy uid",
-      "copyCommand": "Copy command",
       "add": "Add",
       "connect": "Connect",
       "repair": "Repair",
@@ -2830,8 +2831,8 @@
       "repairHint": "Coffer repairs a missing link on its own. It never overwrites a folder it didn't make, and never picks between two versions — those wait for you.",
       "leftAlone": "Left alone · needs you",
       "about": {
-        "missing_link": "The link at {{path}} is gone — safe to repair on its own.",
-        "tampered_link": "{{path}} points somewhere else — safe to repair on its own.",
+        "missing_link": "The link at {{path}} is gone. Repair puts it back.",
+        "tampered_link": "{{path}} points somewhere else. Repair points it back at the library.",
         "replaced_with_regular": "A real folder, not Coffer's link. Coffer won't overwrite it.",
         "missing_master": "Its library folder was removed outside Coffer.",
         "orphan_master": "A folder in the skills store that Coffer doesn't know."
@@ -2909,6 +2910,7 @@
       "masterHelp": "Moves the folder to ~/.coffer/backup/ first, then links the master. Nothing is lost.",
       "agent": "Adopt this folder",
       "agentHelpAlone": "Makes its files the master.",
+      "askAgent": "Not sure which to keep? An agent can compare them and tell you.",
       "inCoffer": "{{path}} in Coffer",
       "same": "The folder holds the same files as the master.",
       "note": "The diff shows the change to the side you are not keeping.",
@@ -2924,7 +2926,8 @@
       "remove": "Remove the skill",
       "removeHelp": "Deletes {{name}} from your library, with its settings.",
       "restoreConfirm": "Restore {{name}}",
-      "removeConfirm": "Remove {{name}}…"
+      "removeConfirm": "Remove {{name}}…",
+      "askAgent": "An agent can look for a copy to put back."
     },
     "orphan": {
       "section": "Not in your library",
@@ -2939,7 +2942,8 @@
       "deleteTitle": "Delete the folder {{name}}?",
       "deleteBody": "Coffer moves it out of the skills store into ~/.coffer/backup/.",
       "deleteConfirm": "Delete folder",
-      "gone": "No folder named “{{name}}” is outside your library"
+      "gone": "No folder named “{{name}}” is outside your library",
+      "askAgent": "Not sure what it is? An agent can look at it and tell you which to choose."
     },
     "source": {
       "change": "Change source…",
@@ -3286,7 +3290,7 @@
       "undoNote": "All or nothing: if a document changed after this pass, nothing is undone. Each document gets a new version by you. The inbox items are not queued again.",
       "undoConfirm": "Undo pass",
       "undoing": "Undoing…",
-      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History instead.",
+      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History, or have your agent undo the pass by hand and keep the later edits.",
       "undoneToast": "Undid the pass.",
       "heading": "What this curation pass changed",
       "meta": "one new version per document · from one inbox item",
@@ -3549,7 +3553,9 @@
       "details": "{{details}} — send a message to start.",
       "effort": "{{effort}} effort",
       "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Conversations run on a Coffer-managed agent. Install Claude Code or Codex on this Mac, then add it on the Agents page.",
+      "noAgentInstall": "Conversations run on a Coffer-managed agent, and none is installed on this machine. Copy the prompt into any assistant to have it install Claude Code or Codex.",
+      "noAgentAdd": "Conversations run on a Coffer-managed agent. Add Claude Code or Codex on the Agents page.",
+      "openAgents": "Open Agents",
       "workspace": "Coffer’s workspace"
     },
     "delete": {
@@ -3746,7 +3752,7 @@
       },
       "sdkMissing": {
         "title": "SeaTalk's Python SDK isn't installed",
-        "body": "Coffer talks to SeaTalk through its official SDK, which isn't bundled. Install it where the message below says, then Retry."
+        "body": "Download SeaTalk's WebSocket SDK from the <portal>SeaTalk Open Platform</portal>, hand the rest to an agent, and press Retry once it's in place."
       },
       "connectFailed": {
         "title": "{{platform}} refused the connection",
@@ -5057,8 +5063,8 @@
       "tickAll": "Tick all",
       "tickOne": "Move {{path}} line {{line}}",
       "ticked": "{{count}} of {{total}} ticked",
-      "mentions_one": "{{count}} skill still points at ~/.coffer/secrets/ — update it by hand:",
-      "mentions_other": "{{count}} skills still point at ~/.coffer/secrets/ — update them by hand:",
+      "mentions_one": "{{count}} skill still reads keys from ~/.coffer/secrets/. Update it by hand, or hand it to an agent:",
+      "mentions_other": "{{count}} skills still read keys from ~/.coffer/secrets/. Update them by hand, or hand them to an agent:",
       "hint": "Each ticked value moves into the encrypted store and the file refers to it by name instead. Values are never shown here.",
       "review_one": "Review {{count}} change",
       "review_other": "Review {{count}} changes",
@@ -5206,9 +5212,9 @@
         "body": "Appears after your next {{agent}} response."
       },
       "statusline": {
-        "lead": "For sessions in your own terminal, set Claude Code's statusLine command to",
+        "lead": "For sessions in your own terminal, have your agent point Claude Code's status line at Coffer's wrapper.",
         "helpLabel": "About the statusline wrapper",
-        "help": "The wrapper passes Claude Code's rate limits to Coffer, then runs your own statusline command with the same input and prints its output, even when Coffer is not running. Coffer never installs it: you set it in ~/.claude/settings.json yourself."
+        "help": "The wrapper passes Claude Code's rate limits to Coffer, then runs your own statusline command with the same input and prints its output, even when Coffer is not running. Coffer never installs it: the prompt asks your agent to wrap your statusLine command in Claude Code's settings.json and show you the diff first."
       },
       "refreshFailed": {
         "title": "Couldn't reach Codex's app-server",
@@ -5579,7 +5585,7 @@
         "title": "Runtime on this Mac",
         "detect": "Detect",
         "looking": "Looking for model runtimes on this Mac…",
-        "none": "Nothing answered on the default ports (Ollama 11434, LM Studio 1234, llama-server 8080). Start the runtime, or type its address and detect again.",
+        "none": "Nothing answered on the default ports (Ollama 11434, LM Studio 1234, llama-server 8080). Have your agent set one up and detect again, or type the address of a runtime that is already running.",
         "noWires": "no agent wire",
         "keyless": "No key needed. Detection only reads — nothing is pulled or loaded."
       },
@@ -5742,6 +5748,8 @@
       "unsafeBody": "Nothing was unpacked. These entries could write outside the archive or link elsewhere:",
       "tooLarge": "Larger than the 50 MB skill limit",
       "unreachable": "Couldn't reach the repository",
+      "gitMissing": "Git isn't installed on this machine",
+      "gitMissingBody": "Adding a skill from a Git repository needs git. Hand installing it to your agent, then try again.",
       "entries": "Offending entries",
       "problem": {
         "absolute_path": "absolute path",
@@ -5798,7 +5806,13 @@
       "compare": "Compare",
       "back": "Back",
       "confirmTitle": "Discard your edits?",
-      "confirmBody": "Taking {{to}} replaces your edits to {{name}} with the update."
+      "confirmBody": "Taking {{to}} replaces your edits to {{name}} with the update.",
+      "merge": "Merge with an agent",
+      "mergeHelp": "Your agent merges the update into your edits. Then you record it with I merged it.",
+      "mergeBody": "Hand this to your agent: it merges {{to}} into your edits in {{name}}'s master folder and shows you the diff. When the files look right, choose I merged it.",
+      "merged": "I merged it",
+      "mergedTitle": "Record the merge?",
+      "mergedBody": "Coffer pins {{name}} to {{to}} and keeps its master folder's files as they are now. Check your agent's diff first."
     },
     "compare": {
       "files": "Files to compare",

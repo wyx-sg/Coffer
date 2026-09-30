@@ -9,7 +9,6 @@ a fake without a real ``claude`` binary (no network/subprocess needed).
 from __future__ import annotations
 
 import pathlib
-import shutil
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
@@ -34,6 +33,7 @@ from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
+from coffer.infrastructure.platform.user_path import which_on_user_path
 
 #: The model ids this agent can be put on, looked up per turn. A narrow callable
 #: rather than the application catalogue service itself, so infrastructure keeps
@@ -68,7 +68,7 @@ class ClaudeSdkProvider:
         *,
         conversations: ConversationRepo,
         session_factory: SdkSessionFactory | None = None,
-        which: Any = shutil.which,
+        which: Any = which_on_user_path,
         list_models: ModelLister | None = None,
         transcriber_factory: TranscriberFactory | None = None,
         compose_memory_context: MemoryContextComposer | None = None,

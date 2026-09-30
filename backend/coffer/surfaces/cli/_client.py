@@ -224,6 +224,12 @@ def render_http_error(
             )
             return ExitCode.GENERIC
         typer.echo(message, err=True)
+        # A refusal whose fix is a chore for an agent carries the prompt
+        # (``domain/handoff.py``); print it the way the web UI offers it.
+        handoff = ((envelope or {}).get("details") or {}).get("handoff")
+        if isinstance(handoff, dict) and handoff.get("prompt"):
+            typer.echo("\nTo hand this to your agent, give it this prompt:\n", err=True)
+            typer.echo(handoff["prompt"], err=True)
 
         status = err.response.status_code
         exit_code: ExitCode = {

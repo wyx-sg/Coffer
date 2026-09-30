@@ -56,6 +56,7 @@ const TYPE_ROW: AgentTypeOut = {
   state: "installed_active",
   uid: UID,
   version: null,
+  install_handoff: null,
 };
 
 const AGENT: AgentOut = {
@@ -69,6 +70,7 @@ const AGENT: AgentOut = {
   tier_models: null,
   wire_api: null,
   version: null,
+  install_handoff: null,
   state: "installed_active",
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",

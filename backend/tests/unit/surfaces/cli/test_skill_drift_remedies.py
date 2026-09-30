@@ -1,11 +1,11 @@
-"""Every drift remedy names an action that actually exists.
+"""Every drift remedy the command line prints names an action that exists.
 
 The remedy is the one line a person reads next to a drift row and then acts
-on. It used to point at per-(skill, agent) re-enabling, which spec
-skill-manager removed, and at a ``--force`` flag ``coffer skill verify`` never
-had. These tests resolve every backticked ``coffer ...`` command in each remedy
-against the real Typer tree, so a renamed or removed command fails here rather
-than in front of a user.
+on. It is the command line's own text (``DRIFT_REMEDIES`` in ``skill_cmd``):
+the report carries only the kind, and the web UI says the remedy in its own
+words beside its Repair button. These tests resolve every backticked
+``coffer ...`` command in each remedy against the real Typer tree, so a
+renamed or removed command fails here rather than in front of a user.
 """
 
 from __future__ import annotations
@@ -16,8 +16,9 @@ from typing import Any
 import pytest
 import typer
 
-from coffer.domain.skill.drift import DriftKind, suggested_remedy
+from coffer.domain.skill.drift import DriftKind
 from coffer.surfaces.cli.main import app
+from coffer.surfaces.cli.skill_cmd import DRIFT_REMEDIES
 
 _COMMAND_RE = re.compile(r"`(coffer [^`]+)`")
 
@@ -50,9 +51,13 @@ def _resolve(command_line: str) -> tuple[Any, list[str]]:
     return cmd, [t for t in rest if t.startswith("-")]
 
 
+def test_every_kind_has_a_remedy() -> None:
+    assert set(DRIFT_REMEDIES) == {k.value for k in DriftKind}
+
+
 @pytest.mark.parametrize("kind", list(DriftKind))
 def test_every_remedy_names_only_real_commands_and_flags(kind: DriftKind) -> None:
-    remedy = suggested_remedy(kind)
+    remedy = DRIFT_REMEDIES[kind.value]
     commands = _COMMAND_RE.findall(remedy)
     assert commands, f"{kind}: remedy names no concrete command: {remedy!r}"
     for line in commands:
@@ -64,7 +69,7 @@ def test_every_remedy_names_only_real_commands_and_flags(kind: DriftKind) -> Non
 
 @pytest.mark.parametrize("kind", list(DriftKind))
 def test_no_remedy_points_at_removed_operations(kind: DriftKind) -> None:
-    remedy = suggested_remedy(kind).lower()
+    remedy = DRIFT_REMEDIES[kind.value].lower()
     assert "--force" not in remedy
     assert "re-enable" not in remedy
     assert "enable the skill" not in remedy
@@ -72,11 +77,11 @@ def test_no_remedy_points_at_removed_operations(kind: DriftKind) -> None:
 
 @pytest.mark.parametrize("kind", [DriftKind.MISSING_LINK, DriftKind.TAMPERED_LINK])
 def test_repairable_kinds_point_at_verify_fix(kind: DriftKind) -> None:
-    assert "`coffer skill verify --fix`" in suggested_remedy(kind)
+    assert "`coffer skill verify --fix`" in DRIFT_REMEDIES[kind.value]
 
 
 def test_replaced_with_regular_says_the_person_moves_it_first() -> None:
-    remedy = suggested_remedy(DriftKind.REPLACED_WITH_REGULAR)
+    remedy = DRIFT_REMEDIES[DriftKind.REPLACED_WITH_REGULAR.value]
     # Repair never touches foreign content (spec skill-manager "Repair
     # repairable drift from master"), so the person moves it themselves.
     assert "move it" in remedy.lower()

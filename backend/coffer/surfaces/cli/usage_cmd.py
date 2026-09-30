@@ -183,6 +183,9 @@ def quota(
     ctx: typer.Context,
     refresh: bool = typer.Option(False, "--refresh", help="Read Codex's windows now"),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+    prompt: bool = typer.Option(
+        False, "--prompt", help="Print the prompt that has your agent set up the statusline wrapper"
+    ),
 ) -> None:
     """Show each subscription agent's official remaining quota."""
     verbose = _verbose(ctx)
@@ -194,9 +197,19 @@ def quota(
     if output_json:
         typer.echo(_json.dumps(body, indent=2))
         return
+    if prompt:
+        # The Usage page's Copy prompt, word for word.
+        handoffs = [a["handoff"]["prompt"] for a in body["agents"] if a.get("handoff")]
+        if not handoffs:
+            typer.echo("Claude Code's quota is already reported; nothing to set up")
+            return
+        typer.echo(handoffs[0])
+        return
     for agent in body["agents"]:
         if not agent["windows"]:
             typer.echo(f"{agent['agent_type']}: no official value seen yet")
+            if agent.get("handoff"):
+                typer.echo("  hand off:  coffer usage quota --prompt  (a prompt for your agent)")
             continue
         typer.echo(f"{agent['agent_type']}" + (f" ({agent['plan']})" if agent["plan"] else ""))
         for w in agent["windows"]:

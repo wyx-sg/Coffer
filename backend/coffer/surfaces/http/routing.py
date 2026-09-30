@@ -42,6 +42,8 @@ from coffer.surfaces.http.chat.conversation_routes import router as chat_convers
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
+from coffer.surfaces.http.daemon_restart_routes import router as daemon_restart_router
+from coffer.surfaces.http.daemon_upgrade_routes import router as daemon_upgrade_router
 from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
 from coffer.surfaces.http.feature_routes import router as feature_router
@@ -87,6 +89,8 @@ def include_all_routers(app: FastAPI) -> None:
     routers: tuple[APIRouter, ...] = (
         daemon_routes.router,
         daemon_port_router,  # spec daemon (the port of the next start)
+        daemon_restart_router,  # spec daemon (restart itself on request)
+        daemon_upgrade_router,  # spec daemon (the upgrade hand-off)
         storage_router,  # spec daemon (Settings > Data: what Coffer stores)
         feature_router,  # spec experimental-features
         resource_router,

@@ -110,12 +110,20 @@ class KnowledgeHistory:
         repository could be created (it is, on first ask)."""
         return self._ensure()
 
+    def git_installed(self) -> bool:
+        """Whether this machine has a ``git`` on the daemon's PATH at all."""
+        return git_available()
+
     def _ensure(self) -> bool:
         root = self._root()
         key = str(root)
+        # git is looked for on every ask, not only the first: one uninstalled
+        # while the daemon runs must read as unavailable, not fail a read.
+        if not git_available():
+            return False
         if key in self._ready and (root / ".git").is_dir():
             return True
-        if not git_available() or not root.is_dir():
+        if not root.is_dir():
             return False
         with self._lock:
             try:

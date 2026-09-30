@@ -21,6 +21,7 @@ from coffer.domain.skill.folder_diff import FileChange, TextVersion
 from coffer.domain.skill.requirements import CommandRequirement
 from coffer.domain.skill.source import ArchiveImportSource, GitImportSource
 from coffer.domain.skill.source_status import SourceStatus
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 # ---------- read-model parts ----------
 
@@ -232,6 +233,10 @@ class SkillUpdatePreviewOut(BaseModel):
     conflict: bool
     #: The local edits, as changes from the pinned commit's folder.
     local_changes: list[SkillFileChangeOut]
+    #: With a conflict: merging the update into the local edits, handed to
+    #: the person's agent; ``POST /skills/{uid}/source/merged`` records it
+    #: (spec skill-manager "Record an update merged into local edits").
+    handoff: HandoffOut | None
 
 
 def preview_out(p: UpdatePreview) -> SkillUpdatePreviewOut:
@@ -244,6 +249,7 @@ def preview_out(p: UpdatePreview) -> SkillUpdatePreviewOut:
         changes=[change_out(c) for c in p.changes],
         conflict=p.conflict,
         local_changes=[change_out(c) for c in p.local_changes],
+        handoff=handoff_out(p.handoff),
     )
 
 
@@ -282,3 +288,9 @@ class SkillUpdateApplyRequest(BaseModel):
 class SkillUpdateKeepRequest(BaseModel):
     #: The commit not to offer again; the latest one seen when omitted.
     commit: str | None = None
+
+
+class SkillUpdateMergedRequest(BaseModel):
+    #: The upstream commit the local edits were merged with — the preview's
+    #: ``to_commit``, in full or by a unique prefix of at least 7 characters.
+    commit: str = Field(min_length=7, max_length=64)

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { ActionMenu } from "@/components/ui/menu";
+import { acceptance } from "@/test/acceptance";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import {
   fakeCallFor,
@@ -88,16 +89,83 @@ describe("useAgentRowActions", () => {
     await waitFor(() => expect(screen.getByTestId("state")).not.toHaveTextContent("disabled"));
   });
 
-  test("a type not installed offers the install command and a menu without agent items", async () => {
-    const row = typeRow({ type: "codex", state: "missing", addable: false, version: null });
-    use(fakeDaemon({ types: [row] }));
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+  acceptance(
+    "web-ui",
+    "an agent whose program is not found offers its install prompt",
+    async () => {
+      const row = typeRow({
+        type: "codex",
+        state: "missing",
+        addable: false,
+        version: null,
+        install_handoff: { prompt: "Please install OpenAI Codex on this machine." },
+      });
+      use(fakeDaemon({ types: [row] }));
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+      renderWithDaemon(<Harness row={row} />);
+      // The daemon's prompt, copied as given; no install command anywhere.
+      fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+      expect(writeText).toHaveBeenCalledWith("Please install OpenAI Codex on this machine.");
+      expect(document.body).not.toHaveTextContent(/npm|install -g/);
+      // No managed agent is available, so the menu has no Ask an agent.
+      fireEvent.click(screen.getByRole("button", { name: "menu" }));
+      const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+      expect(items.map((i) => i.textContent)).toEqual(["Use a different config directory…"]);
+    },
+  );
+
+  acceptance(
+    "web-ui",
+    "ask an agent is offered only while another managed agent is available",
+    async () => {
+      const row = typeRow({
+        type: "claude_code",
+        state: "config_only",
+        addable: false,
+        version: null,
+        install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
+      });
+      // The missing agent itself cannot run a turn; Codex can.
+      const d = use(
+        fakeDaemon({
+          types: [row],
+          providers: [
+            { agent_key: "claude_code", display_name: "Claude Code", available: false },
+            { agent_key: "codex", display_name: "Codex", available: true },
+          ],
+        }),
+      );
+      renderWithDaemon(<Harness row={row} />);
+      fireEvent.click(screen.getByRole("button", { name: "menu" }));
+      const ask = await within(await screen.findByRole("menu")).findByRole("menuitem", {
+        name: "Ask an agent",
+      });
+      fireEvent.click(ask);
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("New conversation")).toBeInTheDocument();
+      expect(writes(d)).toEqual([]);
+    },
+  );
+
+  test("with only the missing agent itself managed, Ask an agent is not offered", async () => {
+    const row = typeRow({
+      type: "claude_code",
+      state: "config_only",
+      addable: false,
+      version: null,
+      install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
+    });
+    use(
+      fakeDaemon({
+        types: [row],
+        providers: [{ agent_key: "claude_code", display_name: "Claude Code", available: false }],
+      }),
+    );
     renderWithDaemon(<Harness row={row} />);
-    fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
-    expect(writeText).toHaveBeenCalledWith("npm install -g @openai/codex");
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "menu" }));
-    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Use a different config directory…"]);
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByRole("menuitem", { name: "Ask an agent" })).toBeNull();
   });
 });

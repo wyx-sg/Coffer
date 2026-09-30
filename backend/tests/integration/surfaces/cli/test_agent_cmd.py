@@ -280,6 +280,28 @@ def test_adopt_a_discovered_agent_from_the_command_line(agent_cli_daemon):
         assert "agent" not in group.commands  # type: ignore[attr-defined]
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="the command line prints an agent's install prompt"
+)
+def test_the_command_line_prints_an_agents_install_prompt(agent_cli_daemon):
+    # Claude Code's program is not found here (the catalogue installs Codex only).
+    printed = _runner.invoke(cli_app, ["agent", "prompt", "claude-code"])
+    assert printed.exit_code == 0, printed.output
+    assert printed.output.startswith("Please install Claude Code on this machine")
+    assert "`claude --version`" in printed.output
+
+    as_json = _runner.invoke(cli_app, ["agent", "prompt", "claude_code", "--json"])
+    assert as_json.exit_code == 0, as_json.output
+    body = json.loads(as_json.output)
+    assert body["name"] == "claude-code"
+    assert body["handoff"]["prompt"] == printed.output.rstrip("\n")
+
+    # An installed program has nothing to hand off.
+    found = _runner.invoke(cli_app, ["agent", "prompt", "codex"])
+    assert found.exit_code == 5
+    assert "nothing to hand off" in found.output
+
+
 # ---------------------------------------------------------------------------
 # agent show
 # ---------------------------------------------------------------------------
@@ -563,7 +585,7 @@ def test_agent_group_offers_the_new_commands_only():
     group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
     assert set(group.commands) == {
         "list", "show", "add", "edit", "rm", "enable", "disable",
-        "connect", "disconnect", "transcript", "models", "config", "plugin", "hooks",
+        "connect", "disconnect", "transcript", "models", "config", "plugin", "hooks", "prompt",
     }  # fmt: skip
 
 

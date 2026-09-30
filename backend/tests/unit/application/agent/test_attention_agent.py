@@ -46,6 +46,11 @@ class FakeDetect:
             self.states.get(config_dir.name, DetectionState.INSTALLED_ACTIVE), None
         )
 
+    async def program_handoff(
+        self, agent_type: AgentType, config_dir: str, state: DetectionState, *, registered: bool
+    ) -> str | None:
+        return f"reinstall {agent_type.value} at {config_dir} ({state.value}, {registered})"
+
 
 class FakeConnection:
     def __init__(self, statuses: dict[str, ConnectionStatus | Exception]) -> None:
@@ -97,6 +102,10 @@ async def test_connected_agent_reports_nothing() -> None:
     assert await _source([_agent("a")], FakeDetect({}), conn).items() == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="an attention item for a missing program carries the reinstall prompt",
+)
 @pytest.mark.parametrize("state", [DetectionState.CONFIG_ONLY, DetectionState.MISSING])
 async def test_missing_program_wins_over_the_connection_state(state: DetectionState) -> None:
     detect = FakeDetect({"a": state})
@@ -106,6 +115,10 @@ async def test_missing_program_wins_over_the_connection_state(state: DetectionSt
     assert item.reason_code == "agent_program_missing"
     assert item.severity is Severity.ERROR
     assert item.action == AttentionAction(verb="check", method="GET", path="/api/v1/agents/a")
+    # The fix is a chore for an agent: the item carries the reinstall prompt,
+    # and its reason names no command.
+    assert item.handoff == f"reinstall claude_code at /agents/a ({state.value}, True)"
+    assert "`" not in item.reason and "install -g" not in item.reason
     # Detection is asked about the agent's own type and config dir.
     assert detect.asked == [(AgentType.CLAUDE_CODE, pathlib.Path("/agents/a"))]
 

@@ -122,6 +122,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/daemon/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Daemon
+         * @description Start a successor, then exit once this answer is sent.
+         *
+         *     The successor binds the configured port (``port``), or this one when a
+         *     test port range is in force. 500 when the successor cannot be started;
+         *     this daemon then keeps serving.
+         */
+        post: operations["restart_daemon_api_v1_daemon_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/daemon/rotate-token": {
         parameters: {
             query?: never;
@@ -165,6 +189,23 @@ export interface paths {
         };
         /** Get Status */
         get: operations["get_status_api_v1_daemon_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Upgrade */
+        get: operations["get_upgrade_api_v1_daemon_upgrade_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -401,6 +442,14 @@ export interface components {
             /** Login Service Supported */
             login_service_supported: boolean;
         };
+        /**
+         * DaemonRestartOut
+         * @description A restart under way (spec daemon "Restart itself on request").
+         */
+        DaemonRestartOut: {
+            /** Port */
+            port: number;
+        };
         /** DaemonStatusOut */
         DaemonStatusOut: {
             /**
@@ -441,6 +490,18 @@ export interface components {
             upstream_summary: components["schemas"]["UpstreamSummary"] | null;
             /** Version */
             version: string;
+        };
+        /**
+         * DaemonUpgradeOut
+         * @description How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent").
+         */
+        DaemonUpgradeOut: {
+            handoff: components["schemas"]["HandoffOut"];
+            /**
+             * Install Method
+             * @enum {string}
+             */
+            install_method: "binaries" | "app" | "source";
         };
         /** EditorOptionOut */
         EditorOptionOut: {
@@ -544,6 +605,15 @@ export interface components {
         FsRevealRequest: {
             /** Path */
             path: string;
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /** HistoryUsageOut */
         HistoryUsageOut: {
@@ -950,6 +1020,47 @@ export interface operations {
             };
         };
     };
+    restart_daemon_api_v1_daemon_restart_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonRestartOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     rotate_token_api_v1_daemon_rotate_token_post: {
         parameters: {
             query?: never;
@@ -1045,6 +1156,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DaemonStatusOut"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_upgrade_api_v1_daemon_upgrade_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonUpgradeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Any other error, as Coffer's error envelope. */

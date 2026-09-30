@@ -268,7 +268,6 @@
     }
   },
   "mcp": {
-    "missingRunnerHint": "请先安装 {{runner}}，然后刷新",
     "server": {
       "tabs": {
         "overview": "概览",
@@ -521,8 +520,7 @@
       "testExit": " · 列出后退出码 {{code}}",
       "testListed": "列出了 {{tools}} 个工具、{{resources}} 个资源、{{prompts}} 个提示词——与智能体现在看到的一致，无需更新。",
       "offBodyAgents": "Coffer 不会为任何会话启动它。重新开启后，它会回到 {{agents}}——你上次选择的智能体。",
-      "openInClis": "在命令行工具中打开",
-      "launcherBodyWho": "Coffer 用 {{runner}} 启动这个服务器。安装它后再测试一次——在此之前 {{who}} 无法调用{{tools}}。",
+      "launcherBodyWho": "Coffer 用 {{runner}} 启动这个服务器，但这台机器上找不到它——在此之前 {{who}} 无法调用{{tools}}。把安装交给智能体，装好后再测试一次。",
       "failingBodyWho": "在它恢复响应之前，{{who}} 无法调用{{tools}}。",
       "lastSuccessAt": "上次成功调用于 {{at}}。",
       "colTool": "工具",
@@ -619,7 +617,7 @@
       "last24h": "最近 24 小时",
       "lastErrorAt": "最近一次错误于 {{at}}",
       "lastSuccess": "最近一次成功调用于 {{at}}，{{tool}}。",
-      "launcherTitle": "这台 Mac 上没有安装 {{runner}}",
+      "launcherTitle": "这台机器上找不到 {{runner}}",
       "listed": "直接列出",
       "listedDirectly": "直接列出",
       "log": {
@@ -827,6 +825,7 @@
       "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
       "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
       "skill_updated": "更新了技能 {{resource}}",
+      "skill_update_merged": "记录了已合并进技能 {{resource}} 的更新",
       "sync_confirmed": "确认了一轮被暂停的收敛",
       "sync_machine_removed": "从同步注册表中下线了一台机器",
       "sync_rejected": "拒绝了一轮被暂停的收敛",
@@ -834,6 +833,7 @@
       "sync_run": "执行了一轮收敛",
       "token_rotated": "已轮换访问令牌",
       "daemon_residency_updated": "守护进程常驻设置已变更",
+      "daemon_restarted": "已从网页界面重启守护进程",
       "knowledge_curated": "整理了 {{resource}}：把新条目整理进了其中的文档",
       "secret_revealed": "在 Coffer 应用中查看了密钥",
       "secret_resolved": "把密钥交给了一条 coffer run 命令",
@@ -1187,7 +1187,11 @@
         "channel": "{{channel}} 渠道的默认值"
       },
       "offTitle": "{{name}}已关闭",
-      "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——在命令行里用 coffer config set feature.{{key}} on 开启即可。"
+      "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——开启后此页面会立即打开。",
+      "offPinned": "{{name}}是实验功能，被启动守护进程处的 COFFER_FEATURES 固定为关闭，无法在这里开启。它保存的内容都没有删除。",
+      "switchOn": "开启",
+      "switchingOn": "正在开启…",
+      "openSettings": "打开设置"
     },
     "retention": {
       "keepForever": "永久保留",
@@ -1278,7 +1282,7 @@
         "whatsNew": "新内容",
         "auto": "自动检查",
         "autoHelp": "在启动时以及每 6 小时检查一次，安装前会先征得你的同意。",
-        "browser": "更新由 Coffer 桌面应用安装。在浏览器中使用时，请安装新版本的命令行工具来更新 Coffer。",
+        "browser": "更新由 Coffer 桌面应用安装。在浏览器中，可以把升级交给智能体：提示词里写明了这份 Coffer 的安装方式。",
         "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。"
       },
       "diagnosticsCopied": "诊断信息已复制，可粘贴到问题报告中。",
@@ -1445,7 +1449,7 @@
       "offlineBrowser": "由守护进程提供的页面无法启动它。请在终端中运行以下命令，然后刷新：",
       "restart": "重启",
       "restartNow": "立即重启",
-      "browserRestart": "要在浏览器中重启它，请在终端中运行以下命令。它恢复后本页面会自动重新连接。",
+      "restartTimedOut": "守护进程在 90 秒内没有恢复。等它响应后到「活动 › 守护进程日志」查看，或重新启动它。",
       "copyCommand": "复制 {{command}}",
       "port": "端口",
       "portHelp": "{{min}}–{{max}}，默认 8000。书签和智能体连接都会跟随它。",
@@ -1665,7 +1669,7 @@
     "RESOURCE_NOT_TOGGLEABLE": "此类资源始终启用，无法启用或停用",
     "RESOURCE_PROTECTED": "该资源由 Coffer 管理，无法删除",
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
-    "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
+    "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim——智能体靠它连接 Coffer 的程序。可以交给智能体找到或重新安装它，然后再试一次。",
     "SKILL_DIR_NOT_WRITABLE": "技能目录不可写——请检查目录权限",
     "SKILL_FILE_STALE": "技能文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "SKILL_INVALID": "该技能无效",
@@ -1713,6 +1717,7 @@
     "SKILL_STAGING_NOT_FOUND": "暂存的来源已不存在——已添加、已取消或已过期。请重新开始。",
     "SKILL_SOURCE_UNREACHABLE": "Git 无法访问该技能的仓库。",
     "SKILL_UPDATE_CONFLICT": "该技能在固定的提交之后被修改过。请保留你的修改，或接受更新并丢弃修改。",
+    "SKILL_UPDATE_NOT_PENDING": "这个提交不是该技能正在等待的更新。请重新打开更新。",
     "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。",
     "PORT_OUT_OF_RANGE": "请选择 1024 到 65535 之间的端口。",
     "PORT_IN_USE": "该端口已被其他程序占用，请换一个。",
@@ -1749,18 +1754,17 @@
       "enable": "启用",
       "add": "添加",
       "moreActions": "{{name}} 的更多操作",
-      "copyCommand": "复制命令",
       "notAdded": {
         "title": "{{name}} 尚未添加",
         "body": "Coffer 在 {{dir}} 找到了 {{name}}。添加后，它通过一个入口和一个钩子获得你的 MCP 服务器、技能和记忆——写入前你会先看到确切的改动行。"
       },
       "notInstalled": {
         "title": "{{name}} 未安装",
-        "body": "用 {{command}} 安装。它出现在 PATH 上后，Coffer 会自动找到它。"
+        "body": "用提示词把安装交给智能体。它出现在 PATH 上后，Coffer 会自动找到它。"
       },
       "leftBehind": {
         "title": "{{name}} 的配置残留",
-        "body": "{{dir}} 还在，但 PATH 上没有这个程序。用 {{command}} 重新安装后它会自动回来。"
+        "body": "{{dir}} 还在，但 PATH 上没有这个程序。用提示词把重新安装交给智能体，装好后它会自动回来。"
       },
       "checkAgain": "再检查一次",
       "repair": "修复",
@@ -2153,6 +2157,7 @@
         "skills_one": "它自带的 {{count}} 个技能也会一并移除。",
         "skills_other": "它自带的 {{count}} 个技能也会一并移除。"
       },
+      "programMissing": "本机找不到 {{agent}} 的程序，所以无法卸载。可以交给智能体重新安装。",
       "footnote": {
         "claude": "Coffer 只读展示插件；卸载会运行 Claude Code 自己的插件命令。",
         "claudeNoCli": "卸载要运行 Claude Code 自己的 claude plugin 命令，但本机 PATH 上找不到它。",
@@ -2285,7 +2290,6 @@
       "problem": {
         "checkAgain": "重新检查",
         "waysToFix": "解决办法",
-        "copyCommand": "复制命令",
         "leftBehind": {
           "title": "{{name}} 的配置还留着，但程序没有安装",
           "body": "检查于 {{time}}：<code>{{dir}}</code> 还在，里面有 <code>{{files}}</code>，但 PATH 上没有 <code>{{program}}</code>。Coffer 无法连接未安装的智能体，也不会动这个文件夹。",
@@ -2294,10 +2298,6 @@
         "install": {
           "title": "安装 {{name}}",
           "body": "然后重新检查。Coffer 会找到程序和你现有的配置，「连接」随之恢复可用。"
-        },
-        "path": {
-          "title": "终端里能运行，这里却找不到？",
-          "body": "Coffer 只在它启动时的 PATH 里查找。安装后重启 Coffer，再重新检查。"
         },
         "onPurpose": {
           "title": "是有意卸载的？",
@@ -2587,10 +2587,12 @@
         "found": "已找到 {{dir}} · 未连接",
         "notCreatedYet": "{{dir}} 尚未创建",
         "gone": "{{dir}} 和它的程序都不在了",
-        "disabled": "已在 Coffer 中停用"
+        "disabled": "已在 Coffer 中停用",
+        "installByAgent": "可以交给智能体安装——复制提示词",
+        "reinstallByAgent": "{{dir}} 已保留 · 可以交给智能体重新安装"
       },
       "leftBehind": {
-        "body": "<code>{{dir}}</code> 还在，但 PATH 上没有 <code>{{program}}</code>，所以 Coffer 无法连接它。用 <code>{{command}}</code> 重新安装后，它会自动回来。",
+        "body": "<code>{{dir}}</code> 还在，但 PATH 上没有 <code>{{program}}</code>，所以 Coffer 无法连接它。重新安装后，它会自动回来。",
         "reveal": "显示文件夹",
         "remove": "从列表移除"
       }
@@ -2602,7 +2604,6 @@
       "reveal": "显示配置目录",
       "revealFailed": "无法显示该文件夹。",
       "copyUid": "复制 uid",
-      "copyCommand": "复制命令",
       "add": "添加",
       "connect": "连接",
       "repair": "修复",
@@ -2830,8 +2831,8 @@
       "repairHint": "Coffer 会自己修复缺失的链接。它从不覆盖不是它创建的文件夹，也从不替你在两个版本之间做选择，这些都等你来处理。",
       "leftAlone": "未改动 · 需要你处理",
       "about": {
-        "missing_link": "{{path}} 的链接不见了，可以安全地自动修复。",
-        "tampered_link": "{{path}} 指向了别处，可以安全地自动修复。",
+        "missing_link": "{{path}} 的链接不见了。点「修复」即可放回。",
+        "tampered_link": "{{path}} 指向了别处。点「修复」即可让它重新指向技能库。",
         "replaced_with_regular": "是真实文件夹，不是 Coffer 的链接。Coffer 不会覆盖它。",
         "missing_master": "它在技能库中的文件夹在 Coffer 之外被删除了。",
         "orphan_master": "技能库目录里一个 Coffer 不认识的文件夹。"
@@ -2909,6 +2910,7 @@
       "masterHelp": "先把文件夹移到 ~/.coffer/backup/，再链接主文件夹。不会丢失任何内容。",
       "agent": "收编这个文件夹",
       "agentHelpAlone": "把它的文件设为主文件夹。",
+      "askAgent": "不确定保留哪一个？可以让智能体对比两边后告诉你。",
       "inCoffer": "Coffer 中的 {{path}}",
       "same": "这个文件夹和主文件夹的文件相同。",
       "note": "差异显示的是你不保留的那一边会发生的变化。",
@@ -2924,7 +2926,8 @@
       "remove": "移除这个技能",
       "removeHelp": "从技能库中删除 {{name}} 及其设置。",
       "restoreConfirm": "恢复 {{name}}",
-      "removeConfirm": "移除 {{name}}…"
+      "removeConfirm": "移除 {{name}}…",
+      "askAgent": "可以让智能体找一份能放回去的副本。"
     },
     "orphan": {
       "section": "不在技能库中",
@@ -2939,7 +2942,8 @@
       "deleteTitle": "删除文件夹 {{name}}？",
       "deleteBody": "Coffer 会把它从技能目录移到 ~/.coffer/backup/。",
       "deleteConfirm": "删除文件夹",
-      "gone": "没有名为“{{name}}”且不在技能库中的文件夹"
+      "gone": "没有名为“{{name}}”且不在技能库中的文件夹",
+      "askAgent": "不确定它是什么？可以让智能体看看，再告诉你该选哪一个。"
     },
     "source": {
       "change": "更换来源…",
@@ -3286,7 +3290,7 @@
       "undoNote": "要么全部撤销，要么都不撤销：只要有一篇文档在这轮整理之后被改过，就什么都不撤销。每篇文档都会得到一个由你写入的新版本。收件箱条目不会重新排队。",
       "undoConfirm": "撤销整理",
       "undoing": "撤销中…",
-      "undoRefused": "{{document}} 在这轮整理之后被编辑过，因此没有撤销任何内容——每篇文档都保持原样。可以改为在单篇文档的历史中恢复。",
+      "undoRefused": "{{document}} 在这轮整理之后被编辑过，因此没有撤销任何内容——每篇文档都保持原样。可以在单篇文档的历史中恢复，或让智能体手动撤销这轮整理并保留之后的编辑。",
       "undoneToast": "已撤销这轮整理。",
       "heading": "这轮整理改了什么",
       "meta": "每篇文档一个新版本 · 来自一个收件箱条目",
@@ -3549,7 +3553,9 @@
       "details": "{{details}}——发送一条消息即可开始。",
       "effort": "{{effort}} 推理强度",
       "noAgentTitle": "没有可用的受管智能体",
-      "noAgentBody": "对话需要一个由 Coffer 管理的智能体。请在本机安装 Claude Code 或 Codex，然后在「智能体」页面添加。",
+      "noAgentInstall": "对话需要一个由 Coffer 管理的智能体，而本机还没有安装。复制提示词给任意助手，让它安装 Claude Code 或 Codex。",
+      "noAgentAdd": "对话需要一个由 Coffer 管理的智能体。请在「智能体」页面添加 Claude Code 或 Codex。",
+      "openAgents": "打开智能体页面",
       "workspace": "Coffer 的工作区"
     },
     "delete": {
@@ -3746,7 +3752,7 @@
       },
       "sdkMissing": {
         "title": "未安装 SeaTalk 的 Python SDK",
-        "body": "Coffer 通过 SeaTalk 官方 SDK 与其通信，但 SDK 不随安装包提供。请按下面的提示安装，然后重试。"
+        "body": "请从 <portal>SeaTalk 开放平台</portal>下载 SeaTalk 的 WebSocket SDK，其余步骤交给智能体，放好后点击重试。"
       },
       "connectFailed": {
         "title": "{{platform}} 拒绝了连接",
@@ -5057,8 +5063,8 @@
       "tickAll": "全选",
       "tickOne": "迁移 {{path}} 第 {{line}} 行",
       "ticked": "已选 {{count}} / {{total}}",
-      "mentions_one": "{{count}} 个 skill 仍指向 ~/.coffer/secrets/，请手动更新：",
-      "mentions_other": "{{count}} 个 skill 仍指向 ~/.coffer/secrets/，请手动更新：",
+      "mentions_one": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
+      "mentions_other": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
       "hint": "每个选中的值会移入加密存储，文件改为按名称引用它。这里不会显示任何值。",
       "review_one": "查看 {{count}} 项改动",
       "review_other": "查看 {{count}} 项改动",
@@ -5206,9 +5212,9 @@
         "body": "下一次 {{agent}} 回复后显示。"
       },
       "statusline": {
-        "lead": "要读取你在自己终端里的会话，把 Claude Code 的 statusLine 命令设为",
+        "lead": "要读取你在自己终端里的会话，可以让智能体把 Claude Code 的状态栏接到 Coffer 的包装命令上。",
         "helpLabel": "关于状态栏包装命令",
-        "help": "这个包装命令把 Claude Code 的额度信息转给 Coffer，再用相同的输入运行你自己的状态栏命令并打印其输出，Coffer 没在运行时也一样。Coffer 从不替你安装：需要你自己在 ~/.claude/settings.json 中设置。"
+        "help": "这个包装命令把 Claude Code 的额度信息转给 Coffer，再用相同的输入运行你自己的状态栏命令并打印其输出，Coffer 没在运行时也一样。Coffer 从不替你安装：提示词会请智能体在 Claude Code 的 settings.json 中包装你的 statusLine 命令，并先给你看改动。"
       },
       "refreshFailed": {
         "title": "无法连接 Codex 的 app-server",
@@ -5579,7 +5585,7 @@
         "title": "这台 Mac 上的运行时",
         "detect": "检测",
         "looking": "正在查找这台 Mac 上的模型运行时…",
-        "none": "默认端口（Ollama 11434、LM Studio 1234、llama-server 8080）上都没有应答。请启动运行时，或输入它的地址后重新检测。",
+        "none": "默认端口（Ollama 11434、LM Studio 1234、llama-server 8080）上都没有应答。可以让智能体装好一个运行时后重新检测，或输入已在运行的运行时地址。",
         "noWires": "不提供智能体协议",
         "keyless": "无需密钥。检测只读取信息——不会拉取或加载任何模型。"
       },
@@ -5742,6 +5748,8 @@
       "unsafeBody": "没有解压任何内容。这些条目可能写到压缩包之外或链接到别处：",
       "tooLarge": "超过了 50 MB 的技能上限",
       "unreachable": "无法访问仓库",
+      "gitMissing": "这台机器没有安装 Git",
+      "gitMissingBody": "从 Git 仓库添加技能需要 git。把安装交给你的智能体，装好后再试一次。",
       "entries": "有问题的条目",
       "problem": {
         "absolute_path": "绝对路径",
@@ -5798,7 +5806,13 @@
       "compare": "对比",
       "back": "返回",
       "confirmTitle": "丢弃你的改动？",
-      "confirmBody": "采用 {{to}} 会用更新替换你对 {{name}} 的改动。"
+      "confirmBody": "采用 {{to}} 会用更新替换你对 {{name}} 的改动。",
+      "merge": "让智能体合并",
+      "mergeHelp": "由你的智能体把更新合并进你的改动，然后你用「我已合并」记录下来。",
+      "mergeBody": "把这段交给你的智能体：它会把 {{to}} 合并进 {{name}} 主文件夹中你的改动，并给你看差异。文件确认无误后，选择「我已合并」。",
+      "merged": "我已合并",
+      "mergedTitle": "记录这次合并？",
+      "mergedBody": "Coffer 会把 {{name}} 固定到 {{to}}，主文件夹里的文件保持现在的样子。请先检查智能体给出的差异。"
     },
     "compare": {
       "files": "要对比的文件",

@@ -3,12 +3,12 @@
 // Spec web-ui "Show and manage the daemon on Settings → Daemon": the state and
 // the address it answers on, then one line — how long it has been up, its pid
 // and how many agents carry Coffer's connection — all from the status probe
-// (the version is on About and in the sidebar footer). In the desktop shell a
-// Restart control that runs the shell's restart, in a browser the `coffer
-// daemon restart` command to copy, since a page the daemon serves cannot start
-// the daemon that replaces it. While the daemon cannot be reached the card
-// reads offline and names the host's recovery. No stop or shutdown control,
-// anywhere.
+// (the version is on About and in the sidebar footer). A Restart control in
+// both hosts: the shell's restart in the desktop shell, the daemon's own
+// restart in a browser (`useRestartDaemon`; the page then reloads from the new
+// daemon). While the daemon cannot be reached the card reads offline and names
+// the host's recovery: nothing is running that could restart itself, so a
+// browser names `coffer daemon start`. No stop or shutdown control, anywhere.
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Power, RotateCw } from "lucide-react";
@@ -19,8 +19,8 @@ import { STATUS_TONE, type StatusTone } from "@/components/status/statusTone";
 import type { DaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { restartErrorText } from "@/lib/daemonRestart";
 import { useRestartDaemon } from "@/lib/hooks/useDaemon";
 import { toneClass } from "@/lib/statusColors";
 import { splitDuration } from "@/lib/usage/format";
@@ -119,28 +119,25 @@ export function DaemonStatusCard({ state, status, inShell }: Props) {
                 : t("settings.daemonTab.offlineBrowser")}
             </p>
           ) : status ? (
-            <p className="text-xs text-text-muted" data-testid="settings-daemon-status-line">
+            <p
+              className="text-xs text-text-muted"
+              data-testid="settings-daemon-status-line"
+              data-visual-volatile
+            >
               {statusLine(t, status, Date.now())}
             </p>
           ) : null}
         </div>
-        {inShell ? restartButton : null}
+        {inShell || state.kind !== "offline" ? restartButton : null}
       </div>
 
       {state.kind === "offline" && !inShell ? (
         <CopyableCommand command="coffer daemon start" />
       ) : null}
 
-      {!inShell && state.kind !== "offline" ? (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs text-text-muted">{t("settings.daemonTab.browserRestart")}</p>
-          <CopyableCommand command="coffer daemon restart" />
-        </div>
-      ) : null}
-
       {restart.error ? (
         <p className="text-xs text-danger" role="alert">
-          {translateApiError(t, restart.error)}
+          {restartErrorText(t, restart.error)}
         </p>
       ) : null}
     </div>

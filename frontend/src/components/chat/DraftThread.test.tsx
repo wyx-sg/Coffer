@@ -16,9 +16,12 @@ vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
 // result with the agent's own catalogue; it no longer reaches the network at
 // all, so there is no introspection hook to mock here.
 vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
+// With no managed agent the draft reads the daemon's install prompt, if any.
+vi.mock("@/lib/hooks/useAgentTypes", () => ({ useAgentInstallHandoff: vi.fn() }));
 
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import { useAgentInstallHandoff } from "@/lib/hooks/useAgentTypes";
 import type { AgentModel } from "@/lib/api/agentModels";
 const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
@@ -59,6 +62,7 @@ beforeEach(() => {
   // Default: an active connection exists so the composer/draft surface renders.
   useProvidersMock.mockReturnValue({ data: [activeConnection] });
   useAgentModelsMock.mockReturnValue({ data: WITH_LEVELS });
+  vi.mocked(useAgentInstallHandoff).mockReturnValue({ data: null } as never);
 });
 
 const agents: AgentProviderInfo[] = [
@@ -115,7 +119,30 @@ describe("DraftThread", () => {
     renderDraft({ noManagedAgent: true });
     expect(screen.getByText("No managed agent available")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
+    // An agent is installed but not added: adding it is Coffer's own action.
+    expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute("href", "/agents");
+    expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
   });
+
+  acceptance(
+    "chat",
+    "with no managed agent the draft offers the install prompt to copy",
+    async () => {
+      vi.mocked(useAgentInstallHandoff).mockReturnValue({
+        data: "Please install Claude Code or OpenAI Codex on this machine.",
+      } as never);
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+      renderDraft({ noManagedAgent: true });
+      fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+      expect(writeText).toHaveBeenCalledWith(
+        "Please install Claude Code or OpenAI Codex on this machine.",
+      );
+      // Copy only: there is no agent of Coffer's to ask, and no install command.
+      expect(screen.queryByRole("button", { name: "Ask an agent" })).not.toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(/npm|install -g|brew/);
+    },
+  );
 
   test("offers a model picker beside the agent selector and commits the choice", () => {
     const onModelChange = vi.fn();

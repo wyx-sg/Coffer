@@ -72,21 +72,20 @@ describe("deliveryRows", () => {
         agent_name: CC.name,
         kind: "missing_link" as const,
         target_path: "/x",
-        suggested_remedy: "r",
+        handoff: null,
       },
       {
         skill_name: skill.name,
         agent_name: CC.name,
         kind: "missing_link" as const,
         target_path: "/l",
-        suggested_remedy: "relink",
+        handoff: null,
       },
     ];
     expect(deliveryRows(skill, [CC], on, drift)[0].delivery).toEqual({
       state: "drift",
       kind: "missing_link",
       path: "/l",
-      remedy: "relink",
     });
   });
 });

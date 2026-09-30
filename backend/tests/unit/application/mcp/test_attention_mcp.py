@@ -37,6 +37,7 @@ def _source(
     health: FakeHealth | None = None,
     held: set[str] | None = None,
     missing: dict[str, str] | None = None,
+    handoffs: Any = None,
 ) -> McpAttentionSource:
     def runner(config: dict[str, Any]) -> str | None:
         return (missing or {}).get(config["transport"].get("command", ""))
@@ -46,6 +47,7 @@ def _source(
         health=health or FakeHealth(),
         secrets=FakeStore(held or set()),
         runner_missing=runner,
+        handoffs=handoffs,
     )
 
 
@@ -138,3 +140,37 @@ def test_missing_runner_of_reads_only_stdio_launchers(tmp_path) -> None:  # type
     assert missing_runner_of({"transport": {"type": "stdio", "command": "sh"}}) is None
     assert missing_runner_of({"transport": {"type": "http", "url": "https://x.test/mcp"}}) is None
     assert missing_runner_of({"transport": "not a transport"}) is None
+
+
+class FakeHandoffs:
+    def launcher(self, server: Any, runner: str) -> str:
+        return f"install {runner} for {server.name}"
+
+    def diagnose(self, server: Any) -> str:
+        return f"diagnose {server.name}"
+
+
+async def test_missing_launcher_item_carries_the_hand_off_and_a_command_free_reason() -> None:
+    srv = resource("u1", "mcp_server", STDIO, name="jira")
+    [item] = await _source(
+        FakeResources([srv]), missing={"uvx": "uvx"}, handoffs=FakeHandoffs()
+    ).items()
+    assert item.reason_code == "mcp_missing_launcher"
+    assert item.handoff == "install uvx for jira"
+    assert "coffer " not in item.reason and "brew" not in item.reason
+    assert "`" not in item.reason
+
+
+async def test_failing_item_carries_the_diagnosis_hand_off() -> None:
+    srv = resource("u1", "mcp_server", STDIO, name="jira")
+    [item] = await _source(
+        FakeResources([srv]), health=FakeHealth({"u1": ("failing", T0)}), handoffs=FakeHandoffs()
+    ).items()
+    assert item.reason_code == "mcp_failing"
+    assert item.handoff == "diagnose jira"
+
+
+async def test_without_a_hand_off_port_items_carry_none() -> None:
+    srv = resource("u1", "mcp_server", STDIO, name="jira")
+    [item] = await _source(FakeResources([srv]), missing={"uvx": "uvx"}).items()
+    assert item.handoff is None

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-import shutil
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
@@ -36,6 +35,7 @@ from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
+from coffer.infrastructure.platform.user_path import which_on_user_path
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -59,7 +59,7 @@ class CodexAppServerProvider:
         *,
         conversations: ConversationRepo,
         session_factory: AppServerSessionFactory | None = None,
-        which: Any = shutil.which,
+        which: Any = which_on_user_path,
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,

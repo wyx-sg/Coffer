@@ -530,6 +530,7 @@ export interface components {
         AgentQuotaOut: {
             /** Agent Type */
             agent_type: string;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Has Value */
             has_value: boolean;
             /** Last Observed At */
@@ -591,6 +592,7 @@ export interface components {
         DetectLocalOut: {
             /** Found */
             found: components["schemas"]["LocalRuntimeOut"][];
+            handoff: components["schemas"]["HandoffOut"] | null;
         };
         /** DetectProtocolIn */
         DetectProtocolIn: {
@@ -632,6 +634,15 @@ export interface components {
          * @enum {string}
          */
         GroupBy: "model" | "agent" | "day";
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
         /** ListModelsIn */
         ListModelsIn: {
             /** Base Url */

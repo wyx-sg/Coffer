@@ -9,7 +9,10 @@ application-layer ``PluginCliRunner`` Protocol so the service never spawns
 subprocesses itself.
 
 ``available()`` gates the in-app uninstall affordance on the CLI being present;
-when it is not, the UI keeps the "use the CLI yourself" hint instead.
+when it is not, the UI says so and offers the agent's reinstall hand-off. The
+CLI is looked up on the agent's real ``PATH`` (``UserPath``) — the one agent
+detection finds ``claude`` on — so an installed Claude Code never reads as
+missing here only because the daemon was started with a shorter ``PATH``.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from coffer.domain.workspace_errors import PluginUninstallFailed
 
@@ -28,11 +31,19 @@ _UNINSTALL_TIMEOUT_S = 120
 class ClaudePluginCli:
     """Runs ``claude plugin uninstall`` for CLI-strategy (Claude) uninstall."""
 
-    def __init__(self, executable: str = "claude") -> None:
+    def __init__(
+        self, executable: str = "claude", *, user_path: Callable[[], str] | None = None
+    ) -> None:
         self._executable = executable
+        self._user_path = user_path
+
+    def _resolve(self) -> str | None:
+        if self._user_path is None:
+            return shutil.which(self._executable)
+        return shutil.which(self._executable, path=self._user_path())
 
     def available(self) -> bool:
-        return shutil.which(self._executable) is not None
+        return self._resolve() is not None
 
     def uninstall(self, plugin_id: str, *, env: Mapping[str, str] | None = None) -> None:
         """Run ``claude plugin uninstall <plugin_id>``.
@@ -45,11 +56,12 @@ class ClaudePluginCli:
         non-zero, or times out — the service maps that to an actionable error
         rather than leaving the user with a silent no-op.
         """
-        if not self.available():
+        program = self._resolve()
+        if program is None:
             raise PluginUninstallFailed(plugin_id, "the `claude` CLI is not on PATH")
         try:
             proc = subprocess.run(
-                [self._executable, "plugin", "uninstall", plugin_id],
+                [program, "plugin", "uninstall", plugin_id],
                 capture_output=True,
                 text=True,
                 timeout=_UNINSTALL_TIMEOUT_S,

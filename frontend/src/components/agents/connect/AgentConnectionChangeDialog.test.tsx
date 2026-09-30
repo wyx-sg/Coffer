@@ -14,6 +14,8 @@ import {
   type FakeDaemon,
 } from "@/components/agents/list/fakeAgentsDaemon";
 import { renderWithDaemon } from "@/components/agents/list/renderWithDaemon";
+import { ApiError } from "@/lib/api/errors";
+import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/call", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/call")>()),
@@ -94,4 +96,50 @@ describe("AgentConnectionChangeDialog", () => {
     // Before registration the uid is not known, and both previews say so.
     expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(2);
   });
+
+  acceptance(
+    "web-ui",
+    "a connect refused for a missing shim offers the daemon's prompt",
+    async () => {
+      const prompt = "Please find or reinstall Coffer's `coffer-mcp-shim` program on this machine.";
+      use(
+        fakeDaemon({
+          types: [claude],
+          connections: {
+            agt_a: {
+              state: "disconnected",
+              parts: [
+                { key: "mcp", installed: false, detail: null },
+                { key: "memory_hook", installed: false, detail: null },
+              ],
+            },
+          },
+          fail: (c) =>
+            c.method === "POST" && c.path === "/agents/agt_a/coffer-connection"
+              ? new ApiError("SHIM_NOT_FOUND", "could not resolve the coffer-mcp-shim binary", {
+                  handoff: { prompt },
+                })
+              : undefined,
+        }),
+      );
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+      renderWithDaemon(
+        <AgentConnectionChangeDialog
+          request={{ kind: "connect", row: claude }}
+          onClose={() => {}}
+        />,
+      );
+      const dialog = await screen.findByRole("dialog");
+      const apply = await within(dialog).findByRole("button", { name: /^Apply/ });
+      fireEvent.click(apply);
+      await waitFor(() =>
+        expect(within(dialog).getByText("Some changes failed")).toBeInTheDocument(),
+      );
+      // The refusal's copy names no command or environment variable.
+      expect(dialog).not.toHaveTextContent(/COFFER_MCP_SHIM_PATH|on PATH, or set/);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Copy prompt" }));
+      expect(writeText).toHaveBeenCalledWith(prompt);
+    },
+  );
 });

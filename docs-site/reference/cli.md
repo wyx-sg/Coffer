@@ -104,6 +104,7 @@ What needs you now, across every kind, with the route that acts on each.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
+| `--prompt` | option | text |  | Print the hand-off prompt of the item with this key, to give an agent |
 
 ## coffer daemon
 
@@ -639,7 +640,22 @@ coffer mcp test [OPTIONS] NAME
 
 Re-query a server's capabilities, then report whether it answers.
 
-Exits 7 when the server does not answer.
+Exits 7 when the server does not answer. With ``--prompt``, a failure also prints the hand-off prompt the server's page offers for it: installing a launcher that is not found here, or finding why the server fails.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Server name |
+| `--prompt` | option | flag |  | On a failure, also print the prompt to give your agent |
+
+### mcp handoff
+
+```sh
+coffer mcp handoff [OPTIONS] NAME
+```
+
+Print the prompt to give your agent for a server that needs one.
+
+A server whose launcher is not found on this machine, or that is failing, has one — the same text its page and the Overview offer. Exits 5 when the server needs nothing.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1086,6 +1102,7 @@ Prints where each one is and the name it would get — never the value. Move the
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
+| `--prompt` | option | flag |  | Print the prompt that hands rewriting skills still reading ~/.coffer/secrets/ to an agent |
 
 ### secret import
 
@@ -1149,6 +1166,21 @@ Show one agent, with its Coffer connection part by part.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### agent prompt
+
+```sh
+coffer agent prompt [OPTIONS] TYPE
+```
+
+Print the prompt to give your agent to install TYPE's program.
+
+Offered while the program is not found, added or not — the same words the Agents page copies (spec agent-registry "Hand installing an agent's program to an agent").
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TYPE` | argument | text | required | claude-code \| codex |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### agent edit
@@ -1654,6 +1686,8 @@ Check a Git-imported skill for updates, preview one and apply it.
 | `--yes, -y` | option | flag |  | Apply without asking |
 | `--take-theirs` | option | flag |  | Apply over local edits, discarding them |
 | `--keep-mine` | option | flag |  | Keep local edits and stop offering this update |
+| `--prompt` | option | flag |  | Print the prompt that hands merging the update into your edits to an agent |
+| `--merged` | option | text |  | Record that your edits were merged with the update at COMMIT: the pin moves there and the files stay as they are |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### skill rm
@@ -1721,6 +1755,7 @@ Report drift between bindings and on-disk symlinks.
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
 | `--fix` | option | flag |  | Re-deliver repairable drift (missing/tampered links) from master; leaves foreign content untouched. |
+| `--prompt` | option | flag |  | Print the prompt that hands each finding no repair settles to an agent |
 
 ## coffer cli
 
@@ -2456,6 +2491,7 @@ Show each subscription agent's official remaining quota.
 | --- | --- | --- | --- | --- |
 | `--refresh` | option | flag |  | Read Codex's windows now |
 | `--json` | option | flag |  | JSON output for scripts |
+| `--prompt` | option | flag |  | Print the prompt that has your agent set up the statusline wrapper |
 
 ### usage statusline
 

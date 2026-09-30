@@ -62,10 +62,12 @@ For each type Coffer looks at its standard directory and, when the daemon's envi
 | --- | --- | --- |
 | **Detected, not added** | installed, config directory present | **Add** |
 | **Installed, never run** | installed, directory not created yet (marked *not created*) | **Add** — the preview names the directory it creates |
-| **Config left behind** | a directory with no program on `PATH` | **Copy command** (the reinstall command); a notice under the row offers **Reveal folder** |
-| **Not installed** | neither | **Copy command** (the install command) |
+| **Config left behind** | a directory with no program on `PATH` | **Copy prompt** (the reinstall hand-off); a notice under the row offers the same prompt and **Reveal folder** |
+| **Not installed** | neither | **Copy prompt** (the install hand-off) |
 | **Connected** / **Not connected** / **Needs repair** | added; its Coffer connection is complete, absent or partial | **Disconnect** / **Connect** / **Repair** |
 | **Disabled** | added and switched off | **Enable** |
+
+Coffer does not install agents, and installing one depends on the machine, so a row whose program is not found hands the job to an agent instead of naming an install command. **Copy prompt** copies a prompt the daemon writes: install (or reinstall) this agent on this machine, keep its existing config directory, make sure its program is found on the `PATH` Coffer looks on (the prompt lists it) and confirm with `claude --version` or `codex --version`, then come back and choose **Check again** — leaving the login to you. Paste it into any assistant. While another managed agent is available, the row's ⋯ menu also offers **Ask an agent**, which opens a new conversation with the prompt in the composer, unsent. The agent's page offers the same prompt on its empty state and on its Overview tab's problem states. You can still install the agent yourself the way its maker documents; the row updates on its own once the program is on your `PATH`.
 
 **Add** registers the agent at its standard directory and connects it. It first opens a preview — every file it will write and the entries it adds — and writes nothing until you apply it. On a first run with both agents installed and neither added, **Add both** previews and adds the two in one confirmation. A registered row also shows its model and how many skills, MCP servers and plugins reach it, and opens the agent's page.
 
@@ -81,6 +83,8 @@ coffer agent add codex            # register the codex agent at ~/.codex
 ```
 
 The command `coffer scan` prints is `coffer agent add <type>`, with `--config-dir` added only when the directory it found is not the type's standard one.
+
+`coffer agent prompt <type>` prints the same install or reinstall prompt the Agents page copies, while that type's program is not found (`--json` returns it under `handoff`); when the program is found it says there is nothing to hand off and exits with code 5. `coffer agent show <type>` points at it for a registered agent whose program is gone.
 
 ### Use a different config directory
 
@@ -195,7 +199,7 @@ The daemon may run from the desktop app, a login service or a virtualenv, none o
 3. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
 4. the binary bundled beside the running executable.
 
-When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with an error naming the missing binary and writes nothing.
+When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**, and `coffer agent connect` prints it under the error.
 
 ### The agent uid and reach
 

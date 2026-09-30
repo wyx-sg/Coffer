@@ -4,7 +4,9 @@
 // the Overview's own buttons, through `open`), so a state offers the same
 // action wherever the agent is shown. Nothing here assumes the list: the row
 // is the agent's type row, and `includeOpen` adds the menu's Open item where
-// the page is not already the agent's own.
+// the page is not already the agent's own. An agent whose program is not found
+// offers the daemon's install prompt: Copy prompt as its action, and Ask an
+// agent in the menu while another managed agent is available.
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -14,9 +16,9 @@ import {
   AgentConnectionChangeDialog,
   type ConnectionChangeRequest,
 } from "@/components/agents/connect/AgentConnectionChangeDialog";
+import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
 import type { MenuAction } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
-import { agentInstallCommand } from "@/lib/agents/display";
 import { agentTabPath } from "@/lib/agents/routes";
 import type { AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
@@ -61,6 +63,8 @@ export function useAgentRowActions(
   const [configDirOpen, setConfigDirOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const uid = row.uid ?? null;
+  const installPrompt = row.install_handoff?.prompt ?? null;
+  const handoff = useAgentHandoff(installPrompt ?? "");
 
   const copy = (text: string) =>
     void navigator.clipboard
@@ -106,11 +110,13 @@ export function useAgentRowActions(
       break;
     case "not_installed":
     case "config_left_behind":
-      primary = {
-        label: t("agents.rowMenu.copyCommand"),
-        icon: Copy,
-        run: () => copy(agentInstallCommand(row.type)),
-      };
+      primary = installPrompt
+        ? {
+            label: t("handoff.copyPrompt"),
+            icon: Copy,
+            run: () => copy(installPrompt),
+          }
+        : null;
       break;
     case "disabled":
       primary = { label: t("agents.rowMenu.enable"), icon: Power, run: open.enable };
@@ -125,6 +131,9 @@ export function useAgentRowActions(
       label: t("agents.rowMenu.open"),
       onSelect: () => navigate(agentTabPath(row.type, "overview")),
     });
+  }
+  if (installPrompt && handoff.canAsk) {
+    actions.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
   }
   actions.push({
     key: "config-dir",
@@ -175,6 +184,7 @@ export function useAgentRowActions(
   const dialogs = (
     <>
       <AgentConnectionChangeDialog request={change} onClose={() => setChange(null)} />
+      {installPrompt ? handoff.dialog : null}
       <AgentConfigDirDialog row={row} open={configDirOpen} onOpenChange={setConfigDirOpen} />
       {uid ? <AgentRemoveDialog row={row} open={removeOpen} onOpenChange={setRemoveOpen} /> : null}
     </>

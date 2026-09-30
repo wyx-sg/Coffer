@@ -4,11 +4,14 @@
 // runtime without changing it"): with no URL it looks on each runtime's
 // default port, with a loopback URL only there. It lists what answered — the
 // runtime, its version, the wires it serves and its models — and the one
-// picked is what the provider records. No key is asked for.
+// picked is what the provider records. No key is asked for. With nothing
+// found, setting a runtime up is handed to the person's agent: the detect
+// response carries the prompt, and typing a running runtime's address stays.
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Loader2, Search } from "lucide-react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import type { DetectLocalOut } from "@/lib/api/providers";
@@ -53,7 +56,12 @@ export function AddLocalRuntime({ detect, requested, chosen, onChoose, onDetect 
           {translateApiError(t, detect.error)}
         </p>
       ) : requested && detect.data && found.length === 0 ? (
-        <p className="text-xs text-text-muted">{t("providers.add.local.none")}</p>
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-xs text-text-muted">{t("providers.add.local.none")}</p>
+          {detect.data.handoff ? (
+            <AgentHandoff prompt={detect.data.handoff.prompt} size="sm" />
+          ) : null}
+        </div>
       ) : found.length > 0 ? (
         <div
           role="radiogroup"

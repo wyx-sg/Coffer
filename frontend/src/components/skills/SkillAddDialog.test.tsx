@@ -19,6 +19,9 @@ vi.mock("@/lib/api/skills", () => ({
     cancelStage: vi.fn(),
   },
 }));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
+}));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { browse: vi.fn(), pickFolder: vi.fn() } }));
 vi.mock("@/lib/api/resources", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/resources")>()),
@@ -297,4 +300,28 @@ describe("SkillAddDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();
   });
+
+  acceptance(
+    "skill-manager",
+    "a skill import with no git hands installing it to an agent",
+    async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      const prompt = "Install git on this machine. This machine: macOS 15.6, arm64.";
+      api.stageGit.mockRejectedValueOnce(
+        new ApiError("SKILL_SOURCE_UNREACHABLE", "git is not installed on this machine", {
+          reason: "git_missing",
+          handoff: { prompt },
+        }),
+      );
+      renderDialog({ initialSource: "git" });
+      fireEvent.change(screen.getByLabelText("Repository URL"), {
+        target: { value: "https://x/y" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Clone" }));
+      const alert = await screen.findByRole("alert");
+      fireEvent.click(within(alert).getByRole("button", { name: "Copy prompt" }));
+      expect(writeText).toHaveBeenCalledWith(prompt);
+    },
+  );
 });

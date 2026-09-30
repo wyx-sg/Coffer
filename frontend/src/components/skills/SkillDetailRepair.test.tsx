@@ -51,7 +51,7 @@ const IN_THE_WAY = {
   agent_name: "codex",
   kind: "replaced_with_regular" as const,
   target_path: LINK,
-  suggested_remedy: "",
+  handoff: null,
 };
 
 beforeEach(() => {

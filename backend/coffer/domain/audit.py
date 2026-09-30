@@ -26,6 +26,9 @@ class AuditEventType(StrEnum):
     # spec daemon "Change residency from the settings page or the command line":
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
+    # spec daemon "Restart itself on request": the web UI asked the daemon to
+    # start its successor and exit
+    DAEMON_RESTARTED = "daemon_restarted"
     RETENTION_UPDATED = "retention_updated"
     # spec web-ui "Let the user ignore an unconnected agent on Overview": an
     # informational "needs you" item ignored on this machine, or no longer.
@@ -63,6 +66,9 @@ class AuditEventType(StrEnum):
     # spec skill-manager
     SKILL_IMPORTED = "skill_imported"
     SKILL_UPDATED = "skill_updated"
+    #: The pin moved to an upstream commit merged into local edits by hand;
+    #: the master's files were not touched.
+    SKILL_UPDATE_MERGED = "skill_update_merged"
     SKILL_BOUND = "skill_bound"
     SKILL_UNBOUND = "skill_unbound"
     SKILL_RELINKED = "skill_relinked"

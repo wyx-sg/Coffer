@@ -1,7 +1,7 @@
 // frontend/src/components/skills/SkillChoiceCards.tsx
-// The pair of radio cards every "two confirmed choices" dialog of the Skills
-// page opens with (canvas 4.3.19, 4.3.23, 4.3.24, 4.3.27, 4.3.41): Keep my
-// edits / Take the update, Restore from master / Adopt the agent's version,
+// The radio cards every "confirmed choices" dialog of the Skills page opens
+// with (canvas 4.3.19, 4.3.23, 4.3.24, 4.3.27, 4.3.41): Keep my edits / Take
+// the update / Merge with an agent, Restore from master / Adopt the agent's version,
 // Replace it with Coffer's link / Adopt this folder. Nothing is chosen for the
 // reader unless the caller passes a value; the chosen card is the lifted one.
 import { cn } from "@/lib/utils";
@@ -24,7 +24,11 @@ interface Props<T extends string> {
 
 export function SkillChoiceCards<T extends string>({ label, choices, value, onChange }: Props<T>) {
   return (
-    <div role="radiogroup" aria-label={label} className="grid gap-2.5 sm:grid-cols-2">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cn("grid gap-2.5", choices.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}
+    >
       {choices.map((c) => {
         const on = c.value === value;
         return (

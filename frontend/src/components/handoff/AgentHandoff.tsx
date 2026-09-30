@@ -9,17 +9,12 @@
 // presses Send — managed agents run with full permissions. With no managed
 // agent available only Copy prompt is offered. Knows nothing about what the
 // chore is: the caller passes the prompt.
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Check, Copy, MessageSquarePlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { NewConversationDialog } from "@/components/chat/NewConversationDialog";
 import { HelpTip } from "@/components/HelpTip";
 import { Button } from "@/components/ui/button";
-import { openHandoffDraft } from "@/lib/conversations/handoff";
-import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
-import { useCopyText } from "@/lib/hooks/useCopyText";
+import { useAgentHandoff } from "./useAgentHandoff";
 
 interface Props {
   /** The backend's hand-off text, passed on as is — never assembled by the caller. */
@@ -29,32 +24,21 @@ interface Props {
 
 export function AgentHandoff({ prompt, size = "default" }: Props) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { copied, copy } = useCopyText();
-  const { data: agents = [] } = useAgentProviders();
-  const [choosing, setChoosing] = useState(false);
-  const canAsk = agents.some((a) => a.available);
+  const { copied, copy, canAsk, ask, dialog } = useAgentHandoff(prompt);
 
   return (
     <div className="inline-flex flex-wrap items-center gap-2">
-      <Button type="button" variant="outline" size={size} onClick={() => copy(prompt)}>
+      <Button type="button" variant="outline" size={size} onClick={copy}>
         {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
         {copied ? t("handoff.copied") : t("handoff.copyPrompt")}
       </Button>
       {canAsk ? (
-        <>
-          <Button type="button" variant="outline" size={size} onClick={() => setChoosing(true)}>
-            <MessageSquarePlus aria-hidden />
-            {t("handoff.askAgent")}
-          </Button>
-          <NewConversationDialog
-            open={choosing}
-            onOpenChange={setChoosing}
-            agents={agents}
-            onStart={(config) => openHandoffDraft(navigate, { ...config, prompt })}
-          />
-        </>
+        <Button type="button" variant="outline" size={size} onClick={ask}>
+          <MessageSquarePlus aria-hidden />
+          {t("handoff.askAgent")}
+        </Button>
       ) : null}
+      {dialog}
       <HelpTip>
         <p className="text-xs">{t("handoff.help")}</p>
       </HelpTip>

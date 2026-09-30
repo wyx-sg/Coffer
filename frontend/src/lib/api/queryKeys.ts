@@ -137,6 +137,8 @@ export const daemonVersionSkewKey = (version: string | undefined) =>
   ["daemon", "version-skew", version] as const;
 export const daemonResidencyKey = ["daemon", "residency"] as const;
 export const daemonPortKey = ["daemon", "port"] as const;
+/** Settings › About in a browser: the prompt that upgrades Coffer. */
+export const daemonUpgradeKey = ["daemon", "upgrade"] as const;
 /** Settings > Data: what Coffer keeps on this machine, by kind. */
 export const storageKey = ["storage"] as const;
 export const daemonFeaturesKey = ["daemon", "features"] as const;

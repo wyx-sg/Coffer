@@ -71,7 +71,7 @@ async def test_connecting_websocket_is_a_reconnecting_warning() -> None:
     assert item.since is None
 
 
-@pytest.mark.parametrize("state", ["kicked", "error", "sdk_missing"])
+@pytest.mark.parametrize("state", ["kicked", "error"])
 async def test_a_down_websocket_is_an_error_carrying_the_recorded_text(state: str) -> None:
     [item] = await _source(_status("c1", ws=(state, "another   process\nholds it"))).items()
     assert item.reason_code == "channel_disconnected"
@@ -79,6 +79,37 @@ async def test_a_down_websocket_is_an_error_carrying_the_recorded_text(state: st
     assert "another process holds it" in item.reason
     assert item.title == "bot-c1"
     assert item.action == _check("c1")
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a missing sdk is handed to an agent on the Overview"
+)
+async def test_a_missing_sdk_carries_the_hand_off_and_a_command_free_reason() -> None:
+    asked: list[str] = []
+
+    def handoff(name: str) -> str:
+        asked.append(name)
+        return f"put the SDK in place for {name}"
+
+    status = _status("c1", ws=("sdk_missing", "not found in /v"))
+    source = ChannelAttentionSource(
+        resources=FakeResources([resource("c1", "channel", {})]),
+        channels=FakeChannels({"c1": status}),
+        sdk_handoff=handoff,
+    )
+    [item] = await source.items()
+    assert item.reason_code == "channel_sdk_missing"
+    assert item.severity is Severity.ERROR
+    assert item.handoff == "put the SDK in place for bot-c1"
+    assert asked == ["bot-c1"]
+    assert "coffer " not in item.reason and "/v" not in item.reason
+    assert item.action == _check("c1")
+
+
+async def test_a_missing_sdk_without_a_hand_off_source_still_reports() -> None:
+    [item] = await _source(_status("c1", ws=("sdk_missing", "x"))).items()
+    assert item.reason_code == "channel_sdk_missing"
+    assert item.handoff is None
 
 
 async def test_the_recorded_error_is_clipped() -> None:

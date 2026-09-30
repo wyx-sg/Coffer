@@ -274,6 +274,9 @@ def show(
         # configuration": a setting that reads correctly here and does nothing in
         # the chat is worth interrupting for.
         typer.echo(f"warning:  {diagnostic['message']}")
+    if body.get("handoff"):
+        # The same hand-off the channel page offers (the SDK is missing).
+        typer.echo(f"\nFor your agent:\n{body['handoff']['prompt']}")
 
 
 def _echo_inbound(inbound: dict[str, object]) -> None:
@@ -286,9 +289,7 @@ def _echo_inbound(inbound: dict[str, object]) -> None:
     state = inbound.get("websocket_state") or "not connected yet"
     typer.echo(f"inbound:  websocket ({state})")
     error = inbound.get("websocket_error")
-    if error:
-        # Verbatim: the two failures that matter (no SDK installed, another
-        # process holding the connection) are only actionable if read.
+    if error:  # verbatim: a missing SDK or a held connection is actionable only if read
         typer.echo(f"ws error: {error}")
 
 

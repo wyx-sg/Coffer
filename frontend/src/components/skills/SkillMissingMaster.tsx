@@ -3,15 +3,18 @@
 // two ways forward, chosen and then confirmed — Restore it from History, or
 // Remove the skill (its row and settings; the confirmation is the usual
 // delete). The skill's versions are not recorded yet, so Restore is shown
-// but can't be chosen until the vault keeps a skill's history.
+// but can't be chosen until the vault keeps a skill's history. The drift
+// finding's hand-off asks an agent to look for a copy that can be put back.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw, Trash2 } from "lucide-react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillChoiceCards } from "@/components/skills/SkillChoiceCards";
 import { SkillDeleteDialog } from "@/components/skills/SkillDeleteDialog";
 import { Button } from "@/components/ui/button";
 import type { SkillOut } from "@/lib/api/skills";
+import { useSkillCopies } from "@/lib/hooks/useSkills";
 
 type Way = "restore" | "remove";
 
@@ -24,6 +27,9 @@ export function SkillMissingMaster({ skill, onDeleted }: Props) {
   const { t } = useTranslation();
   const [way, setWay] = useState<Way | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const handoff = useSkillCopies().data?.entries.find(
+    (e) => e.kind === "missing_master" && e.skill_name === skill.name,
+  )?.handoff;
 
   return (
     <section className="flex flex-col gap-3" aria-label={t("skills.missing.label")}>
@@ -46,6 +52,12 @@ export function SkillMissingMaster({ skill, onDeleted }: Props) {
           },
         ]}
       />
+      {handoff ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-xs text-text-muted">{t("skills.missing.askAgent")}</span>
+          <AgentHandoff prompt={handoff.prompt} size="sm" />
+        </div>
+      ) : null}
       <div className="flex justify-end">
         {way === "remove" ? (
           <Button variant="destructive" onClick={() => setDeleting(true)}>

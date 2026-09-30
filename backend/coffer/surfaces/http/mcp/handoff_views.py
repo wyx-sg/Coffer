@@ -1,0 +1,83 @@
+"""The MCP server hand-offs as the routes and the Overview hand them over.
+
+``application/mcp/handoff.py`` writes the prompts from facts; this is where the
+facts that live on the host are read — the machine's OS and architecture, the
+``PATH`` a started server gets, and the tail of the server's own log file —
+so the status read, the test route and the attention list all say the same
+words (spec mcp-gateway "Name a missing stdio launcher", "Hand a failing MCP
+server's diagnosis to an agent").
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Sequence
+from functools import cache
+from typing import Any
+
+from coffer.application.mcp.handoff import STDERR_LINES, diagnose_handoff, launcher_handoff
+from coffer.domain.resource import Resource
+from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
+from coffer.infrastructure.platform.host import machine_label
+
+#: The OS and architecture do not change while the daemon runs.
+_machine = cache(machine_label)
+
+
+def _launch_path(config: dict[str, Any]) -> str:
+    """The ``PATH`` a started server gets: its own ``env`` entry, else the daemon's."""
+    transport = config.get("transport")
+    env = transport.get("env") if isinstance(transport, dict) else None
+    if isinstance(env, dict) and isinstance(env.get("PATH"), str):
+        return str(env["PATH"])
+    return os.environ.get("PATH", "")
+
+
+def _log_tail(resource: Resource) -> tuple[list[str], str | None]:
+    """The server's newest log lines, oldest first, and the file they came from."""
+    transport = resource.config.get("transport")
+    if not isinstance(transport, dict) or transport.get("type") != "stdio":
+        return [], None
+    tail = read_upstream_tail(resource.name, STDERR_LINES)
+    return [line.text for line in reversed(tail.lines)], (
+        str(tail.path) if tail.path is not None else None
+    )
+
+
+def launcher_prompt(resource: Resource, runner: str) -> str:
+    return launcher_handoff(
+        name=resource.name,
+        config=resource.config,
+        runner=runner,
+        machine=_machine(),
+        path=_launch_path(resource.config),
+    )
+
+
+def diagnose_prompt(
+    resource: Resource, *, error: str | None, stderr: Sequence[str] | None = None
+) -> str:
+    """The diagnosis prompt. ``stderr`` is what a test just captured; without
+    it the server's own log file is quoted."""
+    lines, log_path = _log_tail(resource)
+    return diagnose_handoff(
+        name=resource.name,
+        config=resource.config,
+        error=error,
+        stderr=list(stderr) if stderr else lines,
+        machine=_machine(),
+        log_path=log_path,
+    )
+
+
+class McpHandoffs:
+    """:class:`~coffer.application.mcp.attention.McpHandoffPort` over this module."""
+
+    def launcher(self, server: Resource, runner: str) -> str:
+        return launcher_prompt(server, runner)
+
+    def diagnose(self, server: Resource) -> str:
+        return diagnose_prompt(server, error=None)
+
+
+__all__ = ["McpHandoffs", "diagnose_prompt", "launcher_prompt"]

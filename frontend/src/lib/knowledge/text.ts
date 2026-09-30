@@ -6,6 +6,7 @@
 // words.
 import type { TFunction } from "i18next";
 
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 
 import type { UpkeepRunOut } from "@/lib/api/upkeep";
@@ -47,17 +48,18 @@ export function outlineOf(body: string): Heading[] {
   return out;
 }
 
-/** The refusal in words, and the document that changed since when the daemon
- *  names it. */
+/** The refusal in words, the document that changed since when the daemon
+ *  names it, and the prompt for undoing the pass by hand when it sends one. */
 export function undoRefusal(
   t: TFunction,
   error: unknown,
-): { text: string; document: string | null } {
+): { text: string; document: string | null; handoff: string | null } {
+  const handoff = errorHandoff(error);
   if (error instanceof ApiError && error.code === "KNOWLEDGE_UNDO_CONFLICT") {
     const document = (error.details as { document?: unknown } | undefined)?.document;
     if (typeof document === "string") {
-      return { text: t("knowledge.pass.undoRefused", { document }), document };
+      return { text: t("knowledge.pass.undoRefused", { document }), document, handoff };
     }
   }
-  return { text: translateApiError(t, error), document: null };
+  return { text: translateApiError(t, error), document: null, handoff };
 }

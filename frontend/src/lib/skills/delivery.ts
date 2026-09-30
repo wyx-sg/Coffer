@@ -22,7 +22,7 @@ type NotDeliveredReason = "skillOff" | "outsideReach" | "agentOff" | "pending";
 export type AgentDelivery =
   | { state: "linked"; path: string | null }
   | { state: "copied"; path: string | null }
-  | { state: "drift"; kind: DriftKind; path: string; remedy: string }
+  | { state: "drift"; kind: DriftKind; path: string }
   | { state: "notDelivered"; reason: NotDeliveredReason };
 
 export interface DeliveryRow {
@@ -57,12 +57,7 @@ function deliveryFor(
 ): AgentDelivery {
   const finding = drift?.find((e) => e.skill_name === skill.name && e.agent_name === agent.name);
   if (finding) {
-    return {
-      state: "drift",
-      kind: finding.kind,
-      path: finding.target_path,
-      remedy: finding.suggested_remedy,
-    };
+    return { state: "drift", kind: finding.kind, path: finding.target_path };
   }
   const binding = skill.bindings.find((b) => b.agent_uid === agent.uid);
   if (binding) {

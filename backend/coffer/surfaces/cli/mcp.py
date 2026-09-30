@@ -5,8 +5,9 @@ The lifecycle verbs (``list``, ``show``, ``edit``, ``rm``, ``enable``,
 ``_kind_verbs`` from the ``mcp_server`` descriptor. What is left here is what
 only an MCP server has: ``add`` (the transport is parsed from ``--stdio`` or
 ``--http``; ``edit`` takes the same transport flags, from ``_mcp_edit``),
-``test`` (re-query the capabilities, then report health) and the
-``cap`` group (``_mcp_caps.py``).
+``test`` (re-query the capabilities, then report health), ``prompt`` (the
+hand-off prompt a server's page offers) and the ``cap`` group
+(``_mcp_caps.py``).
 
 A server's name is fixed once registered, because it is the prefix of every
 tool name an agent sees (spec mcp-gateway "Manage MCP servers as resources");
@@ -37,6 +38,7 @@ from coffer.surfaces.cli._kind_verbs import (
 )
 from coffer.surfaces.cli._mcp_caps import cap_app
 from coffer.surfaces.cli._mcp_edit import MCP_EDIT_FLAGS, parse_pairs
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage MCP servers and their capabilities")
@@ -171,10 +173,15 @@ def _capabilities_line(r: httpx.Response) -> str:
 def test_cmd(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Server name"),
+    prompt: bool = typer.Option(
+        False, "--prompt", help="On a failure, also print the prompt to give your agent"
+    ),
 ) -> None:
     """Re-query a server's capabilities, then report whether it answers.
 
-    Exits 7 when the server does not answer.
+    Exits 7 when the server does not answer. With ``--prompt``, a failure also
+    prints the hand-off prompt the server's page offers for it: installing a
+    launcher that is not found here, or finding why the server fails.
 
     \f
     Routes: ``POST /resources/mcp_server/{uid}/refresh`` then ``.../test``
@@ -197,7 +204,44 @@ def test_cmd(
         typer.echo(f"OK  ({data['latency_ms']} ms)")
     else:
         typer.echo(f"FAIL ({data['latency_ms']} ms): {data.get('error_message')}", err=True)
+        handoff = data.get("handoff")
+        if handoff and prompt:
+            typer.echo(handoff["prompt"])
+        elif handoff:
+            typer.echo(
+                f"hand off: coffer mcp test {shlex.quote(name)} --prompt"
+                "  (a prompt for your agent)",
+                err=True,
+            )
         raise typer.Exit(7)
+
+
+@app.command("handoff")
+def handoff_cmd(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Server name"),
+) -> None:
+    """Print the prompt to give your agent for a server that needs one.
+
+    A server whose launcher is not found on this machine, or that is failing,
+    has one — the same text its page and the Overview offer. Exits 5 when the
+    server needs nothing.
+
+    \f
+    Route: ``GET /resources/mcp_server/{uid}/status`` (its ``handoff``; spec
+    mcp-gateway "Hand a failing MCP server's diagnosis to an agent").
+    """
+    verbose = verbose_of(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.get(f"/resources/mcp_server/{uid}/status")
+        _cli_client.check(r, verbose=verbose)
+    handoff = r.json().get("handoff")
+    if not handoff:
+        typer.echo(f"{name} needs nothing handed off.", err=True)
+        raise typer.Exit(int(ExitCode.CONFLICT))
+    typer.echo(handoff["prompt"])
 
 
 app.add_typer(cap_app, name="cap")

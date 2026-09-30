@@ -86,7 +86,8 @@ other process holds — the port the daemon itself answers on counts as free —
 refused with the reason, naming the holder of a taken port. The route MUST write the pre-bind file
 exactly as `coffer config set daemon.port` does and answer that the change is pending: the daemon
 keeps answering on its current port. A change takes effect at the next start, which
-`coffer daemon restart` — or the desktop shell's Restart — applies in one step. After a restart on a
+`coffer daemon restart` — or Restart now on Settings → Daemon, which is the desktop shell's restart
+in the shell and the daemon's own ("Restart itself on request") in a browser — applies in one step. After a restart on a
 new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
 shim find it by the discovery file as they find any daemon, and no agent's configuration needs a
 rewrite: Coffer's MCP entry in an agent's config runs

@@ -31,19 +31,6 @@ export function abbreviateHomePath(path: string): string {
   return `…/${parts.slice(-2).join("/")}`;
 }
 
-// How each supported agent is installed (or reinstalled), for the rows and
-// pages that say "not installed" or "config left behind": the command the user
-// copies into a terminal. Coffer never runs it.
-const INSTALL_COMMANDS: Record<AgentType, string> = {
-  claude_code: "npm install -g @anthropic-ai/claude-code",
-  codex: "npm install -g @openai/codex",
-};
-
-/** The command that installs (or reinstalls) an agent type's program. */
-export function agentInstallCommand(type: AgentType): string {
-  return INSTALL_COMMANDS[type];
-}
-
 /** The program an agent type runs as, as it appears on PATH. */
 export function agentProgramName(type: AgentType): string {
   return type === "claude_code" ? "claude" : "codex";

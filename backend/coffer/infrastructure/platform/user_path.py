@@ -9,6 +9,7 @@ and the skill kind finds the commands a skill requires on it.
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 from collections.abc import Callable
 
@@ -39,6 +40,13 @@ class UserPath:
         return _merge(shell, os.environ.get("PATH", ""))
 
 
+def which_on_user_path(program: str) -> str | None:
+    """``shutil.which`` on the agent's real ``PATH`` rather than the daemon's
+    own, which a GUI launch truncates — so a program the person runs from a
+    terminal is found (and started) by Coffer too."""
+    return shutil.which(program, path=UserPath()())
+
+
 def _merge(first: str, second: str) -> str:
     seen: list[str] = []
     for entry in (*first.split(os.pathsep), *second.split(os.pathsep)):
@@ -47,4 +55,4 @@ def _merge(first: str, second: str) -> str:
     return os.pathsep.join(seen)
 
 
-__all__ = ["UserPath"]
+__all__ = ["UserPath", "which_on_user_path"]

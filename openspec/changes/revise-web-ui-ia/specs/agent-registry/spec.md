@@ -211,7 +211,7 @@ On the command line, candidates are rows of kind `agent` in `coffer scan`, the o
 ## ADDED Requirements
 
 ### Requirement: List the supported agents as fixed rows on the Agents page
-The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as added (with its config directory and version) or not added; an `installed_never_run` type reads as installed but never run, with its config directory marked as not created, and offers Add, whose preview names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and shows the command that reinstalls it, to copy, and no Add; a `missing` type reads as not installed and shows the command that installs it, to copy, and no Add. A row's menu carries **Use a different config directory…** (see "Offer a folder picker for a custom config directory"). On first run, with neither agent added, the page MUST offer **Add both**, which previews and adds every installed, not-added agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
+The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as added (with its config directory and version) or not added; an `installed_never_run` type reads as installed but never run, with its config directory marked as not created, and offers Add, whose preview names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and offers the daemon's prompt that hands reinstalling it to an agent (see "Hand installing an agent's program to an agent"), and no Add; a `missing` type reads as not installed and offers the prompt that hands installing it to an agent, and no Add. The page MUST NOT show an install command. A row's menu carries **Use a different config directory…** (see "Offer a folder picker for a custom config directory"). On first run, with neither agent added, the page MUST offer **Add both**, which previews and adds every installed, not-added agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
 
 #### Scenario: the agents page shows both supported agents on first run
 - **GIVEN** a fresh Coffer with Claude Code and Codex both installed and neither added
@@ -222,7 +222,7 @@ The Agents page MUST list exactly one row per supported agent type — today two
 #### Scenario: an agent that is not installed shows how to install it
 - **GIVEN** Codex not installed on the machine
 - **WHEN** the Agents page renders
-- **THEN** the Codex row reads as not installed and shows the command that installs Codex, to copy, and no Add action
+- **THEN** the Codex row reads as not installed and offers Copy prompt with the daemon's prompt that hands installing Codex to an agent, shows no install command, and has no Add action
 
 #### Scenario: an installed agent that has never run can be added
 - **GIVEN** Codex's program installed and `~/.codex` not created
@@ -233,7 +233,7 @@ The Agents page MUST list exactly one row per supported agent type — today two
 #### Scenario: a leftover config directory reads as config left behind
 - **GIVEN** `~/.codex` present and the Codex program not on the agent's `PATH`
 - **WHEN** the Agents page renders
-- **THEN** the Codex row reads as config left behind — program not found — with the command that reinstalls Codex, to copy, and no Add action
+- **THEN** the Codex row reads as config left behind — program not found — with Copy prompt offering the daemon's reinstall prompt, no install command, and no Add action
 
 #### Scenario: a row's menu offers a different config directory
 - **GIVEN** a Claude Code row on the Agents page

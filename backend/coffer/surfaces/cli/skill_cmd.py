@@ -205,6 +205,31 @@ register_kind_verbs(
 )
 
 
+# What to do about each drift kind, in this surface's own words: the report
+# carries the kind (and a hand-off prompt for the kinds no repair settles), and
+# each surface says the remedy itself — the web UI has a Repair button, the
+# command line has ``verify --fix`` (spec skill-manager "Report skill drift on
+# request"). Backticked ``coffer ...`` commands are resolved against the real
+# CLI by tests/unit/surfaces/test_skill_drift_remedies.py.
+DRIFT_REMEDIES: dict[str, str] = {
+    "missing_link": "Run `coffer skill verify --fix` to re-link it from master.",
+    "tampered_link": "Run `coffer skill verify --fix` to point the link back at master.",
+    "replaced_with_regular": (
+        "A folder Coffer did not make occupies the link path and Coffer will not touch it; "
+        "compare it with master (`coffer skill verify --prompt` hands that to an agent), "
+        "move it away yourself, then run `coffer skill verify --fix`."
+    ),
+    "missing_master": (
+        "The master folder is gone; restore it (`coffer skill verify --prompt` hands the "
+        "search to an agent), or remove the record with `coffer skill rm <name>`."
+    ),
+    "orphan_master": (
+        "A folder in Coffer's skill store has no Coffer record; move it out of the store and "
+        "add it with `coffer skill add <folder>`, or delete it."
+    ),
+}
+
+
 def _drift_table(title: str, entries: list[dict[str, Any]]) -> Table:
     table = Table(title=title)
     for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
@@ -215,9 +240,18 @@ def _drift_table(title: str, entries: list[dict[str, Any]]) -> Table:
             e["agent_name"] or "—",
             e["kind"],
             e["target_path"],
-            e["suggested_remedy"],
+            DRIFT_REMEDIES[e["kind"]],
         )
     return table
+
+
+def _print_prompts(entries: list[dict[str, Any]]) -> None:
+    """Each finding's hand-off prompt — the words the Skills page hands over."""
+    prompts = [e["handoff"]["prompt"] for e in entries if e.get("handoff")]
+    if not prompts:
+        typer.echo("no finding needs an agent; `coffer skill verify --fix` repairs the rest")
+        return
+    typer.echo("\n\n---\n\n".join(prompts))
 
 
 @app.command("verify")
@@ -232,10 +266,21 @@ def verify(
             " leaves foreign content untouched."
         ),
     ),
+    prompt: bool = typer.Option(
+        False,
+        "--prompt",
+        help="Print the prompt that hands each finding no repair settles to an agent",
+    ),
 ) -> None:
     """Report drift between bindings and on-disk symlinks."""
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
+    if prompt:
+        with c:
+            r = c.post("/skills/verify")
+            _cli_client.check(r, verbose=verbose)
+        _print_prompts(r.json()["entries"])
+        return
     if fix:
         with c:
             r = c.post("/skills/repair")

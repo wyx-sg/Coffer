@@ -2,9 +2,12 @@
 //
 // Settings › About's update check, against a stand-in for the desktop shell.
 // The shell owns the check and the install; what is asserted here is that the
-// tab renders the shell's record faithfully and asks it to act.
+// tab renders the shell's record faithfully and asks it to act. In a browser
+// the tab hands the upgrade to an agent with the daemon's prompt.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import type { UpdateStatus } from "@/lib/shellUpdates";
@@ -33,7 +36,26 @@ vi.mock("@/lib/shellUpdates", () => ({
   },
 }));
 
+const getMock = vi.fn();
+vi.mock("@/lib/api/client", () => ({ getApiClient: () => ({ GET: getMock }) }));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
+}));
+
+const UPGRADE_PROMPT = "Please upgrade Coffer on this machine to the latest release.";
+
 const { UpdatesSection } = await import("./UpdatesSection");
+
+function renderSection() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <UpdatesSection />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
 
 const CHECKED_AT = new Date(2026, 8, 30, 9, 15, 0).getTime();
 
@@ -62,10 +84,14 @@ describe("UpdatesSection", () => {
     shell.check.mockReset();
     shell.install.mockReset();
     shell.setAuto.mockReset();
+    getMock.mockReset();
+    getMock.mockResolvedValue({
+      data: { install_method: "binaries", handoff: { prompt: UPGRADE_PROMPT } },
+    });
   });
 
   acceptance("web-ui", "about shows the version and when updates were last checked", async () => {
-    render(<UpdatesSection />);
+    renderSection();
     expect(await screen.findByText("Coffer is up to date")).toBeInTheDocument();
     expect(screen.getByText(/Last checked 2026-09-30 09:15:00/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /check for updates/i })).toBeEnabled();
@@ -81,7 +107,7 @@ describe("UpdatesSection", () => {
         record({ phase: "available", available: NEWER, lastCheckedAt: later }),
       );
     });
-    render(<UpdatesSection />);
+    renderSection();
     fireEvent.click(await screen.findByRole("button", { name: /check for updates/i }));
     expect(shell.check).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Coffer 1.0.1 is available")).toBeInTheDocument();
@@ -92,7 +118,7 @@ describe("UpdatesSection", () => {
 
   test("a busy check takes no second press", async () => {
     shell.status = record({ phase: "checking" });
-    render(<UpdatesSection />);
+    renderSection();
     const busy = await screen.findByRole("button", { name: /checking/i });
     expect(busy).toBeDisabled();
     fireEvent.click(busy);
@@ -102,7 +128,7 @@ describe("UpdatesSection", () => {
   acceptance("web-ui", "download and restart installs the newer version", async () => {
     shell.status = record({ phase: "available", available: NEWER });
     shell.install.mockReturnValue(new Promise(() => {})); // relaunches: never settles
-    render(<UpdatesSection />);
+    renderSection();
     fireEvent.click(await screen.findByRole("button", { name: /download and restart/i }));
     expect(shell.install).toHaveBeenCalledTimes(1);
     act(() =>
@@ -121,7 +147,7 @@ describe("UpdatesSection", () => {
         error: "Couldn't reach the release manifest on github.com (timed out).",
       }),
     );
-    render(<UpdatesSection />);
+    renderSection();
     fireEvent.click(await screen.findByRole("button", { name: /check for updates/i }));
     expect(await screen.findByText("Couldn't check for updates")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/timed out.*You are on 1\.0\.0/);
@@ -130,11 +156,21 @@ describe("UpdatesSection", () => {
     expect(screen.getByRole("button", { name: /try again/i })).toBeEnabled();
   });
 
-  acceptance("web-ui", "about in a browser offers no update control", () => {
+  acceptance("web-ui", "about in a browser offers no update control", async () => {
     shell.inShell = false;
-    render(<UpdatesSection />);
+    renderSection();
     expect(screen.getByText(/installed by the Coffer desktop app/)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    // The upgrade goes to an agent: Copy prompt, and nothing that installs.
+    expect(await screen.findByRole("button", { name: /copy prompt/i })).toBeInTheDocument();
+    expect(getMock).toHaveBeenCalledWith("/daemon/upgrade");
+    expect(screen.queryByRole("button", { name: /check for updates/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  test("the desktop shell never asks for the upgrade hand-off", async () => {
+    renderSection();
+    expect(await screen.findByText("Coffer is up to date")).toBeInTheDocument();
+    expect(getMock).not.toHaveBeenCalled();
   });
 });

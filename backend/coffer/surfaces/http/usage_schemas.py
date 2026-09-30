@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 
 class UsageTotalsOut(BaseModel):
     requests: int
@@ -111,6 +113,10 @@ class AgentQuotaOut(BaseModel):
     plan: str | None
     last_observed_at: datetime | None
     windows: list[QuotaWindowOut]
+    #: Claude Code's row with no value: the prompt that hands opting in to the
+    #: statusline wrapper to the person's agent
+    #: (``application/usage/statusline_handoff.py``). ``None`` otherwise.
+    handoff: HandoffOut | None = None
 
 
 class QuotaListOut(BaseModel):

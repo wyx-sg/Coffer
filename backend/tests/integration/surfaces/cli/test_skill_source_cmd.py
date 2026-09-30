@@ -267,6 +267,33 @@ def test_update_refuses_a_conflict_until_a_side_is_named(home: pathlib.Path, up:
     assert stage_dirs(get_skill_source_service()) == []
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="recording a merge moves the pin and keeps the merged files"
+)
+def test_update_prints_the_merge_prompt_and_records_the_merge(
+    home: pathlib.Path, up: Upstream
+) -> None:
+    _add_git(up)
+    skill_file = default_master_root() / "review" / "SKILL.md"
+    skill_file.write_text(skill_md("review", "mine"))
+    new = _move(up)
+
+    r = _runner.invoke(cli_app, ["skill", "update", "review", "--yes"])
+    assert r.exit_code == 5 and f"--merged {new}" in r.output
+    r = _runner.invoke(cli_app, ["skill", "update", "review", "--prompt"])
+    assert r.exit_code == 0, r.output
+    assert str(default_master_root() / "review") in r.output and new in r.output
+    assert stage_dirs(get_skill_source_service()) == []
+
+    r = _runner.invoke(cli_app, ["skill", "update", "review", "--merged", new])
+    assert r.exit_code == 0, r.output
+    assert f"pinned at {new[:7]}" in r.output
+    assert _show("review")["source"]["commit"] == new
+    assert "mine" in skill_file.read_text()
+    r = _runner.invoke(cli_app, ["skill", "update", "review", "--merged", new])
+    assert r.exit_code != 0  # nothing is waiting any more
+
+
 def test_update_refuses_both_sides_and_an_unreachable_check_fails(
     home: pathlib.Path, up: Upstream
 ) -> None:

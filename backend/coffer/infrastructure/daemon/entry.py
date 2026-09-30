@@ -28,7 +28,7 @@ from collections.abc import Callable, MutableMapping
 import uvicorn
 
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
-from coffer.infrastructure.daemon import bootstrap
+from coffer.infrastructure.daemon import bootstrap, self_restart
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 
 _logger = logging.getLogger(__name__)
@@ -219,6 +219,9 @@ def main() -> None:
     scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()
     _install_signal_handlers()
+    # A restart the daemon asked for itself: the predecessor that spawned us
+    # must be gone before we take the lock and bind its port (self_restart).
+    self_restart.await_predecessor(os.environ)
     # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the
     # auto-spawn caller (CLI/shim) discovers it; otherwise we hold the bound

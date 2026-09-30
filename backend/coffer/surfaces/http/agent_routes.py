@@ -14,7 +14,6 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel
 
 from coffer.application.agent.auto_detect import AgentTypeDetection, AutoDetectService
-from coffer.application.agent.install_handoff import agent_install_handoff
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.detection import DetectionState
@@ -96,6 +95,10 @@ class AgentOut(BaseModel):
     state: DetectionState
     # The version the agent's program reports, when it was found and answered.
     version: str | None
+    #: While its program is not found (``config_only`` or ``missing``): the
+    #: prompt that hands reinstalling it to an agent (spec agent-registry
+    #: "Hand installing an agent's program to an agent"); ``null`` otherwise.
+    install_handoff: HandoffOut | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -130,6 +133,9 @@ class AgentTypeOut(BaseModel):
     #: Another directory seen for this type (the one its environment variable
     #: names), offered as "use a different config directory".
     other_config_dir: str | None
+    #: While its program is not found: the prompt that hands installing (or
+    #: reinstalling) it to an agent; ``null`` otherwise.
+    install_handoff: HandoffOut | None = None
 
 
 class AgentTypesOut(BaseModel):
@@ -145,7 +151,10 @@ class AgentCandidatesOut(BaseModel):
     candidates: list[AgentTypeOut]
 
 
-def _type_out(row: AgentTypeDetection) -> AgentTypeOut:
+async def _type_out(row: AgentTypeDetection, detect: AutoDetectService) -> AgentTypeOut:
+    prompt = await detect.program_handoff(
+        row.type, row.config_dir, row.state, registered=row.uid is not None
+    )
     return AgentTypeOut(
         type=row.type,
         name=row.name,
@@ -158,24 +167,30 @@ def _type_out(row: AgentTypeDetection) -> AgentTypeOut:
         uid=row.uid,
         addable=row.addable,
         other_config_dir=row.other_config_dir,
+        install_handoff=handoff_out(prompt),
     )
 
 
 async def _to_out(r: Resource, detect: AutoDetectService) -> AgentOut:
     cfg = AgentConfig.model_validate(r.config)
-    detection = await detect.detect(cfg.type, cfg.resolved_config_dir())
+    config_dir = cfg.resolved_config_dir()
+    detection = await detect.detect(cfg.type, config_dir)
+    prompt = await detect.program_handoff(
+        cfg.type, str(config_dir), detection.state, registered=True
+    )
     return AgentOut(
         uid=r.uid,
         name=r.name,
         display_name=cfg.type.display_name,
         type=cfg.type,
-        config_dir=str(cfg.resolved_config_dir()),
+        config_dir=str(config_dir),
         model=cfg.model,
         effort=cfg.effort,
         tier_models=cfg.tier_models,
         wire_api=cfg.wire_api,
         state=detection.state,
         version=detection.version,
+        install_handoff=handoff_out(prompt),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -229,8 +244,8 @@ async def list_types(
     (read-only), so a surface can always show one row per type."""
     rows = await svc.types()
     return AgentTypesOut(
-        types=[_type_out(row) for row in rows],
-        install_handoff=handoff_out(agent_install_handoff(rows)),
+        types=[await _type_out(row, svc) for row in rows],
+        install_handoff=handoff_out(await svc.install_handoff(rows)),
     )
 
 
@@ -243,7 +258,9 @@ async def list_candidates(
     "Detect an agent by its program and its config directory"). Nothing is
     registered automatically (discovery + confirm).
     """
-    return AgentCandidatesOut(candidates=[_type_out(row) for row in await svc.discover()])
+    return AgentCandidatesOut(
+        candidates=[await _type_out(row, svc) for row in await svc.discover()]
+    )
 
 
 @router.get("/{uid}", response_model=AgentOut)

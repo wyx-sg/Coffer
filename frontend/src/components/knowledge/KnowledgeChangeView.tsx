@@ -11,11 +11,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Undo2 } from "lucide-react";
+import { CheckCircle2, Undo2 } from "lucide-react";
 
 import { KnowledgeDiff } from "@/components/knowledge/KnowledgeDiff";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeUndoPassDialog } from "@/components/knowledge/KnowledgeUndoPassDialog";
+import { KnowledgeUndoRefusal } from "@/components/knowledge/KnowledgeUndoRefusal";
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -161,16 +162,7 @@ export function KnowledgeChangeView({ version, collections }: Props) {
               </div>
             </div>
           ) : refusal ? (
-            <div
-              role="status"
-              className="flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2.5"
-            >
-              <AlertTriangle className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
-              <div className="flex flex-col gap-[3px]">
-                <p className="text-sm font-label">{t("knowledge.pass.undoRefusedTitle")}</p>
-                <p className="text-xs leading-[1.45] text-text-muted">{refusal.text}</p>
-              </div>
-            </div>
+            <KnowledgeUndoRefusal text={refusal.text} handoff={refusal.handoff} />
           ) : null}
 
           <div className="flex flex-col">

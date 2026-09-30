@@ -16,7 +16,12 @@ import contextlib
 import logging
 from typing import IO
 
-from coffer.application.skill import source_change_ops, source_stage_ops, update_ops
+from coffer.application.skill import (
+    source_change_ops,
+    source_stage_ops,
+    update_merge,
+    update_ops,
+)
 from coffer.application.skill.ports import ArchiveReaderPort, GitSourcePort, SourceStatusRepoPort
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.staging import ImportStage, StagingRegistry
@@ -105,6 +110,11 @@ class SkillSourceService:
 
     async def keep_mine(self, uid: str, commit: str | None) -> SourceStatus:
         return await update_ops.keep_mine(self, await self.skills.get_skill(uid), commit)
+
+    async def mark_merged(self, uid: str, commit: str, *, actor: str) -> Resource:
+        return await update_merge.mark_merged(
+            self, await self.skills.get_skill(uid), commit, actor=actor
+        )
 
     def close(self) -> None:
         self.staging.close()

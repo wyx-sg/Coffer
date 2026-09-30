@@ -4,7 +4,8 @@ At most one item per enabled agent, the most basic problem first:
 
 - ``agent_program_missing`` — the agent's program is not on this machine
   (detection reads ``config_only`` or ``missing``). Nothing else about the
-  agent matters until it is installed again;
+  agent matters until it is installed again, which is a chore for an agent:
+  the item carries the prompt that hands reinstalling it over;
 - ``agent_config_unreadable`` — reading its Coffer connection from the agent's
   own files raised (a config file that does not parse);
 - ``agent_partial`` — some of the parts Coffer writes into it are in place
@@ -23,6 +24,7 @@ from coffer.application.agent.auto_detect import AgentDetection
 from coffer.application.agent.connection_service import ConnectionState, ConnectionStatus
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.detection import DetectionState
 from coffer.domain.agent.types import AgentType, agent_display_name
 from coffer.domain.resource import Resource
 
@@ -39,6 +41,10 @@ class AgentListPort(Protocol):
 
 class AgentDetectPort(Protocol):
     async def detect(self, agent_type: AgentType, config_dir: pathlib.Path) -> AgentDetection: ...
+
+    async def program_handoff(
+        self, agent_type: AgentType, config_dir: str, state: DetectionState, *, registered: bool
+    ) -> str | None: ...
 
 
 class AgentConnectionPort(Protocol):
@@ -81,7 +87,8 @@ class AgentAttentionSource:
     async def _item(self, agent: Resource) -> AttentionItem | None:
         title = agent_display_name(agent.config, agent.name)
         cfg = AgentConfig.model_validate(agent.config)
-        detection = await self._detect.detect(cfg.type, cfg.resolved_config_dir())
+        config_dir = cfg.resolved_config_dir()
+        detection = await self._detect.detect(cfg.type, config_dir)
         if not detection.state.installed:
             return AttentionItem(
                 kind=KIND,
@@ -91,6 +98,9 @@ class AgentAttentionSource:
                 reason="Its program is not installed on this machine.",
                 severity=Severity.ERROR,
                 action=_check(agent.uid),
+                handoff=await self._detect.program_handoff(
+                    cfg.type, str(config_dir), detection.state, registered=True
+                ),
             )
         try:
             status = await self._connection.status(agent.uid)

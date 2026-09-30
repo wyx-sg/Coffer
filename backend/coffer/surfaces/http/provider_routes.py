@@ -5,8 +5,11 @@ Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
 
 from __future__ import annotations
 
+from functools import cache
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
 from coffer.application.provider.order_ops import ProviderOrderError
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
@@ -16,9 +19,12 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.domain.usage.pricing import ResolvedPrice
+from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.platform.memory import memory_label
 from coffer.infrastructure.provider import local_runtime
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
+from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.provider_dependencies import get_price_resolver, get_provider_service
 from coffer.surfaces.http.provider_schemas import (
     ActivateOut,
@@ -37,6 +43,9 @@ from coffer.surfaces.http.provider_schemas import (
     ProviderOut,
     ProviderPatch,
 )
+
+#: The OS and architecture do not change while the daemon runs.
+_machine = cache(machine_label)
 
 router = APIRouter(
     prefix="/api/v1/providers",
@@ -164,6 +173,8 @@ async def detect_local(body: DetectLocalIn) -> DetectLocalOut:
     except local_runtime.NotLoopbackError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DetectLocalOut(
+        # Nothing answered: setting one up is the person's agent's chore.
+        handoff=handoff_out(None if found else local_runtime_handoff(_machine(), memory_label())),
         found=[
             LocalRuntimeOut(
                 base_url=d.base_url,
@@ -174,7 +185,7 @@ async def detect_local(body: DetectLocalIn) -> DetectLocalOut:
                 ],
             )
             for d in found
-        ]
+        ],
     )
 
 

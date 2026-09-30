@@ -4,12 +4,12 @@
 // thread, and the composer whose first send creates the conversation (see
 // useChatController.sendDraft) — no welcome or suggestions. A hand-off opens it
 // with a prompt already in the composer (`restore`), waiting for Send. When no managed
-// agent is available, a state saying how to get one replaces the composer.
+// agent is available, a state saying how to get one replaces the composer: the
+// daemon's install prompt to copy, or the Agents page (NoManagedAgentHelp).
 import { useTranslation } from "react-i18next";
-import { Folder, MessageSquareOff } from "lucide-react";
+import { Folder } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
-import { EmptyState } from "@/components/EmptyState";
 import {
   Select,
   SelectContent,
@@ -25,6 +25,7 @@ import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
+import { NoManagedAgentHelp } from "./NoManagedAgentHelp";
 
 interface Props {
   agents: AgentProviderInfo[];
@@ -78,16 +79,7 @@ export function DraftThread({
     .filter(Boolean)
     .join(" · ");
 
-  if (noManagedAgent) {
-    return (
-      <EmptyState
-        className="flex-1"
-        icon={MessageSquareOff}
-        title={t("conversations.draft.noAgentTitle")}
-        description={t("conversations.draft.noAgentBody")}
-      />
-    );
-  }
+  if (noManagedAgent) return <NoManagedAgentHelp layout="empty" />;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

@@ -23,6 +23,13 @@ vi.mock("@/lib/tauri", async (orig) => ({
   restartDaemon: vi.fn(),
 }));
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn(), resetApiClient: vi.fn() }));
+// The browser's restart (the daemon restarts itself, then the page reloads) is
+// lib/daemonRestart.test.ts; here it only has to be the one the button runs.
+const browserRestart = vi.hoisted(() => vi.fn(() => new Promise<void>(() => {})));
+vi.mock("@/lib/daemonRestart", async (orig) => ({
+  ...(await orig<typeof import("@/lib/daemonRestart")>()),
+  restartFromBrowser: browserRestart,
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -97,12 +104,13 @@ describe("DaemonSettings", () => {
     expect(screen.queryByRole("button", { name: /stop|shut ?down/i })).toBeNull();
   });
 
-  test("in a browser the restart is a command to copy; in the desktop shell a Restart control", async () => {
+  test("both hosts offer Restart; in a browser it asks the daemon to restart itself", async () => {
     mockApi();
     const { unmount } = renderTab();
     const card = await screen.findByTestId("settings-daemon-status");
-    expect(within(card).getByText("coffer daemon restart")).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: /^restart$/i })).toBeNull();
+    expect(within(card).queryByText("coffer daemon restart")).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: /^restart$/i }));
+    await waitFor(() => expect(browserRestart).toHaveBeenCalledTimes(1));
     unmount();
 
     shell.inShell = true;
@@ -129,12 +137,13 @@ describe("DaemonSettings", () => {
     expect(screen.getByText("Running on 127.0.0.1:8000")).toBeInTheDocument();
   });
 
-  test("in a browser the pending port offers the restart command instead of Restart now", async () => {
+  test("in a browser the pending port offers Restart now too", async () => {
     mockApi({ port: { port: 8123, bound_port: 8000, pending: true } });
     renderTab();
     const pending = await screen.findByTestId("settings-daemon-port-pending");
-    expect(within(pending).getByText("coffer daemon restart")).toBeInTheDocument();
-    expect(within(pending).queryByRole("button", { name: /restart now/i })).toBeNull();
+    expect(within(pending).queryByText("coffer daemon restart")).toBeNull();
+    fireEvent.click(within(pending).getByRole("button", { name: /restart now/i }));
+    await waitFor(() => expect(browserRestart).toHaveBeenCalledTimes(1));
   });
 
   test("a port in use is refused in place naming its holder, and one out of range is refused without a request", async () => {

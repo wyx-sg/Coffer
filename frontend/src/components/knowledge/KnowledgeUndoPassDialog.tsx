@@ -6,8 +6,9 @@
 // a new version by you, and the inbox items it curated are not queued again.
 // All or nothing: when a document it wrote has changed since, the daemon
 // refuses the whole undo and writes nothing. The dialog then closes and the
-// pass's page says so, naming that document (KnowledgeChangeView reads the
-// refusal off the same mutation).
+// pass's page says so, naming that document and offering the refusal's
+// prompt for undoing the pass by hand (KnowledgeUndoRefusal; KnowledgeChangeView
+// reads the refusal off the same mutation).
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";

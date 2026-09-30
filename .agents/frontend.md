@@ -303,6 +303,12 @@ Coffer is AI-native: a chore that is open-ended and depends on the machine —
 installing, setting up, troubleshooting, logging in — is not run by the UI or
 the daemon but handed to the person's agent.
 
+A page never shows an install command, a setup script or a manual step list
+for work that depends on the person's machine: it renders `<AgentHandoff>`
+with the prompt the daemon returned. It keeps a plain button for work Coffer
+does itself, and shows the hand-off beside the manual controls in conflict,
+merge and repair flows.
+
 - **Use `AgentHandoff`** (`components/handoff/`) for it: Copy prompt, and Ask
   an agent when a managed agent is available (`size="sm"` in a dense row). Use
   a plain button instead when Coffer can do the work itself, deterministically
@@ -316,6 +322,9 @@ the daemon but handed to the person's agent.
   applies them once and clears the state. The prompt lands in the draft's
   composer and is **never sent automatically** — managed agents run with full
   permissions, so the person reads it and presses Send.
+- **A surface with room for one button** (an Overview Needs you row, whose
+  attention item carries `handoff`) uses `useAgentHandoff` and puts Copy
+  prompt / Ask an agent in its ⋯ menu instead.
 
 ## 7. TypeScript & i18n
 

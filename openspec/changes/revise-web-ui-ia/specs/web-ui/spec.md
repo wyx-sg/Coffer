@@ -945,18 +945,20 @@ for it, and nothing that stops it:
 - **Status** — state and the address it answers on, then one line: how long
   it has been up, its pid and how many agents carry Coffer's connection, all
   from the status probe. The version is on About and in the shell footer.
-- **Restart** — in the desktop shell, a Restart control that runs the shell's
-  restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
-  in a browser, the `coffer daemon restart` command to copy, because a page the
-  daemon serves cannot start the daemon that replaces it.
+- **Restart** — a Restart control in both hosts: in the desktop shell it runs the
+  shell's restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
+  in a browser it asks the daemon to restart itself (spec [daemon](../daemon/spec.md) "Restart itself on request"),
+  shows that it is restarting while the page waits for the successor to answer, and
+  then reloads the page from the successor's origin — on the new port when one
+  was saved — which hands it the successor's token. A successor that does not
+  answer within 90 seconds is reported beside the control.
 - **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
   a value MUST be a whole number from 1024 to 65535 and a port no other process
   holds, each refused in place otherwise, with Save disabled until the value is
   edited; saving writes it to the pre-database
   daemon config and the row then reads **takes effect after restart**, with
-  **Restart now** in the desktop shell and the `coffer daemon restart` command
-  to copy in a browser. Until the restart, the status keeps showing the port the
-  daemon answers on.
+  **Restart now** — the same restart as the Restart control, in either host.
+  Until the restart, the status keeps showing the port the daemon answers on.
 - **Start at login** — see "Set when the daemon runs on the Daemon tab".
 
 The tab has no token row (the token is on Settings › Security) and no
@@ -978,14 +980,20 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab offers the host's restart
 - **GIVEN** the Daemon tab open in a browser, and then in the desktop shell
 - **WHEN** the restart row renders
-- **THEN** the browser shows the `coffer daemon restart` command to copy and no restart button
-- **AND** the desktop shell shows a Restart control that runs the shell's restart
+- **THEN** both show a Restart control and neither shows a command to copy
+- **AND** in the browser it asks the daemon to restart itself, and in the desktop shell it runs the shell's restart
 
 #### Scenario: saving a valid port leaves it pending until restart
 - **GIVEN** a daemon answering on port 8000, opened in the desktop shell
 - **WHEN** the user sets the port to 8123 on the Daemon tab and saves
 - **THEN** `~/.coffer/daemon-config.json` carries 8123, the row reads takes effect after restart with Restart now, and the status still shows 8000
-- **AND** in a browser the row shows the `coffer daemon restart` command instead of Restart now
+- **AND** in a browser the row offers the same Restart now
+
+#### Scenario: a browser restarts the daemon from the daemon tab
+- **GIVEN** the Daemon tab open in a browser on a running daemon
+- **WHEN** the user presses Restart
+- **THEN** the page asks the daemon to restart itself, waits until its successor answers — a new start time on the same port, or an answer on the port that was saved — and reloads the page from the successor
+- **AND** a successor that does not answer within 90 seconds is reported beside the control and nothing is reloaded
 
 #### Scenario: a port in use is rejected
 - **GIVEN** another process holding port 9000
@@ -1575,7 +1583,10 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. An attention source that failed MUST be named
+where the item is dealt with. A row whose item carries a hand-off MUST also
+offer it in the row's ⋯ menu — Copy prompt, and Ask an agent while a managed
+agent is available — with the daemon's prompt as given, the same hand-off the
+item's page offers. An attention source that failed MUST be named
 above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
@@ -1602,6 +1613,12 @@ for what agents share follows.
 - **GIVEN** an MCP server whose last test failed a day ago, an agent not connected since an hour ago and a warning from sync
 - **WHEN** the user opens Overview
 - **THEN** Needs you lists the server first, then the sync item, then the agent, each with its reason, since when and one action opening its page
+
+#### Scenario: a needs-you row offers the item's hand-off in its menu
+- **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
+- **WHEN** the user opens the row's ⋯ menu and chooses Copy prompt, then Ask an agent
+- **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
+- **AND** with no managed agent available the menu offers Copy prompt only, and a row whose item has no hand-off and cannot be ignored has no menu
 
 #### Scenario: overview shows a calm card when nothing needs the user
 - **GIVEN** an attention list with no items and no failed source

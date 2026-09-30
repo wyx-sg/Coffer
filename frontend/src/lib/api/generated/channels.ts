@@ -91,6 +91,7 @@ export interface components {
             diagnostics: components["schemas"]["ChannelDiagnosticOut"][];
             /** Enabled */
             enabled: boolean;
+            handoff: components["schemas"]["HandoffOut"] | null;
             inbound: components["schemas"]["InboundInfoOut"] | null;
             /** Name */
             name: string;
@@ -131,6 +132,15 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /**
          * InboundInfoOut
