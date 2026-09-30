@@ -4105,57 +4105,56 @@
   },
   "sync": {
     "title": "同步",
-    "subtitle": "把本机金库与一个你自己的 git 仓库同步，让你用的每一台机器都持有同样的知识、技能与配置。",
     "tabs": {
-      "runs": "记录",
-      "setup": "配置",
-      "machines": "机器"
-    },
-    "status": {
-      "title": "状态",
-      "syncNow": "立即同步",
-      "syncing": "同步中…",
-      "notConfigured": "尚未配置远端——在「配置」里设置一个，本机金库就会开始与它同步。",
-      "lastRound": "上一轮",
-      "never": "从未",
-      "moved": "变动",
-      "movedValue": "拉取 {{pulled}} · 推送 {{pushed}}",
-      "nextRound": "下一轮",
       "machines": "机器",
-      "knowledge": "知识文档",
-      "skills": "技能",
-      "resources": "资源定义",
-      "secrets": "加密密钥",
-      "secretsSynced": "{{count}} 个随同步",
-      "secretsLocal": "{{count}} 个只留本机"
+      "status": "状态",
+      "remote": "远端"
     },
     "problem": {
-      "noSecret": "未设密钥",
-      "cloudTool": "某个云同步工具",
-      "since": "自 {{when}} 起",
       "auth_failed": {
-        "title": "远端拒绝登录",
-        "body": "git 无法用密钥 {{ref}} 登录。请确认它仍保存在 Coffer 中，并且仍有这个仓库的权限。"
+        "title": "远端拒绝了这个密钥",
+        "body": "被 {{host}} 拒绝了。这个密钥可能已从仓库中移除，或已在「密钥」中被替换。请选择另一个密钥，或在「密钥」中更新它。",
+        "bodyNoSecret": "{{host}} 拒绝登录，而这个远端没有设置密钥。请为它选择一个。"
       },
       "unreachable": {
-        "title": "无法连接远端",
-        "body": "git 连不上这个仓库。不会丢失任何东西：改动会留在本机，等下一轮连上时一起推送。"
+        "title": "无法连接 {{host}}",
+        "since": "自 {{time}} 起没有任何一轮完成。",
+        "keepsWorking": "这台 Mac 上一切照常。",
+        "keepsWorkingWaiting_one": "这台 Mac 上一切照常；{{count}} 项改动等待推送。",
+        "keepsWorkingWaiting_other": "这台 Mac 上一切照常；{{count}} 项改动等待推送。",
+        "retry": "Coffer 会在下一轮重试，也可以现在点「重试」。"
       },
       "push_failed": {
         "title": "推送被拒绝",
-        "body": "这一轮在本机完成了，但远端不接受推送。在推送成功之前，其他机器会落后。"
+        "titlePulled": "已拉取并应用，但推送被拒绝",
+        "body_one": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
+        "body_other": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
+        "bodyPulled_one": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
+        "bodyPulled_other": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。"
       },
       "cloud_folder": {
-        "title": "同步已暂停：金库位于云同步文件夹中",
-        "body": "位于 {{path}} 的金库在 {{tool}} 也会同步的文件夹里。两个工具同时同步一个 git 仓库会把它损坏，因此在把金库移出之前同步保持暂停。"
+        "title": "你的 vault 位于 {{tool}} 中",
+        "body": "同时也被 {{tool}} 同步。两个工具同步同一个 git 文件夹可能会损坏它，所以各轮已暂停。请把 vault 移出 {{tool}}；Syncthing 和 Dropbox 文件夹也是同样的情况。",
+        "someTool": "一个云同步文件夹"
       },
       "layout": {
-        "title": "远端使用了另一种金库布局",
-        "body": "这个仓库是由不同金库布局的 Coffer 写入的。请先升级落后那台机器上的 Coffer，再重新同步。"
+        "title": "远端使用了另一种 vault 布局",
+        "body": "这个仓库是由使用不同 vault 布局的 Coffer 写入的。请更新落后那台机器上的 Coffer，然后再同步。"
       },
       "failed": {
         "title": "上一轮失败了",
-        "body": "这一轮在完成之前停下了，git 的原始信息如下。"
+        "body": "这一轮在完成前停止了。git 的消息见下方。"
+      },
+      "showMessage": "显示 git 的消息",
+      "retry": "重试",
+      "openRemote": "打开远端设置",
+      "chooseSecret": "选择密钥",
+      "openSecrets": "在「密钥」中打开",
+      "reveal": "在访达中显示",
+      "theRemote": "远端",
+      "git_missing": {
+        "title": "这台 Mac 没有安装 Git",
+        "body": "同步需要用 git 拉取和推送，但这台 Mac 上找不到它。安装之后各轮会重新开始。"
       }
     },
     "round": {
@@ -4179,11 +4178,6 @@
         "failed": "失败"
       }
     },
-    "change": {
-      "added": "新增",
-      "modified": "修改",
-      "removed": "删除"
-    },
     "toast": {
       "roundDone": "本轮完成：{{status}}（拉取 {{pulled}}，推送 {{pushed}}）",
       "needs": {
@@ -4191,215 +4185,529 @@
         "held": "同步拦下了一次大量删除——请到同步页面查看。",
         "waiting_on_edit": "同步在等待：本轮要改的文件正在被编辑。",
         "join_required": "本机尚未加入这个远端——请到同步页面加入。"
-      }
-    },
-    "runs": {
-      "table": {
-        "when": "时间",
-        "status": "状态",
-        "pulled": "拉取",
-        "pushed": "推送",
-        "commits": "提交"
       },
-      "filter": "状态",
-      "searchPlaceholder": "搜索同步轮次…",
-      "empty": "还没有运行过任何一轮。保存远端并加入后即开始同步。",
-      "folded": "×{{count}}",
-      "foldedDetail": "{{from}} 到 {{to}} 之间的 {{count}} 轮，结果都一样。",
-      "ran": "开始于 {{from}} · 用时 {{seconds}} 秒 · {{trigger}}",
-      "snapshot": "检出前的快照：{{name}}",
-      "pulledCommits": "拉取的提交",
-      "pulledCommit": "{{sha}}，来自 {{machine}} · {{files}} 个文件 · {{when}}",
-      "unknownMachine": "未知机器",
-      "applied": "本机变动",
-      "pushed": "已推送",
-      "withMachines": "同步对象：{{names}}",
-      "nothingFurther": "这一轮没有更多可报告的内容。"
+      "rolledBack_one": "已把 {{count}} 个文件回滚到 {{snapshot}}",
+      "rolledBack_other": "已把 {{count}} 个文件回滚到 {{snapshot}}"
     },
     "rollback": {
       "action": "回滚",
-      "title": "回滚这一轮？",
-      "description": "把在 {{when}} 结束的这一轮在本机改动的内容恢复回去，作为一个新提交，由下一轮推送。",
-      "snapshot": "来自快照 {{name}}（{{when}}）",
-      "reverses": "会恢复的内容",
-      "morePaths": "……另有 {{count}} 项",
-      "keptNote": "你之后做的修改会保留。",
-      "kept": "之后被修改过、保持原样的文件",
-      "confirm": "回滚本轮",
-      "rollingBack": "回滚中…"
-    },
-    "conflicts": {
-      "title_one": "同步因 {{count}} 个两台机器都改过的文件而停下",
-      "title_other": "同步因 {{count}} 个两台机器都改过的文件而停下",
-      "body": "没有检出任何内容，也没有推送。请为每个文件选择要保留的版本，然后继续。",
-      "columns": {
-        "file": "文件",
-        "area": "区域",
-        "mine": "本机",
-        "theirs": "另一台机器",
-        "answer": "选择",
-        "actions": ""
-      },
-      "unanswered": "未选择",
-      "answer": {
-        "mine": "保留本机的",
-        "theirs": "采用另一台的",
-        "edited": "手动编辑"
-      },
-      "keepMine": "保留本机的",
-      "takeTheirs": "采用另一台的",
-      "openEditor": "在编辑器中打开",
-      "markResolved": "标记为已解决",
-      "takeTheirsTitle": "采用另一台机器的版本？",
-      "takeTheirsBody": "这会用另一台机器的版本替换本机的 {{path}}。本机会发生的变化：",
-      "binary": "这是二进制文件，没有逐行差异可以显示。",
-      "noDiff": "没有差异。",
-      "progress": "已解决 {{resolved}} / {{total}}",
-      "later": "可以稍后再处理——本机金库会保持原样。",
-      "continue": "继续",
-      "continuing": "继续中…"
-    },
-    "hold": {
-      "title_one": "{{who}} 删除了 {{count}} 个文件",
-      "title_other": "{{who}} 删除了 {{count}} 个文件",
-      "thisMac": "本机",
-      "anotherMachine": "另一台机器",
-      "body": {
-        "incoming": "这一轮要删除的某个区域的内容，超过了同步不经询问就会删除的上限。可以在本机删除这些文件，或者恢复它们并推送回去。",
-        "outgoing": "本机要推送的删除超过了同步不经询问就会发送的上限。可以在所有机器上删除它们，或者在本机恢复。"
-      },
-      "share_one": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "share_other": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
-      "more": "……另有 {{count}} 个",
-      "delete_one": "删除 {{count}} 个文件",
-      "delete_other": "删除 {{count}} 个文件",
-      "deleting": "删除中…",
-      "restore_one": "恢复 {{count}} 个文件",
-      "restore_other": "恢复 {{count}} 个文件",
-      "restoring": "恢复中…",
-      "confirmTitle_one": "删除 {{count}} 个文件？",
-      "confirmTitle_other": "删除 {{count}} 个文件？",
-      "confirmBody_one": "该文件会在所有同步的机器上被删除。删除前会先做快照，这一轮之后仍可回滚。",
-      "confirmBody_other": "这些文件会在所有同步的机器上被删除。删除前会先做快照，这一轮之后仍可回滚。"
-    },
-    "join": {
-      "title": "加入这个远端",
-      "notJoined": "本机尚未加入这个远端。在加入之前，每一轮都不会移动任何内容。加入会做的事如下：",
-      "kind": {
-        "empty": "远端是空的，加入会把本机整个金库推送上去。",
-        "new": "本机是这个远端的新机器。加入会取并集：只有一方有的文件会同步到另一方，不会删除任何东西。",
-        "returning": "本机以前在这里同步过，加入会从它上次到达的提交继续。"
-      },
-      "lastPushed": "最近一次由 {{who}} 推送，{{when}}",
-      "pulled": "会拉取",
-      "same_one": "两边已有 {{count}} 个文件完全相同。",
-      "same_other": "两边已有 {{count}} 个文件完全相同。",
-      "differ": "不一致——留在本机等你选择",
-      "pushed": "会推送",
-      "nothingDeleted": "不会删除任何东西。",
-      "deleted": "会删除",
-      "join": "加入",
-      "joining": "加入中…"
-    },
-    "joinChoices": {
-      "title_one": "{{count}} 个文件与远端不一致",
-      "title_other": "{{count}} 个文件与远端不一致",
-      "body": "加入时这些文件保持了本机的样子。请选择保留本机的版本，或采用远端的版本。",
-      "keepMine": "保留我的",
-      "takeTheirs": "采用远端的",
-      "keepAllMine": "全部保留我的",
-      "takeAllTheirs": "全部采用远端的"
+      "title": "回滚到 {{time}} 那一轮之前？",
+      "description": "把这台 Mac 恢复到这一轮应用任何内容之前拍下的安全快照。",
+      "reverses": "回滚会撤销以下改动",
+      "morePaths": "……还有 {{count}} 项",
+      "kept": "此后编辑过的文件，保持原样",
+      "confirm": "回滚",
+      "rollingBack": "正在回滚…",
+      "pulled_one": "拉取 {{count}}",
+      "pulled_other": "拉取 {{count}}",
+      "pushed_one": "推送 {{count}}",
+      "pushed_other": "推送 {{count}}",
+      "wasAdded": "新增的",
+      "wasRemoved": "恢复",
+      "backTo": "回到 {{time}}",
+      "backToSnapshot": "回到快照",
+      "followTitle": "其他 Mac 会跟上",
+      "followBody": "回滚是这台 Mac 上的一次新改动。下一轮会把它推送出去，其他 Mac 也会收到。你在 {{time}} 之后做的编辑会保留。"
     },
     "waiting": {
-      "title_one": "{{count}} 项改动等待推送",
-      "title_other": "{{count}} 项改动等待推送",
-      "columns": {
-        "file": "文件",
-        "change": "改动",
-        "writer": "来源",
-        "time": "时间"
-      },
       "writer": {
         "you": "你",
         "coffer": "Coffer",
         "disk": "在磁盘上编辑",
         "agent": "智能体"
+      },
+      "label": "等待推送"
+    },
+    "conflicts": {
+      "title": "两台 Mac 都改过",
+      "row": "{{area}} · 本机 {{mine}} · {{machine}} {{theirs}}",
+      "unresolved": "未解决",
+      "resolved": "已解决",
+      "otherMachine": "另一台 Mac",
+      "area": {
+        "knowledge": "知识",
+        "skills": "技能",
+        "resources": "MCP 服务器与工具",
+        "secret": "加密的 secret",
+        "memoryTriggers": "记忆触发器",
+        "machines": "机器"
       }
     },
-    "key": {
-      "title": "主密钥",
-      "hint": "密钥只以密文同步。另一台机器只有持有同一把主密钥才能解开本机发布的内容——把它导出成文件，通过你信任的通道带过去再导入。它绝不会被写进仓库。",
-      "fingerprint": "主密钥指纹",
-      "fingerprintHint": "两台机器指纹一致即为同一把主密钥。",
-      "export": "导出主密钥",
-      "import": "导入主密钥",
-      "importConfirmTitle": "替换本机主密钥？",
-      "importConfirmBody": "只有新密钥与当前密钥相同，用当前密钥加密的密钥才仍可读。",
-      "imported": "主密钥已导入——本机现在可以解密它同步到的密钥。",
-      "importedLocked": "主密钥已导入，但仍有 {{count}} 个密钥引用无法用它解密。",
-      "fileEmpty": "该文件为空——请选择从另一台机器导出的主密钥文件。"
+    "hold": {
+      "label": "暂停的删除",
+      "share_one": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
+      "share_other": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件"
+    },
+    "resolve": {
+      "back": "同步",
+      "title": "解决冲突",
+      "pill": "推送已阻塞",
+      "subline": "这一轮在 {{time}} · 从 {{machine}} 拉取 · 为每个文件选一个版本，然后继续这一轮。",
+      "files": "文件 · {{count}}",
+      "filesLabel": "冲突的文件",
+      "state": {
+        "mine": "保留了本机的",
+        "theirs": "采用 {{machine}} 的 · 尚未应用",
+        "edited": "已在编辑器中改好",
+        "editing": "正在编辑器中编辑",
+        "open": "选一个版本"
+      },
+      "changed": "{{area}} · 你在本机 {{mine}} 改过，{{machine}} 在 {{theirs}} 改过",
+      "editingMeta": "{{area}} · 已在编辑器中打开",
+      "openEditor": "在编辑器中打开",
+      "keepMine": "保留本机的",
+      "keepMineHint": "编辑于{{when}} · 下次推送时 {{machine}} 会拿到这个版本",
+      "keepMineHintBare": "下次推送时 {{machine}} 会拿到这个版本",
+      "takeTheirs": "采用 {{machine}} 的",
+      "takeTheirsHint": "编辑于{{when}} · 替换本机的文件",
+      "takeTheirsHintBare": "替换本机的文件",
+      "today": "今天 {{time}}",
+      "onDay": "{{date}} {{time}}",
+      "whatChanges": "本机会发生的变化",
+      "nothingChanges": "本机不会有任何变化。下次推送时 {{machine}} 会拿到本机的版本。",
+      "flipNote": "切换选择时，差异会随之翻转。继续这一轮之前不会写入任何内容。",
+      "binary": "这是二进制文件，没有逐行差异可以显示。",
+      "noDiff": "两个版本相同。",
+      "secret": "这是加密的 secret：不显示其内容。请选择保留哪台 Mac 的值。",
+      "resolvedInEditor": "已在编辑器中解决 · 本机保留并推送保存后的文件。",
+      "editing": {
+        "title": "正在编辑器中编辑",
+        "body": "把文件改成你想要的版本并保存。标记为已解决时 Coffer 会检查它。",
+        "markResolved": "标记为已解决",
+        "back": "回到两个选项",
+        "saved": "保存后的文件",
+        "notSaved": "带冲突标记的副本还没有写出。"
+      },
+      "merge": {
+        "title": "交给智能体合并",
+        "body": "智能体编辑带冲突标记的副本，由 Coffer 提交结果。",
+        "done": "我已合并"
+      },
+      "progress": "已解决 {{resolved}} / {{total}} 个文件",
+      "continueHint": "每个文件都选定版本后才能继续",
+      "later": "稍后处理",
+      "continue": "继续这一轮",
+      "continuing": "继续中…",
+      "empty": {
+        "title": "没有需要解决的冲突",
+        "body": "目前没有因冲突而停下的一轮。"
+      }
+    },
+    "deletions": {
+      "title": "审阅暂停的删除",
+      "pill": "这一轮已暂停",
+      "subline": {
+        "incoming": "这一轮在 {{time}} · 你做出决定后，拉取到的其余内容才会应用。",
+        "outgoing": "这一轮在 {{time}} · 你做出决定前不会推送任何内容。"
+      },
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
+      "folders_one": "{{count}} 个文件夹",
+      "folders_other": "{{count}} 个文件夹",
+      "deletedOn": "在 {{machine}} 上删除",
+      "thisMac": "本机",
+      "anotherMachine": "另一台 Mac",
+      "groupSome": "{{total}} 个文件中的 {{count}} 个",
+      "groupAll_one": "{{count}} 个文件",
+      "groupAll_other": "{{count}} 个文件",
+      "more": "……另有 {{count}} 个",
+      "delete": {
+        "title": {
+          "incoming": "本机也删除",
+          "outgoing": "其他 Mac 也删除"
+        },
+        "body": {
+          "incoming": "本机与 {{machine}} 保持一致。删除前会先做安全快照，这一轮可以回滚。",
+          "outgoing": "远端和其他每台 Mac 会在下一轮删除它们。删除前会先做安全快照，这一轮可以回滚。"
+        },
+        "button_one": "删除 {{count}} 个文件…",
+        "button_other": "删除 {{count}} 个文件…"
+      },
+      "restore": {
+        "title": "恢复它们",
+        "body": {
+          "incoming": "在本机保留这些文件并推送回去，{{machine}} 下一轮会重新拿到它们。",
+          "outgoing": "在本机恢复这些文件，哪里都不会删除。"
+        },
+        "button_one": "恢复 {{count}} 个文件",
+        "button_other": "恢复 {{count}} 个文件",
+        "pending": "恢复中…"
+      },
+      "confirm": {
+        "titleIncoming_one": "本机也删除 {{count}} 个文件？",
+        "titleIncoming_other": "本机也删除 {{count}} 个文件？",
+        "titleOutgoing_one": "在每台 Mac 上删除 {{count}} 个文件？",
+        "titleOutgoing_other": "在每台 Mac 上删除 {{count}} 个文件？",
+        "body": {
+          "incoming": "本机与 {{machine}} 保持一致。删除前会先做安全快照，之后可以回滚这一轮。",
+          "outgoing": "远端和其他每台 Mac 会在下一轮删除它们。删除前会先做安全快照，之后可以回滚这一轮。"
+        },
+        "files": "文件",
+        "filesValue": "{{count}} 个，位于 {{folders}}",
+        "deletedBy": "删除方",
+        "snapshot": "快照",
+        "snapshotValue": "删除前拍摄",
+        "button_one": "删除 {{count}} 个文件",
+        "button_other": "删除 {{count}} 个文件",
+        "pending": "删除中…"
+      },
+      "empty": {
+        "title": "没有暂停的删除",
+        "body": "目前没有等待确认删除的一轮。"
+      }
     },
     "machines": {
-      "title": "机器",
-      "description": "所有与这个远端同步的 Coffer 安装。机器的标识由宿主机派生而来，所以改名不花任何代价，重装 Coffer 也不会多出一台。",
-      "empty": "还没有任何机器——本机金库尚未与远端同步过。",
+      "description": "与这个仓库同步的 Mac。一台 Mac 跑完第一轮后出现在这里。",
+      "empty": "还没有 Mac。一台 Mac 跑完第一轮后出现在这里。",
       "columns": {
+        "icon": "类型",
         "name": "机器",
-        "system": "系统",
         "lastSeen": "最近出现",
         "lastRound": "上一轮",
-        "version": "Coffer 版本",
-        "key": "主密钥",
+        "version": "Coffer",
         "agents": "智能体",
-        "actions": ""
+        "actions": "操作"
       },
-      "thisMachine": "本机",
-      "renameLabel": "机器名称",
+      "thisMac": "本机",
+      "curates": "负责整理",
+      "curatesTip": "为共享这个金库的所有 Mac 整理知识",
+      "keyDiffers": "主密钥不同",
+      "keyDiffersTip": "它持有另一把主密钥，所以它的密钥在这里无法解密",
       "never": "从未",
-      "keyMatches": "同一把主密钥",
-      "keyDiffers": "它的密钥在本机无法解密",
-      "keyUnknown": "未知——有一方还没有发布过指纹",
-      "noAgents": "无",
-      "agent_one": "{{type}} · {{count}} 个插件",
-      "agent_other": "{{type}} · {{count}} 个插件",
-      "retire": "下线",
-      "retireTitle": "下线 {{name}}？",
-      "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。"
+      "time": {
+        "now": "刚刚",
+        "minutesAgo_one": "{{count}} 分钟前",
+        "minutesAgo_other": "{{count}} 分钟前",
+        "hoursAgo_one": "{{count}} 小时前",
+        "hoursAgo_other": "{{count}} 小时前",
+        "daysAgo_one": "{{date}} · {{count}} 天前",
+        "daysAgo_other": "{{date}} · {{count}} 天前",
+        "today": "今天 {{time}}"
+      },
+      "more": "{{name}} 的更多操作",
+      "rename": "改名",
+      "renameTitle": "给 {{name}} 改名",
+      "nameLabel": "名称",
+      "renameHint": "只改这个列表里的名称。其他 Mac 在它们的下一轮之后看到新名称。",
+      "retire": "退役",
+      "retireTitle": "让 {{name}} 退役？",
+      "retireSeen": "最近出现：{{when}}，Coffer {{version}}。",
+      "retireSafeTitle": "不会删除任何东西",
+      "retireSafe": "退役只会把它从这个列表里移除。它的同步轮次留在历史里，那台 Mac 和仓库里的东西都不会改变。如果它上面的 Coffer 再次同步，它会作为一台新机器重新出现在这里。"
     },
     "remote": {
-      "title": "远端",
-      "description": "一个你自己的 git 仓库。每一轮先拉取它，与本机金库合并，再推送结果——遇到两边都改过的文件就停下等你决定。",
-      "vaultPath": "金库：",
-      "cloudFolder": "{{tool}} 也在同步本机金库所在的文件夹（{{path}}）。两个工具同时同步一个 git 仓库会把它损坏，因此在把金库移出之前同步保持暂停。",
-      "enabled": "自动同步",
-      "enabledHint": "请先保存远端。",
       "url": "仓库 URL",
       "branch": "分支",
-      "interval": "间隔（秒）",
-      "save": "保存远端",
-      "errors": {
-        "url": "请输入 git 远端地址（https://… 或 git@…）",
-        "interval": "间隔至少 60 秒"
+      "secret": "密钥",
+      "secretHint": "来自「密钥」页面的一个密钥。",
+      "secretNone": "不使用",
+      "secretMissing": "本机没有它的值",
+      "secretPlaceholder": "选择一个密钥",
+      "secretEmpty": "还没有密钥——先在「密钥」页面添加。",
+      "username": "用户名",
+      "usernameHint": "发送令牌时使用的用户名。GitLab 需要 oauth2 或你的账号名。留空则使用默认值。",
+      "cadence": {
+        "label": "同步频率",
+        "minutes_one": "每 {{count}} 分钟",
+        "minutes_other": "每 {{count}} 分钟",
+        "hours_one": "每 {{count}} 小时",
+        "hours_other": "每 {{count}} 小时",
+        "days_one": "每 {{count}} 天",
+        "days_other": "每 {{count}} 天",
+        "manual": "只在我点「立即同步」时"
       },
-      "includeSecret": "包含加密密钥",
-      "includeSecretHint_one": "将推送 {{count}} 个加密密钥。密钥以密文形式随行；主密钥绝不会被推送。",
-      "includeSecretHint_other": "将推送 {{count}} 个加密密钥。密钥以密文形式随行；主密钥绝不会被推送。",
-      "check": "检查仓库",
+      "includeSecret": "包含加密的密钥",
+      "includeSecretHint": "关闭：API key 和令牌留在本机。开启：它们加密后推送，另一台 Mac 只有导入本机的主密钥后才能读取。主密钥本身从不离开本机。",
+      "errors": {
+        "url": "请输入 git 远端 URL（https://… 或 git@…）"
+      },
+      "secretsOn": {
+        "title": "包含加密的密钥？",
+        "lead": "从下一轮起，API key 和令牌会加密后推送到 {{url}}。",
+        "count_one": "{{count}} 个密钥以密文推送，从不以明文推送。",
+        "count_other": "{{count}} 个密钥以密文推送，从不以明文推送。",
+        "key": "主密钥留在本机，Coffer 从不发送它。你的其他 Mac 只有在导入本机的主密钥后（设置 › 安全）才能使用这些密钥。",
+        "visible": "能访问仓库的人能看到有哪些密钥及其名称，但看不到值。",
+        "confirm": "包含密钥"
+      },
+      "vaultPath": "本机上的金库",
+      "notCloudFolder": "不在 iCloud Drive、Dropbox 或 Syncthing 目录中",
+      "cloudFolder": "{{tool}} 也在同步这个文件夹。两个工具同时同步一个 git 仓库会把它弄坏，所以在金库移出之前同步会暂停。",
+      "reveal": "在访达中显示",
+      "stop": {
+        "label": "停止同步本机",
+        "hint": "在本机忘掉这个远端。金库、它的历史和仓库都保持原样。",
+        "open": "停止同步…",
+        "title": "停止同步本机？",
+        "body": "Coffer 会在本机忘掉这个远端并停止同步。金库、它的历史和仓库都保持原样，你的其他 Mac 会继续同步。之后可以用同一个 URL 重新设置。",
+        "confirm": "停止同步",
+        "remote": "远端",
+        "lastRound": "上一轮"
+      }
+    },
+    "setup": {
+      "title": "把这个金库放进你自己的 git 仓库",
+      "lead": "每一轮先拉取其他 Mac 推送的内容，能干净合并就应用，然后推送本机的改动。遇到冲突时这一轮会停下来等你处理。",
+      "urlHint": "一个你自己的 git 仓库，SSH 或 HTTPS 均可。空仓库也可以。",
+      "secretHint": "来自「密钥」页面的一个密钥。Coffer 用它来拉取和推送；它从不写进金库。",
+      "cadenceHint": "另外，每次点「立即同步」时也会同步。",
+      "checkRepo": "检查仓库",
       "checking": "检查中…",
-      "checkResult": {
-        "empty": "空仓库——第一次推送会填满它。",
+      "back": "返回",
+      "copyUrl": "复制仓库 URL",
+      "check": {
+        "other": "这个仓库不是 Coffer 金库。请使用空仓库，或另一台 Mac 已在同步的仓库。",
         "vault": "一个 Coffer 金库（布局 {{layout}}）。",
-        "other": "一个不是 Coffer 金库的仓库。",
-        "unreachable": "无法连接。",
-        "auth_failed": "登录被拒。",
+        "empty": "仓库是空的。",
+        "unreachable": "无法连接到这个仓库。请检查 URL 和网络。",
+        "auth_failed": "登录被拒绝。请检查密钥和用户名。",
         "failed": "检查失败。"
       },
-      "stop": "停止同步",
-      "stopTitle": "停止与这个远端同步？",
-      "stopBody": "本机会忘掉这个远端。金库、它的历史和仓库本身都保持原样；再次同步需要重新加入。",
-      "notConfigured": "尚未配置远端。在上方填入一个仓库，本机金库就会开始与它同步。",
-      "secretRef": "推送密钥",
-      "secretRefHint": "这里填的是 Coffer 密钥库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。"
+      "empty": {
+        "title": "仓库是空的",
+        "body": "本机成为第一台机器。第一轮会推送整个金库。",
+        "files_one": "{{count}} 个文件",
+        "files_other": "{{count}} 个文件",
+        "skills_one": "{{count}} 个技能",
+        "skills_other": "{{count}} 个技能",
+        "definitions_one": "{{count}} 个定义",
+        "definitions_other": "{{count}} 个定义",
+        "secrets_one": "{{count}} 个加密密钥",
+        "secrets_other": "{{count}} 个加密密钥",
+        "noSecrets": "不包含加密的密钥。之后可以在「远端」标签页里开启。",
+        "push": "推送并开始同步"
+      }
+    },
+    "join": {
+      "kind": {
+        "empty": "仓库是空的",
+        "new": "仓库里已经有一个金库",
+        "returning": "本机以前与这个仓库同步过"
+      },
+      "lastPushed": "由 {{who}} 推送 · 上一轮 {{when}}。",
+      "lead": "下面是加入后在本机会发生的事。",
+      "otherMacs": "你的其他 Mac",
+      "pulled_one": "拉取 {{count}} 个文件",
+      "pulled_other": "拉取 {{count}} 个文件",
+      "pulledBody": "它们在本机是新文件。",
+      "same_one": "{{count}} 个文件已经相同",
+      "same_other": "{{count}} 个文件已经相同",
+      "sameBody": "它们不受影响。",
+      "differ_one": "{{count}} 个文件与本机的副本不同",
+      "differ_other": "{{count}} 个文件与本机的副本不同",
+      "differBody": "在你为每个文件选定版本之前，它们在本机保持原样，也不会被推送。",
+      "conflicts_one": "{{count}} 个资源在两台 Mac 上同名",
+      "conflicts_other": "{{count}} 个资源在两台 Mac 上同名",
+      "pushed_one": "推送 {{count}} 个只有本机才有的文件",
+      "pushed_other": "推送 {{count}} 个只有本机才有的文件",
+      "pushedBody": "{{who}} 会在下一轮收到它们。",
+      "nothingDeleted": "不会删除任何东西",
+      "nothingDeletedBody": "加入从不删除任何一台 Mac 上的文件。",
+      "deleted_one": "删除 {{count}} 个文件",
+      "deleted_other": "删除 {{count}} 个文件",
+      "join": "加入并拉取",
+      "joining": "加入中…",
+      "snapshot": "会先拍一个安全快照",
+      "area": {
+        "knowledge": "知识",
+        "skills": "技能",
+        "resources": "MCP 服务器和工具",
+        "secret": "密钥",
+        "memory-triggers": "记忆",
+        "state": "状态"
+      }
+    },
+    "joinChoices": {
+      "title": "与本机不同",
+      "body": "在你选择之前不会推送或替换",
+      "apply_one": "应用 {{count}} 个选择",
+      "apply_other": "应用 {{count}} 个选择",
+      "edited": "本机修改于 {{mine}} · {{who}} 修改于 {{theirs}}",
+      "otherMac": "另一台 Mac",
+      "open": "打开 {{path}}",
+      "choiceFor": "{{path}} 保留哪个版本",
+      "keepMine": "保留本机的",
+      "takeTheirs": "采用 {{who}} 的",
+      "more_one": "…还有 {{count}} 个",
+      "more_other": "…还有 {{count}} 个",
+      "showDiff": "查看 {{path}} 会有什么变化",
+      "diffCaption": "如果采用 {{who}} 的版本，本机会发生的变化"
+    },
+    "header": {
+      "copyUrl": "复制仓库地址",
+      "everyHour": "每小时",
+      "everyHours_one": "每 {{count}} 小时",
+      "everyHours_other": "每 {{count}} 小时",
+      "everyMinutes_one": "每分钟",
+      "everyMinutes_other": "每 {{count}} 分钟",
+      "syncNow": "立即同步",
+      "syncing": "同步中…",
+      "tryAgain": "重试"
+    },
+    "help": {
+      "label": "如何添加另一台 Mac",
+      "title": "添加另一台 Mac",
+      "steps": {
+        "install": "在另一台 Mac 上安装 Coffer。",
+        "open": "在那台 Mac 上打开「同步」。",
+        "same": "填入与这台 Mac 相同的仓库地址和分支。",
+        "join": "先预览加入会改动什么，再加入。"
+      }
+    },
+    "pill": {
+      "setup": "未设置",
+      "syncing": "同步中",
+      "paused": "已暂停",
+      "conflicts_one": "已停止：{{count}} 处冲突",
+      "conflicts_other": "已停止：{{count}} 处冲突",
+      "held_one": "已停止：暂扣 {{count}} 项删除",
+      "held_other": "已停止：暂扣 {{count}} 项删除",
+      "push_failed": "推送失败",
+      "unreachable": "远端无法连接",
+      "auth_failed": "登录失败",
+      "cloud_folder": "已暂停",
+      "git_missing": "缺少 Git",
+      "layout": "布局不一致",
+      "failed": "本轮失败",
+      "to_push_one": "{{count}} 项改动待推送",
+      "to_push_other": "{{count}} 项改动待推送",
+      "pulled_one": "已拉取 {{count}} 项改动",
+      "pulled_other": "已拉取 {{count}} 项改动",
+      "in_sync": "已同步"
+    },
+    "banner": {
+      "justNow": "刚刚",
+      "minutesAgo_one": "{{count}} 分钟前",
+      "minutesAgo_other": "{{count}} 分钟前",
+      "hoursAgo_one": "{{count}} 小时前",
+      "hoursAgo_other": "{{count}} 小时前",
+      "nextRoundAt": "下一轮 {{time}}",
+      "lastRound": "上一轮 {{time}}：拉取 {{pulled}}，推送 {{pushed}}",
+      "lastRoundAgo": "上一轮 {{time}}（{{ago}}）：拉取 {{pulled}}，推送 {{pushed}}",
+      "noRoundYet": "还没有运行过任何一轮",
+      "inSync": "这台 Mac 与远端一致",
+      "machines_one": "{{count}} 台机器",
+      "machines_other": "{{count}} 台机器",
+      "pulledFrom_one": "从 {{from}} 拉取了 {{count}} 项改动",
+      "pulledFrom_other": "从 {{from}} 拉取了 {{count}} 项改动",
+      "pulled_one": "拉取了 {{count}} 项改动",
+      "pulled_other": "拉取了 {{count}} 项改动",
+      "roundAt": "本轮 {{time}}",
+      "pushedCount_one": "推送 {{count}}",
+      "pushedCount_other": "推送 {{count}}",
+      "nothingToPush": "没有需要推送的",
+      "otherMacs": "其他 Mac",
+      "anotherMac": "另一台 Mac",
+      "toPush_one": "这台 Mac 上有 {{count}} 项改动等待推送",
+      "toPush_other": "这台 Mac 上有 {{count}} 项改动等待推送",
+      "toPushNextAt": "它们会在 {{time}} 的下一轮推送出去，在这台 Mac 拉取 {{peer}} 推送的内容之后。",
+      "toPushNext": "它们会在下一轮推送出去，在这台 Mac 拉取 {{peer}} 推送的内容之后。",
+      "rolledBack": "已回滚到 {{time}} 那一轮之前",
+      "rolledBackTo": "已回滚到 {{snapshot}}",
+      "rolledBackNextAt": "这次回滚会在 {{time}} 的下一轮推送出去，{{peer}} 也会收到。",
+      "rolledBackNext": "这次回滚会在下一轮推送出去，{{peer}} 也会收到。",
+      "startedAt": "本轮开始于 {{time}}",
+      "started": "本轮已开始",
+      "runningHint": "先拉取，再应用，最后推送。运行期间智能体照常工作。",
+      "paused": "这台 Mac 的同步已暂停",
+      "pausedHint": "在「远端」里恢复之前不会自动运行任何一轮；「立即同步」仍会运行一轮。",
+      "stoppedConflicts_one": "本轮因 {{count}} 处冲突停止",
+      "stoppedConflicts_other": "本轮因 {{count}} 处冲突停止",
+      "stoppedConflictsBody": "这台 Mac 和 {{peer}} 改了相同的行。没有检出任何内容，也没有推送任何内容。在你为每个文件选定版本之前，推送会一直被阻止；这台 Mac 在此期间照常工作。",
+      "resolveConflicts": "解决冲突",
+      "heldIncoming_one": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
+      "heldIncoming_other": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
+      "heldOutgoing_one": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
+      "heldOutgoing_other": "这台 Mac 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
+      "heldBody": "一轮删除 20 个及以上文件、或超过某个区域 20% 的内容时，会等你确认。没有检出任何内容，也没有推送任何内容。查看列表后，可以在这里也删除它们，或把它们恢复。",
+      "reviewDeletions": "查看删除"
+    },
+    "areas": {
+      "knowledge": "知识",
+      "documents_one": "{{count}} 篇文档",
+      "documents_other": "{{count}} 篇文档",
+      "skills": "技能",
+      "skillCount_one": "{{count}} 个技能",
+      "skillCount_other": "{{count}} 个技能",
+      "resources": "MCP 服务器与工具",
+      "definitions_one": "{{count}} 个定义",
+      "definitions_other": "{{count}} 个定义",
+      "secrets": "加密密钥",
+      "synced": "已同步",
+      "notSynced": "不同步"
+    },
+    "rounds": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "title": "轮次",
+      "hint": "每一轮先拉取、再应用、最后推送。无事可做的轮次会折叠起来。",
+      "empty": "还没有运行过任何一轮。",
+      "folded": "{{label}} ×{{count}}",
+      "columns": {
+        "when": "时间",
+        "round": "轮次",
+        "pulled": "拉取",
+        "pushed": "推送",
+        "commits": "提交"
+      },
+      "label": {
+        "nothing_to_do": "无事可做",
+        "pulled": "已拉取",
+        "pushed": "已推送",
+        "pulled_and_pushed": "已拉取并推送",
+        "push_failed": "推送失败",
+        "stopped": "因冲突停止",
+        "held": "删除已暂扣",
+        "waiting_on_edit": "等待编辑完成",
+        "join_required": "需要加入",
+        "joined": "已加入",
+        "unreachable": "远端无法连接",
+        "auth_failed": "登录失败",
+        "paused_cloud_folder": "已暂停（云同步文件夹）",
+        "remote_too_new": "远端版本过新",
+        "remote_too_old": "远端版本过旧",
+        "rolled_back": "已回滚",
+        "failed": "失败",
+        "pulledPushFailed": "已拉取，推送失败",
+        "stoppedOn_one": "因 {{count}} 处冲突停止",
+        "stoppedOn_other": "因 {{count}} 处冲突停止",
+        "heldCount_one": "暂扣：{{count}} 项删除",
+        "heldCount_other": "暂扣：{{count}} 项删除",
+        "rolledBackRound": "回滚了 {{time}} 那一轮"
+      },
+      "detail": {
+        "with": "与 {{names}}",
+        "from": "来自 {{names}}",
+        "rejected": "被远端拒绝",
+        "nothingMoved": "没有检出或推送任何内容",
+        "retriesAt": "{{time}} 重试",
+        "nothingPulledOrPushed": "没有拉取或推送任何内容",
+        "byYou": "由你操作"
+      }
+    },
+    "drawer": {
+      "titleToday": "今天 {{time}} 的轮次",
+      "titleYesterday": "昨天 {{time}} 的轮次",
+      "titleDate": "{{date}} {{time}} 的轮次",
+      "finished": "已完成",
+      "took": "{{seconds}} 秒",
+      "snapshot": "安全快照",
+      "noSnapshot": "没有快照：本轮没有检出任何内容。",
+      "pulled_one": "拉取 · {{count}} 个提交",
+      "pulled_other": "拉取 · {{count}} 个提交",
+      "pulledCommit_one": "{{machine}}：{{count}} 个文件",
+      "pulledCommit_other": "{{machine}}：{{count}} 个文件",
+      "unknownMachine": "未知机器",
+      "nothingPulled": "没有从远端拉取任何内容。",
+      "applied_one": "在此应用 · {{count}} 项改动",
+      "applied_other": "在此应用 · {{count}} 项改动",
+      "nothingApplied": "这台 Mac 上没有任何改动。",
+      "pushed": "推送",
+      "nothingPushed": "这台 Mac 没有需要推送的内容。",
+      "rollBack": "回滚到这一轮之前",
+      "viewActivity": "在「活动」中查看"
     }
   },
   "overview": {

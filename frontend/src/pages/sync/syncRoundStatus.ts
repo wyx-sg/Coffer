@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/syncRoundStatus.ts
 //
-// A round's status as a word and a tone — one mapping for the Runs table, the
-// round detail and the Machines tab's "last round" column, so the three never
+// A round's status as a word and a tone — one mapping for the Rounds table, the
+// round drawer and the Machines tab's "last round" column, so the three never
 // call one outcome two things.
 import type { TFunction } from "i18next";
 
@@ -34,9 +34,6 @@ const STATUS_TONE: Record<RoundStatus, Tone> = {
   remote_too_old: "error",
   failed: "error",
 };
-
-/** Every status, in the order the Runs filter offers them. */
-export const ROUND_STATUSES = Object.keys(STATUS_TONE) as RoundStatus[];
 
 export function statusTone(status: string): Tone {
   return STATUS_TONE[status as RoundStatus] ?? "muted";

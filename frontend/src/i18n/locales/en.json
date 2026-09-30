@@ -4105,49 +4105,37 @@
   },
   "sync": {
     "title": "Sync",
-    "subtitle": "Sync this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
     "tabs": {
-      "runs": "Runs",
-      "setup": "Setup",
-      "machines": "Machines"
-    },
-    "status": {
-      "title": "Status",
-      "syncNow": "Sync now",
-      "syncing": "Syncing…",
-      "notConfigured": "No remote yet — set one up under Setup and this vault starts syncing with it.",
-      "lastRound": "Last round",
-      "never": "Never",
-      "moved": "Moved",
-      "movedValue": "{{pulled}} pulled · {{pushed}} pushed",
-      "nextRound": "Next round",
       "machines": "Machines",
-      "knowledge": "Knowledge documents",
-      "skills": "Skills",
-      "resources": "Resource definitions",
-      "secrets": "Encrypted secrets",
-      "secretsSynced": "{{count}} synced",
-      "secretsLocal": "{{count}} kept on this machine"
+      "status": "Status",
+      "remote": "Remote"
     },
     "problem": {
-      "noSecret": "no secret",
-      "cloudTool": "a cloud sync tool",
-      "since": "Since {{when}}",
       "auth_failed": {
-        "title": "The remote refused to sign in",
-        "body": "Git could not sign in with the secret {{ref}}. Check that it is still stored in Coffer and still has access to the repository."
+        "title": "The remote refused the secret",
+        "body": "was rejected by {{host}}. The key may have been removed from the repository, or replaced in Secrets. Choose another secret or update this one in Secrets.",
+        "bodyNoSecret": "{{host}} refused to sign in, and this remote has no secret. Choose one for it."
       },
       "unreachable": {
-        "title": "The remote cannot be reached",
-        "body": "Git could not reach the repository. Nothing is lost: changes wait here and go up with the next round that gets through."
+        "title": "{{host}} can’t be reached",
+        "since": "No round has finished since {{time}}.",
+        "keepsWorking": "Everything keeps working on this Mac.",
+        "keepsWorkingWaiting_one": "Everything keeps working on this Mac; {{count}} change waits to push.",
+        "keepsWorkingWaiting_other": "Everything keeps working on this Mac; {{count}} changes wait to push.",
+        "retry": "Coffer tries again at the next round, or now with Try again."
       },
       "push_failed": {
         "title": "The push was rejected",
-        "body": "The round finished here but the remote would not take the push. The other machines are behind until it goes through."
+        "titlePulled": "Pulled and applied, but the push was rejected",
+        "body_one": "This Mac's {{count}} change did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
+        "body_other": "This Mac's {{count}} changes did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
+        "bodyPulled_one": "This Mac took {{pulled}} changes from the remote. Its own {{count}} change did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing.",
+        "bodyPulled_other": "This Mac took {{pulled}} changes from the remote. Its own {{count}} changes did not go out, so the other Macs are behind. The next round tries again; fix the branch rule first if it keeps failing."
       },
       "cloud_folder": {
-        "title": "Sync is paused: the vault is in a cloud-synced folder",
-        "body": "The vault at {{path}} is inside a folder {{tool}} also syncs. Two tools syncing one git repository corrupt it, so sync stays paused until the vault is moved."
+        "title": "Your vault is inside {{tool}}",
+        "body": "is also moved around by {{tool}}. Two tools syncing one git folder can corrupt it, so rounds are paused. Move the vault out of {{tool}}; Syncthing and Dropbox folders are the same case.",
+        "someTool": "a cloud-synced folder"
       },
       "layout": {
         "title": "The remote uses another vault layout",
@@ -4156,6 +4144,17 @@
       "failed": {
         "title": "The last round failed",
         "body": "The round stopped before it finished. Git's message is below."
+      },
+      "showMessage": "Show git's message",
+      "retry": "Retry",
+      "openRemote": "Open Remote settings",
+      "chooseSecret": "Choose secret",
+      "openSecrets": "Open in Secrets",
+      "reveal": "Reveal in Finder",
+      "theRemote": "the remote",
+      "git_missing": {
+        "title": "Git isn’t installed on this Mac",
+        "body": "Sync runs git to pull and push, and this Mac can’t find it. Rounds start again once it is installed."
       }
     },
     "round": {
@@ -4179,11 +4178,6 @@
         "failed": "failed"
       }
     },
-    "change": {
-      "added": "added",
-      "modified": "changed",
-      "removed": "removed"
-    },
     "toast": {
       "roundDone": "Round finished: {{status}} ({{pulled}} pulled, {{pushed}} pushed)",
       "needs": {
@@ -4191,215 +4185,529 @@
         "held": "Sync held a large deletion — review it on the Sync page.",
         "waiting_on_edit": "Sync is waiting: a file the round would change has an edit in progress.",
         "join_required": "This machine has not joined the remote yet — join it on the Sync page."
-      }
-    },
-    "runs": {
-      "table": {
-        "when": "When",
-        "status": "Status",
-        "pulled": "Pulled",
-        "pushed": "Pushed",
-        "commits": "Commits"
       },
-      "filter": "Status",
-      "searchPlaceholder": "Search rounds…",
-      "empty": "No round has run yet. Save a remote and join it to start syncing.",
-      "folded": "×{{count}}",
-      "foldedDetail": "{{count}} rounds between {{from}} and {{to}}, each ending the same way.",
-      "ran": "Started {{from}} · took {{seconds}} s · {{trigger}}",
-      "snapshot": "Snapshot before checkout: {{name}}",
-      "pulledCommits": "Pulled commits",
-      "pulledCommit": "{{sha}} from {{machine}} · {{files}} files · {{when}}",
-      "unknownMachine": "unknown machine",
-      "applied": "Changed here",
-      "pushed": "Pushed",
-      "withMachines": "Synced with: {{names}}",
-      "nothingFurther": "This round reported nothing further."
+      "rolledBack_one": "Rolled back {{count}} file to {{snapshot}}",
+      "rolledBack_other": "Rolled back {{count}} files to {{snapshot}}"
     },
     "rollback": {
       "action": "Roll back",
-      "title": "Roll back this round?",
-      "description": "This puts back what the round that finished {{when}} changed here, as a new commit the next round pushes.",
-      "snapshot": "From snapshot {{name}} ({{when}})",
-      "reverses": "What comes back",
+      "title": "Roll back to before the {{time}} round?",
+      "description": "Restores this Mac to the safety snapshot taken just before the round applied anything.",
+      "reverses": "Rolling back reverses these",
       "morePaths": "…and {{count}} more",
-      "keptNote": "Edits you made after are kept.",
-      "kept": "Edited since, left as they are",
-      "confirm": "Roll back round",
-      "rollingBack": "Rolling back…"
-    },
-    "conflicts": {
-      "title_one": "Sync stopped on {{count}} file both machines changed",
-      "title_other": "Sync stopped on {{count}} files both machines changed",
-      "body": "Nothing was checked out and nothing was pushed. Choose which version to keep for each file, then continue.",
-      "columns": {
-        "file": "File",
-        "area": "Area",
-        "mine": "This Mac",
-        "theirs": "Other machine",
-        "answer": "Answer",
-        "actions": ""
-      },
-      "unanswered": "Not answered",
-      "answer": {
-        "mine": "Keeping this Mac's",
-        "theirs": "Taking the other's",
-        "edited": "Edited by hand"
-      },
-      "keepMine": "Keep this Mac's",
-      "takeTheirs": "Take the other's",
-      "openEditor": "Open in editor",
-      "markResolved": "Mark resolved",
-      "takeTheirsTitle": "Take the other machine's version?",
-      "takeTheirsBody": "This replaces this Mac's {{path}} with the other machine's. What changes here:",
-      "binary": "This is a binary file, so there is no line-by-line difference to show.",
-      "noDiff": "No difference.",
-      "progress": "{{resolved}} of {{total}} resolved",
-      "later": "You can leave this for later — the vault stays as it is here.",
-      "continue": "Continue",
-      "continuing": "Continuing…"
-    },
-    "hold": {
-      "title_one": "{{who}} deleted {{count}} file",
-      "title_other": "{{who}} deleted {{count}} files",
-      "thisMac": "This Mac",
-      "anotherMachine": "Another machine",
-      "body": {
-        "incoming": "The round would delete more of an area than sync removes without asking. Delete the files here, or restore them and push them back.",
-        "outgoing": "This machine would push more deletions than sync sends without asking. Delete them everywhere, or restore them here."
-      },
-      "share_one": "{{count}} file · {{percent}}% of the folder",
-      "share_other": "{{count}} files · {{percent}}% of the folder",
-      "more": "…and {{count}} more",
-      "delete_one": "Delete {{count}} file",
-      "delete_other": "Delete {{count}} files",
-      "deleting": "Deleting…",
-      "restore_one": "Restore {{count}} file",
-      "restore_other": "Restore {{count}} files",
-      "restoring": "Restoring…",
-      "confirmTitle_one": "Delete {{count}} file?",
-      "confirmTitle_other": "Delete {{count}} files?",
-      "confirmBody_one": "The file is deleted on every machine that syncs. A snapshot is taken first, so the round can still be rolled back.",
-      "confirmBody_other": "The files are deleted on every machine that syncs. A snapshot is taken first, so the round can still be rolled back."
-    },
-    "join": {
-      "title": "Join this remote",
-      "notJoined": "This machine has not joined this remote yet. Until it does, rounds move nothing. Here is what joining would do:",
-      "kind": {
-        "empty": "The remote is empty, so joining pushes this whole vault to it.",
-        "new": "This machine is new to the remote. Joining takes the union: files only one side has go to the other, and nothing is deleted.",
-        "returning": "This machine synced here before, so joining resumes from the commit it last reached."
-      },
-      "lastPushed": "Last pushed by {{who}}, {{when}}",
-      "pulled": "Comes down",
-      "same_one": "{{count}} file is already the same on both sides.",
-      "same_other": "{{count}} files are already the same on both sides.",
-      "differ": "Differ — left here for you to choose",
-      "pushed": "Goes up",
-      "nothingDeleted": "Nothing is deleted.",
-      "deleted": "Deleted",
-      "join": "Join",
-      "joining": "Joining…"
-    },
-    "joinChoices": {
-      "title_one": "{{count}} file differs from the remote",
-      "title_other": "{{count}} files differ from the remote",
-      "body": "Joining left these as they are here. Keep this Mac's version, or take the remote's.",
-      "keepMine": "Keep mine",
-      "takeTheirs": "Take theirs",
-      "keepAllMine": "Keep mine for all",
-      "takeAllTheirs": "Take theirs for all"
+      "kept": "Edited since, kept as they are",
+      "confirm": "Roll back",
+      "rollingBack": "Rolling back…",
+      "pulled_one": "{{count}} pulled",
+      "pulled_other": "{{count}} pulled",
+      "pushed_one": "{{count}} pushed",
+      "pushed_other": "{{count}} pushed",
+      "wasAdded": "added",
+      "wasRemoved": "restored",
+      "backTo": "back to {{time}}",
+      "backToSnapshot": "back to the snapshot",
+      "followTitle": "Other Macs follow",
+      "followBody": "The rollback is a new change on this Mac. The next round pushes it, so the other Macs get it too. Edits you made after {{time}} are kept."
     },
     "waiting": {
-      "title_one": "{{count}} change waiting to push",
-      "title_other": "{{count}} changes waiting to push",
-      "columns": {
-        "file": "File",
-        "change": "Change",
-        "writer": "By",
-        "time": "When"
-      },
       "writer": {
         "you": "You",
         "coffer": "Coffer",
         "disk": "Edited on disk",
         "agent": "Agent"
+      },
+      "label": "Waiting to push"
+    },
+    "conflicts": {
+      "title": "Changed on both Macs",
+      "row": "{{area}} · this Mac {{mine}} · {{machine}} {{theirs}}",
+      "unresolved": "Unresolved",
+      "resolved": "Resolved",
+      "otherMachine": "the other Mac",
+      "area": {
+        "knowledge": "Knowledge",
+        "skills": "Skills",
+        "resources": "MCP servers & tools",
+        "secret": "Encrypted secrets",
+        "memoryTriggers": "Memory triggers",
+        "machines": "Machines"
       }
     },
-    "key": {
-      "title": "Master key",
-      "hint": "Secrets sync as ciphertext only. Another machine can decrypt what this one publishes only once it holds this same key — export it to a file, carry it over a channel you trust, and import it there. It is never written into the repository.",
-      "fingerprint": "Key fingerprint",
-      "fingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
-      "export": "Export key",
-      "import": "Import key",
-      "importConfirmTitle": "Replace this machine's master key?",
-      "importConfirmBody": "Secrets stored with the current key stay readable only if the new key is the same one.",
-      "imported": "Key imported — this machine now decrypts the secrets it syncs.",
-      "importedLocked": "Key imported, but {{count}} secret reference still cannot be decrypted with it.",
-      "fileEmpty": "That file is empty — pick the key file exported from the other machine."
+    "hold": {
+      "label": "Held deletions",
+      "share_one": "{{count}} file · {{percent}}% of the folder",
+      "share_other": "{{count}} files · {{percent}}% of the folder",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
+    "resolve": {
+      "back": "Sync",
+      "title": "Resolve conflicts",
+      "pill": "Pushing blocked",
+      "subline": "Round at {{time}} · pulled from {{machine}} · pick a version for every file, then continue the round.",
+      "files": "Files · {{count}}",
+      "filesLabel": "Conflicting files",
+      "state": {
+        "mine": "Kept this Mac’s",
+        "theirs": "Take {{machine}}’s · not applied yet",
+        "edited": "Edited in your editor",
+        "editing": "Editing in your editor",
+        "open": "Choose a version"
+      },
+      "changed": "{{area}} · changed here at {{mine}} by you, and on {{machine}} at {{theirs}}",
+      "editingMeta": "{{area}} · open in your editor",
+      "openEditor": "Open in editor",
+      "keepMine": "Keep this Mac’s",
+      "keepMineHint": "Edited {{when}} · {{machine}} gets this version in the next push",
+      "keepMineHintBare": "{{machine}} gets this version in the next push",
+      "takeTheirs": "Take {{machine}}’s",
+      "takeTheirsHint": "Edited {{when}} · replaces the file on this Mac",
+      "takeTheirsHintBare": "Replaces the file on this Mac",
+      "today": "today at {{time}}",
+      "onDay": "{{date}} at {{time}}",
+      "whatChanges": "What changes on this Mac",
+      "nothingChanges": "Nothing changes on this Mac. {{machine}} gets this Mac’s version in the next push.",
+      "flipNote": "The diff flips when you change the choice. Nothing is written until you continue the round.",
+      "binary": "This is a binary file, so there is no line-by-line difference to show.",
+      "noDiff": "The two versions are the same.",
+      "secret": "An encrypted secret: its contents are not shown. Choose which Mac’s value to keep.",
+      "resolvedInEditor": "Resolved in your editor · the saved file is what this Mac keeps and pushes.",
+      "editing": {
+        "title": "Editing in your editor",
+        "body": "Edit the file to the version you want and save it. Coffer checks it when you mark it resolved.",
+        "markResolved": "Mark resolved",
+        "back": "Back to two choices",
+        "saved": "The file as saved",
+        "notSaved": "The marked-up copy has not been written yet."
+      },
+      "merge": {
+        "title": "Merge with an agent",
+        "body": "Your agent edits the marked-up copies; Coffer commits the result.",
+        "done": "I merged it"
+      },
+      "progress": "{{resolved}} of {{total}} files resolved",
+      "continueHint": "continue is available when every file has a version",
+      "later": "Leave for later",
+      "continue": "Continue round",
+      "continuing": "Continuing…",
+      "empty": {
+        "title": "Nothing to resolve",
+        "body": "No round is stopped on conflicts right now."
+      }
+    },
+    "deletions": {
+      "title": "Review held deletions",
+      "pill": "Round held",
+      "subline": {
+        "incoming": "Round at {{time}} · the rest of what was pulled applies once you decide.",
+        "outgoing": "Round at {{time}} · nothing is pushed until you decide."
+      },
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "folders_one": "{{count}} folder",
+      "folders_other": "{{count}} folders",
+      "deletedOn": "deleted on {{machine}}",
+      "thisMac": "this Mac",
+      "anotherMachine": "another Mac",
+      "groupSome": "{{count}} of {{total}} files",
+      "groupAll_one": "{{count}} file",
+      "groupAll_other": "{{count}} files",
+      "more": "…and {{count}} more",
+      "delete": {
+        "title": {
+          "incoming": "Delete here too",
+          "outgoing": "Delete on the other Macs too"
+        },
+        "body": {
+          "incoming": "This Mac matches {{machine}}. A safety snapshot is taken first, so the round can be rolled back.",
+          "outgoing": "The remote and every other Mac lose them in their next round. A safety snapshot is taken first, so the round can be rolled back."
+        },
+        "button_one": "Delete {{count}} file…",
+        "button_other": "Delete {{count}} files…"
+      },
+      "restore": {
+        "title": "Restore them",
+        "body": {
+          "incoming": "Keeps the files here and pushes them back, so {{machine}} gets them again in its next round.",
+          "outgoing": "Puts the files back on this Mac, so nothing is deleted anywhere."
+        },
+        "button_one": "Restore {{count}} file",
+        "button_other": "Restore {{count}} files",
+        "pending": "Restoring…"
+      },
+      "confirm": {
+        "titleIncoming_one": "Delete {{count}} file on this Mac too?",
+        "titleIncoming_other": "Delete {{count}} files on this Mac too?",
+        "titleOutgoing_one": "Delete {{count}} file on every Mac?",
+        "titleOutgoing_other": "Delete {{count}} files on every Mac?",
+        "body": {
+          "incoming": "This Mac matches {{machine}}. A safety snapshot is taken first, so you can roll the round back.",
+          "outgoing": "The remote and every other Mac lose them in their next round. A safety snapshot is taken first, so you can roll the round back."
+        },
+        "files": "Files",
+        "filesValue": "{{count}} in {{folders}}",
+        "deletedBy": "Deleted by",
+        "snapshot": "Snapshot",
+        "snapshotValue": "Taken before deleting",
+        "button_one": "Delete {{count}} file",
+        "button_other": "Delete {{count}} files",
+        "pending": "Deleting…"
+      },
+      "empty": {
+        "title": "Nothing is held",
+        "body": "No round is waiting on deletions right now."
+      }
     },
     "machines": {
-      "title": "Machines",
-      "description": "Every installation of Coffer that syncs with this remote. A machine is identified by an id derived from its host, so renaming one costs nothing and reinstalling Coffer does not create a second.",
-      "empty": "No machines yet — this vault has not synced with a remote.",
+      "description": "Macs that sync with this repository. A Mac appears here after its first round.",
+      "empty": "No Macs yet. A Mac appears here after its first round.",
       "columns": {
+        "icon": "Kind",
         "name": "Machine",
-        "system": "System",
         "lastSeen": "Last seen",
         "lastRound": "Last round",
-        "version": "Coffer version",
-        "key": "Key",
+        "version": "Coffer",
         "agents": "Agents",
-        "actions": ""
+        "actions": "Actions"
       },
-      "thisMachine": "This machine",
-      "renameLabel": "Machine name",
+      "thisMac": "This Mac",
+      "curates": "Runs curation",
+      "curatesTip": "Curates knowledge for every Mac that shares this vault",
+      "keyDiffers": "Different master key",
+      "keyDiffersTip": "It holds another master key, so its secrets cannot be decrypted here",
       "never": "Never",
-      "keyMatches": "Same key",
-      "keyDiffers": "Its secrets cannot be decrypted here",
-      "keyUnknown": "Unknown — one side has published no fingerprint yet",
-      "noAgents": "None",
-      "agent_one": "{{type}} · {{count}} plugin",
-      "agent_other": "{{type}} · {{count}} plugins",
+      "time": {
+        "now": "Now",
+        "minutesAgo_one": "{{count}} minute ago",
+        "minutesAgo_other": "{{count}} minutes ago",
+        "hoursAgo_one": "{{count}} hour ago",
+        "hoursAgo_other": "{{count}} hours ago",
+        "daysAgo_one": "{{date}} · {{count}} day ago",
+        "daysAgo_other": "{{date}} · {{count}} days ago",
+        "today": "Today {{time}}"
+      },
+      "more": "More for {{name}}",
+      "rename": "Rename",
+      "renameTitle": "Rename {{name}}",
+      "nameLabel": "Name",
+      "renameHint": "Only the name in this list changes. Other Macs see it after their next round.",
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
-      "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another."
+      "retireSeen": "Last seen {{when}}, on Coffer {{version}}.",
+      "retireSafeTitle": "Nothing is deleted",
+      "retireSafe": "Retiring only removes it from this list. Its rounds stay in history, and nothing on that Mac or in the repository changes. If Coffer on it syncs again, it shows up here as a new machine."
     },
     "remote": {
-      "title": "Remote",
-      "description": "One git repository you own. Each round fetches it, merges it with this vault, and pushes the result — stopping for you on any file both sides changed.",
-      "vaultPath": "Vault:",
-      "cloudFolder": "{{tool}} also syncs the folder this vault is in ({{path}}). Two tools syncing one git repository corrupt it, so sync is paused until the vault is moved out.",
-      "enabled": "Sync automatically",
-      "enabledHint": "Save the remote first.",
       "url": "Repository URL",
       "branch": "Branch",
-      "interval": "Interval (seconds)",
-      "save": "Save remote",
-      "errors": {
-        "url": "Enter a git remote URL (https://… or git@…)",
-        "interval": "Interval must be at least 60 seconds"
+      "secret": "Secret",
+      "secretHint": "A secret from Secrets.",
+      "secretNone": "None",
+      "secretMissing": "No value on this Mac",
+      "secretPlaceholder": "Choose a secret",
+      "secretEmpty": "No secrets yet — add one in Secrets.",
+      "username": "User name",
+      "usernameHint": "The user name the token is sent with. GitLab needs oauth2 or your account name. Empty uses the default.",
+      "cadence": {
+        "label": "Run a round",
+        "minutes_one": "Every {{count}} minute",
+        "minutes_other": "Every {{count}} minutes",
+        "hours_one": "Every hour",
+        "hours_other": "Every {{count}} hours",
+        "days_one": "Every day",
+        "days_other": "Every {{count}} days",
+        "manual": "Only when I press Sync now"
       },
       "includeSecret": "Include encrypted secrets",
-      "includeSecretHint_one": "{{count}} encrypted secret would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
-      "includeSecretHint_other": "{{count}} encrypted secrets would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
-      "check": "Check repository",
+      "includeSecretHint": "Off: API keys and tokens stay on this Mac. On: they are pushed encrypted, and another Mac can read them only after you import this Mac’s master key there. The master key itself never leaves this Mac.",
+      "errors": {
+        "url": "Enter a git remote URL (https://… or git@…)"
+      },
+      "secretsOn": {
+        "title": "Include encrypted secrets?",
+        "lead": "From the next round, API keys and tokens go to {{url}} encrypted.",
+        "count_one": "{{count}} secret is pushed as ciphertext, never in plain text.",
+        "count_other": "{{count}} secrets are pushed as ciphertext, never in plain text.",
+        "key": "The master key stays on this Mac. Coffer never sends it. Your other Macs can use the secrets only after you import this Mac’s master key there (Settings › Security).",
+        "visible": "Anyone with access to the repository sees that secrets exist and their names, but not their values.",
+        "confirm": "Include secrets"
+      },
+      "vaultPath": "Vault on this Mac",
+      "notCloudFolder": "not inside iCloud Drive, Dropbox or Syncthing",
+      "cloudFolder": "{{tool}} also syncs this folder. Two tools syncing one git repository corrupt it, so sync is paused until the vault is moved out.",
+      "reveal": "Reveal in Finder",
+      "stop": {
+        "label": "Stop syncing this Mac",
+        "hint": "Forgets the remote here. The vault, its history and the repository stay as they are.",
+        "open": "Stop syncing…",
+        "title": "Stop syncing this Mac?",
+        "body": "Coffer forgets the remote on this Mac and stops running rounds. The vault, its history and the repository stay as they are, and your other Macs keep syncing. You can set it up again with the same URL.",
+        "confirm": "Stop syncing",
+        "remote": "Remote",
+        "lastRound": "Last round"
+      }
+    },
+    "setup": {
+      "title": "Keep this vault in a git repository you own",
+      "lead": "Each round pulls what other Macs pushed, applies it when it merges cleanly, then pushes this Mac’s changes. A conflict stops the round and waits for you.",
+      "urlHint": "A git repository you own. SSH or HTTPS. An empty repository is fine.",
+      "secretHint": "A secret from Secrets. Coffer uses it to pull and push; the key is never written into the vault.",
+      "cadenceHint": "Also whenever you press Sync now.",
+      "checkRepo": "Check repository",
       "checking": "Checking…",
-      "checkResult": {
-        "empty": "Empty — the first push fills it.",
+      "back": "Back",
+      "copyUrl": "Copy repository URL",
+      "check": {
+        "other": "This repository is not a Coffer vault. Use an empty repository or one another Mac already syncs with.",
         "vault": "A Coffer vault (layout {{layout}}).",
-        "other": "A repository that is not a Coffer vault.",
-        "unreachable": "Cannot be reached.",
-        "auth_failed": "Sign-in refused.",
+        "empty": "The repository is empty.",
+        "unreachable": "The repository can’t be reached. Check the URL and your network.",
+        "auth_failed": "Sign-in was refused. Check the secret and the user name.",
         "failed": "The check failed."
       },
-      "stop": "Stop syncing",
-      "stopTitle": "Stop syncing with this remote?",
-      "stopBody": "This machine forgets the remote. The vault, its history and the repository itself are left as they are; syncing again means joining again.",
-      "notConfigured": "No remote configured yet. Name a repository above and this vault starts syncing with it.",
-      "secretRef": "Push secret",
-      "secretRefHint": "The name of an entry in Coffer's secret store — not the secret itself. The daemon resolves it when it pushes, so the secret never reaches this page, the repository's git config, or any error text."
+      "empty": {
+        "title": "The repository is empty",
+        "body": "This Mac becomes the first machine. The first round pushes the whole vault.",
+        "files_one": "{{count}} file",
+        "files_other": "{{count}} files",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills",
+        "definitions_one": "{{count}} definition",
+        "definitions_other": "{{count}} definitions",
+        "secrets_one": "{{count}} encrypted secret",
+        "secrets_other": "{{count}} encrypted secrets",
+        "noSecrets": "Encrypted secrets are not included. You can include them later from the Remote tab.",
+        "push": "Push and start syncing"
+      }
+    },
+    "join": {
+      "kind": {
+        "empty": "The repository is empty",
+        "new": "The repository already holds a vault",
+        "returning": "This Mac synced with this repository before"
+      },
+      "lastPushed": "Pushed by {{who}} · last round {{when}}.",
+      "lead": "Here is what joining does on this Mac.",
+      "otherMacs": "Your other Macs",
+      "pulled_one": "{{count}} file is pulled in",
+      "pulled_other": "{{count}} files are pulled in",
+      "pulledBody": "They are new on this Mac.",
+      "same_one": "{{count}} file is already the same",
+      "same_other": "{{count}} files are already the same",
+      "sameBody": "Nothing happens to them.",
+      "differ_one": "{{count}} file differs from this Mac’s copy",
+      "differ_other": "{{count}} files differ from this Mac’s copy",
+      "differBody": "Left exactly as they are here, and not pushed, until you choose a version for each one.",
+      "conflicts_one": "{{count}} resource has the same name on both Macs",
+      "conflicts_other": "{{count}} resources have the same name on both Macs",
+      "pushed_one": "{{count}} file only this Mac has is pushed",
+      "pushed_other": "{{count}} files only this Mac has are pushed",
+      "pushedBody": "{{who}} gets them in its next round.",
+      "nothingDeleted": "Nothing is deleted",
+      "nothingDeletedBody": "Joining never removes a file on either Mac.",
+      "deleted_one": "{{count}} file is deleted",
+      "deleted_other": "{{count}} files are deleted",
+      "join": "Join and pull",
+      "joining": "Joining…",
+      "snapshot": "A safety snapshot is taken first",
+      "area": {
+        "knowledge": "Knowledge",
+        "skills": "Skills",
+        "resources": "MCP servers & tools",
+        "secret": "Secrets",
+        "memory-triggers": "Memory",
+        "state": "State"
+      }
+    },
+    "joinChoices": {
+      "title": "Differ from this Mac",
+      "body": "Not pushed or replaced until you choose",
+      "apply_one": "Apply {{count}} choice",
+      "apply_other": "Apply {{count}} choices",
+      "edited": "this Mac edited {{mine}} · {{who}} edited {{theirs}}",
+      "otherMac": "the other Mac",
+      "open": "Open {{path}}",
+      "choiceFor": "Version to keep for {{path}}",
+      "keepMine": "Keep this Mac’s",
+      "takeTheirs": "Take {{who}}’s",
+      "more_one": "…and {{count}} more",
+      "more_other": "…and {{count}} more",
+      "showDiff": "Show what changes in {{path}}",
+      "diffCaption": "What changes on this Mac if you take {{who}}'s"
+    },
+    "header": {
+      "copyUrl": "Copy repository URL",
+      "everyHour": "every hour",
+      "everyHours_one": "every {{count}} hour",
+      "everyHours_other": "every {{count}} hours",
+      "everyMinutes_one": "every minute",
+      "everyMinutes_other": "every {{count}} minutes",
+      "syncNow": "Sync now",
+      "syncing": "Syncing…",
+      "tryAgain": "Try again"
+    },
+    "help": {
+      "label": "How to add another Mac",
+      "title": "Add another Mac",
+      "steps": {
+        "install": "Install Coffer on the other Mac.",
+        "open": "Open Sync there.",
+        "same": "Enter the same repository URL and branch as this Mac.",
+        "join": "Preview what joining would change, then join."
+      }
+    },
+    "pill": {
+      "setup": "Not set up",
+      "syncing": "Syncing",
+      "paused": "Paused",
+      "conflicts_one": "Stopped: {{count}} conflict",
+      "conflicts_other": "Stopped: {{count}} conflicts",
+      "held_one": "Stopped: {{count}} deletion held",
+      "held_other": "Stopped: {{count}} deletions held",
+      "push_failed": "Push failed",
+      "unreachable": "Remote unreachable",
+      "auth_failed": "Sign-in failed",
+      "cloud_folder": "Paused",
+      "git_missing": "Git missing",
+      "layout": "Layout differs",
+      "failed": "Round failed",
+      "to_push_one": "{{count}} change to push",
+      "to_push_other": "{{count}} changes to push",
+      "pulled_one": "{{count}} change pulled",
+      "pulled_other": "{{count}} changes pulled",
+      "in_sync": "In sync"
+    },
+    "banner": {
+      "justNow": "just now",
+      "minutesAgo_one": "{{count}} minute ago",
+      "minutesAgo_other": "{{count}} minutes ago",
+      "hoursAgo_one": "{{count}} hour ago",
+      "hoursAgo_other": "{{count}} hours ago",
+      "nextRoundAt": "next round at {{time}}",
+      "lastRound": "Last round {{time}}: pulled {{pulled}}, pushed {{pushed}}",
+      "lastRoundAgo": "Last round {{time}}, {{ago}}: pulled {{pulled}}, pushed {{pushed}}",
+      "noRoundYet": "No round has run yet",
+      "inSync": "This Mac matches the remote",
+      "machines_one": "{{count}} machine",
+      "machines_other": "{{count}} machines",
+      "pulledFrom_one": "Pulled {{count}} change from {{from}}",
+      "pulledFrom_other": "Pulled {{count}} changes from {{from}}",
+      "pulled_one": "Pulled {{count}} change",
+      "pulled_other": "Pulled {{count}} changes",
+      "roundAt": "Round at {{time}}",
+      "pushedCount_one": "pushed {{count}}",
+      "pushedCount_other": "pushed {{count}}",
+      "nothingToPush": "nothing to push",
+      "otherMacs": "the other Macs",
+      "anotherMac": "another Mac",
+      "toPush_one": "{{count}} change on this Mac is waiting to push",
+      "toPush_other": "{{count}} changes on this Mac are waiting to push",
+      "toPushNextAt": "They go out in the next round at {{time}}, after this Mac pulls whatever {{peer}} pushed.",
+      "toPushNext": "They go out in the next round, after this Mac pulls whatever {{peer}} pushed.",
+      "rolledBack": "Rolled back to before the {{time}} round",
+      "rolledBackTo": "Rolled back to {{snapshot}}",
+      "rolledBackNextAt": "The rollback goes out in the next round at {{time}}, so {{peer}} gets it too.",
+      "rolledBackNext": "The rollback goes out in the next round, so {{peer}} gets it too.",
+      "startedAt": "Round started at {{time}}",
+      "started": "Round started",
+      "runningHint": "Pulling first, then applying, then pushing. Agents keep working while it runs.",
+      "paused": "Sync is paused on this Mac",
+      "pausedHint": "No round runs on its own until you resume it under Remote. Sync now still runs one.",
+      "stoppedConflicts_one": "This round stopped on {{count}} conflict",
+      "stoppedConflicts_other": "This round stopped on {{count}} conflicts",
+      "stoppedConflictsBody": "This Mac and {{peer}} changed the same lines. Nothing was checked out and nothing was pushed. Pushing stays blocked until you choose a version for each file; this Mac keeps working meanwhile.",
+      "resolveConflicts": "Resolve conflicts",
+      "heldIncoming_one": "{{peer}} deleted {{count}} file, more than one round may delete",
+      "heldIncoming_other": "{{peer}} deleted {{count}} files, more than one round may delete",
+      "heldOutgoing_one": "This Mac deleted {{count}} file, more than one round may delete",
+      "heldOutgoing_other": "This Mac deleted {{count}} files, more than one round may delete",
+      "heldBody": "Rounds that delete 20 files or more, or more than 20% of an area, wait for you. Nothing was checked out and nothing was pushed. Review the list, then delete them here too or restore them.",
+      "reviewDeletions": "Review deletions"
+    },
+    "areas": {
+      "knowledge": "Knowledge",
+      "documents_one": "{{count}} document",
+      "documents_other": "{{count}} documents",
+      "skills": "Skills",
+      "skillCount_one": "{{count}} skill",
+      "skillCount_other": "{{count}} skills",
+      "resources": "MCP servers & tools",
+      "definitions_one": "{{count}} definition",
+      "definitions_other": "{{count}} definitions",
+      "secrets": "Encrypted secrets",
+      "synced": "Synced",
+      "notSynced": "Not synced"
+    },
+    "rounds": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "title": "Rounds",
+      "hint": "Each round pulls, applies, then pushes. Rounds with nothing to do are folded.",
+      "empty": "No round has run yet.",
+      "folded": "{{label}} ×{{count}}",
+      "columns": {
+        "when": "When",
+        "round": "Round",
+        "pulled": "Pulled",
+        "pushed": "Pushed",
+        "commits": "Commits"
+      },
+      "label": {
+        "nothing_to_do": "Nothing to do",
+        "pulled": "Pulled",
+        "pushed": "Pushed",
+        "pulled_and_pushed": "Pulled and pushed",
+        "push_failed": "Push failed",
+        "stopped": "Stopped on conflicts",
+        "held": "Deletions held",
+        "waiting_on_edit": "Waiting on an edit",
+        "join_required": "Join required",
+        "joined": "Joined",
+        "unreachable": "Remote unreachable",
+        "auth_failed": "Sign-in failed",
+        "paused_cloud_folder": "Paused (cloud folder)",
+        "remote_too_new": "Remote too new",
+        "remote_too_old": "Remote too old",
+        "rolled_back": "Rolled back",
+        "failed": "Failed",
+        "pulledPushFailed": "Pulled, push failed",
+        "stoppedOn_one": "Stopped on {{count}} conflict",
+        "stoppedOn_other": "Stopped on {{count}} conflicts",
+        "heldCount_one": "Held: {{count}} deletion",
+        "heldCount_other": "Held: {{count}} deletions",
+        "rolledBackRound": "Rolled back the {{time}} round"
+      },
+      "detail": {
+        "with": "with {{names}}",
+        "from": "from {{names}}",
+        "rejected": "rejected by the remote",
+        "nothingMoved": "nothing checked out or pushed",
+        "retriesAt": "retries at {{time}}",
+        "nothingPulledOrPushed": "nothing pulled or pushed",
+        "byYou": "by you"
+      }
+    },
+    "drawer": {
+      "titleToday": "Round at {{time}} today",
+      "titleYesterday": "Round at {{time}} yesterday",
+      "titleDate": "Round at {{time}} on {{date}}",
+      "finished": "Finished",
+      "took": "{{seconds}} s",
+      "snapshot": "Safety snapshot",
+      "noSnapshot": "No snapshot: this round checked nothing out.",
+      "pulled_one": "Pulled · {{count}} commit",
+      "pulled_other": "Pulled · {{count}} commits",
+      "pulledCommit_one": "{{machine}}: {{count}} file",
+      "pulledCommit_other": "{{machine}}: {{count}} files",
+      "unknownMachine": "Unknown machine",
+      "nothingPulled": "Nothing pulled from the remote.",
+      "applied_one": "Applied here · {{count}} change",
+      "applied_other": "Applied here · {{count}} changes",
+      "nothingApplied": "Nothing changed on this Mac.",
+      "pushed": "Pushed",
+      "nothingPushed": "Nothing from this Mac to push.",
+      "rollBack": "Roll back to before this round",
+      "viewActivity": "View in Activity"
     }
   },
   "overview": {

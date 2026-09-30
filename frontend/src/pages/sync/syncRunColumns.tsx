@@ -1,98 +1,108 @@
 // frontend/src/pages/sync/syncRunColumns.tsx
 //
-// The Runs table's columns — what one round produces: when it ran, how it
-// ended, how many files it pulled and pushed, and the commits it moved the
-// vault between. Pulled and pushed are two columns and not one, because they
-// are different facts: a machine that pushes every round and pulls nothing is
-// the one everybody else is following.
+// The Rounds table's columns (6.5.01): when a round finished, how it ended
+// (a dot and a word, then the clause that tells it apart), how many files it
+// pulled and pushed, the commits it moved the vault between, and Roll back on
+// the rounds that can be rolled back. Pulled and pushed are two columns and
+// not one, because they are different facts: a machine that pushes every
+// round and pulls nothing is the one everybody else is following.
 //
-// Split out of the tab so the tab stays a tab (query, filters, states) rather
-// than also being a renderer.
+// A folded row states its outcome once with its count ("Nothing to do ×6")
+// and its span in the When column; it moved nothing by construction, so its
+// number cells stay empty.
 import type { TFunction } from "i18next";
+import { Undo2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import type { Column } from "@/components/DataTable";
-import { toneClass } from "@/lib/statusColors";
-import { formatDateTime } from "@/lib/utils";
-import { SyncRollbackAction } from "./SyncRollbackAction";
+import { TableActionButton } from "@/components/table/TableActionButton";
+import type { SyncRound } from "@/lib/api/sync";
+import { SyncRoundOutcome as Outcome } from "./SyncRoundOutcome";
 import { canRollBack } from "./syncRowActions";
-import { statusLabel, statusTone } from "./syncRoundStatus";
+import { commitsCell, movedCells, outcomeLabel, roundLabel } from "./syncRoundLabel";
 import { groupSpan, type SyncRunRow } from "./syncRunRows";
+import { dayTime, daySpan } from "./syncTime";
 
-/** The status a folded row answers the filter with: every round inside it
- *  ended the same way, which is what let them fold at all. */
-export function rowStatus(row: SyncRunRow): string {
-  return row.kind === "group" ? row.status : row.run.status;
+interface Context {
+  runs: SyncRound[];
+  nextRoundAt: string | null;
+  onRollback: (run: SyncRound & { id: number }) => void;
 }
 
-const short = (sha: string | null) => (sha ? sha.slice(0, 7) : "—");
+const NUM = "w-16 whitespace-nowrap font-mono text-xs text-text-muted";
 
-export function syncRunColumns(t: TFunction): Column<SyncRunRow>[] {
+export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[] {
+  const newestId = (() => {
+    const first = ctx.runs[0];
+    return first ? (first.id === null ? `at-${first.finished_at}` : String(first.id)) : null;
+  })();
   return [
     {
       key: "when",
-      header: t("sync.runs.table.when"),
-      className: "w-44 text-xs text-muted-foreground",
-      // When it FINISHED: the moment the vault and the remote were last in the
-      // state this row describes. A folded row reports its stretch instead.
+      header: t("sync.rounds.columns.when"),
+      className: "w-44 whitespace-nowrap text-xs",
       cell: (row) => {
-        if (row.kind === "run") return formatDateTime(row.run.finished_at);
+        if (row.kind === "run") {
+          return <span className="text-text">{dayTime(row.run.finished_at, t)}</span>;
+        }
         const span = groupSpan(row.runs);
-        return (
-          <span className="whitespace-nowrap">
-            {formatDateTime(span.from)} → {formatDateTime(span.to)}
-          </span>
-        );
+        return <span className="text-text-muted">{daySpan(span.from, span.to, t)}</span>;
       },
     },
     {
-      key: "status",
-      header: t("sync.runs.table.status"),
-      className: "w-52",
-      cell: (row) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className={toneClass(statusTone(rowStatus(row)))}>
-            {statusLabel(t, rowStatus(row))}
-          </Badge>
-          {row.kind === "group" ? (
-            <Badge variant="outline" className={toneClass("muted")}>
-              {t("sync.runs.folded", { count: row.runs.length })}
-            </Badge>
-          ) : null}
-        </div>
-      ),
+      key: "round",
+      header: t("sync.rounds.columns.round"),
+      className: "min-w-0",
+      cell: (row) => {
+        if (row.kind === "group") {
+          return (
+            <Outcome
+              status={row.status}
+              main={t("sync.rounds.folded", {
+                label: outcomeLabel(t, row.status),
+                count: row.runs.length,
+              })}
+              detail={null}
+            />
+          );
+        }
+        const label = roundLabel(t, row.run, {
+          runs: ctx.runs,
+          newest: row.id === newestId,
+          nextRoundAt: ctx.nextRoundAt,
+        });
+        return <Outcome status={row.run.status} main={label.main} detail={label.detail} />;
+      },
     },
     {
       key: "pulled",
-      header: t("sync.runs.table.pulled"),
-      className: "w-24 text-xs",
-      // A folded row moved nothing by construction, so it shows the dash an
-      // absent value shows rather than a zero repeated N times.
-      cell: (row) => (row.kind === "run" ? row.run.pulled_files : "—"),
+      header: t("sync.rounds.columns.pulled"),
+      className: NUM,
+      cell: (row) => (row.kind === "run" ? movedCells(row.run).pulled : null),
     },
     {
       key: "pushed",
-      header: t("sync.runs.table.pushed"),
-      className: "w-24 text-xs",
-      cell: (row) => (row.kind === "run" ? row.run.pushed_files : "—"),
+      header: t("sync.rounds.columns.pushed"),
+      className: NUM,
+      cell: (row) => (row.kind === "run" ? movedCells(row.run).pushed : null),
     },
     {
       key: "commits",
-      header: t("sync.runs.table.commits"),
-      className: "w-40 whitespace-nowrap font-mono text-xs text-muted-foreground",
-      // A dash, never a blank: a round that moved the vault nowhere is saying
-      // something, not missing a value.
-      cell: (row) => {
-        if (row.kind !== "run" || (!row.run.from_commit && !row.run.to_commit)) return "—";
-        return `${short(row.run.from_commit)}..${short(row.run.to_commit)}`;
-      },
+      header: t("sync.rounds.columns.commits"),
+      className: "w-40 whitespace-nowrap font-mono text-xs text-text-muted",
+      cell: (row) => (row.kind === "run" ? commitsCell(row.run) : null),
     },
     {
       key: "actions",
       header: "",
-      className: "w-40 text-right",
+      className: "w-28 text-right",
       cell: (row) =>
-        row.kind === "run" && canRollBack(row.run) ? <SyncRollbackAction run={row.run} /> : null,
+        row.kind === "run" && canRollBack(row.run) ? (
+          <TableActionButton
+            icon={Undo2}
+            label={t("sync.rollback.action")}
+            onClick={() => ctx.onRollback(row.run as SyncRound & { id: number })}
+          />
+        ) : null,
     },
   ];
 }

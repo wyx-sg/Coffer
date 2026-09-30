@@ -114,6 +114,8 @@ export const syncApi = {
   editorCopy: (path: string) =>
     call<EditorCopy>("/sync/stop/files/editor", { method: "POST", body: { path } }),
   fileVersions: (path: string) => call<FileVersions>(`/sync/stop/files/versions?path=${enc(path)}`),
+  /** "I merged it": every agent-mergeable file takes its saved copy as its answer. */
+  markMerged: () => call<StopState>("/sync/stop/merged", { method: "POST" }),
   continueRound: () => call<SyncRound>("/sync/continue", { method: "POST" }),
   confirmHold: () => call<SyncRound>("/sync/hold/confirm", { method: "POST" }),
   restoreHold: () => call<SyncRound>("/sync/hold/restore", { method: "POST" }),
@@ -126,8 +128,4 @@ export const syncApi = {
     call<Machine>("/sync/machines/self", { method: "PATCH", body: { name } }),
   retire: (machineId: string) =>
     call<MachineRemoved>(`/sync/machines/${enc(machineId)}`, { method: "DELETE" }),
-
-  keyFingerprint: () => call<{ fingerprint: string | null }>("/sync/key/fingerprint"),
-  importKey: (material: string) =>
-    call<{ locked_refs: string[] }>("/sync/key/import", { method: "POST", body: { material } }),
 };
