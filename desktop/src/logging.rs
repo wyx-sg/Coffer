@@ -20,13 +20,14 @@
 //! anything else whole into the message cell. The file is already several
 //! writers' worth of formats; this is the one it reads best.
 
-use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
+
+use crate::coffer_home;
 
 /// The `logger` field on every record this shell writes, so a reader can tell
 /// the shell's lines from the daemon's in a file both append to.
@@ -36,10 +37,7 @@ const LOGGER_NAME: &str = "coffer.desktop";
 /// appended to, given the user's home dir. Pure so it's unit-testable.
 /// Mirrors the CLI spawn (backend `_client.py`), which logs to this same file.
 pub fn daemon_log_path(home: &str) -> PathBuf {
-    PathBuf::from(home)
-        .join(".coffer")
-        .join("logs")
-        .join("daemon.log")
+    coffer_home::logs_dir(home).join("daemon.log")
 }
 
 /// Open `~/.coffer/logs/daemon.log` for appending, creating the logs directory
@@ -47,10 +45,7 @@ pub fn daemon_log_path(home: &str) -> PathBuf {
 /// callers degrade — `spawn.rs` to `/dev/null`, the logger to dropping the
 /// record — rather than failing the thing they were asked to do.
 pub fn open_daemon_log() -> Option<fs::File> {
-    let home = env::var("HOME")
-        .ok()
-        .or_else(|| env::var("USERPROFILE").ok())?;
-    let path = daemon_log_path(&home);
+    let path = daemon_log_path(&coffer_home::home_dir()?);
     fs::create_dir_all(path.parent()?).ok()?;
     fs::OpenOptions::new()
         .create(true)

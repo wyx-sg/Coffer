@@ -10,6 +10,7 @@
 //
 // The logic lives in sibling modules to keep every file under the project's
 // 400-line size cap (see `.agents/stack.md`):
+//   * `coffer_home` — every `~/.coffer` path the shell touches
 //   * `logging`   — where the shell's own log records go
 //   * `sidecar`   — find a binary Tauri staged in the app bundle
 //   * `resolve`   — the five-step "where does a daemon come from" chain
@@ -28,6 +29,7 @@
 //   * `approval_watch` — one notification per approval waiting on a person
 
 mod approval_watch;
+mod coffer_home;
 mod daemon;
 mod daemon_http;
 mod discovery;

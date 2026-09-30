@@ -21,6 +21,8 @@
 
 use std::path::PathBuf;
 
+use crate::coffer_home;
+
 /// The access group a signed release build was stamped with, or `None` for
 /// every build from source.
 const ACCESS_GROUP: Option<&str> = option_env!("COFFER_KEYCHAIN_ACCESS_GROUP");
@@ -49,7 +51,7 @@ pub fn read() -> Result<Vec<u8>, String> {
 /// `~/.coffer/master.key` — the development arrangement's key file.
 fn dev_key_file() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
-    Some(PathBuf::from(home).join(".coffer").join("master.key"))
+    Some(coffer_home::master_key(home))
 }
 
 /// DEVELOPMENT FALLBACK: any same-user process can read this file, so a grant
