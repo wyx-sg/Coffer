@@ -262,6 +262,7 @@ Everything that runs outside a request is started in one place, `surfaces/http/b
 | Channel runtime | `application/channel/runtime.py` | Every 2 s | Reconciles running adapters (Telegram polling, SeaTalk connections) against the channel resources bound to this machine. |
 | MCP session reaper | `surfaces/http/mcp/protocol_routes.py` | Every 60 s | Closes `/mcp` sessions idle for more than 30 min, with their per-session supervisors and upstream subprocesses. Tunable with `COFFER_MCP_SESSION_IDLE_S` and `COFFER_MCP_SESSION_REAPER_INTERVAL_S`. |
 | Invocation writer | `infrastructure/mcp/invocation_writer.py` | Continuous | Batches MCP invocation-log rows into SQLite off the request path. |
+| Unpack keep-alive | `infrastructure/daemon/unpack_keepalive.py` | Immediately, then every 6 h | Frozen builds only. Refreshes the timestamps of the files the one-file binary unpacked into `$TMPDIR/_MEI*`, so the OS temp cleaner (macOS removes files unused for about 3 days) cannot delete the CA bundle and libraries from under a long-running daemon. |
 | Supersession check | `infrastructure/daemon/entry.py` | Every 30 s | Stands the daemon down when another live daemon now owns `daemon.json` (see below). |
 
 The curation, aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart.
