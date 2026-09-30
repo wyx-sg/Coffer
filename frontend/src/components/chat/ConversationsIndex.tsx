@@ -37,7 +37,7 @@ export function ConversationsIndex({ c, onNew, agentNames, channelLabel }: Props
         icon={MessageSquare}
         title={t("conversations.title")}
         badges={
-          c.listLoading ? null : (
+          c.listLoading || none ? null : (
             <span className="text-sm font-normal text-text-muted">
               {c.listConversations.length}
             </span>
