@@ -11,41 +11,26 @@ from __future__ import annotations
 import pathlib
 import shlex
 
-#: The words every Coffer-managed ``apiKeyHelper`` runs: the ``coffer`` CLI's
-#: ``provider key`` command. Coffer writes the CLI as an absolute path
-#: (``/Users/me/.coffer/bin/coffer provider key --connection-uid <uid>``); files
-#: on disk still hold the older bare form (``coffer provider key ...``) and, before
-#: the uid existed, the name form (``--connection <name>``) and the wire form
-#: (``--wire anthropic``). :func:`is_managed_api_key_helper` recognises all of
-#: them, so de-projection never clobbers a user-owned helper but always reverts
-#: ours — including one this machine wrote before any of those changes.
-#: Recognising those on the way OUT is not a compatibility shim: nothing reads
-#: them, and a file Coffer wrote is a file Coffer has to be able to clean up.
+#: What Coffer writes: the ``coffer`` CLI's ``proxy token`` command, which prints
+#: the agent's local proxy token, never a provider key (ADR
+#: api-key-providers-are-reached-through-a-separate-local-model-proxy). The CLI
+#: is written as an absolute path
+#: (``/Users/me/.coffer/bin/coffer proxy token --agent-uid <uid>``).
+#:
+#: Earlier builds wrote ``provider key`` lines instead: by connection uid
+#: (``--connection-uid <uid>``), before that by name (``--connection <name>``)
+#: and by wire (``--wire anthropic``), bare or by path. Nothing runs that
+#: command any more, but files on disk still hold those lines, so
+#: :func:`is_managed_api_key_helper` recognises them too: de-projection never
+#: clobbers a user-owned helper but always reverts ours, including one this
+#: machine wrote before the proxy existed (spec provider-switching "Project into
+#: Claude Code settings without clobbering them"). Recognising them on the way
+#: OUT is not a compatibility shim: a file Coffer wrote is a file Coffer has to
+#: be able to clean up.
 _CLI_NAME = "coffer"
-_KEY_COMMAND = ["provider", "key"]
-#: What Coffer writes now: the agent's local proxy token, never a provider key
-#: (ADR api-key-providers-are-reached-through-a-separate-local-model-proxy).
 _TOKEN_COMMAND = ["proxy", "token"]
-
-
-def anthropic_api_key_helper(connection_uid: str, *, coffer_cli: str) -> str:
-    """The ``apiKeyHelper`` Coffer projects for Claude Code: fetch one specific
-    connection's key on demand (so the raw key is never written to disk).
-
-    ``coffer_cli`` is the CLI to run, resolved by the caller — an absolute path,
-    because Claude Code launched from the Dock or Finder does not get the login
-    shell's ``PATH`` and a bare ``coffer`` would not be found. Claude Code runs
-    the helper through a shell, so a path holding a space is quoted.
-
-    Keyed by the connection's UID, not its name and not its wire. The wire could
-    not say which connection's key to fetch at all; the name could, until the
-    user renamed the connection and left the agent shelling out to something
-    that no longer resolved — which is why a rename used to have to rewrite
-    this file, and why it no longer has to
-    (ADR resource-identity-is-an-immutable-uid). A uid never changes, so the
-    line stays true for the life of the connection.
-    """
-    return f"{shlex.quote(coffer_cli)} provider key --connection-uid {connection_uid}"
+#: The command earlier builds wrote; recognised, never written.
+_LEGACY_KEY_COMMAND = ["provider", "key"]
 
 
 def proxy_token_args(agent_uid: str) -> tuple[str, ...]:
@@ -56,9 +41,12 @@ def proxy_token_args(agent_uid: str) -> tuple[str, ...]:
 
 def proxy_token_helper(agent_uid: str, *, coffer_cli: str) -> str:
     """The ``apiKeyHelper`` Coffer projects for Claude Code: print the agent's
-    local proxy token. Keyed by the agent's uid, which no rename moves; the
-    CLI by absolute path, quoted, for the reason :func:`anthropic_api_key_helper`
-    gives."""
+    local proxy token. Keyed by the agent's uid, which no rename moves.
+
+    ``coffer_cli`` is the CLI to run, resolved by the caller — an absolute path,
+    because Claude Code launched from the Dock or Finder does not get the login
+    shell's ``PATH`` and a bare ``coffer`` would not be found. Claude Code runs
+    the helper through a shell, so a path holding a space is quoted."""
     return " ".join([shlex.quote(coffer_cli), *proxy_token_args(agent_uid)])
 
 
@@ -76,5 +64,5 @@ def is_managed_api_key_helper(helper: object) -> bool:
     return (
         len(argv) >= 3
         and pathlib.PurePath(argv[0]).name == _CLI_NAME
-        and argv[1:3] in (_KEY_COMMAND, _TOKEN_COMMAND)
+        and argv[1:3] in (_TOKEN_COMMAND, _LEGACY_KEY_COMMAND)
     )

@@ -20,7 +20,9 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 ├── machine-id                    # fallback machine id (only if the host gives none)
 ├── daemon.json                   # running daemon: pid, port, API token
 ├── daemon.lock                   # spawn lock
-├── daemon-config.json            # port, machine name, experimental features
+├── daemon-config.json            # ports, machine name, experimental features
+├── proxy.json                    # running model proxy: pid, port, control token
+├── proxy-usage/                  # model proxy usage spool, ingested by the daemon
 ├── bin/
 │   ├── coffer -> <version>/coffer
 │   ├── coffer-daemon -> <version>/coffer-daemon
@@ -28,6 +30,7 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 │   └── <version>/                # one directory per deployed build (newest 2 kept)
 ├── logs/
 │   ├── daemon.log, daemon.log.1…3
+│   ├── proxy.log
 │   ├── shim-<pid>-<epoch>.log
 │   └── upstream/<server>.log, <server>.log.1
 ├── knowledge/<collection>/       # knowledge documents (+ README.md, hidden .inbox/)
@@ -64,7 +67,9 @@ See [Persistence](/architecture/persistence) and [Credentials](/guides/credentia
 | --- | --- | --- | --- | --- |
 | `daemon.json` | Runtime state of the running daemon: `version`, `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`. Every client (CLI, shim, desktop app, web UI dev server) reads the port and API token from it. Removed when the daemon exits. | daemon | No | Only while no daemon runs. A stale file is detected and ignored. |
 | `daemon.lock` | `flock` target that serialises detect-or-spawn, so two clients never start two daemons. Left on disk between runs by design. | daemon, CLI, shim | No | Yes, while no daemon is starting. |
-| `daemon-config.json` | Settings read before the database opens: `port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the channel defaults. |
+| `daemon-config.json` | Settings read before the database opens: `port`, `proxy_port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the channel defaults. |
+| `proxy.json` | Runtime state of the running [model proxy](/architecture/model-proxy): `port`, `pid`, `started_at`, `version` and `control_token`, the token the daemon uses to push the proxy its state and tell it to drain. Mode `0600`. Written by the proxy once its socket is bound, and removed on exit only while it still names that proxy's pid. The proxy outlives daemon restarts, and a new daemon finds it through this file. | model proxy | No | Only while no proxy runs. |
+| `proxy-usage/<pid>-<seq>.jsonl` (`.jsonl.part` while open) | The model proxy's usage records, one JSON object per line, metadata only. The proxy never opens the database; the daemon ingests each finished file. `COFFER_PROXY_SPOOL_DIR` moves the directory. | model proxy, daemon | No | Finished files not yet ingested are lost from the usage report. |
 | `upstream-pids/<server-uid>-<pid>.json` | One file per upstream MCP server process the daemon spawned, so the next daemon can reap orphans after a crash. | daemon | No | Yes, while the daemon is stopped. |
 | `state/removed-agent-notice.done` | Marks that the one-time notice about config directories of agent types Coffer no longer supports was logged. | daemon | No | Yes; the notice is logged once more. |
 
@@ -84,10 +89,11 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
+| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or credential. | daemon (supervisor), model proxy | No | Yes. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 
-`COFFER_LOG_DIR` moves the daemon, upstream and shim logs together. See [Observability](/architecture/observability).
+`COFFER_LOG_DIR` moves the daemon, proxy, upstream and shim logs together. See [Observability](/architecture/observability).
 
 ### Knowledge, memory and skills
 
@@ -148,7 +154,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | File | What Coffer writes | When |
 | --- | --- | --- |
 | `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Connecting the agent to Coffer. See [Agents](/guides/agents#connect-an-agent-to-coffer). |
-| `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> provider key --connection-uid <uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found) and `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_MODEL`, `env.ANTHROPIC_SMALL_FAST_MODEL`. The API key itself is never written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
+| `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> proxy token --agent-uid <agent uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found), which prints the agent's local proxy token; `env.ANTHROPIC_BASE_URL` set to the model proxy's `http://127.0.0.1:<proxy port>/anthropic`; `127.0.0.1,localhost` appended to `env.NO_PROXY`; and the model keys (`model`, `effortLevel`, `env.ANTHROPIC_DEFAULT_<TIER>_MODEL`, `modelPicker`). Every write deletes `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`. No provider key is ever written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
 | `settings.json` | Four hook entries whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path as `coffer memory hook --agent-uid <uid> --cwd "$PWD"`: `hooks.SessionStart` (matcher `startup\|resume\|clear\|compact`, 10-second timeout), `hooks.UserPromptSubmit`, and `hooks.PreToolUse` and `hooks.PostToolUse` (matcher `Bash`), each with a 5-second timeout. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory#install-the-hook). |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
@@ -157,12 +163,12 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | File | What Coffer writes | When |
 | --- | --- | --- |
 | `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Connecting the agent to Coffer. |
-| `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table whose `env_key` is `COFFER_PROVIDER_KEY`, and `model_catalog_json` pointing at the catalogue below. | Switching the agent to a model provider. |
+| `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table with `base_url` set to the model proxy's `http://127.0.0.1:<proxy port>/openai/v1`, `supports_websockets = false`, `requires_openai_auth = false` and an `auth` command (`coffer` by absolute path, `args = ["proxy", "token", "--agent-uid", "<agent uid>"]`), and `model_catalog_json` pointing at the catalogue below. No provider key is ever written. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
 | `hooks.json` | The same four hook entries as for Claude Code, on the same events with the same matchers and timeouts, all running `coffer memory hook`. Coffer reads, and never writes, Codex's approval of each entry in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
 
-Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `provider key`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
+Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token` — or `provider key`, the form earlier builds wrote — and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
 
 ::: tip Cleaning up an agent
 Before removing Coffer, disconnect each agent from Coffer and remove the provider projection from each agent's page (or `coffer agent disconnect` and the matching `coffer provider` commands), then delete `~/.coffer`. Deleting `~/.coffer` first leaves the agents pointing at a shim that no longer exists.

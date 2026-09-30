@@ -37,11 +37,11 @@ If sources disagree: **principles win.** Flag inconsistency to the user.
 1. confirm today's scope back to the user
 2. open the right branch (see .agents/workflow.md)
 3. behaviour change? start an OpenSpec change first (/opsx:propose)
-4. work in small, committable chunks (one logical change per commit)
+4. work in small, committable chunks (one logical change per commit);
+   make verify before each commit — the commit hook asks when it is stale
 5. archive the change (/opsx:archive) in the same PR, before it merges
-6. before opening PR: make verify
-7. squash to one commit before final push
-8. open PR — STOP at PR-opened, wait for explicit user merge instruction
+6. squash to one commit before final push
+7. open PR — STOP at PR-opened, wait for explicit user merge instruction
 ```
 
 **Hard stops within a session:**
@@ -67,7 +67,7 @@ The user has delegated architectural authority. **Default to deciding and explai
 ## 5. Common Commands
 
 ```bash
-make install                # one-time: venv + backend deps
+make install                # one-time: .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make verify                 # fast path (lint + unit + integration + contract + acceptance)
 make verify-all             # adds e2e
 make dev                    # backend (:8000) + frontend (:5173)

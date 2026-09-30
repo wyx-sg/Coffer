@@ -4,8 +4,7 @@ Two kinds have to agree on it: the ``memory`` kind's delivery adapters read an
 agent's trust record and answer with one of these values, and the ``agent``
 kind's hooks listing reports it. Neither kind may import the other
 (import-linter cross-kind contracts), so the values live here, in the
-kind-agnostic domain, the way ``domain.connection`` holds the one string the
-provider and chat kinds share.
+kind-agnostic domain.
 """
 
 from __future__ import annotations

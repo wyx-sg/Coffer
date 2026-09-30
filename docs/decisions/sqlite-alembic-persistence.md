@@ -20,9 +20,9 @@ Forces on the choice:
 - **One user, several processes.** The daemon, the CLI, the stdio shim and the
   desktop shell all run on one machine. Only one of them is long-lived.
 - **Upgrades are unattended.** A release is installed by replacing binaries;
-  the next daemon start is the first moment new code meets old data. There are
-  103 revisions in the lineage today (head `0103`), many of them data rewrites
-  of user rows rather than DDL.
+  the next daemon start is the first moment new code meets old data. The
+  lineage runs to over a hundred revisions, many of them data rewrites of user
+  rows rather than DDL.
 - **Many kinds, one framework.** Kind-agnostic tables (`resources`,
   `audit_log`, …) are referenced by kind-owned ones (`skill_agent_bindings`,
   `channel_peers`, `mcp_capability_preferences`, …) through foreign keys with

@@ -271,9 +271,10 @@ class ProviderService:
     # Coffer, and it existed because the connection's NAME was written into
     # another tool's config file — Claude Code's ``apiKeyHelper`` shelled out
     # to ``--connection <name>``, so moving the label meant re-projecting or
-    # leaving the agent calling something that no longer resolved. The helper
-    # carries the uid now (``anthropic_api_key_helper``), so a rename writes one
-    # column and nothing else: ``ResourceService.rename`` does that for every
+    # leaving the agent calling something that no longer resolved. What Coffer
+    # writes now names no connection at all — the helper prints the agent's
+    # local proxy token (``proxy_token_helper``, keyed by the agent's uid) — so
+    # a rename writes one column and nothing else: ``ResourceService.rename`` does that for every
     # kind, validating the name and refusing a collision in the one place those
     # rules live.
 

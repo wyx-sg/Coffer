@@ -250,7 +250,7 @@ The workspace amendment adds:
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer resource disable|enable agent <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer agent disable|enable <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
@@ -465,7 +465,8 @@ in spec "List the MCP entries in the agent's own config files") because
 claude_code's format has no such flag and codex's duplicates a switch its own UI
 owns. Removal and adoption stay, because each is a write Coffer alone has a
 reason to make. Both are exposed as `DELETE
-/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer agent mcp remove-entry`.
+/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer discard mcp <agent>:<entry>`
+(adoption: `coffer adopt mcp <agent>:<entry>`).
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 

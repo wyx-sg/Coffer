@@ -11,7 +11,7 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 | **Contract**    | What contract freshness cannot see: every served route has an owning capability (`test_contract_coverage.py` over `scripts/gen_contracts.py`'s ownership table), MCP protocol behaviour against the SDK oracle, built-in tool names. The contracts themselves are generated from the Pydantic models and their freshness is a `make lint` step (`scripts/gen_contracts.py --check`), not a test. | < 1 s                   | `pytest` over the app's generated OpenAPI and the MCP SDK. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
 | **E2E**         | Full stack via real surfaces, in **two legs**: a browser (Chromium) against the UI the daemon serves, and a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite. | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. The `web` project drives pages against a Vite server pointed at an isolated daemon; the `mcp` project spawns the real shim + daemon as OS subprocesses and drives JSON-RPC across them. | NO (separate `make verify-e2e`) |
 
-**Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but stays fast (the full backend suite is ~100 s), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
+**Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but runs in parallel on xdist workers (and in four shards on CI), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
 
 Per-test budgets are guidance, not gates — a single slow test isn't a CI failure. They exist so a test that drifts an order of magnitude past its tier prompts a "wrong tier?" question. No total-suite budget is enforced; the suite grows with the project.
 
@@ -243,17 +243,20 @@ make verify-visual       # screenshot baseline: every route, light + dark (not i
 make visual-update       # re-record this platform's screenshot baseline
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
-make format              # ruff format + ruff --fix + prettier (frontend)
+make format              # ruff format + ruff --fix (backend, evals); prettier is run per file
 ```
 
 **`make lint` is the whole static gate, not a formatter pass.** In order
-(`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
+(`Makefile`): `scripts/check_file_sizes.py`, `scripts/gen_contracts.py --check`
+(contract freshness), `scripts/check_response_models.py`,
 `scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
-`scripts/check_agent_type_branches.py`, `ruff check`, `ruff format --check`,
-`mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
+`scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
+`ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
+(configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`
+(the layering + cross-kind fence), and — when
 `frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
 
@@ -271,8 +274,11 @@ Two consequences worth internalising:
   `docs-site/architecture/layering.md` and the builtin-tool roster in
   `docs-site/architecture/` to the code; `check_removed_commands.py` rejects any
   `coffer` command or `coffer__` tool the CLI/MCP reshape removed wherever it is
-  quoted under `docs-site/`, the shipped skill bodies (`backend/coffer/**/skill_assets/`)
-  or `e2e/`. Run `make lint` after touching markdown, not just after touching code.
+  quoted under `docs-site/`, `README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `.agents/`, `openspec/specs/`, the shipped skill bodies
+  (`backend/coffer/**/skill_assets/`), `frontend/src/` or `e2e/` (a line that
+  names one on purpose is listed in the script's `ALLOWED`). Run `make lint`
+  after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through
   the editable install (which points at the main checkout) and reports contract
@@ -284,8 +290,8 @@ Two consequences worth internalising:
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
-| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n auto backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
-| `make verify-integration` | `pytest -n auto backend/tests/integration`.                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/unit` (`PYTEST_WORKERS` defaults to `auto`), then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
+| `make verify-integration` | `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/integration`.                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
 | `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After adding a route or touching the MCP surface. After editing Pydantic API schemas run `make contracts` (models → contracts → frontend types); `make lint` fails on a stale contract. |
 | `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
@@ -320,7 +326,7 @@ up here as an image diff.
 
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`):
+`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main` or `feature/rearch`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`):
 
 | Job                               | What                                                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -330,7 +336,7 @@ up here as an image diff.
 | `test-integration (N/4)`          | Four shards of `make verify-integration`, each picking its quarter with pytest-split (`--splits 4 --group N --splitting-algorithm least_duration`) balanced by the committed `backend/.test_durations`, and each running that quarter on xdist across the runner's cores. Installs `ripgrep`. |
 | `test-integration`                | The required check: succeeds only when all four shards succeeded, or when they were skipped because the change is `code=false`. |
 | `test-benchmark`                  | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
-| `audit-acceptance`                | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`. Always runs.      |
+| `audit-acceptance`                | `make verify-acceptance`: `openspec validate --all --strict` (needs the root `npm ci`), then `scripts/audit_acceptance.py`. Always runs. |
 | `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean. Always runs. |
 | `test-contract`                   | `make verify-contract`                                                                                                     |
 | `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects), then `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact |
@@ -339,7 +345,7 @@ The test jobs are skipped only on an explicit `code=false`: if `changes` itself 
 
 **Shard balance.** A test missing from `backend/.test_durations` is weighed at the average, so a stale file only unbalances the shards — it never drops a test. When one shard runs clearly longer than the others, run `make test-durations` (serial, ~15 min) and commit the file. Changing the shard count means editing both the `shard` matrix and `--splits`.
 
-`.github/workflows/ci.yml` runs one full `make verify` on every push to `main` and `feature/**`; it inherits the xdist default from the Makefile.
+`.github/workflows/ci.yml` runs one full `make verify` on every push to `main` and `feature/**` and on manual dispatch; it inherits the xdist default from the Makefile. The same workflow runs a weekly latest-dependencies canary (Mondays 06:00 UTC) that re-resolves the `>=` floors instead of the frozen lock, so an upstream release that breaks Coffer shows up on a schedule.
 
 ## When a Tier is Empty
 

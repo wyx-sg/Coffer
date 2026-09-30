@@ -45,7 +45,7 @@ function agent(type: AgentOut["type"]): AgentOut {
 const SETTINGS = "/home/u/.claude/settings.json";
 const LOCAL = "/home/u/.claude/settings.local.json";
 const PLUGIN_HOOKS = "/home/u/.claude/plugins/cache/superpowers/hooks/hooks.json";
-const COFFER_CMD = "coffer memory index --agent-uid u-claude_code";
+const COFFER_CMD = 'coffer memory hook --agent-uid u-claude_code --cwd "$PWD"';
 
 function hook(over: Partial<NativeHook>): NativeHook {
   return {
@@ -163,13 +163,13 @@ describe("AgentHooksTab", () => {
     const onRepair = vi.fn();
     renderTab(
       {
-        items: [{ ...COFFER_ROW, command: "coffer memory index --agent codex" }],
+        items: [{ ...COFFER_ROW, command: "coffer memory context --agent codex" }],
         coffer_hook: { ...COFFER, health: "stale", installed_command: "old" },
         parse_errors: [],
       },
       { onRepair },
     );
-    const row = await rowOf("coffer memory index --agent codex");
+    const row = await rowOf("coffer memory context --agent codex");
     expect(await within(row).findByText("Out of date")).toBeInTheDocument();
     expect(within(row).getByText(/^fired /)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: "Repair Coffer’s SessionStart hook" }));

@@ -1078,7 +1078,6 @@ source_modules = [
     "coffer.domain.audit",
     "coffer.domain.retention",
     "coffer.domain.scope",
-    "coffer.domain.connection",
     "coffer.infrastructure.net",
     # The host-OS port and its one adapter answer for every kind, so neither
     # may import one.

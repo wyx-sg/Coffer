@@ -30,13 +30,14 @@ can be put on and the reasoning levels its runtime reports, and the config-file 
 projection write goes through. What the flagged connections are used for — the engine's model, the
 speech-to-text model, the unattended passes and the rule that drops a model when a flag moves — is
 [internal-engine](../internal-engine/spec.md)'s. Coffer is a single-user tool, so no access control
-applies beyond the daemon's `X-Coffer-Token` gate. Out of scope: hot-switching a running Claude Code
-or Codex process mid-session; continuously reconciling live native config against the active
-connection (the boot self-check is the narrow version that exists); restoring native config beyond
-the `.bak` copies projection leaves; proxying, failover chains or anthropic↔openai translation (a
-connection reaches an agent only because the user routed it there, and the endpoint must really
-speak what that agent sends); curating an agent's own models; and deriving account entitlement
-locally.
+applies beyond the daemon's `X-Coffer-Token` gate. It also owns the local model proxy every
+API-key and local connection is reached through — the per-agent proxy tokens, failover between
+connections that serve the same model, and usage metering. Out of scope: hot-switching a running
+Claude Code or Codex process mid-session; restoring native config beyond the `.bak` copies
+projection leaves; anthropic↔openai protocol translation (a connection reaches an agent only
+because the user routed it there, and the endpoint must really speak what that agent sends — the
+proxy relays each wire to an upstream of the same wire); curating an agent's own models; and
+deriving account entitlement locally.
 
 ## Requirements
 
@@ -339,7 +340,7 @@ routed to Claude Code. Coffer translates nothing between protocols.
 #### Scenario: route an openai-compatible connection to Claude Code with its scope
 - **GIVEN** a Claude Code agent is registered and an `openai`-wire connection is created and then scoped to `["claude_code"]`,
 - **WHEN** the user activates that connection,
-- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> provider key --connection-uid <uid>"`, `GET /providers/{uid}/key` returns exactly that connection's key, and the reported agent set follows the scope.
+- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> proxy token --agent-uid <agent uid>"`, the model proxy routes that agent's requests to exactly that connection with that connection's key, and the reported agent set follows the scope.
 
 ### Requirement: Audit every provider switch
 The system MUST emit an audit event with value `"provider_switched"` for every switch, with details
@@ -1007,8 +1008,7 @@ arrived on, and any request that carries an `Origin` header — no browser page 
 ### Requirement: Fail over only before the first content byte
 When a request fails before the first content byte reaches the agent — a connect, TLS or DNS
 error, a 5xx, 529 or 429 status, a 401 or 403, a first-byte timeout, or an error event before the
-first content event (the proxy holds the response until then, bounded to a few kilobytes and
-seconds) — the proxy MUST move it to the next member of the agent's route: another enabled
+first content event (the proxy holds the response until then, bounded to 64 KiB and 5 seconds) — the proxy MUST move it to the next member of the agent's route: another enabled
 connection that reaches the same agent type, speaks the same protocol and lists the requested model
 among its curated models. Failover MUST never change the model, never try the same member twice for
 one request, and never happen after the first content byte: an error or truncation after it goes to

@@ -286,8 +286,10 @@ return useMutation({
   a bug: it forks one component into two looks.
 - **Show an agent with `AgentBadge`** (its official mark on a neutral tile),
   never initials or a per-agent colour; list agents in the Agents page's order.
-- Keep files focused; a component growing past a few hundred lines is a signal to
-  split. One component per file, test colocated (§8).
+- Keep files focused. `scripts/check_file_sizes.py` (in `make lint`) enforces
+  the limits: a page (`src/pages/**`) ≤ 200 lines, a component
+  (`src/components/**`) ≤ 250, a hook or utility (`src/lib/**`) ≤ 300. One
+  component per file, test colocated (§8).
 
 ## 7. TypeScript & i18n
 
