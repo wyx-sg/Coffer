@@ -2,11 +2,11 @@
 "Keep every document's history and undo a pass as a whole").
 
 The service's writes and the curation pass both go through here, so the rule
-is stated once: open the operation's commit (which first commits whatever
-changed outside Coffer, as an edit on disk), do the write, touch what it wrote,
-commit exactly that. The git calls run off the event loop. With no history
-wired — a unit test, a machine with no git — the operation runs unrecorded and
-nothing else changes.
+is stated once: open the operation's commit in the vault repository (which
+first commits whatever changed under ``knowledge/`` outside Coffer, as a
+``disk`` write), touch what it writes, do the write, commit exactly that. The
+git calls run off the event loop. With no history wired — a unit test, a
+machine with no git — the operation runs unrecorded and nothing else changes.
 """
 
 from __future__ import annotations
@@ -18,14 +18,15 @@ from collections.abc import AsyncIterator
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import ACTOR_AGENT
-from coffer.domain.knowledge.history import WRITER_AGENT, WRITER_USER, ChangeMeta
+from coffer.domain.knowledge.history import WRITER_AGENT, WRITER_USER
 from coffer.domain.resource import Resource
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge.history import KnowledgeHistory, Transaction
 
 
 @contextlib.asynccontextmanager
 async def recording(
-    history: KnowledgeHistory | None, meta: ChangeMeta
+    history: KnowledgeHistory | None, meta: CommitMeta
 ) -> AsyncIterator[Transaction]:
     """One operation's commit around the block. The commit is made even when
     the block raises, so a write that half-landed is never left unrecorded."""
@@ -42,7 +43,7 @@ def writer_of(actor_kind: str) -> str:
 
 
 async def settle(history: KnowledgeHistory | None) -> None:
-    """Commit what changed outside Coffer — sync's paths, then edits on disk."""
+    """Commit what changed under ``knowledge/`` outside Coffer, as ``disk`` writes."""
     if history is not None:
         await asyncio.to_thread(history.settle)
 

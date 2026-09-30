@@ -37,9 +37,7 @@ def test_isolated_home_is_where_coffer_resolves_its_trees(isolated_home: Isolate
 def test_isolated_home_env_runs_a_subprocess_as_that_machine(tmp_path: pathlib.Path) -> None:
     other = make_home(tmp_path / "other")  # built, not activated
     probe = (
-        "import os, pathlib;"
-        "print(pathlib.Path.home());"
-        "print(os.environ.get('COFFER_KNOWLEDGE_ROOT', '-'))"
+        "import os, pathlib;print(pathlib.Path.home());print(os.environ.get('COFFER_LOG_DIR', '-'))"
     )
     out = subprocess.run(
         [sys.executable, "-c", probe],

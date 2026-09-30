@@ -40,6 +40,7 @@ from typer.testing import CliRunner
 import coffer.surfaces.cli._client as _cli_client
 import coffer.surfaces.cli.memory_cmd as memory_cmd
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.memory.paths import memory_root as _memory_root
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
@@ -83,8 +84,6 @@ def memory_cli_daemon(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59900")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59909")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
 
     app = create_app()
@@ -361,7 +360,7 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
     assert "## Coffer memory" in result.output
     assert "`python-lockfile.md`" in result.output  # the repository's own note
     assert "`worktree-development.md`" in result.output  # and what is known about the developer
-    assert str(tmp_path / "memory" / partition / "notes") in result.output
+    assert str(_memory_root() / partition / "notes") in result.output
     assert "coffer__recall" not in result.output
 
     assert _fires() == 1

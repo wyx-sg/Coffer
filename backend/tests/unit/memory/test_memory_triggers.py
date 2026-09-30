@@ -29,9 +29,7 @@ from tests.unit.memory.conftest import FakeAudit
 
 @pytest.fixture(autouse=True)
 def _triggers_root(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    root = tmp_path / "vault" / "memory-triggers"
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(root))
-    return root
+    return paths.triggers_root()
 
 
 def _block(command: str, *, unless: str = "", note: str = "coffer/node-20") -> Trigger:

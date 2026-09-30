@@ -221,7 +221,7 @@ class DeliveryStatus:
     agent_uid: str
     #: The agent's label at the moment the status was read, carried beside the
     #: uid for the same reason an audit row carries `resource_name` beside
-    #: `resource_id`: a surface has to render something a person recognises,
+    #: `resource_uid`: a surface has to render something a person recognises,
     #: and looking the name up again would be a second question with a second
     #: chance to disagree. It is never matched on.
     agent_name: str

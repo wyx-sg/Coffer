@@ -120,9 +120,9 @@ def promote(collection: str, name: str) -> KnowledgeFile:
 
     The path with no model to merge it: the material is knowledge the moment it
     arrives, so it must not wait in a hidden directory for a connection that
-    may never be configured. It lands at the collection root, stamped as
-    curated — nothing is going to curate it, and an unstamped document would
-    only be handed back by every sweep.
+    may never be configured. It lands at the collection root, recorded as
+    settled by curation — nothing is going to curate it, and an unsettled
+    document would only be handed back by every sweep.
     """
     material = read_material(collection, name)
     written = write_file(

@@ -6,9 +6,9 @@ A partition holds four things with one writer each — ``MEMORY.md``, ``notes/``
 ``RETIRED.md`` and the hidden ``.raw/`` — and ``paths.py`` is the sole owner of
 every one of those names.
 
-The root itself is already pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture in ``backend/tests/conftest.py`` — every
-test here runs against that, never a developer's real ``~/.coffer/memory``.
+The root resolves from ``HOME``, which the suite gives every test fresh
+(``_real_home_guard`` in ``backend/tests/conftest.py``) — every test here runs
+against that, never a developer's real tree.
 """
 
 from __future__ import annotations
@@ -20,20 +20,18 @@ import pytest
 from coffer.infrastructure.memory import paths
 
 
-def test_memory_root_honours_override(
+def test_memory_root_is_derived_under_home(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    override = tmp_path / "somewhere-else"
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(override))
-    assert paths.memory_root() == override
-
-
-def test_memory_root_falls_back_to_home_when_unset(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
-) -> None:
-    monkeypatch.delenv("COFFER_MEMORY_ROOT", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert paths.memory_root() == tmp_path / ".coffer" / "memory"
+    assert paths.memory_root() == tmp_path / ".coffer" / "derived" / "memory"
+
+
+def test_triggers_live_in_the_vault(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert paths.triggers_root() == tmp_path / ".coffer" / "vault" / "memory-triggers"
 
 
 def test_partition_dir_is_one_segment_under_root() -> None:

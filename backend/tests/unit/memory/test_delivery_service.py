@@ -46,7 +46,6 @@ _CC_UID = "9f3c1b0a4d5e4f7b8c1d2e3f40516273"
 _CODEX_UID = "1a2b3c4d5e6f708192a3b4c5d6e7f809"
 
 _CLAUDE_RESOURCE = Resource(
-    id=1,
     uid=_CC_UID,
     kind="agent",
     name="cc",
@@ -58,7 +57,6 @@ _CLAUDE_RESOURCE = Resource(
 )
 
 _CODEX_RESOURCE = Resource(
-    id=2,
     uid=_CODEX_UID,
     kind="agent",
     name="codex",

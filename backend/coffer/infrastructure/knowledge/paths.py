@@ -1,6 +1,8 @@
 """On-disk layout for the knowledge layer — the sole owner of path construction.
 
-One root, one tree per collection: ``~/.coffer/knowledge/<collection>/…``.
+One root, one tree per collection: ``~/.coffer/vault/knowledge/<collection>/…``
+— inside the vault repository (ADR storage-is-five-classes-by-nature), so a
+collection's history is the vault's history under ``knowledge/``.
 Everything visible under a collection is a **document** — Markdown a person and
 Coffer's curation pass write together, in whatever nesting either of them
 chooses (spec knowledge "Store each collection as one tree of Markdown files",
@@ -17,23 +19,27 @@ inbox"). A person may still *look* at it — the tree lists a collection's inbox
 and the read route reads an item — and that one allowance is
 :func:`inbox_parts`, spelled out here rather than made by loosening the dot rule
 in :func:`check_segment`: :func:`resolve` and :func:`require_document` still
-refuse every hidden segment, so no write, delete or stamp reaches the inbox
+refuse every hidden segment, so no write or delete reaches the inbox
 through them. Every other hidden entry is never addressable.
 
-``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
-becomes a path component goes through the traversal guard here (see "Guard every
-path through one module").
+There is no override: the root is resolved from ``HOME`` at every call, and a
+tree outside the vault would be a tree its history cannot see. Every segment
+that becomes a path component goes through the traversal guard here (see
+"Guard every path through one module").
 """
 
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
+from coffer.infrastructure.vault.home import vault_root
 
 README_NAME = "README.md"
+
+#: The knowledge root's path inside the vault repository.
+VAULT_PREFIX = "knowledge"
 
 #: Where material waits to be merged into a collection's documents.
 INBOX_DIR_NAME = ".inbox"
@@ -43,12 +49,20 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
 
 
 def knowledge_root() -> pathlib.Path:
-    """The one directory the layer lives in."""
-    override = os.environ.get("COFFER_KNOWLEDGE_ROOT")
-    if override:
-        return pathlib.Path(override)
-    home = pathlib.Path(os.environ.get("HOME", "~")).expanduser()
-    return home / ".coffer" / "knowledge"
+    """The one directory the layer lives in: ``vault/knowledge``."""
+    return vault_root() / VAULT_PREFIX
+
+
+def vault_path(relpath: str) -> str:
+    """A knowledge-root-relative path as the vault repository names it."""
+    cleaned = relpath.strip("/")
+    return f"{VAULT_PREFIX}/{cleaned}" if cleaned else VAULT_PREFIX
+
+
+def from_vault_path(path: str) -> str | None:
+    """The knowledge-root-relative form of a vault path, ``None`` outside it."""
+    head = f"{VAULT_PREFIX}/"
+    return path[len(head) :] if path.startswith(head) else None
 
 
 def check_segment(segment: str, relpath: str) -> None:

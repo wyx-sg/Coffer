@@ -1,331 +1,267 @@
-"""Every accepted write to a collection, kept as one git commit naming its
+"""Every accepted write to a collection, kept as one vault commit naming its
 writer (spec knowledge "Keep every document's history and undo a pass as a
 whole").
 
-**Where the history lives.** ADR
-every-vault-write-is-a-validated-commit-naming-its-writer makes the vault one
-git repository; until that lands, the knowledge root keeps a repository of its
-own at ``<knowledge root>/.git``. It is shaped to fold into the vault's: the
-same trailers (``history_git.TRAILERS``), one commit per operation, and paths
-relative to the knowledge root, so the fold is a history import under
-``knowledge/`` rather than a translation. It stays out of everything else by
-construction — every knowledge listing skips dot-prefixed entries, the sync
-mirror skips ``.git`` directories, and git will not accept a ``.git`` path from
-a remote.
+**Where the history lives.** Knowledge is inside the vault repository, at
+``vault/knowledge/`` (ADR storage-is-five-classes-by-nature), so its history is
+the vault's history of that directory (ADR
+every-vault-write-is-a-validated-commit-naming-its-writer). This module is a
+view over the process's one vault writer
+(``coffer.infrastructure.vault.instance.vault_writer``): an operation's
+:class:`Transaction` is a vault transaction whose touched paths are
+``knowledge/<relpath>``, and log, show, diff and later are the vault
+repository's, pathspec-limited to ``knowledge/`` with every path handed back
+knowledge-root-relative — which is what every caller and API response speaks.
 
-``.git/info/exclude`` ignores every dot-prefixed entry except ``.inbox/``: the
-inbox is tracked, so a submission is a commit and the text a pass consumed stays
-in history after the inbox file is deleted.
+The vault's ``.git/info/exclude`` ignores every hidden entry under
+``knowledge/`` except ``.inbox/``: the inbox is tracked, so a submission is a
+commit and the text a pass consumed stays in history after the inbox file is
+deleted.
 
 **Who wrote what.** A Coffer operation opens a :class:`Transaction`, touches
-the paths it writes, and commits exactly those. Anything else that changed in
-the tree — a person's own editor, an agent's file tools — is committed first,
-as an edit on disk (:meth:`KnowledgeHistory.settle`), so it is never counted as
-Coffer's. A curation pass holds its transaction open for minutes; the paths it
-has touched are *owned* meanwhile, and a concurrent settle leaves them alone.
-Paths vault sync applied are marked (:meth:`mark_sync`) and committed as
-``sync`` before any disk edit is.
+the paths it writes, and commits exactly those. Anything else that changed
+under ``knowledge/`` — a person's own editor, an agent's file tools — is
+committed first, as a ``disk`` write (:meth:`KnowledgeHistory.settle`), so it
+is never attributed to Coffer. A curation pass holds its transaction open for
+minutes; the paths it has touched are *owned* by the vault writer meanwhile,
+and a concurrent settle leaves them alone. A sync round's merge is a ``sync``
+commit by construction, so nothing here marks sync's paths.
 
-**Never in the way.** Without git — or with a knowledge root that does not
-exist yet — every method is a no-op and :meth:`available` is false: a write is
-never refused because it could not be recorded.
+**Never in the way.** Without git every method is a no-op and
+:meth:`available` is false: a write is never refused because it could not be
+recorded.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import pathlib
-import threading
-from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 
-from coffer.domain.knowledge.history import (
-    OP_BASELINE,
-    OP_EDIT,
-    OP_SYNC,
-    WRITER_DISK,
-    WRITER_SYNC,
-    Change,
-    ChangeMeta,
-)
+from coffer.domain.knowledge.history import Change, DocumentChange
+from coffer.domain.vault.content_ids import fingerprint
+from coffer.domain.vault.errors import VaultFileStale
+from coffer.domain.vault.history import Commit, looks_like_a_version
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import paths
-from coffer.infrastructure.knowledge.history_git import (
-    LOG_FORMAT,
-    GitCommandError,
-    git_available,
-    message,
-    parse_log,
-    run,
-)
+from coffer.infrastructure.vault import git
+from coffer.infrastructure.vault.atomic import atomic_write
+from coffer.infrastructure.vault.instance import vault_writer
+from coffer.infrastructure.vault.writer import Transaction as VaultTransaction
+from coffer.infrastructure.vault.writer import VaultWriter
 
 logger = logging.getLogger(__name__)
 
-#: Ignore every hidden entry but the inbox. ``.git`` itself is never tracked.
-_EXCLUDE = "# Written by Coffer: hidden entries are not knowledge, except the inbox.\n.*\n!.inbox\n"
+#: What recording failures look like; each is logged and the write stands.
+_RECORDING_ERRORS = (git.VaultGitError, git.GitMissing, OSError)
 
 
 class Transaction:
-    """One Coffer operation's commit: the paths it touched, committed once."""
+    """One Coffer operation's commit: the knowledge paths it touched,
+    committed once as one vault commit."""
 
-    def __init__(self, history: KnowledgeHistory | None, meta: ChangeMeta) -> None:
+    def __init__(
+        self,
+        history: KnowledgeHistory | None,
+        meta: CommitMeta,
+        vault: VaultTransaction | None = None,
+    ) -> None:
         self._history = history
+        self._vault = vault
         self.meta = meta
         self.paths: list[str] = []
+        #: Directories touched, re-expanded at commit time so a file the
+        #: operation created inside one is part of its commit.
+        self._dirs: list[str] = []
         self.version: str | None = None
 
     def touch(self, relpath: str) -> None:
-        """Claim ``relpath`` for this operation's commit."""
-        if relpath and relpath not in self.paths:
+        """Claim ``relpath`` — a document, or a whole directory — for this
+        operation's commit. Touch before writing where possible: an owned path
+        is never settled as someone else's edit."""
+        if not relpath:
+            return
+        if relpath not in self.paths:
             self.paths.append(relpath)
-            if self._history is not None:
-                self._history.own(relpath)
+        if self._vault is None or self._history is None:
+            return
+        if (paths.knowledge_root() / relpath).is_dir() and relpath not in self._dirs:
+            self._dirs.append(relpath)
+        for path in self._history.files_of(relpath):
+            self._vault.touch(path)
 
-    def commit(self, meta: ChangeMeta | None = None) -> str | None:
+    def write(self, relpath: str, data: bytes, expected: str) -> None:
+        """Replace ``relpath``'s bytes if it still holds what the caller read
+        (``expected`` is that read's fingerprint); raise ``VaultFileStale``
+        otherwise. Compared under the vault's write lock when history is on."""
+        if self._vault is not None:
+            # Not ``touch`` first: the vault compares only a path this
+            # transaction has not claimed yet, and claims it as it writes.
+            if relpath not in self.paths:
+                self.paths.append(relpath)
+            self._vault.write(paths.vault_path(relpath), data, expected)
+            return
+        target = paths.resolve(relpath)
+        current = target.read_bytes() if target.is_file() else None
+        if current is None or fingerprint(current) != expected:
+            raise VaultFileStale(paths.vault_path(relpath))
+        atomic_write(target, data)
+
+    def commit(self, meta: CommitMeta | None = None) -> str | None:
         """Commit what this operation touched; answer the commit, or ``None``
         when nothing changed. Idempotent: a second call commits nothing."""
-        if self._history is None:
-            return None
-        history, self._history = self._history, None
-        self.version = history.finish(self.paths, meta or self.meta)
+        vault, history = self._vault, self._history
+        self._vault = None
+        if vault is None or history is None:
+            return self.version
+        try:
+            for relpath in self._dirs:
+                for path in history.files_of(relpath):
+                    vault.touch(path)
+            self.version = vault.commit(meta or self.meta)
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.commit_failed", exc_info=True)
         return self.version
 
 
 class KnowledgeHistory:
-    """The knowledge root's history repository."""
+    """The knowledge directory's view of the vault repository."""
 
-    def __init__(self, root: Callable[[], pathlib.Path] = paths.knowledge_root) -> None:
-        self._root = root
-        self._lock = threading.RLock()
-        self._owned: Counter[str] = Counter()
-        self._sync_marks: set[str] = set()
-        self._ready: set[str] = set()
+    def __init__(self, writer: Callable[[], VaultWriter] = vault_writer) -> None:
+        self._writer = writer
 
     # --- the repository ------------------------------------------------------
 
-    def root(self) -> pathlib.Path:
-        return self._root()
+    def writer(self) -> VaultWriter:
+        return self._writer()
 
     def available(self) -> bool:
-        """Whether history is being recorded here: git exists and the
-        repository could be created (it is, on first ask)."""
-        return self._ensure()
-
-    def _ensure(self) -> bool:
-        root = self._root()
-        key = str(root)
-        if key in self._ready and (root / ".git").is_dir():
-            return True
-        if not git_available() or not root.is_dir():
+        """Whether history is being recorded: git exists and the vault is a
+        repository (it becomes one on first ask)."""
+        if not git.git_available():
             return False
-        with self._lock:
-            try:
-                if not (root / ".git").is_dir():
-                    run(root, "init", "-q")
-                exclude = root / ".git" / "info" / "exclude"
-                exclude.parent.mkdir(parents=True, exist_ok=True)
-                if not exclude.is_file() or exclude.read_text(encoding="utf-8") != _EXCLUDE:
-                    exclude.write_text(_EXCLUDE, encoding="utf-8")
-                self._ready.add(key)
-                if run(root, "rev-parse", "--verify", "-q", "HEAD", check=False).returncode:
-                    # History starts here: whatever the tree already held is
-                    # one baseline commit, so a first change has a "before".
-                    self._commit_all(
-                        ChangeMeta(
-                            writer=WRITER_DISK,
-                            operation=OP_BASELINE,
-                            summary="History starts here",
-                        )
-                    )
-            except (GitCommandError, OSError):
-                logger.warning("knowledge.history.unavailable", exc_info=True)
-                self._ready.discard(key)
-                return False
+        try:
+            self._writer().repo.ensure()
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.unavailable", exc_info=True)
+            return False
         return True
+
+    def files_of(self, relpath: str) -> list[str]:
+        """Every vault path ``relpath`` stands for: itself when it names a
+        file, else every file under it on disk or at ``HEAD``."""
+        vp = paths.vault_path(relpath)
+        target = paths.knowledge_root() / relpath
+        found = dict.fromkeys(self._writer().repo.tree("HEAD", vp))
+        if target.is_dir():
+            vault = paths.knowledge_root().parent
+            for root, _dirs, files in os.walk(target):
+                for name in files:
+                    found.setdefault((pathlib.Path(root) / name).relative_to(vault).as_posix())
+        elif not found:
+            found[vp] = None
+        return list(found)
 
     # --- recording -----------------------------------------------------------
 
-    def begin(self, meta: ChangeMeta) -> Transaction:
+    def begin(self, meta: CommitMeta) -> Transaction:
         """Open one operation's commit, having committed what came before it."""
-        if not self._ensure():
+        if not self.available():
             return Transaction(None, meta)
         self.settle()
-        return Transaction(self, meta)
+        return Transaction(self, meta, self._writer().begin(meta))
 
-    def own(self, relpath: str) -> None:
-        with self._lock:
-            self._owned[relpath] += 1
-
-    def finish(self, relpaths: Iterable[str], meta: ChangeMeta) -> str | None:
-        """Commit ``relpaths`` alone and release them."""
-        touched = list(dict.fromkeys(relpaths))
-        root = self._root()
-        with self._lock:
-            try:
-                if not touched or not self._ensure():
-                    return None
-                self._stage(root, touched)
-                return self._commit_staged(root, meta)
-            except (GitCommandError, OSError):
-                logger.warning("knowledge.history.commit_failed", exc_info=True)
-                return None
-            finally:
-                for path in touched:
-                    self._owned[path] -= 1
-                    if self._owned[path] <= 0:
-                        del self._owned[path]
-
-    def mark_sync(self, relpath: str) -> None:
-        """Vault sync applied ``relpath``: the next commit names sync."""
-        with self._lock:
-            self._sync_marks.add(relpath)
-
-    def settle(self) -> None:
-        """Commit what changed outside any Coffer operation: sync's paths as
-        ``sync``, then everything else no open operation owns as an edit on
-        disk."""
-        if not self._ensure():
+    def settle(self, relpath: str = "") -> None:
+        """Commit what changed under ``knowledge/`` (or under ``relpath`` in it)
+        outside any Coffer operation, as a ``disk`` write. Owned paths — an
+        open operation's — are left for that operation's own commit."""
+        if not self.available():
             return
-        root = self._root()
-        with self._lock:
-            try:
-                marks, self._sync_marks = sorted(self._sync_marks), set()
-                if marks:
-                    self._stage(root, marks)
-                    self._commit_staged(
-                        root,
-                        ChangeMeta(
-                            writer=WRITER_SYNC,
-                            operation=OP_SYNC,
-                            summary="Applied from another machine",
-                        ),
-                    )
-                self._commit_all(
-                    ChangeMeta(writer=WRITER_DISK, operation=OP_EDIT, summary="Edited on disk"),
-                    leave=sorted(self._owned),
-                )
-            except (GitCommandError, OSError):
-                logger.warning("knowledge.history.settle_failed", exc_info=True)
-
-    def _stage(self, root: pathlib.Path, relpaths: Iterable[str]) -> None:
-        for relpath in relpaths:
-            if (root / relpath).exists():
-                run(root, "add", "-A", "--", relpath, literal=True)
-            else:
-                run(
-                    root,
-                    "rm",
-                    "-r",
-                    "-q",
-                    "--cached",
-                    "--ignore-unmatch",
-                    "--",
-                    relpath,
-                    literal=True,
-                )
-
-    def _commit_all(self, meta: ChangeMeta, *, leave: Iterable[str] = ()) -> str | None:
-        root = self._root()
-        if not run(root, "status", "--porcelain", "--untracked-files=all").stdout.strip():
-            return None  # the usual case, and one process rather than three
-        run(root, "add", "-A")
-        for relpath in leave:
-            # An open operation's path is its own commit's, not this one's.
-            run(root, "reset", "-q", "--", relpath, check=False, literal=True)
-        return self._commit_staged(root, meta)
-
-    def _commit_staged(self, root: pathlib.Path, meta: ChangeMeta) -> str | None:
-        if run(root, "diff", "--cached", "--quiet", check=False).returncode == 0:
-            return None
-        run(root, "commit", "-q", "--no-verify", "-F", "-", stdin=message(meta), writer=meta.writer)
-        return run(root, "rev-parse", "HEAD").stdout.decode().strip()
+        prefix = f"{paths.vault_path(relpath)}/"
+        writer = self._writer()
+        try:
+            pending = [p for p in writer.pending() if p.startswith(prefix)]
+            if pending:
+                writer.settle(pending)
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.settle_failed", exc_info=True)
 
     # --- reading -------------------------------------------------------------
 
     def log(
         self,
-        *pathspecs: str,
+        *relpaths: str,
         start: str | None = None,
         limit: int | None = None,
         skip: int = 0,
     ) -> list[Change]:
-        """Commits newest first, from ``start`` (default ``HEAD``), touching
-        ``pathspecs`` when given."""
-        if not self._ensure():
+        """Commits newest first, from ``start`` (default ``HEAD``), that
+        touched knowledge — ``relpaths`` in it, when given."""
+        if not self.available():
             return []
-        root = self._root()
-        args = ["log", LOG_FORMAT, "--raw", "--numstat", "--no-renames", "--no-abbrev"]
-        if limit is not None:
-            args.append(f"-n{limit}")
-        if skip:
-            args.append(f"--skip={skip}")
-        args.append(start or "HEAD")
-        if pathspecs:
-            args += ["--", *pathspecs]
-        done = run(root, *args, check=False, literal=True)
-        if done.returncode != 0:
-            return []
-        return parse_log(done.stdout)
+        specs = [paths.vault_path(r) for r in relpaths] or [paths.VAULT_PREFIX]
+        commits = self._writer().repo.log(*specs, start=start, limit=limit, skip=skip)
+        return [_change(c) for c in commits]
 
     def change(self, version: str) -> Change | None:
-        """One commit, or ``None`` when the history holds no such commit."""
-        if not self._ensure() or not _looks_like_a_version(version):
+        """One commit that touched knowledge, or ``None`` when there is none."""
+        if not self.available() or not looks_like_a_version(version):
             return None
-        found = self.log(start=version, limit=1)
-        return found[0] if found and found[0].version.startswith(version) else None
+        commit = self._writer().repo.commit_of(version)
+        if commit is None:
+            return None
+        found = _change(commit)
+        return found if found.documents else None
 
     def show(self, version: str, relpath: str) -> bytes | None:
-        """``relpath``'s bytes at ``version``, or ``None`` where it did not exist."""
-        if not self._ensure() or not _looks_like_a_version(version.rstrip("^")):
+        """``relpath``'s bytes at ``version`` (``<id>^`` for its parent), or
+        ``None`` where it did not exist."""
+        if not self.available() or not looks_like_a_version(version.rstrip("^")):
             return None
-        done = run(self._root(), "show", f"{version}:{relpath}", check=False)
-        return done.stdout if done.returncode == 0 else None
+        return self._writer().repo.read(version, paths.vault_path(relpath))
 
     def diff(self, version: str, relpath: str) -> str:
-        """The unified diff ``version`` made to ``relpath`` (empty if none)."""
-        if not self._ensure() or not _looks_like_a_version(version):
+        """The unified diff ``version`` made to ``relpath``, its headers
+        knowledge-root-relative (empty if none)."""
+        if not self.available() or not looks_like_a_version(version):
             return ""
-        done = run(
-            self._root(),
+        done = git.run(
+            self._writer().repo.root,
             "show",
             "--format=",
             "--patch",
             "--no-color",
             "--no-ext-diff",
             "--no-renames",
+            f"--relative={paths.VAULT_PREFIX}/",
             version,
             "--",
-            relpath,
+            paths.vault_path(relpath),
             check=False,
             literal=True,
         )
-        return done.stdout.decode("utf-8", "replace") if done.returncode == 0 else ""
+        return git.text(done) if done.returncode == 0 else ""
 
     def later(self, version: str, relpath: str) -> str | None:
         """The newest commit after ``version`` that touched ``relpath``."""
-        if not self._ensure():
+        if not self.available() or not looks_like_a_version(version):
             return None
-        done = run(
-            self._root(),
-            "log",
-            "--format=%H",
-            "-n1",
-            f"{version}..HEAD",
-            "--",
-            relpath,
-            check=False,
-            literal=True,
-        )
-        found = done.stdout.decode().strip()
-        return found or None
+        return self._writer().repo.later(version, paths.vault_path(relpath))
 
 
-def _looks_like_a_version(version: str) -> bool:
-    """A commit id, and nothing git would read as an option or a range."""
-    return 4 <= len(version) <= 64 and all(c in "0123456789abcdef" for c in version)
+def _change(commit: Commit) -> Change:
+    documents = tuple(
+        DocumentChange(path=rel, status=pc.status, added=pc.added, removed=pc.removed)
+        for pc in commit.paths
+        if (rel := paths.from_vault_path(pc.path)) is not None
+    )
+    return Change(version=commit.version, time=commit.time, meta=commit.meta, documents=documents)
 
 
-#: The one history the daemon shares: the lock and the owned paths only mean
-#: something if every writer in the process consults the same instance.
+#: The one history the daemon shares. It holds no state of its own — the lock
+#: and the owned paths are the vault writer's, looked up by the vault root that
+#: follows ``HOME`` — so every writer in the process consults the same one.
 KNOWLEDGE_HISTORY = KnowledgeHistory()
 
 __all__ = ["KNOWLEDGE_HISTORY", "KnowledgeHistory", "Transaction"]

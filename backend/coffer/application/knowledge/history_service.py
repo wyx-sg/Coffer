@@ -2,19 +2,18 @@
 the recent-changes feed (spec knowledge "Keep every document's history and
 undo a pass as a whole", "Follow knowledge changes across collections").
 
-The history is git (``infrastructure.knowledge.history``); this service is what
-the surfaces ask. Every read first commits what changed outside Coffer — sync's
-paths, then edits on disk — so what it reports is the tree as it is, not as
-Coffer last wrote it.
+The history is the vault repository's, under ``knowledge/``
+(``infrastructure.knowledge.history``); this service is what the surfaces ask.
+Every read first commits what changed outside Coffer as ``disk`` writes, so
+what it reports is the tree as it is, not as Coffer last wrote it.
 
 Two writes live here, and both are a person's: **restore** puts one version of
-one document back as a new commit, with a fresh modification time, so the sweep
-carries it outward like any edit; **undo** puts every document one curation
-pass wrote or retired back exactly as it was before the pass, as one commit —
-refused, naming the document, when a later commit changed any of them. Undo
-aligns each restored file's modification time to the curation stamp it carries,
-so the sweep does not read the undo as an edit and redo the pass; the item the
-pass consumed is not put back in the inbox.
+one document back as a new commit, which the sweep carries outward like any
+edit; **undo** puts every document one curation pass wrote or retired back
+exactly as it was before the pass, as one commit — refused, naming the
+document, when a later commit changed any of them. Undo records each restored
+document as settled by curation, so the sweep does not read the undo as an
+edit and redo the pass; the item the pass consumed is not put back in the inbox.
 """
 
 from __future__ import annotations
@@ -43,7 +42,6 @@ from coffer.domain.knowledge.history import (
     WRITER_USER,
     Change,
     ChangeDetail,
-    ChangeMeta,
     ChangesPage,
     DocumentDiff,
     DocumentVersion,
@@ -51,6 +49,7 @@ from coffer.domain.knowledge.history import (
 )
 from coffer.domain.pagination import decode_cursor, encode_cursor
 from coffer.domain.resource import Resource
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import fs, inbox, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -134,7 +133,7 @@ class KnowledgeHistoryService:
         raw = await asyncio.to_thread(history.show, change.version, relpath)
         if raw is None:
             raise KnowledgeVersionNotFound(version, relpath)
-        meta = ChangeMeta(
+        meta = CommitMeta(
             WRITER_USER,
             OP_RESTORE,
             f"Restore {relpath}",
@@ -279,7 +278,7 @@ class KnowledgeHistoryService:
             later = await asyncio.to_thread(history.later, change.version, relpath)
             if later is not None:
                 raise KnowledgeUndoConflict(change.version, relpath, later)
-        meta = ChangeMeta(
+        meta = CommitMeta(
             WRITER_USER,
             OP_UNDO,
             f"Undo curation: {change.meta.summary}",
@@ -296,7 +295,7 @@ class KnowledgeHistoryService:
                     with contextlib.suppress(KnowledgeFileNotFound):
                         await asyncio.to_thread(fs.delete_file, relpath)
                 else:
-                    await asyncio.to_thread(fs.write_bytes, relpath, before, align_to_stamp=True)
+                    await asyncio.to_thread(fs.write_bytes, relpath, before, settled=True)
         if change.meta.collection:
             with contextlib.suppress(Exception):
                 row = await self._knowledge.require_collection(change.meta.collection)

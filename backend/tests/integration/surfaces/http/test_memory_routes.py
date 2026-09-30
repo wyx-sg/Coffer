@@ -24,9 +24,8 @@ the CLI makes through ``_resolve``. The tests keep naming partitions ``coffer``
 and ``global`` because that is what a reader recognises; what travels on the
 wire is the identity.
 
-``COFFER_MEMORY_ROOT``, ``COFFER_KNOWLEDGE_ROOT`` and ``HOME`` are all pinned
-into ``tmp_path``, so nothing here ever reaches a real ``~/.coffer`` or a real
-``~/.claude``.
+``HOME`` is pinned into ``tmp_path`` and every tree resolves from it, so
+nothing here ever reaches a real ``~/.coffer`` or a real ``~/.claude``.
 """
 
 from __future__ import annotations
@@ -43,6 +42,7 @@ from coffer.domain.memory.budget import estimate_tokens
 from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import paths as memory_paths
 from coffer.infrastructure.memory import store as memory_store
+from coffer.infrastructure.memory.paths import memory_root as _memory_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.memory.conftest import claude_code_config, init_repository
@@ -84,8 +84,6 @@ _CC_PERSONAL_MEMORY = _cc_memory_file(
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
     # Connecting an agent (which is what installs the delivery hook) writes the
@@ -411,7 +409,7 @@ def test_update_memory_aggregates_and_distils_in_one_call(client, tmp_path) -> N
     both files it under ``.raw/`` and distils it into a note, and says so."""
     partition = _distilled(client, tmp_path)
     before = {n.slug for n in memory_store.list_notes(partition)}
-    raw_dir = tmp_path / "memory" / partition / ".raw"
+    raw_dir = _memory_root() / partition / ".raw"
     raw_before = {p.name for p in raw_dir.iterdir()}
 
     repository = tmp_path / "coffer"
@@ -741,13 +739,13 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     uid = _partition_uid(client, partition)
     tree = client.get(f"/api/v1/memory/partitions/{uid}/files").json()["root"]
     assert tree["path"] == ""
-    assert tree["abs_path"] == str(tmp_path / "memory" / partition)
+    assert tree["abs_path"] == str(_memory_root() / partition)
     names = {child["name"]: child for child in tree["children"]}
     # Coffer's own writing, and nothing left of the shape this replaced: no
     # README.md, no summary.md, no facts/. `.raw/` — aggregation's verbatim
     # input — is on disk but not in the tree.
     assert set(names) == {"MEMORY.md", "notes", "RETIRED.md"}
-    assert (tmp_path / "memory" / partition / ".raw").is_dir()
+    assert (_memory_root() / partition / ".raw").is_dir()
     assert names["notes"]["type"] == "dir"
     assert "derived" not in names["notes"]
     assert "notes/python-lockfile.md" in {c["path"] for c in names["notes"]["children"]}
@@ -763,7 +761,7 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert content["folder_abs_path"] == str(memory_paths.notes_dir(partition))
 
     # Reading under `.raw/` is refused as absent, the way the tree leaves it out.
-    raw_entry = next((tmp_path / "memory" / partition / ".raw").iterdir())
+    raw_entry = next((_memory_root() / partition / ".raw").iterdir())
     raw = client.get(
         f"/api/v1/memory/partitions/{uid}/files/content",
         params={"path": f".raw/{raw_entry.name}"},

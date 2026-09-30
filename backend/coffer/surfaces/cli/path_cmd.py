@@ -11,15 +11,17 @@ Resource paths come from reads the daemon already serves: the skill's
 ``master_path``, a partition's file tree, an agent's config-file listing,
 native-memory scan and transcript listing. A collection's directory is its name
 under the knowledge root, found through the collection listing, which is also
-what refuses while ``knowledge`` is switched off. The roots themselves, and the
-log directory, resolve through the same functions and the same ``COFFER_*``
-overrides the daemon uses.
+what refuses while ``knowledge`` is switched off. The roots themselves resolve
+through the same functions the daemon uses, all from ``HOME``: the five storage
+classes of ADR storage-is-five-classes-by-nature (the vault repository with
+knowledge and skill masters inside it, ``local/``, ``content/``, ``derived/``
+with the memory tree, and ``runs.db``), plus the log directory
+(``COFFER_LOG_DIR`` moves it).
 """
 
 from __future__ import annotations
 
 import json as _json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,14 @@ from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.skill.master_store import default_master_root
+from coffer.infrastructure.vault.home import (
+    coffer_home,
+    content_root,
+    derived_root,
+    local_root,
+    runs_db_path,
+    vault_root,
+)
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._resolve import resolve_uid
 
@@ -58,7 +68,18 @@ def _abs(path: str | Path) -> str:
 
 
 def _vault() -> str:
-    return _abs(Path(os.environ.get("HOME", "~")).expanduser() / ".coffer")
+    return _abs(vault_root())
+
+
+def _classes() -> dict[str, str]:
+    """``~/.coffer`` and the storage classes beside the vault in it."""
+    return {
+        "home": _abs(coffer_home()),
+        "local": _abs(local_root()),
+        "content": _abs(content_root()),
+        "derived": _abs(derived_root()),
+        "runs_db": _abs(runs_db_path()),
+    }
 
 
 def _logs() -> dict[str, str]:
@@ -94,7 +115,8 @@ def _not_found(what: str, name: str) -> typer.Exit:
 
 @app.callback()
 def roots(ctx: typer.Context, output_json: bool = _JSON) -> None:
-    """With no target, print every root: the vault, knowledge, memory, skills and logs."""
+    """With no target, print every root: the vault, knowledge, memory, skills, the other
+    storage classes and logs."""
     if ctx.invoked_subcommand is not None:
         return
     c, _info = _cli_client.client_or_exit()
@@ -108,6 +130,7 @@ def roots(ctx: typer.Context, output_json: bool = _JSON) -> None:
     if features.get("memory", True):
         paths["memory"] = _abs(memory_root())
     paths["skills"] = _abs(default_master_root())
+    paths.update(_classes())
     paths.update(_logs())
     _emit(paths, output_json, lines=[f"{k}: {v}" for k, v in paths.items()])
 
@@ -231,5 +254,5 @@ def logs(output_json: bool = _JSON) -> None:
 
 @app.command("vault")
 def vault(output_json: bool = _JSON) -> None:
-    """The directory that holds this machine's vault."""
+    """The vault repository: configuration, knowledge and skill masters, in git."""
     _emit({"vault": _vault()}, output_json)

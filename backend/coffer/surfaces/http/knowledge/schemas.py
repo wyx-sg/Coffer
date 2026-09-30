@@ -93,9 +93,9 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
-    #: When curation last had this document in front of it; empty when it never
-    #: has ("Settle an item only after its pass completes"). A document edited
-    #: since is what the sweep comes back for.
+    #: When curation last settled this document as it now reads; empty when it
+    #: never has, or the document changed since ("Settle an item only after its
+    #: pass completes") — which is what the sweep comes back for.
     curated_at: str = ""
     #: sha256 hex of the file's bytes as read; hand it back as
     #: ``expected_fingerprint`` to save an edit ("Save a document edited in the
@@ -152,7 +152,7 @@ class SubmissionOut(BaseModel):
 class CurationRequest(BaseModel):
     #: One document to curate, knowledge-root-relative: exactly one pass runs,
     #: over it. Omitted, Curate now runs a pass per pending item — inbox items
-    #: oldest first, then documents edited since curation last stamped them —
+    #: oldest first, then documents edited since curation last settled them —
     #: until none is left ("Run curation on a sweep and on demand").
     document: str | None = None
 
@@ -188,8 +188,8 @@ class CurationOut(BaseModel):
     documents_after: int = 0
     #: The item-size ceiling, present only with ``status`` ``too_large``. Such
     #: an item is never shown to the model and never left pending: material is
-    #: promoted as it stands (``promoted``), an edited document is stamped
-    #: (``stamped``).
+    #: promoted as it stands (``promoted``), an edited document is settled
+    #: as seen (``stamped``).
     limit: int = 0
     #: Documents material was promoted into as it stood: the whole inbox with
     #: ``status`` ``no_model`` ("Promote material directly when no model is
@@ -198,12 +198,12 @@ class CurationOut(BaseModel):
     promoted: list[str] = Field(default_factory=list)
     #: With ``status`` ``truncated``: this was the item's third cut-off in a
     #: row, so the pass settled it instead of leaving it owed — material
-    #: promoted as it stood, an edited document stamped ("Bound a pass to
+    #: promoted as it stood, an edited document settled ("Bound a pass to
     #: eight writes").
     gave_up: bool = False
-    #: The edited document stamped as seen without a pass, present only with
+    #: The edited document settled as seen without a pass, present only with
     #: ``status`` ``too_large`` when the oversized item was a document — there
-    #: is nothing to promote, and the stamp stops the sweep re-offering it.
+    #: is nothing to promote, and settling it stops the sweep re-offering it.
     stamped: str = ""
 
 

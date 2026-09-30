@@ -200,7 +200,7 @@ def wire_memory_kind(
     )
     set_memory_service(service)
 
-    # Nothing in this layer syncs: the whole tree under ``~/.coffer/memory/``
+    # Nothing in this layer syncs: the whole tree under ``~/.coffer/derived/memory/``
     # is derived from the agents installed on THIS machine and is rebuilt per
     # machine (spec vault-sync "Keep reach machine-local").
 

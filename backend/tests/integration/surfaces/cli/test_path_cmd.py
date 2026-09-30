@@ -87,7 +87,7 @@ def test_the_command_line_names_the_files_behind_a_resource(
     assert collection.exit_code == 0, collection.output
     [directory] = _lines(collection.output)
     assert os.path.isabs(directory) and pathlib.Path(directory).is_dir()
-    assert directory == str((tmp_path / "knowledge" / "team").resolve())
+    assert directory == str((tmp_path / ".coffer" / "vault" / "knowledge" / "team").resolve())
 
     skill = _run("skill", "lint-rules", "--json")
     assert skill.exit_code == 0, skill.output
@@ -105,14 +105,14 @@ def test_the_command_line_names_the_files_behind_a_resource(
 )
 def test_locate_a_collections_documents(daemon: TestClient, tmp_path: pathlib.Path) -> None:
     assert daemon.post("/knowledge/collections", json={"name": "shopee"}).status_code == 201
-    doc = tmp_path / "knowledge" / "shopee" / "infra" / "cache.md"
+    doc = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "infra" / "cache.md"
     doc.parent.mkdir(parents=True)
     doc.write_text("---\ntitle: Cache\ndescription: cache notes\n---\nbody\n", encoding="utf-8")
 
     [directory] = _lines(_run("knowledge", "shopee").output)
     assert (pathlib.Path(directory) / "infra" / "cache.md").read_text() == doc.read_text()
     [root] = _lines(_run("knowledge").output)
-    assert root == str((tmp_path / "knowledge").resolve())
+    assert root == str((tmp_path / ".coffer" / "vault" / "knowledge").resolve())
     assert _run("knowledge", "nope").exit_code == 4
     assert not {"collections", "create", "ls", "read", "save", "delete"} & _group_commands(
         "knowledge"
@@ -202,8 +202,32 @@ def test_the_command_line_names_the_daemon_log_file(
 
 def test_path_with_no_target_prints_every_root(daemon: TestClient, tmp_path: pathlib.Path) -> None:
     body = extract_json(_run("--json").output)
-    assert set(body) == {"vault", "knowledge", "memory", "skills", "logs", "daemon_log"}
-    assert body["vault"] == str((tmp_path / ".coffer").resolve())
+    assert set(body) == {
+        "vault",
+        "knowledge",
+        "memory",
+        "skills",
+        "home",
+        "local",
+        "content",
+        "derived",
+        "runs_db",
+        "logs",
+        "daemon_log",
+    }
+    coffer = (tmp_path / ".coffer").resolve()
+    assert body["home"] == str(coffer)
+    # The storage classes (ADR storage-is-five-classes-by-nature).
+    assert body["vault"] == str(coffer / "vault")
+    assert body["knowledge"] == str(coffer / "vault" / "knowledge")
+    assert body["skills"] == str(coffer / "vault" / "skills")
+    assert body["memory"] == str(coffer / "derived" / "memory")
+    assert (body["local"], body["content"], body["derived"], body["runs_db"]) == (
+        str(coffer / "local"),
+        str(coffer / "content"),
+        str(coffer / "derived"),
+        str(coffer / "runs.db"),
+    )
     assert all(os.path.isabs(v) for v in body.values())
     assert json.loads(json.dumps(body)) == body
     assert _lines(_run("vault").output) == [body["vault"]]

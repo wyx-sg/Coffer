@@ -1,8 +1,8 @@
 """Acceptance scenarios of the knowledge spec that the filesystem layer, the
 curation tools and the worker can observe on their own.
 
-Every test pins ``COFFER_KNOWLEDGE_ROOT`` into ``tmp_path``: an unset root
-falls back to the developer's real ``~/.coffer/knowledge``.
+The knowledge root resolves from the fresh ``HOME`` every test gets
+(``backend/tests/conftest.py``), never the developer's real vault.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 class _Resources:
@@ -38,7 +39,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 uid=f"uid-{i}",
                 kind=KIND_KNOWLEDGE,
                 name=name,
@@ -72,8 +72,7 @@ class _Audit:
 
 @pytest.fixture
 def root(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    knowledge = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(knowledge))
+    knowledge = _knowledge_root()
     fs.create_collection_dir("shopee")
     return knowledge
 

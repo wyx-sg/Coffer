@@ -33,8 +33,8 @@ registers nothing, audits nothing and re-delivers nothing, and the row's
 ``version_hash`` means "the content moved" rather than "time passed".
 
 That is still why the knowledge and memory roots are rendered in their
-``~``-relative form whenever they sit in the default place — though the reason there has always been
-partly that a path an agent reads should be one a person can retype.
+``~``-relative form whenever they sit under the home — though the reason there has always
+been partly that a path an agent reads should be one a person can retype.
 """
 
 from __future__ import annotations
@@ -48,8 +48,9 @@ import yaml
 
 from coffer.domain.knowledge.entry import CollectionEntry, FileEntry
 
-#: The skill's name, its master folder name under ``~/.coffer/skills/``, and the
-#: directory name every agent receives it as.
+#: The skill's name, its master folder name (under ``~/.coffer/derived/skills/``:
+#: the folder is rendered from the build, so it is derived output, not vault
+#: content), and the directory name every agent receives it as.
 GUIDE_SKILL_NAME = "coffer-guide"
 
 #: Skill frontmatter descriptions are capped by the importers that read them;
@@ -101,30 +102,32 @@ _TAIL = (
 Catalogue = Sequence[tuple[CollectionEntry, Sequence[FileEntry]]]
 
 
-def _display(path: pathlib.Path, default: str, *, home: pathlib.Path | None) -> str:
-    base = (home or pathlib.Path.home()) / default
-    return f"~/{default}" if path == base else str(path)
+def _display(path: pathlib.Path, *, home: pathlib.Path | None) -> str:
+    base = home or pathlib.Path.home()
+    try:
+        return f"~/{path.relative_to(base).as_posix()}"
+    except ValueError:
+        return str(path)
 
 
 def display_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str:
     """The knowledge root as the skill should name it.
 
-    ``~/.coffer/knowledge`` when the root sits in its default place, and the
-    absolute path otherwise. The tilde form keeps the rendered bytes free of
-    this machine's home directory, and a path an agent reads should be one a
-    person can retype; the artifact itself does not converge (see the module
-    docstring), so this is not about two copies agreeing. When the root has
-    been moved (``COFFER_KNOWLEDGE_ROOT``), ``~`` would be a lie, and an
-    accurate path matters more than a stable one.
+    ``~/.coffer/vault/knowledge`` — the tilde form of any root under the home,
+    and the absolute path otherwise. The tilde form keeps the rendered bytes
+    free of this machine's home directory, and a path an agent reads should be
+    one a person can retype; the artifact itself does not converge (see the
+    module docstring), so this is not about two copies agreeing. A root
+    outside the home (a home that is itself a symlink resolved elsewhere) is
+    named absolutely, because an accurate path matters more than a stable one.
     """
-    return _display(root, ".coffer/knowledge", home=home)
+    return _display(root, home=home)
 
 
 def display_memory_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str:
     """The memory root as the skill names it, on the rule :func:`display_root`
-    states: ``~/.coffer/memory`` in its default place, absolute when moved
-    (``COFFER_MEMORY_ROOT``)."""
-    return _display(root, ".coffer/memory", home=home)
+    states (``~/.coffer/derived/memory``)."""
+    return _display(root, home=home)
 
 
 def _subject(entry: CollectionEntry) -> str:

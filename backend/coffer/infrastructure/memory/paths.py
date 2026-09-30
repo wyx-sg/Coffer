@@ -1,9 +1,9 @@
 """On-disk layout for the memory layer — the sole owner of path construction.
 
-Mirrors ``infrastructure/knowledge/paths.py`` on purpose: one root, one guard,
-one override for tests. Everything under this root is derived and rebuildable
-(spec memory "Keep the memory tree derived and local"), and a partition holds
-four things with one writer each:
+Mirrors ``infrastructure/knowledge/paths.py`` on purpose: one root, one guard.
+Everything under this root is derived and rebuildable (spec memory "Keep the
+memory tree derived and local"), and a partition holds four things with one
+writer each:
 
 ``MEMORY.md``
     The index (see "Write each index line to stand on its own"). What a session
@@ -25,10 +25,10 @@ four things with one writer each:
     distillation be re-run without going back to the agents. Hidden, and
     excluded from the index and from delivery.
 
-``$COFFER_MEMORY_ROOT`` overrides the root, exactly like knowledge's own
-override, so a test can never wander into a developer's real
-``~/.coffer/memory`` and rewrite it (a past bug did exactly that to the
-knowledge tree with its own override left unset).
+The root is ``~/.coffer/derived/memory`` (ADR storage-is-five-classes-by-nature:
+the tree is rebuilt from the agents, so deleting it is safe). There is no
+override: it is resolved from ``HOME`` at every call, which is how a test's
+throwaway home keeps it off a developer's real tree.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ import pathlib
 import re
 
 from coffer.domain.error_base import CofferError
+from coffer.infrastructure.vault.home import derived_root, vault_root
 
 #: The partition's index — the file delivery renders from and a human opens.
 INDEX_NAME = "MEMORY.md"
@@ -67,25 +68,16 @@ class UnsafeMemoryPath(CofferError):  # noqa: N818
 
 
 def memory_root() -> pathlib.Path:
-    """The one directory the memory layer lives in."""
-    override = os.environ.get("COFFER_MEMORY_ROOT")
-    if override:
-        return pathlib.Path(override)
-    home = pathlib.Path(os.environ.get("HOME", "~")).expanduser()
-    return home / ".coffer" / "memory"
+    """The one directory the memory layer lives in: ``derived/memory``."""
+    return derived_root() / "memory"
 
 
 def triggers_root() -> pathlib.Path:
     """Where authored memory triggers live: ``vault/memory-triggers/``, one file
     per trigger (ADR storage-is-five-classes-by-nature). In the vault, not under
     the memory root, because a person wrote them: deleting and rebuilding the
-    derived memory tree must not take them with it. ``$COFFER_MEMORY_TRIGGERS_ROOT``
-    overrides it, as ``$COFFER_MEMORY_ROOT`` does the tree."""
-    override = os.environ.get("COFFER_MEMORY_TRIGGERS_ROOT")
-    if override:
-        return pathlib.Path(override)
-    home = pathlib.Path(os.environ.get("HOME", "~")).expanduser()
-    return home / ".coffer" / "vault" / "memory-triggers"
+    derived memory tree must not take them with it."""
+    return vault_root() / "memory-triggers"
 
 
 def notes_signature(name: str) -> tuple[tuple[str, int, int], ...]:

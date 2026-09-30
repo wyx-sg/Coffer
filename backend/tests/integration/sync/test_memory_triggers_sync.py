@@ -34,9 +34,6 @@ created: '2026-09-30T00:00:00+00:00'
 
 @pytest.fixture
 def roots(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "roots" / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "roots" / "skills"))
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(tmp_path / "roots" / "triggers"))
     return tmp_path
 
 
@@ -47,7 +44,6 @@ def test_memory_triggers_are_a_mirrored_tree_of_their_own_area(roots: pathlib.Pa
 
 
 def test_the_default_root_is_in_the_vault(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("COFFER_MEMORY_TRIGGERS_ROOT", raising=False)
     root = memory_triggers_root()
     assert root.parts[-3:] == (".coffer", "vault", "memory-triggers")
 

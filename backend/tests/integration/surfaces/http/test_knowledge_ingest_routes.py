@@ -30,7 +30,7 @@ def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: 
     The tree route lists visible documents only, so asserting "nothing landed"
     through it would pass with a stray original, or an item in the inbox.
     """
-    directory = tmp_path / "knowledge" / collection
+    directory = tmp_path / ".coffer" / "vault" / "knowledge" / collection
     if not directory.is_dir():
         return []
     return sorted(
@@ -114,7 +114,7 @@ def test_an_upload_takes_no_folder(client, tmp_path) -> None:  # type: ignore[no
     )
     assert resp.status_code == 201, resp.text
     assert resp.json()["path"] == "shopee/notes.md"
-    assert not (tmp_path / "knowledge" / "shopee" / "runbooks").exists()
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "runbooks").exists()
 
 
 @pytest.mark.acceptance(
@@ -183,7 +183,7 @@ def test_upload_into_an_unknown_collection_is_not_found(client, tmp_path) -> Non
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_NOT_FOUND"
     # A read or a write never provisions a collection ("Create collections only deliberately").
-    assert not (tmp_path / "knowledge" / "typo").exists()
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "typo").exists()
 
 
 def test_oversize_upload_is_refused_and_names_the_limit(client, monkeypatch) -> None:  # type: ignore[no-untyped-def]

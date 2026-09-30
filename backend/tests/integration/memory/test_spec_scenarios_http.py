@@ -2,14 +2,15 @@
 its audit log, and the built-in tools its gateway advertises.
 
 Boots the real app via ``create_app`` against a fresh SQLite file under
-``tmp_path`` (the app upgrades it to head on startup), with ``HOME``,
-``COFFER_MEMORY_ROOT`` and ``COFFER_KNOWLEDGE_ROOT`` all pinned into
-``tmp_path`` — nothing here reaches a real ``~/.coffer`` or ``~/.claude``. No
-internal connection is configured, so distil takes its mechanical path.
+``tmp_path`` (the app upgrades it to head on startup), with ``HOME`` pinned
+into ``tmp_path`` and every tree resolved from it — nothing here reaches a
+real ``~/.coffer`` or ``~/.claude``. No internal connection is configured, so
+distil takes its mechanical path.
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
 import shutil
 import sqlite3
@@ -47,8 +48,6 @@ _FILES = {
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59320")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59329")
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
@@ -168,13 +167,14 @@ def test_after_both_passes_no_memory_table_exists_and_each_partition_is_one_row(
         tables = [
             name for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         ]
-        rows = db.execute("SELECT uid, name FROM resources WHERE kind = 'memory'").fetchall()
 
     assert len(head) == 1  # upgraded, to one head
-    assert "resources" in tables
     assert [t for t in tables if "memory" in t.lower()] == []
-    assert sorted(name for _, name in rows) == ["coffer", "global"]
-    assert {uid for uid, _ in rows} == {p["uid"] for p in partitions.values()}
+    # Each partition is one resource file, derived (rebuilt, never in git).
+    files = sorted((home / ".coffer" / "derived" / "resources" / "memory").glob("*.json"))
+    docs = [json.loads(f.read_text()) for f in files]
+    assert sorted(d["name"] for d in docs) == ["coffer", "global"]
+    assert {d["uid"] for d in docs} == {p["uid"] for p in partitions.values()}
 
 
 # --- Expose no memory tool and name the memory root at session start --------
@@ -216,7 +216,7 @@ def test_no_memory_tool_is_listed_and_the_context_names_the_memory_root(
     # resolve, absolute, under the pinned ``COFFER_MEMORY_ROOT``.
     root = str(memory_paths.memory_root())
     assert root.startswith("/")
-    assert root == str(home / "memory")
+    assert root == str(home / ".coffer" / "derived" / "memory")
     assert f"under {root}/<partition>/notes/" in text
     assert f"search {root} with your own tools" in text
     assert "Markdown files" in text

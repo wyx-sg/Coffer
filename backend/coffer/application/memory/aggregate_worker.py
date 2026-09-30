@@ -9,7 +9,7 @@ someone clicked.
 
 Shaped like the distil sweep's worker, and on for the same reason: a pass only
 *reads* the agents' own files and only *writes* the derived tree under
-``~/.coffer/memory/`` ("Keep the memory tree derived and local" — deleting that tree and
+``~/.coffer/derived/memory/`` ("Keep the memory tree derived and local" — deleting that tree and
 re-running reproduces an equivalent one), so there is no unattended-write risk to gate
 behind an operator switch. It is also cheap to repeat: "Skip unchanged sources" skips
 any source file whose content hash is unchanged, so a pass over an idle machine parses

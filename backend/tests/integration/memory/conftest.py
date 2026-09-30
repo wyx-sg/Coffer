@@ -8,8 +8,8 @@ the test's idea of git rather than git's.
 
 ``ResourceService``/``AuditService`` stay fake — nothing here needs a real
 database, and the agent config directories all live under ``tmp_path``.
-``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture in ``backend/tests/conftest.py``.
+The memory root resolves from the fresh ``HOME`` every test gets
+(``_real_home_guard`` in ``backend/tests/conftest.py``).
 """
 
 from __future__ import annotations

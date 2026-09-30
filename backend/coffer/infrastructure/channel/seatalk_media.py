@@ -16,7 +16,6 @@ from __future__ import annotations
 import base64
 import logging
 import mimetypes
-import os
 import pathlib
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -26,6 +25,7 @@ from typing import Any
 import httpx
 
 from coffer.domain.channel.envelopes import InboundAttachment
+from coffer.infrastructure.channel.media_root import default_media_dir
 
 __all__ = [
     "MediaRef",
@@ -95,13 +95,6 @@ _SUFFIX_BY_MIME = {
     "image/gif": ".gif",
     "image/webp": ".webp",
 }
-
-
-def default_media_dir() -> pathlib.Path:
-    """``~/.coffer/channel-media`` — where inbound images are saved. ``HOME`` is
-    honored (not ``Path.home()``) so tests can redirect it to a tmp dir."""
-    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "channel-media"
 
 
 @dataclass(frozen=True)

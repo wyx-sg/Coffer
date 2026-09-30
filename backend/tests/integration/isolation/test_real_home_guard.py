@@ -49,12 +49,9 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
     assert os.path.abspath(home) not in _guard().homes
     assert _guard().protected_root(os.path.join(home, ".coffer", "coffer.db")) is None
     # Only the suite's own pins survive: a COFFER_* the developer's shell
-    # exported (a DB URL, a skills root) was stripped at import.
+    # exported (a DB URL, a log directory) was stripped at import.
     pins = {
         "COFFER_LOG_DIR",
-        "COFFER_KNOWLEDGE_ROOT",
-        "COFFER_MEMORY_ROOT",
-        "COFFER_AGENT_STATE_ROOT",
         "COFFER_ALLOWED_HOSTS",
         # The root conftest keeps the app from spawning the model proxy and a
         # background ``codex app-server`` in every test that boots it.
@@ -84,17 +81,15 @@ def test_writing_under_the_real_home_is_refused_before_it_happens(under: str) ->
 
 
 def test_the_knowledge_root_incident_is_caught() -> None:
-    """The original bug: with its override unset and ``HOME`` gone,
-    ``knowledge_root()`` resolves into the real vault, and the migration then
-    creates directories there."""
+    """The original bug: with ``HOME`` gone, ``knowledge_root()`` resolves
+    into the real vault, and the migration then creates directories there."""
     mp = pytest.MonkeyPatch()
     try:
-        mp.delenv("COFFER_KNOWLEDGE_ROOT", raising=False)
         mp.delenv("HOME", raising=False)
         root = knowledge_paths.knowledge_root()
     finally:
         mp.undo()
-    assert root == _real_home() / ".coffer" / "knowledge"
+    assert root == _real_home() / ".coffer" / "vault" / "knowledge"
     target = root / f".s0-guard-probe-{uuid.uuid4().hex}"
     with _guard().expect_violation() as caught, pytest.raises(RealHomeAccessError):
         target.mkdir(parents=True)

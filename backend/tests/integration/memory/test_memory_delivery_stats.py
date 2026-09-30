@@ -66,7 +66,7 @@ def _age_fire(app: HookApp, fire_id: int, days: int) -> None:
 def _claude_transcript(app: HookApp, name: str) -> None:
     """A Claude Code session whose tool calls read two notes (one twice) and
     whose message text names a third — which must not count."""
-    notes = app.home / "memory" / name / "notes"
+    notes = app.home / ".coffer" / "derived" / "memory" / name / "notes"
     now = datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
     def tool_use(path: pathlib.Path) -> dict[str, Any]:
@@ -193,7 +193,9 @@ def test_a_codex_rollout_counts_the_notes_its_shell_calls_named(app: HookApp) ->
     register(app.client, "claude_code")  # whose memory fills the partition
     register(app.client, "codex")
     _repo, name = distilled(app)
-    note = app.home / "memory" / name / "notes" / "node-20-for-make-verify.md"
+    note = (
+        app.home / ".coffer" / "derived" / "memory" / name / "notes" / "node-20-for-make-verify.md"
+    )
     now = datetime.now(tz=UTC).isoformat()
     rollout = app.home / ".codex" / "sessions" / "2026" / "09" / "30" / "rollout-1.jsonl"
     rollout.parent.mkdir(parents=True)

@@ -11,8 +11,9 @@ So it is an **optional runtime dependency the operator supplies**. This module
 is the whole of that contract:
 
 * ``sdk_dir()`` — where we look: ``$COFFER_SEATALK_SDK_DIR`` when set, else
-  ``~/.coffer/vendor``. (Same per-subsystem env-override convention as
-  ``$COFFER_KNOWLEDGE_ROOT``.)
+  ``~/.coffer/vendor`` (machine state beside the class directories, ADR
+  storage-is-five-classes-by-nature). (Same per-subsystem env-override
+  convention as ``$COFFER_DB_URL``.)
 * ``load_sdk()`` — prepend that directory to ``sys.path`` *only when it exists*,
   then import the package. The import is attempted lazily, never at daemon
   import time, so a daemon with no SDK starts exactly as it always did.

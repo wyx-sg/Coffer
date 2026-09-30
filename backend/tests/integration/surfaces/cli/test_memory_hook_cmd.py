@@ -69,7 +69,6 @@ def _events(cwd: str) -> list[dict[str, Any]]:
 
 @pytest.fixture
 def armed_trigger(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Trigger:
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(tmp_path / "triggers"))
     t = Trigger(
         id="node-20",
         note="coffer/node-20-for-make-verify",
@@ -191,7 +190,6 @@ def test_a_fire_that_can_deliver_nothing_never_contacts_the_daemon(
 def test_an_unarmed_trigger_does_not_send_its_command(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(tmp_path / "triggers"))
     trigger_store.write_trigger(
         Trigger(id="p", note="coffer/x", kind=KIND_BLOCK, command="^make", proposed_by="distil")
     )
@@ -259,7 +257,9 @@ def test_both_agents_installed_commands_answer_prompt_and_guard(app: HookApp) ->
         json={"note": f"{name}/node-20-for-make-verify", "command": r"^make\s+verify\b"},
     )
     assert r.status_code == 201, r.text
-    note_file = str(app.home / "memory" / name / "notes" / "node-20-for-make-verify.md")
+    note_file = str(
+        app.home / ".coffer" / "derived" / "memory" / name / "notes" / "node-20-for-make-verify.md"
+    )
 
     shapes: dict[str, tuple[pathlib.Path, dict[str, Any]]] = {
         "claude_code": (

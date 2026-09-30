@@ -71,7 +71,7 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         The opposite failure policy from ``on_delete`` above, and deliberately
         so. A delete that leaves a directory behind costs disk and is logged;
         a *rename* that leaves the directory behind costs the collection — the
-        row would point at ``~/.coffer/knowledge/<new>/``, the corpus would
+        row would point at ``~/.coffer/vault/knowledge/<new>/``, the corpus would
         still be under ``<old>/``, and the layer reads the directory. So this
         hook lets its failure through, and because ``on_rename`` is pre-write
         the rename is abandoned with the row and the folder both untouched.

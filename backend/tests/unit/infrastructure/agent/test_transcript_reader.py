@@ -2,8 +2,8 @@
 
 Every test builds its own transcript tree under ``tmp_path``; the reader is
 never pointed at a real ``~/.claude`` or ``~/.codex``, and the root conftest
-pins ``$COFFER_AGENT_STATE_ROOT`` per test so the sidecar it writes is this
-test's own.
+gives every test its own ``HOME`` so the sidecar it writes (under
+``derived/cache/agent``) is this test's own.
 """
 
 from __future__ import annotations

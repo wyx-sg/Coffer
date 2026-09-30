@@ -39,7 +39,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 # A uid a test can spell, and deliberately not the name: a
                 # lookup that worked because the two matched would prove
                 # nothing about addressing a collection by identity.
@@ -126,7 +125,6 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """A ``KnowledgeService`` over an isolated tree with one collection
     (``shopee``) and a model that could merge; ``elsewhere`` is a name no
     collection answers to."""
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     return KnowledgeService(
         resources=_Resources(["shopee"]), audit=_Audit(), merge_available=_can_merge
@@ -136,7 +134,6 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 @pytest.fixture
 def knowledge_without_model(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """The same tree, with nothing configured to merge material."""
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
 

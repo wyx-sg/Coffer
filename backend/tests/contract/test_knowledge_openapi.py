@@ -203,7 +203,6 @@ def test_collection_config_carries_nothing() -> None:
 def app_with_knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     from coffer.surfaces.http.app import create_app
 
     return create_app()

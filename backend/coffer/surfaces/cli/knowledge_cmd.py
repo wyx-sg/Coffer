@@ -47,7 +47,7 @@ KIND = "knowledge"
 app = typer.Typer(
     help=(
         "Manage Coffer's knowledge collections, the Markdown under "
-        "~/.coffer/knowledge/<collection>/ (`coffer path knowledge` prints it). "
+        "~/.coffer/vault/knowledge/<collection>/ (`coffer path knowledge` prints it). "
         "Each collection is one tree of documents you and Coffer write together: "
         "read, grep and edit them with your own tools, and add new knowledge with "
         "`write` or `upload`: it waits as an item until Coffer curates it into the "

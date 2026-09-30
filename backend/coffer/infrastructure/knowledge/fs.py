@@ -12,9 +12,10 @@ editor and a curation pass reach the same bytes with nothing in between.
 Two kinds of file live under a collection, and this module is where they meet:
 
 * **Documents** — the visible tree. A person edits them in their own editor;
-  a curation pass writes them through :func:`write_file`. Each carries
-  ``coffer_curated_at``, the moment curation last had it in front of it, and an
-  edit made since is what the sweep comes back for.
+  a curation pass writes them through :func:`write_file`. What curation last
+  settled each one as is recorded by content in ``local/curation.json``
+  (``curation_state``), and an edit made since is what the sweep comes back
+  for — the file itself carries no stamp.
 * **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. New
   knowledge waits there until a pass folds it into the documents, and is
   deleted when that pass completes (see "Submit every entrance's input as
@@ -23,7 +24,6 @@ Two kinds of file live under a collection, and this module is where they meet:
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import os
 import pathlib
@@ -37,27 +37,22 @@ from coffer.domain.knowledge.errors import (
     KnowledgeFileNotFound,
     UnsafeKnowledgePath,
 )
-from coffer.infrastructure.knowledge import paths
+from coffer.domain.vault.errors import VaultFileStale
+from coffer.infrastructure.knowledge import curation_state, paths
 from coffer.infrastructure.knowledge.catalogue import is_markdown
 from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
     replace_body,
     split_frontmatter,
 )
+from coffer.infrastructure.knowledge.history import Transaction
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
-
-#: Frontmatter key carrying when curation last had a document in front of it
-#: (see "Settle an item only after its pass completes"). Written into a file a
-#: person also edits, deliberately: it is feedback the person can see in their
-#: own editor, and it means the watermark needs no state file, no table and
-#: nothing to keep level with the disk.
-CURATED_AT_KEY = "coffer_curated_at"
 
 #: The frontmatter keys this layer writes, in render order (see "Carry title,
 #: description and actor in frontmatter"). Anything else a person put in the
 #: file is kept and rendered after them: that requirement says what Coffer
 #: writes, not what a person may not.
-_ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at", CURATED_AT_KEY)
+_ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at")
 
 
 def timestamp() -> str:
@@ -97,7 +92,7 @@ def read_file(relpath: str) -> KnowledgeFile:
         body=body,
         file_path=str(path),
         folder_path=str(path.parent),
-        curated_at=str(fm.get(CURATED_AT_KEY) or ""),
+        curated_at=curation_state.curated_at(paths.relative_of(path), raw),
         fingerprint=fingerprint(raw),
     )
 
@@ -131,9 +126,9 @@ def atomic_write(path: pathlib.Path, text: str) -> None:
 def render(frontmatter: dict[str, Any], body: str) -> str:
     """The known keys in their fixed order, then anything else, unharmed.
 
-    The tail matters. ``mark_curated`` rewrites a file a *person* also edits to
-    add one stamp, unattended — so dropping a key it does not recognise would
-    quietly delete their own `tags:` or `reviewed_by:` from a document.
+    The tail matters. A save or a pass rewrites a file a *person* also edits,
+    so dropping a key it does not recognise would quietly delete their own
+    `tags:` or `reviewed_by:` from a document.
     """
     ordered = {k: frontmatter[k] for k in _ORDERED_KEYS if frontmatter.get(k)}
     extra = {k: v for k, v in frontmatter.items() if k not in _ORDERED_KEYS and v}
@@ -157,10 +152,10 @@ def write_file(
     Replacing preserves ``created_at`` so the file keeps its own history even
     though nothing but the file records it.
 
-    ``curated`` is the curation pass's own write: it stamps
-    ``coffer_curated_at`` so the sweep does not hand the pass its own output
-    back. Any other write leaves the stamp off, which is exactly what makes the
-    sweep look at it.
+    ``curated`` is the curation pass's own write (or a promotion nothing will
+    curate): the bytes written are recorded as settled, so the sweep does not
+    hand the pass its own output back. Any other write records nothing, which
+    is exactly what makes the sweep look at it.
     """
     now = timestamp()
     created = now
@@ -183,23 +178,26 @@ def write_file(
         "created_at": created,
         "updated_at": now,
     }
+    text = render(frontmatter, body)
+    atomic_write(target, text)
     if curated:
-        frontmatter[CURATED_AT_KEY] = now
-    atomic_write(target, render(frontmatter, body))
-    if curated:
-        _align_mtime(target, now)
+        curation_state.record(paths.relative_of(target), text.encode("utf-8"), when=now)
     return read_file(paths.relative_of(target))
 
 
-def save_body(relpath: str, body: str, *, expected_fingerprint: str) -> KnowledgeFile:
+def save_body(
+    relpath: str, body: str, *, expected_fingerprint: str, tx: Transaction | None = None
+) -> KnowledgeFile:
     """Replace a document's body, keeping its frontmatter as it stands.
 
     A person's edit from the web UI (see "Save a document edited in the web
     UI"). ``expected_fingerprint`` is what the editor's read carried: a file
     whose bytes moved since — a person's own editor, a curation pass — is
-    refused with ``KnowledgeFileConflict`` and left untouched. Nothing here
-    stamps ``coffer_curated_at``: the write moves the file's mtime past any
-    stamp it carries, which is exactly what makes the sweep treat it as a
+    refused with ``KnowledgeFileConflict`` and left untouched. The write goes
+    through the operation's vault transaction (``tx``), which compares the
+    fingerprint again under the vault's write lock, so a change that lands
+    between this read and the write is refused the same way. Nothing records
+    it as settled, which is exactly what makes the sweep treat it as a
     person's edit (see "Let newer statements win and a person's edit stand").
 
     Only a Markdown document can be saved: ``require_document`` keeps the
@@ -215,32 +213,40 @@ def save_body(relpath: str, body: str, *, expected_fingerprint: str) -> Knowledg
         raise UnsafeKnowledgePath(relpath, "only a Markdown document can be edited")
     raw = path.read_bytes()
     if fingerprint(raw) != expected_fingerprint:
-        # The refusal carries the document as it is now, so the editor can
-        # Reload, Compare or Copy the person's text without a second save over it.
-        _, current = split_frontmatter(decode(raw))
-        raise KnowledgeFileConflict(
-            relpath, current_body=current, current_fingerprint=fingerprint(raw)
-        )
-    atomic_write(path, replace_body(decode(raw), body))
+        raise _conflict(relpath, raw)
+    text = replace_body(decode(raw), body)
+    if tx is None:
+        atomic_write(path, text)
+        return read_file(relpath)
+    try:
+        tx.write(relpath, text.encode("utf-8"), expected_fingerprint)
+    except VaultFileStale as exc:
+        raise _conflict(relpath, path.read_bytes() if path.is_file() else b"") from exc
     return read_file(relpath)
 
 
-def write_bytes(relpath: str, raw: bytes, *, align_to_stamp: bool = False) -> None:
+def _conflict(relpath: str, raw: bytes) -> KnowledgeFileConflict:
+    """The refusal carries the document as it is now, so the editor can Reload,
+    Compare or Copy the person's text without a second save over it."""
+    _, current = split_frontmatter(decode(raw))
+    return KnowledgeFileConflict(
+        relpath, current_body=current, current_fingerprint=fingerprint(raw)
+    )
+
+
+def write_bytes(relpath: str, raw: bytes, *, settled: bool = False) -> None:
     """Put a document's exact bytes back — a restored version, an undone pass.
 
-    ``align_to_stamp`` sets the file's mtime to the ``coffer_curated_at`` stamp
-    the bytes carry, so a document put back exactly as curation last left it is
-    not mistaken by the sweep for a person's edit (an undo); without it the
-    write is a fresh edit the sweep carries outward (a restore).
+    ``settled`` records the bytes as what curation last settled, so a document
+    put back exactly as it was before a pass is not mistaken by the sweep for
+    a person's edit and curated again (an undo); without it the write is a
+    fresh edit the sweep carries outward (a restore).
     """
     paths.require_document(relpath)
     path = paths.resolve(relpath)
     atomic_write(path, decode(raw))
-    if align_to_stamp:
-        fm, _ = split_frontmatter(decode(raw))
-        stamp = str(fm.get(CURATED_AT_KEY) or "")
-        if stamp:
-            _align_mtime(path, stamp)
+    if settled:
+        curation_state.record_file(relpath)
 
 
 def delete_file(relpath: str) -> None:
@@ -251,80 +257,18 @@ def delete_file(relpath: str) -> None:
     path.unlink()
 
 
-def _align_mtime(path: pathlib.Path, stamp: str) -> None:
-    """Make the file's mtime the stamp it now carries.
-
-    Writing a stamp is itself a modification, so without this the file's mtime
-    would land just after the stamp and the sweep would hand the same document
-    back forever. Setting it to the stamp makes the file say the true thing —
-    its last modification *was* curation — and any later edit by a person moves
-    mtime past it again, which is the whole comparison.
-    """
-    with contextlib.suppress(OSError):
-        seconds = _parse(stamp)
-        if seconds:
-            os.utime(path, (seconds, seconds))
-
-
 def mark_curated(relpath: str, *, when: str | None = None) -> None:
-    """Stamp a document as seen by curation, changing nothing else.
+    """Record a document as settled by curation, as it is now — the file is
+    not touched.
 
     Called only after a pass over that document completes. A pass that fails
-    leaves the stamp as it was, so the document comes back on a later sweep
-    rather than being lost to one that half-ran.
+    records nothing, so the document comes back on a later sweep rather than
+    being lost to one that half-ran.
     """
     paths.require_document(relpath)
-    path = paths.resolve(relpath)
-    if not path.is_file():
+    if not paths.resolve(relpath).is_file():
         raise KnowledgeFileNotFound(relpath)
-    fm, body = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
-    # Values are carried through as they were parsed, not stringified: a YAML
-    # list a person wrote must come back a YAML list, or the stamp has still
-    # damaged their file — just more quietly than deleting the key would.
-    merged: dict[str, Any] = {k: v for k, v in fm.items() if v not in (None, "")}
-    stamp = when or timestamp()
-    merged[CURATED_AT_KEY] = stamp
-    atomic_write(path, render(merged, body))
-    _align_mtime(path, stamp)
-
-
-def edited_documents(collection: str) -> tuple[str, ...]:
-    """Documents changed since curation last saw them, oldest first.
-
-    The comparison is the file's own modification time against its own
-    ``coffer_curated_at``: no state file, no table, and nothing that can
-    disagree with the disk. A document a person has just edited — or written
-    from scratch, with no stamp at all — is newer than its stamp and comes
-    back; one nothing has touched does not.
-    """
-    directory = paths.collection_dir(collection)
-    if not directory.is_dir():
-        return ()
-    pending: list[tuple[float, str]] = []
-    for root, dirnames, filenames in os.walk(directory):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
-        at_root = pathlib.Path(root) == directory
-        for name in sorted(filenames):
-            if not is_markdown(name) or (at_root and name == paths.README_NAME):
-                continue
-            # One read and one stat per file: this runs on every sweep, so it
-            # is deliberately not built on `walk_files` + `read_file`, which
-            # would open each document three times a minute for nothing.
-            path = pathlib.Path(root) / name
-            fm, _ = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
-            mtime = path.stat().st_mtime
-            stamp = str(fm.get(CURATED_AT_KEY) or "")
-            if stamp and _parse(stamp) >= mtime:
-                continue
-            pending.append((mtime, paths.relative_of(path)))
-    return tuple(relpath for _, relpath in sorted(pending))
-
-
-def _parse(stamp: str) -> float:
-    try:
-        return datetime.fromisoformat(stamp).timestamp()
-    except ValueError:
-        return 0.0
+    curation_state.record_file(relpath, when=when)
 
 
 def create_collection_dir(name: str) -> pathlib.Path:
@@ -350,7 +294,7 @@ def rename_collection_dir(old: str, new: str) -> None:
     **A target that already exists is refused, never merged or replaced.** The
     framework has already checked that no ``knowledge`` *row* holds the new
     name, but a directory can sit there with no row behind it — a folder
-    somebody made by hand under ``~/.coffer/knowledge/``, or one a failed
+    somebody made by hand under ``~/.coffer/vault/knowledge/``, or one a failed
     cleanup left behind — and the check has to be explicit, because
     ``rename(2)`` would not make it for us: it fails on a non-empty target but
     quietly succeeds over an *empty* directory. Neither outcome is one to pick
