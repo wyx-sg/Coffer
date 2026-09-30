@@ -38,7 +38,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 | --- | --- |
 | `coffer-daemon` | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若前端已构建（`frontend/dist`）则打包进来的 Web 界面。 |
 | `coffer-mcp-shim` | MCP 客户端启动的 stdio 到 HTTP 的桥。不含 FastAPI、uvicorn、SQLAlchemy、alembic 和 structlog，这样对每个会话都要拉起它的客户端来说启动很快。 |
-| `coffer` | Typer 命令行、httpx 和 `keyring` 后端。不含服务端栈和 MCP SDK。 |
+| `coffer` | Typer 命令行、httpx 和 `keyring` 后端，以及 SQLAlchemy、aiosqlite 和 alembic（迁移脚本作为数据文件），因为 `coffer migrate` 在命令行进程里执行一次性的 vault 升级。不含 Web 服务端和 MCP SDK。 |
 
 每个 spec 都构建一个单文件的控制台可执行程序，不做 UPX 压缩，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
 
@@ -53,7 +53,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 构建脚本在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
 
-冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。
+冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，使用空闲的守护进程端口和代理端口以及一个独立的 master key 文件，所以能和本机已在运行的 Coffer 并存，也不会读取登录钥匙串。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 查询守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程及其启动的模型代理。指向 `Coffer.app/Contents/MacOS` 时，它测试的是桌面 app 自带的那几份二进制。
 
 ## 发布流水线 {#the-release-workflow}
 
