@@ -22,6 +22,8 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.agent.service import AgentService
+from coffer.application.audit_service import AuditService
+from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.usage_lookup import ProviderUsageLookup
 from coffer.application.usage.ingest import UsageIngestService
@@ -29,6 +31,7 @@ from coffer.application.usage.ports import (
     CodexRateLimitReader,
     ConnectionNames,
     ConnectionPriceLookup,
+    FailoverLog,
 )
 from coffer.application.usage.query import UsageQueryService
 from coffer.application.usage.quota import BACKGROUND_INTERVAL, QuotaService
@@ -97,6 +100,7 @@ def wire_usage(
     *,
     price_lookup: ConnectionPriceLookup,
     connection_names: ConnectionNames,
+    failovers: FailoverLog | None = None,
     codex_reader: CodexRateLimitReader | None,
     spool_dir: Path | None = None,
     quota_background_enabled: Callable[[], Awaitable[bool]] | None = None,
@@ -113,6 +117,7 @@ def wire_usage(
         repo=usage_repo,
         spool=FileSpoolReader(spool_dir),
         prices=price_lookup,
+        failovers=failovers,
     )
     query = UsageQueryService(repo=usage_repo, connection_names=connection_names)
     quota = QuotaService(
@@ -134,14 +139,19 @@ QUOTA_POLL_ENV = "COFFER_QUOTA_POLL"
 
 
 async def wire_model_usage(
-    sm: async_sessionmaker[AsyncSession], provider_svc: ProviderService, agents: AgentService
+    sm: async_sessionmaker[AsyncSession],
+    provider_svc: ProviderService,
+    agents: AgentService,
+    *,
+    prices: ProviderPriceResolver,
+    audit: AuditService,
 ) -> UsageWiring:
     """The composition the lifespan uses: prices and names from the provider
     kind, Codex's quota read from a short-lived ``codex app-server`` under the
     agent's own home — in the background only while a Codex agent is on its
     own (subscription) login, since an agent on a connection has no quota to
-    show — and both loops started."""
-    lookup = ProviderUsageLookup(provider_svc)
+    show — failovers filed in the audit log, and both loops started."""
+    lookup = ProviderUsageLookup(provider_svc, prices, audit)
     # The agent whose quota the reader pulls: the one ``codex app-server`` is.
     codex_type = AgentType(_CODEX_READER_AGENT)
 
@@ -162,6 +172,7 @@ async def wire_model_usage(
         sm,
         price_lookup=lookup,
         connection_names=lookup,
+        failovers=lookup,
         codex_reader=AppServerRateLimitReader(
             resolve_env=agent_home_env_resolver(_CODEX_READER_AGENT)
         ),

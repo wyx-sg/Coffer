@@ -29,6 +29,8 @@ from coffer.application.provider.internal_default_ops import (
 from coffer.application.provider.internal_default_ops import (
     set_internal_default as _set_internal_default_op,
 )
+from coffer.application.provider.order_ops import ordered as _ordered
+from coffer.application.provider.order_ops import reorder as _reorder_op
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
@@ -59,6 +61,8 @@ KIND = "provider"
 # AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
 # shadowing under PEP 563), so name the type here where ``list`` is the builtin.
 _CuratedModels = list[CuratedModel]
+_Uids = list[str]
+_Rows = list[Resource]
 
 
 class _CredentialStore(_Protocol):
@@ -213,7 +217,12 @@ class ProviderService:
             raise
 
     async def list(self) -> list[Resource]:
-        return await self._resources.list(kind=KIND)
+        """Every connection, in Model providers list order — fallback priority."""
+        return _ordered(await self._resources.list(kind=KIND))
+
+    async def reorder(self, uids: _Uids, *, actor: str = "api") -> _Rows:
+        """Place the connections in ``uids`` order (see ``order_ops``)."""
+        return await _reorder_op(self, uids, actor=actor)
 
     async def get(self, uid: str) -> Resource:
         """One connection, by the identity every caller inside the daemon holds.
@@ -240,6 +249,7 @@ class ProviderService:
         secret_value: str | None = None,
         models: _CuratedModels | None = None,
         description: str | None = None,
+        fallback: bool | None = None,
         actor: str = "api",
     ) -> Resource:
         """Partial update; see ``update_ops`` for what may move and what may not."""
@@ -251,6 +261,7 @@ class ProviderService:
             secret_value=secret_value,
             models=models,
             description=description,
+            fallback=fallback,
             actor=actor,
         )
 

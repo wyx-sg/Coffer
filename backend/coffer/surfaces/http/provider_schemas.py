@@ -21,6 +21,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedPrice, Protocol
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
+from coffer.domain.usage.pricing import PriceSource
 
 
 class ProviderModel(BaseModel):
@@ -93,6 +94,9 @@ class ProviderPatch(BaseModel):
     secret_value: str | None = Field(default=None, max_length=8192)
     models: list[ProviderModel] | None = None
     description: str | None = None
+    #: "Use as fallback for other providers": whether another provider's
+    #: request may fail over here. ``None`` leaves it alone.
+    fallback: bool | None = None
 
 
 class ProviderOut(BaseModel):
@@ -143,11 +147,55 @@ class ProviderOut(BaseModel):
     created_at: datetime
     #: The local runtime this connection points at, or ``None`` for a remote one.
     local_runtime: LocalRuntime | None = None
+    #: "Use as fallback for other providers" (default on). A local runtime is
+    #: never a fallback whatever this says.
+    fallback: bool = True
     updated_at: datetime
 
 
 class ProviderListOut(BaseModel):
+    """Every connection in Model providers list order — which is also the
+    order the model proxy tries fallbacks in."""
+
     providers: list[ProviderOut]
+
+
+class ProviderOrderIn(BaseModel):
+    """The new list order: every connection's uid, exactly once."""
+
+    uids: list[str] = Field(min_length=1, max_length=500)
+
+
+class ModelPricesIn(BaseModel):
+    """The models whose price on this provider to resolve."""
+
+    models: list[str] = Field(max_length=1000)
+
+
+class ModelPriceOut(BaseModel):
+    """One model's price on a provider and where it came from (spec
+    provider-switching "Resolve each model's price from the provider, its API,
+    or the bundled list"). USD per million tokens; ``source`` ``None`` means no
+    price is known and every rate is ``None`` — shown as "—", never as zero.
+    ``source_name`` names the provider whose API reported it (``provider``) or
+    the price list's provider (``bundled``). ``tiered``: the rates shown are
+    the base tier; past a threshold of input tokens the request pays more."""
+
+    model: str
+    source: PriceSource | None = None
+    source_name: str | None = None
+    input: float | None = None
+    output: float | None = None
+    cache_write_5m: float | None = None
+    cache_write_1h: float | None = None
+    cache_read: float | None = None
+    tiered: bool = False
+
+
+class ModelPricesOut(BaseModel):
+    prices: list[ModelPriceOut]
+    #: The bundled price list this build ships (``genai-prices@<commit>…``).
+    bundled_version: str
 
 
 class ActivateOut(BaseModel):

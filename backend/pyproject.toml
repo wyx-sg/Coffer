@@ -106,7 +106,12 @@ packages = ["coffer"]
 # and the catalogue in the skill body") is a markdown file, not a module, so an
 # installed wheel has to be told to carry it. A frozen build is told
 # separately, in backend/coffer-daemon.spec.
-coffer = ["application/knowledge/skill_assets/**/*.md"]
+coffer = [
+    "application/knowledge/skill_assets/**/*.md",
+    # The bundled model price list and its licence (spec provider-switching
+    # "Resolve each model's price from the provider, its API, or the bundled list").
+    "infrastructure/usage/price_list/*",
+]
 
 [tool.ruff]
 line-length = 100

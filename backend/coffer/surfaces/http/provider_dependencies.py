@@ -8,6 +8,7 @@ connection editors use to probe an endpoint and list its models.
 from __future__ import annotations
 
 from coffer.application.provider.introspection import ModelIntrospectionService
+from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 
 _provider_service: ProviderService | None = None
@@ -40,3 +41,19 @@ def get_introspection_service() -> ModelIntrospectionService:
     if _introspection_service is None:
         raise RuntimeError("introspection service not initialised")
     return _introspection_service
+
+
+_price_resolver: ProviderPriceResolver | None = None
+
+
+def set_price_resolver(resolver: ProviderPriceResolver) -> None:
+    """Called by the composition root once on startup."""
+    global _price_resolver
+    _price_resolver = resolver
+
+
+def get_price_resolver() -> ProviderPriceResolver:
+    """FastAPI Depends() target: where a model's price on a provider comes from."""
+    if _price_resolver is None:
+        raise RuntimeError("price resolver not initialised")
+    return _price_resolver

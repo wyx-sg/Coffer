@@ -16,11 +16,13 @@ The composition root satisfies it with the engine's own guard.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.provider.modality import Modality
+from coffer.domain.usage.pricing import ModelPrice
 
 #: WIRE PROTOCOLS Coffer treats as machine-local; their base URL is loopback, so
 #: the SSRF guard (which blocks loopback) is intentionally skipped for them. The
@@ -50,6 +52,36 @@ class DiscoveredModel:
 
 
 @dataclass(frozen=True)
+class ListedModel:
+    """One id an endpoint listed, with the price its API reported for it —
+    OpenRouter and gateways like it answer ``/models`` with each model's
+    per-token rates. ``None`` when the endpoint says nothing about price."""
+
+    id: str
+    price: ModelPrice | None = None
+
+
+@dataclass(frozen=True)
+class ReportedPrices:
+    """What one endpoint's API last reported its models cost, and when."""
+
+    fetched_at: datetime
+    prices: Mapping[str, ModelPrice]
+
+
+class ReportedPriceStore(Protocol):
+    """Where the prices an endpoint's API reported are remembered between
+    listings (spec provider-switching "Resolve each model's price from the
+    provider, its API, or the bundled list"). Keyed by the endpoint's root, so
+    two connections to one endpoint share it. Derived: losing it only means
+    waiting for the next listing."""
+
+    def get(self, root: str) -> ReportedPrices | None: ...
+
+    def put(self, root: str, prices: Mapping[str, ModelPrice]) -> None: ...
+
+
+@dataclass(frozen=True)
 class ModelList:
     models: list[DiscoveredModel]
     message: str = ""
@@ -64,7 +96,9 @@ class ProviderIntrospectionPort(Protocol):
 
     async def list_models(
         self, *, provider: str, base_url: str | None, api_key: str | None
-    ) -> list[str]: ...
+    ) -> Sequence[str | ListedModel]:
+        """The endpoint's models — a bare id, or a :class:`ListedModel` when
+        its API also reported a price."""
 
     async def test_chat(
         self, *, provider: str, model: str, base_url: str | None, api_key: str | None

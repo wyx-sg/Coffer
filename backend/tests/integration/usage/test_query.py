@@ -31,7 +31,7 @@ async def _seed(sm, tmp_path: Path) -> UsageQueryService:  # type: ignore[no-unt
             record(3, model="claude-opus-4-6", agent_uid="agent-2"),
             record(
                 4,
-                model="gpt-5.5-codex",
+                model="acme-coder-1",
                 wire="openai",
                 connection_uid="conn-openai",
                 agent_uid="agent-codex",
@@ -74,8 +74,8 @@ async def test_summary_by_model_carries_the_connection_name(sm, tmp_path: Path) 
     assert (sonnet.connection_uid, sonnet.connection_name) == ("conn-anthropic", "Anthropic")
     assert sonnet.totals.requests == 2  # record 1 + the unknown-usage record 5
     assert sonnet.totals.unknown_usage_requests == 1
-    assert rows["gpt-5.5-codex"].totals.unpriced_requests == 1
-    assert rows["gpt-5.5-codex"].connection_name is None  # connection gone: uid only
+    assert rows["acme-coder-1"].totals.unpriced_requests == 1
+    assert rows["acme-coder-1"].connection_name is None  # connection gone: uid only
     assert summary.totals.requests == 4
     assert summary.totals.unpriced_requests == 1
     assert summary.totals.cost_usd == pytest.approx(sum(r.totals.cost_usd for r in summary.rows))
@@ -135,6 +135,6 @@ async def test_requests_page_newest_first_by_cursor(sm, tmp_path: Path) -> None:
     assert starts == sorted(starts, reverse=True)
 
     only_codex = await svc.requests(filters=RequestFilters(agent_uid="agent-codex"))
-    assert [r.record.model for r in only_codex.items] == ["gpt-5.5-codex"]
+    assert [r.record.model for r in only_codex.items] == ["acme-coder-1"]
     with pytest.raises(CursorInvalid):
         await svc.requests(filters=RequestFilters(model="x"), cursor=first.next_cursor)

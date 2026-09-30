@@ -100,7 +100,9 @@ async def wire_resource_kinds(
     )
 
     # What the proxy metered, and the official quota of subscription agents.
-    usage = await wire_model_usage(sm, provider.service, agent_skill.agent_service)
+    usage = await wire_model_usage(
+        sm, provider.service, agent_skill.agent_service, prices=provider.prices, audit=audit
+    )
 
     # Coffer's own skill carries the knowledge catalogue, so a collection
     # appearing, going or being switched has to reach the rendered file. The

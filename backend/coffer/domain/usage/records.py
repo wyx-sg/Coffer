@@ -73,6 +73,10 @@ class UsageRecord(BaseModel):
     #: crash writes nothing twice.
     dedupe_key: str
     attempt_id: str
+    #: One id per request the agent sent: every attempt at it — the one that
+    #: failed over and the one that answered — carries the same, so a
+    #: failover can name where the request went next.
+    relay_id: str | None = None
     started_at: datetime
     #: The agent, from the per-agent local token — never self-reported.
     agent_uid: str | None = None

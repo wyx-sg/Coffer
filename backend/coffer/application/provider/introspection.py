@@ -12,10 +12,13 @@ from collections.abc import Callable
 
 from coffer.application.provider.ports import (
     DiscoveredModel,
+    ListedModel,
     ModelList,
     ProviderIntrospectionPort,
+    ReportedPriceStore,
     TestResult,
 )
+from coffer.domain.model_proxy.state import upstream_root
 from coffer.domain.provider.modality import infer_modality
 
 
@@ -31,9 +34,15 @@ class ModelIntrospectionService:
         self,
         port: ProviderIntrospectionPort,
         resolve_credential: Callable[[str], str],
+        reported_prices: ReportedPriceStore | None = None,
+        default_base_url: Callable[[str], str | None] | None = None,
     ) -> None:
         self._port = port
         self._resolve = resolve_credential
+        # Where the prices an endpoint's API reports are remembered, so usage
+        # is costed from them without asking the endpoint per request.
+        self._reported = reported_prices
+        self._default_base_url = default_base_url or (lambda _provider: None)
 
     def _key_for(
         self, provider: str, credential_ref: str | None, secret_value: str | None = None
@@ -56,14 +65,34 @@ class ModelIntrospectionService:
     ) -> ModelList:
         try:
             key = self._key_for(provider, credential_ref, secret_value)
-            models = await self._port.list_models(provider=provider, base_url=base_url, api_key=key)
+            listed = await self._port.list_models(provider=provider, base_url=base_url, api_key=key)
         except Exception as e:  # degrade to an empty list + reason — never 500 the picker
             return ModelList(models=[], message=str(e), reachable=False)
+        entries = [m if isinstance(m, ListedModel) else ListedModel(id=m) for m in listed]
+        models = [m.id for m in entries]
+        self._remember_prices(provider, base_url, entries)
         if not models:
             # Say what happened, nothing more: no surface takes a typed model id
             # (spec provider-switching "Choose a model from a fixed list").
             return ModelList(models=[], message="the endpoint listed no models")
         return ModelList(models=[DiscoveredModel(id=m, modality=infer_modality(m)) for m in models])
+
+    def _remember_prices(
+        self, provider: str, base_url: str | None, entries: list[ListedModel]
+    ) -> None:
+        """Keep what the endpoint's API reported its models cost — only when it
+        reported something, so an endpoint that says nothing about price
+        never erases what an earlier listing learned."""
+        if self._reported is None:
+            return
+        prices = {m.id: m.price for m in entries if m.price is not None}
+        url = base_url or self._default_base_url(provider)
+        if not prices or not url:
+            return
+        try:
+            self._reported.put(upstream_root(url), prices)
+        except Exception:  # a derived cache: failing to write it costs nothing now
+            return
 
     async def test_connection(
         self,

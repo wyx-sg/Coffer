@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from coffer.domain.usage.pricing import ModelPrice
+from coffer.domain.usage.pricing import ModelPrice, PriceSource, ResolvedPrice, override_label
 from coffer.domain.usage.records import Outcome, UsageRecord, Wire
 from coffer.infrastructure.chat import persistence as _chat_models  # noqa: F401  (conversations)
 from coffer.infrastructure.mcp import persistence as _mcp_models  # noqa: F401  (mcp_invocations)
@@ -22,6 +22,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
+from coffer.infrastructure.usage.bundled_prices import load_bundled_prices
 
 NOW = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 
@@ -76,15 +77,23 @@ def write_spool(directory: Path, name: str, lines: Iterable[UsageRecord | str]) 
 
 
 class FakePrices:
-    """``ConnectionPriceLookup`` from a ``{(connection, model): price}`` map."""
+    """``ConnectionPriceLookup``: a ``{(connection, model): price}`` map of
+    prices the user set, then the real bundled list (by model alone)."""
 
     def __init__(self, overrides: Mapping[tuple[str, str], ModelPrice] | None = None) -> None:
         self._overrides = dict(overrides or {})
+        self._bundled = load_bundled_prices()
 
-    async def override_price(
-        self, connection_uid: str | None, model: str | None
-    ) -> ModelPrice | None:
-        return self._overrides.get((connection_uid or "", model or ""))
+    async def resolve_price(
+        self, connection_uid: str | None, model: str | None, at: datetime
+    ) -> ResolvedPrice | None:
+        override = self._overrides.get((connection_uid or "", model or ""))
+        if override is not None and connection_uid:
+            return ResolvedPrice(override, PriceSource.USER, override_label(connection_uid))
+        found = self._bundled.lookup(model, at=at)
+        if found is None:
+            return None
+        return ResolvedPrice(found.price, PriceSource.BUNDLED, self._bundled.label)
 
 
 class FakeNames:
