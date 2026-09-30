@@ -267,6 +267,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 消息渠道运行时 | `application/channel/runtime.py` | 每 2 s | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和绑定到本机的消息渠道资源进行调和。 |
 | MCP 会话回收器 | `surfaces/http/mcp/protocol_routes.py` | 每 60 s | 关闭闲置超过 30 分钟的 `/mcp` 会话，连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
 | 调用记录写入器 | `infrastructure/mcp/invocation_writer.py` | 持续 | 在请求路径之外，把 MCP 调用日志行批量写入 SQLite。 |
+| 解包保活 | `infrastructure/daemon/unpack_keepalive.py` | 启动时立即执行，之后每 6 h | 仅限冻结构建。刷新单文件二进制解包到 `$TMPDIR/_MEI*` 里的文件时间戳，让系统临时文件清理（macOS 会删除约 3 天未使用的文件）无法在长时间运行的守护进程底下删掉 CA 证书包和库文件。 |
 | 被取代检查 | `infrastructure/daemon/entry.py` | 每 30 s | 当另一个存活的守护进程接管了 `daemon.json` 时，让本守护进程退下（见下文）。 |
 | 保险库扫描器 | `infrastructure/vault/scanner.py`，在 `vault_wiring.py` 里启动 | 启动时扫一次，然后在文件事件时以及每 60 s | 把保险库里的手工编辑落成提交。 |
 | 调和器 | `application/reconcile/reconciler.py`，在 `reconcile_wiring.py` 里启动 | 每 60 s，收到提示时提前 | 收敛智能体的 MCP 条目、技能链接、提供商投射和投递 Hook，并记录尚未解决的偏移。 |

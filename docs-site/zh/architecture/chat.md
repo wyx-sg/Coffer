@@ -345,7 +345,7 @@ flowchart TD
 
 当消息渠道的消息到达队首时，编排器调用 `on_start`，并为那个轮次提供一个专用的事件队列。`turn_render.py` 消费它，工作沿四个接缝拆分：
 
-- **状态模型**（`turn_status.py`，纯函数）。`TurnStatus` 统计这个轮次——已用时间、步骤和失败、最新的讲述——并绘制状态块：`⏳ Working · 2m 14s · 7 steps`，一行 `💬` 讲述，以及最新的三行步骤，每行根据调用的输入描述这次调用（`✅ Read · wedding.json`）。`ReplyText` 把回复保存为被工具调用分隔开的若干段：打开的那段是回答的尾部，已关闭的是讲述，最终回复用段落分隔把它们连起来。
+- **状态模型**（`turn_status.py`，纯函数）。`TurnStatus` 统计这个轮次——已用时间、步骤和失败、最新的讲述——并绘制状态块：`⏳ Working · 2m 14s · 7 steps`，一行 `💬` 讲述，以及最新的三行步骤。在私聊里，每行步骤根据调用的输入描述这次调用（`✅ Read · wedding.json`）；在群组里只写工具名，因为输入里可能带着命令或查询。`ReplyText` 把回复保存为被工具调用分隔开的若干段：打开的那段是回答的尾部，已关闭的是讲述，最终回复用段落分隔把它们连起来。
 - **实时界面**（`turn_surface.py`）。有 `supports_live_text` 时，一个界面在整个轮次期间持续增长。每个快照是状态块、一条 `─` 分隔线，然后是回答尾部；分隔线是与传输层的唯一约定，传输层裁剪的是回答而从不是状态块，并且可以把两者分开渲染（Telegram 的富草稿把头部放在 `<tg-thinking>` 里）。渲染器每 10 秒重绘一次，这是这些界面自己的保活节奏，所以在一个沉默的工具运行期间时钟也在走。作为回复保留下来的界面（`live_text_persists`）会立即打开，并在每个快照上带着提问者的 @；临时性的脚手架则不带。
 - **收尾**（`turn_finish.py`）。`MEDIA:` 哨兵会被上传（`turn_media.py`）；`reply_shape.py` 根据能力改写会话显示不了的内容：表格改成列表加一个 CSV（`renders_tables`），长代码改成文件（`max_inline_code_lines`）；最后一行 `NEEDS YOU:`（`needs_you.py`）变成一个带 `reply:<option>` 按钮的问题，点一下会作为所有者自己的消息重新进入入站路径；在传输层有卡片但自己不会折叠详情的地方（`collapses_details`），`## Details` 一节会被放到一张摘要卡片后面（`details_card.py`）。如果轮次长于消息渠道的 `notify_after_seconds`，并且它的回答是在一个保留下来的界面上完成的，就会发一次提醒，因为完成一条几分钟前创建的消息不会通知任何人。
 - **传输层。** 适配器把 Markdown 转换成平台的格式，按 `max_message_chars` 分块且不切断代码围栏，为续篇编号 `(2/3)`，被拒绝的格式化消息改以纯文本重试，遇到限流就退避。其余部分它们声明为能力：表情回应集合（`reactions`：received、working、done、failed、stopped）、@ 模板（可以带 `{name}`），以及给智能体的 `render_notes`。
