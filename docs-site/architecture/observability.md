@@ -32,7 +32,7 @@ Coffer is a background process that other programs talk to. When something goes 
 
 ### One format
 
-Coffer's own modules log through the standard library (`logging.getLogger`). The root logger's handlers use a `structlog.stdlib.ProcessorFormatter`, so every record — Coffer's own, and those of libraries running inside the daemon such as the MCP SDK, asyncio and alembic — leaves as one JSON object with the same fields:
+Coffer's own modules log through Python's standard logging library. Every handler on the root logger formats records with structlog's formatter for standard-library records, so every record — Coffer's own, and those of libraries running inside the daemon such as the MCP SDK, asyncio and alembic — leaves as one JSON object with the same fields:
 
 | Field | Source |
 | --- | --- |
@@ -41,7 +41,7 @@ Coffer's own modules log through the standard library (`logging.getLogger`). The
 | `level` | `debug`, `info`, `warning`, `error` or `critical` |
 | `logger` | the module that logged it |
 | `trace_id` | the current request's trace id, or `-` outside a request |
-| any `extra={...}` keys | whatever the call site passed |
+| any extra keys | whatever structured fields the code that logged the record attached |
 | `exception` | the rendered traceback, kept inside the same line |
 
 A real line looks like this:
@@ -50,15 +50,15 @@ A real line looks like this:
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
-`structlog` is also configured to route through the same handlers, so a future call site that uses `structlog.get_logger()` produces the same shape rather than printing to stdout.
+`structlog` is also configured to route through the same handlers, so future code that logs through structlog's own API produces the same shape rather than printing to stdout.
 
-The timestamp comes from the `LogRecord`, not from the clock at format time. That keeps one record at one time even when two handlers format it, and it keeps timestamps lexically sortable, which the readers rely on for their `since` filter.
+The timestamp is the moment the record was created, not the clock at format time. That keeps one record at one time even when two handlers format it, and it keeps timestamps lexically sortable, which the readers rely on for their `since` filter.
 
 ### One writer per file
 
 `daemon.log` has two writers by design:
 
-1. The daemon's rotating file handler (`RotatingFileHandler`, 10 MB per file, 3 backups: `daemon.log.1` … `daemon.log.3`).
+1. The daemon's rotating file handler (10 MB per file, 3 backups: `daemon.log.1` … `daemon.log.3`).
 2. The daemon process's own output. The CLI's detect-or-spawn, `coffer daemon start` and the MCP shim open `daemon.log` for append and hand it to the child as stdout and stderr; the desktop app redirects the daemon it spawns into the same file. A daemon that refuses to start (a port already taken, for example) prints why into the file the error message tells you to check.
 
 A stderr handler would therefore write every record twice. The daemon attaches its stderr handler only when stderr is *not* the same file as `daemon.log` (compared by device and inode), which is the foreground case — a terminal or a test — where it is the only way to see output.
@@ -78,7 +78,7 @@ Upstream MCP servers get their own files because they are far chattier than Coff
 
 ### The tolerant reader
 
-Because `daemon.log` is also the stdio of the daemon's children, it is never guaranteed to be pure JSON. `application/log_reader.py` is the one reader both the Activity page and `coffer log daemon` use. It:
+Because `daemon.log` is also the stdio of the daemon's children, it is never guaranteed to be pure JSON. One reader, in the application layer, serves both the Activity page and `coffer log daemon`. It:
 
 - reads only the last 512 KiB of the file, so a 10 MB log is never pulled into memory;
 - strips ANSI colour and cursor sequences;
@@ -91,7 +91,7 @@ The HTTP route `GET /api/v1/daemon/logs` exposes this reader with `since`, `leve
 
 ## Trace ids
 
-Every HTTP request gets a trace id before anything else runs. `surfaces/http/trace.py` is a raw ASGI middleware (not `BaseHTTPMiddleware`, which buffers and would interfere with the long-lived streams `/mcp` serves) that:
+Every HTTP request gets a trace id before anything else runs. The trace middleware in the HTTP surface is a raw ASGI middleware (not Starlette's convenience middleware base, which buffers and would interfere with the long-lived streams `/mcp` serves). It:
 
 1. takes the client's `X-Coffer-Trace` request header if present, strips it to `[A-Za-z0-9._:-]` and 64 characters, or generates a fresh 16-hex-character id;
 2. binds it to a context variable that the log formatter reads for every record the request produces;
@@ -137,7 +137,7 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 Two decisions shape this:
 
 - **Identity and label are stored separately.** A resource's trail is queried by its uid, so renaming a resource leaves its history intact, and old rows keep the name that was true when they were written. There is no way to audit an event by label alone; see [Resource framework](/architecture/resource-framework).
-- **Redaction happens before storage, per kind.** Each resource kind can supply an `audit_redactor` that strips secret fields from a configuration before it becomes `details`. The MCP server kind uses one to drop the `env` and `headers` maps from its transport, keeping only secret references.
+- **Redaction happens before storage, per kind.** Each resource kind can supply an audit redactor that strips secret fields from a configuration before it becomes `details`. The MCP server kind uses one to drop the `env` and `headers` maps from its transport, keeping only secret references.
 
 The actor comes from the `X-Coffer-Actor` request header, which must match `^[a-z][a-z0-9_-]{0,31}$`; a missing header means `api`, and anything else is rejected with `400`.
 
@@ -145,7 +145,7 @@ Every audit event is also written to `daemon.log` as an `info` line carrying the
 
 ### Event vocabulary
 
-The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/domain/audit.py`.
+The vocabulary is a closed enumeration, defined in the domain layer.
 
 | Area | Events |
 | --- | --- |
@@ -208,7 +208,7 @@ You read it on the **MCP calls** tab of the Activity page, per server on the ser
 
 Everything log-like is bounded by one mechanism.
 
-`application/retention_registry.py` defines `PrunableTable`, a declarative description of a table the retention worker sweeps: its policy key, timestamp column, default window, display name, and an `action` of `delete` or `archive`. The composition root registers every such table in one `PrunableRegistry`, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
+Every table the retention worker sweeps is described declaratively: its policy key, timestamp column, default window, display name, and an action of `delete` or `archive`. The composition root registers every such description in one registry, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
 
 | Policy (`name`) | Table | Timestamp column | Default | Action |
 | --- | --- | --- | --- | --- |
@@ -222,17 +222,17 @@ Chat conversations use the two-stage form: idle threads are archived first, and 
 
 ```mermaid
 flowchart LR
-    W["RetentionWorker (every 6 h)"] --> S["RetentionService.prune"]
-    S --> R["PrunableRegistry"]
+    W["Retention worker (every 6 h)"] --> S["Prune"]
+    S --> R["Registered prunable tables"]
     R --> T1["delete rows older than window"]
     R --> T2["archive idle conversations"]
     S --> M["sweep channel media dir"]
-    W --> F["prune_log_dir: shim and upstream logs older than 7 days"]
+    W --> F["Log-file pruning: shim and upstream logs older than 7 days"]
     S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- `RetentionService.initialize_defaults` seeds a policy for each registered table in `~/.coffer/local/retention.json` at startup and never overwrites one you changed.
-- `RetentionWorker` runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
+- At startup the retention service seeds a policy for each registered table in `~/.coffer/local/retention.json` and never overwrites one you changed.
+- The retention worker runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.
 
@@ -255,7 +255,7 @@ An agent that hits a `SECRET_MISSING` error does not know whether it needs "what
 
 ## Eval capture
 
-Coffer's deterministic tests prove the plumbing. The quality of its non-deterministic behaviour — above all, how well `coffer__search_tools` ranks upstream tools — is measured by the eval harness in [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals), and grown from real usage by an opt-in capture sink.
+Coffer's deterministic tests prove the plumbing. The quality of its non-deterministic behaviour — above all, how well `coffer__search_tools` ranks upstream tools — is measured by the eval harness in the repository's `evals/` directory, and grown from real usage by an opt-in capture sink.
 
 ```mermaid
 flowchart LR
@@ -267,7 +267,7 @@ flowchart LR
 ```
 
 - **Capture.** When `COFFER_EVAL_CAPTURE` is set for the daemon, each `coffer__search_tools` call appends one line — the query and the ranked tool names that came back — to a JSONL file: `~/.coffer/eval-capture.jsonl` for `1`/`true`/`yes`, or the path given. The capture logger does not propagate, so these lines never reach `daemon.log`. Nothing is written when the variable is unset. Tool arguments and results are never captured.
-- **Curate.** `make eval-curate` (`python -m evals.curate`) reads the sink, drops queries the dataset already covers, and asks you to mark which returned tools were relevant. Confirmed cases are appended to `evals/datasets/tool_search.jsonl` tagged `"source": "captured"`.
+- **Curate.** `make eval-curate` reads the sink, drops queries the dataset already covers, and asks you to mark which returned tools were relevant. Confirmed cases are appended to `evals/datasets/tool_search.jsonl` tagged `"source": "captured"`.
 - **Gate.** `make eval` runs the deterministic tool-search suite (recall@k and MRR over the same ranker the gateway uses) and fails when a score drops below the committed baseline minus tolerance. The `evals` GitHub workflow runs it on pushes and pull requests that touch `evals/` or the MCP, knowledge or memory code. `make eval-routing` adds a model-bearing tool-routing suite, which needs a model endpoint and stays out of CI.
 
 The invocation log's honest `error` status for in-band tool errors is what makes it usable as a signal here: a log that recorded failed tool calls as `ok` could not tell a good routing decision from a bad one.
@@ -278,7 +278,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 **A log file per writer.** Giving the desktop shell or a detached daemon's stdio their own files would keep `daemon.log` pure JSON. Coffer keeps one file and a tolerant reader instead, because every "check the log" message points at one path and a second file is a place nobody is told to look. Upstream MCP servers are the exception, because their volume would evict Coffer's own records.
 
-**Structured logging through structlog's own API.** Converting over a hundred `logging.getLogger` call sites buys nothing the stdlib formatter does not already provide. The formatter runs structlog's processors over stdlib records, so the file has one shape with no call-site churn.
+**Structured logging through structlog's own API.** Converting over a hundred call sites that use the standard logging library buys nothing the stdlib formatter does not already provide. The formatter runs structlog's processors over stdlib records, so the file has one shape with no call-site churn.
 
 **Audit events in the daemon log only.** A log line cannot be filtered by resource id or survive rotation for a year. The table is the record; the log line is a convenience for whoever is tailing the file.
 
@@ -286,24 +286,16 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 ## Where it lives in the code
 
-| Path | What it does |
+| Package | What it does |
 | --- | --- |
-| [`backend/coffer/infrastructure/logging/setup.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/setup.py) | JSON formatter, rotating file handler, stderr rule, trace id context |
-| [`backend/coffer/infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) | log directory, per-upstream stderr files, log-file pruning |
-| [`backend/coffer/application/log_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/log_reader.py) | tolerant tail reader shared by the Activity page and `coffer log daemon` |
-| [`backend/coffer/surfaces/http/trace.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/trace.py) | trace id middleware |
-| [`backend/coffer/surfaces/http/middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | middleware order |
-| [`backend/coffer/domain/audit.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/audit.py) | audit entry and event vocabulary |
-| [`backend/coffer/application/audit_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/audit_service.py) | recording and querying audit rows |
-| [`backend/coffer/application/mcp/gateway_handlers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_handlers.py) | invocation status for proxied calls |
-| [`backend/coffer/application/mcp/gateway_builtin.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_builtin.py) | invocation rows for builtin tools, eval capture hook |
-| [`backend/coffer/infrastructure/mcp/invocation_writer.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/mcp/invocation_writer.py) | `mcp_invocations` table and buffered writer |
-| [`backend/coffer/application/retention_registry.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_registry.py) | `PrunableTable` and `PrunableRegistry` |
-| [`backend/coffer/application/retention_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_service.py), [`retention_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_worker.py) | prune logic and cadence |
-| [`backend/coffer/surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) | the registered prunable tables |
-| [`backend/coffer/surfaces/cli/log_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/log_cmd.py), [`path_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/path_cmd.py) | `coffer log` and `coffer path` |
-| [`backend/coffer/application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py), [`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) | eval capture emit and sink |
-| [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | eval harness, datasets, baselines, curate CLI |
+| `infrastructure/logging/` | JSON formatter, rotating file handler, stderr rule, trace id context, log directory, per-upstream stderr files, log-file pruning, eval capture sink |
+| the application layer | tolerant tail reader shared by the Activity page and `coffer log daemon`; recording and querying audit rows; prunable tables, prune logic and cadence; eval capture emit |
+| the MCP gateway, in `application/mcp/` | invocation status for proxied calls; invocation rows for builtin tools; eval capture hook |
+| `infrastructure/mcp/` | `mcp_invocations` table and buffered writer |
+| `domain/` | audit entry and event vocabulary |
+| the HTTP surface | trace id middleware, middleware order, and the registered prunable tables (composition root) |
+| the CLI surface | `coffer log` and `coffer path` |
+| `evals/` | eval harness, datasets, baselines, curate CLI |
 
 ## Related
 

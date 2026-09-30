@@ -32,15 +32,17 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 
 ## 二进制 {#the-binaries}
 
-| 二进制 | 入口点 | Spec 文件 | 包含什么 |
-| --- | --- | --- | --- |
-| `coffer-daemon` | `coffer/infrastructure/daemon/entry.py` | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec) | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若存在 `frontend/dist/index.html` 则打包进来的 Web 界面。 |
-| `coffer-mcp-shim` | `coffer/surfaces/shim/main.py` | [`backend/coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec) | MCP 客户端启动的 stdio 到 HTTP 的桥。不含 FastAPI、uvicorn、SQLAlchemy、alembic 和 structlog，这样对每个会话都要拉起它的客户端来说启动很快。 |
-| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | Typer 命令行、httpx 和 `keyring` 后端。不含服务端栈和 MCP SDK。 |
+每个二进制都由 `backend/` 下各自的 PyInstaller spec 冻结而成，一个入口点一个：守护进程的、shim 的和命令行的。
 
-每个 spec 都是一个单文件 `EXE`，`console=True`、`upx=False`，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
+| 二进制 | 包含什么 |
+| --- | --- |
+| `coffer-daemon` | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若前端已构建（`frontend/dist`）则打包进来的 Web 界面。 |
+| `coffer-mcp-shim` | MCP 客户端启动的 stdio 到 HTTP 的桥。不含 FastAPI、uvicorn、SQLAlchemy、alembic 和 structlog，这样对每个会话都要拉起它的客户端来说启动很快。 |
+| `coffer` | Typer 命令行、httpx 和 `keyring` 后端。不含服务端栈和 MCP SDK。 |
 
-PyInstaller 靠静态分析找导入，所以任何在函数里延迟导入的东西——文档转换器、模型 SDK——都在 spec 的 `hiddenimports` 里写死，包数据文件也显式收集。[`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) 在 `make lint` 中运行，当某个 spec 的入口脚本或某个 `datas` 源路径不再存在，或者某个 spec 丢了 `-X utf8` 时就失败。除了发布之外没有别的 CI 任务会跑 PyInstaller，所以在两次发布之间，是这项检查让 spec 和代码树保持同步。
+每个 spec 都构建一个单文件的控制台可执行程序，不做 UPX 压缩，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
+
+PyInstaller 靠静态分析找导入，所以任何在函数里延迟导入的东西——文档转换器、模型 SDK——都在 spec 的隐式导入列表里写死，包数据文件也显式收集。一项 spec 检查在 `make lint` 中运行，当某个 spec 的入口脚本或某个数据文件源路径不再存在，或者某个 spec 丢了 `-X utf8` 时就失败。除了发布之外没有别的 CI 任务会跑 PyInstaller，所以在两次发布之间，是这项检查让 spec 和代码树保持同步。
 
 ### 本地构建 {#building-locally}
 
@@ -49,22 +51,22 @@ make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, di
 bash scripts/smoke_test_bundle.sh dist
 ```
 
-[`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) 在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
+构建脚本在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
 
-[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) 在隔离的 `HOME` 下启动打包好的守护进程，等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。
+冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。
 
 ## 发布流水线 {#the-release-workflow}
 
-[`.github/workflows/release.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/release.yml) 在推送 `v*` tag 时运行（也可以手动触发，那样只构建产物不发布）。它有一个在 `macos-14` runner 上为 `aarch64-apple-darwin` 构建的任务，和一个发布任务。
+发布流水线（在 `.github/workflows/` 下）在推送 `v*` tag 时运行（也可以手动触发，那样只构建产物不发布）。它有一个在 `macos-14` runner 上为 `aarch64-apple-darwin` 构建的任务，和一个发布任务。
 
 ```mermaid
 flowchart TD
     T["推送 tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["构建前端（codegen + vite build）"]
-    F --> P["release_plan.py：哪些 secret 已设置"]
-    P --> S["stamp_channel.py stable（签名时加上 access group）"]
-    S --> B["build_binaries.sh（PyInstaller ×3，能签就签）"]
-    B --> K["smoke_test_bundle.sh（+ 校验签名、公证）"]
+    F --> P["发布计划：哪些 secret 已设置"]
+    P --> S["打上渠道标记 stable（签名时加上 access group）"]
+    S --> B["构建二进制（PyInstaller ×3，能签就签）"]
+    B --> K["冒烟测试（+ 校验签名、公证）"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
     K --> D["放置二进制 → tauri build（签名、公证、更新包）"]
     D --> G["Coffer[-unsigned]-aarch64-apple-darwin.dmg"]
@@ -75,29 +77,29 @@ flowchart TD
     H --> R["GitHub Release"]
 ```
 
-1. 用 `uv sync --frozen` 按 `backend/uv.lock` 安装后端，让打 tag 的构建严格使用锁定的依赖集。
+1. 用 `uv sync --frozen` 按后端的锁文件（`uv.lock`）安装后端，让打 tag 的构建严格使用锁定的依赖集。
 2. 构建前端（`npm run codegen`、`npm run build`）。守护进程的 spec 会把 `frontend/dist` 作为要提供的 Web 界面收进去。
-3. 判断哪些签名步骤可以运行（`scripts/release_plan.py`，见[签名、公证与更新](#signing-notarisation-and-updates)）。有 Developer ID 时，把它导入一个临时钥匙串，并打上钥匙串 access group 标记。
-4. 在 tag 上运行 `scripts/stamp_channel.py stable`（见[发布渠道](#release-channels)）。
+3. 判断哪些签名步骤可以运行（见[签名、公证与更新](#signing-notarisation-and-updates)）。有 Developer ID 时，把它导入一个临时钥匙串，并打上钥匙串 access group 标记。
+4. 在 tag 上打上渠道标记 `stable`（见[发布渠道](#release-channels)）。
 5. 冻结三个二进制——有 Developer ID 就用它签名——并对 `dist/` 跑冒烟测试。签名的构建随后会校验签名并对二进制做公证。
 6. 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 打包成 `coffer-cli-<triple>.tar.gz`。
-7. 把同样三个文件复制到 `desktop/binaries/<name>-<triple>`，运行 `tauri build`，产出 `.dmg`——签名时是 `Coffer-<triple>.dmg`（随后公证并 staple），否则是 `Coffer-unsigned-<triple>.dmg`——有更新密钥时还会产出签名的更新包和 `latest.json`。
+7. 把同样三个文件以 `<name>-<triple>` 的名字放进桌面 crate，运行 `tauri build`，产出 `.dmg`——签名时是 `Coffer-<triple>.dmg`（随后公证并 staple），否则是 `Coffer-unsigned-<triple>.dmg`——有更新密钥时还会产出签名的更新包和 `latest.json`。
 8. 对每个产物写出 `SHA256SUMS`，然后为这个 tag 创建（或用 `--clobber` 更新）GitHub Release。
 
 只发布 Apple Silicon 上的 macOS 版本。spec 和构建脚本是跨平台的，所以扩大发布矩阵只是改流水线，而不是重新设计。
 
-版本号存在好几个必须完全一致的文件里——其中包括 Python 包、前端 `package.json` 及其锁文件、桌面 crate 和 `tauri.conf.json`。[`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) 一步改写全部文件，并有一个集成测试确保它们一致。桌面应用把自己的版本和 `/api/v1/daemon/status` 报告的 `version` 比较；不一致时，Web 界面显示一条**守护进程版本过旧**横幅，带一个重启操作。
+版本号存在好几个必须完全一致的文件里——其中包括 Python 包、前端 `package.json` 及其锁文件、桌面 crate 及其 Tauri 配置。一个版本号脚本一步改写全部文件，并有一个集成测试确保它们一致。桌面应用把自己的版本和 `/api/v1/daemon/status` 报告的 `version` 比较；不一致时，Web 界面显示一条**守护进程版本过旧**横幅，带一个重启操作。
 
 ## 桌面安装包 {#the-desktop-bundle}
 
-桌面应用是一个 Tauri 2 壳，包着守护进程提供的同一套 Web 界面（[`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json)）。它打包 `app` 和 `dmg` 两个目标，把 `frontend/dist` 作为本地资源加载，并把三个二进制列为 `externalBin`。Tauri 把每个 `binaries/<name>` 条目解析为 `binaries/<name>-<target-triple>`，放到 `Coffer.app/Contents/MacOS/`，和应用自己的可执行文件放在一起。
+桌面应用是一个 Tauri 2 壳，包着守护进程提供的同一套 Web 界面。它的 Tauri 配置打包 `app` 和 `dmg` 两个目标，把构建好的前端作为本地资源加载，并把三个二进制列为外部二进制。Tauri 把每个二进制名字解析为 `<name>-<target-triple>`，放到 `Coffer.app/Contents/MacOS/`，和应用自己的可执行文件放在一起。
 
 应用启动时按固定顺序寻找守护进程：`~/.coffer/daemon.json` 指向的、已在运行的守护进程（直接附着，从不重新拉起）；应用包里的二进制；`~/.coffer/bin/coffer-daemon`；`PATH` 上的 `coffer-daemon`；都没有就提示你安装命令行。壳自己从不写 `~/.coffer/bin`——那是它启动的守护进程的事（见下一节）。所以装了应用也就装了命令行。
 
 | 目标 | 做什么 |
 | --- | --- |
 | `make desktop` | 构建前端，运行 `make bundle-binaries`，按宿主机三元组放置二进制，然后运行 `tauri build`。在 `desktop/target/release/bundle/` 下产出未签名的 `.app` 和 `.dmg`。大约需要 50 分钟，主要花在 PyInstaller 上。 |
-| `make desktop-stage-binaries` | 为缺失的 `externalBin` 条目放置占位脚本，让 `cargo` 不需要冻结构建也能编译 crate。 |
+| `make desktop-stage-binaries` | 为缺失的外部二进制放置占位脚本，让 `cargo` 不需要冻结构建也能编译 crate。 |
 | `make desktop-lint` | `cargo check` 和 `cargo clippy -D warnings`。 |
 | `make desktop-test` | `cargo test`。 |
 
@@ -109,7 +111,7 @@ flowchart TD
 
 ### 一行安装脚本 {#the-one-line-installer}
 
-[`install.sh`](https://github.com/wyx-sg/Coffer/blob/main/docs-site/public/install.sh) 由文档站提供，是 POSIX `sh` 脚本：
+`install.sh` 由文档站提供，是 POSIX `sh` 脚本：
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -119,7 +121,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 ### 按版本分的目录与符号链接切换 {#versioned-directories-and-the-symlink-flip}
 
-每个冻结的守护进程，不管来自哪一档下载，都会在启动时部署它的兄弟二进制（[`application/binary_deploy.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/binary_deploy.py)）。源码安装跳过这一步，因为 `pip install` 已经把控制台脚本放到了 `PATH` 上。
+每个冻结的守护进程，不管来自哪一档下载，都会在启动时部署它的兄弟二进制。源码安装跳过这一步，因为 `pip install` 已经把控制台脚本放到了 `PATH` 上。
 
 ```text
 ~/.coffer/bin/
@@ -162,17 +164,11 @@ stateDiagram-v2
 
 ## 发布渠道 {#release-channels}
 
-每个构建都在 [`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) 里带一个渠道：
-
-```python
-CHANNEL: Literal["stable", "dev"] = "dev"
-```
-
-仓库里永远写的是 `dev`。发布流水线在 tag 上、PyInstaller 之前运行 `scripts/stamp_channel.py stable`，所以只有打 tag 的发布是 `stable`。二进制是否冻结不是判断依据：维护者自己的测试构建也是冻结的，但仍是 `dev`。渠道由 `/api/v1/daemon/status` 以 `channel` 字段报告，它唯一的作用是决定实验功能的默认状态。
+每个构建都带一个渠道，`stable` 或 `dev`，记录在后端包里的一个常量中。仓库里永远写的是 `dev`。发布流水线在 tag 上、PyInstaller 运行之前把它改写为 `stable`，所以只有打 tag 的发布是 `stable`。二进制是否冻结不是判断依据：维护者自己的测试构建也是冻结的，但仍是 `dev`。渠道由 `/api/v1/daemon/status` 以 `channel` 字段报告，它唯一的作用是决定实验功能的默认状态。
 
 ## 实验功能 {#experimental-features}
 
-实验功能是一项在每个构建里都有、但在 `stable` 上默认关闭的能力。[`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) 里的注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
+实验功能是一项在每个构建里都有、但在 `stable` 上默认关闭的能力。领域层里的功能注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
 
 注册表目前是空的。同步（`vault_sync`）、知识（`knowledge`）和记忆（`memory`）在 1.0 之前是其中的条目，并在 1.0 转正：它们的条目和所有提到它们的门禁都被删除，一次迁移把它们存储的开关从 `daemon-config.json` 中清掉。注册表不再声明的已存储键会被忽略，所以残留的键无害。
 
@@ -184,7 +180,7 @@ CHANNEL: Literal["stable", "dev"] = "dev"
 
 ```mermaid
 flowchart LR
-    Q["某功能前缀下的请求"] --> G{"require_feature(key)"}
+    Q["某功能前缀下的请求"] --> G{"功能门禁（key）"}
     G -->|固定值？| P["COFFER_FEATURES"]
     G -->|有设置？| S["daemon-config.json"]
     G -->|否则| C["渠道默认值"]
@@ -194,7 +190,7 @@ flowchart LR
 
 门禁在请求时执行：
 
-- 前缀落在某功能前缀之下的每个路由器，挂载时都带一个 `require_feature` 依赖。路由始终保持注册，所以 OpenAPI 文档从不随开关变化，开关在下一个请求就生效。
+- 前缀落在某功能前缀之下的每个路由器，挂载时都带一个检查该功能状态的功能门禁依赖。路由始终保持注册，所以 OpenAPI 文档从不随开关变化，开关在下一个请求就生效。
 - 与类型无关的 `/api/v1/resources` 路由会拒绝属于被关闭功能的类型的资源，并在列表中略去这些资源。
 - MCP 网关从工具列表中去掉该功能的内置工具，对它们的调用按未知工具处理；握手说明也不再提到它们。
 - 命令行命令经由被把关的路由访问守护进程，会打印一行指向 `coffer config set feature.<key> on` 的提示，然后以 1 退出。
@@ -204,17 +200,17 @@ flowchart LR
 
 ## 签名、公证与更新 {#signing-notarisation-and-updates}
 
-有三类凭据能把未签名发布变成签名发布，每一类都是可选的。[`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) 只被告知每个 secret 是否已设置——从不知道它的值——然后回答后续步骤的 `if:` 要读的三个问题。它关掉的每一步都会在运行页面上标出缺的是哪个 secret，未签名的发布照旧构建和发布，所以 fork 或没有这些 secret 的仓库也保持绿色。
+有三类凭据能把未签名发布变成签名发布，每一类都是可选的。一个发布计划步骤只被告知每个 secret 是否已设置——从不知道它的值——然后回答后续步骤的 `if:` 条件要读的三个问题。它关掉的每一步都会在运行页面上标出缺的是哪个 secret，未签名的发布照旧构建和发布，所以 fork 或没有这些 secret 的仓库也保持绿色。
 
 | 步骤 | 设置了这些时运行 | 做什么 |
 | --- | --- | --- |
-| Developer ID 签名 | `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_TEAM_ID` | 把证书导入临时钥匙串；把 `<TEAM_ID>.coffer` 写进 `build_identity.py` 和壳；PyInstaller 为每个冻结二进制及其收集的每个库签名，Tauri 为应用签名，都使用 hardened runtime，带 `keychain-access-groups` entitlement，不带 `get-task-allow`；打包前校验签名。 |
+| Developer ID 签名 | `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_TEAM_ID` | 把证书导入临时钥匙串；把 `<TEAM_ID>.coffer` 写进后端的构建身份和壳；PyInstaller 为每个冻结二进制及其收集的每个库签名，Tauri 为应用签名，都使用 hardened runtime，带 `keychain-access-groups` entitlement，不带 `get-task-allow`；打包前校验签名。 |
 | 公证 | 以上各项，再加 `APPLE_API_KEY`、`APPLE_API_KEY_ID`、`APPLE_API_ISSUER` | `notarytool` 为命令行二进制做公证（以 zip 形式；裸二进制无法 staple），Tauri 在用应用构建 `.dmg` 和更新包之前为应用公证并 staple，流水线再为 `.dmg` 公证并 staple。 |
-| 更新源 | `TAURI_SIGNING_PRIVATE_KEY`（如有密码也要它的密码），以及仓库变量 `COFFER_UPDATER_PUBKEY` | Tauri 用更新密钥为 `Coffer.app.tar.gz` 签名；`scripts/make_update_manifest.py` 写出 `latest.json`；公钥编译进壳里。 |
+| 更新源 | `TAURI_SIGNING_PRIVATE_KEY`（如有密码也要它的密码），以及仓库变量 `COFFER_UPDATER_PUBKEY` | Tauri 用更新密钥为 `Coffer.app.tar.gz` 签名；一个清单步骤写出 `latest.json`；公钥编译进壳里。 |
 
 ### 钥匙串 access group {#the-keychain-access-group}
 
-主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：[`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py) 在 PyInstaller 冻结之前改写 `backend/coffer/infrastructure/secret/build_identity.py` 里的 `KEYCHAIN_ACCESS_GROUP`，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，[`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) 用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。
+主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。
 
 ### 桌面应用怎样更新 {#how-the-desktop-app-updates}
 
@@ -234,7 +230,7 @@ sequenceDiagram
     App->>D: 拉起新版本的守护进程，等它响应
 ```
 
-更新器（`tauri-plugin-updater`）运行在壳的 Rust 进程里；webview 没有它的任何权限，其内容策略仍然只允许回环地址。壳检查 [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json) 中 `plugins.updater.endpoints` 指定的清单，并用编译时带入的公钥校验每个更新包。`requireSignedVersion` 还会拒绝签名版本与清单所写版本不同的更新包，所以被篡改的清单无法把新版本号和旧发布配在一起。编译时没有密钥的构建从不检查更新。安装完成后，壳带着环境变量里的一个标记重新启动，重启后的壳在第一次握手时，通过菜单栏用的同一套重启流程替换掉旧版本的守护进程。见[桌面应用 → 更新](/zh/guides/desktop-app#update)。
+更新器（Tauri 的更新插件）运行在壳的 Rust 进程里；webview 没有它的任何权限，其内容策略仍然只允许回环地址。壳检查其 Tauri 配置中作为更新端点指定的清单，并用编译时带入的公钥校验每个更新包。更新器还要求签名中的版本一致，拒绝签名版本与清单所写版本不同的更新包，所以被篡改的清单无法把新版本号和旧发布配在一起。编译时没有密钥的构建从不检查更新。安装完成后，壳带着环境变量里的一个标记重新启动，重启后的壳在第一次握手时，通过菜单栏用的同一套重启流程替换掉旧版本的守护进程。见[桌面应用 → 更新](/zh/guides/desktop-app#update)。
 
 ### 未签名的发布 {#an-unsigned-release}
 
@@ -262,24 +258,14 @@ sequenceDiagram
 
 ## 在代码中的位置 {#where-it-lives-in-the-code}
 
-| 路径 | 做什么 |
+| 目录 | 放着什么 |
 | --- | --- |
-| [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec)、[`coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec)、[`coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | PyInstaller spec |
-| [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) | 把三个二进制都冻结到 `dist/` |
-| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | 构建后守护进程和 shim 的往返测试 |
-| [`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) | 检查 spec 路径失效和 `-X utf8` 的 lint 门禁 |
-| [`scripts/stamp_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_channel.py)、[`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) | 发布渠道 |
-| [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) | 在每个带版本号的文件里设置版本 |
-| [`.github/workflows/release.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/release.yml) | 发布构建与发布 |
-| [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py)、[`scripts/release_signing.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_signing.sh) | 哪些签名步骤运行；钥匙串、校验、notarytool、stapler |
-| [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py)、[`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) | 钥匙串 access group 的标记与授权 |
-| [`scripts/make_update_manifest.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/make_update_manifest.py)、[`desktop/src/updater.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/updater.rs) | 更新清单，以及读取它的壳 |
-| [`.github/workflows/desktop.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/desktop.yml) | 桌面 crate 的 check、clippy 和测试 |
-| [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json)、[`desktop/src/resolve.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/resolve.rs) | 打包配置与守护进程查找顺序 |
-| [`docs-site/public/install.sh`](https://github.com/wyx-sg/Coffer/blob/main/docs-site/public/install.sh) | 一行安装脚本 |
-| [`backend/coffer/application/binary_deploy.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/binary_deploy.py) | 按版本部署与符号链接切换 |
-| [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | 迁移前的数据库副本 |
-| [`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)、[`application/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/features.py)、[`surfaces/http/feature_dependencies.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/feature_dependencies.py) | 功能注册表、状态解析、请求时门禁 |
+| `backend/` | 三个 PyInstaller spec |
+| `scripts/` | 构建、冒烟测试、spec 检查、渠道与构建身份打标记、发布计划与签名、更新清单、版本号改写 |
+| `.github/workflows/` | 发布流水线和 `desktop` 检查流水线 |
+| `desktop/` | Tauri 壳：打包配置、entitlements、守护进程查找顺序、更新器 |
+| `docs-site/public/` | 一行安装脚本 |
+| 后端的应用层 | 按版本部署与符号链接切换、实验功能状态；HTTP 界面层放着请求时门禁和迁移前的数据库副本 |
 
 ## 相关页面 {#related}
 

@@ -88,7 +88,7 @@ After a round that changed the vault, the [reconciler](/architecture/reconciler)
 
 ### Round outcomes
 
-Every round is recorded in `runs.db` (`sync_runs`) and audited, whatever its outcome:
+Every round is recorded in the round history in `runs.db` and audited, whatever its outcome:
 
 | Status | Meaning |
 | --- | --- |
@@ -115,7 +115,7 @@ Each conflicting file gets one of three answers:
 - **Take the other's** (`theirs`), shown with the diff of what changes here.
 - **Edit.** Coffer writes a marked-up copy of git's merge under `derived/sync-conflicts/` and opens it in your editor. The vault's own file never receives a conflict marker. Marking it resolved is refused while a marker is left, and the refusal names the line.
 
-A fourth way to reach the edit answer hands the merge to an agent, because merging two people's edits is judgement Coffer does not make (Principle IV). For every file both sides edited, the stopped round's `handoff` prompt names the vault, both sides' commits, the `git -C <vault> diff` commands and the marked-up copy Coffer has already written. The agent edits only those copies and never the vault or its git history. **I merged it** (`POST /api/v1/sync/stop/merged`, `coffer sync resolve --merged`) then records every copy as that file's edited answer, and refuses the whole request while any copy still holds a marker. The prompt is built in `domain/sync/handoffs.py`. It never carries a secret: a `secret/*.enc` file in a stop offers only mine and theirs, gets no editor copy, and is only counted in the prompt.
+A fourth way to reach the edit answer hands the merge to an agent, because merging two people's edits is judgement Coffer does not make (Principle IV). For every file both sides edited, the stopped round's `handoff` prompt names the vault, both sides' commits, the `git -C <vault> diff` commands and the marked-up copy Coffer has already written. The agent edits only those copies and never the vault or its git history. **I merged it** (`POST /api/v1/sync/stop/merged`, `coffer sync resolve --merged`) then records every copy as that file's edited answer, and refuses the whole request while any copy still holds a marker. The prompt is built by the sync domain. It never carries a secret: a `secret/*.enc` file in a stop offers only mine and theirs, gets no editor copy, and is only counted in the prompt.
 
 A remote's refusal is handed over the same way. A rejected push, a refused sign-in and an unreachable remote put a prompt on the status's `problem`: the URL without credentials, the branch, the secret's name and git's message scrubbed of token shapes. A missing `git` is the problem `git_missing`, with the shared install hand-off.
 
@@ -215,17 +215,15 @@ The cost is real: a genuine conflict stops sync on this machine until you answer
 
 ## Where it lives in the code
 
-| Path | Responsibility |
+| Package | Responsibility |
 | --- | --- |
-| [`domain/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/sync) | Round statuses and records, stops and answers, joins, the deletion breaker, the machine descriptor, the remote |
-| [`application/sync/round_engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_engine.py) | The round |
-| [`application/sync/round_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_guard.py), [`round_trees.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_trees.py) | Validation, the breaker, identity clashes, descriptors and ciphertext in a merged tree |
-| [`application/sync/round_answers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_answers.py), [`round_resume.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_resume.py) | Answers to a stop, a hold and a join, and continuing the round |
-| [`application/sync/round_join.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_join.py), [`round_rollback.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_rollback.py) | Join preview and join; rollback plan and rollback |
-| [`application/sync/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/service.py), [`worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/worker.py) | The lock, recording and auditing rounds, the remote, machines; the interval loop |
-| [`infrastructure/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/sync) | Git over the vault, machine id and descriptor, cloud-folder detection, local sync state |
-| [`infrastructure/vault/git.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/git.py), [`merge.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/merge.py) | One safe `git` process; the merge and the checkout |
-| [`surfaces/http/sync_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_wiring.py), [`sync_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_routes.py), [`sync_stop_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_stop_routes.py) | Composition and the `/api/v1/sync` routes |
+| `domain/sync/` | Round statuses and records, stops and answers, the agent hand-off prompt, joins, the deletion breaker, the machine descriptor, the remote |
+| `application/sync/` | The round; validation, the breaker, identity clashes, descriptors and ciphertext in a merged tree; answers to a stop, a hold and a join, and continuing the round; join preview and join; rollback plan and rollback; the lock, recording and auditing rounds, the remote, machines; the interval loop |
+| `infrastructure/sync/` | Git over the vault, machine id and descriptor, cloud-folder detection, local sync state |
+| `infrastructure/vault/` | One safe `git` process; the merge and the checkout |
+| `surfaces/http/` | Composition and the `/api/v1/sync` routes |
+
+All paths are under `backend/coffer/`.
 
 ## Related
 

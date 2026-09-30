@@ -88,7 +88,7 @@ sequenceDiagram
 
 ### 一轮同步的结果 {#round-outcomes}
 
-每一轮无论结果如何，都会记录在 `runs.db`（`sync_runs`）中并审计：
+每一轮无论结果如何，都会记录在 `runs.db` 的同步轮次历史中并审计：
 
 | 状态 | 含义 |
 | --- | --- |
@@ -115,7 +115,7 @@ sequenceDiagram
 - **采用另一台的**（`theirs`），会显示本机将发生哪些改动的 diff。
 - **编辑。** Coffer 在 `derived/sync-conflicts/` 下写一份带标记的 git 合并副本，并在你的编辑器里打开它。保险库自己的文件永远不会收到冲突标记。只要还留有标记，标为已解决就会被拒绝，拒绝信息会点名那一行。
 
-还有第四种方式得到“编辑”这个答复：把合并交给智能体，因为合并两个人的修改需要判断，Coffer 不替你做（原则 IV）。对每个两边都改过的文件，停下的这一轮的 `handoff` 提示词会写明保险库、两边的提交、`git -C <vault> diff` 命令，以及 Coffer 已经写好的带标记副本。智能体只编辑这些副本，从不碰保险库或它的 git 历史。之后 **我已合并**（`POST /api/v1/sync/stop/merged`、`coffer sync resolve --merged`）会把每份副本记录为对应文件的“编辑”答复；只要还有任何一份副本留有标记，整个请求都会被拒绝。提示词在 `domain/sync/handoffs.py` 里构建。它从不携带密钥：停下的一轮里的 `secret/*.enc` 文件只提供“保留本机的”和“采用另一台的”两个选项，没有编辑用的副本，在提示词里也只计数。
+还有第四种方式得到“编辑”这个答复：把合并交给智能体，因为合并两个人的修改需要判断，Coffer 不替你做（原则 IV）。对每个两边都改过的文件，停下的这一轮的 `handoff` 提示词会写明保险库、两边的提交、`git -C <vault> diff` 命令，以及 Coffer 已经写好的带标记副本。智能体只编辑这些副本，从不碰保险库或它的 git 历史。之后 **我已合并**（`POST /api/v1/sync/stop/merged`、`coffer sync resolve --merged`）会把每份副本记录为对应文件的“编辑”答复；只要还有任何一份副本留有标记，整个请求都会被拒绝。提示词由同步领域层构建。它从不携带密钥：停下的一轮里的 `secret/*.enc` 文件只提供“保留本机的”和“采用另一台的”两个选项，没有编辑用的副本，在提示词里也只计数。
 
 远端的拒绝也以同样方式交接。推送被拒、登录被拒和远端无法访问，都会在状态的 `problem` 上放一段提示词：不含凭据的 URL、分支、密钥的名字，以及去掉了 token 形态内容的 git 消息。缺少 `git` 则是问题 `git_missing`，附带共用的安装交接提示词。
 
@@ -215,17 +215,15 @@ Coffer 调用真正的 `git`，所以远端始终是一个你可以克隆和查�
 
 ## 在代码中的位置 {#where-it-lives-in-the-code}
 
-| 路径 | 职责 |
+| 包 | 职责 |
 | --- | --- |
-| [`domain/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/sync) | 本轮状态与记录、停止与答复、加入、删除断路器、机器描述文件、远端 |
-| [`application/sync/round_engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_engine.py) | 一轮同步 |
-| [`application/sync/round_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_guard.py)、[`round_trees.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_trees.py) | 合并树中的校验、断路器、身份冲突、描述文件和密文 |
-| [`application/sync/round_answers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_answers.py)、[`round_resume.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_resume.py) | 对停止、扣住和加入的答复，以及继续这一轮 |
-| [`application/sync/round_join.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_join.py)、[`round_rollback.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_rollback.py) | 加入预览与加入；回滚计划与回滚 |
-| [`application/sync/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/service.py)、[`worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/worker.py) | 锁、各轮的记录与审计、远端、机器；间隔循环 |
-| [`infrastructure/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/sync) | 基于保险库的 Git 操作、机器 id 和描述文件、云文件夹检测、本地同步状态 |
-| [`infrastructure/vault/git.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/git.py)、[`merge.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/merge.py) | 一个安全的 `git` 进程；合并与检出 |
-| [`surfaces/http/sync_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_wiring.py)、[`sync_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_routes.py)、[`sync_stop_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_stop_routes.py) | 组装与 `/api/v1/sync` 路由 |
+| `domain/sync/` | 本轮状态与记录、停止与答复、交给智能体的提示词、加入、删除断路器、机器描述文件、远端 |
+| `application/sync/` | 一轮同步；合并树中的校验、断路器、身份冲突、描述文件和密文；对停止、扣住和加入的答复，以及继续这一轮；加入预览与加入；回滚计划与回滚；锁、各轮的记录与审计、远端、机器；间隔循环 |
+| `infrastructure/sync/` | 基于保险库的 Git 操作、机器 id 和描述文件、云文件夹检测、本地同步状态 |
+| `infrastructure/vault/` | 一个安全的 `git` 进程；合并与检出 |
+| `surfaces/http/` | 组装与 `/api/v1/sync` 路由 |
+
+以上路径都在 `backend/coffer/` 下。
 
 ## 相关内容 {#related}
 

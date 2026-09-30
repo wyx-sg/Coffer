@@ -55,13 +55,13 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 | `MEMORY.md` | 仅提炼 | 可查找。每条笔记一行，按类型分组，最新的在前。 |
 | `RETIRED.md` | 仅提炼 | 让退役生效。下一轮提炼会把它当作排除清单读取。 |
 
-因为每个目录恰好只有一个写入者，提炼出了问题可以重跑，而不必重新读取智能体：`.raw/` 里仍保存着它们说过的一切。这条规则在代码里可以检查：`infrastructure/memory/raw_store.py` 是写入 `.raw/` 的唯一路径，提炼流程不会为了写入而导入它。
+因为每个目录恰好只有一个写入者，提炼出了问题可以重跑，而不必重新读取智能体：`.raw/` 里仍保存着它们说过的一切。这条规则在代码里可以检查：只有一个模块会写入 `.raw/`，提炼流程从不借它来写。
 
 记忆根目录固定为 `~/.coffer/derived/memory/`，属于派生存储类别（见[持久化](/zh/architecture/persistence)），不能改。测试套件给每个测试一个独立的 `HOME`，所以测试永远不会改写开发者真实的记忆树。
 
 ### 一个分区就是一个仓库 {#a-partition-is-a-repository}
 
-分区按**仓库**识别，而不是按路径。主检出、它的 worktree 以及第二份克隆都归入同一个分区。身份键由 `domain/memory/repository.py` 推导：
+分区按**仓库**识别，而不是按路径。主检出、它的 worktree 以及第二份克隆都归入同一个分区。身份键这样推导：
 
 - 仓库有远端时，键是规范化后的远端 URL。规范化会去掉 scheme、用户名、端口、结尾的 `.git` 和结尾的斜杠，并把主机名转小写。路径的大小写保留，因为在大多数代码托管平台上 `owner/Repo` 和 `owner/repo` 是不同的仓库。所以 `git@host:owner/repo.git` 和 `https://host/owner/repo` 得到同一个键。
 - 没有远端的仓库退回使用它自己的根路径。键上加了前缀，保证路径永远不会和 URL 撞键。
@@ -74,17 +74,17 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 - 没有工作目录、或工作目录就是你的家目录的条目，进 `global`。
 - 在不属于任何仓库的目录里学到的条目，进 `global` 的 `.raw/`。不会为那个目录创建分区。之后由提炼按条目本身判断，要么留在 `global`，要么什么都不留。
 
-只有聚合会创建分区。`memory` 类型设置了 `generic_create_allowed=False`，`MemoryService` 通过生命周期的 opt-in 注册新分区。组装上下文从不创建分区。记录的仓库已不在磁盘上的分区，会在分区列表里显示为 `unresolvable`，你仍然可以删除它。聚合本身从不删除分区。
+只有聚合会创建分区。`memory` 类型拒绝通用的创建路由，由记忆服务自己通过资源生命周期的 opt-in 注册新分区。组装上下文从不创建分区。记录的仓库已不在磁盘上的分区，会在分区列表里显示为 `unresolvable`，你仍然可以删除它。聚合本身从不删除分区。
 
 ### 没有按智能体的生效范围，也没有开关 {#no-per-agent-reach-and-no-switch}
 
-大多数资源类型都带有按智能体的**生效范围**（见[资源框架](/zh/architecture/resource-framework)）。记忆没有：它的类型把 `supports_scope` 保持为 `False`，并声明 `toggleable=False`，所以分区也没有启用开关，通用的启用/禁用路由会以 `RESOURCE_NOT_TOGGLEABLE` 拒绝。**每个**分区都投递给**每个**智能体。笔记本身就是记忆根目录下的文件。
+大多数资源类型都带有按智能体的**生效范围**（见[资源框架](/zh/architecture/resource-framework)）。记忆没有：它的类型不声明按智能体的范围，并声明自己不可开关，所以分区也没有启用开关，通用的启用/禁用路由会以 `RESOURCE_NOT_TOGGLEABLE` 拒绝。**每个**分区都投递给**每个**智能体。笔记本身就是记忆根目录下的文件。
 
 这是有意为之。按智能体设默认值是很自然的想法，即“把分区限定给它聚合自的那些智能体”。但这个默认值恰好和这一层的目的相反。一个只从 Claude Code 填充的分区，会对在同一仓库工作的 Codex 隐藏，而 Codex 恰恰是还没学到这些的那个智能体。况且生效范围本来也不是真正的边界。笔记是任何本地进程都能打开的普通文件，所以分区上的任何开关最多只能决定 Coffer *提供*什么；一个被禁用的分区，依然是任何智能体都能读的文件。
 
 ### 什么都不同步 {#nothing-syncs}
 
-记忆树派生自*这台*机器上安装的智能体，所以它永远不会到达[保险库同步](/zh/architecture/vault-sync)的远端。`memory` 类型声明的是派生存储类别（`Kind.storage`）：它的资源文件和整棵树都在 `~/.coffer/derived/` 下，位于保险库仓库之外，同步没有东西可带。每台机器聚合自己的智能体。只有人写下或启用的触发器存在保险库里（`vault/memory-triggers/`），因为它们是人写的，不是派生的。
+记忆树派生自*这台*机器上安装的智能体，所以它永远不会到达[保险库同步](/zh/architecture/vault-sync)的远端。`memory` 类型声明的是派生存储类别：它的资源文件和整棵树都在 `~/.coffer/derived/` 下，位于保险库仓库之外，同步没有东西可带。每台机器聚合自己的智能体。只有人写下或启用的触发器存在保险库里（`vault/memory-triggers/`），因为它们是人写的，不是派生的。
 
 ### 没有自己的表 {#no-table-of-its-own}
 
@@ -92,14 +92,14 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 
 ## 读取原生记忆 {#reading-native-memory}
 
-每个受支持的智能体有一个读取器，实现 `domain/memory/reader.py` 里的 `MemoryReader` 协议。协议分两步：
+每个受支持的智能体有一个读取器，所有读取器都遵循同一个两步约定：
 
-- `sources(config_dir)` 列出智能体的记忆文件并逐个算哈希，不解析。
-- `read(source)` 把一个文件解析成若干 `RawEntry`：标题、描述、类型、原文正文、锚点、项目根目录，以及可选的检索词。
+- **列出来源**：列出智能体的记忆文件并逐个算哈希，不解析。
+- **读取来源**：把一个文件解析成若干原始条目：标题、描述、类型、原文正文、锚点、项目根目录，以及可选的检索词。
 
-拆成两步，聚合才能在付出解析代价之前跳过没变的文件。Coffer 只读**已注册且已启用**的智能体，路径由每个智能体自己的 `config_dir` 推导。
+拆成两步，聚合才能在付出解析代价之前跳过没变的文件。Coffer 只读**已注册且已启用**的智能体，路径由每个智能体自己的配置目录（下文的 `config_dir`）推导。
 
-| | Claude Code（`readers/claude_code.py`） | Codex（`readers/codex.py`） |
+| | Claude Code | Codex |
 | --- | --- | --- |
 | 读取的文件 | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` 和 `memory_summary.md` |
 | 一条条目对应 | 一个事实文件 | 任务组里一个有内容的列表小节（`User preferences`、`Reusable knowledge`、`Failures and how to do differently`），外加 summary 里的档案和档案偏好 |
@@ -113,17 +113,17 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 
 Codex 检索词的关联刻意保守。Codex 在 summary 里会改写组的标题，所以精确匹配标题几乎找不到东西。读取器改按词元覆盖率匹配，并且只有在恰好一个组过线、*并且*恰好一个 summary 主题认领该组时才附上检索词。归错比不归更糟。
 
-读取器解析不了某个文件时，会抛出带文件路径的 `UnreadableMemory`。聚合把这个失败隔离在那一个文件上：这一轮会报告失败，附上智能体、路径和原因，其他来源照常聚合，坏掉的来源之前产出的东西一条都不会被清理。读取器抛出的意外异常也按同样方式隔离。
+读取器解析不了某个文件时，会把它报告为不可读，并附上文件路径。聚合把这个失败隔离在那一个文件上：这一轮会报告失败，附上智能体、路径和原因，其他来源照常聚合，坏掉的来源之前产出的东西一条都不会被清理。读取器抛出的意外异常也按同样方式隔离。
 
 ## 聚合流程 {#the-aggregation-pass}
 
-`application/memory/aggregate.py` 把这一轮实现为一个作用在普通值和派生树上的纯函数。`MemoryService.aggregate` 在外面包上资源相关的部分：列出已启用的智能体和已有的分区行，注册新分区，并记一条 `memory_aggregated` 审计事件。
+这一轮本身是一个作用在普通值和派生树上的纯函数。记忆服务在外面包上资源相关的部分：列出已启用的智能体和已有的分区行，注册新分区，并记一条 `memory_aggregated` 审计事件。
 
 ```mermaid
 flowchart TD
   A["按已启用的智能体列出来源"] --> B{"摘要未变且条目仍在磁盘上？"}
   B -- 是 --> S["跳过：计为 skipped"]
-  B -- 否 --> R["reader.read(source)"]
+  B -- 否 --> R["读取器解析来源"]
   R -- 抛出异常 --> F["记录失败；保留旧条目；不保存摘要"]
   R -- 条目 --> P["安放每条条目：global 或仓库分区"]
   P --> W["原样写入 partition/.raw/"]
@@ -145,7 +145,7 @@ flowchart TD
 
 摘要文件丢失或损坏时，下一轮会重新解析所有来源。正确性不受影响。
 
-`version` 是归档规则的版本（`infrastructure/memory/source_state.py` 里的 `STATE_VERSION`）。摘要只说明来源没变，并不说明安放其条目的规则没变，所以改变条目归属的构建会提升这个版本。在其他版本下写的文件读出来为空：下一轮会把每个来源重读一次，按当前规则归档条目，并删掉之前写在别处的那些。
+`version` 是归档规则的版本。摘要只说明来源没变，并不说明安放其条目的规则没变，所以改变条目归属的构建会提升这个版本。在其他版本下写的文件读出来为空：下一轮会把每个来源重读一次，按当前规则归档条目，并删掉之前写在别处的那些。
 
 ### 稳定的原始条目 {#stable-raw-entries}
 
@@ -161,7 +161,7 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-  participant P as distil_partition
+  participant P as 提炼流程
   participant M as 内部模型
   participant FS as 分区文件
   P->>FS: 让 .raw 条目已全部消失的笔记退役
@@ -201,7 +201,7 @@ sequenceDiagram
 
 ### 安全降级 {#degrading-safely}
 
-- **没有内部连接。** `_distil_mechanically` 是一个同步函数，没有可以调用模型的补全端口。每条新条目各自成为一条笔记，带上来源的标题、描述、文本、类型和检索词，索引根据它们的 frontmatter 写出。结果更单薄，但仍然可用。
+- **没有内部连接。** 这一轮退回机械提炼，它根本没有办法调用模型。每条新条目各自成为一条笔记，带上来源的标题、描述、文本、类型和检索词，索引根据它们的 frontmatter 写出。结果更单薄，但仍然可用。
 - **模型输出格式不对。** 未知的 slug、不是 JSON 的回答、或者动作指向了本批之外的条目，都会记日志并跳过。受影响的条目留在 `.raw/` 等下一轮。这一轮从不因为坏输出而抛异常。
 - **`MEMORY.md` 在每条路径上都会写**，包括什么都没变、以及所有模型调用都失败的情况。会话开始时的投递来自索引，没有索引的分区在会话开始时就什么也投递不了。
 
@@ -213,13 +213,13 @@ sequenceDiagram
 
 ## 索引行 {#the-index-line}
 
-`application/memory/index.py` 为每条笔记渲染一行。`MEMORY.md` 和投递都用它，所以两者永远不会不一致：
+同一个渲染器为每条笔记写出一行。`MEMORY.md` 和投递都用它，所以两者永远不会不一致：
 
 ```md
 - **Worktrees for parallel sessions** (`worktree-for-parallel-sessions.md`) — Another session edits the main checkout; work in a git worktree. · look up: worktree, parallel session
 ```
 
-一行承载的是笔记的结论，而不是指向它的指针，所以读完索引通常事情就办完了。它用相对路径命名文件，因为目录在每个投递面只说明一次。来源提供了检索词时，它会重复这些检索词。两个投递面按同一个“最新”定义排序，即 `index.recency`：笔记的 `updated_at`，退而取 `created_at`，再退而取来源的时间戳。它是一条回退链而不是 `max()`：刚重建完时，所有来源共享同一个捕获时间，用 `max()` 会让排序塌缩。
+一行承载的是笔记的结论，而不是指向它的指针，所以读完索引通常事情就办完了。它用相对路径命名文件，因为目录在每个投递面只说明一次。来源提供了检索词时，它会重复这些检索词。两个投递面按同一个共享的“最新”定义排序：笔记的 `updated_at`，退而取 `created_at`，再退而取来源的时间戳。它是一条回退链，而不是取三者中最晚的那个：刚重建完时，所有来源共享同一个捕获时间，取最晚值会让排序塌缩。
 
 ## 投递 {#delivery}
 
@@ -250,7 +250,7 @@ flowchart LR
 
 ### 会话开始时：有界索引 {#at-session-start-the-bounded-index}
 
-`application/memory/context.py` 里的 `compose_context` 为某个工作目录构建会话开始时的内容：
+组装上下文会为某个工作目录构建会话开始时的内容：
 
 1. 按包含 `cwd` 的最长已记录 `repository_path` 把 `cwd` 解析到一个分区。因此 worktree 会解析到它所属仓库的分区。未知目录解析到 `global`。
 2. 按顺序输出：一个 `## Coffer memory` 标题、*Known about you:* 下的 `global` 各行、当前仓库的各行、一行给出 `notes/` 目录的绝对路径并说明把笔记当文件读，以及一行给出记忆根目录，用于查找其他仓库的笔记。
@@ -258,8 +258,8 @@ flowchart LR
 
 这份内容有两个上限：
 
-- **token 上限** 为估算的 12,000 个 token（`DEFAULT_CEILING_TOKENS`），按整份索引而不是几行来定。
-- **字节上限** 为 9,500 个 UTF-8 字节（`DELIVERY_CEILING_BYTES`），适用于已安装 Hook 打印的任何内容。两个智能体都会截断更长的 Hook 输出，而两种截断都会丢掉关键的行：
+- **token 上限** 为估算的 12,000 个 token，按整份索引而不是几行来定。
+- **字节上限** 为 9,500 个 UTF-8 字节，适用于已安装 Hook 打印的任何内容。两个智能体都会截断更长的 Hook 输出，而两种截断都会丢掉关键的行：
   - **Claude Code** 把 Hook 输出内联保留到约 10,000 个字符。超过后，它把输出存到文件里，只给模型看约 2 KB 的预览，其中只有最新的几行 `global`，完全没有仓库的内容。
   - **Codex** 把 `additionalContext` 保留到 2,500 个 token，按 UTF-8 字节数 / 4 计算。超过后，它保留头尾、砍掉中间。
 
@@ -271,7 +271,7 @@ flowchart LR
 
 ### 每次提问时：字面检索 {#at-each-prompt-lexical-retrieval}
 
-在 `UserPromptSubmit` 时，守护进程用提问对会话所在仓库分区和 `global` 的笔记排序，并把最好的几条加入会话。`domain/memory/retrieval.py` 放排序器，`application/memory/retrieval.py` 放包在外面的服务。
+在 `UserPromptSubmit` 时，守护进程用提问对会话所在仓库分区和 `global` 的笔记排序，并把最好的几条加入会话。
 
 - **排序对象。** 每条笔记的标题、描述、检索词和正文，合成一个文档。
 - **方法。** 基于词元的 Okapi BM25，CJK 文本切成重叠的双字 bigram，所以不需要分词器，中文提问也能找到中文笔记。一个小的停用词表去掉太常见、不含信息的词。
@@ -378,7 +378,7 @@ sequenceDiagram
 
 它从不以进程 id 为键。同一个 Codex app-server 的所有会话共享一个父 pid，所以以 `$PPID` 为键的守卫在 Codex Desktop 和各 IDE 宿主下只会对每个 app-server 的第一个会话触发。
 
-台账不需要自己的表也能挺过守护进程重启。每一次有投递的触发都已经是一条 `memory_delivery_fired` 审计事件，记着它的会话、笔记，以及触发器触发时的触发器。新的守护进程在回答第一个提问或命令之前，`restore_from_audit`（`application/memory/ledger_restore.py`）会把最近七天的触发按从旧到新读回台账。所以正在运行的会话在重启后不会再次拿到同一条笔记，触发器也不会在其中拦第二条命令。闲置超过七天的会话视为新会话。审计日志读不出来时，失败会记日志，台账从空开始；代价是多一行重复内容或多一次拒绝。
+台账不需要自己的表也能挺过守护进程重启。每一次有投递的触发都已经是一条 `memory_delivery_fired` 审计事件，记着它的会话、笔记，以及触发器触发时的触发器。新的守护进程在回答第一个提问或命令之前，会把最近七天的触发按从旧到新读回台账。所以正在运行的会话在重启后不会再次拿到同一条笔记，触发器也不会在其中拦第二条命令。闲置超过七天的会话视为新会话。审计日志读不出来时，失败会记日志，台账从空开始；代价是多一行重复内容或多一次拒绝。
 
 ### 审计与投递视图 {#audit-and-the-delivery-views}
 
@@ -419,14 +419,14 @@ Coffer 按 Codex 的方式计算每个哈希，并读取这些记录。只有**�
 
 ### 消息渠道的轮次 {#channel-turns}
 
-来自 Telegram 或 SeaTalk 的轮次由 Coffer 自己驱动，所以这个轮次的记忆也由它自己组装。`wire_chat` 把 `surfaces/http/memory_turn_wiring.py` 里的两个闭包交给两个智能体提供方，两个闭包都捕获了 `TurnRetrieval`（`application/memory/turn_retrieval.py`）：
+来自 Telegram 或 SeaTalk 的轮次由 Coffer 自己驱动，所以这个轮次的记忆也由它自己组装。守护进程装配对话时，会把两个记忆回调交给两个智能体提供方，两个回调共用同一个轮次检索服务：
 
-- `memory_context_composer` 负责给出索引。`infrastructure/chat/adapter_support.py` 里的 `compose_system_context` 只在消息渠道驱动的轮次调用它，并传入对话的工作目录。它运行与 Hook 相同的 `compose_context`，所以消息渠道的轮次在系统提示词里拿到的索引和笔记路径，与终端会话拿到的一样。这次投递记为作答智能体的一次 `session_start` 触发，事件为 `ChannelTurn`。
-- `memory_turn_retriever` 负责给出提问点到的笔记。提供方只在消息渠道驱动的轮次把它绑定到该轮次（`infrastructure/chat/prompt_memory.py`），适配器把它返回的内容加在所发送提示词里用户文本的后面——也就是 `UserPromptSubmit` Hook 的上下文会落到的位置，所以笔记留在智能体自己的会话里。`TurnRetrieval` 调用的是 Hook 所走的同一个 `RetrievalService`，以 `conversation:<id>` 作为会话 id，所以一条笔记每个对话只给一次；它把这次投递记为作答智能体的一次 `prompt` 触发，事件为 `ChannelTurn`。存进对话的消息是用户自己的原文。
+- **索引回调**负责给出索引。对话适配器在组装系统提示词时调用它，只针对消息渠道驱动的轮次，并传入对话的工作目录。它运行与 Hook 相同的上下文组装，所以消息渠道的轮次在系统提示词里拿到的索引和笔记路径，与终端会话拿到的一样。这次投递记为作答智能体的一次 `session_start` 触发，事件为 `ChannelTurn`。
+- **检索回调**负责给出提问点到的笔记。提供方只在消息渠道驱动的轮次把它绑定到该轮次，适配器把它返回的内容加在所发送提示词里用户文本的后面——也就是 `UserPromptSubmit` Hook 的上下文会落到的位置，所以笔记留在智能体自己的会话里。轮次检索服务调用的是 Hook 所走的同一个检索服务，以 `conversation:<id>` 作为会话 id，所以一条笔记每个对话只给一次；它把这次投递记为作答智能体的一次 `prompt` 触发，事件为 `ChannelTurn`。存进对话的消息是用户自己的原文。
 
 两个闭包什么都没找到、或者树读不了时（会记日志；记忆是轮次的附加内容，不是前提），都什么也不返回。
 
-Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设置：Agent SDK 读取用户的 `settings.json`，`codex app-server` 运行已被信任的 `hooks.json`。所以在已连接的智能体上，Coffer 的 Hook 在消息渠道轮次里同样会触发；如果没有专门的规则，它会第二次把索引和笔记交给智能体（它的台账以智能体的会话 id 为键，从没见过这个轮次的 id），并把每次提问审计两遍。因此每个时机只有一个负责方。提供方在消息渠道轮次的进程环境里设置 `COFFER_CHANNEL_TURN=1`（`domain/channel_turn.py`，合并在守护进程自身的环境之上），智能体会把这个环境传给它运行的每个 Hook，`coffer memory hook` 看到这个标记时，在 `SessionStart` 或 `UserPromptSubmit` 上什么都不回答。它不联系守护进程，所以什么都不记录。守卫和错误上下文仍然走 Hook，因为轮次本身不投递这两者：已连接智能体上的消息渠道轮次，和终端会话一样会被已启用的触发器拦截。
+Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设置：Agent SDK 读取用户的 `settings.json`，`codex app-server` 运行已被信任的 `hooks.json`。所以在已连接的智能体上，Coffer 的 Hook 在消息渠道轮次里同样会触发；如果没有专门的规则，它会第二次把索引和笔记交给智能体（它的台账以智能体的会话 id 为键，从没见过这个轮次的 id），并把每次提问审计两遍。因此每个时机只有一个负责方。提供方在消息渠道轮次的进程环境里设置 `COFFER_CHANNEL_TURN=1`（合并在守护进程自身的环境之上），智能体会把这个环境传给它运行的每个 Hook，`coffer memory hook` 看到这个标记时，在 `SessionStart` 或 `UserPromptSubmit` 上什么都不回答。它不联系守护进程，所以什么都不记录。守卫和错误上下文仍然走 Hook，因为轮次本身不投递这两者：已连接智能体上的消息渠道轮次，和终端会话一样会被已启用的触发器拦截。
 
 来自 Web 对话页面的轮次不带这个标记，也不会拿到这两个闭包。它通过智能体自己的 Hook 获得记忆，所以没有哪个轮次会两路都拿到记忆。
 
@@ -442,14 +442,14 @@ Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设�
 
 ## Worker 与调度 {#workers-and-scheduling}
 
-两个流程都以 asyncio 任务运行，由守护进程从 `surfaces/http/memory_wiring.py` 启动：
+两个流程都以后台任务运行，由守护进程在启动时开启：
 
 | Worker | 首次运行 | 默认间隔 | 审计操作者 |
 | --- | --- | --- | --- |
-| `AggregateWorker` | 启动时立即运行 | 1 小时 | `system:memory-aggregate-worker` |
-| `DistilWorker` | 60 秒后 | 6 小时 | `system:memory-distil-worker` |
+| 聚合 | 启动时立即运行 | 1 小时 | `system:memory-aggregate-worker` |
+| 提炼 | 60 秒后 | 6 小时 | `system:memory-distil-worker` |
 
-两者默认开启。它们读智能体的文件，只写派生树，所以无人值守地运行没有风险。每一轮都会**逐轮**从内部引擎配置（`aggregate`、`distil`）读取自己的开关和间隔，所以在设置里的修改无需重启就生效。失败的一轮会记日志，从不终止循环。关闭时，待执行的一轮会被丢弃，因为下次启动会再全部扫一遍。你也可以一次手动运行两者：`coffer memory sync`、`POST /api/v1/memory/sync` 或 Web 界面的「更新记忆」按钮（`application/memory/update.py`）会先聚合，再提炼所有还有未提炼原始条目的分区。提炼已在运行的分区报告为 `skipped`，而不会让调用失败。回答中包含聚合写了什么，以及 `distilled` 和 `skipped` 的分区。
+两者默认开启。它们读智能体的文件，只写派生树，所以无人值守地运行没有风险。每一轮都会**逐轮**从内部引擎配置（`aggregate`、`distil`）读取自己的开关和间隔，所以在设置里的修改无需重启就生效。失败的一轮会记日志，从不终止循环。关闭时，待执行的一轮会被丢弃，因为下次启动会再全部扫一遍。你也可以一次手动运行两者：`coffer memory sync`、`POST /api/v1/memory/sync` 或 Web 界面的「更新记忆」按钮会先聚合，再提炼所有还有未提炼原始条目的分区。提炼已在运行的分区报告为 `skipped`，而不会让调用失败。回答中包含聚合写了什么，以及 `distilled` 和 `skipped` 的分区。
 
 ## 权衡与备选方案 {#trade-offs-and-alternatives}
 
@@ -461,33 +461,17 @@ Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设�
 - **用 embedding 排序，或从笔记文本派生触发器。** embedding 为一个 2.2 GB 的模型换来三个点的召回；派生触发器要么太吵，要么漏掉陷阱。在评测集证明某个替代方案值回成本之前，排序器保持字面匹配，触发器保持人写。
 - **跨智能体的字面去重。** 两个智能体从不用同样的话描述同一个教训，所以字面比较什么都合并不了。合并是对含义的判断，由提炼模型来做。
 - **按工作目录划分分区。** 这会把一个仓库拆散到它的各个 worktree，目录消失时留下孤立分区，还会把临时文件夹变成永久分区。按仓库划分就避免了这三点。
-- **第三个读取器抽象。** 两个读取器就写成两个读取器。第三个智能体按现有的 `MemoryReader` 和 `DeliveryAdapter` 协议写一个适配器，而不是搞一张能力矩阵。
+- **第三个读取器抽象。** 两个读取器就写成两个读取器。第三个智能体按现有的读取器和投递适配器约定写一个适配器，而不是搞一张能力矩阵。
 
 ## 代码位置 {#where-it-lives-in-the-code}
 
-| 关注点 | 路径 |
+| 关注点 | 位置 |
 | --- | --- |
-| 读取器协议、`RawEntry`、`SourceFile` | [`domain/memory/reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/reader.py) |
-| 笔记、来源键、笔记类型 | [`domain/memory/note.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/note.py) |
-| 仓库身份、分区 slug | [`domain/memory/repository.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/repository.py)、[`domain/memory/partition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/partition.py) |
-| Hook 标记、四个条目、安装变换和 Hook 上限 | [`domain/memory/hook_entries.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_entries.py)、[`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
-| 排序器、触发器匹配、投递措辞 | [`domain/memory/retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/retrieval.py)、[`domain/memory/trigger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/trigger.py)、[`domain/memory/hook_output.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_output.py) |
-| 响应 Hook 触发、检索、触发器、会话台账及其恢复、投递视图 | [`application/memory/hook_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/hook_service.py)、[`retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/retrieval.py)、[`triggers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/triggers.py)、[`session_ledger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/session_ledger.py)、[`ledger_restore.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/ledger_restore.py)、[`delivery_stats.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_stats.py) |
-| 聚合流程与 worker | [`application/memory/aggregate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate.py)、[`aggregate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate_worker.py) |
-| 条目归入哪个分区 | [`application/memory/placement.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/placement.py) |
-| 提炼流程（路由、计划、撰写、应用）与 worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) 及其同级的 `distil_*.py` |
-| 索引渲染 | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
-| 上下文组装 | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
-| 投递服务与投递 Hook 的调和目标 | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py)、[`delivery_reconcile.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_reconcile.py) |
-| 类型（派生存储类别、无范围）与服务 | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py)、[`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
-| 原生记忆读取器 | [`infrastructure/memory/readers/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/readers) |
-| 各智能体的 Hook 适配器 | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
-| 路径、原始存储、笔记存储、摘要缓存、触发器文件、笔记读取计数 | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
-| 与智能体类型共用的会话记录 `cwd` 查找 | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| 装配、worker、投递 Hook 目标 | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
-| 消息渠道轮次的组装器和按提问检索器 | [`surfaces/http/memory_turn_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_turn_wiring.py)、[`application/memory/turn_retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/turn_retrieval.py) |
-| REST 路由 | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
-| CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py)、[`memory_hook_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_hook_cmd.py)（`hook`、`trigger`、`delivered`） |
+| 仓库身份、笔记、触发器、排序器、Hook 条目和投递措辞 | 领域层的 `memory` 包 |
+| 聚合、安放、提炼、索引、上下文组装、投递、会话台账、投递视图和投递 Hook 的调和目标 | 应用层的 `memory` 包 |
+| 原生记忆读取器、各智能体的 Hook 适配器，以及记忆根目录和 `vault/memory-triggers/` 下的文件 | 基础设施层的 `memory` 包 |
+| Worker、装配、消息渠道轮次的回调和 REST 路由 | HTTP 接口层 |
+| `coffer memory`（含 `hook`、`trigger`、`delivered`） | CLI 接口层 |
 
 ## 相关链接 {#related}
 

@@ -56,7 +56,7 @@ flowchart LR
 | **runs** | `runs.db` | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次、用量、额度。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
 | **derived** | `derived/` | `derived.db`、记忆树、智能体会话记录缓存、uid 索引、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
 
-一个资源属于哪个类别由它的类型声明（`Kind.storage`），并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
+一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
 ### 保险库 {#the-vault}
 
@@ -146,7 +146,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 迁移链还会创建 `workflow_runs`、`workflow_events`、`workflow_node_attempts` 和 `workflow_approvals`。这个构建里没有模块读取它们；它们之所以存在，是因为迁移是一条线性历史，后面的修订建立在创建它们的那些修订之上。
 :::
 
-每个连接都会执行这组 pragma（[`infrastructure/persistence/engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/engine.py)）：
+每个连接都会执行这组 pragma：
 
 | Pragma | 值 | 原因 |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ## 进入保险库的唯一写入路径 {#the-one-write-path-into-the-vault}
 
-有三个写入者会改动保险库：你（编辑器、shell、智能体的文件工具）、守护进程（Web 界面里的保存、CLI 或 API 的改动、一轮整理）和同步。它们做的每一次改动，都以同样的方式由保险库写入器（[`infrastructure/vault/writer.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/writer.py)）接纳：
+有三个写入者会改动保险库：你（编辑器、shell、智能体的文件工具）、守护进程（Web 界面里的保存、CLI 或 API 的改动、一轮整理）和同步。它们做的每一次改动，都以同样的方式由唯一的保险库写入器接纳：
 
 ```mermaid
 flowchart LR
@@ -195,13 +195,13 @@ flowchart LR
 
 保险库里的每个文件和文件夹都有可以查看、diff 和恢复的历史：`coffer vault history|diff|show|restore`、`/api/v1/vault/` 下的 REST 路由，以及技能的「历史」标签页。恢复是一次经过同样检查的新提交。见[手工编辑保险库](/zh/guides/vault-files)。
 
-保险库需要 `git`。没有 git 的机器会在启动时失败，并给出说明。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词（`domain/git_handoff.py`）；同步状态也会报告问题 `git_missing`，附带同一段提示词。
+保险库需要 `git`。没有 git 的机器会在启动时失败，并给出说明。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词；同步状态也会报告问题 `git_missing`，附带同一段提示词。
 
 ## runs.db 的迁移 {#migrations-of-runs-db}
 
-`runs.db` 的 schema 变更是 [`infrastructure/persistence/migrations/versions/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations/versions) 下的 Alembic 修订，命名为 `YYYYMMDD_NNNN_<slug>.py`。当前 head 是 `0136`，正是把旧数据库变成 `runs.db` 的那个修订：它把历史表改为以 uid 为键，并删掉了所有状态已移到文件里的表。schema 变更永远是一次迁移，从不是隐式的 `create_all`。
+`runs.db` 的 schema 变更是放在持久化包里的 Alembic 修订，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`。当前 head 是 `0136`，正是把旧数据库变成 `runs.db` 的那个修订：它把历史表改为以 uid 为键，并删掉了所有状态已移到文件里的表。schema 变更永远是一次迁移，从不由模型隐式建表。
 
-迁移在守护进程的 lifespan 里、在构建任何服务之前运行（[`surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py)）：
+迁移在守护进程的 lifespan 里、在构建任何服务之前运行：
 
 ```mermaid
 flowchart TB
@@ -239,16 +239,15 @@ flowchart TB
 
 ## 代码位置 {#where-it-lives-in-the-code}
 
-| 路径 | 内容 |
+| 位置 | 内容 |
 | --- | --- |
-| [`backend/coffer/infrastructure/vault/home.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/home.py) | `~/.coffer` 下各类别的根目录。 |
-| [`backend/coffer/domain/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/vault) | 布局、文档、格式版本、写入者和 trailer。 |
-| [`backend/coffer/infrastructure/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/vault) | 仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON、一次性升级。 |
-| [`backend/coffer/application/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/vault) | 校验规则、历史与恢复、问题。 |
-| [`backend/coffer/infrastructure/persistence/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence) | runs.db 引擎、模型和 Alembic 修订；`derived_db.py`。 |
-| [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | 启动时迁移、备份、“太新”守卫、拒绝旧的家目录。 |
-| [`backend/coffer/infrastructure/secret/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/encrypted_store.py) | 以文件形式存放的密钥密文。 |
-| [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`。 |
+| 领域层的 `vault` 包 | 布局、文档、格式版本、写入者和 trailer。 |
+| 应用层的 `vault` 包 | 校验规则、历史与恢复、问题。 |
+| 基础设施层的 `vault` 包 | `~/.coffer` 下各类别的根目录、仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON、一次性升级。 |
+| 基础设施层的 `persistence` 包 | runs.db 引擎、模型和 Alembic 修订；`derived.db`。 |
+| HTTP 界面 | 启动时迁移、备份、“太新”守卫、拒绝旧的家目录。 |
+| 基础设施层的 `secret` 包 | 以文件形式存放的密钥密文。 |
+| 基础设施层的 `daemon` 包 | `daemon-config.json`。 |
 
 ## 相关链接 {#related}
 

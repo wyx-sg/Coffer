@@ -177,7 +177,7 @@ The boundary holds only in a release signed with Coffer's Developer ID, under th
 
 ## Loopback binding
 
-The daemon binds `127.0.0.1` and nothing else ([`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py)). Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. Coffer listens on one other socket: the [local model proxy](/architecture/model-proxy), the daemon's sibling process, binds `127.0.0.1:8001` (`proxy_port` in `daemon-config.json`) and nothing else, and runs Host and Origin checks of its own (see [below](#the-model-proxy-listener)). Nothing else listens: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
+The daemon binds `127.0.0.1` and nothing else. Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. Coffer listens on one other socket: the [local model proxy](/architecture/model-proxy), the daemon's sibling process, binds `127.0.0.1:8001` (`proxy_port` in `daemon-config.json`) and nothing else, and runs Host and Origin checks of its own (see [below](#the-model-proxy-listener)). Nothing else listens: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
 
 ## The Host and Origin checks
 
@@ -185,7 +185,7 @@ Binding to loopback stops remote hosts. It does not stop a browser, because any 
 
 ### Host: DNS rebinding
 
-Suppose an attacker controls `evil.example` and re-points its DNS name at `127.0.0.1`. To the browser, the page is still same-origin with `evil.example`, so CORS never applies and the page can read the response body. The daemon puts its API token into the web UI's `index.html` (see below), so one `fetch("/")` from that page would take the token, and with it everything the API can do: change Coffer's configuration, register a server, run up your provider bill.
+Suppose an attacker controls `evil.example` and re-points its DNS name at `127.0.0.1`. To the browser, the page is still same-origin with `evil.example`, so CORS never applies and the page can read the response body. The daemon puts its API token into the web UI's `index.html` (see below), so one request for `/` from that page would take the token, and with it everything the API can do: change Coffer's configuration, register a server, run up your provider bill.
 
 DNS rebinding does not change the `Host` header. A rebound request still says `Host: evil.example:8000`. So the daemon accepts a request only when `Host` names `127.0.0.1`, `localhost` or `[::1]` **and** the port the request arrived on. It refuses anything else, including a request with no `Host` and a loopback name on another port:
 
@@ -224,23 +224,23 @@ Both variables are read when the daemon starts, so restart it after you change t
 
 ### The model proxy listener
 
-The [local model proxy](/architecture/model-proxy) is Coffer's second listener, and it runs its own checks before anything else ([`infrastructure/model_proxy/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/app.py)). They are stricter than the daemon's. A request whose `Host` is not a loopback name on the port it arrived on gets 403, and `COFFER_ALLOWED_HOSTS` does not apply here. **Any** request that carries an `Origin` header gets 403 as well, because no browser page is a client of the proxy. Only then does a model route check the agent's local proxy token. The daemon's control routes are behind a separate control token from `~/.coffer/proxy.json`.
+The [local model proxy](/architecture/model-proxy) is Coffer's second listener, and it runs its own checks before anything else. They are stricter than the daemon's. A request whose `Host` is not a loopback name on the port it arrived on gets 403, and `COFFER_ALLOWED_HOSTS` does not apply here. **Any** request that carries an `Origin` header gets 403 as well, because no browser page is a client of the proxy. Only then does a model route check the agent's local proxy token. The daemon's control routes are behind a separate control token from `~/.coffer/proxy.json`.
 
 ## The API token
 
 ### Minting and storage
 
-At every start the daemon mints a fresh token with `secrets.token_urlsafe(32)` (256 bits) and writes it into `~/.coffer/daemon.json` along with the pid and port. The file is staged with `mkstemp` and moved into place atomically, so it never exists with a mode wider than `0600`. The token is not persisted across restarts, not placed in any environment variable, and not written into any agent's config: the shim reads it from `daemon.json` at runtime.
+At every start the daemon mints a fresh random URL-safe token from 32 bytes (256 bits) and writes it into `~/.coffer/daemon.json` along with the pid and port. The file is staged as a private temporary file and moved into place atomically, so it never exists with a mode wider than `0600`. The token is not persisted across restarts, not placed in any environment variable, and not written into any agent's config: the shim reads it from `daemon.json` at runtime.
 
 ### Checking it
 
-Every route under `/api/v1/*` and the `/mcp` endpoint require an `X-Coffer-Token` header, compared in constant time (`hmac.compare_digest`) against the daemon's in-process token. A missing or wrong token is `401`; a request that arrives before the daemon has published its token is `503`. The one unauthenticated API route is `GET /api/v1/daemon/status`, the readiness probe the CLI and shim call before they have a token; it returns lifecycle phase, version, executable, port, release channel, feature switches, machine name and an aggregate upstream health summary — nothing secret.
+Every route under `/api/v1/*` and the `/mcp` endpoint require an `X-Coffer-Token` header, compared in constant time against the daemon's in-process token. A missing or wrong token is `401`; a request that arrives before the daemon has published its token is `503`. The one unauthenticated API route is `GET /api/v1/daemon/status`, the readiness probe the CLI and shim call before they have a token; it returns lifecycle phase, version, executable, port, release channel, feature switches, machine name and an aggregate upstream health summary — nothing secret.
 
 `coffer daemon rotate-token` (or `POST /api/v1/daemon/rotate-token`) mints a new token, rewrites `daemon.json`, invalidates the old token immediately, and records `token_rotated` in the audit log.
 
 ### Getting it into the page
 
-The web UI needs the token too, and a URL is the wrong channel: it ends up in browser history, session restore, screenshots and pasted bug reports. So the daemon hands it over in the **response body**. Whenever it serves `index.html` — for `/` and for every client-side route through the SPA fallback — it injects `window.__COFFER_TOKEN__` as the first script in `<head>`, read from the same in-process variable the token check compares against, so what the page holds cannot drift from what the API accepts ([`webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py)).
+The web UI needs the token too, and a URL is the wrong channel: it ends up in browser history, session restore, screenshots and pasted bug reports. So the daemon hands it over in the **response body**. Whenever it serves `index.html` — for `/` and for every client-side route through the SPA fallback — it injects the token as a page global, in the first script in `<head>`, read from the same in-process value the token check compares against, so what the page holds cannot drift from what the API accepts.
 
 - The document is served `Cache-Control: no-store`, with no ETag or Last-Modified, so a restarted daemon's browser never gets the previous daemon's token from a cache. Hashed files under `/assets` keep normal caching.
 - The page persists nothing: reload after a daemon restart and it is authenticated against the new daemon.
@@ -252,7 +252,7 @@ The desktop shell loads the same frontend as a local asset that nobody served, s
 
 ### CORS
 
-CORS grants exactly the cross-origin entries of the [Origin table](#origin-requests-from-other-sites): the desktop app's origins by default, and the development origins when you opt in. The browser-served UI is same-origin with the API and needs no CORS. CORS never uses a wildcard, and `allow_credentials` is always false, so no cookie is ever attached. CORS and the Origin check read the same list, so they cannot disagree.
+CORS grants exactly the cross-origin entries of the [Origin table](#origin-requests-from-other-sites): the desktop app's origins by default, and the development origins when you opt in. The browser-served UI is same-origin with the API and needs no CORS. CORS never uses a wildcard, and never allows credentials, so no cookie is ever attached. CORS and the Origin check read the same list, so they cannot disagree.
 
 ## The secret store
 
@@ -271,7 +271,7 @@ Plaintext exists in memory only between decrypt and the spawn or header injectio
 
 ### The master key
 
-The one secret that is not ciphertext is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/master_key.py) behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
+The one secret that is not ciphertext is the Fernet master key, managed by one master-key component behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
 
 | Build | Where the key lives | Defends against an offline copy of `~/.coffer/`? | Defends against a same-user process? |
 | --- | --- | --- | --- |
@@ -287,7 +287,7 @@ The one secret that is not ciphertext is the Fernet master key, managed by [`Mas
 
 Startup is fail-closed in every build. The daemon counts the ciphertext files *before* resolving the key, and creates a new key only when there are none. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
 
-`keyring` is imported by exactly one module, [`infrastructure/secret/keyring_adapter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/keyring_adapter.py), and an import contract fails the build if surfaces or application code import it.
+`keyring` is imported by exactly one module, the keyring adapter in the secret infrastructure package, and an import contract fails the build if surfaces or application code import it.
 
 ::: warning The signed-release Keychain backend is not yet proven on a real build
 The access-group backend is built behind the storage port and tested against a fake Keychain. Whether a Developer-ID-signed `coffer-daemon` running as a bare binary outside an app bundle can claim the access group is still to be shown on a signed build; if it cannot, the daemon will run from inside the signed app bundle. Until the signed build exists, the development arrangement above is what runs.
@@ -299,14 +299,14 @@ A copy of `~/.coffer` without its master key yields no secrets, and in a signed 
 
 ## Outbound requests
 
-[`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
+The SSRF guard resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Four paths fetch from typed input. The first is the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Four paths fetch from typed input. The first is the provider introspector, behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
 
 - A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
 - `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
 
-The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (`infrastructure/mcp/openapi_fetch.py`, capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
+The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (the fetch is capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
 
 The third is the MCP servers page's test of a server that is not added yet (`POST /api/v1/resources/mcp_server/test-config`): an HTTP server's typed URL is checked before the test connects, and the MCP SDK follows a redirect only within that URL's own origin, so the test cannot be led to a host the guard did not see. A server on a private or loopback address is tested once it is added. The same test starts a stdio server only for the length of the test, in its own process group that is stopped whole when the test ends, and releases no stored secret to it — only values typed into the form for this test, which are redacted from the stderr lines and the message it returns.
 
@@ -321,7 +321,7 @@ So a probe of a non-Ollama endpoint on a private or link-local address is refuse
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
 - **A skill's Git repository**, also a `git` subprocess against a URL you typed, run with no prompt, only the `https`, `http`, `ssh`, `git` and `file` transports and no submodules; a company's own Git host usually sits on a private address (see [Skills](/architecture/skills#git-repositories)).
 
-One outbound request goes to an address Coffer chose itself rather than one you typed or configured, and so is not guarded: the **daily price-list refresh** ([`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py)). Once shortly after the daemon starts and then every 24 hours it sends a read-only `GET` to the file pydantic/genai-prices publishes, `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json`, with a 10-second timeout, a 16 MiB cap, no redirects, no credentials and nothing about you or your usage. The answer is validated before it is cached, and prices are never looked up while a request is being costed. **Refresh model prices** in Settings › General (`coffer config set prices.refresh off`) turns it off on a firewalled machine; Coffer then prices from the list shipped in the build.
+One outbound request goes to an address Coffer chose itself rather than one you typed or configured, and so is not guarded: the **daily price-list refresh**. Once shortly after the daemon starts and then every 24 hours it sends a read-only `GET` to the file pydantic/genai-prices publishes, `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json`, with a 10-second timeout, a 16 MiB cap, no redirects, no credentials and nothing about you or your usage. The answer is validated before it is cached, and prices are never looked up while a request is being costed. **Refresh model prices** in Settings › General (`coffer config set prices.refresh off`) turns it off on a firewalled machine; Coffer then prices from the list shipped in the build.
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.
 
@@ -331,9 +331,9 @@ A skill can declare the command-line tools it needs ([Skill requirements](/archi
 
 ## Agent identity
 
-When Coffer installs its MCP entry into an agent, it writes `coffer-mcp-shim --agent-uid <uid>`. The shim stamps that uid onto the MCP handshake as `_meta["coffer/agent-uid"]`, and the gateway uses it for two things:
+When Coffer installs its MCP entry into an agent, it writes `coffer-mcp-shim --agent-uid <uid>`. The shim stamps that uid onto the MCP handshake, in the `_meta` field under the key `coffer/agent-uid`, and the gateway uses it for two things:
 
-1. **Reach.** Every scoped resource is filtered with `is_active(scope, agent_uid)`. A session with no identity — a shim you configured by hand — matches only unscoped resources, so it sees strictly less, never more. An older shim sending a name-based key is read as unidentified; there is no fallback that could match a stale label against a scope.
+1. **Reach.** Every scoped resource is filtered by whether its scope covers the session's agent uid. A session with no identity — a shim you configured by hand — matches only unscoped resources, so it sees strictly less, never more. An older shim sending a name-based key is read as unidentified; there is no fallback that could match a stale label against a scope.
 2. **Attribution.** Every builtin tool call carries an `agent` argument naming the caller, which tools such as `coffer__write` record. The gateway **always** sets it from the handshake identity (resolved to the agent's current name): a value the client supplied is dropped unconditionally, and with no identity the argument is simply absent. No builtin tool advertises the argument, so a model has nothing to fill in.
 
 The identity is self-reported by a process running as you. It is not a security boundary against a malicious local process — any such process already holds the token — and the spec says so rather than implying stronger isolation.
@@ -352,7 +352,7 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 ## What goes into logs and audit
 
 - **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.
-- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's `audit_redactor` first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach `audit_log`. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
+- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
 - **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
 ## Sync carries ciphertext only
@@ -387,21 +387,16 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 
 ## Where it lives in the code
 
-| Path | Contents |
+| Package | Contents |
 | --- | --- |
-| [`surfaces/http/auth.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/auth.py) | Token check. |
-| [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) | `Host` and `Origin` checks. |
-| [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py), [`middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | CORS allowlist and middleware order. |
-| [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) | Serving the UI with the injected token. |
-| [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py), [`atomic_write.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/atomic_write.py) | Token minting, `daemon.json`, `0600` writes. |
-| [`infrastructure/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/secret) | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan. |
-| [`application/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/secret) | The secret boundary (destinations, bindings, approvals), presence grants, the guarded resolver. |
-| [`surfaces/http/secret_boundary_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/secret_boundary_routes.py) | Presence-gated reveal and key backup, approvals, the `coffer run` resolve, scan and import. |
-| [`surfaces/cli/run_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/run_cmd.py) | `coffer run` and its output masking. |
-| [`desktop/src/`](https://github.com/wyx-sg/Coffer/tree/main/desktop/src) | The desktop app's presence check, grant signing and approval notifications. |
-| [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) | SSRF guard. |
-| [`application/mcp/gateway_parsing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_parsing.py), [`gateway_builtin.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_builtin.py) | Handshake identity and the `agent` argument overwrite. |
-| [`application/channel/pairing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/channel/pairing.py), [`inbound.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/channel/inbound.py) | Pairing codes and the owner gate. |
+| The HTTP surface | The token check, the `Host` and `Origin` checks, the CORS allowlist and middleware order, serving the UI with the injected token, and the secret-boundary routes (presence-gated reveal and key backup, approvals, the `coffer run` resolve, scan and import). |
+| The daemon infrastructure | Token minting, `daemon.json`, `0600` writes, the loopback bind. |
+| The secret infrastructure | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan. |
+| The secret application layer | The secret boundary (destinations, bindings, approvals), presence grants, the guarded resolver. |
+| The CLI surface | `coffer run` and its output masking. |
+| `desktop/` | The desktop app's presence check, grant signing and approval notifications. |
+| The network infrastructure | SSRF guard. |
+| The MCP gateway and the channel application layer | Handshake identity and the `agent` argument overwrite; pairing codes and the owner gate. |
 
 ## Related
 
