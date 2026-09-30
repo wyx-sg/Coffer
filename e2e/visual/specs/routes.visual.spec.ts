@@ -50,8 +50,17 @@ const FREEZE_CSS = `*, *::before, *::after {
   animation: none !important;
   transition: none !important;
   caret-color: transparent !important;
+  /* A scrollbar appears only when a run wrote enough records to overflow. */
+  scrollbar-width: none !important;
 }
-.tsqd-parent-container { display: none !important; }`;
+.tsqd-parent-container { display: none !important; }
+/* Masked regions whose size follows how many records a run wrote: pin the
+   size (a run always writes at least six records) so the layout around them
+   is the same in every run. */
+[data-visual-volatile="rows"] > tr:nth-child(n+7) { display: none !important; }
+[data-visual-volatile="rows"] > tr { height: 34px !important; }
+[data-visual-volatile="rows"] > tr > td > * { display: none !important; }
+[data-visual-volatile="count"] { display: inline-block !important; width: 4ch !important; overflow: hidden !important; vertical-align: middle; }`;
 
 function daemonToken(): string {
   const json = fs.readFileSync(
