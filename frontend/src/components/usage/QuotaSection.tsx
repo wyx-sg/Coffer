@@ -1,7 +1,9 @@
 // src/components/usage/QuotaSection.tsx — "Subscription quota": one row per agent type the daemon reports quota for.
 //
 // Loads and fails on its own, so a quota error never blanks the API-key
-// section below it (and vice versa).
+// section below it (and vice versa). The page says which agents run on an
+// API-key provider (no subscription quota) and which also sent requests
+// through one in the range (the "via API key" tag).
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -9,7 +11,7 @@ import { HelpTip } from "@/components/HelpTip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { QuotaList } from "@/lib/api/usage";
-import { QuotaCard, type RefreshState } from "./QuotaCard";
+import { QuotaCard, type RefreshState, type RereadState } from "./QuotaCard";
 
 interface Props {
   data: QuotaList | undefined;
@@ -17,10 +19,25 @@ interface Props {
   isError: boolean;
   onRetryLoad: () => void;
   refresh: RefreshState;
+  reread: RereadState;
   now: Date;
+  /** The vendor of the API-key provider an agent type runs on, or null on its own login. */
+  apiKeyVendorFor: (agentType: string) => string | null;
+  /** Agent types that sent requests through an API-key provider in the range. */
+  viaApiKey: ReadonlySet<string>;
 }
 
-export function QuotaSection({ data, isLoading, isError, onRetryLoad, refresh, now }: Props) {
+export function QuotaSection({
+  data,
+  isLoading,
+  isError,
+  onRetryLoad,
+  refresh,
+  reread,
+  now,
+  apiKeyVendorFor,
+  viaApiKey,
+}: Props) {
   const { t } = useTranslation();
   return (
     <section aria-label={t("usage.quota.title")} className="flex flex-col gap-2">
@@ -56,7 +73,10 @@ export function QuotaSection({ data, isLoading, isError, onRetryLoad, refresh, n
                 key={q.agent_type}
                 quota={q}
                 now={now}
+                apiKeyVendor={apiKeyVendorFor(q.agent_type)}
+                viaApiKey={viaApiKey.has(q.agent_type)}
                 refresh={q.agent_type === "codex" ? refresh : undefined}
+                reread={q.agent_type === "claude_code" ? reread : undefined}
               />
             ))}
           </ul>

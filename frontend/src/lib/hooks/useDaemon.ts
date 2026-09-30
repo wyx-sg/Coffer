@@ -70,7 +70,7 @@ export function useRestartDaemon() {
         await restartFromBrowser();
         return null;
       }
-      // The daemon mints a fresh token on every start, so the credentials the
+      // The daemon mints a fresh token on every start, so the secrets the
       // shell handed over at launch are now revoked. The restart already
       // waited for the replacement to answer and returned its connection, so
       // swap that in before anything refetches — otherwise every request 401s
@@ -85,7 +85,7 @@ export function useRestartDaemon() {
       return result;
     },
     // The token changed, so every cached query (not just daemon/status) was
-    // fetched with the revoked credentials — refetch the whole cache so the
+    // fetched with the revoked secrets — refetch the whole cache so the
     // app recovers in place.
     onSuccess: (result) => (result ? qc.invalidateQueries() : undefined),
   });

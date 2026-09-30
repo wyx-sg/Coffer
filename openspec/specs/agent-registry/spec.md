@@ -180,13 +180,19 @@ Connecting an agent to Coffer ("Connect an agent to Coffer in one action") MUST 
 
 - `command` is the absolute path of the `coffer-mcp-shim` binary, resolved on `PATH`, then the running interpreter's scripts directory — so a venv-installed shim is found even when the daemon's `PATH` lacks the venv — then the bundled binary; a `COFFER_MCP_SHIM_PATH` environment override takes precedence over all.
 - The install additionally writes `--agent-uid <uid>` in the entry shape's argument slot — the agent's immutable uid, never its mutable name, because the entry is written once into a file Coffer does not otherwise revisit and a name would go stale on the first rename — so the gateway can attribute the session to this agent for per-agent scope enforcement ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)).
-- If the shim cannot be resolved, the connect is rejected with an error naming the missing binary and nothing is written.
+- If the shim cannot be resolved, the connect is rejected with `SHIM_NOT_FOUND`, an error naming the missing binary, and nothing is written. Finding or reinstalling the shim depends on how Coffer got onto this machine, so the refusal MUST carry, in its details as `handoff.prompt`, a hand-off prompt (see [skill-manager](../skill-manager/spec.md) "Hand a required command to an agent with a prompt" for the shape every hand-off takes) asking the person's agent to find or reinstall `coffer-mcp-shim` so it resolves at `~/.coffer/bin/coffer-mcp-shim` or one of the places Coffer looks, naming every place it looked, then to have the person choose Connect again. The web UI's Connect review MUST offer that prompt through **Copy prompt** (and **Ask an agent** while a managed agent is available) beside Retry, and its refusal copy MUST name no environment variable or command; the command line MUST print the prompt under the error.
 
 #### Scenario: refuse the Coffer MCP install when the shim cannot be resolved
 - **GIVEN** a registered agent and no resolvable `coffer-mcp-shim` binary
 - **WHEN** the user connects the agent to Coffer
 - **THEN** the connect is rejected with an error naming the missing binary
 - **AND** the agent's MCP config file is not written
+
+#### Scenario: a missing shim is refused with a prompt that hands finding it to an agent
+- **GIVEN** no `coffer-mcp-shim` at the override `COFFER_MCP_SHIM_PATH` names, on the daemon's `PATH`, in the interpreter's scripts directory or beside the running executable
+- **WHEN** the shim is resolved for a connect
+- **THEN** the refusal carries a hand-off prompt asking to find or reinstall `coffer-mcp-shim` so it resolves at `~/.coffer/bin/coffer-mcp-shim`
+- **AND** the prompt names every place Coffer looked and ends by asking the person to choose Connect again
 
 #### Scenario: connect an agent to Coffer from the command line
 - **GIVEN** a registered agent whose MCP config has no `coffer` entry and a resolvable `coffer-mcp-shim` binary
@@ -264,7 +270,7 @@ Coffer does not offer toggling an entry's `enabled` flag, nor editing an entry i
 ### Requirement: Show one direct MCP entry's full configuration without its secrets
 Users MUST be able to open one direct MCP entry and see everything the agent's own config file holds for it, read-only: its transport, its command and arguments (or its URL), its working directory, its per-entry `enabled` flag where the format has one, the names of its environment variables and HTTP headers, every other key the entry carries, which config file it lives in (the resolved absolute path, with open-in-editor and reveal-in-file-manager beside it), and `matches_resource` when an equivalent `mcp_server` resource is already registered. The read is addressed like removal and adoption — the entry's name, plus the source file where the type's entries may come from more than one — and is derived from the file at read time; Coffer stores nothing and starts nothing, so an unmanaged server is never spawned to be looked at.
 
-No secret value crosses the API. Environment and header values are never returned — only their names, with the secret-like ones flagged by the pattern of "Route secret-like environment values to the credential store on adoption". Any other key whose name matches that pattern with a non-empty value, or whose value nests such a key at any depth, has its value withheld by the daemon and is reported as masked.
+No secret value crosses the API. Environment and header values are never returned — only their names, with the secret-like ones flagged by the pattern of "Route secret-like environment values to the secret store on adoption". Any other key whose name matches that pattern with a non-empty value, or whose value nests such a key at any depth, has its value withheld by the daemon and is reported as masked.
 
 The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry}`), from `coffer scan --ref <agent>:<entry> [--source] [--json]`, and in the web UI as the page a direct server's name opens on the agent's MCP servers tab (`/agents/{uid}/mcp-servers/{entry}?source=`). The page labels the entry as a direct server of that agent, returns to the agent's MCP servers tab, and offers the row's two writes: adopting it (then opening the new managed server's page) and deleting it behind the same confirm (then returning to the tab).
 
@@ -318,13 +324,13 @@ Users MUST be able to adopt a direct MCP entry into Coffer, so that it is served
 - **THEN** an `mcp_server` resource named `github-work` is registered and the direct entry is gone from the agent's config
 - **AND** an `agent_mcp_entry_adopted` audit entry is recorded
 
-### Requirement: Route secret-like environment values to the credential store on adoption
-Adoption MUST NOT persist secret values into resource config. When an entry's environment or HTTP headers carry values under secret-like keys (defined below), the adopt request MUST supply a credential mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's credential store through the daemon (per the credentials invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
+### Requirement: Route secret-like environment values to the secret store on adoption
+Adoption MUST NOT persist secret values into resource config. When an entry's environment or HTTP headers carry values under secret-like keys (defined below), the adopt request MUST supply a secret mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's secret store through the daemon (per the secrets invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
 
-#### Scenario: require a credential mapping for secret-like env values
+#### Scenario: require a secret mapping for secret-like env values
 - **GIVEN** a direct MCP entry whose environment contains a value under a secret-like key (e.g. `API_TOKEN`)
-- **WHEN** the user adopts the entry without supplying a credential mapping for that key
-- **THEN** the request is rejected with a response listing the unresolved keys; when the mapping is supplied, the secret is stored in the credential store via the daemon and the created resource config carries a reference, never the value
+- **WHEN** the user adopts the entry without supplying a secret mapping for that key
+- **THEN** the request is rejected with a response listing the unresolved keys; when the mapping is supplied, the secret is stored in the secret store via the daemon and the created resource config carries a reference, never the value
 
 ### Requirement: Degrade a facet to a parse-error state when its config file is unparseable
 When an agent config file cannot be parsed, the affected facet (MCP entries, plugins) MUST degrade to an explicit parse-error state (file path + parser error) without failing the surrounding view, leaving other facets and tabs unaffected, and entry-level writes against that file MUST be rejected until it parses again.
@@ -873,3 +879,30 @@ Applying an import MUST perform the plan recomputed from the files as they are a
 - **GIVEN** two chosen entries, one of which was removed from its file after the plan was shown
 - **WHEN** the person applies the import
 - **THEN** the other entry is imported, the removed one is reported as skipped with the reason, and nothing is written for it
+
+### Requirement: Hand installing an agent's program to an agent
+While an agent type's program is not found on the agent's real `PATH` — detection reads `config_only` or `missing` (see "Detect an agent by its program and its config directory") — the system MUST offer a hand-off prompt (see [skill-manager](../skill-manager/spec.md) "Hand a required command to an agent with a prompt" for the shape every hand-off takes) that asks the person's agent to install that type's program, or to reinstall it when an agent of the type is registered or its config directory is still there. The prompt MUST name the agent and this machine's OS and architecture; say that an existing config directory is kept with everything in it; name the program Coffer looks for and the `PATH` it looks on, and ask that the program be found there and confirmed with `<program> --version`; ask the person to come back and choose Check again; and leave signing in to the agent to the person. It MUST name no installer, package manager or install command. The prompt MUST be carried as `install_handoff` on each row of `GET /api/v1/agents/types` and on the agent record (`GET /api/v1/agents`, `GET /api/v1/agents/{uid}`), `null` while the program is found; the Overview attention item for a registered agent whose program is missing MUST carry the same prompt, with a reason sentence that names no command; and `coffer agent prompt <type>` MUST print it, exiting with a conflict when the program is found.
+
+#### Scenario: a type that is not installed carries its install prompt
+- **GIVEN** Codex's program is not on the agent's `PATH` and no Codex agent is registered
+- **WHEN** the prompt for the Codex type is built
+- **THEN** it asks to install OpenAI Codex on this machine, naming the machine, the `PATH` Coffer looks on, the program `codex` and `codex --version` to confirm, and ends with Check again and signing in left to the person
+- **AND** it names no installer or package manager
+
+#### Scenario: an agent whose program is gone carries a reinstall prompt that keeps its folder
+- **GIVEN** a registered Claude Code agent whose config directory is still there and whose program is not on its `PATH`
+- **WHEN** the prompt for it is built
+- **THEN** it asks to reinstall Claude Code and to keep its config directory and everything in it, confirming with `claude --version`
+- **AND** a registered agent whose directory is gone too gets a reinstall prompt saying so, and a found program gets no prompt
+
+#### Scenario: an attention item for a missing program carries the reinstall prompt
+- **GIVEN** an enabled registered agent whose program is not found
+- **WHEN** the Overview attention list is read
+- **THEN** its `agent_program_missing` item carries the reinstall prompt for that agent's type and config directory
+- **AND** the item's reason names no command
+
+#### Scenario: the command line prints an agent's install prompt
+- **GIVEN** Claude Code's program is not found and Codex's is
+- **WHEN** the user runs `coffer agent prompt claude-code`, then `coffer agent prompt codex`
+- **THEN** the first prints the install prompt, the same text `--json` returns under `handoff`
+- **AND** the second says there is nothing to hand off and exits with a conflict

@@ -5,7 +5,7 @@ meets local edits offers keep mine or take theirs; the merge is a chore for
 the person's agent, which this prompt hands over with what it needs — the
 master folder (the only place it may edit), the files edited since the pin,
 the commit range and where upstream can be read. Upstream is named by its
-repository (without any credential in the URL) and commits rather than by the
+repository (without any secret in the URL) and commits rather than by the
 preview's stage, which is gone once the dialog closes; the agent clones it
 read-only itself. The person then records the merge (``update_merge``).
 """

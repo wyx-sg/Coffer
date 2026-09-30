@@ -7,7 +7,7 @@ git repository the user can clone, inspect and restore from with their own
 tools — the same binary they would reach for.
 
 This module is *what* the round asks git for. How an invocation is made safe —
-the push credential's route through a credential helper, the user's own git config
+the push secret's route through a credential helper, the user's own git config
 pinned at ``/dev/null``, the redaction every raised message passes through —
 is ``git_invoke.py`` beside it, because that changes for entirely different
 reasons than a new git command does.
@@ -264,7 +264,7 @@ class GitMirror:
 
         ``revision`` may be a merge stage (``:2`` ours, ``:3`` theirs), which
         ``<revision>:<path>`` spells correctly on its own. Bytes rather than
-        text: a credential blob is ciphertext a lossy decode would corrupt."""
+        text: a secret blob is ciphertext a lossy decode would corrupt."""
         out = await self._git("show", f"{revision}:{path}", check=False)
         return out.stdout_bytes if out.returncode == 0 else None
 

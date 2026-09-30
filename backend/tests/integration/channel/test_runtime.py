@@ -80,7 +80,7 @@ async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv)
     )
 
     await env.runtime.reconcile_once()
-    # Held with the app's own materialized credentials, keyed by the channel's
+    # Held with the app's own materialized secrets, keyed by the channel's
     # UID — the register handshake is per key, and a label the owner may
     # rename is the wrong thing to hold one on.
     assert env.runtime.is_running("st") is True

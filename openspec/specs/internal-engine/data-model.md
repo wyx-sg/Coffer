@@ -74,7 +74,7 @@ satisfies both.
 | Port | Method | Answer |
 |---|---|---|
 | `ModelSelectorPort` | `get_default()` | the engine's `ResolvedConnection`, or `None` |
-| `LlmCompletionPort` | `complete(system, user, model, credential_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
+| `LlmCompletionPort` | `complete(system, user, model, secret_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
 
 `ResolvedConnection` is spec provider-switching's value object — a
 `ProviderConfig` paired with the `model` to run on it. The ports name it in

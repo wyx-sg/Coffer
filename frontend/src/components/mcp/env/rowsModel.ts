@@ -2,10 +2,10 @@
 // Headers rows to and from a stored MCP server config.
 //
 // A config keeps plain values in `transport.env` (stdio) or `transport.headers`
-// (HTTP) and secrets in `transport.credential_refs` (KEY → ref). The dialog
+// (HTTP) and secrets in `transport.secret_refs` (KEY → ref). The dialog
 // shows both as one list of rows (`ParsedEnvVar`), secrets first. On the way
 // back each Secret row either cites a stored secret (its ref goes into
-// credential_refs, nothing is written) or carries a typed value (written to
+// secret_refs, nothing is written) or carries a typed value (written to
 // the keychain first, see `editMcpServerSave.ts`).
 import type { TFunction } from "i18next";
 
@@ -14,9 +14,9 @@ import type { ParsedEnvVar } from "@/lib/mcp/pasteTypes";
 /** A Secrets-page ref is shared with other resources; never written through. */
 const isSecretsPageRef = (ref: string) => ref.startsWith("secret/");
 
-export function credentialRefsOf(config: unknown): Record<string, string> {
+export function secretRefsOf(config: unknown): Record<string, string> {
   const transport = (config as Record<string, unknown> | null)?.transport;
-  const refs = (transport as Record<string, unknown> | undefined)?.credential_refs;
+  const refs = (transport as Record<string, unknown> | undefined)?.secret_refs;
   const out: Record<string, string> = {};
   if (refs && typeof refs === "object") {
     for (const [k, v] of Object.entries(refs)) {
@@ -26,10 +26,10 @@ export function credentialRefsOf(config: unknown): Record<string, string> {
   return out;
 }
 
-/** The rows a stored config loads as: each credential ref a Secret row citing
+/** The rows a stored config loads as: each secret ref a Secret row citing
  *  it, then each plain value a Plain row. */
 export function rowsOf(config: unknown, plain: { key: string; value: string }[]): ParsedEnvVar[] {
-  const secrets = Object.entries(credentialRefsOf(config)).map(([key, ref]) => ({
+  const secrets = Object.entries(secretRefsOf(config)).map(([key, ref]) => ({
     key,
     value: "",
     isSecret: true,

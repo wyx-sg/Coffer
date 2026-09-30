@@ -1,9 +1,12 @@
 // src/lib/activity/filters.ts — Activity's filters: their state, which logs a tab reads under them, and the client-side predicate.
 //
-// The server-side half of a filter (time window, a call's server, agent and
-// status, the daemon's level floor) travels in each log's request
+// The server-side half of a filter (time window, a call's server, a single
+// agent and status, the daemon's level floor) travels in each log's request
 // (`useActivityFeed.sourceParams`); this module is the half the routes cannot
 // apply and the rules both halves share. Pure functions only.
+//
+// Who and Kind are multi-select (design 6.1.03, 6.1.04): a record passes when
+// it matches any of the chosen values, and choosing none is "Any".
 import type { TFunction } from "i18next";
 
 import { auditSearchHaystack, daemonSearchHaystack } from "./activityText";
@@ -19,31 +22,79 @@ import {
   type Invocation,
 } from "./records";
 
-/** The resource kinds a change can be about, in the order the kind filter lists them. */
-export const CHANGE_KINDS = [
+/**
+ * What a change is about, in the order the kind filter lists them. A resource
+ * kind when the change names a resource; otherwise the area its event belongs
+ * to — secrets, sync, CLIs, or Coffer's own settings.
+ */
+export const CHANGE_CATEGORIES = [
   "mcp_server",
   "skill",
   "agent",
   "provider",
   "channel",
+  "secret",
+  "sync",
+  "settings",
   "knowledge",
   "memory",
+  "cli",
 ] as const;
+export type ChangeCategory = (typeof CHANGE_CATEGORIES)[number];
+
+const EVENT_AREAS: [RegExp, ChangeCategory][] = [
+  [/^(secret_|master_key_)/, "secret"],
+  [/^sync_/, "sync"],
+  [/^memory_/, "memory"],
+  [/^knowledge_/, "knowledge"],
+  [/^skill_/, "skill"],
+  [/^agent_/, "agent"],
+  [/^provider_/, "provider"],
+  [/^channel_/, "channel"],
+  [/^cli_/, "cli"],
+];
+
+/** The kind-filter category one change falls under. */
+export function changeCategory(entry: AuditEntry): ChangeCategory {
+  const kind = entry.resource_kind;
+  if (kind && (CHANGE_CATEGORIES as readonly string[]).includes(kind)) {
+    return kind as ChangeCategory;
+  }
+  for (const [pattern, area] of EVENT_AREAS) if (pattern.test(entry.event_type)) return area;
+  // Everything else Coffer records without a resource is a change to its own
+  // settings: the access token, retention, residency, Coffer's model, the cache.
+  return "settings";
+}
+
+/** Who a change was made by when it was not an agent, as the who filter groups them. */
+export const WHO_ACTORS = ["you", "cli", "system", "sync"] as const;
+
+/**
+ * The who-group an audit actor falls under, or null when the actor names an
+ * agent. The web UI, the desktop app and a user action are all "you"; every
+ * background pass of the daemon (`system:<worker>`) is Coffer.
+ */
+function actorWho(actor: string): string | null {
+  if (actor === "ui" || actor === "user" || actor === "desktop") return "you";
+  if (actor === "system" || actor.startsWith("system:")) return "system";
+  if (actor === "cli" || actor === "sync" || actor === "api" || actor === "channel") return actor;
+  return null;
+}
 
 /** @ui-only Every Activity filter; each tab reads the ones its records afford. */
 export interface ActivityFilters {
-  /** A TIME_PRESETS key, or "custom" with from/to. */
+  /** A time preset key, or "custom" with from/to. */
   timeRange: string;
   from: string;
   to: string;
   /** Free text over what each row shows. */
   search: string;
-  /** Who: "any", `agent:<uid>`, or `actor:<audit actor>`. */
-  by: string;
+  /** Who: `agent:<uid>` and `actor:<who group>` values; empty is any. */
+  by: string[];
   /** An MCP server's uid, or "any". */
   server: string;
-  /** What: "any", "calls", "changes", "daemon", "not-daemon" or `change:<resource kind>`. */
-  kind: string;
+  /** What: "calls", "daemon", "changes" (every change) and `change:<category>`; empty is any. */
+  kinds: string[];
   /** An MCP call's status, or "any" (MCP calls tab). */
   status: string;
   /** Daemon log severity floor; "" is every level (Daemon log tab). */
@@ -57,18 +108,38 @@ export const DEFAULT_FILTERS: ActivityFilters = {
   from: "",
   to: "",
   search: "",
-  by: "any",
+  by: [],
   server: "any",
-  kind: "any",
+  kinds: [],
   status: "any",
   level: "",
   logger: "any",
 };
 
+/** The who values a tab applies: calls only have agents; the daemon log has no who. */
+function byFor(tab: ActivityTab, f: ActivityFilters): string[] {
+  if (tab === "daemon") return [];
+  if (tab === "mcp") return f.by.filter((b) => b.startsWith("agent:"));
+  return f.by;
+}
+
+/** The kind values a tab applies: Everything all of them, Changes its categories. */
+function kindsFor(tab: ActivityTab, f: ActivityFilters): string[] {
+  if (tab === "everything") return f.kinds;
+  if (tab === "changes") return f.kinds.filter((k) => k.startsWith("change:"));
+  return [];
+}
+
+/** The one agent the who filter names, when it names exactly one and nothing else. */
+export function singleAgent(tab: ActivityTab, f: ActivityFilters): string | undefined {
+  const agents = byFor(tab, f).filter((b) => b.startsWith("agent:"));
+  return agents.length === 1 ? agents[0].slice("agent:".length) : undefined;
+}
+
 /** Whether anything narrows the view beyond the default time window. */
 export function filtersNarrow(f: ActivityFilters, tab: ActivityTab): boolean {
-  if (f.search.trim() || f.by !== "any" || f.server !== "any") return true;
-  if ((tab === "everything" || tab === "changes") && f.kind !== "any") return true;
+  if (f.search.trim() || byFor(tab, f).length || kindsFor(tab, f).length) return true;
+  if (tab !== "daemon" && tab !== "changes" && f.server !== "any") return true;
   if (tab === "mcp" && f.status !== "any") return true;
   if (tab === "daemon" && (f.level !== "" || f.logger !== "any")) return true;
   return false;
@@ -81,17 +152,24 @@ export function filtersNarrow(f: ActivityFilters, tab: ActivityTab): boolean {
  */
 export function sourcesFor(tab: ActivityTab, f: ActivityFilters): ActivitySource[] {
   let sources = [...TAB_SOURCES[tab]];
-  if (tab === "everything") {
-    if (f.kind === "calls") sources = ["call"];
-    else if (f.kind === "daemon") sources = ["daemon"];
-    else if (f.kind === "changes" || f.kind.startsWith("change:")) sources = ["change"];
-    else if (f.kind === "not-daemon") sources = ["change", "call"];
+  const kinds = kindsFor(tab, f);
+  if (tab === "everything" && kinds.length) {
+    sources = sources.filter((s) =>
+      s === "call"
+        ? kinds.includes("calls")
+        : s === "daemon"
+          ? kinds.includes("daemon")
+          : kinds.some((k) => k === "changes" || k.startsWith("change:")),
+    );
   }
   if (f.server !== "any") sources = sources.filter((s) => s !== "daemon");
-  if (f.by.startsWith("agent:")) sources = sources.filter((s) => s !== "daemon");
-  else if (f.by.startsWith("actor:")) {
-    const actor = f.by.slice("actor:".length);
-    sources = sources.filter((s) => s === "change" || (s === "daemon" && actor === "system"));
+  const by = byFor(tab, f);
+  if (by.length) {
+    const agents = by.some((b) => b.startsWith("agent:"));
+    const coffer = by.includes("actor:system");
+    sources = sources.filter(
+      (s) => s === "change" || (s === "call" && agents) || (s === "daemon" && coffer),
+    );
   }
   return sources;
 }
@@ -128,17 +206,53 @@ function recordHaystack(r: ActivityRecord, ctx: FilterContext): string {
   return daemonSearchHaystack(ctx.t, r.log);
 }
 
-/** Whether a change was made by the agent `uid` (its actor names the agent). */
-function changeByAgent(entry: AuditEntry, uid: string, ctx: FilterContext): boolean {
-  const name = ctx.agentNames.get(uid);
-  return entry.actor === uid || (name !== undefined && entry.actor === name);
+/** The agent uid a change was made by, when its actor names one. */
+function changeAgent(entry: AuditEntry, agentNames: ReadonlyMap<string, string>): string | null {
+  if (actorWho(entry.actor) !== null) return null;
+  if (agentNames.has(entry.actor)) return entry.actor;
+  for (const [uid, name] of agentNames) if (name === entry.actor) return uid;
+  return null;
+}
+
+/** The who value one record carries — `agent:<uid>` or `actor:<group>` — or null. */
+export function recordWho(
+  r: ActivityRecord,
+  agentNames: ReadonlyMap<string, string>,
+): string | null {
+  if (r.source === "call") return r.call.agent_uid ? `agent:${r.call.agent_uid}` : null;
+  if (r.source === "daemon") return "actor:system";
+  const who = actorWho(r.entry.actor);
+  if (who) return `actor:${who}`;
+  const uid = changeAgent(r.entry, agentNames);
+  return uid ? `agent:${uid}` : null;
+}
+
+/** The kind value one record carries: "calls", "daemon" or `change:<category>`. */
+export function recordKind(r: ActivityRecord): string {
+  if (r.source === "call") return "calls";
+  if (r.source === "daemon") return "daemon";
+  return `change:${changeCategory(r.entry)}`;
+}
+
+/** How many of `records` carry each value `of` gives them, for the pills' counts. */
+export function tally(
+  records: readonly ActivityRecord[],
+  of: (r: ActivityRecord) => string | null,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of records) {
+    const value = of(r);
+    if (value) out.set(value, (out.get(value) ?? 0) + 1);
+  }
+  return out;
 }
 
 /**
  * The client-side half of the filters: what the routes cannot narrow by
- * themselves (free text, the custom range's upper bound, a change's who and
- * server, a kind, a logger). The server-side half — time window, a call's
- * server, agent and status, the daemon's level floor — is in the request.
+ * themselves (free text, the custom range's upper bound, who, a change's
+ * server, the kinds, a logger). The server-side half — time window, a call's
+ * server, a single agent and status, the daemon's level floor — is in the
+ * request.
  */
 export function matchesFilters(
   r: ActivityRecord,
@@ -147,25 +261,10 @@ export function matchesFilters(
   ctx: FilterContext,
 ): boolean {
   if (ctx.until && r.at && recordTimeMs(r.at) > recordTimeMs(ctx.until)) return false;
-  if (f.by !== "any") {
-    if (f.by.startsWith("agent:")) {
-      const uid = f.by.slice("agent:".length);
-      if (r.source === "call" && r.call.agent_uid !== uid) return false;
-      if (r.source === "change" && !changeByAgent(r.entry, uid, ctx)) return false;
-      if (r.source === "daemon") return false;
-    } else {
-      const actor = f.by.slice("actor:".length);
-      if (r.source === "call") return false;
-      const made = r.source === "change" ? r.entry.actor : "";
-      if (
-        r.source === "change" &&
-        made !== actor &&
-        !(actor === "system" && made.startsWith("system:"))
-      ) {
-        return false;
-      }
-      if (r.source === "daemon" && actor !== "system") return false;
-    }
+  const by = byFor(tab, f);
+  if (by.length) {
+    const who = recordWho(r, ctx.agentNames);
+    if (!who || !by.includes(who)) return false;
   }
   if (f.server !== "any") {
     if (r.source === "daemon") return false;
@@ -175,10 +274,11 @@ export function matchesFilters(
       if (r.entry.resource_kind !== "mcp_server" || r.entry.resource_name !== name) return false;
     }
   }
-  if ((tab === "everything" || tab === "changes") && f.kind.startsWith("change:")) {
-    if (r.source !== "change" || r.entry.resource_kind !== f.kind.slice("change:".length)) {
-      return false;
-    }
+  const kinds = kindsFor(tab, f);
+  if (kinds.length) {
+    const kind = recordKind(r);
+    const allChanges = r.source === "change" && kinds.includes("changes");
+    if (!allChanges && !kinds.includes(kind)) return false;
   }
   if (tab === "daemon" && f.logger !== "any" && recordLogger(r) !== f.logger) return false;
   const query = f.search.trim().toLowerCase();

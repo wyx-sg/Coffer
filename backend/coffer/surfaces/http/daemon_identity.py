@@ -6,7 +6,7 @@ to read them back, because the auth dependency and ``/daemon/status`` answer out
 of module-level singletons rather than out of that file.
 
 Split out of the composition root for the file-size guideline, alongside
-``credential_composition`` and ``engine_config_composition``.
+``secret_composition`` and ``engine_config_composition``.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import pathlib
 
 from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.sync.identity import coffer_dir
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port, daemon_routes
 from coffer.surfaces.http.auth import set_active_token
 
 _logger = logging.getLogger(__name__)
@@ -47,5 +47,5 @@ def publish_daemon_identity() -> None:
         )
         raise RuntimeError(f"daemon.json at {json_path} is unreadable: {exc}") from exc
     set_active_token(info.token)
-    daemon_routes.set_port(info.port)
+    daemon_port.set_port(info.port)
     daemon_routes.set_started_at(info.started_at)

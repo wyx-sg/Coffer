@@ -19,7 +19,7 @@ class GitMirrorPort(Protocol):
     result of that merge as a diff.
 
     The only port in this slice that reaches the network, and the only place
-    the push credential is ever materialised. Implementations must keep the
+    the push secret is ever materialised. Implementations must keep the
     token out of the repository's config, out of argv, and out of the text of
     any error they raise — it is handed over per call rather than held on the
     adapter so it lives no longer than the one git invocation that needs it.

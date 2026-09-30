@@ -38,6 +38,8 @@ class UsageSummaryRowOut(BaseModel):
     agent_uid: str | None = None
     agent_type: str | None = None
     day: str | None = None
+    #: The agent types that sent the group's requests, most requests first.
+    agent_types: list[str] = Field(default_factory=list)
     totals: UsageTotalsOut
 
 

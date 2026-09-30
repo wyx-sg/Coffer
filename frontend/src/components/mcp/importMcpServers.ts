@@ -1,6 +1,6 @@
 // frontend/src/components/mcp/importMcpServers.ts
 // The plumbing behind "Add MCP server": turn each parsed server into a Coffer
-// config plus credential writes, register it, write its secrets (rolling the
+// config plus secret writes, register it, write its secrets (rolling the
 // registration back when they cannot be stored), then give it its reach.
 // Pure functions + one async batch, so the dialog stays a view and the
 // mutation hook (useMcpServerMutations.ts) stays one line.
@@ -9,7 +9,7 @@ import type { TFunction } from "i18next";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError, translateApiError } from "@/lib/api/errors";
 import { scopeApi } from "@/lib/api/scope";
-import { mintCredentialRef } from "@/lib/credentialRef";
+import { mintSecretRef } from "@/lib/secretRef";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
 
 /** One server as the dialog confirmed it: the parsed shape plus the note
@@ -34,31 +34,31 @@ interface ServerPlan {
 
 /** The secret keys of `srv` still without a value — a `bearer_token_env_var`
  *  header arrives that way. The dialog asks for them; nothing is sent while
- *  any is empty, so an empty secret never reaches the credential store. */
+ *  any is empty, so an empty secret never reaches the secret store. */
 export function missingSecretValues(srv: ParsedServer): string[] {
   return srv.env.filter((e) => e.isSecret && e.value === "" && !e.ref).map((e) => e.key);
 }
 
 /**
- * A parsed server as a Coffer config plus the credential writes to perform.
+ * A parsed server as a Coffer config plus the secret writes to perform.
  * Pure — the config is fully built before any side effect runs. A secret value
- * becomes a `credential_refs` entry under an opaque minted ref
+ * becomes a `secret_refs` entry under an opaque minted ref
  * (`mcp_server/<uuid4 hex>/<key>`, never derived from the name); a plain value
  * stays inline — in `env` for stdio, in `headers` for http (HttpTransport has
  * no `env` field; the parser already gathered an http server's env into
  * `srv.env`).
  */
 function planServer(srv: NewServer): ServerPlan {
-  const credentialRefs: Record<string, string> = {};
+  const secretRefs: Record<string, string> = {};
   const plain: Record<string, string> = {};
   const secrets: { ref: string; value: string }[] = [];
   for (const e of srv.env) {
     if (e.isSecret && e.ref) {
       // A stored secret picked for this row: cite it, write nothing.
-      credentialRefs[e.key] = e.ref;
+      secretRefs[e.key] = e.ref;
     } else if (e.isSecret) {
-      const ref = mintCredentialRef("mcp_server", e.key);
-      credentialRefs[e.key] = ref;
+      const ref = mintSecretRef("mcp_server", e.key);
+      secretRefs[e.key] = ref;
       secrets.push({ ref, value: e.value });
     } else {
       plain[e.key] = e.value;
@@ -71,10 +71,10 @@ function planServer(srv: NewServer): ServerPlan {
           command: srv.command,
           args: srv.args,
           env: plain,
-          credential_refs: credentialRefs,
+          secret_refs: secretRefs,
           ...(srv.cwd?.trim() ? { cwd: srv.cwd.trim() } : {}),
         }
-      : { type: "http", url: srv.url, headers: plain, credential_refs: credentialRefs };
+      : { type: "http", url: srv.url, headers: plain, secret_refs: secretRefs };
   return { config: { transport }, secrets };
 }
 
@@ -92,14 +92,14 @@ async function registerResource(srv: NewServer, config: Record<string, unknown>)
 
 /** Writes one secret. `true` when the daemon answered 202: the value is
  *  stored sealed and waits for approval in the Coffer app. */
-async function writeCredential(ref: string, value: string): Promise<boolean> {
-  const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+async function writeSecret(ref: string, value: string): Promise<boolean> {
+  const { data, error } = await getApiClient().POST("/secrets", { body: { ref, value } });
+  if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
   return data?.approval !== undefined && data?.approval !== null;
 }
 
 /** Best-effort rollback of a just-registered server whose secrets failed, so
- *  nothing is left citing a credential that was never stored. A cleanup error
+ *  nothing is left citing a secret that was never stored. A cleanup error
  *  is logged, not surfaced — the secret failure is what the user acts on. */
 async function rollbackResource(uid: string, name: string): Promise<void> {
   try {
@@ -162,7 +162,7 @@ function isNameTaken(err: unknown): boolean {
 /**
  * Add a batch, one server at a time: register → write its secrets (a failed
  * write rolls the registration back, so a failed registration never orphans a
- * credential and a failed secret never leaves a server citing nothing) → reach.
+ * secret and a failed secret never leaves a server citing nothing) → reach.
  * Never rejects: every server lands in `created` or `failed`.
  */
 export async function importMcpServers({
@@ -184,7 +184,7 @@ export async function importMcpServers({
     try {
       uid = await registerResource(srv, config);
       for (const s of secrets) {
-        if (await writeCredential(s.ref, s.value)) waiting = true;
+        if (await writeSecret(s.ref, s.value)) waiting = true;
       }
     } catch (e) {
       if (uid !== null) await rollbackResource(uid, srv.name);

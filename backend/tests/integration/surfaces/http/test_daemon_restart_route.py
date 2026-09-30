@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from coffer.surfaces.http import daemon_restart_routes, daemon_routes
+from coffer.surfaces.http import daemon_port, daemon_restart_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_restart_routes import SelfRestart, get_self_restart
@@ -90,7 +90,7 @@ async def test_a_second_press_does_not_start_a_second_successor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: None)
-    monkeypatch.setattr(daemon_routes, "_PORT", 8000)
+    monkeypatch.setattr(daemon_port, "_PORT", 8000)
     restart, audit = _Restart(), _Audit()
     async for c in _client(_app(restart, audit)):
         first = await c.post("/api/v1/daemon/restart")

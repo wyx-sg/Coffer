@@ -105,7 +105,7 @@ coffer mcp add filesystem \
 registered: mcp_server filesystem
 ```
 
-`--stdio` takes the whole command line as one string, and Coffer splits it into a command and its arguments. For a server reached over HTTP, use `--http <url>` instead. For a server that needs an API key, add `--credential ENV_NAME=<credential-ref>` (see [Credentials](/guides/credentials)).
+`--stdio` takes the whole command line as one string, and Coffer splits it into a command and its arguments. For a server reached over HTTP, use `--http <url>` instead. For a server that needs an API key, add `--secret ENV_NAME=<secret-ref>` (see [Secret store](/guides/secret-store)).
 
 Check that Coffer can start the server and see its tools:
 
@@ -242,7 +242,7 @@ flowchart LR
 
 - **Add Codex.** Run `coffer agent add codex` and `coffer agent connect codex`. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
 - **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
-- **Store a key.** Register a server that needs an API key, using a credential ref. See [Credentials](/guides/credentials).
+- **Store a key.** Register a server that needs an API key, using a secret ref. See [Secret store](/guides/secret-store).
 - **Share knowledge.** Create a collection with `coffer knowledge add handbook` and drop Markdown files into it. See [Knowledge](/guides/knowledge).
 - **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
 - **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.

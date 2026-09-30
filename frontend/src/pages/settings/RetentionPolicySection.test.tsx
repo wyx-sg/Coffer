@@ -4,6 +4,14 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { RetentionPolicySection } from "./RetentionPolicySection";
 import type { components } from "@/lib/api/types";
 
+// The shortening dialog counts what it would delete; each test sets the answer.
+const preview = vi.hoisted(() => ({
+  data: undefined as { total_rows: number; rows_to_delete: number } | undefined,
+}));
+vi.mock("@/lib/hooks/useRetention", () => ({
+  useRetentionPreview: () => ({ data: preview.data }),
+}));
+
 type RetentionPolicyOut = components["schemas"]["RetentionPolicyOut"];
 
 const basePolicy: RetentionPolicyOut = {
@@ -115,9 +123,35 @@ describe("RetentionPolicySection", () => {
     expect(onUpdate).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Shorten retention to 7 days?");
-    fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
+    expect(dialog).toHaveTextContent("Keep changes for 7 days?");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Shorten to 7 days" }));
     expect(onUpdate).toHaveBeenCalledWith(7);
+  });
+
+  test("the shortening names how many records it deletes, now and after", async () => {
+    preview.data = { total_rows: 11210, rows_to_delete: 9400 };
+    render(
+      <RetentionPolicySection
+        policy={{ ...basePolicy, table_name: "mcp_invocations" }}
+        onUpdate={vi.fn()}
+        updating={false}
+      />,
+    );
+    const daysInput = screen.getByRole("spinbutton");
+    fireEvent.change(daysInput, { target: { value: "7" } });
+    fireEvent.blur(daysInput);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Keep MCP calls for 7 days?");
+    expect(dialog).toHaveTextContent(
+      "About 9,400 calls older than 7 days are deleted at the next cleanup, within six hours.",
+    );
+    expect(within(dialog).getByTestId("retention-shorten-now")).toHaveTextContent(
+      "30 days · 11,210 calls",
+    );
+    expect(within(dialog).getByTestId("retention-shorten-after")).toHaveTextContent(
+      "7 days · about 1,810 calls",
+    );
+    preview.data = undefined;
   });
 
   test("cancelling the shortening puts the field back", async () => {

@@ -103,13 +103,13 @@ async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_engine: bool =
         kinds={"provider": make_provider_kind()},
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     singleton = _ModelSingleton(model)
     providers = ProviderService(
         agent_catalog=agent_catalog(),
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
         agents=_NoAgents(),
         audit=audit,

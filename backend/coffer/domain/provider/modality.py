@@ -1,6 +1,6 @@
 """``Modality`` — what KIND of model a curated entry names.
 
-An endpoint serves more than chat: the same credential usually reaches an
+An endpoint serves more than chat: the same secret usually reaches an
 embedding model, an image model, sometimes video or speech. A curated entry
 therefore records which kind it is, so a picker asks for the kind it needs
 instead of offering every id to every surface (a chat dropdown narrows to

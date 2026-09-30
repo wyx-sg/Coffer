@@ -1,4 +1,4 @@
-"""How one ``git`` process is started, and how the push credential reaches it.
+"""How one ``git`` process is started, and how the push secret reaches it.
 
 Extracted from ``git_mirror.py`` beside it, the way ``convergence_ops.py`` sits
 beside ``convergence.py``, and along a real seam: that module is about *what*
@@ -7,7 +7,7 @@ making any such invocation safe. The two change for different reasons. A new
 git command is added there; the rules below change only when the way a secret
 or a user's own configuration could reach git changes.
 
-The credential is why this module is shaped the way it is. It reaches git
+The push secret is why this module is shaped the way it is. It reaches git
 through a **credential helper** given on the command line, which reads the
 secret from an environment variable: never interpolated into the remote URL,
 never in argv (which any process on the machine can read — the helper names

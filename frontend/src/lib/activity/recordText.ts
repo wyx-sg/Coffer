@@ -3,7 +3,13 @@
 // Pure functions shared by the list, the drawer and their tests.
 import type { TFunction } from "i18next";
 
-import type { AuditEntry, Invocation } from "./records";
+import {
+  callServerLabel,
+  recordTimeMs,
+  type ActivityRecord,
+  type AuditEntry,
+  type Invocation,
+} from "./records";
 
 function pad(n: number, width = 2): string {
   return String(n).padStart(width, "0");
@@ -73,4 +79,84 @@ export function changeLink(entry: AuditEntry): { to: string; name: string } | nu
     default:
       return null;
   }
+}
+
+/** "You, in the web UI", "Coffer", "Sync" — who made a change, said in full. */
+export function actorLong(t: TFunction, actor: string): string {
+  const base = actor.startsWith("system:") ? "system" : actor;
+  return t(`activity.actorLong.${base}`, { defaultValue: actorLabel(t, actor) });
+}
+
+/** "14:32:08.114 today" — when a record was written, for the drawer's header. */
+export function whenLabel(
+  t: TFunction,
+  at: string | null,
+  withMs: boolean,
+  locale: string,
+): string {
+  if (!at) return "";
+  const time = clockTime(at, withMs);
+  const now = new Date();
+  const day = dayLabel(t, at, now, locale);
+  if (day === dayLabel(t, now.toISOString(), now, locale)) {
+    return t("activity.drawer.whenToday", { time });
+  }
+  const yesterday = new Date(now.getTime() - 86_400_000).toISOString();
+  if (day === dayLabel(t, yesterday, now, locale)) {
+    return t("activity.drawer.whenYesterday", { time });
+  }
+  const date = new Date(at).toLocaleDateString(locale, { day: "numeric", month: "short" });
+  return t("activity.drawer.whenOn", { time, date });
+}
+
+/** Records this close to an open one count as "around the same time". */
+const AROUND_MS = 5 * 60_000;
+
+/** The records written within five minutes of `record`, nearest first, at most three. */
+export function nearby(record: ActivityRecord, rows: readonly ActivityRecord[]): ActivityRecord[] {
+  const at = recordTimeMs(record.at);
+  if (!at) return [];
+  return rows
+    .filter((r) => r.key !== record.key && r.at && Math.abs(recordTimeMs(r.at) - at) <= AROUND_MS)
+    .sort((a, b) => Math.abs(recordTimeMs(a.at) - at) - Math.abs(recordTimeMs(b.at) - at))
+    .slice(0, 3);
+}
+
+/** "+13 s", "−2 min" — how far another record is from this one. */
+export function offsetLabel(t: TFunction, from: ActivityRecord, to: ActivityRecord): string {
+  const seconds = Math.round((recordTimeMs(to.at) - recordTimeMs(from.at)) / 1000);
+  const sign = seconds >= 0 ? "+" : "−";
+  const abs = Math.abs(seconds);
+  return abs < 60
+    ? t("activity.drawer.offsetSeconds", { sign, n: abs })
+    : t("activity.drawer.offsetMinutes", { sign, n: Math.round(abs / 60) });
+}
+
+/** A failure that says the server could not be reached, rather than that a tool failed. */
+const UNREACHABLE = /refused|unreachable|connect|timed? ?out|dns|resolve|reset/i;
+
+/** The headline of a call that did not go well: "Couldn't reach sentry". */
+export function callProblemTitle(t: TFunction, call: Invocation): string {
+  const server = callServerLabel(call);
+  if (call.status === "error" && call.error_message && UNREACHABLE.test(call.error_message)) {
+    return t("activity.drawer.callProblem.unreachable", { server });
+  }
+  return t(`activity.drawer.callProblem.${call.status}`, { server });
+}
+
+/** "sentry has been failing since 14:20 — 7 errors in the last 24 hours." */
+export function serverFailureLine(
+  t: TFunction,
+  call: Invocation,
+  failures: { failingSince: string | null; errors: number } | undefined,
+): string | null {
+  if (!failures) return null;
+  if (failures.failingSince) {
+    return t("activity.drawer.failingSince", {
+      server: callServerLabel(call),
+      since: clockTime(failures.failingSince).slice(0, 5),
+      count: failures.errors,
+    });
+  }
+  return failures.errors ? t("activity.drawer.errorsToday", { count: failures.errors }) : null;
 }

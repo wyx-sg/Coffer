@@ -150,6 +150,26 @@ class SqlAlchemyRetentionRepo:
             await session.commit()
             return int(result.rowcount or 0)
 
+    async def count_rows(
+        self,
+        table: str,
+        timestamp_column: str,
+        cutoff: datetime,
+    ) -> tuple[int, int]:
+        """``(all rows, rows older than cutoff)``: what a prune at ``cutoff`` would delete."""
+        allowed_columns = self._allowlist.get(table)
+        if allowed_columns is None or timestamp_column not in allowed_columns:
+            raise UnknownPrunableTable(
+                f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
+            )
+        async with self._sm() as session:
+            stmt = text(
+                f"SELECT COUNT(*), COALESCE(SUM(CASE WHEN {timestamp_column} < :cutoff "
+                f"THEN 1 ELSE 0 END), 0) FROM {table}"
+            )
+            total, older = (await session.execute(stmt, {"cutoff": cutoff})).one()
+            return int(total or 0), int(older or 0)
+
     async def archive_older_than(
         self,
         target_table: str,

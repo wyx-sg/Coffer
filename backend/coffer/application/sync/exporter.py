@@ -13,7 +13,7 @@ non-converging kind's rows, and the rows a converging kind declines one by one,
 and each is held back the same way on every export, so an absence in the tree
 is always a deletion somebody made rather than a document that went missing.
 
-Credentials are omitted unless the remote is configured to carry them, and even
+Secrets are omitted unless the remote is configured to carry them, and even
 then only Fernet ciphertext travels; the master key is never written.
 """
 
@@ -23,7 +23,7 @@ import asyncio
 from collections.abc import Sequence
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import BundlePort, CredentialSyncPort, SyncedStatePort
+from coffer.application.sync.ports import BundlePort, SecretSyncPort, SyncedStatePort
 from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import AreaCount, ExportSummary
 from coffer.domain.sync.portability import normalize_home
@@ -75,7 +75,7 @@ from coffer.domain.sync.serialization import resource_to_doc
 
 class SyncExporter:
     """Writes the manifest, mirrored trees, resource docs, shared state, and
-    (opt-in) credential ciphertext into a bundle directory.
+    (opt-in) secret ciphertext into a bundle directory.
 
     One thing a resource has is deliberately left behind: its **reach** —
     ``enabled`` and ``scope``, which are one control in the UI and one decision
@@ -97,18 +97,18 @@ class SyncExporter:
     def __init__(
         self,
         resources: ResourceService,
-        credentials: CredentialSyncPort,
+        secrets: SecretSyncPort,
         state_providers: Sequence[SyncedStatePort] = (),
         *,
         home: str | None,
     ) -> None:
         self._resources = resources
-        self._credentials = credentials
+        self._secrets = secrets
         self._state_providers = list(state_providers)
         self._home = home
 
-    async def export(self, bundle: BundlePort, *, with_credentials: bool = False) -> ExportSummary:
-        summary = ExportSummary(path=bundle.path, credentials_included=with_credentials)
+    async def export(self, bundle: BundlePort, *, with_secrets: bool = False) -> ExportSummary:
+        summary = ExportSummary(path=bundle.path, secrets_included=with_secrets)
         docs: list[dict[str, object]] = []
         unserializable: list[str] = []
         withheld: list[str] = []
@@ -168,9 +168,9 @@ class SyncExporter:
             state_docs.append((provider.area, area_docs))
 
         blobs: dict[str, bytes] = {}
-        if with_credentials:
-            for ref in await asyncio.to_thread(self._credentials.list_refs):
-                blob = await asyncio.to_thread(self._credentials.read_ciphertext, ref)
+        if with_secrets:
+            for ref in await asyncio.to_thread(self._secrets.list_refs):
+                blob = await asyncio.to_thread(self._secrets.read_ciphertext, ref)
                 if blob is not None:
                     blobs[ref] = blob
 
@@ -181,7 +181,7 @@ class SyncExporter:
             docs,
             state_docs,
             blobs,
-            with_credentials,
+            with_secrets,
             unserializable,
             withheld,
         )
@@ -191,7 +191,7 @@ class SyncExporter:
             summary.areas.append(AreaCount(subdir, count))
         for area, area_docs in state_docs:
             summary.areas.append(AreaCount(f"state/{area}", len(area_docs)))
-        if with_credentials:
+        if with_secrets:
             summary.areas.append(AreaCount("credentials", len(blobs)))
         return summary
 
@@ -201,7 +201,7 @@ class SyncExporter:
         docs: list[dict[str, object]],
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]],
         blobs: dict[str, bytes],
-        with_credentials: bool,
+        with_secrets: bool,
         unserializable: list[str],
         withheld: list[str],
     ) -> None:
@@ -211,11 +211,11 @@ class SyncExporter:
         for area, area_docs in state_docs:
             bundle.write_state_docs(area, area_docs)
         bundle.mirror_trees_out()
-        if with_credentials:
+        if with_secrets:
             # Converged even when empty, and NOT converged when this remote
-            # does not carry credentials. Skipping an empty set would leave
-            # the vault's last deleted credential standing in the tree
+            # does not carry secrets. Skipping an empty set would leave
+            # the vault's last deleted secret standing in the tree
             # forever — its deletion could never be published — while
             # converging an area this remote opted out of would publish the
             # opting-out as a deletion of everyone else's blobs.
-            bundle.write_credential_blobs(blobs)
+            bundle.write_secret_blobs(blobs)

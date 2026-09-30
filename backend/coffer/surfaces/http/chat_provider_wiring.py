@@ -65,7 +65,7 @@ def agent_home_env_resolver(
 def build_agent_provider_registry(
     conv_repo: ConversationRepo,
     agent_catalog: AgentCatalog,
-    credential_resolver: Callable[[str], str] | None = None,
+    secret_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
     resolve_channel: ChannelNoteResolver | None = None,
     observe_quota: QuotaObserver | None = None,
@@ -73,7 +73,7 @@ def build_agent_provider_registry(
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
-    ``credential_resolver`` is what lets voice be transcribed: with it, a turn
+    ``secret_resolver`` is what lets voice be transcribed: with it, a turn
     carrying audio reaches the connection the operator marked
     ``transcribe_default``, on the model they chose for it. Without the
     resolver, without such a connection, or without a model, audio is handed to
@@ -120,10 +120,10 @@ def build_agent_provider_registry(
             lambda: resolve_transcribe_connection(
                 read_model=read_transcribe_model, connections=get_provider_service()
             ),
-            credential_resolver,
+            secret_resolver,
             read_internal_engine_timeout,
         )
-        if credential_resolver is not None
+        if secret_resolver is not None
         else None
     )
 

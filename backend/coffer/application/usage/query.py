@@ -87,6 +87,22 @@ class SummaryRow:
     agent_uid: str | None = None
     agent_type: str | None = None
     day: str | None = None
+    #: The agent types that sent the group's requests, most requests first —
+    #: who used a model, or a day's top agent.
+    agent_types: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SummaryFilters:
+    """Narrowing of a summary; ``None`` means any."""
+
+    agent_type: str | None = None
+    connection_uid: str | None = None
+
+    def keeps(self, row: DailyUsage) -> bool:
+        if self.agent_type is not None and row.agent_type != self.agent_type:
+            return False
+        return self.connection_uid is None or row.connection_uid == self.connection_uid
 
 
 @dataclass(frozen=True)
@@ -144,16 +160,24 @@ class UsageQueryService:
         start: date | None = None,
         end: date | None = None,
         group_by: GroupBy | str = GroupBy.MODEL,
+        filters: SummaryFilters | None = None,
     ) -> UsageSummary:
         span = self.resolve(range_name, start, end)
         grouping = GroupBy(group_by)
-        daily = await self._repo.daily(span.start_day, span.end_day)
+        narrowed = filters or SummaryFilters()
+        daily = [
+            r for r in await self._repo.daily(span.start_day, span.end_day) if narrowed.keeps(r)
+        ]
         groups: dict[tuple[str | None, ...], tuple[DailyUsage, UsageTotals]] = {}
+        senders: dict[tuple[str | None, ...], dict[str, int]] = {}
         total = UsageTotals()
         for row in daily:
             key = _group_key(grouping, row)
             first, sums = groups.get(key, (row, UsageTotals()))
             groups[key] = (first, sums.plus(row))
+            if row.agent_type:
+                by_type = senders.setdefault(key, {})
+                by_type[row.agent_type] = by_type.get(row.agent_type, 0) + row.requests
             total = total.plus(row)
         if grouping is GroupBy.DAY:
             # Every day of the span, so a chart has no gaps: a quiet day is a 0.
@@ -161,7 +185,10 @@ class UsageQueryService:
                 key = (day.isoformat(),)
                 if key not in groups:
                     groups[key] = (DailyUsage(key[0], None, None, None, None), UsageTotals())
-        rows = [self._row(grouping, first, sums) for first, sums in groups.values()]
+        rows = [
+            replace(self._row(grouping, first, sums), agent_types=_most_first(senders.get(key)))
+            for key, (first, sums) in groups.items()
+        ]
         if grouping is GroupBy.MODEL:
             rows = await self._with_connection_names(rows)
         if grouping is GroupBy.DAY:
@@ -225,9 +252,12 @@ class UsageQueryService:
         start: date | None = None,
         end: date | None = None,
         group_by: GroupBy | str = GroupBy.MODEL,
+        filters: SummaryFilters | None = None,
     ) -> str:
         """The summary as CSV: identity columns, every total, estimated cost."""
-        summary = await self.summary(range_name, start=start, end=end, group_by=group_by)
+        summary = await self.summary(
+            range_name, start=start, end=end, group_by=group_by, filters=filters
+        )
         identity: dict[GroupBy, list[tuple[str, Callable[[SummaryRow], object]]]] = {
             GroupBy.MODEL: [
                 ("model", lambda r: r.model),
@@ -254,8 +284,21 @@ class UsageQueryService:
         return buf.getvalue()
 
 
+def _most_first(counts: dict[str, int] | None) -> tuple[str, ...]:
+    if not counts:
+        return ()
+    return tuple(sorted(counts, key=lambda t: (-counts[t], t)))
+
+
 def _cell(value: object) -> object:
     return "" if value is None else value
 
 
-__all__ = ["GroupBy", "SummaryRow", "UsageQueryService", "UsageSummary", "UsageTotals"]
+__all__ = [
+    "GroupBy",
+    "SummaryFilters",
+    "SummaryRow",
+    "UsageQueryService",
+    "UsageSummary",
+    "UsageTotals",
+]

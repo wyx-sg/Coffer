@@ -1,6 +1,6 @@
 """What the CLI says, and does, when a change waits for the Coffer app.
 
-Spec credentials "Hold a secret for a new destination until a person approves
+Spec secret "Hold a secret for a new destination until a person approves
 it": a secret bound to a new destination, a replaced value that is in use, or
 switching the protection off is saved as a pending approval. Approving takes a
 present human in the desktop app — Touch ID or the login password — which no
@@ -41,9 +41,9 @@ def pending_for(
     against any one destination, so it is found by its ref.
     """
     if not refs:
-        r = c.get("/credentials/approvals", params={"status": "pending", "destination_uid": uid})
+        r = c.get("/secrets/approvals", params={"status": "pending", "destination_uid": uid})
     else:
-        r = c.get("/credentials/approvals", params={"status": "pending"})
+        r = c.get("/secrets/approvals", params={"status": "pending"})
     if r.status_code == 404:
         # A daemon from before the secret boundary has no approvals to wait on.
         return []
@@ -93,7 +93,7 @@ def settle(
             raise typer.Exit(int(ExitCode.APPROVAL_PENDING))
         time.sleep(POLL_SECONDS)
         for approval_id in sorted(remaining):
-            r = c.get(f"/credentials/approvals/{approval_id}")
+            r = c.get(f"/secrets/approvals/{approval_id}")
             _cli_client.check(r, verbose=verbose)
             status = r.json()["status"]
             if status == "approved":
@@ -107,7 +107,7 @@ def settle(
 def settle_ids(c: httpx.Client, ids: list[str], *, wait: bool, verbose: bool) -> None:
     approvals = []
     for approval_id in ids:
-        r = c.get(f"/credentials/approvals/{approval_id}")
+        r = c.get(f"/secrets/approvals/{approval_id}")
         _cli_client.check(r, verbose=verbose)
         approvals.append(r.json())
     settle(c, approvals, wait=wait, verbose=verbose)

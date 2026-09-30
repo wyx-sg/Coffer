@@ -2,22 +2,22 @@
 //
 // Every tab filters by time range and free text; each adds the filters its
 // records afford (spec web-ui "Filter each Activity tab and expand any row"):
-// Everything and Changes a who and a kind, Everything and MCP calls a server,
-// MCP calls a status, the Daemon log a severity floor and a logger. "/"
-// focuses the text box from anywhere on the page.
-import { useEffect, useRef } from "react";
+// Everything an agent (or who else), a server and a kind; Changes who and
+// the kind of change; MCP calls an agent, a server and a status; the Daemon
+// log a severity floor and a logger. Agent and Kind choose several values at
+// once, each with its count (design 6.1.03, 6.1.04). "/" focuses the text box
+// from anywhere on the page.
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentBadge } from "@/components/agent/AgentBadge";
 import { SearchInput } from "@/components/SearchInput";
-import { TimeRangePicker } from "@/components/TimeRangePicker";
-import { type ActivityTab } from "@/lib/activity/records";
-import { CHANGE_KINDS, type ActivityFilters } from "@/lib/activity/filters";
+import { type ActivityRecord, type ActivityTab } from "@/lib/activity/records";
+import type { ActivityFilters } from "@/lib/activity/filters";
+import type { TabCount } from "@/lib/hooks/useActivityFeed";
 import { cn } from "@/lib/utils";
-import { FilterPill, type PillGroup } from "./FilterPill";
-
-/** The audit actors that are not an agent. */
-const NON_AGENT_ACTORS = ["ui", "cli", "api", "system", "channel"] as const;
+import { ActivityTimeRange } from "./ActivityTimeRange";
+import { FilterPill } from "./FilterPill";
+import { KindPill, WhoPill } from "./WhoKindPills";
 
 const CALL_STATUSES = ["ok", "error", "timeout", "denied"] as const;
 
@@ -42,12 +42,29 @@ interface Props {
   filters: ActivityFilters;
   onChange: (next: ActivityFilters) => void;
   agents: AgentOption[];
+  agentNames: ReadonlyMap<string, string>;
   servers: ServerOption[];
   /** Loggers seen in the loaded daemon records. */
   loggers: string[];
+  /** The loaded records before the client-side filters, for the pills' counts. */
+  loaded: readonly ActivityRecord[];
+  counts: Record<ActivityTab, TabCount>;
+  /** Shown after the text box (the daemon log's "Open log file"). */
+  trailing?: ReactNode;
 }
 
-export function ActivityFilterBar({ tab, filters, onChange, agents, servers, loggers }: Props) {
+export function ActivityFilterBar({
+  tab,
+  filters,
+  onChange,
+  agents,
+  agentNames,
+  servers,
+  loggers,
+  loaded,
+  counts,
+  trailing,
+}: Props) {
   const { t } = useTranslation();
   const searchBox = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<ActivityFilters>) => onChange({ ...filters, ...patch });
@@ -72,93 +89,70 @@ export function ActivityFilterBar({ tab, filters, onChange, agents, servers, log
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const agentGroup: PillGroup = {
-    label: tab === "mcp" ? undefined : t("activity.filters.agents"),
-    options: agents.map((a) => ({
-      value: `agent:${a.uid}`,
-      label: (
-        <span className="inline-flex items-center gap-2">
-          <AgentBadge type={a.type} name={a.name} size="sm" tooltip={false} />
-          {a.name}
-        </span>
-      ),
-    })),
-  };
-  const actorGroup: PillGroup = {
-    label: t("activity.filters.notAnAgent"),
-    options: NON_AGENT_ACTORS.map((actor) => ({
-      value: `actor:${actor}`,
-      label: t(`activity.actor.${actor}`),
-    })),
-  };
-  const byGroups = tab === "mcp" ? [agentGroup] : [agentGroup, actorGroup];
-
-  const changeKindGroup: PillGroup = {
-    label: tab === "everything" ? t("activity.filters.kinds.changes") : undefined,
-    options: [
-      ...(tab === "everything"
-        ? [{ value: "changes", label: t("activity.filters.kinds.allChanges") }]
-        : []),
-      ...CHANGE_KINDS.map((kind) => ({
-        value: `change:${kind}`,
-        label: t(`activity.filters.changeKinds.${kind}`),
-      })),
-    ],
-  };
-  const kindGroups: PillGroup[] =
-    tab === "everything"
-      ? [
-          { options: [{ value: "calls", label: t("activity.filters.kinds.calls") }] },
-          changeKindGroup,
-          {
-            options: [
-              { value: "daemon", label: t("activity.filters.kinds.daemon") },
-              { value: "not-daemon", label: t("activity.filters.kinds.notDaemon") },
-            ],
-          },
-        ]
-      : [changeKindGroup];
+  const timePill = (
+    <ActivityTimeRange
+      timeRange={filters.timeRange}
+      from={filters.from}
+      to={filters.to}
+      onChange={(v) => set(v)}
+    />
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <TimeRangePicker
-        timeRange={filters.timeRange}
-        from={filters.from}
-        to={filters.to}
-        onChange={(v) => set(v)}
-      />
       {tab === "daemon" ? (
-        <div
-          role="radiogroup"
-          aria-label={t("activity.filters.levelLabel")}
-          className="inline-flex h-control-sm items-center rounded-md border border-border bg-surface-sunken p-0.5"
-        >
-          {LEVELS.map((level) => (
-            <button
-              key={level || "all"}
-              type="button"
-              role="radio"
-              aria-checked={filters.level === level}
-              onClick={() => set({ level })}
-              className={cn(
-                "h-full rounded-sm px-2 text-xs text-text-muted transition-colors duration-fast hover:text-text",
-                filters.level === level && "bg-surface-raised font-label text-text shadow-sm",
-              )}
-            >
-              {t(`activity.filters.level.${level || "all"}`)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {tab !== "daemon" ? (
-        <FilterPill
-          label={t("activity.filters.by")}
-          value={filters.by}
-          anyValue="any"
-          groups={byGroups}
-          onChange={(by) => set({ by })}
-        />
-      ) : null}
+        <>
+          <div
+            role="radiogroup"
+            aria-label={t("activity.filters.levelLabel")}
+            className="inline-flex items-center gap-0.5 rounded-md border border-border-subtle bg-surface-sunken p-[3px]"
+          >
+            {LEVELS.map((level) => (
+              <button
+                key={level || "all"}
+                type="button"
+                role="radio"
+                aria-checked={filters.level === level}
+                onClick={() => set({ level })}
+                className={cn(
+                  "h-6 rounded-sm px-2.5 text-xs font-label text-text-muted transition-colors duration-fast hover:text-text",
+                  filters.level === level &&
+                    "bg-surface-raised text-text shadow-sm ring-1 ring-border",
+                )}
+              >
+                {t(`activity.filters.level.${level || "all"}`)}
+              </button>
+            ))}
+          </div>
+          <FilterPill
+            label={t("activity.filters.logger")}
+            value={filters.logger}
+            anyValue="any"
+            groups={[
+              {
+                options: loggers.map((logger) => ({
+                  value: logger,
+                  label: <span className="font-mono text-xs">{logger}</span>,
+                })),
+              },
+            ]}
+            onChange={(logger) => set({ logger })}
+          />
+          {timePill}
+        </>
+      ) : (
+        <>
+          {timePill}
+          <WhoPill
+            tab={tab}
+            filters={filters}
+            set={set}
+            loaded={loaded}
+            agents={agents}
+            agentNames={agentNames}
+          />
+        </>
+      )}
       {tab === "everything" || tab === "mcp" ? (
         <FilterPill
           label={t("activity.filters.server")}
@@ -169,13 +163,7 @@ export function ActivityFilterBar({ tab, filters, onChange, agents, servers, log
         />
       ) : null}
       {tab === "everything" || tab === "changes" ? (
-        <FilterPill
-          label={t("activity.filters.kind")}
-          value={filters.kind}
-          anyValue="any"
-          groups={kindGroups}
-          onChange={(kind) => set({ kind })}
-        />
+        <KindPill tab={tab} filters={filters} set={set} loaded={loaded} counts={counts} />
       ) : null}
       {tab === "mcp" ? (
         <FilterPill
@@ -193,29 +181,27 @@ export function ActivityFilterBar({ tab, filters, onChange, agents, servers, log
           onChange={(status) => set({ status })}
         />
       ) : null}
-      {tab === "daemon" ? (
-        <FilterPill
-          label={t("activity.filters.logger")}
-          value={filters.logger}
-          anyValue="any"
-          groups={[
-            {
-              options: loggers.map((logger) => ({
-                value: logger,
-                label: <span className="font-mono text-xs">{logger}</span>,
-              })),
-            },
-          ]}
-          onChange={(logger) => set({ logger })}
-        />
-      ) : null}
-      <div ref={searchBox} className="ml-auto w-full sm:w-64">
-        <SearchInput
-          value={filters.search}
-          onChange={(search) => set({ search })}
-          placeholder={t(`activity.filters.search.${tab}`)}
-          ariaLabel={t("activity.filters.searchLabel")}
-        />
+      <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
+        <div
+          ref={searchBox}
+          className={cn("relative w-full", tab === "daemon" ? "sm:w-56" : "sm:w-64")}
+        >
+          <SearchInput
+            value={filters.search}
+            onChange={(search) => set({ search })}
+            placeholder={t(`activity.filters.search.${tab}`)}
+            ariaLabel={t("activity.filters.searchLabel")}
+          />
+          {filters.search || tab === "daemon" ? null : (
+            <kbd
+              aria-hidden
+              className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-[18px] -translate-y-1/2 items-center rounded-[4px] border border-border bg-surface-raised px-[5px] font-sans text-2xs text-text-subtle"
+            >
+              /
+            </kbd>
+          )}
+        </div>
+        {trailing}
       </div>
     </div>
   );

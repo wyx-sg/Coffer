@@ -58,7 +58,7 @@ MANIFEST_PATH = "manifest.json"
 #: addition. This is exactly the kind of change the gate below exists for: a
 #: build on layout 1 reading a layout-2 tree would see every document's path
 #: change at once and apply the lot as "the user deleted everything and created
-#: everything" — the ``ResourceService.delete`` cascade, the orphaned-credential
+#: everything" — the ``ResourceService.delete`` cascade, the orphaned-secret
 #: release, the whole loss this layout was introduced to stop. Refusing the
 #: remote outright is the only safe reading such a build has.
 SCHEMA_VERSION = 2

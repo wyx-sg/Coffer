@@ -87,14 +87,14 @@ def _status(supervisor: ProxySupervisor) -> Callable[[], dict[str, Any]]:
 
 def wire_model_proxy(
     provider_svc: ProviderService,
-    credential_store: Any,
+    secret_store: Any,
     reconciler: Reconciler,
     *,
     coffer_dir: pathlib.Path | None = None,
 ) -> ModelProxyWiring:
     """Build the supervisor, publish the management facade, and start
     supervising unless ``COFFER_MODEL_PROXY=off``."""
-    tokens = ProxyTokenService(credential_store)
+    tokens = ProxyTokenService(secret_store)
 
     async def state() -> ProxyState:
         return await build_proxy_state(provider_svc, tokens)

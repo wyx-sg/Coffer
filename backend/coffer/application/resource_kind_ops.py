@@ -13,7 +13,7 @@ repository, the audit log or a resource; none of them can fail a write. The
 service keeps thin delegates so callers see no change.
 
 Free functions over the registry rather than methods, because two of them —
-``audit_safe_config`` and ``credential_refs`` — were already free functions
+``audit_safe_config`` and ``secret_refs`` — were already free functions
 taking a resolved ``Kind``, and nothing here needs the service at all.
 """
 
@@ -41,15 +41,15 @@ def audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
     return kind_def.audit_redactor(config)
 
 
-def credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
+def secret_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
+    """Return ``{key: secret_ref}`` for ``config`` using the kind's extractor.
 
-    Kinds without a ``credential_ref_extractor`` declare no credentials and are
+    Kinds without a ``secret_ref_extractor`` declare no secrets and are
     not probed.
     """
-    if kind_def.credential_ref_extractor is None:
+    if kind_def.secret_ref_extractor is None:
         return {}
-    return kind_def.credential_ref_extractor(config)
+    return kind_def.secret_ref_extractor(config)
 
 
 def converges(kinds: Registry, kind: str) -> bool:
@@ -178,5 +178,5 @@ __all__ = [
     "checked_title",
     "converges",
     "converges_row",
-    "credential_refs",
+    "secret_refs",
 ]

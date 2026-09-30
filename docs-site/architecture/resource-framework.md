@@ -86,7 +86,7 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 
 | Field | Meaning |
 | --- | --- |
-| `credential_ref_extractor` | Returns `{key: credential_ref}` for a config. The core probes each ref before any write (`CREDENTIAL_MISSING`) and uses the same answer to refuse deleting a credential that is still cited, and to release credentials nothing cites after a delete. |
+| `secret_ref_extractor` | Returns `{key: secret_ref}` for a config. The core probes each ref before any write (`SECRET_MISSING`) and uses the same answer to refuse deleting a secret that is still cited, and to release secrets nothing cites after a delete. |
 | `audit_redactor` | Returns an audit-safe copy of a config. |
 | `default_scope` | The scope a newly registered row starts with, instead of "every agent". |
 
@@ -104,27 +104,27 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Kind | Hooks and flags it supplies |
 | --- | --- |
-| `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `titled=False`, `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
+| `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `titled=False`, `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `secret_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
 | `agent` | `generic_create_allowed=False`, `name_from_config` and `name_fixed` (one agent per type, named by it), `titled=False`, `on_delete`, `on_enabled_changed` |
 | `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `titled=False`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
 | `knowledge` | `generic_create_allowed=False`, `toggleable=False`, `on_rename` (moves the collection directory), `on_delete` |
 | `memory` | `generic_create_allowed=False`, `toggleable=False`, `converges=False`, `on_rename`, `on_delete` |
-| `channel` | `supports_scope` (inverted, see below), `credential_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
-| `provider` | `supports_scope`, `default_scope`, `credential_ref_extractor`, `validate_config`, `on_update_config` |
+| `channel` | `supports_scope` (inverted, see below), `secret_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
+| `provider` | `supports_scope`, `default_scope`, `secret_ref_extractor`, `validate_config`, `on_update_config` |
 
 ### ResourceService
 
-[`ResourceService`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/resource_service.py) is constructed with the per-app `kinds` dict, a repository, the audit service and the credential store. It dispatches on `resource.kind` and never imports a kind module. Its operations, in the order each performs its steps:
+[`ResourceService`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/resource_service.py) is constructed with the per-app `kinds` dict, a repository, the audit service and the secret store. It dispatches on `resource.kind` and never imports a kind module. Its operations, in the order each performs its steps:
 
 | Operation | Steps |
 | --- | --- |
-| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus `validate_new_name` when minting the uid, and the derived name when the kind sets `name_from_config`) → title rule (at most 80 characters, and none on a kind that is not `titled`) → schema validation → `validate_config` → probe cited credentials → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
-| `update_config` | Same generic-create gate → schema → credential probe → `on_update_config` → write → audit `resource_updated` with redacted before and after. |
+| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus `validate_new_name` when minting the uid, and the derived name when the kind sets `name_from_config`) → title rule (at most 80 characters, and none on a kind that is not `titled`) → schema validation → `validate_config` → probe cited secrets → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
+| `update_config` | Same generic-create gate → schema → secret probe → `on_update_config` → write → audit `resource_updated` with redacted before and after. |
 | `rename` | No-op if unchanged → refuse a kind with `name_fixed` (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → `on_rename` → write → audit `resource_renamed` with `from` and `to`. |
 | `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters, or any title on a kind that is not `titled`, is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation. |
 | `set_enabled` | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
 | `update_scope` | `validate_scope` against `supports_scope` → `validate_scope_for` → write → audit `resource_scope_updated` → `on_scope_changed`. |
-| `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
+| `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release secrets no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
 
 The delete path, which shows the validator/reaction split most clearly:
 
@@ -142,7 +142,7 @@ sequenceDiagram
   S->>K: on_delete(resource)
   Note over K: cleanup, awaited to completion
   S->>R: delete row
-  S->>S: release orphaned credentials
+  S->>S: release orphaned secrets
   S->>A: resource_deleted with redacted snapshot
   S-->>C: done
 ```
@@ -209,7 +209,7 @@ You read the log on the **Changes** tab of **Activity** in the web UI, with `cof
 
 ## Schema validation
 
-Each kind's `config_schema` is a Pydantic v2 model. `ResourceService` validates the incoming config and stores `model_dump(mode="json")`, so special types such as URLs are persisted as plain strings. A shape failure is `CONFIG_INVALID` (422). Semantic checks that need more than the shape — does this channel's `default_agent` name a registered agent, does this workspace directory exist — run in `validate_config` or `on_update_config`. Credential refs are probed against the encrypted store before the row is written, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind.
+Each kind's `config_schema` is a Pydantic v2 model. `ResourceService` validates the incoming config and stores `model_dump(mode="json")`, so special types such as URLs are persisted as plain strings. A shape failure is `CONFIG_INVALID` (422). Semantic checks that need more than the shape — does this channel's `default_agent` name a registered agent, does this workspace directory exist — run in `validate_config` or `on_update_config`. Secret refs are probed against the encrypted store before the row is written, so a missing secret fails with `SECRET_MISSING` and leaves nothing behind.
 
 ## Reach
 
@@ -240,13 +240,13 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 
 | Kind | Carries | Scope | Where reach is enforced |
 | --- | --- | --- | --- |
-| `mcp_server` | Transport (stdio or HTTP), credential refs, per-server gateway policy. | Yes | The MCP gateway filters the server's tools by the session's agent uid (`application/mcp/gateway_scope.py`). |
+| `mcp_server` | Transport (stdio or HTTP), secret refs, per-server gateway policy. | Yes | The MCP gateway filters the server's tools by the session's agent uid (`application/mcp/gateway_scope.py`). |
 | `agent` | Agent type, config directory, Coffer-MCP install state. Everything else is read from the agent's own files. | No — it is the agent | — |
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and `is_active(scope, agent)`; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
 | `memory` | One partition (a repository, or `global`) under `~/.coffer/memory/`, derived from agents' native memory. Does not converge. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
-| `channel` | Transport config, credential refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a dormant channel. |
-| `provider` | Wire protocol, base URL, one `credential_ref`. | Yes, pre-filled by `default_scope` from the wire | The projection seam `application/provider/targets.py`: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
+| `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a dormant channel. |
+| `provider` | Wire protocol, base URL, one `secret_ref`. | Yes, pre-filled by `default_scope` from the wire | The projection seam `application/provider/targets.py`: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them.
 

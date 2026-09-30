@@ -13,7 +13,7 @@ _STUB: Any = object()
 def test_every_source_when_every_dependency_is_wired() -> None:
     sources = build_attention_sources(
         resource_svc=_STUB,
-        credential_store=_STUB,
+        secret_store=_STUB,
         connection_service=_STUB,
         auto_detect=_STUB,
         sync_service=_STUB,
@@ -31,7 +31,7 @@ def test_every_source_when_every_dependency_is_wired() -> None:
 def test_an_unwired_dependency_skips_its_source() -> None:
     sources = build_attention_sources(
         resource_svc=_STUB,
-        credential_store=_STUB,
+        secret_store=_STUB,
         connection_service=_STUB,
         auto_detect=_STUB,
         sync_service=None,

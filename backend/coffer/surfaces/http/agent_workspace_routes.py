@@ -86,8 +86,8 @@ class McpEntriesOut(BaseModel):
 class McpEntryAdopt(BaseModel):
     source: str | None = None
     new_name: str | None = None
-    # Maps secret-looking env/header KEY names to credential refs; the VALUES
-    # are encrypted into the credential store server-side, never into the
+    # Maps secret-looking env/header KEY names to secret refs; the VALUES
+    # are encrypted into the secret store server-side, never into the
     # resource config.
     secrets: dict[str, str] | None = None
 

@@ -102,7 +102,7 @@ Coffer that does is a secret going somewhere new, below.
 ## Secrets: you use them, you never see them
 
 Coffer holds the developer's secrets and never prints one — not through a tool,
-not through the `coffer` CLI, not through its API. `coffer credentials get
+not through the `coffer` CLI, not through its API. `coffer secret get
 <ref>` only says `[redacted]` or exits `4`; there is no option that shows the
 value, and nothing to work around. Only the developer sees a value, in the
 Coffer desktop app.
@@ -117,8 +117,8 @@ coffer run --env-file connection.env -- ./query.sh
 
 A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
 cited in files as `coffer://secret/<name>`. Write that reference into skills,
-scripts and env files — never the value. `coffer credentials list` shows what
-exists; `coffer credentials scan` finds plaintext secrets left in files.
+scripts and env files — never the value. `coffer secret list` shows what
+exists; `coffer secret scan` finds plaintext secrets left in files.
 
 You may configure Coffer freely, but a secret that would go somewhere it has not
 gone before — a new MCP server citing an existing token, a changed command line
@@ -141,8 +141,8 @@ text does not explain, not as a debugger for the developer's own program.
 
 ## What not to put in
 
-- **No secrets.** No keys, tokens, passwords or credentials — not in knowledge,
-  not anywhere you write through Coffer. The developer's credentials live in an
+- **No secrets.** No keys, tokens, passwords or secrets — not in knowledge,
+  not anywhere you write through Coffer. The developer's secrets live in an
   encrypted store Coffer keeps separately, and nothing you write reaches it.
 - **Not the repository in front of you.** If the answer is in code you can
   already read, read the code. Knowledge is for what the repository cannot say.

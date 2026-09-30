@@ -42,7 +42,7 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | [`channels`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) | Messaging channels to agents, independent of platform |
 | `channels/telegram`, `channels/seatalk` | The per-platform mechanics |
 | [`chat`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md) | The turn platform (agent adapters, conversations, the event stream) and the web Conversations page |
-| [`credentials`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/credentials/spec.md) | The encrypted credential store and the rule that everything else holds references |
+| [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | The encrypted secret store and the rule that everything else holds references |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | The Coffer process: one per vault, discovery, the loopback HTTP guard, serving the UI, logs, terminal install |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | The macOS shell: window, tray, handshake, detect-or-spawn, the `.dmg` |
 | [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | Release channels, the feature registry, per-machine switches, closing surfaces |
@@ -185,7 +185,7 @@ fn a_spawned_daemon_leaves_the_apps_process_group() { /* ... */ }
 `scripts/audit_acceptance.py` runs in `make verify-acceptance` and in CI. It scans every `spec.md` and every test file, and fails on any of these:
 
 - a scenario that no marker covers
-- a marker that names a capability or scenario that does not exist, usually after a rename
+- a marker that names a capability or scenario that does not exist, usually after a rename (a scenario that a change in progress adds counts as existing, and is listed, until that change is archived)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 

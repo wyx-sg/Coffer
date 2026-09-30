@@ -5,7 +5,7 @@ description: Register upstream MCP servers once in Coffer, curate their tools, c
 
 # MCP servers
 
-Coffer's gateway aggregates the MCP servers you register and serves them to every connected agent through one endpoint. This page covers registering stdio and HTTP servers, keeping their secrets in the credential store, curating what each server exposes, choosing which agents reach it, and how the gateway behaves when you have many tools.
+Coffer's gateway aggregates the MCP servers you register and serves them to every connected agent through one endpoint. This page covers registering stdio and HTTP servers, keeping their secrets in the secret store, curating what each server exposes, choosing which agents reach it, and how the gateway behaves when you have many tools.
 
 ## What the gateway does
 
@@ -85,12 +85,12 @@ The Brave Search server reads its API key from the `BRAVE_API_KEY` environment v
 
 ```sh
 # 1. Store the secret (read from stdin, so it never lands in shell history)
-printf '%s' "$BRAVE_API_KEY" | coffer credentials set brave/api-key
+printf '%s' "$BRAVE_API_KEY" | coffer secret set brave/api-key
 
-# 2. Register the server, mapping the env var to the credential ref
+# 2. Register the server, mapping the env var to the secret ref
 coffer mcp add brave \
   --stdio "npx -y @modelcontextprotocol/server-brave-search" \
-  --credential BRAVE_API_KEY=brave/api-key
+  --secret BRAVE_API_KEY=brave/api-key
 
 # 3. Check it starts and lists tools
 coffer mcp test brave
@@ -109,7 +109,7 @@ The stored config holds only the reference:
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"],
     "env": {},
-    "credential_refs": { "BRAVE_API_KEY": "brave/api-key" },
+    "secret_refs": { "BRAVE_API_KEY": "brave/api-key" },
     "cwd": null
   },
   "spawn_timeout_seconds": 30,
@@ -117,9 +117,9 @@ The stored config holds only the reference:
 }
 ```
 
-When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised credentials — nothing else.
+When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised secrets — nothing else.
 
-In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the credential store under a generated ref and cited from `credential_refs`; the rest stay in `env`.
+In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the secret store under a generated ref and cited from `secret_refs`; the rest stay in `env`.
 
 ## Register an HTTP server
 
@@ -129,17 +129,17 @@ An HTTP server is a remote MCP endpoint that speaks the streamable HTTP transpor
 
 ```sh
 # 1. Store the whole header value, including the scheme
-printf 'Bearer %s' "$GITHUB_PAT" | coffer credentials set github/authorization
+printf 'Bearer %s' "$GITHUB_PAT" | coffer secret set github/authorization
 
-# 2. Register the server, mapping the header to the credential ref
+# 2. Register the server, mapping the header to the secret ref
 coffer mcp add github \
   --http https://api.githubcopilot.com/mcp/ \
-  --credential Authorization=github/authorization
+  --secret Authorization=github/authorization
 
 coffer mcp test github
 ```
 
-For an HTTP server each `--credential NAME=REF` entry becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+For an HTTP server each `--secret NAME=REF` entry becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
 
 The config Coffer stores:
 
@@ -149,7 +149,7 @@ The config Coffer stores:
     "type": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers": {},
-    "credential_refs": { "Authorization": "github/authorization" }
+    "secret_refs": { "Authorization": "github/authorization" }
   },
   "spawn_timeout_seconds": 30,
   "request_timeout_seconds": 120
@@ -157,11 +157,11 @@ The config Coffer stores:
 ```
 
 ::: warning Secrets cannot sit in `env` or `headers`
-A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `credential_refs`. A `credential_refs` entry citing a ref the store does not hold is also rejected, naming the missing credential.
+A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `secret_refs`. A `secret_refs` entry citing a ref the store does not hold is also rejected, naming the missing secret.
 :::
 
 ::: info Pasting an HTTP server with `headers`
-The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
+The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the secret store and cited from `secret_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
 ## Server names and descriptions
@@ -182,7 +182,7 @@ After each discovery, Coffer measures the name a client like Claude Code shows f
 | Change the description | **Edit** | `PATCH /api/v1/resources/{uid}` (`description`) |
 | Change command or URL, environment or headers, secrets, working directory, timeouts | **Edit** | `PATCH /api/v1/resources/{uid}` |
 | Check the server answers and re-list its tools | **Test** (**Test again** while it is failing) | `coffer mcp test <name>` (exit 7 on failure; `--prompt` prints the failure's hand-off) |
-| Hand a missing launcher or a failure to an agent | **Copy prompt** / **Ask an agent** in the Overview's callout | `coffer mcp prompt <name>` |
+| Hand a missing launcher or a failure to an agent | **Copy prompt** / **Ask an agent** in the Overview's callout | `coffer mcp handoff <name>` |
 | Turn the whole server off or on | **⋯** → **Turn off**, **Turn on** | `coffer mcp disable <name>` (and `enable`) |
 | Copy its config | **⋯** → **Copy config as JSON** (secret names only, never values) | `coffer mcp show <name>` |
 | Delete | **⋯** → **Delete…** | `coffer mcp rm <name>` |
@@ -197,9 +197,9 @@ Deleting a server removes its registration and capability preferences and keeps 
 
 The list groups servers by what needs you: **Needs attention** (failing, launcher missing, secret missing — each with its reason, such as `Connection refused · since 14:02`), **Healthy**, **Not checked yet** and **Off**. The open server's header carries its state (the icon tinted for a problem), its transport and command or URL on one line, and its reach, Test, Edit and **⋯** buttons. Its **Overview** opens with why and what next: a failing server's last error, since when it has been failing, which agents can't call its tools and its last successful call, with **View log** and a diagnosis hand-off; a missing launcher with a hand-off for installing it (both below); a secret this Mac does not hold (a vault restored on a new Mac carries names, not values) with **Replace secret** and the setting that cites it; a test you just ran, with what it listed and its stderr one click away. Below it, **Agents** (whether its tools are listed directly or mostly behind search) beside **Last 24 hours** (calls, errors, and per calling agent its calls, errors and last call), then **Most-called tools**. A server that is failing, off or missing something shows its tools from the saved switches at once, marked as such, instead of waiting for it to answer. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers. Without a **Test connection** result, health follows the server's most recent call: a call that could not reach the server (it would not start, the connection died, or it timed out) reads as failing, while a tool that answered with an error does not, because the server itself is up. Refused (`denied`) calls are ignored.
 
-When a stdio server's command is not installed on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>` and the page says so (`uvx isn't found on this machine`). Coffer does not install software for you, and does not guess an install command either: which installer fits depends on the machine. The callout offers **Copy prompt** (and **Ask an agent** while a Coffer-managed agent is available) — a prompt for your agent that names the launcher, the server, the command line it is started with (a token-looking argument reads `<secret>`, and environment values are never included), the `PATH` Coffer looks it up on and this machine's OS and architecture, and asks for an install a process started from the GUI can find, confirmed with `coffer mcp test <name>`. `coffer mcp prompt <name>` prints the same prompt. To do it by hand, install the runtime the command belongs to (`uv` for `uvx`, Node.js for `npx`, Docker for `docker`) where the daemon's `PATH` reaches — the desktop app and `coffer daemon install` hand the daemon your login shell's `PATH` — then press **Test**.
+When a stdio server's command is not installed on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>` and the page says so (`uvx isn't found on this machine`). Coffer does not install software for you, and does not guess an install command either: which installer fits depends on the machine. The callout offers **Copy prompt** (and **Ask an agent** while a Coffer-managed agent is available) — a prompt for your agent that names the launcher, the server, the command line it is started with (a token-looking argument reads `<secret>`, and environment values are never included), the `PATH` Coffer looks it up on and this machine's OS and architecture, and asks for an install a process started from the GUI can find, confirmed with `coffer mcp test <name>`. `coffer mcp handoff <name>` prints the same prompt. To do it by hand, install the runtime the command belongs to (`uv` for `uvx`, Node.js for `npx`, Docker for `docker`) where the daemon's `PATH` reaches — the desktop app and `coffer daemon install` hand the daemon your login shell's `PATH` — then press **Test**.
 
-A failing server, and a **Test** that fails, offer a second hand-off beside **View log**: a prompt to find the cause and propose a fix. It carries the server's name, its transport and a config summary (the command line and working directory, or the URL; the *names* of its environment variables, headers and stored secrets, never their values), the last error, and the newest 20 lines the server printed on stderr, each scrubbed of anything that looks like a token. It asks the agent not to read or change the secrets Coffer stores, and to verify with `coffer mcp test <name>`. `coffer mcp test <name> --prompt` prints a failed test's prompt; `coffer mcp prompt <name>` prints the one the page shows for a failing server.
+A failing server, and a **Test** that fails, offer a second hand-off beside **View log**: a prompt to find the cause and propose a fix. It carries the server's name, its transport and a config summary (the command line and working directory, or the URL; the *names* of its environment variables, headers and stored secrets, never their values), the last error, and the newest 20 lines the server printed on stderr, each scrubbed of anything that looks like a token. It asks the agent not to read or change the secrets Coffer stores, and to verify with `coffer mcp test <name>`. `coffer mcp test <name> --prompt` prints a failed test's prompt; `coffer mcp handoff <name>` prints the one the page shows for a failing server.
 
 A stdio server's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to the daemon log. Coffer adds its own lines there when it starts the server, when a start fails (a launcher not found on `PATH`, a start that timed out) and when it stops it. **⋯** → **Calls and server log** opens a drawer with the server's calls in the last 24 hours (**All** or **Errors**, one agent or all; the newest opened below with its result, how long it took and its session) and its **Server log**, newest first, error lines in red, with **Copy** and **Open log file**. The **Invocations** tab shows the same calls list.
 
@@ -305,7 +305,7 @@ See [MCP gateway](/architecture/mcp-gateway) for the full request lifecycle.
 ## Related
 
 - [Connect a client](/guides/connect-a-client) — the shim, the HTTP endpoint, agent identity
-- [Credentials](/guides/credentials) — storing the secrets servers cite
+- [Secret store](/guides/secret-store) — storing the secrets servers cite
 - [Agents](/guides/agents#manage-the-agent-s-own-mcp-entries) — adopting MCP entries already in an agent's config
 - [MCP tools reference](/reference/mcp-tools) — Coffer's own `coffer__…` tools
 - [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Session Subprocess Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)

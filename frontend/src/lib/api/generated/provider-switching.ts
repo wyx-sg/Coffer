@@ -84,7 +84,7 @@ export interface paths {
         put?: never;
         /**
          * Create Provider
-         * @description Create a provider profile (422 when the credential source is invalid).
+         * @description Create a provider profile (422 when the secret source is invalid).
          */
         post: operations["create_provider_api_v1_providers_post"];
         delete?: never;
@@ -598,8 +598,8 @@ export interface components {
         DetectProtocolIn: {
             /** Base Url */
             base_url?: string | null;
-            /** Credential Ref */
-            credential_ref?: string | null;
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
         };
@@ -647,10 +647,10 @@ export interface components {
         ListModelsIn: {
             /** Base Url */
             base_url?: string | null;
-            /** Credential Ref */
-            credential_ref?: string | null;
             /** Provider */
             provider: string;
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
         };
@@ -788,7 +788,7 @@ export interface components {
         /**
          * ProviderCreate
          * @description Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
-         *     supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
+         *     supply EXACTLY one of ``secret_value`` / ``secret_ref``; an ``ollama``
          *     connection has no key, so supply neither. WHICH agents the connection
          *     projects into is not set here: the new connection starts on the wire's own
          *     default scope and is re-targeted through the framework's scope surface
@@ -799,8 +799,6 @@ export interface components {
         ProviderCreate: {
             /** Base Url */
             base_url: string;
-            /** Credential Ref */
-            credential_ref?: string | null;
             /** Description */
             description?: string | null;
             local_runtime?: components["schemas"]["LocalRuntime"] | null;
@@ -809,6 +807,8 @@ export interface components {
             /** Name */
             name: string;
             protocol: components["schemas"]["Protocol"];
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
         };
@@ -877,7 +877,7 @@ export interface components {
          * ProviderOut
          * @description An LLM connection as returned by the API (no secret).
          *
-         *     ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
+         *     ``secret_ref`` is ``None`` for ``ollama`` connections (no key).
          *     ``compatible_agents`` is the CONFIGURED reach — the agent types this
          *     connection's per-agent scope (ADR per-agent-resource-scope) covers among the
          *     agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
@@ -912,8 +912,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Credential Ref */
-            credential_ref: string | null;
             /** Description */
             description: string | null;
             /** Enabled */
@@ -933,6 +931,8 @@ export interface components {
             /** Name */
             name: string;
             protocol: components["schemas"]["Protocol"];
+            /** Secret Ref */
+            secret_ref: string | null;
             /** Title */
             title: string | null;
             /** Transcribe Default */
@@ -947,7 +947,7 @@ export interface components {
         };
         /**
          * ProviderPatch
-         * @description Partial update. ``credential_ref`` is immutable (it is the vault address
+         * @description Partial update. ``secret_ref`` is immutable (it is the vault address
          *     the connection owns); ``protocol`` is not — the probe that guessed the wire
          *     can be wrong, so it is corrected in place rather than by re-entering the
          *     connection, key and all.
@@ -1107,12 +1107,12 @@ export interface components {
         TestConnectionIn: {
             /** Base Url */
             base_url?: string | null;
-            /** Credential Ref */
-            credential_ref?: string | null;
             /** Model */
             model: string;
             /** Provider */
             provider: string;
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Secret Value */
             secret_value?: string | null;
         };
@@ -1232,6 +1232,8 @@ export interface components {
         UsageSummaryRowOut: {
             /** Agent Type */
             agent_type: string | null;
+            /** Agent Types */
+            agent_types: string[];
             /** Agent Uid */
             agent_uid: string | null;
             /** Connection Name */
@@ -2239,6 +2241,10 @@ export interface operations {
                 to?: string | null;
                 /** @description model | agent | day */
                 group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -2459,6 +2465,10 @@ export interface operations {
                 to?: string | null;
                 /** @description model | agent | day */
                 group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

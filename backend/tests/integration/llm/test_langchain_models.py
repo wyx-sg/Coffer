@@ -1,7 +1,7 @@
 """Integration tests for build_chat_model — the real LangChain provider seam.
 
 These construct real LangChain client objects (no network calls) to cover the
-per-wire builders and their credential/base_url handling, which the scripted
+per-wire builders and their secret/base_url handling, which the scripted
 LangGraph tests never exercise. ``build_chat_model`` now consumes a provider
 connection (``ProviderConfig``) dispatched by ``wire_format``.
 """
@@ -18,13 +18,13 @@ def _conn(wire: Protocol, **overrides) -> ResolvedConnection:  # type: ignore[no
     base = {
         "protocol": wire,
         "base_url": "http://localhost:11434" if wire is Protocol.OLLAMA else "https://api.test",
-        "credential_ref": None if wire is Protocol.OLLAMA else "ref",
+        "secret_ref": None if wire is Protocol.OLLAMA else "ref",
     }
     base.update(overrides)
     return ResolvedConnection(config=ProviderConfig(**base), model="test-model")  # type: ignore[arg-type]
 
 
-def test_anthropic_resolves_credential_and_builds_client() -> None:
+def test_anthropic_resolves_secret_and_builds_client() -> None:
     calls: list[str] = []
 
     def resolver(ref: str) -> str:
@@ -33,11 +33,11 @@ def test_anthropic_resolves_credential_and_builds_client() -> None:
 
     model = build_chat_model(_conn(Protocol.ANTHROPIC), resolver)
 
-    assert calls == ["ref"]  # the credential ref was resolved
+    assert calls == ["ref"]  # the secret ref was resolved
     assert model.__class__.__name__ == "ChatAnthropic"
 
 
-def test_openai_resolves_credential_and_builds_client() -> None:
+def test_openai_resolves_secret_and_builds_client() -> None:
     calls: list[str] = []
     model = build_chat_model(_conn(Protocol.OPENAI), lambda ref: calls.append(ref) or "secret-key")
     assert calls == ["ref"]
@@ -54,9 +54,9 @@ def test_openai_passes_base_url_for_compatible_endpoint() -> None:
     assert "apihub.example.com/v1" in str(model.openai_api_base)
 
 
-def test_ollama_uses_base_url_and_skips_credential() -> None:
+def test_ollama_uses_base_url_and_skips_secret() -> None:
     def resolver(ref: str) -> str:  # pragma: no cover - must not be called
-        raise AssertionError("ollama must not resolve a credential")
+        raise AssertionError("ollama must not resolve a secret")
 
     model = build_chat_model(_conn(Protocol.OLLAMA), resolver)
 

@@ -53,7 +53,7 @@ async def client():  # type: ignore[no-untyped-def]
 @pytest.mark.acceptance(spec="provider-switching", scenario="list a provider's models")
 async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
     r = await client.post(
-        "/api/v1/models/list-models", json={"provider": "openai", "credential_ref": "ok"}
+        "/api/v1/models/list-models", json={"provider": "openai", "secret_ref": "ok"}
     )
     assert r.status_code == 200
     # Each id comes back with a modality GUESSED from its name, so the
@@ -78,18 +78,18 @@ async def test_list_models_degrades(client) -> None:  # type: ignore[no-untyped-
 async def test_test_connection_ok_and_fail(client) -> None:  # type: ignore[no-untyped-def]
     ok = await client.post(
         "/api/v1/models/test-connection",
-        json={"provider": "openai", "model": "gpt-4o", "credential_ref": "ok"},
+        json={"provider": "openai", "model": "gpt-4o", "secret_ref": "ok"},
     )
     assert ok.status_code == 200 and ok.json()["ok"] is True
     bad = await client.post(
         "/api/v1/models/test-connection",
-        json={"provider": "openai", "model": "gpt-4o", "credential_ref": "bad-ref"},
+        json={"provider": "openai", "model": "gpt-4o", "secret_ref": "bad-ref"},
     )
     assert bad.status_code == 200 and bad.json()["ok"] is False
 
 
 async def test_inline_secret_reaches_port(client) -> None:  # type: ignore[no-untyped-def]
-    # An inline secret (no credential_ref) flows straight to the port: "bad"
+    # An inline secret (no secret_ref) flows straight to the port: "bad"
     # triggers the fake port's 401, proving the typed key was used as-is.
     r = await client.post(
         "/api/v1/models/test-connection",

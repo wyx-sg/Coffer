@@ -5,7 +5,7 @@ request, on_notification, close), but the underlying transport is the
 official mcp SDK's `streamable_http_client` against a remote HTTP MCP
 endpoint.
 
-Headers (including materialised credentials) are injected via an
+Headers (including materialised secrets) are injected via an
 httpx2.AsyncClient that we create and manage here; this is the SDK-blessed
 approach — the legacy `streamablehttp_client` helper that accepted headers
 directly was removed in mcp 2.0. httpx2 (not httpx) is the client library the
@@ -127,7 +127,7 @@ class HttpUpstreamConnection:
         """Open the HTTP/SSE connection and complete MCP initialize.
 
         Returns the server's capabilities as a plain dict.
-        Headers from the transport config and the credential overlay are
+        Headers from the transport config and the secret overlay are
         merged and injected into every request via the httpx2.AsyncClient.
 
         Timeout enforcement: the whole connect + initialize phase is bounded
@@ -140,7 +140,7 @@ class HttpUpstreamConnection:
         same way and the CancelledError is re-raised untouched, so a daemon
         shutdown is never mistaken for an upstream failure.
         """
-        # Combine static headers from config with materialised credentials.
+        # Combine static headers from config with materialised secrets.
         merged_headers: dict[str, str] = {**self._transport.headers, **self._header_overlay}
 
         # httpx2.Timeout: connect/write/pool use spawn_timeout_seconds; the

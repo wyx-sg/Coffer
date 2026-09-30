@@ -11,7 +11,7 @@ Covers: branch naming, Conventional Commits, AI co-author signatures, pull-reque
 | `feature/<short-name>` | New functionality scoped to a spec | `feature/mcp-gateway-crud` |
 | `fix/<short-name>` | Bug fix scoped to a spec | `fix/mcp-gateway-list-cursor` |
 | `docs/<short-name>` | Documentation only | `docs/contributing-rewrite` |
-| `refactor/<short-name>` | Internal restructuring, no behavior change | `refactor/extract-credential-port` |
+| `refactor/<short-name>` | Internal restructuring, no behavior change | `refactor/extract-secret-port` |
 | `chore/<short-name>` | Deps, tooling, CI, project meta | `chore/upgrade-fastapi-to-0.115` |
 
 Rules:

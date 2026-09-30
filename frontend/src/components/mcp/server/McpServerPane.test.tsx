@@ -89,8 +89,8 @@ vi.mock("@/lib/hooks/useAgents", () => ({
     ],
   }),
 }));
-vi.mock("@/lib/api/credentials", () => ({
-  credentialsApi: {
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: {
     list: vi.fn(async () => ({
       refs: [
         {
@@ -119,7 +119,7 @@ vi.mock("@/components/mcp/EditMcpServerDialog", () => ({
 }));
 vi.mock("@/components/ScopeControl", () => ({ ScopeControl: () => <button>Every agent</button> }));
 
-const { credentialsApi } = await import("@/lib/api/credentials");
+const { secretsApi } = await import("@/lib/api/secret");
 const { resourcesApi } = await import("@/lib/api/resources");
 
 const SENTRY = {
@@ -134,7 +134,7 @@ const SENTRY = {
       type: "http",
       url: "https://mcp.sentry.dev/mcp",
       headers: {},
-      credential_refs: { Authorization: "SENTRY_TOKEN", "X-Shared": "SHARED" },
+      secret_refs: { Authorization: "SENTRY_TOKEN", "X-Shared": "SHARED" },
     },
   },
 } as unknown as ResourceOut;
@@ -425,7 +425,7 @@ describe("McpServerPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /copy config as json/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     const copied = JSON.parse(writeText.mock.calls[0][0]);
-    expect(copied.sentry.transport.credential_refs.Authorization).toBe("SENTRY_TOKEN");
+    expect(copied.sentry.transport.secret_refs.Authorization).toBe("SENTRY_TOKEN");
   });
 
   test("Delete says what it costs and can take the secrets only this server uses", async () => {
@@ -446,8 +446,8 @@ describe("McpServerPane", () => {
     fireEvent.click(box);
     fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
     await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith("u-sentry"));
-    await waitFor(() => expect(credentialsApi.remove).toHaveBeenCalledWith("SENTRY_TOKEN"));
-    expect(credentialsApi.remove).not.toHaveBeenCalledWith("SHARED");
+    await waitFor(() => expect(secretsApi.remove).toHaveBeenCalledWith("SENTRY_TOKEN"));
+    expect(secretsApi.remove).not.toHaveBeenCalledWith("SHARED");
     expect(onDeleted).toHaveBeenCalled();
   });
   test("a failing server's header is tinted, and its tools come from the saved switches at once", async () => {

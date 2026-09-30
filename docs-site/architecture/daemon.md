@@ -124,7 +124,7 @@ sequenceDiagram
   U->>A: lifespan startup
   A->>A: schema guard, backup, alembic upgrade head
   A->>A: startup sweep of orphans and stale daemons
-  A->>A: credentials, services, kinds, chat, channels
+  A->>A: secrets, services, kinds, chat, channels
   A->>A: boot reconcile pass and guide refresh
   A->>J: read token and port back
   A->>A: deploy frozen sibling binaries
@@ -145,13 +145,13 @@ Step by step:
 5. **Publish.** It mints a token (`secrets.token_urlsafe(32)`) and writes `daemon.json`. The socket stays open and its file descriptor goes to uvicorn, so the published port is never released and rebound. Otherwise another process could take the port in between and receive the token.
 6. **Migrations.** The lifespan runs Alembic off the event loop (`surfaces/http/migrations_runner.py`). If the database's revision is unknown to this build, startup fails with `DB_SCHEMA_TOO_NEW` rather than an opaque Alembic error. If an upgrade is due, the file and its `-wal`/`-shm` companions are first copied to `coffer.db.pre-<revision>`, keeping the three newest copies. A current schema copies nothing. See [Persistence](/architecture/persistence).
 7. **Startup sweep.** `orphan_sweep.startup_sweep()` kills every process tree recorded under `~/.coffer/upstream-pids/` that is still alive with the same command line. A frozen build also terminates other daemon processes provably serving this same vault, meaning the same executable name and the same resolved `~/.coffer`. A process whose vault cannot be read is left alone.
-8. **Wiring.** The lifespan builds the credential store and master key, the audit and resource services, the retention service, and the internal-engine settings. It creates the builtin-tool registry, wires every resource kind in dependency order (`kind_wiring.py`), then chat, curation and channels. Chat also schedules a one-shot sweep that marks any message left `streaming` by a crash as `failed`.
+8. **Wiring.** The lifespan builds the secret store and master key, the audit and resource services, the retention service, and the internal-engine settings. It creates the builtin-tool registry, wires every resource kind in dependency order (`kind_wiring.py`), then chat, curation and channels. Chat also schedules a one-shot sweep that marks any message left `streaming` by a crash as `failed`.
 9. **Boot heals.** Each is best effort: the legacy-keychain migration, the provider projection sweep, skill drift repair, the Claude MCP home migration, memory delivery matched to the `memory` switch, and a re-render of the builtin `coffer-guide` skill from this build.
 10. **Identity.** The lifespan reads the token, port and start time back from `daemon.json` into the auth dependency and the status route. A `daemon.json` that exists but cannot be read fails startup. Swallowing that error would leave every authenticated route answering 503 while the status route said ready.
 11. **Binary deployment.** A frozen build copies its siblings into `~/.coffer/bin` (see [Binary deployment](#binary-deployment)). From source this does nothing.
 12. **Workers.** It starts the background workers, the channel runtime reconciler and the MCP session reaper, then sets the phase to `ready`.
 
-Only after the lifespan returns does uvicorn call `listen()` on the socket, report `started`, and let `entry.py` release the spawn lock. A racing spawn is therefore blocked on the lock for the whole boot, never probing a socket that is bound but not yet answering. When the lock opens, that spawn's probe finds a serving daemon and it exits cleanly. Boot takes several seconds on a real vault (migrations, credential store, upstream warm-up), which is why the probe timeouts are generous.
+Only after the lifespan returns does uvicorn call `listen()` on the socket, report `started`, and let `entry.py` release the spawn lock. A racing spawn is therefore blocked on the lock for the whole boot, never probing a socket that is bound but not yet answering. When the lock opens, that spawn's probe finds a serving daemon and it exits cleanly. Boot takes several seconds on a real vault (migrations, secret store, upstream warm-up), which is why the probe timeouts are generous.
 
 ::: info Status during boot
 `GET /api/v1/daemon/status` reports a `status` phase of `ready` or `draining`. There is no starting phase: the socket starts listening only after the lifespan has finished, so a client sees a refused connection during boot, then `ready`, then `draining` during teardown. A client that has just spawned a daemon therefore waits a bounded time for the probe to answer instead of reading a refused connection as a failure.

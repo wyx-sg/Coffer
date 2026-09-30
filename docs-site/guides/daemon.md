@@ -221,7 +221,7 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 | Path | Why it matters |
 | --- | --- |
 | `coffer.db` (+ `-wal`, `-shm`) | Every resource, setting, conversation and log table. |
-| `master.key` | The key that decrypts every stored credential. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
+| `master.key` | The key that decrypts every stored secret. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
 | `knowledge/` | Your knowledge collections. |
 | `skills/` | The master skill store. |
 
@@ -234,7 +234,7 @@ coffer daemon start
 ```
 
 ::: warning
-A backup that includes `master.key` can decrypt every credential in it. Store it like a password. A backup without the key keeps the credentials as ciphertext nobody can read.
+A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
 :::
 
 If you run Coffer on several machines, [vault sync](/guides/vault-sync) keeps a history of the vault's documents in a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.

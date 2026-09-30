@@ -6,7 +6,7 @@ started and what it printed, so the agent can find why it will not start
 prompt is copied into another program, so nothing secret may be in it:
 
 * environment variables and HTTP headers are named, never valued — a static
-  value can still be a secret a person pasted in, and a credential ref's value
+  value can still be a secret a person pasted in, and a secret ref's value
   is only ever resolved at spawn time;
 * an argument, a URL's query parameter or a log line that looks like it
   carries a secret (a ``--token`` flag's value, ``api_key=…``, a well-known

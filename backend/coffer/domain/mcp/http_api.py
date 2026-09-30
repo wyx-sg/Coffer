@@ -6,9 +6,9 @@ answers ``tools/list`` from :attr:`HttpApiTransport.tools` and makes each
 tool's HTTP request itself (``infrastructure/mcp/http_api_client.py``).
 
 The one secret a group may carry is the value of its auth header. It is cited
-the way the other transports cite theirs — ``credential_refs`` maps the slot
-(the header's name) to the ref — so every mechanism that walks credential refs
-(the missing-credential probe, the attention source, the secret boundary's
+the way the other transports cite theirs — ``secret_refs`` maps the slot
+(the header's name) to the ref — so every mechanism that walks secret refs
+(the missing-secret probe, the attention source, the secret boundary's
 destinations) covers a group unchanged. A tool's per-agent reach override is
 not here: reach is machine-local and this config travels with sync, so the
 overrides live in their own table (design add-http-custom-tools §2).
@@ -168,7 +168,7 @@ class HttpApiTransport(BaseModel):
     auth_header: str | None = None
     auth_prefix: str = Field(default="", max_length=64)
     #: ``{auth_header: ref}`` — the one secret, when the auth header is bound.
-    credential_refs: dict[str, str] = Field(default_factory=dict)
+    secret_refs: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     source: OpenApiSource | None = None
     tools: list[HttpApiTool] = Field(default_factory=list)
@@ -200,8 +200,8 @@ class HttpApiTransport(BaseModel):
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError("tool names must be unique in a group: " + ", ".join(dupes))
-        if self.credential_refs and (
-            self.auth_header is None or set(self.credential_refs) != {self.auth_header}
+        if self.secret_refs and (
+            self.auth_header is None or set(self.secret_refs) != {self.auth_header}
         ):
             raise ValueError("a group's only secret is its auth header's value")
         return self
@@ -211,7 +211,7 @@ class HttpApiTransport(BaseModel):
 
     @property
     def secret_ref(self) -> str | None:
-        return self.credential_refs.get(self.auth_header or "") if self.auth_header else None
+        return self.secret_refs.get(self.auth_header or "") if self.auth_header else None
 
 
 def http_api_target(transport: HttpApiTransport) -> str:

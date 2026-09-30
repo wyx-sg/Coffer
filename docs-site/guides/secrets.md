@@ -7,7 +7,7 @@ description: How Coffer keeps secrets from the agents it serves — plaintext on
 
 Coffer holds secrets for your agents, and your agents run as you. This page explains the line Coffer draws between the two, and how to work with it day to day: storing a secret that belongs to no resource, running a command with it, answering the approvals Coffer asks for, finding what uses a secret, moving plaintext secret files into the store, and backing up the master key.
 
-For storing, citing, rotating and deleting a resource's credentials — an MCP server's token, a provider key — see [Credentials](/guides/credentials). The threat model behind all of this is on [Security model](/architecture/security).
+For storing, citing, rotating and deleting a resource's secrets — an MCP server's token, a provider key — see [Secret store](/guides/secret-store). The threat model behind all of this is on [Security model](/architecture/security).
 
 ## The idea in plain words
 
@@ -18,7 +18,7 @@ A coding agent can read a hostile web page, issue or README and start following 
 3. **Switching these protections off also takes you, at the desktop app.** No environment variable, config file or flag does it.
 4. **Agents get capabilities, not keys.** The gateway puts an HTTP server's token into the request itself, so the agent sees the tool's results and never the token.
 
-Writing a secret stays open to every surface: whoever supplies a value already has it.
+Writing a resource's secret stays open to every surface: whoever supplies a value already has it. Adding a standalone secret, or a new value for one in use, waits for your approval.
 
 ::: danger Only a signed release holds this boundary
 Coffer does not yet ship binaries signed with an Apple Developer ID. Until it does, every build is a **development build**: the master key is the file `~/.coffer/master.key`, which any program running as you can read, and with it a program can forge the desktop app's approval. The commands and approvals on this page work the same way in a development build, and the desktop app labels every prompt "Development build", but they do not stop a determined agent there. See [Security model → Development builds](/architecture/security#development-builds).
@@ -30,8 +30,14 @@ Coffer does not yet ship binaries signed with an Apple Developer ID. Until it do
 
 The list comes in two groups:
 
-- **In use** — every secret something cites. The **Name** column shows a standalone secret by its name with its `coffer://secret/<name>` reference beneath, and any other secret by its ref, such as `mcp_server/…/GITHUB_TOKEN`. A ref a resource cites but the store does not hold reads **Missing**: store a value for it from the row's menu. **Waiting for approval** marks a secret whose new destination or new value waits for you in the desktop app, and a terminal icon marks one that other programs running as you can read where Coffer puts it.
+- **In use** — every secret something cites. The **Name** column shows a standalone secret by its name and any other secret by its ref, such as `mcp_server/…/GITHUB_TOKEN`. **Waiting for approval** marks a secret whose new value or new destination waits for you in the desktop app, and a terminal icon marks one that other programs running as you can read where Coffer puts it.
 - **Not used by anything** — secrets nothing cites, marked safe to delete.
+
+Each row also says when the secret was **last used** on this Mac — when something last had its value decrypted to use it, such as a server starting or `coffer run`; revealing it does not count — and when it was **created**. A secret never used here reads **Never**.
+
+### Missing on this Mac
+
+A row reads **Missing on this Mac** when this Mac has no value to hand out for it: a resource or skill cites it but it was never stored here, or its encrypted value came with the vault from another Mac whose master key this one does not have (encrypted secrets don't sync by default). Whatever uses it cannot start until it has a value. The row's **Add value** stores one; like any write it may [wait for your approval](#approvals). While any secret is missing, a banner at the top counts them and offers **Import master key…**, which opens Settings › Security: importing the other Mac's key opens every secret it encrypted at once. Coffer finds a secret it cannot open by checking the encrypted value's signature against this Mac's key, without decrypting anything.
 
 **Used by** shows how many things use the secret and their names. Choose it for the list, each by kind (MCP server, model provider, channel, skill, …) and current name; choosing a name opens that thing's page. **Find a secret** filters both groups by name.
 
@@ -39,17 +45,19 @@ Each row's **⋯** menu:
 
 | Item | What it does |
 | --- | --- |
-| **Replace value…** | Takes a new value without ever showing the old one. The dialog names what uses the secret. A value something already receives, and any standalone secret's, [waits for your approval](#replacing-a-value-in-use); the dialog says so instead of claiming it took effect, with **Review** to open the approvals window. For a missing ref the item reads **Store value…**. |
+| **Replace value…** | Takes a new value without ever showing the old one. The dialog names what uses the secret. A value something already receives, and any standalone secret's, [waits for your approval](#replacing-a-value-in-use); the page then says "Saved, waiting for approval" instead of claiming it took effect. For a secret [missing on this Mac](#missing-on-this-mac) the item reads **Add value…**. |
 | **Reveal value…** | Only in the desktop app — see [See or copy a value](#see-or-copy-a-value). A browser shows it disabled as **Reveal in the Coffer app**. |
-| **Copy reference** | Copies what a file or config cites: `coffer://secret/<name>` for a standalone secret, the ref otherwise. |
+| **Copy reference (…)** | Copies what a file or config cites, shown in the item: `coffer://secret/<name>` for a standalone secret, the ref otherwise. |
 | **Show in Activity** | Opens the Changes tab of [Activity](/guides/activity), where every store, replace, reveal and delete is recorded. |
-| **Delete…** | For a secret nothing uses, asks once and deletes it. For one in use, it deletes nothing: the dialog lists each thing that still uses it, with **Open** to go there, and the row stays. |
+| **Delete…** | For a secret nothing uses, asks once, saying when it was last used, and deletes it — on this Mac and, if encrypted secrets sync, on your other Macs at their next round. For one in use, it deletes nothing: the dialog lists each thing that still uses it, with **Open** to go there, and the row stays. |
 
-**Add secret** stores a new standalone secret: a name (letters, digits, `.`, `_` and `-`, at most 64, fixed once added) and a value, which is never shown back. A name that already exists is caught before anything is sent, with a link to replace that secret's value instead. The dialog shows the reference to cite.
+**Add secret** adds a new standalone secret: a name (letters, digits, `.`, `_` and `-`, at most 64, fixed once added) and a value, which is never shown back. A name that already exists is caught before anything is sent, with a link to replace that secret's value instead. The dialog shows the reference to cite. A new secret [waits for your approval](#approvals) before it exists: the value is held encrypted, and the approvals window asks "Approve the new secret …?".
 
-**Find plaintext keys** runs the [plaintext scan](#move-plaintext-secret-files-into-the-store) from the page. It lists each key it found by file, line, key and the secret name it would get — never the value — with every finding ticked. Untick what should stay, then **Review changes**: Coffer works out what the import would do without writing anything, and shows the secrets it would add and the files it would change. **Apply** moves them. A name that already holds a different value is skipped with its file untouched, and the dialog lists what was skipped and why. Skills that still point at `~/.coffer/secrets/` are listed too, for you to update by hand — or to hand to your agent with **Copy prompt** or **Ask an agent** beside the list. The prompt names each skill, file and line and the secret names the keys become, asks the agent to rewrite the commands to use `coffer run` and show you the diff, and never carries a value.
+The **?** beside the page title explains running a command with a secret, `coffer run --secret` — see [Run a command with a secret](#run-a-command-with-a-secret).
 
-While any change waits for approval, the top of the page says how many, with **Review** to reopen the approvals window. With no secrets at all, the page offers **Add secret** and **Find plaintext keys**.
+**Find plaintext keys** runs the [plaintext scan](#move-plaintext-secret-files-into-the-store) from the page. It lists each key it found by file, line, key and the secret name it would get — never the value — with every finding ticked. Untick what should stay, then **Review changes**: Coffer works out what the import would do without writing anything, and shows the secrets it would add and the files it would change. **Apply** moves them. A name that already holds a different value is skipped with its file untouched. A file Coffer cannot rewrite — in a read-only folder, say — keeps its key: the value is saved as the secret all the same, but the file still holds it in plain text, and the dialog says "Moved 2 of 3 keys", names the file and offers **Try again**. A scan that finds nothing says how many files it read. Skills that still point at `~/.coffer/secrets/` are listed too, for you to update by hand — or to hand to your agent with **Copy prompt** or **Ask an agent** beside the list. The prompt names each skill, file and line and the secret names the keys become, asks the agent to rewrite the commands to use `coffer run` and show you the diff, and never carries a value.
+
+While any change waits for approval, a banner at the top says how many ("1 change waiting for approval") and what approving takes here — Touch ID or your login password in the desktop app; in a browser, the desktop app — with **Review** to reopen the approvals window. With no secrets at all, the page offers **Add secret** and **Find plaintext keys**.
 
 ## Standalone secrets
 
@@ -61,13 +69,13 @@ A name is one segment of letters, digits, `.`, `_` and `-`, at most 64 character
 
 ```sh
 # From stdin, so the value never reaches your shell history
-printf '%s' "$ORDERS_DB_PASSWORD" | coffer credentials set secret/orders-db
+printf '%s' "$ORDERS_DB_PASSWORD" | coffer secret set secret/orders-db
 
 # Or at a hidden prompt
-coffer credentials set secret/orders-db
+coffer secret set secret/orders-db
 ```
 
-On the [Secrets page](#the-secrets-page), **Add secret** does the same. Storing a new name takes effect at once. Replacing the value of a standalone secret that already exists [waits for your approval](#replacing-a-value-in-use).
+On the [Secrets page](#the-secrets-page), **Add secret** does the same. A new name [waits for your approval](#approvals): until you approve it in the desktop app nothing is stored under the name and `coffer run` cannot resolve it; `coffer secret set` prints that it waits and exits `9` (or waits with `--wait`). Replacing the value of a standalone secret that already exists [waits for your approval](#replacing-a-value-in-use) too.
 
 ### Cite it
 
@@ -82,7 +90,7 @@ DB_PASSWORD=coffer://secret/orders-db
 
 A skill's `connection.md` names it the same way. A file holding only references is safe to commit and safe to sync. Nothing reads it by itself: [`coffer run`](#run-a-command-with-a-secret) resolves the references when a command starts.
 
-A resource can cite a standalone secret too, as `secret/<name>` in its credential refs, like any other ref.
+A resource can cite a standalone secret too, as `secret/<name>` in its secret refs, like any other ref.
 
 ## Run a command with a secret
 
@@ -105,7 +113,7 @@ A `coffer://secret/<name>` value already in `coffer run`'s own environment is re
 
 What happens:
 
-- **Only standalone secrets resolve.** A name must be stored under `secret/`; a resource's credential can never be fetched this way. An unknown name fails with `SECRET_NOT_FOUND` and the command does not start.
+- **Only standalone secrets resolve.** A name must be stored under `secret/`; a resource's secret can never be fetched this way. An unknown name fails with `SECRET_NOT_FOUND` and the command does not start.
 - **The values go to the child only.** The shell that ran `coffer run` does not get them, and neither do its other children.
 - **Output is masked.** Every exact occurrence of a value in the command's standard output and error prints as `***`, even when it is split across two writes. Values shorter than 8 characters are not masked — masking a short value would shred ordinary output — and `coffer run` says so when it skips one.
 - **The exit status passes through**, so `coffer run` fits into scripts. A command killed by a signal exits `128 + signal`; a command that cannot start exits `127`. `Ctrl-C` and `SIGTERM` are forwarded to the command.
@@ -117,9 +125,9 @@ What happens:
 
 ## See or copy a value
 
-Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **Reveal value…** on the row. A warning comes first: anyone who can see your screen can read the value. Then macOS asks for Touch ID or your login password, and the prompt names the secret. The value shows for 30 seconds, with **Copy** and **Hide**, then hides again; closing the dialog drops it at once. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `credential_revealed` with the ref only.
+Open the [Secrets page](#the-secrets-page) in the **desktop app** and choose **Reveal value…** on the row. A warning comes first: anyone who can see your screen can read the value. Then macOS asks for Touch ID or your login password, and the prompt names the secret. The value shows for 30 seconds, with **Copy** and **Hide**, then hides again; closing the dialog drops it at once. Each reveal asks again; there is no window during which a second one is free. The reveal is audited as `secret_revealed` with the ref only.
 
-The browser UI offers no reveal: the menu item reads **Reveal in the Coffer app** and is disabled. `coffer credentials get <ref>` only confirms that a value is stored.
+The browser UI offers no reveal: the menu item reads **Reveal in the Coffer app** and is disabled. `coffer secret get <ref>` only confirms that a value is stored.
 
 ## Approvals
 
@@ -133,6 +141,7 @@ An approval is a change that would widen where a secret goes, held until you ans
 | Change where a resource sends a secret: a stdio server's command, arguments, working directory or other environment; an HTTP server's URL; a SeaTalk channel's app. | The resource gets no secret until you approve the new target. |
 | Point the sync remote's push token at a different URL. | The remote is not saved until you approve. |
 | Store a new value for a ref something already receives, or for any standalone secret. | The old value stays in use; the new one waits encrypted. |
+| Add a new standalone secret. | Nothing is stored under the name until you approve; the value waits encrypted. |
 | `coffer config set secrets.require_approval off` | The protection stays on until you approve. |
 
 What counts is the **target** — the thing that actually receives the value, written so you can judge it: a stdio server's whole command line with its working directory and other environment variables (a variable such as `NODE_OPTIONS=--require …` changes what the process does), an HTTP server's URL, a git remote's URL, a channel's bot or app. An approval reads, for example:
@@ -153,26 +162,26 @@ A binding is checked at the moment of use — when a server starts, a channel co
 
 ### Answering one
 
-When something waits, the desktop app posts a notification, **Coffer needs your approval**, naming the change, and opens a sheet listing what waits. Approve runs Touch ID or your login password, with a prompt that names the change, then applies it; the server, channel or remote picks the secret up on its next attempt, with no restart. Reject needs no presence check, since refusing only narrows what Coffer does.
+When something waits, the desktop app posts a notification, **Coffer needs your approval**, naming the change, and opens a window that asks the change as a question — "Approve a new value for github-token?", "Approve the new secret npm-publish-token?" — with the kind of change (**New value**, **New secret**, **New use**, **Turn off protection**), the secret, who asked and when, and what uses it. **Approve…** runs Touch ID or your login password, with a prompt that names the change, then applies it; the server, channel or remote picks the secret up on its next attempt, with no restart. **Reject** needs no presence check, since refusing only narrows what Coffer does.
 
-In a browser, the page offers **Open in Coffer app** where the approve button would be.
+In a browser, **Approve** is disabled — "Approve in the Coffer desktop app" — and only **Reject** works.
 
 From a terminal you can list and reject, never approve:
 
 ```sh
-coffer credentials approvals              # what waits now
-coffer credentials approvals --all        # decided ones too; --json for scripts
-coffer credentials reject <id>
+coffer secret approvals              # what waits now
+coffer secret approvals --all        # decided ones too; --json for scripts
+coffer secret reject <id>
 ```
 
 An approval ends as `approved`, `rejected`, or `superseded` — when the resource it was for was deleted or has since moved to another target, which raises a fresh approval of its own.
 
 ### On the command line
 
-A command whose change waits — `coffer mcp add`, any `coffer <kind> edit` (including `coffer provider edit --secret` or `--base-url`), `coffer channel add`, `coffer provider add`, `coffer sync remote set`, `coffer credentials set`, `coffer config set secrets.require_approval off` — saves what it can, prints what waits and exits `9`:
+A command whose change waits — `coffer mcp add`, any `coffer <kind> edit` (including `coffer provider edit --secret` or `--base-url`), `coffer channel add`, `coffer provider add`, `coffer sync remote set`, `coffer secret set`, `coffer config set secrets.require_approval off` — saves what it can, prints what waits and exits `9`:
 
 ```text
-$ coffer mcp add gh-work --stdio "npx -y @modelcontextprotocol/server-github" --credential GITHUB_TOKEN=github/token
+$ coffer mcp add gh-work --stdio "npx -y @modelcontextprotocol/server-github" --secret GITHUB_TOKEN=github/token
 waiting for approval in the Coffer app: send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -y @modelcontextprotocol/server-github (approval 3f9c0a7d12e45b68)
 $ echo $?
 9
@@ -184,7 +193,7 @@ An agent that hits exit `9` should tell you what it registered and that it waits
 
 ### Replacing a value in use
 
-`coffer credentials set` on a ref that an approved destination receives, or on any standalone secret, answers with a pending approval instead of replacing the value. Until you approve, everything keeps using the old value; the new one is held encrypted and is dropped if you reject. A new ref, or one nothing receives, is stored at once.
+`coffer secret set` on a ref that an approved destination receives, or on any standalone secret, answers with a pending approval instead of replacing the value. Until you approve, everything keeps using the old value; the new one is held encrypted and is dropped if you reject. A new ref, or one nothing receives, is stored at once.
 
 ### Switching the protection off
 
@@ -199,30 +208,30 @@ coffer config set secrets.require_approval on   # at once
 ## List your secrets
 
 ```sh
-coffer credentials list
+coffer secret list
 ```
 
-The [Secrets page](#the-secrets-page) shows the same list, grouped into in use and not used by anything. The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<name>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: every standalone secret (it goes into a `coffer run` child) and every secret in a stdio MCP server's environment. See [Credentials → List and inspect](/guides/credentials#list-and-inspect) for the columns.
+The [Secrets page](#the-secrets-page) shows the same list, grouped into in use and not used by anything. `--json` also carries, per secret, `locked` (stored, but this Mac's master key cannot open it), `created_at` and `last_used_at`. The list has every ref the store holds and every ref a resource cites, with what uses each one — resources, skills whose files cite `coffer://secret/<name>`, destinations waiting for approval — and `(unreferenced)` for a secret nothing uses. **Readable by local processes** is `yes` where another program running as you can read the value where Coffer puts it: every standalone secret (it goes into a `coffer run` child) and every secret in a stdio MCP server's environment. See [Secret store → List and inspect](/guides/secret-store#list-and-inspect) for the columns.
 
 Deleting a standalone secret is refused while a resource cites it or a skill's files cite its URI; the message names them.
 
 ## Move plaintext secret files into the store
 
-Earlier advice kept skill secrets in plaintext files such as `~/.coffer/secrets/<name>.env`. Any program that walks your home directory reads those — backup tools, a cloud-drive client, an agent's file search. `coffer credentials scan` finds them, and `coffer credentials import` moves them into the store. **Find plaintext keys** on the [Secrets page](#the-secrets-page) runs the same scan, dry run and import:
+Earlier advice kept skill secrets in plaintext files such as `~/.coffer/secrets/<name>.env`. Any program that walks your home directory reads those — backup tools, a cloud-drive client, an agent's file search. `coffer secret scan` finds them, and `coffer secret import` moves them into the store. **Find plaintext keys** on the [Secrets page](#the-secrets-page) runs the same scan, dry run and import:
 
 ```sh
-coffer credentials scan
+coffer secret scan
 ```
 
-The scan reads `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of strings), and every text file in your managed skills (assignments whose name says password, secret, token or key, and well-known token shapes). For each finding it prints the file, line, key and the standalone name it would get, such as `coffer://secret/db.PASSWORD` — never the value. It also names every skill that still reads a file under `~/.coffer/secrets/`, so you can move its command to `coffer run --secret` or `coffer run --env-file`; `coffer credentials scan --prompt` prints a prompt that hands that rewrite to your agent.
+The scan reads `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of strings), and every text file in your managed skills (assignments whose name says password, secret, token or key, and well-known token shapes). For each finding it prints the file, line, key and the standalone name it would get, such as `coffer://secret/db.PASSWORD` — never the value. It also names every skill that still reads a file under `~/.coffer/secrets/`, so you can move its command to `coffer run --secret` or `coffer run --env-file`; `coffer secret scan --prompt` prints a prompt that hands that rewrite to your agent.
 
 ```sh
-coffer credentials import --dry-run     # print the plan, write nothing
-coffer credentials import               # move every finding (asks first; --yes skips)
-coffer credentials import --id <id>     # only this finding (repeatable)
+coffer secret import --dry-run     # print the plan, write nothing
+coffer secret import               # move every finding (asks first; --yes skips)
+coffer secret import --id <id>     # only this finding (repeatable)
 ```
 
-For each finding the import stores the value as `secret/<name>`, reads it back and compares, and only then replaces the value in its file with `coffer://secret/<name>`, atomically and keeping the file's mode. A name that already holds a different value is skipped and its file left untouched. No plaintext backup is kept. Each move is audited as `secret_imported`.
+For each finding the import stores the value as `secret/<name>`, reads it back and compares, and only then replaces the value in its file with `coffer://secret/<name>`, atomically and keeping the file's mode. A name that already holds a different value is skipped and its file left untouched. A file that cannot be rewritten is reported as skipped with the value stored — the store has it, the file still holds it — while the other files are rewritten; importing the same finding again retries the file. No plaintext backup is kept. Each value stored is audited as `secret_imported`.
 
 Then change the skill's commands to run under `coffer run`, for example `coffer run --env-file ~/.coffer/secrets/db.env -- ./query.sh`.
 
@@ -235,14 +244,14 @@ Every secret is encrypted with one master key. How it is kept depends on the bui
 
 Presence checks guard what lets plaintext out, not the key itself: that is why the daemon never waits for you.
 
-**Back up the key in the desktop app**: pick a folder, confirm with Touch ID or your login password, and the app writes `coffer-master-key-<fingerprint>.key` there with mode `0600`, audited as `master_key_exported`. No command or browser page can do it. Install the backup on another machine with `coffer sync key import <file>` — see [Credentials → Carry the key to another machine](/guides/credentials#carry-the-key-to-another-machine). In a signed release the Keychain is the only copy, so make a backup.
+**Back up the key in the desktop app** (Settings › Security): choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`, audited as `master_key_exported`. No command or browser page can do it. Install the backup on another machine with `coffer sync key import <file>` — see [Secret store → Carry the key to another machine](/guides/secret-store#carry-the-key-to-another-machine). In a signed release the Keychain is the only copy, so make a backup.
 
 ## Related
 
-- [Credentials](/guides/credentials) — storing, citing, rotating and deleting a resource's secrets
+- [Secret store](/guides/secret-store) — storing, citing, rotating and deleting a resource's secrets
 - [Security model](/architecture/security) — the threat model, and what stays exposed
 - [Desktop app](/guides/desktop-app) — where reveals, key backups and approvals happen
 - [Writing skill libraries](/guides/writing-skill-libraries) — citing secrets from a skill
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
-- Spec: [credentials](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/credentials/spec.md)
+- Spec: [secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)

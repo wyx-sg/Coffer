@@ -5,7 +5,7 @@
 // walks step 1 into step 3 and waits there for the pairing to land.
 //
 // The registration flow's ordering contract (mirrors AddMcpServerDialog's
-// test): secrets are written to the credential store BEFORE the resource is
+// test): secrets are written to the secret store BEFORE the resource is
 // registered (registration probes the refs), and a failed registration rolls
 // the just-written secrets back so nothing orphaned stays behind.
 //
@@ -140,7 +140,7 @@ function renderSeatalk() {
 }
 
 /**
- * The ref of the n-th `/credentials` write, read back off the mock.
+ * The ref of the n-th `/secrets` write, read back off the mock.
  *
  * A ref is minted opaque — `channel/<uuid4 hex>/<secret>` — so no test can name
  * the value it expects, and the thing worth asserting was never the value: it
@@ -149,7 +149,7 @@ function renderSeatalk() {
  * rather than two independent guesses.
  */
 function writtenRef(api: ApiClientMock, nth: number): string {
-  const call = api.POST.mock.calls.filter((c) => c[0] === "/credentials")[nth];
+  const call = api.POST.mock.calls.filter((c) => c[0] === "/secrets")[nth];
   return (call[1] as { body: { ref: string } }).body.ref;
 }
 
@@ -171,9 +171,9 @@ acceptance("channels", "register a telegram channel", async () => {
   submit();
 
   await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-  // Secret write first (registration probes the credential ref) …
+  // Secret write first (registration probes the secret ref) …
   expect(api.POST.mock.calls[0]).toEqual([
-    "/credentials",
+    "/secrets",
     { body: { ref: refFor("bot-token"), value: "123:abc" } },
   ]);
   // … then the resource registration with refs only (never the secret), citing
@@ -273,7 +273,7 @@ describe("AddChannelDialog", () => {
   });
 
   acceptance(
-    "credentials",
+    "secret",
     "a surface lifts a pasted secret into the store before registering",
     async () => {
       const api = registeringApi();
@@ -284,9 +284,9 @@ describe("AddChannelDialog", () => {
       submit();
 
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-      expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
+      expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets", "/resources"]);
       expect(api.POST.mock.calls[0]).toEqual([
-        "/credentials",
+        "/secrets",
         { body: { ref: refFor("app-secret"), value: "s1" } },
       ]);
       expect(api.POST.mock.calls[1][1]).toEqual({
@@ -338,7 +338,7 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  acceptance("credentials", "a failed registration leaves no orphaned credential", async () => {
+  acceptance("secret", "a failed registration leaves no orphaned secret", async () => {
     const api = registeringApi({
       POST: vi.fn(async (path: string) =>
         path === "/resources"
@@ -352,7 +352,7 @@ describe("AddChannelDialog", () => {
 
     await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
     // The rollback deletes the address that was just written, whatever it is.
-    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
       params: { path: { ref: writtenRef(api, 0) } },
     });
     // The translated error surfaces in the dialog.

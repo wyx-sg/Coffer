@@ -6,7 +6,7 @@ data — the request as the app hands it over, the per-attempt accounting
 (status, outcome, time to first content, the usage reader fed beside the
 relay) and the one function that turns that accounting into the
 :class:`~coffer.domain.usage.records.UsageRecord` the spool writes. The record
-holds metadata and token counts only — never a body or a credential.
+holds metadata and token counts only — never a body or a secret.
 """
 
 from __future__ import annotations

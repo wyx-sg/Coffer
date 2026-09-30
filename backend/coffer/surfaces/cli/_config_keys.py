@@ -9,8 +9,8 @@ resource-framework "Change every setting through one key-value command"):
 - ``engine.*`` and ``transcribe.model`` on the engine's settings row
   (``_config_engine``);
 - ``engine.provider`` and ``transcribe.provider`` as the connection flags;
-- ``credentials.storage`` through the daemon, the sole owner of the master key
-  — this module imports no credential code (spec credentials "Route every credential
+- ``secrets.storage`` through the daemon, the sole owner of the master key
+  — this module imports no secret code (spec secret "Route every secret
   command through the daemon");
 - ``feature.<key>`` and ``retention.<table>``, whose members only the daemon
   knows, as families expanded on demand.
@@ -140,21 +140,21 @@ TRANSCRIBE_PROVIDER = _flag_key(
 )
 
 
-# --- credentials.storage -----------------------------------------------------------------
+# --- secrets.storage ---------------------------------------------------------------------
 
 
 def _storage_write(s: Session, where: str) -> list[str]:
-    now = s.send("PUT", "/settings/credentials", {"master_key_storage": where})
+    now = s.send("PUT", "/settings/secrets", {"master_key_storage": where})
     return [f"master key storage: {now['master_key_storage']}"]
 
 
-CREDENTIALS_STORAGE = Setting(
-    "credentials.storage",
+SECRETS_STORAGE = Setting(
+    "secrets.storage",
     "file|keychain",
-    "Where the credential master key is kept (moved and verified by the daemon)",
-    "PUT /settings/credentials",
-    choice("credentials.storage", ("file", "keychain")),
-    lambda s: Reading(s.get("/settings/credentials")["master_key_storage"], "file"),
+    "Where the secrets' master key is kept (moved and verified by the daemon)",
+    "PUT /settings/secrets",
+    choice("secrets.storage", ("file", "keychain")),
+    lambda s: Reading(s.get("/settings/secrets")["master_key_storage"], "file"),
     _storage_write,
     lambda s: _storage_write(s, "file"),
 )
@@ -167,7 +167,7 @@ def _approval_write(s: Session, on: bool) -> list[str]:
     now = s.send("PUT", "/settings/secret-boundary", {"require_approval": on})
     if now.get("pending_approval_id"):
         # Switching it off widens where secrets may go, so it waits for the
-        # desktop app like any new destination (spec credentials "Turn the
+        # desktop app like any new destination (spec secret "Turn the
         # protection off only through the desktop app").
         typer.echo(
             f"{WAITING}: turn off approval for new secret destinations "
@@ -309,7 +309,7 @@ def static_settings() -> list[Setting]:
         *engine_settings(),
         TRANSCRIBE_PROVIDER,
         TRANSCRIBE_MODEL,
-        CREDENTIALS_STORAGE,
+        SECRETS_STORAGE,
         SECRETS_REQUIRE_APPROVAL,
         PRICES_REFRESH,
     ]

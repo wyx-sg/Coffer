@@ -44,6 +44,19 @@ export function HistoryBlock({ size, onReveal }: Props) {
     policies.data?.policies.find((p) => p.table_name === name),
   ).filter((p): p is NonNullable<typeof p> => p !== undefined);
   const failedTable = update.isError ? update.variables?.tableName : undefined;
+  // "MCP calls are still kept for 30 days." — what the refused save left in place.
+  const failedPolicy = rows.find((p) => p.table_name === failedTable);
+  const stillKept = failedPolicy
+    ? t("settings.data.stillKept", {
+        name: t(`settings.retention.policy.${failedPolicy.table_name}.name`, {
+          defaultValue: failedPolicy.display_name,
+        }),
+        window:
+          failedPolicy.retention_days === null
+            ? t("settings.retention.foreverLower")
+            : t("settings.retention.forDays", { count: failedPolicy.retention_days }),
+      })
+    : null;
 
   const pruned = rows.filter((p) => p.last_pruned_at);
   const lastAt = pruned
@@ -72,13 +85,16 @@ export function HistoryBlock({ size, onReveal }: Props) {
         <Alert variant="destructive" data-testid="settings-data-save-failed">
           <AlertTitle>{t("settings.data.saveFailedTitle")}</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center gap-3">
-            <span>{translateApiError(t, update.error)}</span>
+            <span>
+              {translateApiError(t, update.error)}
+              {stillKept ? ` ${stillKept}` : null}
+            </span>
             <Button
               size="sm"
               variant="outline"
               onClick={() => update.variables && update.mutate(update.variables)}
             >
-              {t("common.retry")}
+              {t("settings.data.tryAgain")}
             </Button>
           </AlertDescription>
         </Alert>
@@ -144,6 +160,9 @@ export function HistoryBlock({ size, onReveal }: Props) {
             {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
           </Button>
         </SettingRow>
+        <p className="pb-1 pt-2 text-xs text-text-muted" data-testid="settings-data-other-retention">
+          {t("settings.data.otherRetention")} <code className="font-mono">coffer config</code>
+        </p>
       </DataBlock>
       <ConfirmDialog
         open={confirmPrune}

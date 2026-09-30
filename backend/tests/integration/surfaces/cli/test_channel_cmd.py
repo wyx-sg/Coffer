@@ -61,7 +61,7 @@ _AGENT_NAME = "claude-code"
 
 
 class _FakeKeyring:
-    """Register-time credential probe target — stored refs only."""
+    """Register-time secret probe target — stored refs only."""
 
     def __init__(self, store: dict[str, str]) -> None:
         self._store = store
@@ -175,7 +175,7 @@ def channel_daemon(tmp_path, monkeypatch):
         kinds={"channel": make_channel_kind(agent_names=_agent_names), "agent": make_agent_kind()},
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
-        credentials=keyring,
+        secrets=keyring,
     )
     # Registered through the service because the agent kind refuses the generic
     # create path. One agent is enough: every command here binds to the same one.
@@ -340,7 +340,7 @@ def test_bind_moves_the_channel_to_another_machine_and_keeps_the_rest(
 ) -> None:
     """`coffer channel bind` is an ordinary config edit, and must stay one.
 
-    The credential refs are the thing to watch: a bind that rebuilt the config
+    The secret refs are the thing to watch: a bind that rebuilt the config
     from flags instead of patching the stored one would drop them, and the
     channel would arrive on its new machine with no way to authenticate.
     """
@@ -352,7 +352,7 @@ def test_bind_moves_the_channel_to_another_machine_and_keeps_the_rest(
     resource = channel_daemon.channel("tg")
     assert resource.config["runs_on"] == "ffffffffffffffff"
     assert resource.config["bot_token_ref"] == _TG_REF
-    # Same reason as the credential refs, and a harder one to spot: the bound
+    # Same reason as the secret refs, and a harder one to spot: the bound
     # agent is stored as a uid, and a rebuilt config would lose it silently.
     assert resource.config["default_agent"] == channel_daemon.agent_uid
 
@@ -649,7 +649,7 @@ def test_register_invalid_agent_config_json_exits_6(channel_daemon: _Daemon) -> 
     assert _listed_names(channel_daemon) == []
 
 
-def test_register_with_missing_credential_exits_8(channel_daemon: _Daemon) -> None:
+def test_register_with_missing_secret_exits_8(channel_daemon: _Daemon) -> None:
     r = runner.invoke(
         app,
         [
@@ -664,7 +664,7 @@ def test_register_with_missing_credential_exits_8(channel_daemon: _Daemon) -> No
             _AGENT_NAME,
         ],
     )
-    assert r.exit_code == 8  # daemon rejected with CREDENTIAL_MISSING
+    assert r.exit_code == 8  # daemon rejected with SECRET_MISSING
     assert _listed_names(channel_daemon) == []
 
 

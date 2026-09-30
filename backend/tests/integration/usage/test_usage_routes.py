@@ -74,6 +74,16 @@ async def test_summary_route(wired) -> None:  # type: ignore[no-untyped-def]
     assert body["totals"]["unpriced_requests"] == 1
     names = {row["model"]: row["connection_name"] for row in body["rows"]}
     assert names["claude-sonnet-4-6"] == "Anthropic"
+    assert body["rows"][0]["agent_types"] == ["claude_code"]
+    narrowed = await client.get(
+        "/api/v1/usage/summary",
+        params={"range": "7d", "agent_type": "codex", "connection_uid": "conn-anthropic"},
+    )
+    assert narrowed.json()["totals"]["requests"] == 0
+    csv_text = await client.get(
+        "/api/v1/usage/export.csv", params={"range": "7d", "agent_type": "claude_code"}
+    )
+    assert len(csv_text.text.splitlines()) == 3  # header + two models
     bad = await client.get(
         "/api/v1/usage/summary", params={"range": "custom", "from": "2026-09-01"}
     )

@@ -21,8 +21,8 @@ export type QuotaRefresh = Schemas["QuotaRefreshOut"];
 export type UsageRangeName = "today" | "7d" | "30d" | "month" | "custom";
 
 /**
- * One summary request: a range (with its inclusive local days when custom) and
- * a grouping.
+ * One summary request: a range (with its inclusive local days when custom), a
+ * grouping, and the optional agent-type and connection filters.
  * @ui-only — the query string the page builds, not a wire body.
  */
 export interface UsageQuery {
@@ -30,12 +30,18 @@ export interface UsageQuery {
   from?: string;
   to?: string;
   group_by: UsageGroupBy;
+  agent_type?: string;
+  connection_uid?: string;
 }
 
 function query(q: UsageQuery) {
+  const filters = {
+    ...(q.agent_type ? { agent_type: q.agent_type } : {}),
+    ...(q.connection_uid ? { connection_uid: q.connection_uid } : {}),
+  };
   return q.range === "custom"
-    ? { range: q.range, from: q.from ?? null, to: q.to ?? null, group_by: q.group_by }
-    : { range: q.range, group_by: q.group_by };
+    ? { range: q.range, from: q.from ?? null, to: q.to ?? null, group_by: q.group_by, ...filters }
+    : { range: q.range, group_by: q.group_by, ...filters };
 }
 
 export async function fetchUsageSummary(q: UsageQuery): Promise<UsageSummary> {

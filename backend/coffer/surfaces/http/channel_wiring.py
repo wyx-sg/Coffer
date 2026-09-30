@@ -42,14 +42,14 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
 from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
-from coffer.surfaces.http.credential_composition import boundary_resolver
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
+from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 if TYPE_CHECKING:
@@ -75,7 +75,7 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     chat: ChatWiring,
     knowledge: KnowledgeWiring,
     sync: SyncContributions,
@@ -115,7 +115,7 @@ def wire_channel_kind(
 
     # ``materialize_async`` is the resolver's own off-the-loop path;
     # hand-rolling ``to_thread`` here is how the two drifted apart before.
-    materialize = boundary_resolver(credential_store).materialize_async
+    materialize = boundary_resolver(secret_store).materialize_async
     register_resource_destination("channel", _channel_secret_destination)
 
     async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
@@ -221,7 +221,7 @@ def wire_channel_kind(
 def _channel_secret_destination(
     resource: Resource,
 ) -> tuple[SecretDestination, dict[str, str]] | None:
-    """Where a channel's credential goes, for the secret boundary's listing."""
+    """Where a channel's secret goes, for the secret boundary's listing."""
     parsed = parse_channel_config(dict(resource.config))
     if parsed.channel_type == "telegram":
         dest = channel_destination(resource.uid, resource.name, "telegram")

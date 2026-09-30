@@ -6,7 +6,7 @@
 // A timer-driven history repeats itself. More than half of a converging
 // vault's rounds changed nothing — 14 of 27 on the machine this was written
 // against — and when something breaks it repeats even harder: an expired
-// credential is ten identical failures by morning, a held round is re-raised
+// secret is ten identical failures by morning, a held round is re-raised
 // every hour until someone answers it. One row each, they bury the rounds
 // that actually said something, and they make a page whose whole job is to
 // report a state read like an argument for it.
@@ -49,7 +49,7 @@ const FOLDABLE = new Set(["no_change", "failed", "awaiting_confirmation"]);
  *
  * Deliberately stricter than `status === "no_change"`: a round can end
  * `no_change` and still have joined a remote, hit a failure, locked a
- * credential ref, or had an agent resolve a conflict. Each of those is
+ * secret ref, or had an agent resolve a conflict. Each of those is
  * something a reader wants a row for. So the test is "this round's detail pane
  * would be empty", not "its badge says no change".
  */

@@ -277,3 +277,33 @@ async def test_delete_older_than_rejects_unknown_table(tmp_path):
     with pytest.raises(UnknownPrunableTable):
         await repo.delete_older_than("audit_log", "junk_column", datetime.now(tz=UTC))
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_count_rows_counts_what_a_prune_would_delete_without_deleting(tmp_path):
+    """The preview a shortening shows: every row, and the rows older than the cutoff."""
+    repo, engine = await _repo(tmp_path)
+    sm = session_maker(engine)
+    now = datetime(2026, 5, 20, tzinfo=UTC)
+    async with sm() as s:
+        for i in range(5):
+            s.add(
+                AuditLogModel(
+                    timestamp=now - timedelta(days=i),
+                    event_type="resource_created",
+                    resource_kind="mcp_server",
+                    resource_name=f"r{i}",
+                    actor="cli",
+                    details_json=None,
+                )
+            )
+        await s.commit()
+
+    total, older = await repo.count_rows("audit_log", "timestamp", now - timedelta(days=2))
+    assert (total, older) == (5, 2)
+    async with sm() as s:
+        remaining = (await s.execute(select(func.count()).select_from(AuditLogModel))).scalar_one()
+    assert remaining == 5
+    with pytest.raises(UnknownPrunableTable):
+        await repo.count_rows("audit_log", "resource_name", now)
+    await engine.dispose()

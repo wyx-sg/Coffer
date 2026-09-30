@@ -1,7 +1,7 @@
 // src/components/agents/mcp/AdoptKeyTable.tsx — the adopt dialog's Key · Value in Coffer · Store as grid.
 //
 // Board 2.1.24. A secret-looking key moves into Coffer's encrypted vault, and
-// its row edits the credential reference the adopted config will carry; the
+// its row edits the secret reference the adopted config will carry; the
 // value itself never passes through this form (the daemon moves it). Any other
 // key keeps its value as it is, which the daemon never sends to the UI.
 import { useTranslation } from "react-i18next";

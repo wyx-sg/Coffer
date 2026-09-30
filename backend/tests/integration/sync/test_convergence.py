@@ -22,7 +22,7 @@ import pathlib
 import pytest
 
 from coffer.application.agent.sync_reconcile import AgentImportGate
-from coffer.domain.credential_errors import CredentialUnreadable
+from coffer.domain.secret_errors import SecretUnreadable
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, JoinKind
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard
 from coffer.infrastructure.platform import HostPlatform
@@ -73,7 +73,7 @@ async def roomy(tmp_path: pathlib.Path):
     so they raise the threshold rather than pad every vault with filler.
 
     They also share a master key, because a machine that cannot decrypt a
-    credential cannot register the resource citing it — the row is held for
+    secret cannot register the resource citing it — the row is held for
     retry, which is right, but it makes the machine a poor witness to anything
     else.
     """
@@ -149,16 +149,16 @@ async def test_a_remote_addition_is_registered_here(pair) -> None:
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="a remote deletion is applied")
-async def test_a_remote_deletion_removes_files_rows_and_credentials(roomy) -> None:
+async def test_a_remote_deletion_removes_files_rows_and_secrets(roomy) -> None:
     a, b = roomy
     a.write_skill("doomed")
-    a.set_credential("mcp/doomed/token", "s3cret")
-    await a.register("mcp_server", "doomed", {"value": "x", "credential_ref": "mcp/doomed/token"})
+    a.set_secret("mcp/doomed/token", "s3cret")
+    await a.register("mcp_server", "doomed", {"value": "x", "secret_ref": "mcp/doomed/token"})
     a.write_skill("kept")
     await a.register("mcp_server", "kept", {"value": "y"})
     await settle(a, b)
     assert b.has_skill_files("doomed")
-    assert b.has_credential("mcp/doomed/token")
+    assert b.has_secret("mcp/doomed/token")
     audited_before = await b.audit_events("resource_deleted")
 
     a.delete_skill_files("doomed")
@@ -170,8 +170,8 @@ async def test_a_remote_deletion_removes_files_rows_and_credentials(roomy) -> No
     assert run.status is ConvergeStatus.OK, run.error
     assert not b.has_skill_files("doomed")
     assert await b.resource_names("mcp_server") == ["kept"]
-    # Deleting the resource released the credential no remaining resource cites.
-    assert not b.has_credential("mcp/doomed/token")
+    # Deleting the resource released the secret no remaining resource cites.
+    assert not b.has_secret("mcp/doomed/token")
     assert await b.audit_events("resource_deleted") > audited_before
     assert "skills/doomed/SKILL.md" in deleted(run.applied)
 
@@ -501,28 +501,28 @@ async def test_an_agent_resolution_leaving_a_conflict_marker_is_refused(pair) ->
     assert await b.state.pointer() == pointer_before
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="the fresher credential ciphertext wins")
+@pytest.mark.acceptance(spec="vault-sync", scenario="the fresher secret ciphertext wins")
 async def test_the_fresher_ciphertext_wins_regardless_of_commit_order(keyed) -> None:
     """Two machines re-encrypt one ref. A Fernet token carries its encryption
     time in cleartext, so the two can be ordered without the key — and must be,
     because the alternative is the blob whose machine synced last winning."""
     a, b = keyed
-    a.set_credential("mcp/shared/token", "original")
-    await a.register("mcp_server", "shared", {"value": "s", "credential_ref": "mcp/shared/token"})
+    a.set_secret("mcp/shared/token", "original")
+    await a.register("mcp_server", "shared", {"value": "s", "secret_ref": "mcp/shared/token"})
     await settle(a, b)
 
     # B re-encrypts first; A re-encrypts a second later and pushes last.
-    b.set_credential("mcp/shared/token", "from-b")
+    b.set_secret("mcp/shared/token", "from-b")
     _sleep_past_a_fernet_second()
-    a.set_credential("mcp/shared/token", "from-a")
+    a.set_secret("mcp/shared/token", "from-a")
     await a.converge()
 
     run = await b.converge()
 
     assert run.status is ConvergeStatus.OK, run.error
-    assert b.credential_store.get("mcp/shared/token") == "from-a"
+    assert b.secret_store.get("mcp/shared/token") == "from-a"
     await a.converge()
-    assert a.credential_store.get("mcp/shared/token") == "from-a"
+    assert a.secret_store.get("mcp/shared/token") == "from-a"
 
 
 # --- holding paths back, guards, snapshots ----------------------------------
@@ -786,8 +786,8 @@ async def test_restore_returns_a_deleted_skill_without_discarding_later_work(roo
 @pytest.mark.acceptance(spec="vault-sync", scenario="the master key never enters the repository")
 async def test_the_repository_carries_ciphertext_and_no_key_material(pair) -> None:
     a, b = pair
-    a.set_credential("mcp/files/token", "s3cret-value")
-    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    a.set_secret("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "secret_ref": "mcp/files/token"})
     await settle(a)
 
     blob = await a.remote_text("credentials/mcp/files/token.enc")
@@ -804,15 +804,15 @@ async def test_the_repository_carries_ciphertext_and_no_key_material(pair) -> No
     # rather than failing decryption silently.
     joined = await b.adopt()
     later = await b.converge()
-    assert b.credentials.locked_refs() == ["mcp/files/token"]
+    assert b.secrets.locked_refs() == ["mcp/files/token"]
     # And the round says so (spec vault-sync "Report refs without a key as
     # locked"): the round that delivered the ciphertext, and every round after
     # it while the key is still missing.
     assert joined.locked_refs == ("mcp/files/token",)
     assert later.locked_refs == ("mcp/files/token",)
     # "Locked", not "silently wrong": reading it here is refused outright.
-    with pytest.raises(CredentialUnreadable):
-        b.credential_store.get("mcp/files/token")
+    with pytest.raises(SecretUnreadable):
+        b.secret_store.get("mcp/files/token")
 
 
 async def test_a_round_that_delivers_undecryptable_ciphertext_reports_the_ref_locked(
@@ -826,9 +826,9 @@ async def test_a_round_that_delivers_undecryptable_ciphertext_reports_the_ref_lo
     a ref B *can* decrypt is not in that list.
     """
     a, b = pair
-    b.set_credential("mcp/own/token", "b-local")
-    a.set_credential("mcp/files/token", "s3cret-value")
-    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    b.set_secret("mcp/own/token", "b-local")
+    a.set_secret("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "secret_ref": "mcp/files/token"})
     await settle(a)
     await b.remote_config()
     service = b.service()

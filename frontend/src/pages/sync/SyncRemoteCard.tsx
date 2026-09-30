@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncRemoteCard.tsx — Sync → Status → Remote
 // (spec vault-sync). The one git repository this vault converges with: name
-// the repository and branch, say how often, say whether credential
+// the repository and branch, say how often, say whether secret
 // ciphertext rides along, save it, and run a round now — or, on a machine that
 // has not joined yet, see what joining would do and join (SyncConvergeAction).
 //
@@ -11,8 +11,8 @@
 // remote on and off the moment it moves — and only once a remote is stored,
 // because before that there is nothing for it to switch.
 //
-// Nothing here ever holds the push credential. The form's credential field is
-// a *reference* — a name in Coffer's credential store — which the daemon
+// Nothing here ever holds the push secret. The form's secret field is
+// a *reference* — a name in Coffer's secret store — which the daemon
 // resolves at push time and nowhere else; that is why this card can render a
 // fully configured remote in a browser with nothing to redact.
 import { useEffect, useMemo, useState } from "react";
@@ -46,8 +46,8 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   // rather than on the identity of the object a refetch happens to hand back.
   const savedUrl = saved?.url ?? "";
   const savedBranch = saved?.branch ?? DEFAULT_BRANCH;
-  const savedCredentialRef = saved?.credential_ref ?? "";
-  const savedIncludeCredentials = saved?.include_credentials ?? false;
+  const savedSecretRef = saved?.secret_ref ?? "";
+  const savedIncludeSecrets = saved?.include_secrets ?? false;
   const savedInterval = saved?.interval_seconds ?? DEFAULT_INTERVAL_SECONDS;
   const savedEnabled = saved?.enabled ?? true;
   const worktreePath = saved?.worktree_path ?? null;
@@ -56,11 +56,11 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
     () => ({
       url: savedUrl,
       branch: savedBranch,
-      credentialRef: savedCredentialRef,
-      includeCredentials: savedIncludeCredentials,
+      secretRef: savedSecretRef,
+      includeSecrets: savedIncludeSecrets,
       intervalSeconds: savedInterval,
     }),
-    [savedUrl, savedBranch, savedCredentialRef, savedIncludeCredentials, savedInterval],
+    [savedUrl, savedBranch, savedSecretRef, savedIncludeSecrets, savedInterval],
   );
   const [form, setForm] = useState<FormState>(savedForm);
 
@@ -87,8 +87,8 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
       {
         url: next.url.trim(),
         branch: next.branch.trim() || DEFAULT_BRANCH,
-        credential_ref: next.credentialRef.trim() || null,
-        include_credentials: next.includeCredentials,
+        secret_ref: next.secretRef.trim() || null,
+        include_secrets: next.includeSecrets,
         interval_seconds: next.intervalSeconds,
         enabled,
         ...(worktreePath ? { worktree_path: worktreePath } : {}),

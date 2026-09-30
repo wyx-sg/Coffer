@@ -1,9 +1,11 @@
 // src/pages/UsagePage.tsx — /usage: subscription quota as each agent reports it, and metered API-key usage over a range.
 //
-// Two sections that load and fail independently. The range and the breakdown
-// live in the URL (`?range=`, `?from=&to=`, `?by=`) so a refresh or Back keeps
-// them. Refresh re-reads the summary and asks Codex's app-server for fresh
-// quota; the ⋯ menu exports the current range and grouping as CSV.
+// Two sections that load and fail independently. The range, the Agent and
+// Provider filters and the breakdown live in the URL (`?range=`,
+// `?from=&to=`, `?by=`, `?agent=`, `?provider=`) so a refresh or Back keeps
+// them. The header's Refresh re-reads everything and asks Codex's app-server
+// for fresh quota; Claude Code's row re-reads its own. The ⋯ beside the
+// filters exports the current range and filters as CSV.
 import { useState } from "react";
 import { Gauge, RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -11,9 +13,9 @@ import { useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { ActionMenu } from "@/components/ui/menu";
 import { QuotaSection } from "@/components/usage/QuotaSection";
 import { UsageSection } from "@/components/usage/UsageSection";
+import { useProviders } from "@/lib/hooks/useProviders";
 import { useRetentionPolicies } from "@/lib/hooks/useRetention";
 import {
   useExportUsageCsv,
@@ -22,12 +24,22 @@ import {
   useUsageQuota,
   useUsageSummary,
 } from "@/lib/hooks/useUsage";
+import type { Provider } from "@/lib/api/providers";
 import type { UsageQuery } from "@/lib/api/usage";
+import { presetById, vendorOf } from "@/lib/providers/presets";
 import { formatClock } from "@/lib/usage/format";
-import { readUsageQuery, writeUsageQuery } from "@/lib/usage/range";
+import { addDays, localDay, readUsageQuery, writeUsageQuery } from "@/lib/usage/range";
 
 /** Per-request detail window when the retention policy has not loaded. */
 const DEFAULT_DETAIL_DAYS = 30;
+/** Daily totals are kept this long: nothing in it means nothing ever went through the proxy. */
+const DAILY_TOTALS_DAYS = 365;
+
+/** The vendor a provider reads as: its preset's brand, else its own name. */
+function vendorLabel(p: Provider): string {
+  const vendor = vendorOf(p.base_url ?? "");
+  return vendor === "custom" ? p.title || p.name : presetById(vendor).label;
+}
 
 export function UsagePage() {
   const { t, i18n } = useTranslation();
@@ -35,7 +47,24 @@ export function UsagePage() {
   const query = readUsageQuery(params);
   const summary = useUsageSummary(query);
   const byDay = useUsageSummary({ ...query, group_by: "day" });
+  // Who sent API-key requests in the range, whatever the filters: the quota
+  // rows' "some requests via API key".
+  const byAgent = useUsageSummary({
+    range: query.range,
+    from: query.from,
+    to: query.to,
+    group_by: "agent",
+  });
+  // Whether anything ever went through the proxy: the first-run state.
+  const today = new Date();
+  const ever = useUsageSummary({
+    range: "custom",
+    from: localDay(addDays(today, 1 - DAILY_TOTALS_DAYS)),
+    to: localDay(today),
+    group_by: "agent",
+  });
   const quota = useUsageQuota();
+  const providers = useProviders();
   const refresh = useRefreshQuota();
   const invalidate = useInvalidateUsage();
   const exportCsv = useExportUsageCsv();
@@ -53,13 +82,34 @@ export function UsagePage() {
   const now = new Date();
   const reason = refresh.data && !refresh.data.refreshed ? refresh.data.reason : null;
 
+  const proxied = (providers.data ?? []).filter((p) => !p.local_runtime);
+  // An agent runs on an API-key provider when one that reaches it is enabled
+  // and active — the rule the agent's Model tab uses.
+  const apiKeyVendorFor = (agentType: string) => {
+    const active = proxied.find(
+      (p) => p.enabled && p.is_active && (p.compatible_agents ?? []).some((a) => a === agentType),
+    );
+    return active ? vendorLabel(active) : null;
+  };
+  const subscriptionAgents = new Set(
+    (quota.data?.agents ?? [])
+      .filter((a) => a.plan && !apiKeyVendorFor(a.agent_type))
+      .map((a) => a.agent_type),
+  );
+  const sentViaApiKey = new Set(
+    (byAgent.data?.rows ?? [])
+      .filter((r) => r.agent_type && r.totals.requests > 0)
+      .map((r) => r.agent_type as string),
+  );
+  const viaApiKey = new Set([...subscriptionAgents].filter((a) => sentViaApiKey.has(a)));
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         icon={Gauge}
         title={t("usage.title")}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {updatedAt > 0 ? (
               <span className="text-xs text-text-muted">
                 {t("usage.updated", { time: formatClock(new Date(updatedAt), i18n.language) })}
@@ -77,17 +127,6 @@ export function UsagePage() {
               <RotateCw aria-hidden />
               {t("usage.refresh")}
             </Button>
-            <ActionMenu
-              label={t("usage.more")}
-              actions={[
-                {
-                  key: "export",
-                  label: t("usage.exportCsv"),
-                  disabled: exportCsv.isPending,
-                  onSelect: () => exportCsv.mutate(query),
-                },
-              ]}
-            />
           </div>
         }
       />
@@ -97,7 +136,10 @@ export function UsagePage() {
         isError={quota.isError}
         onRetryLoad={() => void quota.refetch()}
         refresh={{ reason, triedAt, pending: refresh.isPending, onRetry: askCodex }}
+        reread={{ pending: quota.isFetching, onReread: () => void quota.refetch() }}
         now={now}
+        apiKeyVendorFor={apiKeyVendorFor}
+        viaApiKey={viaApiKey}
       />
       <UsageSection
         query={query}
@@ -105,7 +147,12 @@ export function UsagePage() {
         detailDays={detailDays}
         summary={summary}
         byDay={byDay}
-        hasQuota={!!quota.data?.agents.some((a) => a.has_value)}
+        neverUsed={ever.data?.totals.requests === 0}
+        agentTypes={(quota.data?.agents ?? []).map((a) => a.agent_type)}
+        providers={proxied.map((p) => ({ uid: p.uid, label: p.title || p.name }))}
+        subscriptionAgents={subscriptionAgents}
+        onExport={() => exportCsv.mutate(query)}
+        exporting={exportCsv.isPending}
       />
     </div>
   );

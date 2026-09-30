@@ -244,7 +244,7 @@ async def build_plan(
     retired: Sequence[RetiredNote],
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = DEFAULT_MODEL_TIMEOUT_S,
     chunk_size: int,
 ) -> Plan:
@@ -268,7 +268,7 @@ async def build_plan(
             partition=partition,
             model=model,
             completion=completion,
-            credential_resolver=credential_resolver,
+            secret_resolver=secret_resolver,
             timeout=timeout,
         )
         # Two rounds over the chunk: a merge naming a sibling entry can only be

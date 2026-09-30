@@ -1,7 +1,7 @@
 // frontend/src/components/channel/registerChannel.ts
 // Registration plumbing for AddChannelDialog: secrets are written to the
-// credential store FIRST (registration probes the refs — see "Register
-// channels as a credential-referencing resource kind"), then the
+// secret store FIRST (registration probes the refs — see "Register
+// channels as a secret-referencing resource kind"), then the
 // resource is registered; on failure the just-written secrets are rolled
 // back so nothing orphaned stays behind.
 //
@@ -16,15 +16,15 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { channelSlug, type ChannelPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
-  const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  const { error } = await getApiClient().POST("/secrets", { body: { ref, value } });
+  if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
 }
 
 /** Best-effort rollback of secrets written before a failed registration. */
 async function rollbackSecrets(refs: string[]): Promise<void> {
   for (const ref of refs) {
     try {
-      await getApiClient().DELETE("/credentials/{ref}", { params: { path: { ref } } });
+      await getApiClient().DELETE("/secrets/{ref}", { params: { path: { ref } } });
     } catch (e) {
       console.warn(`[AddChannelDialog] rollback delete failed for ${ref}:`, e);
     }

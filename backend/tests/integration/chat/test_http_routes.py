@@ -464,7 +464,7 @@ def test_send_message_returns_202_fire_and_return() -> None:
                 "display_name": "Test Model",
                 "provider": "anthropic",
                 "model": "claude-sonnet-4-6",
-                "credential_ref": "ref",
+                "secret_ref": "ref",
             },
         )
         resp = client.post("/api/v1/chat/conversations", json={"agent_key": "builtin"})
@@ -488,7 +488,7 @@ def test_set_pending_replaces_queue() -> None:
     # orchestrator re-inserts the head and pauses rather than dropping it, so the
     # WHOLE queue is preserved (regression test for the lost-head bug).
     provider = FakeAgentProvider(
-        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+        adapter=None, build_error=AgentConfigRejected("missing_secret", "no secret")
     )
     chat_svc, orchestrator = _make_services(provider=provider)
     app = _build_app(chat_svc, orchestrator)
@@ -562,7 +562,7 @@ def test_send_message_build_adapter_error_real_orchestrator() -> None:
     endpoint returns the mapped status as JSON — the orchestrator propagates it
     before streaming, so the client never gets a half-open SSE stream."""
     provider = FakeAgentProvider(
-        adapter=None, build_error=AgentConfigRejected("missing_credential", "no credential")
+        adapter=None, build_error=AgentConfigRejected("missing_secret", "no secret")
     )
     chat_svc, orchestrator = _make_services(provider=provider)
     app = _build_app(chat_svc, orchestrator)

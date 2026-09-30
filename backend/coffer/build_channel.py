@@ -7,7 +7,11 @@ release is ``stable`` (spec experimental-features "Stamp every build with a
 release channel"). ``sys.frozen`` is not the signal: the owner's testing build
 is frozen too.
 
-Rewritten by that script; keep the assignment on one line.
+The same script stamps ``COMMIT``, the short hash of the commit the release was
+built from, which the Settings About tab shows beside the version; a build from
+source keeps ``None``.
+
+Rewritten by that script; keep each assignment on one line.
 """
 
 from __future__ import annotations
@@ -15,3 +19,4 @@ from __future__ import annotations
 from typing import Literal
 
 CHANNEL: Literal["stable", "dev"] = "dev"
+COMMIT: str | None = None

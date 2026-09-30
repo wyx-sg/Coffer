@@ -1,7 +1,7 @@
 """Request / response schemas for ``/api/v1/providers`` (spec provider-switching).
 
-``ProviderOut`` NEVER carries the secret — only its ``credential_ref``. A
-connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
+``ProviderOut`` NEVER carries the secret — only its ``secret_ref``. A
+connection is a credentialed endpoint ``{protocol, base_url, secret_ref}``;
 the model lives apart from it (spec provider-switching "Take projected model
 keys from the agent's binding") and is chosen at the point of use.
 ``models`` is the curated set the connection OFFERS to that choice — empty means
@@ -52,7 +52,7 @@ class ProviderModel(BaseModel):
 
 class ProviderCreate(BaseModel):
     """Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
-    supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
+    supply EXACTLY one of ``secret_value`` / ``secret_ref``; an ``ollama``
     connection has no key, so supply neither. WHICH agents the connection
     projects into is not set here: the new connection starts on the wire's own
     default scope and is re-targeted through the framework's scope surface
@@ -63,7 +63,7 @@ class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
     base_url: str = Field(min_length=1)
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     models: list[ProviderModel] | None = None
     description: str | None = None
@@ -73,7 +73,7 @@ class ProviderCreate(BaseModel):
 
 
 class ProviderPatch(BaseModel):
-    """Partial update. ``credential_ref`` is immutable (it is the vault address
+    """Partial update. ``secret_ref`` is immutable (it is the vault address
     the connection owns); ``protocol`` is not — the probe that guessed the wire
     can be wrong, so it is corrected in place rather than by re-entering the
     connection, key and all.
@@ -104,7 +104,7 @@ class ProviderPatch(BaseModel):
 class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 
-    ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
+    ``secret_ref`` is ``None`` for ``ollama`` connections (no key).
     ``compatible_agents`` is the CONFIGURED reach — the agent types this
     connection's per-agent scope (ADR per-agent-resource-scope) covers among the
     agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
@@ -138,7 +138,7 @@ class ProviderOut(BaseModel):
     title: str | None = None
     protocol: Protocol
     base_url: str
-    credential_ref: str | None
+    secret_ref: str | None
     compatible_agents: list[AgentType]
     models: list[ProviderModel]
     is_active: bool
@@ -253,21 +253,21 @@ class DeactivateOut(BaseModel):
 class TestConnectionIn(BaseModel):
     provider: str
     model: str
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     secret_value: str | None = None  # inline secret to test before saving
     base_url: str | None = None
 
 
 class ListModelsIn(BaseModel):
     provider: str
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     secret_value: str | None = None  # inline secret to fetch before saving
     base_url: str | None = None
 
 
 class DetectProtocolIn(BaseModel):
     base_url: str | None = None
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     secret_value: str | None = None  # inline secret to probe before saving
 
 

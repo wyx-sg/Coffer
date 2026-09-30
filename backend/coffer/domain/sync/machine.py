@@ -76,7 +76,7 @@ class MachineDescriptor:
     #: deleted while it was away.
     last_converged_commit: str | None = None
     #: Short hash of the master key, so another machine can say "your
-    #: credentials will not decrypt here" instead of the user comparing
+    #: secrets will not decrypt here" instead of the user comparing
     #: fingerprints by hand. Never the key.
     key_fingerprint: str | None = None
     #: Names of the agents registered on this machine.

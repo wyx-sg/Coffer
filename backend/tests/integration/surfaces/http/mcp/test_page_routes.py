@@ -32,7 +32,6 @@ from coffer.infrastructure.persistence.engine import create_async_engine_with_pr
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
 from coffer.surfaces.http.mcp.dependencies import (
@@ -41,6 +40,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_preferences_repo,
 )
 from coffer.surfaces.http.mcp.page_routes import router as page_router
+from coffer.surfaces.http.secret_composition import get_secret_store
 
 NOW = datetime.now(tz=UTC)
 
@@ -126,7 +126,7 @@ async def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     app.dependency_overrides[get_preferences_repo] = lambda: prefs
     app.dependency_overrides[get_invocation_repo] = lambda: invocations
     app.dependency_overrides[get_health_repo] = lambda: health
-    app.dependency_overrides[get_credential_store] = lambda: store
+    app.dependency_overrides[get_secret_store] = lambda: store
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://t", headers={"X-Coffer-Token": "tok"}
     ) as client:
@@ -173,7 +173,7 @@ async def test_a_secret_missing_on_this_machine_is_named_by_key_and_ref(ctx):
         "transport": {
             "type": "http",
             "url": "https://mcp.linear.app/mcp",
-            "credential_refs": {"Authorization": "LINEAR_API_KEY"},
+            "secret_refs": {"Authorization": "LINEAR_API_KEY"},
         }
     }
     srv = await ctx.server("linear", config)

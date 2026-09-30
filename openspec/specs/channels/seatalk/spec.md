@@ -55,18 +55,18 @@ Deliberately out of scope:
 A SeaTalk channel's configuration MUST carry **`app_id` and `app_secret_ref`**
 and no inbound-transport field: SeaTalk inbound has one transport (see "Receive
 every event over one outbound websocket connection"), and the register handshake
-authenticates it from those two values alone. The secret lives in the credential
-store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a credential-referencing resource kind").
+authenticates it from those two values alone. The secret lives in the secret
+store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a secret-referencing resource kind").
 
 A channel stored while webhook delivery existed MUST be rewritten once, by a
 migration, so that it carries none of `delivery`, `signing_secret_ref`,
 `public_base_url` or `tunnel_token_ref`: a stored key that configures nothing
-misdescribes the running system. The credential values those refs cited MUST be
-left in the credential store rather than deleted, because a migration that
+misdescribes the running system. The secret values those refs cited MUST be
+left in the secret store rather than deleted, because a migration that
 destroys secrets cannot be undone by its downgrade.
 
 #### Scenario: a seatalk channel without an app id or secret reference is refused
-- **GIVEN** a stored SeaTalk app secret under a credential reference
+- **GIVEN** a stored SeaTalk app secret under a secret reference
 - **WHEN** a seatalk channel is registered missing `app_id`, or missing `app_secret_ref`
 - **THEN** the registration is rejected and nothing is persisted
 - **AND** the same registration carrying both is accepted with the secret held only as a reference
@@ -75,7 +75,7 @@ destroys secrets cannot be undone by its downgrade.
 - **GIVEN** a stored seatalk channel carrying `delivery: webhook`, a signing secret ref, a public base URL and a tunnel token ref
 - **WHEN** the daemon's startup migrations run
 - **THEN** the channel's configuration carries its `app_id`, its `app_secret_ref` and its common fields, and none of the four webhook-era keys
-- **AND** the credential values the removed refs cited are still in the credential store
+- **AND** the secret values the removed refs cited are still in the secret store
 
 ### Requirement: Load the websocket client library from an operator-supplied directory
 The WebSocket client library MUST be an **operator-supplied optional
@@ -96,13 +96,32 @@ alternative either: none is published. See
   does today.
 - When it cannot be imported, the websocket channel's connection MUST NOT come
   up and the channel MUST say precisely why: its websocket state is
-  `sdk_missing`, with a detail naming the directory that was searched and the
-  platform documentation that says what to put there. The connection keeps
-  retrying on its back-off ladder, so dropping the SDK in needs no daemon
-  restart. Nothing crashes, the daemon stays up, every other channel keeps
-  running, the channel's outbound sends — replies and notifications, which
-  never touch the SDK — are unaffected, and the reason is reported as that
-  channel's own state rather than left in a log for someone to find.
+  `sdk_missing`, with a detail naming the missing library, the directory that
+  was searched and the platform documentation for it — a statement of fact, not
+  a procedure. The connection keeps retrying on its back-off ladder, so dropping
+  the SDK in needs no daemon restart. Nothing crashes, the daemon stays up,
+  every other channel keeps running, the channel's outbound sends — replies and
+  notifications, which never touch the SDK — are unaffected, and the reason is
+  reported as that channel's own state rather than left in a log for someone to
+  find.
+- Putting the SDK in place is handed to the person's agent (see
+  [principles](../../../../docs-site/architecture/principles.md) "AI-Native").
+  The download stays with the person, because the portal needs their login;
+  everything after it is the agent's. While a channel reports `sdk_missing`,
+  its status (`GET /api/v1/channels/{uid}/status`) MUST carry a `handoff`
+  prompt naming the directory the daemon imports from (and whether
+  `$COFFER_SEATALK_SDK_DIR` chose it), the platform documentation where the
+  person downloads the archive, and the steps: find the downloaded archive
+  (usually in `~/Downloads`), unpack it so that `<directory>/seatalk_oapi_sdk/`
+  exists without pip-installing it, check the package landed, and confirm with
+  `coffer channel show <name>` that the websocket reads connected; `handoff` is
+  null in every other state. The channel page MUST show one sentence linking
+  the platform's download page, the hand-off (Copy prompt, and Ask an agent
+  when a managed agent is available) and the header's Retry — and no manual
+  procedure. The Overview's attention item for the channel MUST carry the same
+  prompt as its `handoff`, with the reason code `channel_sdk_missing` and a
+  reason sentence that names no command. `coffer channel show` MUST print the
+  same prompt.
 - An installation without the SDK has **no SeaTalk inbound**. The websocket
   connection is the only inbound transport, so an outside user of this project
   who cannot obtain the SDK can register a SeaTalk channel and send to its
@@ -118,6 +137,18 @@ alternative either: none is published. See
 - **AND** the connection keeps retrying, so the library can be dropped in without
   a daemon restart
 - **AND** the daemon stays up and every other channel keeps working
+
+#### Scenario: a missing sdk is handed to an agent from the channel page
+- **GIVEN** a SeaTalk channel whose websocket reports `sdk_missing`, with `$COFFER_SEATALK_SDK_DIR` set
+- **WHEN** its status is read and its page is opened
+- **THEN** the status carries a `handoff` prompt naming `<dir>/seatalk_oapi_sdk/`, the variable that chose the directory, the platform's download page, `~/Downloads` and `coffer channel show <name>`, and leaving the login to the person
+- **AND** the page's banner links the platform's download page and offers Copy prompt beside the header's Retry, without the error text
+- **AND** once the websocket connects, `handoff` is null
+
+#### Scenario: a missing sdk is handed to an agent on the Overview
+- **GIVEN** an enabled SeaTalk channel bound to this machine whose websocket reports `sdk_missing`
+- **WHEN** the attention list is read
+- **THEN** the channel's item has reason code `channel_sdk_missing`, a reason that names no command, and the same hand-off prompt as its status
 
 ### Requirement: Carry both of a member's ids
 A SeaTalk member has **two ids, and they are not interchangeable**, so the

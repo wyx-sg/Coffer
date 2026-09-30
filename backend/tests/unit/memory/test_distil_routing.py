@@ -255,7 +255,7 @@ async def test_a_failing_completion_routes_nothing_rather_than_raising() -> None
         partition="coffer",
         model="m",
         completion=_Broken(),  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
     )
 
     assert actions == ()
@@ -275,7 +275,7 @@ async def test_a_routed_chunk_validates_against_the_index_it_was_given() -> None
             system: str,
             user: str,
             model: object,
-            credential_resolver: object,
+            secret_resolver: object,
             timeout: float | None = None,
         ) -> str:
             self.user = user
@@ -291,7 +291,7 @@ async def test_a_routed_chunk_validates_against_the_index_it_was_given() -> None
         partition="coffer",
         model="m",
         completion=completion,  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
     )
 
     assert [a.slug for a in actions] == ["worktree-trap"]

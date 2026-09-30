@@ -371,6 +371,8 @@ export interface components {
         };
         /** DaemonLogListOut */
         DaemonLogListOut: {
+            /** Path */
+            path: string;
             /** Records */
             records: components["schemas"]["DaemonLogRecordOut"][];
         };
@@ -455,6 +457,12 @@ export interface components {
              * @enum {string}
              */
             channel: "stable" | "dev";
+            /** Commit */
+            commit: string | null;
+            /** Connected Agents */
+            connected_agents: number | null;
+            /** Data Dir */
+            data_dir: string;
             /** Executable */
             executable: string;
             /** Features */
@@ -465,6 +473,8 @@ export interface components {
             machine_id: string | null;
             /** Machine Name */
             machine_name: string;
+            /** Pid */
+            pid: number;
             /** Port */
             port: number;
             /**

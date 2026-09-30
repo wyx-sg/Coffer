@@ -9,7 +9,7 @@ Vault sync keeps one vault across several machines by converging each of them wi
 
 ## The problem
 
-You work the same projects from a laptop and a desktop, and both produce vault state: knowledge documents, skills, MCP server registrations, agent configuration, provider profiles, credentials. Without convergence each machine is an island. Exporting from one and importing on the other is a chore nobody does often enough, and it is a wholesale overwrite with no base, so it cannot tell "this machine never had that document" from "this machine deleted it".
+You work the same projects from a laptop and a desktop, and both produce vault state: knowledge documents, skills, MCP server registrations, agent configuration, provider profiles, secrets. Without convergence each machine is an island. Exporting from one and importing on the other is a chore nobody does often enough, and it is a wholesale overwrite with no base, so it cannot tell "this machine never had that document" from "this machine deleted it".
 
 Convergence has to meet four constraints that pull against each other:
 
@@ -43,7 +43,7 @@ The working tree is a plain git repository. Its layout is versioned by `manifest
 ├── memory-triggers/<id>.md          mirrored from ~/.coffer/vault/memory-triggers/ (authored memory triggers)
 ├── resources/<kind>/<uid>.yaml      one document per resource, keyed by its immutable uid
 ├── state/<area>/<doc>.yaml          module-owned shared state
-├── credentials/<ref>.enc            Fernet ciphertext, only if the remote carries credentials
+├── credentials/<ref>.enc            Fernet ciphertext, only if the remote carries secrets
 └── machines/<machine_id>.yaml       one descriptor per machine
 ```
 
@@ -54,7 +54,7 @@ config:
   transport:
     args: []
     command: ${HOME}/.local/bin/jira-mcp
-    credential_refs:
+    secret_refs:
       JIRA_TOKEN: jira-token
     type: stdio
 description: Company Jira
@@ -185,7 +185,7 @@ The raw identifier never leaves the machine. What travels is `sha256("coffer-mac
 
 ### The registry is a view, not a table
 
-Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never another machine's, so descriptors cannot conflict and git merges them trivially. The registry is whatever `machines/*.yaml` holds. A descriptor carries `name`, `os`, `hostname`, `coffer_version`, `last_converged_on`, `last_converged_commit`, `key_fingerprint` (a 12-character SHA-256 prefix of the master key, so another machine can say its credentials will not decrypt here) and the registered `agents`.
+Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never another machine's, so descriptors cannot conflict and git merges them trivially. The registry is whatever `machines/*.yaml` holds. A descriptor carries `name`, `os`, `hostname`, `coffer_version`, `last_converged_on`, `last_converged_commit`, `key_fingerprint` (a 12-character SHA-256 prefix of the master key, so another machine can say its secrets will not decrypt here) and the registered `agents`.
 
 `last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine rm`) is the one deliberate write to another machine's path.
 
@@ -200,20 +200,20 @@ flowchart LR
     D --> MT["memory-triggers/ → TreeApplier"]
     D --> RS["resources/ → ResourceApplier"]
     D --> ST["state/ → StateApplier"]
-    D --> CR["credentials/ → CredentialApplier"]
+    D --> CR["credentials/ → SecretApplier"]
     RS --> SVC["ResourceService + ImportGate"]
     ST --> SP["SyncedStatePort of the area"]
     K --> FS["~/.coffer/knowledge"]
     SK --> FS2["~/.coffer/skills"]
-    CR --> CS["credential store"]
+    CR --> CS["secret store"]
 ```
 
 - **Knowledge and skill files** (`TreeApplier`) are copied in or unlinked; an emptied collection directory is removed too. Symlinks in the working tree are refused. There is no index to rebuild, because [knowledge is plain files](/architecture/knowledge).
-- **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook (a kind whose name is fixed refuses it, and the path is held). Config and description are updated, and, on a kind that carries a title, the title is set from the document's `title` key, or cleared when the document carries none (a document from an older build that still carries a title for an agent, MCP server or skill is accepted and its title ignored); the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases credentials no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
+- **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook (a kind whose name is fixed refuses it, and the path is held). Config and description are updated, and, on a kind that carries a title, the title is set from the document's `title` key, or cleared when the document carries none (a document from an older build that still carries a title for an agent, MCP server or skill is accepted and its title ignored); the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases secrets no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
 - **State documents** (`StateApplier`) are handed to the `SyncedStatePort` that claims the area, with `${HOME}` expanded. Each area defines what deleting its document means: an un-pairing, capabilities re-enabled, engine settings back to defaults, or nothing at all for the plugin inventory. An area this build does not know is skipped rather than failed.
-- **Credential blobs** (`CredentialApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
+- **Secret blobs** (`SecretApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
 
-After the apply, the round lists credential refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band: the desktop app writes a key backup behind a presence check, and `coffer sync key import` installs it on the other machine.
+After the apply, the round lists secret refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and `coffer sync key import` (or Settings › Security) installs it on the other machine, after showing whose key the file holds beside this machine's.
 
 ### Kinds reach sync through ports
 
@@ -234,20 +234,20 @@ The sync package imports no kind. Kinds contribute at the composition root throu
 | Skill folders | `skills/coffer-guide/` and its resource row (derived output) |
 | Resource documents of every converging kind, `channel` included | `memory` partitions (`Kind.converges = False`) and `~/.coffer/memory/` |
 | The four state areas | Conversations, the active conversation pointer, the audit log, MCP invocation records |
-| Credential ciphertext, if the remote opts in | The master key, `coffer.db`, `daemon-config.json`, logs, PID files |
+| Secret ciphertext, if the remote opts in | The master key, `coffer.db`, `daemon-config.json`, logs, PID files |
 | One descriptor per machine | The pointer, retry set, not-applicable set and any held round |
 
 **Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered: the laptop that left a server dark would find it live after the desktop's next round. See [Resource framework](/architecture/resource-framework).
 
 **Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own knowledge and memory root paths. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
 
-**Channels** travel with a `runs_on` field naming the one `machine_id` whose daemon starts the adapter. The document, its credential references and its pairings converge, so taking over a bot on another machine is a rebind rather than a re-registration. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
+**Channels** travel with a `runs_on` field naming the one `machine_id` whose daemon starts the adapter. The document, its secret references and its pairings converge, so taking over a bot on another machine is a rebind rather than a re-registration. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
 
 ## Conflicts
 
 Most concurrent edits are not conflicts: git merges different hunks of one file on its own. What git cannot settle goes to `ConflictArbiter` (`application/sync/conflicts.py`), narrowest rule first:
 
-1. **Credential blobs never reach a text merge.** A Fernet token carries its encryption time in cleartext, so two blobs for one ref are ordered without the key and the fresher one wins. Unreadable headers are refused rather than guessed.
+1. **Secret blobs never reach a text merge.** A Fernet token carries its encryption time in cleartext, so two blobs for one ref are ordered without the key and the fresher one wins. Unreadable headers are refused rather than guessed.
 2. **Delete versus edit in `knowledge/`, `skills/` and `memory-triggers/` resolves toward the edit.** A deletion there is usually a curation pass's housekeeping, which the next pass will redo; losing an edit is unrecoverable. This rule does not apply to `resources/`.
 3. **An agent may attempt the rest** if an internal model is configured. `AgenticConflictResolver` works in the working tree only and never sees the vault. It is bounded (at most 20 files, 96 KiB per file, 90 s per call, 300 s per pass) and untrusted: each file it claims must exist, carry no conflict marker and, under `resources/` or `state/`, parse as a YAML mapping. Agent-resolved paths are reported on the round so you can review them.
 4. **Otherwise the round stops** with status `conflict`. The merge is aborted, the vault is untouched and the pointer stays; you resolve in the working tree with your own git tools. Two machines waiting is better than two machines quietly disagreeing.
@@ -301,7 +301,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 
 `GitMirror` (`infrastructure/sync/git_mirror.py`) shells out to the real `git` binary so the remote stays an ordinary repository. `git_invoke.py` makes each invocation safe:
 
-- The push credential is resolved from the credential store for one call and reaches git through a credential helper given with `-c` that reads `$COFFER_GIT_TOKEN` from the environment. It is never in the remote URL, argv, `.git/config` or any recorded error; failure text is redacted in the adapter and again in the service. A helper is used rather than `GIT_ASKPASS` because macOS's own git ignores the latter.
+- The push secret is resolved from the secret store for one call and reaches git through a credential helper given with `-c` that reads `$COFFER_GIT_TOKEN` from the environment. It is never in the remote URL, argv, `.git/config` or any recorded error; failure text is redacted in the adapter and again in the service. A helper is used rather than `GIT_ASKPASS` because macOS's own git ignores the latter.
 - `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` point at `/dev/null`, and the commit identity is supplied as `Coffer <coffer@localhost>`, so your own git configuration cannot change what a round does. `core.quotepath=false` keeps non-ASCII paths parseable.
 - The remote URL may not start with `-`, the branch must pass `git check-ref-format --branch` rules, and positional arguments sit behind `--`, so no configured value can be read as an option.
 - The working tree may not overlap the knowledge or skills roots, contain `~/.coffer`, or sit elsewhere inside `~/.coffer` than the default. A repository Coffer creates or adopts is marked `coffer.managed` in its local config.
@@ -315,7 +315,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 - **Leave the file trees to your own git and sync only structured state.** If Coffer runs the pull it is convergence anyway; if you run it, the drift stays. It also splits `skill`, whose files and registry row are one thing.
 - **Tombstones, timestamp arbitration and quarantine.** These are what a database projected into files needs. With knowledge and skills as plain files and the rest a few dozen deterministic documents, git's commit graph already records deletions, `git merge` already arbitrates, and a set of held paths replaces quarantine.
 - **Commit `~/.coffer` in place.** It mixes machine-local state with vault truth, and `coffer.db` is binary and unmergeable.
-- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record. Peer-to-peer and object stores have no history or three-way merge. Git suits an audience that already holds git credentials.
+- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record. Peer-to-peer and object stores have no history or three-way merge. Git suits an audience that already holds git secrets.
 - **Manual convergence by default.** A vault that converges only when someone remembers is the island problem with an extra step. The interval is the knob, pausing the remote is the off switch, and `coffer sync now` avoids waiting.
 - **Local export and import.** A bundle written to a directory and read back is a wholesale overwrite with no base. A new machine runs `coffer sync adopt`, an offline medium is a `file://` remote, and handing someone a copy is `git clone ~/.coffer/sync`.
 
@@ -345,5 +345,5 @@ The cost is real: Coffer writes your vault without a human in the loop. That is 
 ## Related
 
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
-- Decision records: [Vault Sync](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Resource Identity Is an Immutable uid](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md), [Envelope-Encrypted Credentials](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- Decision records: [Vault Sync](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Resource Identity Is an Immutable uid](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md), [Envelope-Encrypted Secrets](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
 - [Vault sync guide](/guides/vault-sync) · [Knowledge architecture](/architecture/knowledge) · [Persistence](/architecture/persistence) · [Security model](/architecture/security)

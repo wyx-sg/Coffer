@@ -1,7 +1,7 @@
 """SeaTalk-specific acceptance scenarios that need the real channel core.
 
 Registration scenarios run through the real ``ResourceService`` with the real
-channel kind (config schema + credential probing). The card and thread
+channel kind (config schema + secret probing). The card and thread
 scenarios bind the REAL ``SeaTalkAdapter`` — talking to the in-process
 ``FakeSeaTalk`` Open API — into the real ``InboundProcessor``, so what is
 asserted is the wire traffic SeaTalk would actually receive.

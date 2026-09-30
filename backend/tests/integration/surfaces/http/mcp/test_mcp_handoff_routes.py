@@ -60,7 +60,7 @@ async def ctx(
 
 def _attention(rsvc: ResourceService, health: MCPServerHealthRepo, **kw: Any) -> McpAttentionSource:
     return McpAttentionSource(
-        resources=rsvc, health=health, credentials=_NoSecrets(), handoffs=McpHandoffs(), **kw
+        resources=rsvc, health=health, secrets=_NoSecrets(), handoffs=McpHandoffs(), **kw
     )
 
 

@@ -137,7 +137,7 @@ RESOURCES MUST hold exactly one entry per resource kind that has a list UI —
 today six kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`,
 `channel`), six entries. That correspondence is the rule: **Model providers**
 is filed under Resources rather than Settings, because a `provider` is
-`{protocol, base_url, credential_ref}`, a vendor endpoint and its key, and the
+`{protocol, base_url, secret_ref}`, a vendor endpoint and its key, and the
 model is not stored there but chosen at the point of use; **Channels** is filed
 under Resources rather than Agents, because a channel is a credentialed
 transport the vault owns, not a consumer of the vault.
@@ -414,9 +414,9 @@ The review covers every server's `env` values and, for an HTTP server, the
 values of its `headers` object too, read with the same secret detection as
 `env` rather than ignored (a header and an `env` entry of the same name are one
 header, the `headers` value winning). Secrets MUST
-be lifted into the encrypted credential store with only their refs kept in the
+be lifted into the encrypted secret store with only their refs kept in the
 resource config, and the server MUST be registered before its secrets are
-written, so a failed registration leaves no orphan credential entry.
+written, so a failed registration leaves no orphan secret entry.
 
 The review step MUST show each server's name, taken from its key in the pasted block, as the
 name the server will keep: it cannot be changed after registration
@@ -428,7 +428,7 @@ block.
 #### Scenario: MCP server registration round-trip via JSON import
 - **GIVEN** the user opens the "Add MCP server" dialog from the resources list
 - **WHEN** they paste the standard `mcpServers` JSON and confirm the review step
-- **THEN** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **THEN** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/secrets` (register-first ordering avoids orphan secret entries when registration fails)
 - **AND** on success the dialog closes and (for a single server) the app navigates to the server's detail page `/mcp-servers/<uid>` showing the Overview tab
 - **AND** the new server appears on the resources list with health "unknown" then "healthy" within 10 seconds
 
@@ -440,7 +440,7 @@ block.
 #### Scenario: a pasted HTTP server's headers are reviewed for secrets
 - **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
 - **WHEN** the review step is shown and confirmed
-- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+- **THEN** the header is offered as a secret, its value is written to the secret store, and the registered server keeps only its ref (`secret_refs`), never the value in `headers`
 
 #### Scenario: the import review shows each server's fixed name
 - **GIVEN** the user pastes an `mcpServers` block holding one server keyed with a 12-character name and one keyed with a 30-character name
@@ -457,7 +457,7 @@ parse location, or the failing field — and MUST NOT send a request.
 - **GIVEN** the user opens the "Add MCP server" dialog
 - **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape) and submit
 - **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/secrets`
 - **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 ### Requirement: Scope Activity's calls table to one server on its page
@@ -860,7 +860,11 @@ the tab, keep the last successful check's time, and leave the running version
 untouched. A desktop build made without an updater key MUST say it does not
 check for updates. In a browser, About MUST show the version and say that
 updates are installed by the desktop app, with no update control, because a page
-the daemon serves cannot replace the application.
+the daemon serves cannot replace the application; it MUST instead offer the
+daemon's upgrade hand-off (spec [daemon](../daemon/spec.md) "Hand an upgrade of
+Coffer to an agent") — Copy prompt, and Ask an agent when a managed agent is
+available — and name no install command itself. The desktop shell never asks
+for that hand-off.
 
 #### Scenario: about shows the version and when updates were last checked
 - **GIVEN** the desktop shell running version 1.0.0, last checked at launch, with no newer release
@@ -889,7 +893,7 @@ the daemon serves cannot replace the application.
 - **GIVEN** the web UI opened in a browser
 - **WHEN** the user opens `/settings/about`
 - **THEN** the tab shows the version and says updates are installed by the desktop app
-- **AND** it shows no Check for updates or Download and restart control
+- **AND** it shows no Check for updates or Download and restart control, and offers Copy prompt with the daemon's upgrade hand-off
 
 ### Requirement: Test a server in the Add dialog before adding it
 The Add server dialog's one-server form MUST offer Test, which tests the
@@ -1070,11 +1074,14 @@ While no supported agent is installed on this machine, `GET /api/v1/agents/types
 `install_handoff`, a prompt the daemon writes (see
 [skill-manager](../skill-manager/spec.md) "Hand a required command to an agent with a prompt"
 for the shape every hand-off takes) asking the person's assistant to install one of the
-supported agents the way its maker recommends for this machine, run it once, and then come back
-to Scan again; it MUST name no installer, package manager or command, and it MUST be `null` once
-any supported agent is installed. Overview's first run with no agent found MUST offer that
-prompt through **Copy prompt** only: there is no agent of Coffer's to ask, and the page MUST
-carry no install link of its own.
+supported agents — naming each with its program and settings folder, this machine's OS and
+architecture and the `PATH` Coffer looks programs up on — choosing the install method that fits
+this machine, keeping any settings folder that already exists, confirming the program with
+`--version`, leaving signing in to the person, and then coming back to Scan again; it MUST name
+no installer, package manager or command, and it MUST be `null` once any supported agent is
+installed. Overview's first run with no agent found MUST offer that prompt through **Copy
+prompt** only: there is no agent of Coffer's to ask, and the page MUST carry no install link of
+its own.
 
 #### Scenario: with no agent found the install prompt is built by the daemon
 - **GIVEN** neither supported agent's program is installed on this machine
@@ -1088,3 +1095,78 @@ carry no install link of its own.
 - **WHEN** Overview renders
 - **THEN** beside Scan again it offers Copy prompt with the daemon's install prompt
 - **AND** it offers no Ask an agent and no install link
+
+### Requirement: Hand an agent's missing program to an agent on the agent pages
+Wherever the web UI shows an agent type whose program is not found — its Agents list row and
+the notice under a config-left-behind row, its detail page while it is not added, and the
+Overview tab's problem states (config left behind, not found) — it MUST offer the daemon's
+`install_handoff` prompt for that type (agent-registry "Hand installing an agent's program to an
+agent") through **Copy prompt**, and through **Ask an agent** only while another managed agent
+is available to run the conversation: the missing agent itself cannot. A list row, which has
+room for one action, MUST make Copy prompt its action and put Ask an agent in its ⋯ menu. None
+of these surfaces MUST show an install command or tell the person to restart Coffer. The
+Plugins tab of a Claude Code agent whose program is not found, where Uninstall cannot run, MUST
+say so and offer the same prompt. The Connect review MUST offer the hand-off a `SHIM_NOT_FOUND`
+refusal carries beside Retry (agent-registry "Install Coffer's MCP server into an agent in one
+action").
+
+#### Scenario: an agent whose program is not found offers its install prompt
+- **GIVEN** Codex not installed and no managed agent available
+- **WHEN** the user chooses Copy prompt on the Codex row, then opens the row's ⋯ menu
+- **THEN** the daemon's prompt is copied as given, no install command is shown anywhere
+- **AND** the menu offers no Ask an agent
+
+#### Scenario: ask an agent is offered only while another managed agent is available
+- **GIVEN** Claude Code's config left behind with its program gone, and Codex available as a managed agent
+- **WHEN** the user opens the Claude Code row's ⋯ menu and chooses Ask an agent
+- **THEN** New conversation opens, and nothing is written or sent
+- **AND** with only Claude Code itself managed, the menu offers no Ask an agent
+
+#### Scenario: a connect refused for a missing shim offers the daemon's prompt
+- **GIVEN** a registered agent and a daemon that refuses its Connect with `SHIM_NOT_FOUND` carrying a hand-off
+- **WHEN** the user applies the Connect review
+- **THEN** the review shows the change as failed with copy that names no environment variable or command
+- **AND** Copy prompt beside Retry copies the refusal's prompt as given
+
+### Requirement: Offer an MCP server's hand-off beside Test and View log
+An MCP server's page MUST offer the backend's hand-off (Copy prompt, and Ask an agent when a managed agent
+is available) wherever the server's state is a chore for an agent, passing the prompt on as served and
+never assembling it: the missing-launcher callout offers the status read's `handoff` in place of any install
+command, and the failing callout and a failed test's result offer the diagnosis `handoff` beside View log
+(or Show stderr) while Test stays in the header. The page MUST NOT show a package-manager command or an
+"install it, then refresh" instruction.
+
+#### Scenario: a missing launcher offers the hand-off, not an install command
+- **GIVEN** an MCP server whose status names a missing launcher and carries a `handoff`
+- **WHEN** its page opens
+- **THEN** the launcher callout names the launcher and offers Copy prompt, which copies the served prompt, and shows no `brew install` line
+
+#### Scenario: a failed test offers a diagnosis hand-off beside View log
+- **GIVEN** an MCP server whose test just failed with an error and a `handoff`
+- **WHEN** the result is shown
+- **THEN** the result callout shows the error with View log and Copy prompt beside it, and the header still offers Test
+
+### Requirement: Offer the hand-off a knowledge refusal carries beside it
+When the daemon refuses a knowledge operation with a hand-off in the error's details
+(`details.handoff.prompt`), the Knowledge page MUST offer that prompt (Copy prompt, and Ask an
+agent when a managed agent is available) where it shows the refusal, passing the prompt on as
+served and never assembling it: a refused **Undo this pass** offers the prompt for undoing the
+pass by hand in the note that names the document edited since, which still points at the
+per-document History restore; and a History tab or Recent changes that cannot be read because
+git is not installed offers the prompt for installing it beside Retry. The page MUST NOT show an
+install command.
+
+#### Scenario: a refused pass undo offers the prompt for undoing it by hand
+- **GIVEN** a curation pass whose undo the daemon refuses because a document it wrote was edited since, with a hand-off in the refusal
+- **WHEN** the user undoes the pass from its page
+- **THEN** the note that names the document still points at restoring a single document from its History, and offers Copy prompt, which copies the served prompt
+
+#### Scenario: a history that needs git offers the prompt for installing it
+- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
+- **WHEN** a document's History tab opens
+- **THEN** it says the history could not be read, with Retry and Copy prompt, which copies the served prompt, and names no install command
+
+#### Scenario: recent changes that need git offer the prompt for installing it
+- **GIVEN** a machine with no git, whose history reads are refused with the install hand-off
+- **WHEN** Recent changes opens
+- **THEN** it offers Retry and Copy prompt, which copies the served prompt

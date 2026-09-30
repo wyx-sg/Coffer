@@ -131,7 +131,7 @@ fn a_spawned_daemon_leaves_the_apps_process_group() { /* ... */ }
 `make verify-acceptance` runs two checks. First, `openspec validate --all --strict` fails any requirement without a scenario. Then `scripts/audit_acceptance.py` fails on:
 
 - a scenario with no covering marker
-- a marker naming a capability or scenario that does not exist
+- a marker naming a capability or scenario that does not exist (a scenario that a change in progress adds counts as existing, and is listed, until that change is archived)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 
@@ -196,7 +196,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
 | `mypy` | Type-checks the whole `coffer` package under `backend/pyproject.toml`, which sets `strict = true` |
-| `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the credentials code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
+| `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the secrets code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
 | `scripts/dump_i18n_backend_keys.py --check` | Every backend error code and audit event type has an entry in the fixture that the frontend's locale-coverage test reads, so none ships untranslated |
 | `npm run lint` | `codegen:check` (generated API types match the contracts, and no wire type in the API modules is written by hand), then ESLint |
 | `npm run typecheck` | `tsc` over the frontend |

@@ -29,7 +29,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.daemon import bootstrap, self_restart
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.daemon_schemas import DaemonRestartOut
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
@@ -82,7 +82,7 @@ async def restart_daemon(
     this daemon then keeps serving.
     """
     global _RESTARTING
-    port = bootstrap.planned_port() or daemon_routes.get_port()
+    port = bootstrap.planned_port() or daemon_port.get_port()
     if _RESTARTING:
         return DaemonRestartOut(port=port)
     try:

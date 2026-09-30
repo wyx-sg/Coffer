@@ -79,7 +79,7 @@ const ITEMS = [
     uid: "m-jira",
     title: "jira",
     reason_code: "mcp_missing_secret",
-    reason: "The credential `jira_token` it uses is not stored on this machine.",
+    reason: "The secret `jira_token` it uses is not stored on this machine.",
     severity: "error",
     since: ago(5 * HOUR),
     action: action("set_secret"),
@@ -269,7 +269,7 @@ function install(setup: Setup = {}) {
         };
       case "/knowledge/collections":
         return { collections: [{ uid: "k1", name: "shopee", document_count: 142 }] };
-      case "/credentials":
+      case "/secrets":
         return {
           refs: [
             {

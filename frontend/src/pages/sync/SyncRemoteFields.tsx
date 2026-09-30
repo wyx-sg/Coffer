@@ -1,14 +1,14 @@
 // frontend/src/pages/sync/SyncRemoteFields.tsx
 //
 // The remote's form fields: where it converges, on what branch, how often,
-// which credential-store reference holds the push token, and whether
-// credential ciphertext rides along.
+// which secret-store reference holds the push token, and whether
+// secret ciphertext rides along.
 //
 // Presentational — it owns no state and saves nothing. The card above it keeps
 // the draft, validates it, and persists it behind one Save button; this
 // component only edits the draft and shows the field errors it is handed.
 //
-// There is deliberately no password field: the remote names its credential by
+// There is deliberately no password field: the remote names its secret by
 // reference, so a secret has no reason to exist in this component's tree.
 import { useTranslation } from "react-i18next";
 
@@ -77,30 +77,30 @@ export function SyncRemoteFields({ form, setForm, errors, busy }: Props) {
         </div>
       </div>
 
-      {/* A name in the credential store, never the secret — see the module
+      {/* A name in the secret store, never the secret — see the module
           comment. There is deliberately no password field on this page. */}
       <div className="space-y-2">
-        <Label htmlFor="sync-credential-ref">{t("sync.remote.credentialRef")}</Label>
+        <Label htmlFor="sync-secret-ref">{t("sync.remote.secretRef")}</Label>
         <Input
-          id="sync-credential-ref"
-          value={form.credentialRef}
+          id="sync-secret-ref"
+          value={form.secretRef}
           disabled={busy}
           placeholder="sync.PUSH_TOKEN"
-          onChange={(e) => setForm({ ...form, credentialRef: e.target.value })}
+          onChange={(e) => setForm({ ...form, secretRef: e.target.value })}
         />
-        <p className="text-xs text-muted-foreground">{t("sync.remote.credentialRefHint")}</p>
+        <p className="text-xs text-muted-foreground">{t("sync.remote.secretRefHint")}</p>
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <Label htmlFor="sync-with-credentials">{t("sync.remote.includeCredentials")}</Label>
+        <Label htmlFor="sync-with-secrets">{t("sync.remote.includeSecrets")}</Label>
         <Switch
-          id="sync-with-credentials"
-          checked={form.includeCredentials}
+          id="sync-with-secrets"
+          checked={form.includeSecrets}
           disabled={busy}
-          onCheckedChange={(checked) => setForm({ ...form, includeCredentials: checked })}
+          onCheckedChange={(checked) => setForm({ ...form, includeSecrets: checked })}
         />
       </div>
-      <p className="text-xs text-muted-foreground">{t("sync.remote.includeCredentialsHint")}</p>
+      <p className="text-xs text-muted-foreground">{t("sync.remote.includeSecretsHint")}</p>
     </>
   );
 }

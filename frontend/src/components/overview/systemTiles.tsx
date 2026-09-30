@@ -13,7 +13,7 @@ import { useClis } from "@/lib/hooks/useClis";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { useUsageSummary } from "@/lib/hooks/useUsage";
-import type { CredentialRef } from "@/lib/api/credentials";
+import type { SecretRef } from "@/lib/api/secret";
 import type { UsageSummary } from "@/lib/api/usage";
 import { tileStatus } from "@/lib/overview/health";
 import { allUnpriced, formatCost, formatTokens } from "@/lib/usage/format";
@@ -79,7 +79,7 @@ export function ClisTile({ area, items }: AreaProps) {
 }
 
 /** Missing on this Mac is a problem; a secret nothing references is only worth knowing. */
-function secretsContent(t: TFunction, refs: readonly CredentialRef[]): TileContent {
+function secretsContent(t: TFunction, refs: readonly SecretRef[]): TileContent {
   const missing = refs.filter((r) => !r.present).length;
   const unused = refs.filter((r) => r.unreferenced).length;
   const users = new Set(

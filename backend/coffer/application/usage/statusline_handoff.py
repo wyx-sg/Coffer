@@ -6,7 +6,7 @@ command, which differs per person, in a settings file that is Claude Code's.
 So the edit is handed to the person's agent (``domain/handoff.py``), with the
 file, the wrapper's exact form and how it treats its argument — one argument
 is run as a shell command line, which is what ``statusLine.command`` holds.
-The prompt asks for no credential and no quota endpoint: the wrapper forwards
+The prompt asks for no secret and no quota endpoint: the wrapper forwards
 only the ``rate_limits`` Claude Code already writes to the status line.
 """
 

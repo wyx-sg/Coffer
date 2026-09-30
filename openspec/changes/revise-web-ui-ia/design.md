@@ -190,7 +190,7 @@ and the user had no in-app way to rotate a token or restart outside the offline 
     hook to it, so nothing needs reconnecting by hand. A port the daemon cannot bind is still fixed
     from `coffer config set daemon.port`, which works with no daemon running. *Rejected:* keeping
     the port read-only in the UI, which left a person who never opened a terminal no way to move it.
-  - *The token lives on Settings › Security, with rotation.* It is a credential, so it sits with
+  - *The token lives on Settings › Security, with rotation.* It is a secret, so it sits with
     the master key rather than with the daemon's process settings; Show, Copy and Rotate are there,
     and the Daemon tab has no token row. The route already exists and returns the new token, so the
     page installs it and continues without a reload. The confirmation names the consequence:
@@ -208,7 +208,7 @@ and the user had no in-app way to rotate a token or restart outside the offline 
 
 The desktop shell's sanctioned host-conditional affordances (Restart control, version-skew check)
 are rendered in two places now — offline banner and Daemon tab — and the footer reads the skew
-check's answer. They stay reached through the one credential-supplier module, so the frontend
+check's answer. They stay reached through the one secret-supplier module, so the frontend
 still has no host branch outside it.
 
 ### 6. Command palette scope
@@ -242,12 +242,12 @@ no dot: a sidebar that shows errors on every page is the floating banner the Syn
 `/secrets` lists every secret the store reports, with presence and what uses it (kind and
 current name, each a link), and carries add, replace, reveal and delete. Reveal is an explicit
 action and an audited read; delete is refused while any resource cites the secret, naming the
-citers, as the credential routes already do. The entry to the migration assistant (plaintext
+citers, as the secret routes already do. The entry to the migration assistant (plaintext
 secret files into the store) appears when that assistant ships.
 
 The page is specified at the level of place and parts only. A separate secrets change owns what
 the store enumerates beyond cited references (so that unused secrets can be listed), the
-migration assistant, and any new route; until it lands the page reads `GET /api/v1/credentials`
+migration assistant, and any new route; until it lands the page reads `GET /api/v1/secrets`
 and the existing value, store and delete routes, and "unused" can only be shown once uncited
 secrets are enumerated. *Rejected:* growing Settings › Security into the secrets list (the plan's
 earlier idea), which puts shared data among machine preferences and hides it one level down;
@@ -322,7 +322,7 @@ updates control and, when a newer version exists, Download and restart.
   application, and the terminal tier updates by reinstalling its archive.
 
 The update check is a third sanctioned host affordance, reached through the same
-credential-supplier module as Restart and the skew check and rendered only on About.
+secret-supplier module as Restart and the skew check and rendered only on About.
 
 ### 11. Adding an MCP server
 
@@ -331,7 +331,7 @@ that recognises the forms a README hands out — an `mcpServers` block or one se
 TOML `[mcp_servers.<name>]` tables, a command line (`claude mcp add …`, `codex mcp add …` or a
 plain `npx …`), or a URL — so the user never picks a format before pasting. One server opens the
 manual form prefilled, because a single server is easiest to check field by field; several open
-the existing review step, where secrets move to the credential store, names are normalised and can
+the existing review step, where secrets move to the secret store, names are normalised and can
 be corrected before they become fixed, and reach is chosen. Unreadable input says what it accepts
 and offers the manual type choice rather than a dead end. Import from agents stays a link in the
 same dialog, not a second page action. *Rejected:* a format picker before the paste box, which
@@ -384,7 +384,7 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
     derived class, not its content class; the ADR's Proposed table still lists memory under
     content and follows this at acceptance. There is no search index to list: FTS was dropped
     with the knowledge rewrite. There is no "This Mac only" block.
-  - *Secrets.* The Security tab carries the master-key location and the access token only. Credential management
+  - *Secrets.* The Security tab carries the master-key location and the access token only. Secret management
     lives on the Secrets page (decision 8), whose deeper behaviour arrives with the secrets
     change.
 - **Footer data.** Reuse the status poll behind `DaemonOfflineBanner`; do not add a second timer.

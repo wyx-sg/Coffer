@@ -21,33 +21,33 @@ Three rules shape everything below:
 
 - **A private, empty git repository you own.** GitHub, GitLab, a server of your own, a bare repository on a NAS, or a `file://` path on a USB drive all work. One vault converges with at most one remote.
 - **Credentials git can use without prompting.** Coffer runs `git` with your global and system git configuration switched off and terminal prompts disabled, so a credential helper configured in `~/.gitconfig` or macOS's keychain helper is not consulted. Pick one:
-  - **HTTPS:** a personal access token with push rights, stored in Coffer's credential store and named with `--credential-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process; it never appears in the URL, the command line, the repository's git config or an error message.
+  - **HTTPS:** a personal access token with push rights, stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process; it never appears in the URL, the command line, the repository's git config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt, since no askpass program is available to the daemon.
-  - **`file://`**: no credential.
+  - **`file://`**: no secret.
 - **The same Coffer on every machine.**
 
 ## Set up the first machine
 
-1. Store the push token. `coffer credentials set` reads the secret from stdin, so it stays out of your shell history:
+1. Store the push token. `coffer secret set` reads the secret from stdin, so it stays out of your shell history:
 
    ```sh
-   printf '%s' "$GITHUB_TOKEN" | coffer credentials set sync/github-token
+   printf '%s' "$GITHUB_TOKEN" | coffer secret set sync/github-token
    ```
 
 2. Configure the remote:
 
    ```sh
    coffer sync remote set https://github.com/you/coffer-vault.git \
-     --credential-ref sync/github-token \
-     --with-credentials
+     --secret-ref sync/github-token \
+     --with-secrets
    ```
 
    | Option | Default | Meaning |
    | --- | --- | --- |
    | `--branch` | `main` | The branch every machine converges on. |
    | `--interval` | `3600` | Seconds between automatic rounds, at least `60`. A smaller value is refused here, by the API and by the web form. |
-   | `--with-credentials` / `--without-credentials` | without | Carry credential ciphertext. The master key is never carried under any setting. |
-   | `--credential-ref` | none | Name of the push credential in the credential store. `''` removes it. |
+   | `--with-secrets` / `--without-secrets` | without | Carry secret ciphertext. The master key is never carried under any setting. |
+   | `--secret-ref` | none | Name of the push secret in the secret store. `''` removes it. |
    | `--worktree` | `~/.coffer/sync` | Absolute path of the git working tree. It must not be at, inside or above a vault directory (`knowledge`, `skills`, `memory`), or at or above `~/.coffer`. |
 
    The remote is probed before it is stored, so a typo or a token that cannot push fails here rather than an hour later. Re-running `remote set` changes only the options you pass; everything else keeps its stored value.
@@ -62,12 +62,12 @@ Three rules shape everything below:
 
    `adopt` reports what joining would do and asks before it applies anything. Against an empty remote it publishes everything this vault holds.
 
-In the web UI the same steps are on the **Sync** page, **Setup** tab: fill in **Repository URL**, **Branch**, **Interval (seconds)**, **Push credential** and **Include credentials**, choose **Save remote**, then **Join this remote**.
+In the web UI the same steps are on the **Sync** page, **Setup** tab: fill in **Repository URL**, **Branch**, **Interval (seconds)**, **Push secret** and **Include secrets**, choose **Save remote**, then **Join this remote**.
 
 ## Join another machine
 
 1. Install Coffer.
-2. If the remote needs a token, store it under the same reference, then configure the same remote with `coffer sync remote set`. For a remote that needs no credential and uses the defaults, you can pass the URL straight to `adopt` instead.
+2. If the remote needs a token, store it under the same reference, then configure the same remote with `coffer sync remote set`. For a remote that needs no secret and uses the defaults, you can pass the URL straight to `adopt` instead.
 3. Run `coffer sync adopt` and read the report before you answer:
 
    ```text
@@ -89,19 +89,19 @@ If a returning machine's recorded commit is no longer in the remote's history, `
 
 ## Move the master key
 
-Only needed when the remote carries credentials. On a machine that has the key, open the **desktop app** and back the key up: pick a folder, confirm with Touch ID or your login password, and the app writes `coffer-master-key-<fingerprint>.key` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
+Only needed when the remote carries secrets. On a machine that has the key, open the **desktop app** and back the key up on **Settings › Security**: choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 
 Carry the file over a channel you trust (a password manager, `scp`, a USB stick), never through the sync repository. On the other machine:
 
 ```sh
-coffer sync key import ~/coffer-master-key-<fingerprint>.key
+coffer sync key import ~/coffer-master-key.cfk   # asks for the passphrase
 coffer sync key fingerprint                     # compare with the other machine
-rm ~/coffer-master-key-<fingerprint>.key
+rm ~/coffer-master-key.cfk
 ```
 
-Importing is open to every surface — the file already holds the key — and the **Master key** card on **Setup** offers **Import key** (a file picker) as well. Importing a different key keeps the previous one as a backup beside it.
+Importing is open to every surface — the file and its passphrase already hold the key — and **Import a master key** on **Settings › Security** does it with the two keys' fingerprints side by side before anything is replaced. Importing a different key keeps the previous one as a backup beside it.
 
-Without the key, sync still works, but credentials that arrived are reported as locked on each round (`credential locked: <ref>`), and the resources that need them cannot start until you import the key. The machine table flags a machine whose key differs from this one's.
+Without the key, sync still works, but secrets that arrived are reported as locked on each round (`secret locked: <ref>`), and the resources that need them cannot start until you import the key. The machine table flags a machine whose key differs from this one's.
 
 ## What travels and what stays
 
@@ -111,7 +111,7 @@ Without the key, sync still works, but credentials that arrived are reported as 
 | The master skill store under `~/.coffer/skills/`, and the memory triggers you wrote or armed (`~/.coffer/vault/memory-triggers/`) | **Reach**: each resource's enabled flag and agent scope |
 | Definitions of MCP servers, agents, skills, knowledge collections, providers and channels (one YAML document each, keyed by uid) | The `coffer-guide` skill, which each machine generates from its own build and its own knowledge and memory paths |
 | MCP capability preferences, Coffer's model settings, the agent plugin inventory, channel pairings | Memory (`~/.coffer/memory/` and its partitions), which each machine derives from its own agents |
-| Credential ciphertext, with `--with-credentials` | Conversations, the audit log, MCP invocation records |
+| Secret ciphertext, with `--with-secrets` | Conversations, the audit log, MCP invocation records |
 | One descriptor per machine under `machines/` | The master key |
 
 Some consequences to know:
@@ -173,7 +173,7 @@ git add -A && git commit
 coffer sync now
 ```
 
-The web UI shows the conflicted paths and the working tree as a banner above the runs. Credential ciphertext never conflicts: the more recently encrypted value wins.
+The web UI shows the conflicted paths and the working tree as a banner above the runs. Secret ciphertext never conflicts: the more recently encrypted value wins.
 
 ## When a round is held for deletions
 
@@ -239,9 +239,9 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Status `awaiting_join`, nothing applied | This machine has not joined the remote. | `coffer sync adopt` |
-| Push fails with an authentication error | No usable credential: your git config and keychain helper are not consulted. | Store a token and set `--credential-ref`, or use an SSH key that needs no prompt. |
+| Push fails with an authentication error | No usable credential: your git config and keychain helper are not consulted. | Store a token and set `--secret-ref`, or use an SSH key that needs no prompt. |
 | `remote set` refused for the working tree | The path is relative, or at, inside or above the vault or `~/.coffer`. | Use the default or an absolute path outside `~/.coffer`. |
-| `credential locked: <ref>` on every round | This machine lacks the master key those credentials were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
+| `secret locked: <ref>` on every round | This machine lacks the master key those secrets were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
 | A held round after reinstalling Coffer | The empty vault would publish its loss. | Do not confirm. `coffer sync rebuild` takes the remote's state; `coffer sync reject` discards just this round. |
 | Status `push_failed` | The round applied here but could not reach the remote. | Check the network and the token; the next round retries. |
 | A machine appears twice in the table | Its id was stored locally and `~/.coffer` was deleted. | `coffer sync machine rm <old id>` |
@@ -254,7 +254,7 @@ The seven round steps, the joining algorithm, the deletion guard and the reasons
 
 ## Related
 
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [Channels](/guides/channels)
 - [Knowledge](/guides/knowledge)
 - [CLI reference](/reference/cli)

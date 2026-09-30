@@ -2,7 +2,7 @@
 "Resolve remaining conflicts with an agent only in the working tree").
 
 Implements ``application.sync.ports.ConflictResolverPort``. It is the middle
-layer of three: credential blobs are settled by encryption time before they get
+layer of three: secret blobs are settled by encryption time before they get
 here, and anything this pass does not resolve stops the round so the user's own
 git tools can.
 
@@ -56,7 +56,7 @@ CALL_TIMEOUT_S = 90.0
 PASS_TIMEOUT_S = 300.0
 
 _MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
-_CREDENTIALS = "credentials/"
+_SECRETS = "credentials/"
 
 SYSTEM = (
     "You resolve a git merge conflict in one file of a user's personal vault. "
@@ -90,7 +90,7 @@ class LlmCompletionPort(Protocol):
         system: str,
         user: str,
         model: ResolvedConnection,
-        credential_resolver: Callable[[str], str],
+        secret_resolver: Callable[[str], str],
     ) -> str: ...
 
 
@@ -109,7 +109,7 @@ class AgenticConflictResolver:
         worktree: pathlib.Path,
         completion: LlmCompletionPort,
         models: InternalModelPort,
-        credential_resolver: Callable[[str], str],
+        secret_resolver: Callable[[str], str],
         max_paths: int = MAX_PATHS,
         max_bytes: int = MAX_BYTES,
         call_timeout_s: float = CALL_TIMEOUT_S,
@@ -118,7 +118,7 @@ class AgenticConflictResolver:
         self._worktree = pathlib.Path(worktree)
         self._completion = completion
         self._models = models
-        self._credential_resolver = credential_resolver
+        self._secret_resolver = secret_resolver
         self._max_paths = max_paths
         self._max_bytes = max_bytes
         self._call_timeout = call_timeout_s
@@ -147,7 +147,7 @@ class AgenticConflictResolver:
         model = await self._models.resolve_internal_connection()
         if model is None:
             return []
-        attempts = [p for p in paths if not p.startswith(_CREDENTIALS)][: self._max_paths]
+        attempts = [p for p in paths if not p.startswith(_SECRETS)][: self._max_paths]
         if not attempts:
             return []
         resolved: list[str] = []
@@ -174,7 +174,7 @@ class AgenticConflictResolver:
                     system=SYSTEM,
                     user=f"File: {path}\n\n{original}",
                     model=model,
-                    credential_resolver=self._credential_resolver,
+                    secret_resolver=self._secret_resolver,
                 )
         except (TimeoutError, asyncio.CancelledError):
             raise

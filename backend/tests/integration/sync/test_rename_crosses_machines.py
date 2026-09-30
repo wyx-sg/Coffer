@@ -9,7 +9,7 @@ While a resource's identity was its NAME, the bundle laid documents out at
 ``resources/<kind>/<name>.yaml``, so renaming one on machine A published a
 deletion beside an addition. The receiving machine could not tell that from a
 delete-and-create, and ran the real ``ResourceService.delete``: the row's
-cascade took its kind-owned state with it, and the orphaned-credential release
+cascade took its kind-owned state with it, and the orphaned-secret release
 took the secret nothing else cited. Whether the addition that followed could
 then be applied depended on whether the NEW name sorted before or after the old
 one in the path-ordered apply loop — so the same user action was lossless or
@@ -34,13 +34,13 @@ CRED = "mcp_server/renamed/key"
 
 
 async def _publish_one(tmp_path: pathlib.Path, name: str) -> tuple[VaultMachine, VaultMachine]:
-    """Two machines that already agree on one credential-citing resource."""
+    """Two machines that already agree on one secret-citing resource."""
     a, b = await two_machines(tmp_path, shared_key=True)
-    a.set_credential(CRED, "s3cret")
-    await a.register("mcp_server", name, {"value": "v", "credential_ref": CRED})
+    a.set_secret(CRED, "s3cret")
+    await a.register("mcp_server", name, {"value": "v", "secret_ref": CRED})
     await settle(a, b)
     assert await b.resource_names("mcp_server") == [name]
-    assert b.has_credential(CRED), "precondition: the secret reached the other machine"
+    assert b.has_secret(CRED), "precondition: the secret reached the other machine"
     return a, b
 
 
@@ -61,7 +61,7 @@ async def _rename(machine: VaultMachine, kind: str, name: str, new_name: str) ->
     [
         # The new document sorts AFTER the old one, so the apply loop reaches
         # the deletion FIRST. This is the ordering that used to destroy the
-        # credential and leave the resource unimportable forever.
+        # secret and leave the resource unimportable forever.
         ("aaa", "zzz"),
         # The mirror image, which used to survive by luck alone: the addition
         # landed first, so for one moment two rows cited the same secret and
@@ -80,7 +80,7 @@ async def test_a_rename_travels_as_a_rename(tmp_path: pathlib.Path, before: str,
     await settle(a, b)
 
     assert await b.resource_names("mcp_server") == [after]
-    assert b.has_credential(CRED), "renaming a resource must not delete its secret elsewhere"
+    assert b.has_secret(CRED), "renaming a resource must not delete its secret elsewhere"
     assert await b.uid("mcp_server", after) == uid, "the renamed row must be the same resource"
     # One document, moved through by modification: the tree never held two.
     assert await a.remote_paths() >= {f"resources/mcp_server/{uid}.yaml"}

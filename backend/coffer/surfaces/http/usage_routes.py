@@ -2,7 +2,8 @@
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
 * ``GET /summary`` — the daily rollup summed over a range, grouped by model,
-  agent or day. Costs are estimates and say so.
+  agent or day, optionally narrowed to one agent type and one connection.
+  Costs are estimates and say so.
 * ``GET /requests`` — the per-request detail, newest first, paged by the
   shared opaque cursor (spec resource-framework "Page growing lists by an
   opaque cursor").
@@ -25,6 +26,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.usage.ports import RequestFilters, StoredUsage
 from coffer.application.usage.query import (
     GroupBy,
+    SummaryFilters,
     SummaryRow,
     UsageQueryService,
     UsageTotals,
@@ -33,6 +35,7 @@ from coffer.application.usage.quota import AgentQuotaView, QuotaService
 from coffer.application.usage.statusline_handoff import statusline_handoff
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
+from coffer.domain.usage.quota import CLAUDE_AGENT_TYPE
 from coffer.domain.usage.ranges import InvalidRange
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service_optional
@@ -65,6 +68,8 @@ _RANGE = Query(default="today", alias="range", description="today | 7d | 30d | m
 _FROM = Query(default=None, alias="from", description="First local day (custom range)")
 _TO = Query(default=None, alias="to", description="Last local day, inclusive (custom range)")
 _GROUP = Query(default=GroupBy.MODEL, description="model | agent | day")
+_AGENT = Query(default=None, description="Only requests this agent type sent")
+_CONNECTION = Query(default=None, description="Only requests this connection served")
 
 
 def _bad_range(exc: InvalidRange) -> HTTPException:
@@ -96,6 +101,7 @@ def _row(r: SummaryRow) -> UsageSummaryRowOut:
         agent_uid=r.agent_uid,
         agent_type=r.agent_type,
         day=r.day,
+        agent_types=list(r.agent_types),
         totals=_totals(r.totals),
     )
 
@@ -149,7 +155,7 @@ def quota_out(views: list[AgentQuotaView], claude_config_dir: Path) -> list[Agen
             has_value=_has_value(v),
             handoff=handoff_out(
                 statusline_handoff(claude_config_dir)
-                if v.agent_type == AgentType.CLAUDE_CODE.value and not _has_value(v)
+                if v.agent_type == CLAUDE_AGENT_TYPE and not _has_value(v)
                 else None
             ),
             plan=v.plan,
@@ -178,10 +184,15 @@ async def usage_summary(
     start: date | None = _FROM,
     end: date | None = _TO,
     group_by: GroupBy = _GROUP,
+    agent_type: str | None = _AGENT,
+    connection_uid: str | None = _CONNECTION,
     svc: UsageQueryService = Depends(get_usage_query_service),  # noqa: B008
 ) -> UsageSummaryOut:
+    filters = SummaryFilters(agent_type=agent_type, connection_uid=connection_uid)
     try:
-        summary = await svc.summary(range_name, start=start, end=end, group_by=group_by)
+        summary = await svc.summary(
+            range_name, start=start, end=end, group_by=group_by, filters=filters
+        )
     except InvalidRange as exc:
         raise _bad_range(exc) from exc
     return UsageSummaryOut(
@@ -225,10 +236,13 @@ async def usage_export_csv(
     start: date | None = _FROM,
     end: date | None = _TO,
     group_by: GroupBy = _GROUP,
+    agent_type: str | None = _AGENT,
+    connection_uid: str | None = _CONNECTION,
     svc: UsageQueryService = Depends(get_usage_query_service),  # noqa: B008
 ) -> Response:
+    filters = SummaryFilters(agent_type=agent_type, connection_uid=connection_uid)
     try:
-        body = await svc.csv(range_name, start=start, end=end, group_by=group_by)
+        body = await svc.csv(range_name, start=start, end=end, group_by=group_by, filters=filters)
     except InvalidRange as exc:
         raise _bad_range(exc) from exc
     filename = f"coffer-usage-{range_name}-{GroupBy(group_by).value}.csv"
@@ -242,13 +256,15 @@ async def usage_export_csv(
 async def _claude_config_dir(
     resources: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
 ) -> Path:
-    """The registered Claude Code agent's config dir, else the standard one."""
+    """The config dir of the agent whose statusline the wrapper feeds (the
+    registered one's), else that type's standard one."""
+    statusline_type = AgentType(CLAUDE_AGENT_TYPE)
     if resources is not None:
         for row in await resources.list(kind="agent"):
             cfg = AgentConfig.model_validate(row.config)
-            if cfg.type is AgentType.CLAUDE_CODE:
+            if cfg.type is statusline_type:
                 return cfg.resolved_config_dir()
-    return AgentType.CLAUDE_CODE.config_dir()
+    return statusline_type.config_dir()
 
 
 @router.get("/quota", response_model=QuotaListOut)

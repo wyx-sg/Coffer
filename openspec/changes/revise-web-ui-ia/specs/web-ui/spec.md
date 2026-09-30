@@ -262,10 +262,10 @@ The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
 the environment rather than ignored (a header and an environment entry of the
 same name are one header, the `headers` value winning). The user confirms which
-values are secrets; secrets MUST be lifted into the encrypted credential store
+values are secrets; secrets MUST be lifted into the encrypted secret store
 with only their refs kept in the resource config, and each server MUST be
 registered before its secrets are written, so a failed registration leaves no
-orphan credential entry. The user also chooses the servers' reach there.
+orphan secret entry. The user also chooses the servers' reach there.
 
 The review step MUST show each server's name as the name it will keep: it
 cannot be changed after registration
@@ -279,7 +279,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: MCP server registration round-trip via JSON import
 - **GIVEN** the user opens the Add server dialog from the MCP servers page
 - **WHEN** they paste the standard `mcpServers` JSON holding one server and add it from the prefilled form
-- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/secrets` (register-first ordering avoids orphan secret entries when registration fails)
 - **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<name>` showing the Overview tab
 - **AND** the new server appears on the MCP servers list with health "unknown" then "healthy" within 10 seconds
 
@@ -291,7 +291,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: a pasted HTTP server's headers are reviewed for secrets
 - **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
 - **WHEN** the review step is shown and confirmed
-- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+- **THEN** the header is offered as a secret, its value is written to the secret store, and the registered server keeps only its ref (`secret_refs`), never the value in `headers`
 
 #### Scenario: the import review shows each server's fixed name
 - **GIVEN** the user pastes an `mcpServers` block holding one server keyed `My Server` and one keyed with a 30-character name
@@ -339,7 +339,7 @@ request.
 - **GIVEN** the user opens the Add server dialog
 - **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape)
 - **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/secrets`
 - **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 #### Scenario: unreadable input offers a manual type choice
@@ -424,10 +424,14 @@ Only the visible tab pages through records — Everything through all three
 logs, each other tab through its own — and the count beside every other tab
 MUST come from a read of one row (the audit and invocation answers carry their
 `total`) or of the daemon log's bounded tail, never from paging a tab that is
-not in front. A record whose route fails MUST render its error inside its own
-tab, leaving the other two working — one failing lane must not take the other
-two down with it; on Everything the failing record is named above the stream,
-which shows the other two records, and offers Retry. There MUST be no manual
+not in front. A tab count follows the time window, the server and the status,
+not the who or kind filters, and a tab with nothing in the window — or whose
+log failed — shows no number. A record whose route fails MUST render its error
+inside its own tab, leaving the other two working — one failing lane must not
+take the other two down with it; on Everything the failing record is named
+above the stream with its error and which records are still shown ("Showing
+changes and daemon records only; they are complete."), the stream shows the
+other two records, and the notice offers Retry. There MUST be no manual
 refresh control and no Pause / Resume control: switching tab or changing a
 filter refetches, and new records arrive on their own (see "Stream new Activity
 records while the list is at the top").
@@ -452,7 +456,13 @@ machine only is a setting shown on the tab it belongs to:
 - **History** — the retention of each record kind — changes, MCP calls and
   conversations — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
-  **Clear expired now** action; a saved value survives a reload.
+  **Clear expired now** action and a muted line naming `coffer config` for the
+  other retention settings; a saved value survives a reload. Shortening a
+  window (or turning Keep forever off) MUST ask first, and the confirmation
+  MUST say how many records the shorter window deletes at the next cleanup and
+  how many the table holds now and would hold after, counted by the daemon
+  without deleting anything. A refused save MUST say so above the blocks with
+  **Try again**, name the window still in place, and mark the row "Not saved".
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache
   (`cache/agent/`), which Coffer rebuilds on its own: one **Clear** action,
   behind a confirmation saying that memory is rebuilt from the agents' own
@@ -471,6 +481,12 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
 - **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+
+#### Scenario: shortening a retention window counts what it deletes
+- **GIVEN** MCP calls kept for 30 days, some of them older than 7 days
+- **WHEN** the user sets the MCP calls window to 7 days
+- **THEN** a confirmation asks "Keep MCP calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
+- **AND** nothing is deleted or saved until the user confirms
 
 #### Scenario: clear expired now removes what retention has passed
 - **GIVEN** MCP calls kept for 7 days and calls older than that
@@ -510,8 +526,17 @@ default, merging the changes, the calls and the daemon's warnings and errors
 into one newest-first stream, then one tab per record — **Changes**, **MCP
 calls**, **Daemon log** — each a newest-first table with the columns that
 record actually has: an activity line and who made it; a call's agent, server
-and tool, duration and outcome; a log record's level, logger and message. Each
-tab pages older records on request ("Load older") by the log's cursor.
+and tool, duration and outcome; a log record's level, logger and message. Above
+the rows a line says what the tab holds: on Everything and Changes the first
+day with its errors and warnings in the window ("1 error and 1 warning in the
+last hour"), or else how many records are loaded of how many there are; on MCP
+calls the window with the calls, the failed and the denied calls in it
+("182 calls · 7 failed · 1 denied"), each counted by the invocation route; on
+the Daemon log the file the tail is read from, newest first, and whether the
+list is following it, with **Open log file**. Each tab but the Daemon log pages
+older records on request ("Load older") by the log's cursor; beside the button
+it says how many the next page holds and from before when, and how long MCP
+calls and changes are kept, linking to Settings › Data where that is set.
 
 #### Scenario: activity gives each record its own tab
 - **GIVEN** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
@@ -532,16 +557,49 @@ Every Activity tab MUST filter by free text and time range plus the filters its
 own records afford — Everything: who (an agent, or a person, the command line
 or Coffer itself), server and kind; Changes: who and the kind of resource
 changed; MCP calls: agent, server and status; Daemon log: a severity floor and
-a logger. Selecting any row MUST open it in a detail drawer beside the list —
-a failed call's error, a change's configuration before and after as a diff, a
-daemon record's traceback — ending in its raw underlying record, pretty-printed
+a logger. The time range offers the last 15 minutes, hour, 24 hours and 7 days,
+everything the retention settings keep, and a custom From / To (an empty To is
+now); a tab opens on the last hour, the Daemon log on the last 24 hours, until
+the user picks one. Who and kind choose several values at once, each listed
+with how many loaded records carry it: who lists the agents, then the ones who
+are not an agent — you (the web UI, the desktop app), the command line, Coffer
+itself and sync; kind lists MCP calls, Changes with each kind of change under
+it (a resource kind, or secrets, sync, settings and CLIs for a change that
+names no resource), and daemon records. A record passes when it matches any
+chosen value.
+
+Selecting a row on Everything, Changes or MCP calls MUST open it in a detail
+drawer beside the list, answer first — a failed call's error and how its server
+has been doing (since when it has been failing, and its errors in the last 24
+hours), a change's who and what, then its configuration before and after as a
+diff, a daemon record's message and traceback — then the records written
+within five minutes of it, ending in its raw underlying record, pretty-printed
 in a monospace, scrollable block; the drawer steps to the previous or next
-record without closing.
+record without closing, and its footer holds the next step: open the resource,
+read the daemon log about a failed call's server, or copy the record. A call's
+drawer shows its metadata only, since Coffer stores no call's arguments or
+results. A change whose event the page has no sentence for — a kind of record
+added later — reads through the same facts and diff. On the Daemon log a row
+opens in place under its own line instead, with its traceback, **Copy record**
+(its raw record) and, when the record names a server and tool, **Show the MCP
+call**, which opens the MCP calls tab looking for that call.
 
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
-- **WHEN** the user clicks (or presses Enter/Space on) that row
+- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or MCP calls
 - **THEN** a detail drawer opens beside the list and renders its raw record — the full underlying JSON, pretty-printed in a monospace, scrollable block
+
+#### Scenario: a daemon log row opens in place
+- **GIVEN** the Daemon log tab with an error record carrying a traceback and naming `server=github tool=search_issues`
+- **WHEN** the user selects that row, then chooses Show the MCP call
+- **THEN** the row opens under its own line with the traceback and Copy record, and no drawer opens
+- **AND** Show the MCP call opens the MCP calls tab filtered to `github.search_issues`
+
+#### Scenario: who and kind choose several values
+- **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
+- **WHEN** the user chooses the agent and "You" under Agent, then MCP calls and Changes under Kind
+- **THEN** the list keeps the agent's call and the web UI's change and drops the others, the Kind pill reads "Calls, changes" and its list says "Everything except daemon records"
+- **AND** the tab counts do not change
 
 ### Requirement: Read each Activity tab from its record owner's route
 The Activity page MUST add no route of its own: each tab reads the read-only
@@ -694,7 +752,7 @@ Resources heading, because "resource" is the framework's storage word, not a
 word a user navigates by:
 
 - **Model providers** is filed under Agents, not Capabilities or Settings: a
-  `provider` is `{protocol, base_url, credential_ref}`, the endpoint and key an
+  `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
   agent on that agent's page (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
@@ -720,7 +778,7 @@ CLIs page"), and sits under Capabilities beside Skills.
 Agents are stored as resources of kind `agent` but are the consumers of the
 others, so the Agents entry heads the Agents group and no agent is listed on a
 Capabilities or Context page. **Secrets** is not a resource kind — it is the
-credential store every kind cites into — and sits under System (see "Manage
+secret store every kind cites into — and sits under System (see "Manage
 stored secrets on the Secrets page").
 
 #### Scenario: each listed resource kind has one sidebar entry
@@ -751,8 +809,10 @@ daemon from the web kills the very page it was asked from, and recovery then nee
 a terminal anyway, where `coffer daemon stop` already is. Restarting is not
 stopping — the desktop shell's restart waits for the replacement and hands the
 page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first").
-The About tab MUST show version, license, source, the update check of "Check
-for and install updates on Settings › About" and **Copy diagnostics** only —
+The About tab MUST show the version (with the short commit a release build was
+made from, when stamped), license, source, the data folder, the update check of "Check
+for and install updates on Settings › About" and **Copy diagnostics** only, and no
+release channel —
 which copies the version, release channel, host, daemon state and port, and
 the enabled experimental features as plain text, and never a token or a
 secret — with no language picker (the
@@ -764,7 +824,7 @@ sidebar already switches language) and no installed-resource-kind list
 - **GIVEN** the user opens the Settings tabs
 - **WHEN** each tab is fully rendered
 - **THEN** no tab exposes a "Shutdown daemon" or "Stop daemon" control
-- **AND** the About tab shows version / license / source, the update check and Copy diagnostics only — no language picker, no resource-kind list
+- **AND** the About tab shows version / license / source / data folder, the update check and Copy diagnostics only — no language picker, no resource-kind list, no release channel
 
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
@@ -882,8 +942,9 @@ every surface that can start one still does so without asking.
 The Daemon tab MUST show the daemon's state and carry the controls a user needs
 for it, and nothing that stops it:
 
-- **Status** — state, version, release channel, the port it answers on, when it
-  started and the executable answering, all from the status probe.
+- **Status** — state and the address it answers on, then one line: how long
+  it has been up, its pid and how many agents carry Coffer's connection, all
+  from the status probe. The version is on About and in the shell footer.
 - **Restart** — a Restart control in both hosts: in the desktop shell it runs the
   shell's restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
   in a browser it asks the daemon to restart itself (spec [daemon](../daemon/spec.md) "Restart itself on request"),
@@ -893,7 +954,8 @@ for it, and nothing that stops it:
   answer within 90 seconds is reported beside the control.
 - **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
   a value MUST be a whole number from 1024 to 65535 and a port no other process
-  holds, each refused in place otherwise; saving writes it to the pre-database
+  holds, each refused in place otherwise, with Save disabled until the value is
+  edited; saving writes it to the pre-database
   daemon config and the row then reads **takes effect after restart**, with
   **Restart now** — the same restart as the Restart control, in either host.
   Until the restart, the status keeps showing the port the daemon answers on.
@@ -912,7 +974,7 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab shows the running daemon
 - **GIVEN** a running daemon
 - **WHEN** the user opens `/settings/daemon`
-- **THEN** the status card shows its state, version, channel, port, start time and executable, matching `GET /api/v1/daemon/status`
+- **THEN** the status card shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
 - **AND** the tab carries no stop or shutdown control
 
 #### Scenario: the settings daemon tab offers the host's restart
@@ -1044,7 +1106,7 @@ The Secrets page (`/secrets`, under the sidebar's System group) MUST be the one
 page in the web UI that lists and manages stored secrets. A secret is shared
 infrastructure data — one reference can be cited by MCP servers, model
 providers, channels and skills at once (spec
-[credentials](../credentials/spec.md) "Address a secret by an opaque reference") —
+[secret](../secret/spec.md) "Address a secret by an opaque reference") —
 so it gets a page of its own rather than a section of any one kind's page, and
 it is not a Settings tab, because it holds data the user manages rather than a
 preference. A secret field inside a resource's own dialog stays there: a secret
@@ -1054,23 +1116,23 @@ The page MUST carry:
 
 - **List** — every secret the store reports, by its reference, with whether the
   store holds it, so a reference cited but missing reads as missing (spec
-  [credentials](../credentials/spec.md) "List every cited reference with its presence").
+  [secret](../secret/spec.md) "List every cited reference with its presence").
 - **Used by** — for each secret, what cites it, by kind and current name, each
   opening that thing's page; a secret nothing cites is marked unused.
 - **Add and replace** — store a new secret, or replace the value of one that
   exists, without the value ever being shown back.
 - **Reveal** — show one value behind an explicit action, which is an audited
-  read (spec [credentials](../credentials/spec.md) "Audit every read of a secret value").
+  read (spec [secret](../secret/spec.md) "Audit every read of a secret value").
 - **Delete** — refused while the secret is cited: the control MUST say what still
   uses it, naming each citer as the delete refusal does (spec
-  [credentials](../credentials/spec.md) "Refuse to delete a credential still in use"), and
+  [secret](../secret/spec.md) "Refuse to delete a secret still in use"), and
   the row MUST stay.
 - **Migration assistant** — the entry point that moves plaintext secret files into
   the store, shown once that assistant ships.
 
 This requirement fixes the page's place and its parts. What the store enumerates
 beyond cited references, how each operation behaves, and the migration
-assistant's steps are the credentials capability's, specified with it.
+assistant's steps are the secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
@@ -1088,7 +1150,7 @@ assistant's steps are the credentials capability's, specified with it.
 - **GIVEN** a stored secret listed on the Secrets page
 - **WHEN** the page renders, and then the user chooses Reveal on that row
 - **THEN** no value is shown until Reveal is chosen
-- **AND** the reveal records a `credential_read` audit entry carrying the reference only
+- **AND** the reveal records a `secret_read` audit entry carrying the reference only
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
 A sidebar entry MUST carry a count badge while the kind or tool behind it has

@@ -4,7 +4,7 @@
 Coffer-hosted channels MUST have a unified management surface. A management
 view lists every Coffer-hosted channel with its status, paired owner, agent, and
 health, mirroring the MCP-server / memory / skill management surfaces; each
-channel's credentials (bot tokens, app secrets) are held in the Coffer vault.
+channel's secrets (bot tokens, app secrets) are held in the Coffer vault.
 The Channels page holds each channel's setup, connection status and settings only: it shows no conversation history, and each channel links to the Conversations page filtered to that channel (spec [chat](../chat/spec.md) "Show every conversation on the Conversations page"). Externally-hosted channels are out of scope (a non-goal).
 
 #### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health

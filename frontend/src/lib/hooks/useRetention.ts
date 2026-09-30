@@ -42,6 +42,25 @@ export function useUpdateRetentionPolicy() {
   });
 }
 
+type RetentionPreviewOut = components["schemas"]["RetentionPreviewOut"];
+
+/** How many rows a window of `days` would delete from `tableName`; off while `days` is null. */
+export function useRetentionPreview(tableName: string, days: number | null) {
+  return useQuery({
+    queryKey: [...retentionKey, "preview", tableName, days],
+    enabled: days !== null,
+    queryFn: async (): Promise<RetentionPreviewOut> => {
+      const client = getApiClient();
+      const { data, error } = await client.GET("/retention/policies/{table_name}/preview", {
+        params: { path: { table_name: tableName }, query: { days: days ?? 1 } },
+      });
+      if (error) throwApiError(error, "INTERNAL_ERROR", "retention preview failed");
+      if (!data) throw new ApiError("INTERNAL_ERROR", "empty retention preview");
+      return data;
+    },
+  });
+}
+
 export function usePruneNow() {
   const qc = useQueryClient();
   return useMutation({

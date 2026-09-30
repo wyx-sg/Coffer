@@ -134,7 +134,7 @@ describe("useChannels hooks", () => {
   test("useRebindChannel PATCHes the config with the new binding, keeping the rest", async () => {
     // A rebind is an ordinary config edit — there is no command reaching
     // across to the other machine — so every other field has to survive it.
-    // Dropping a credential ref here would move the channel and break it in
+    // Dropping a secret ref here would move the channel and break it in
     // the same request.
     const api = mockApiClient();
     getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -221,7 +221,7 @@ describe("useCreateChannel", () => {
     expect(api.GET).toHaveBeenCalledWith("/resources", {
       params: { query: { kind: "channel" } },
     });
-    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
+    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets", "/resources"]);
     expect(created).toMatchObject({ uid: TG.uid, name: TG.name });
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith(

@@ -13,8 +13,8 @@
 // restore`, where the user has `git log` on the working tree beside it. Undo
 // (`/rollback`) has none of that trouble: it names no revision.
 //
-// Nothing here ever carries the push credential or the master key into a
-// stored shape: a remote names its credential by REFERENCE, which the daemon
+// Nothing here ever carries the push secret or the master key into a
+// stored shape: a remote names its secret by REFERENCE, which the daemon
 // resolves at push time and nowhere else, so a fully configured remote is safe
 // to render in a browser. No route here returns the master key: a backup is
 // written by the desktop shell after a presence check (`@/lib/tauri`). Import
@@ -70,7 +70,7 @@ export type JoinPreview = Schemas["JoinPreviewOut"];
 /** The one answer an ambiguous join takes. */
 export type JoinChoice = "keep-local";
 
-/** The one remote this vault converges with. `credential_ref` is a NAME. */
+/** The one remote this vault converges with. `secret_ref` is a NAME. */
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
 /** `GET /sync/status` — the remote, its last round, and this machine's id. */

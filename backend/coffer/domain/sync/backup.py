@@ -85,11 +85,11 @@ def validate_url(url: str) -> str:
 class BackupRemote:
     """Where the vault converges, and how often.
 
-    ``credential_ref`` names a secret in the credential store; the secret
+    ``secret_ref`` names a secret in the secret store; the secret
     itself never lives on this object, so a remote can be logged, serialized
     into an API response or rendered in the UI without redaction.
 
-    ``include_credentials`` is fixed here rather than per round: a remote that
+    ``include_secrets`` is fixed here rather than per round: a remote that
     silently changed what it carried between rounds would be worse than either
     answer.
 
@@ -102,8 +102,8 @@ class BackupRemote:
 
     url: str
     branch: str = DEFAULT_BRANCH
-    credential_ref: str | None = None
-    include_credentials: bool = False
+    secret_ref: str | None = None
+    include_secrets: bool = False
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS
     enabled: bool = True
     worktree_path: str = DEFAULT_WORKTREE

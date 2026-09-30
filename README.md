@@ -14,7 +14,7 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 
 - **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and connect any of them to Coffer in one action — which installs its gateway MCP entry and, while memory is on, the memory delivery hook.
-- **Providers** — one shared registry of model-provider connections (base URL, encrypted credential, curated models), so you switch provider once instead of once per agent. Switching points the agent's native config at Coffer's local model proxy on `127.0.0.1:8001` and installs a helper, `coffer proxy token --agent-uid <uid>`, that prints the agent's own local proxy token. The proxy exchanges that token for the connection's key upstream, fails over to another connection serving the same model before the first byte, and meters usage (`coffer usage`, `coffer proxy status`). No provider key is written into an agent's config; credentials stay Fernet ciphertext.
+- **Providers** — one shared registry of model-provider connections (base URL, encrypted secret, curated models), so you switch provider once instead of once per agent. Switching points the agent's native config at Coffer's local model proxy on `127.0.0.1:8001` and installs a helper, `coffer proxy token --agent-uid <uid>`, that prints the agent's own local proxy token. The proxy exchanges that token for the connection's key upstream, fails over to another connection serving the same model before the first byte, and meters usage (`coffer usage`, `coffer proxy status`). No provider key is written into an agent's config; secrets stay Fernet ciphertext.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read the same bytes with their own file tools, find things by walking a generated catalogue and grepping, and add to it through `coffer__write`, with nothing chunked, embedded or reconciled in between. Every collection is served to every agent; a collection cannot be disabled. A curation pass merges new material into coherent documents, on a sweep or on request.
 - **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers it back through one hook at four moments — session start, each prompt, and before and after a shell command — naming the memory root (`coffer path memory`) that an agent greps with its own file tools for whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
@@ -230,7 +230,7 @@ backend/              Python daemon + CLI + shim
   coffer/
     domain/           pure types + business rules (no I/O)
     application/      services + orchestration
-    infrastructure/   DB, MCP transports, encrypted credential store, daemon discovery
+    infrastructure/   DB, MCP transports, encrypted secret store, daemon discovery
     surfaces/         HTTP (FastAPI), CLI (Typer), stdio shim
 frontend/             React + TypeScript + Vite web UI, served by the daemon
 desktop/              Tauri (Rust) macOS shell — Dock icon, menu-bar tray, bundled binaries
@@ -269,7 +269,7 @@ ADRs: [docs/decisions/](docs/decisions/).
 - **Conventional Commits** required — see [.agents/workflow.md](.agents/workflow.md)
 - **[OpenSpec](https://github.com/Fission-AI/OpenSpec)** — every behaviour change starts with an OpenSpec change (`/opsx:propose`) that is archived in the same PR — see [.agents/openspec.md](.agents/openspec.md)
 - **Architecture contracts** — 20 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
-- **Credentials** — secrets are stored only as Fernet ciphertext in the `credentials` table via `coffer.infrastructure.credentials`; plaintext never reaches the DB, logs, or audit
+- **Secrets** — secrets are stored only as Fernet ciphertext in the `secrets` table via `coffer.infrastructure.secret`; plaintext never reaches the DB, logs, or audit
 
 ---
 

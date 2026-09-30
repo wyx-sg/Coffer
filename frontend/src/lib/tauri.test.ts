@@ -148,7 +148,7 @@ describe("connectToShellDaemon", () => {
     await connectToShellDaemon();
 
     // Read back through the ordinary getters: nothing downstream should be
-    // able to tell which host supplied the credentials.
+    // able to tell which host supplied the secrets.
     expect(getCofferBaseUrl()).toBe("http://127.0.0.1:8000/api/v1");
     expect(getCofferToken()).toBe("fresh-token");
   });
@@ -166,7 +166,7 @@ describe("connectToShellDaemon", () => {
     expect(getApiClient()).not.toBe(staleClient);
   });
 
-  test("propagates the IPC failure and leaves the previous credentials alone", async () => {
+  test("propagates the IPC failure and leaves the previous secrets alone", async () => {
     enterTauri();
     invokeMock.mockRejectedValue(new Error("coffer-daemon did not become ready within 90s"));
 
@@ -322,7 +322,7 @@ describe("presence-gated actions", () => {
     for (const run of [
       () => presenceMode(),
       () => revealSecret("mcp_server/abc/TOKEN"),
-      () => exportMasterKeyBackup(),
+      () => exportMasterKeyBackup("correct horse"),
       () => approvePending("apr-1"),
     ]) {
       const attempt = run();
@@ -344,10 +344,12 @@ describe("presence-gated actions", () => {
       secretRef: "mcp_server/abc/TOKEN",
     });
 
-    const backup = { path: "/Users/me/coffer-master.key", fingerprint: "ab12" };
+    const backup = { path: "/Users/me/coffer-master-key.cfk", fingerprint: "ab12" };
     invokeMock.mockResolvedValueOnce(backup);
-    await expect(exportMasterKeyBackup()).resolves.toEqual(backup);
-    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup");
+    await expect(exportMasterKeyBackup("correct horse")).resolves.toEqual(backup);
+    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup", {
+      passphrase: "correct horse",
+    });
 
     invokeMock.mockResolvedValueOnce({ id: "apr-1", status: "approved" });
     await expect(approvePending("apr-1")).resolves.toMatchObject({ status: "approved" });

@@ -239,8 +239,8 @@ def render_http_error(
             422: ExitCode.INVALID_INPUT,
         }.get(status, ExitCode.GENERIC)
 
-        if code_name in ("CREDENTIAL_MISSING", "CREDENTIAL_LOCKED"):
-            exit_code = ExitCode.CREDENTIAL_ISSUE
+        if code_name in ("SECRET_MISSING", "SECRET_LOCKED"):
+            exit_code = ExitCode.SECRET_ISSUE
         if code_name == "SECRET_BINDING_PENDING":
             exit_code = ExitCode.APPROVAL_PENDING
     elif isinstance(err, httpx.TransportError):

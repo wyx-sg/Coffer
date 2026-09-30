@@ -164,6 +164,7 @@ local `make verify` proves nothing about the desktop shell.
 
 - a scenario without a covering marker (missing coverage)
 - a marker referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec or scenario was renamed)
+  — a marker naming a scenario that an in-flight change adds (under `ADDED` / `MODIFIED` in `openspec/changes/<name>/specs/`) is accepted and listed until that change is archived
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 

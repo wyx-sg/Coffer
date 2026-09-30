@@ -19,7 +19,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -78,7 +78,7 @@ def fake_keyring(monkeypatch) -> dict[str, str]:
     """Patch KeyringAdapter class-wide so no test ever touches the OS keychain.
 
     Affects both the adoption service's adapter (secret writes) and the
-    ResourceService's register-time credential probe (secret reads).
+    ResourceService's register-time secret probe (secret reads).
     """
     store: dict[str, str] = {}
     monkeypatch.setattr(KeyringAdapter, "get", lambda self, ref: store.get(ref))
@@ -274,19 +274,19 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         assert r.status_code == 200, r.text
         assert r.json()["name"] == "fetcher"
         transport = r.json()["config"]["transport"]
-        assert transport["credential_refs"] == {"API_TOKEN": ref}
+        assert transport["secret_refs"] == {"API_TOKEN": ref}
         assert SECRET_VALUE not in r.text
 
         # The entry is gone from the agent's own file.
         data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
         assert "fetcher" not in data["mcp_servers"]
 
-        # The secret value landed in the encrypted credential store under the
+        # The secret value landed in the encrypted secret store under the
         # ref. No route returns a value, so it is read from the daemon's own
         # store — never via the keychain.
-        from coffer.surfaces.http.credential_composition import get_credential_store
+        from coffer.surfaces.http.secret_composition import get_secret_store
 
-        assert get_credential_store().get(ref) == SECRET_VALUE
+        assert get_secret_store().get(ref) == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="reject adoption on resource name conflict")
@@ -320,7 +320,7 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="require a credential mapping for secret-like env values"
+    spec="agent-registry", scenario="require a secret mapping for secret-like env values"
 )
 def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59870)

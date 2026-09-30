@@ -32,8 +32,8 @@ vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
-vi.mock("@/lib/api/credentials", () => ({
-  credentialsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
 }));
 
 const { agentsState, engineState, listModels } = vi.hoisted(() => ({
@@ -57,7 +57,7 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 
 const { providersApi } = await import("@/lib/api/providers");
 const { scopeApi } = await import("@/lib/api/scope");
-const { credentialsApi } = await import("@/lib/api/credentials");
+const { secretsApi } = await import("@/lib/api/secret");
 const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const UIDS: Record<string, string> = {
@@ -76,7 +76,7 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
     title: null,
     protocol: "anthropic",
     base_url: "https://gw/anthropic",
-    credential_ref: `provider/${name}/key`,
+    secret_ref: `provider/${name}/key`,
     local_runtime: null,
     compatible_agents: ["claude_code"],
     is_active: false,
@@ -153,7 +153,7 @@ describe("ModelProvidersPage", () => {
       scope: null,
       supports_scope: true,
     });
-    (credentialsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (secretsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
       approvals: [],
     });
   });
@@ -226,7 +226,7 @@ describe("ModelProvidersPage", () => {
     serve([
       makeProvider({ name: "official", models: [{ id: "a" }, { id: "b" }] as ProviderModel[] }),
       makeProvider({ name: "agnes", protocol: "openai" }),
-      makeProvider({ name: "local-llm", protocol: "ollama", credential_ref: null }),
+      makeProvider({ name: "local-llm", protocol: "ollama", secret_ref: null }),
     ]);
     renderAt();
     await screen.findAllByTestId("provider-row");
@@ -351,11 +351,11 @@ describe("ModelProvidersPage", () => {
     expect(dialog.getByText(/Nothing was saved/)).toBeInTheDocument();
   });
 
-  acceptance("provider-switching", "create an ollama connection without a credential", async () => {
+  acceptance("provider-switching", "create an ollama connection without a secret", async () => {
     serve([]);
     api.detectLocal.mockResolvedValue({ found: [] });
     api.create.mockResolvedValue(
-      makeProvider({ name: "local-llm", protocol: "ollama", credential_ref: null }),
+      makeProvider({ name: "local-llm", protocol: "ollama", secret_ref: null }),
     );
     renderAt();
     const dialog = await openAdd();
@@ -376,7 +376,7 @@ describe("ModelProvidersPage", () => {
       base_url: "http://localhost:11434",
     });
     expect(body.secret_value).toBeUndefined();
-    expect(body.credential_ref).toBeUndefined();
+    expect(body.secret_ref).toBeUndefined();
   });
 
   test("a detected runtime is recorded with its tool-capable models and their windows", async () => {

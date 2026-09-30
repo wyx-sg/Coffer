@@ -24,9 +24,7 @@ def _conn(
     model: str = "gpt-4o-mini",
 ):
     return ResolvedConnection(
-        config=ProviderConfig(
-            protocol=protocol, base_url="https://api.example/v1", credential_ref=ref
-        ),
+        config=ProviderConfig(protocol=protocol, base_url="https://api.example/v1", secret_ref=ref),
         model=model,
     )
 
@@ -56,7 +54,7 @@ def test_unknown_protocol_is_tried() -> None:
     assert isinstance(remote_transcriber(_conn(Protocol.UNKNOWN), _resolver()), RemoteTranscriber)
 
 
-def test_an_unresolvable_credential_sends_nothing() -> None:
+def test_an_unresolvable_secret_sends_nothing() -> None:
     """A revoked or missing key must not become an unauthenticated upload."""
 
     def _boom(ref: str) -> str:

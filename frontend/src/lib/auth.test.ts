@@ -75,7 +75,7 @@ describe("setDaemonConnection", () => {
     expect(getCofferToken()).toBe("shell-token");
   });
 
-  it("overwrites credentials from an earlier daemon", () => {
+  it("overwrites secrets from an earlier daemon", () => {
     setDaemonConnection("http://127.0.0.1:8000/api/v1", "launch-token");
     // A restarted daemon mints a fresh token and revokes the old one.
     setDaemonConnection("http://127.0.0.1:8000/api/v1", "fresh-token");

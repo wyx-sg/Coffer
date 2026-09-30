@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { credentialsApi } from "@/lib/api/credentials";
+import { secretsApi } from "@/lib/api/secret";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useSecrets } from "@/lib/hooks/useSecrets";
@@ -29,8 +29,8 @@ interface Props {
 }
 
 function citedRefs(config: unknown): string[] {
-  const refs = (config as { transport?: { credential_refs?: Record<string, string> } } | null)
-    ?.transport?.credential_refs;
+  const refs = (config as { transport?: { secret_refs?: Record<string, string> } } | null)
+    ?.transport?.secret_refs;
   return refs ? Object.values(refs) : [];
 }
 
@@ -91,7 +91,7 @@ export function McpDeleteDialog({
               if (dropSecrets) {
                 // Best-effort: the server is gone either way; a secret that
                 // cannot go stays on the Secrets page.
-                for (const s of onlyMine) void credentialsApi.remove(s.ref).catch(() => undefined);
+                for (const s of onlyMine) void secretsApi.remove(s.ref).catch(() => undefined);
               }
               onOpenChange(false);
               onDeleted();

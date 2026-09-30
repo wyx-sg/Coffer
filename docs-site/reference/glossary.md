@@ -43,7 +43,7 @@ A change that would widen where a secret goes, held until a person answers it in
 app: a secret cited from a new [destination](#destination) or sent to a new
 [target](#target), a replaced value that something already receives, or switching the
 protection off. Approving takes a [presence grant](#presence-grant); rejecting does not, and
-works from any surface (`coffer credentials reject`). A command whose change waits prints
+works from any surface (`coffer secret reject`). A command whose change waits prints
 "waiting for approval in the Coffer app" and exits `9`. See
 [Secrets](/guides/secrets#approvals).
 
@@ -113,7 +113,7 @@ the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-co
 
 ### Connection
 
-A model-provider profile: a wire protocol, a base URL and one credential. Switching a
+A model-provider profile: a wire protocol, a base URL and one secret. Switching a
 connection on for an agent [projects](#projection) it into that agent's config. A connection
 is a [resource](#resource) of kind `provider`. See [Model providers](/guides/providers).
 
@@ -170,7 +170,7 @@ before a known trap. See [Memory](/guides/memory).
 ### Destination
 
 A place Coffer sends a secret's plaintext: an MCP server's environment variable or HTTP
-header, a channel's credential, the sync remote's push token. Each destination has a
+header, a channel's secret, the sync remote's push token. Each destination has a
 [target](#target), the thing that actually receives the value. A secret reaches a new
 destination, or a destination's new target, only after an [approval](#approval). See
 [Security model](/architecture/security#a-secret-goes-somewhere-new-only-with-your-approval).
@@ -237,11 +237,11 @@ machine. [Vault sync](#vault-sync) uses it to tell machines apart, and a channel
 
 ### Master key
 
-The key that decrypts every stored credential. A signed release keeps it in a Keychain item
+The key that decrypts every stored secret. A signed release keeps it in a Keychain item
 only Coffer's signed binaries can read; a development build keeps it in `master.key` beside the
 database (mode `0600`), or in the OS keychain if you move it there. It never syncs. Back it up
 in the desktop app, which writes a key file behind a presence check, and install it on another
-machine with `coffer sync key import`. See [Credentials](/guides/credentials#where-the-master-key-lives).
+machine with `coffer sync key import`. See [Secret store](/guides/secret-store#where-the-master-key-lives).
 
 ### Master store
 
@@ -413,7 +413,7 @@ is a [resource](#resource) of kind `skill`. See [Skills](/guides/skills).
 
 ### Standalone secret
 
-A secret that belongs to no resource, stored as `secret/<name>` (`coffer credentials set
+A secret that belongs to no resource, stored as `secret/<name>` (`coffer secret set
 secret/<name>`) and cited from skills and env files as `coffer://secret/<name>`. Commands use
 it through [`coffer run`](#coffer-run). Its name is fixed once created. See
 [Secrets](/guides/secrets).
@@ -478,7 +478,7 @@ See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/archi
 ### Vault
 
 Everything Coffer holds for you on one machine, under `~/.coffer/`: the database of
-resources and encrypted credentials, the skill master store, knowledge collections and
+resources and encrypted secrets, the skill master store, knowledge collections and
 memory partitions. See [Files and directories](/reference/filesystem).
 
 ### Vault sync

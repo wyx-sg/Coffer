@@ -50,7 +50,7 @@ function conn(name: string, over: Partial<Provider> = {}): Provider {
     name,
     protocol: "anthropic",
     base_url: "https://api.example.com",
-    credential_ref: "ref",
+    secret_ref: "ref",
     is_active: false,
     title: null,
     internal_default: false,

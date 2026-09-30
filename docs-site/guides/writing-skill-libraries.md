@@ -134,7 +134,7 @@ When a key a body needs is absent altogether, the body names the key and the fil
 | `references/` | Method and policy shared by several sub-skills or functions in this domain: a playbook, a schema, safety rules. |
 | `profiles/` | `default.md` and one file per environment (see [Profiles](#profiles)). The only place organisation-specific strings may appear. |
 | `scripts/` | Deterministic checks, each with tests. |
-| `connection.md` | Carriers only: hosts, credential locations, backends. |
+| `connection.md` | Carriers only: hosts, secret locations, backends. |
 
 The test for `sub-skills/` versus `functions/`: would someone ask for this by itself? "Open a review request" and "which service owns this path" are sub-skills. "Run preflight" or "execute case 3" only make sense inside a plan already in hand, so they are functions. A domain can have both; a test-orchestration domain has eight numbered functions and one sub-skill for validating a plan file without running it.
 
@@ -156,14 +156,14 @@ metadata:
 
 - **No virtualenv inside the skill.** A venv contains symlinks that resolve outside the folder, and Coffer refuses to import a folder with any such link. Keep it outside, for example `~/.cache/coffer-skill-venv`, and document the one-line rebuild in `SKILL.md`.
 - **No test caches.** Point pytest's `cache_dir` outside the folder and run with `PYTHONDONTWRITEBYTECODE=1`.
-- **No secrets.** A skill folder travels through vault sync into git, so it never holds a value. Store the secret in Coffer as a standalone secret (`coffer credentials set secret/<name>`) and cite it as `coffer://secret/<name>` — in `connection.md`, or as the value in an env file the skill ships. Commands that need it run under `coffer run`, which sets the value only in that command's environment:
+- **No secrets.** A skill folder travels through vault sync into git, so it never holds a value. Store the secret in Coffer as a standalone secret (`coffer secret set secret/<name>`) and cite it as `coffer://secret/<name>` — in `connection.md`, or as the value in an env file the skill ships. Commands that need it run under `coffer run`, which sets the value only in that command's environment:
 
   ```sh
   coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; `coffer credentials scan` finds them and `coffer credentials import` moves them into the store. See [Secrets](/guides/secrets).
+  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; `coffer secret scan` finds them and `coffer secret import` moves them into the store. See [Secrets](/guides/secrets).
 
 ## Descriptions
 
@@ -322,4 +322,4 @@ When a new domain replaces older single-purpose skills, remove the old ones with
 
 - [Skills](/guides/skills) — the skill format, import, reach, editing and drift
 - [Vault sync](/guides/vault-sync) — how skill folders travel to your other machines
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)

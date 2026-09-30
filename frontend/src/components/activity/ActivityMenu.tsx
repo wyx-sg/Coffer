@@ -51,7 +51,12 @@ export function ActivityMenu({ tab, specs, keep }: Props) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={t("activity.menu.label")}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("activity.menu.label")}
+          title={t("activity.menu.title")}
+        >
           <MoreHorizontal />
         </Button>
       </PopoverTrigger>

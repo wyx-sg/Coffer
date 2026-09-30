@@ -111,7 +111,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     from coffer.surfaces.http.app import create_app
     from coffer.surfaces.http.auth import set_active_token
-    from coffer.surfaces.http.daemon_routes import set_port
+    from coffer.surfaces.http.daemon_port import set_port
 
     app = create_app()
     set_active_token(_TOKEN)

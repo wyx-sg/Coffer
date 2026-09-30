@@ -57,3 +57,19 @@ describe("local days", () => {
     expect(isDay("2026-9-1")).toBe(false);
   });
 });
+
+describe("usage filters in the URL", () => {
+  it("reads and writes the agent and provider filters", () => {
+    const q = readUsageQuery(sp("agent=codex&provider=conn-1"));
+    expect(q).toEqual({
+      range: "7d",
+      group_by: "model",
+      agent_type: "codex",
+      connection_uid: "conn-1",
+    });
+    expect(writeUsageQuery(sp("tab=x"), q).toString()).toBe("tab=x&agent=codex&provider=conn-1");
+    expect(writeUsageQuery(sp("agent=codex"), { range: "7d", group_by: "model" }).toString()).toBe(
+      "",
+    );
+  });
+});

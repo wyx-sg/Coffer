@@ -2,8 +2,10 @@
 
 ### Requirement: Report the state the shell shows
 The daemon's state MUST be visible to the user while starting it stays automatic. Every fact the
-web UI's shell footer and its Settings → Daemon tab show about the daemon — lifecycle phase, bound
-port, start time, version, executable and release channel — MUST come from
+web UI's shell footer, its Settings → Daemon tab and its About tab show about the daemon —
+lifecycle phase, bound port, start time, version, executable, release channel, process id, the
+commit a release build was stamped with, Coffer's data folder and how many agents carry Coffer's
+connection — MUST come from
 `GET /api/v1/daemon/status` (see "Answer the status probe without a token"), so the page can show a
 daemon's state without a token and without a route of its own, and so the footer, the Daemon tab,
 `coffer daemon status` and the desktop shell's version check all read one answer. The one daemon
@@ -16,7 +18,7 @@ needs one").
 #### Scenario: the status probe carries what the shell shows
 - **GIVEN** a running daemon,
 - **WHEN** `GET /api/v1/daemon/status` is called with no token,
-- **THEN** the response carries the phase, port, start time, version, executable and channel the shell footer and Settings → Daemon show,
+- **THEN** the response carries the phase, port, start time, version, executable, channel, pid, commit, data folder and connected-agent count the shell footer, Settings → Daemon and About show,
 - **AND** `coffer daemon status --json` reports the same version, channel and port.
 
 ### Requirement: Report what Coffer stores and clear the rebuildable cache
@@ -128,3 +130,40 @@ would be less honest than recording none.
 - **GIVEN** a daemon configured for 8123 while answering on 8000, and Claude Code and Codex connected to Coffer
 - **WHEN** the daemon is restarted
 - **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry and delivery hook name no port and are left as they are, and the desktop shell, the CLI, an MCP shim and the hook reach the daemon on 8123
+
+### Requirement: Serve the daemon log tail normalised
+`GET /api/v1/daemon/logs` MUST return the tail of that file, newest-first, guarded by the token even
+though `/daemon/status` on the same router is not: a readiness probe is public, log contents are
+not. It MUST accept `since`, a severity floor (`level`), the older `errors_only` boolean, and a
+bounded `limit`, and MUST read from the tail rather than the head so a large file is never pulled
+into memory whole. Every record MUST carry the timestamp, level and logger its line actually
+stated, whichever writer produced it; escape sequences MUST be stripped; continuation lines such as
+a traceback MUST ride with the record that raised them; and a line no format fits MUST be kept whole
+rather than dropped, because it is often the interesting one. The answer MUST also carry `path`,
+the absolute path of the file the tail was read from — also when that file does not exist yet — so
+the Activity page's Daemon log tab can name the file it shows and open it through
+`POST /api/v1/fs/open`.
+
+`coffer log daemon [--since <when>] [--errors] [--limit <n>] [--json]` MUST read the same tail
+through that route — the one the Activity page reads — so a terminal sees the same normalised
+records the page shows: `--since` and `--limit` pass through, `--errors` narrows to errors, the
+table form prints one record per entry with its time, level, logger and message, and `--json`
+prints the records as the route returns them. A refusal from the route MUST be printed with the
+route's error and a non-zero exit.
+
+#### Scenario: the daemon log tail reads every writer's format
+- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a line in the format the daemon wrote before "Write one bounded daemon log in one format" was met, a uvicorn line, a colour-escaped line from an upstream, and a multi-line traceback,
+- **WHEN** `GET /api/v1/daemon/logs` is called with a token,
+- **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
+- **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.
+
+#### Scenario: the daemon log tail names the file it read
+- **GIVEN** a daemon whose log directory holds `daemon.log`, and one whose log directory holds none yet
+- **WHEN** `GET /api/v1/daemon/logs` is called with a token on each
+- **THEN** both answers carry `path`, the absolute path of that directory's `daemon.log`, the second with no records
+
+#### Scenario: the command line reads the daemon log tail
+- **GIVEN** a running daemon whose `daemon.log` holds an info record, an error record carrying a traceback, and a record older than one hour,
+- **WHEN** the user runs `coffer log daemon --json --since 1h`, then `coffer log daemon --errors --limit 1`,
+- **THEN** the first prints, newest-first, the two recent records exactly as `GET /api/v1/daemon/logs` returns them for that window, the older record absent,
+- **AND** the second prints only the error record, with its traceback riding with it.

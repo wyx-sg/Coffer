@@ -10,14 +10,13 @@ from pathlib import Path
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -32,6 +31,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
@@ -69,7 +69,7 @@ async def _setup(tmp_path, server_configs):
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     inv_repo = MCPInvocationRepo(sm)

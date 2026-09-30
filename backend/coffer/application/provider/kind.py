@@ -1,9 +1,9 @@
 """``provider`` Kind wiring for the composition root (spec provider-switching).
 
 A provider profile is a pure-config resource (no on-disk artifact), so it uses
-the generic create/update path. Its only credential is ``credential_ref``,
+the generic create/update path. Its only secret is ``secret_ref``,
 surfaced to ResourceService so a missing key fails before the DB write and so
-deleting a still-cited credential is refused.
+deleting a still-cited secret is refused.
 
 Handed the rows it guards, the kind also refuses a direct write that would flag
 a second internal-engine default (spec provider-switching "Keep at most one
@@ -20,11 +20,11 @@ from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 
 
-def _provider_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+def _provider_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
     """The profile's API-key ref, probed at register/update time."""
-    ref = config.get("credential_ref")
+    ref = config.get("secret_ref")
     if isinstance(ref, str) and ref:
-        return {"credential_ref": ref}
+        return {"secret_ref": ref}
     return {}
 
 
@@ -69,7 +69,7 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         name="provider",
         display_name="Provider",
         config_schema=ProviderConfig,
-        credential_ref_extractor=_provider_credential_ref_extractor,
+        secret_ref_extractor=_provider_secret_ref_extractor,
         # Per-agent scope: a connection's scope names the agents it projects
         # into — the reach this kind used to carry itself, as
         # ``compatible_agents`` inside its config, before the framework grew

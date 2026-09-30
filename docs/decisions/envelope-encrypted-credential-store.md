@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: [principles](../../docs-site/architecture/principles.md) (Credentials), [Credential References](credential-references.md), [Credentials Across Machines](credentials-across-machines.md), [Distribution — PyInstaller](distribution-pyinstaller.md) (unsigned macOS distribution), spec credentials, research note [credentials and secrets](../research/credentials-secrets.md)
+**Related**: [principles](../../docs-site/architecture/principles.md) (Credentials), [Credential References](credential-references.md), [Credentials Across Machines](credentials-across-machines.md), [Distribution — PyInstaller](distribution-pyinstaller.md) (unsigned macOS distribution), spec secret, research note [credentials and secrets](../research/credentials-secrets.md)
 
 ## Context
 
@@ -35,26 +35,26 @@ Secrets live only as Fernet ciphertext in a `credentials` table in
 `~/.coffer/coffer.db` (ref, ciphertext, created and updated times — nothing
 else). One Fernet master key opens them, kept in **exactly one** of two
 places: `~/.coffer/master.key` (`0600`, the default, zero prompts) or the OS
-keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in exactly one place").
+keychain (service `coffer`, opt-in) (spec secret "Keep the master key in exactly one place").
 
 - **File-first resolution; create only for an empty store.** The key file is
   read before the keychain. A new key is generated only while the
   `credentials` table is empty, and never while the keychain cannot be read —
   a fresh file key would shadow a keychain key forever
-  (spec credentials "Resolve the master key file-first and create it only for an empty store").
+  (spec secret "Resolve the master key file-first and create it only for an empty store").
   Ciphertext with no usable key is a fatal `MASTER_KEY_MISSING` naming the
   expected path; a locked keychain at start is `CREDENTIAL_LOCKED`. Coffer
   refuses to start rather than silently lose access.
 - **Relocate the key, never re-encrypt the data.** Moving between file and
   keychain writes and verifies the destination, then removes the source last,
   so an interruption resolves back to a working key
-  (spec credentials "Verify the destination before relocating the master key").
+  (spec secret "Verify the destination before relocating the master key").
   The ciphertext column is untouched. Exposed as
   `GET`/`PUT /api/v1/settings/credentials`,
   `coffer config get|set credentials.storage` and the Settings →
   Security card, audited as `master_key_relocated`.
 - **One owner of key material.** `MasterKeyManager`
-  (`infrastructure/credentials/master_key.py`) is the only code that reads or
+  (`infrastructure/secret/master_key.py`) is the only code that reads or
   writes the key, and `keyring_adapter.py` the only module that imports
   `keyring`. The CLI goes through the daemon for everything, so each machine
   has one reader of the key.
@@ -63,7 +63,7 @@ keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in ex
   register-time probing are synchronous; loop callers use the `aget`/`aset`/…
   facade under `asyncio.to_thread`, since a synchronous call on the loop would
   deadlock against the aiosqlite connection holding the write lock
-  (spec credentials "Keep blocking store calls off the event loop").
+  (spec secret "Keep blocking store calls off the event loop").
 - **Audited lifecycle.** `credential_set`, `credential_read`,
   `credential_deleted`, `credential_migrated` and `master_key_relocated`, each
   carrying the ref and never the value. Since 2026-09-30 no route reads a value
@@ -73,7 +73,7 @@ keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in ex
 - **One-time legacy migration.** At startup, keychain secrets from the earlier
   design that registered resources still cite are encrypted into the store
   (`run_legacy_keychain_migration`); a locked keychain skips and retries on the
-  next start (spec credentials "Migrate legacy keychain secrets once at startup").
+  next start (spec secret "Migrate legacy keychain secrets once at startup").
 
 Pros: zero keychain prompts by default under an unsigned, frequently rebuilt
 binary; at most one prompt per daemon start in keychain mode, for the single
@@ -140,7 +140,7 @@ Lost: relocating only the key is small and crash-safe.
 
 Secrets are stored only as Fernet ciphertext in the `credentials` table; one
 master key, file by default and keychain on opt-in, lives in exactly one place
-and is managed solely by `coffer.infrastructure.credentials`. The key is
+and is managed solely by `coffer.infrastructure.secret`. The key is
 created only for an empty store, never regenerated over existing ciphertext,
 and relocated rather than rotated. The daemon is the only process that holds
 it.
@@ -154,11 +154,11 @@ it.
   `coffer.surfaces` and `coffer.application` from importing it (the domain
   purity contract covers `coffer.domain`), and the acceptance test
   `test_only_the_keyring_adapter_imports_keyring`
-  (`tests/unit/infrastructure/credentials/test_key_location_and_boundaries.py`)
+  (`tests/unit/infrastructure/secret/test_key_location_and_boundaries.py`)
   pins `keyring_adapter.py` as the only importer in the whole tree
-  (spec credentials "Confine key management to the credentials package"). A
+  (spec secret "Confine key management to the secret package"). A
   further contract, "CLI does not access the keychain directly", keeps
-  `coffer.surfaces.cli` away from `coffer.infrastructure.credentials`.
+  `coffer.surfaces.cli` away from `coffer.infrastructure.secret`.
 - Carrying the key to another machine is a separate, out-of-band act — a key
   backup and `coffer sync key import`; the backup has been written only by the
   desktop app, behind a presence check, since 2026-09-30 — owned by

@@ -4,7 +4,7 @@ The Vite dev UI talks to the daemon cross-origin (``localhost:5173`` →
 ``127.0.0.1:8000``). Any non-simple request (JSON body, custom header) triggers
 a CORS preflight; the browser blocks the real request unless the preflight
 allows its method. ``PUT`` was missing from the allowlist, so every ``PUT``
-endpoint (credential settings, agent config files, sync/embedding config, …)
+endpoint (secret settings, agent config files, sync/embedding config, …)
 failed in the browser with "Failed to fetch" even though the server itself was
 healthy.
 """
