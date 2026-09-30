@@ -36,30 +36,50 @@ A hook or gate must stay fast: a slow one trains people to bypass it. That is wh
   hand-edit them. `backend/tests/integration/harness/test_skills.py` pins that
   exactly those six skills are checked in and carry the required frontmatter.
   Read [`openspec.md`](./openspec.md) for the change workflow they drive.
-- Whatever a change adds, a capability is **named, never numbered**:
-  `scripts/check_doc_numbering.py` (run by `make lint`) fails on a spec
-  directory starting with a digit and on any `spec <digits>` token, in any
-  case, so a numbered spec cannot be committed. A requirement is cited by
-  title, and `scripts/check_spec_citations.py` (also `make lint`) fails on a
-  citation whose capability or title does not exist in `openspec/specs/`.
-- `scripts/check_platform_calls.py` (also `make lint`) fails on a
-  `sys.platform` / `platform.system()` / `os.name` check anywhere in
-  `backend/coffer/` outside `infrastructure/platform/` — ask the platform port
-  instead ([Platform port](../docs-site/architecture/platform.md)).
-- `scripts/check_agent_type_branches.py` (also `make lint`) fails on code in
-  `backend/coffer/` that names an `AgentType` member (`AgentType.CODEX`, under
-  any alias) or compares a value with an agent type's literal (`== "codex"`, a
-  `match` case) outside `domain/agent/`, `infrastructure/agent/`, the
-  migrations and the facet implementations the script lists by name — put the
-  value on the descriptor or the mechanism in a facet instead
-  ([Agent facets](../docs-site/architecture/agent-facets.md)). Its own tests
-  are `backend/tests/integration/harness/test_agent_type_gate.py`.
-- `scripts/check_frontend_colors.py` (also `make lint`) fails on a colour
-  literal — a hex value, an `rgb()` / `hsl()` value that does not read a token,
-  or a Tailwind palette class — in `frontend/src/` outside `index.css`, which
-  holds the theme tokens for light and dark
-  ([Design system](../docs-site/architecture/design-system.md)). Its own tests
-  are `backend/tests/integration/harness/test_frontend_colors_gate.py`.
+- Whatever a change adds, a capability is **named, never numbered**, and a
+  requirement is cited by its title — `scripts/check_spec_citations.py` fails
+  a citation whose capability or title does not exist in `openspec/specs/`.
+
+## Gates
+
+`make verify` is the single entry point. It runs `lint`, `verify-unit`,
+`verify-integration`, `verify-contract` and `verify-acceptance` in that order,
+prints how long each stage took, and keeps the times in
+`.coffer-verify.timings`. Each target is one job in
+`.github/workflows/verify.yml` (the header comment there holds the mapping);
+`ci.yml` runs `make verify` whole. The repository gates under `scripts/`, one
+line each:
+
+| Gate                                         | Runs in               | Fails when                                                                                                                  |
+| -------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/check_file_sizes.py`                | `make lint`           | A backend, desktop or frontend file is over its tier's line limit                                                           |
+| `scripts/gen_contracts.py --check`           | `make lint`           | A checked-in `api.openapi.yaml` is not what the Pydantic models produce, or a served route has no owning capability        |
+| `scripts/check_response_models.py`           | `make lint`           | A FastAPI route declares neither `response_model=` nor `response_class=`                                                    |
+| `scripts/check_adr_index.py`                 | `make lint`           | A link inside `docs/decisions/` is dead, or the ADR index does not list exactly the ADRs that exist                         |
+| `scripts/check_spec_citations.py`            | `make lint`           | A `spec <capability> "<Title>"` citation names a capability or requirement title that does not exist                        |
+| `scripts/check_architecture_doc.py`          | `make lint`           | The code-layout tree or the built-in tool roster in `docs-site/architecture/` has drifted from the code                    |
+| `scripts/check_pyinstaller_specs.py`         | `make lint`           | A PyInstaller spec names a missing file or has lost the `-X utf8` runtime option                                            |
+| `scripts/check_cli_reference.py`             | `make lint`           | The generated CLI or REST reference page differs from the code (`make docs-reference` fixes it)                            |
+| `scripts/check_removed_commands.py`          | `make lint`           | A doc, spec, shipped skill, web UI file or e2e spec quotes a removed `coffer` command, option or tool                      |
+| `scripts/check_platform_calls.py`            | `make lint`           | Code outside `infrastructure/platform/` asks which operating system it runs on                                              |
+| `scripts/check_agent_type_branches.py`       | `make lint`           | Code outside the agent descriptor and its facets branches on an agent type (tests: `test_agent_type_gate.py`)              |
+| `scripts/check_frontend_colors.py`           | `make lint`           | A colour literal appears in `frontend/src/` outside `index.css` (tests: `test_frontend_colors_gate.py`)                     |
+| `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
+| `scripts/dump_i18n_backend_keys.py --check`  | `make lint`           | A backend error code or audit event type is missing from the frontend's locale-coverage fixture                             |
+| `scripts/check_unit_purity.py`               | `make verify-unit`    | A test under `backend/tests/unit/` imports an I/O module                                                                    |
+| `scripts/audit_acceptance.py`                | `make verify-acceptance` | A spec scenario has no test marker, or a marker names no scenario                                                        |
+| `scripts/ci_change_scope.py`                 | CI `changes` job      | (Not a gate.) Decides whether a pull request is prose-only, so the test jobs can be skipped                                |
+| `scripts/verify_stamp.py`                    | `make verify`         | (Not a gate.) Records the fingerprint the verify-before-commit hook compares against                                        |
+
+The rest of `scripts/` is build and release tooling, run by a Makefile target
+or `release.yml` and never by `make verify`: `build_binaries.sh`
+(`make bundle-binaries`), `smoke_test_bundle.sh`, `bump_version.py`,
+`stamp_channel.py`, `stamp_build_identity.py`, `release_plan.py`,
+`release_signing.sh`, `make_update_manifest.py`, `refresh_model_prices.py`
+(`make refresh-prices`) and `render_tray_icons.sh` (redraws the desktop tray
+icons from `desktop/icons/tray/tray.svg`).
+
+Each gate's own tests live in `backend/tests/integration/harness/`.
 
 ## How it is tested
 

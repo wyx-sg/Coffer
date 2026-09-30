@@ -8,25 +8,22 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
+# Packaging output. A pattern that names a common folder word is anchored to
+# the directory it is meant for: unanchored, `lib/` or `build/` would hide a
+# source folder of that name at any depth (scripts/check_ignored_sources.py).
+/build/
+/backend/build/
+/develop-eggs/
 dist/
-downloads/
-eggs/
+/downloads/
+/eggs/
 .eggs/
-# `lib/` matches Python build artifacts; the negation below restores
-# the frontend's `src/lib/` source folder which would otherwise be
-# silently ignored (and missed by `git add` — exactly the trap that
-# produced the round-1 "112 typescript-eslint errors in CI for
-# unresolvable @/lib/types imports" failure).
-lib/
-!frontend/src/lib/
-!frontend/src/lib/**
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -71,8 +68,7 @@ dist/
 .parcel-cache/
 
 # Build output
-build/
-out/
+/out/
 .next/
 .nuxt/
 .svelte-kit/
@@ -120,7 +116,7 @@ $RECYCLE.BIN/
 .settings/
 
 # --- Logs ---
-logs/
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -131,9 +127,9 @@ yarn-error.log*
 *.db-journal
 *.db-wal
 *.db-shm
-data/
+/data/
 .coffer/
-local/
+/local/
 
 # --- Secrets / env ---
 .env
@@ -164,8 +160,8 @@ backend/tests/perf/results/*
 
 # --- Misc ---
 .cache/
-tmp/
-temp/
+/tmp/
+/temp/
 
 # --- Per-developer Claude Code state (local-only; not shared across clones) ---
 # settings.local.json is where the CLI writes one machine's permission grants.
@@ -195,13 +191,14 @@ docs/superpowers/
 /FULL-REVIEW-*.md
 
 # PyInstaller build artefacts + the binaries `make bundle-binaries` stages
-build/
-dist/
+# land in the root /build/ (its --workpath) and dist/ (its --distpath) above.
 *.spec.lock
 
 # Opt-in eval-capture sink (ADR eval-capture-and-regression-gate) — a local dev artefact, never committed.
 *eval-capture*.jsonl
 evals/captured/
 
-# verify-before-commit freshness stamp (scripts/verify_stamp.py) — local only.
+# verify-before-commit freshness stamp (scripts/verify_stamp.py) and the
+# per-stage timings `make verify` writes — local only.
 .coffer-verify.stamp
+.coffer-verify.timings

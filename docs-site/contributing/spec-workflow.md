@@ -97,7 +97,7 @@ Because a requirement has no number, you cite it by its capability and its exact
 # spec experimental-features "Stamp every build with a release channel"
 ```
 
-`scripts/check_spec_citations.py` runs in `make lint` and scans every tracked file, including this site. It resolves each citation against the `### Requirement:` headings under `openspec/specs/`. A citation whose capability or title does not exist fails the gate. So renaming a requirement fails until every citation of the old title follows it. A title that an in-flight change adds or renames is accepted until that change is archived. The gate also rejects retired id forms, such as numbered requirement, spec or ADR ids, and `scripts/check_doc_numbering.py` keeps spec directories and ADR filenames free of numbers.
+`scripts/check_spec_citations.py` runs in `make lint` and scans every tracked file, including this site. It resolves each citation against the `### Requirement:` headings under `openspec/specs/`. A citation whose capability or title does not exist fails the gate. So renaming a requirement fails until every citation of the old title follows it. A title that an in-flight change adds or renames is accepted until that change is archived. Capabilities and ADRs are named, never numbered.
 
 ## The change workflow
 
@@ -244,7 +244,7 @@ An ADR states **one** decision and argues every serious option, the chosen one i
 ## Consequences
 ```
 
-The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it so it reads as if written today, with the design it replaced argued as one of its options. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `check_doc_numbering.py` keeps in step with the files. A change to [Principles](/architecture/principles) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
+The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it so it reads as if written today, with the design it replaced argued as one of its options. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `scripts/check_adr_index.py` keeps in step with the files. A change to [Principles](/architecture/principles) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
 
 The site's [decision records](/architecture/decisions) page summarises the current ADRs.
 
