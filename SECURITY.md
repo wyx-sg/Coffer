@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Coffer is pre-v1; **only `main`** is supported. Pinned older versions receive no security backports.
+Only the **latest release** is supported. Fixes land on `main` and ship in the next release; older releases receive no security backports.
 
 ## Threat Model in Brief
 
@@ -20,7 +20,6 @@ What stays exposed, by design:
 - An agent with Accessibility or screen control can click an approval.
 - The signed `coffer` CLI shares the master key's Keychain access group; no CLI path returns the key or plaintext.
 - Agents in bypass modes (`bypassPermissions`, `--yolo`, `danger-full-access`) have no sandbox of their own.
-- Until the local model proxy ships, `coffer provider key` prints a provider key to whoever runs it.
 - **Development builds.** Until Coffer ships Developer-ID-signed binaries, the master key is the file `~/.coffer/master.key`, readable by any same-user process, so a presence grant can be forged and **the boundary does not hold**. It holds only in a signed release.
 
 The full model is in [`docs-site/architecture/security.md`](docs-site/architecture/security.md). A way to read a secret's plaintext or the master key, or to make Coffer send a secret to an unapproved target, without a present human in a signed build is a vulnerability — please report it as below.
@@ -47,4 +46,4 @@ Two private channels:
 - **Triage / first response**: within 7 days.
 - **Fix / disclosure timeline**: agreed case-by-case; typical 30–90 days.
 
-Coffer is single-maintainer pre-v1 — response time is best-effort, not SLA-guaranteed.
+Coffer has a single maintainer, so response time is best-effort, not SLA-guaranteed.
