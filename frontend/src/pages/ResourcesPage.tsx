@@ -1,29 +1,25 @@
 // frontend/src/pages/ResourcesPage.tsx — the MCP servers page (design 4.1; spec web-ui "Lay out every detail page's tabs alike").
 //
-// The list beside the open server, like the Skills page: `/mcp-servers`,
-// `/mcp-servers/<name>` and `/mcp-servers/<name>/<tab>` all render it — the
-// servers grouped by what needs the user on the left (McpServerList), the open
-// server on the right (McpServerPane, loaded on first open), the first-run
-// welcome while nothing is registered, or a prompt to choose one. One header
-// action, Add server. Scoped to `mcp_server` server-side, so no other kind's
-// resources can leak in. (The file keeps its old name — the naming exception in
-// .agents/frontend.md.)
-//
-// Addressing: a server is addressed by its fixed NAME; the REST API takes the
-// uid from the list row the name resolves to. `/mcp-servers/<uid>` and an old
-// `?tab=` redirect to the name address.
+// The list beside the open server, like the Skills page, at `/mcp-servers[/<name>[/<tab>]]`:
+// the servers grouped by what needs the user (McpServerList), the open server
+// (McpServerPane) or Coffer's own built-in one (McpBuiltinPane, name `coffer`),
+// the full-width first-run welcome, or a prompt to choose one. One header
+// action, Add server. Scoped to `mcp_server` server-side. (The file keeps its old
+// name — the naming exception in .agents/frontend.md.) A server is addressed by
+// its fixed NAME; `/mcp-servers/<uid>` and an old `?tab=` redirect to it.
 import { lazy, Suspense, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Server } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
 import { MCP_SERVER_TABS } from "@/components/mcp/mcpServerTabs";
 import { McpFirstRun } from "@/components/mcp/server/McpFirstRun";
-import { McpServerList } from "@/components/mcp/server/McpServerList";
+import { BUILTIN_NAME, McpServerList } from "@/components/mcp/server/McpServerList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
@@ -42,6 +38,10 @@ function PaneSkeleton() {
     </div>
   );
 }
+
+const McpBuiltinPane = lazy(() =>
+  import("@/components/mcp/server/McpBuiltinPane").then((m) => ({ default: m.McpBuiltinPane })),
+);
 
 const McpServerPane = lazy(() =>
   import("@/components/mcp/server/McpServerPane").then((m) => ({ default: m.McpServerPane })),
@@ -89,6 +89,8 @@ export function ResourcesPage() {
   const tabSegment = pathTab && pathTab !== "overview" ? `/${pathTab}` : "";
   const hrefFor = (name: string) => `/mcp-servers/${encodeURIComponent(name)}${tabSegment}`;
 
+  // Nothing registered: the welcome takes the page's whole width, no list (board 4.1.20).
+  const firstRun = !list.error && !list.isPending && servers.length === 0 && !nameParam;
   let pane: JSX.Element;
   if (list.error) {
     pane = (
@@ -117,6 +119,13 @@ export function ResourcesPage() {
         />
       </Suspense>
     );
+  } else if (nameParam === BUILTIN_NAME) {
+    // Coffer's own server is not a resource; its pane reads the daemon's description.
+    pane = (
+      <Suspense fallback={<PaneSkeleton />}>
+        <McpBuiltinPane basePath={basePath} />
+      </Suspense>
+    );
   } else if (nameParam) {
     pane = (
       <EmptyState
@@ -142,12 +151,15 @@ export function ResourcesPage() {
     <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
       <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">
         <PageHeader
-          icon={Server}
           title={t("resources.title")}
           badges={
-            list.data ? <span className="text-sm text-text-muted">{servers.length}</span> : null
+            <>
+              {list.data ? <span className="text-sm text-text-muted">{servers.length}</span> : null}
+              <HelpTip>
+                <p className="text-xs text-text-muted">{t("resources.subtitle")}</p>
+              </HelpTip>
+            </>
           }
-          subtitle={t("resources.subtitle")}
           actions={
             <Button onClick={() => setAdd("paste")}>
               <Plus aria-hidden /> {t("resources.addServer")}
@@ -155,22 +167,27 @@ export function ResourcesPage() {
           }
         />
       </div>
-      <SplitView
-        storageKey="mcp.list"
-        defaultListWidth={320}
-        label={t("splitView.resizeList")}
-        className="min-h-0 flex-1"
-        detailClassName="overflow-y-auto"
-        list={
-          <McpServerList
-            servers={servers}
-            isLoading={list.isPending}
-            selectedName={match?.item.name ?? null}
-            hrefFor={hrefFor}
-          />
-        }
-        detail={<div className="px-7 pb-5 pt-5">{pane}</div>}
-      />
+      {firstRun ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-5">{pane}</div>
+      ) : (
+        <SplitView
+          storageKey="mcp.list"
+          defaultListWidth={320}
+          label={t("splitView.resizeList")}
+          className="min-h-0 flex-1"
+          detailClassName="overflow-y-auto"
+          list={
+            <McpServerList
+              servers={servers}
+              isLoading={list.isPending}
+              selectedName={match?.item.name ?? null}
+              hrefFor={hrefFor}
+              builtinSelected={!match && nameParam === BUILTIN_NAME}
+            />
+          }
+          detail={<div className="px-7 pb-5 pt-5">{pane}</div>}
+        />
+      )}
       <AddMcpServerDialog
         open={add !== null}
         initialMode={add ?? "paste"}

@@ -14,12 +14,6 @@
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 
-/** Whether any agent's copy of `skill` is a copy rather than a link — the
- *  Copied mark in the library and the header. */
-export function hasCopiedDelivery(skill: SkillOut): boolean {
-  return skill.bindings.some((b) => b.link_mode === "copy_fallback");
-}
-
 type DriftKind = SkillDriftEntry["kind"];
 
 type NotDeliveredReason = "skillOff" | "outsideReach" | "agentOff" | "pending";

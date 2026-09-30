@@ -12,10 +12,12 @@ import { scopeApi } from "@/lib/api/scope";
 import { mintCredentialRef } from "@/lib/credentialRef";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
 
-/** One server as the dialog confirmed it: the parsed shape plus the title
- *  the user may have typed (`""` = none). */
+/** One server as the dialog confirmed it: the parsed shape plus the note
+ *  and working directory the form may carry (`""` = none). */
 export interface NewServer extends ParsedServer {
-  title?: string;
+  description?: string;
+  /** stdio only: the folder the command starts in. */
+  cwd?: string;
 }
 
 /** Which agents the new servers reach: every agent (no scope written), the
@@ -34,7 +36,7 @@ interface ServerPlan {
  *  header arrives that way. The dialog asks for them; nothing is sent while
  *  any is empty, so an empty secret never reaches the credential store. */
 export function missingSecretValues(srv: ParsedServer): string[] {
-  return srv.env.filter((e) => e.isSecret && e.value === "").map((e) => e.key);
+  return srv.env.filter((e) => e.isSecret && e.value === "" && !e.ref).map((e) => e.key);
 }
 
 /**
@@ -46,12 +48,15 @@ export function missingSecretValues(srv: ParsedServer): string[] {
  * no `env` field; the parser already gathered an http server's env into
  * `srv.env`).
  */
-function planServer(srv: ParsedServer): ServerPlan {
+function planServer(srv: NewServer): ServerPlan {
   const credentialRefs: Record<string, string> = {};
   const plain: Record<string, string> = {};
   const secrets: { ref: string; value: string }[] = [];
   for (const e of srv.env) {
-    if (e.isSecret) {
+    if (e.isSecret && e.ref) {
+      // A stored secret picked for this row: cite it, write nothing.
+      credentialRefs[e.key] = e.ref;
+    } else if (e.isSecret) {
       const ref = mintCredentialRef("mcp_server", e.key);
       credentialRefs[e.key] = ref;
       secrets.push({ ref, value: e.value });
@@ -67,17 +72,18 @@ function planServer(srv: ParsedServer): ServerPlan {
           args: srv.args,
           env: plain,
           credential_refs: credentialRefs,
+          ...(srv.cwd?.trim() ? { cwd: srv.cwd.trim() } : {}),
         }
       : { type: "http", url: srv.url, headers: plain, credential_refs: credentialRefs };
   return { config: { transport }, secrets };
 }
 
-/** Registers the server (with its title, which the create body accepts) and
+/** Registers the server (with its note, which the create body accepts) and
  *  returns its uid — the handle a rollback and the reach write need. */
 async function registerResource(srv: NewServer, config: Record<string, unknown>): Promise<string> {
-  const title = srv.title?.trim() || null;
+  const description = srv.description?.trim() || null;
   const { data, error } = await getApiClient().POST("/resources", {
-    body: { kind: "mcp_server", name: srv.name, title, config },
+    body: { kind: "mcp_server", name: srv.name, description, config },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
   if (!data) throw new ApiError("INTERNAL_ERROR", "empty register response");

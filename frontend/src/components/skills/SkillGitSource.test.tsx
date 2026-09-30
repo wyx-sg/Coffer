@@ -1,23 +1,25 @@
 // src/components/skills/SkillGitSource.test.tsx
-// The Source block of a Git-imported skill: pinned commit, status, Check now, and the update banner.
+// The Source block of a Git-imported skill: repository, folder, pinned commit,
+// status, Check now and Change source…; the update and unreachable banners
+// above the tabs are SkillBanners' (SkillBanners.test.tsx).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { SkillOut } from "@/lib/api/skills";
+import { acceptance } from "@/test/acceptance";
 import { SkillGitSourcePanel } from "./SkillGitSource";
 import { gitSkill, updatePreview } from "./skillSourceTestData";
 
 vi.mock("@/lib/api/skills", () => ({
   skillsApi: {
     checkSource: vi.fn(),
-    previewUpdate: vi.fn(),
+    changeSource: vi.fn(),
     cancelStage: vi.fn(),
     applyUpdate: vi.fn(),
-    keepMine: vi.fn(),
-    compareUpdate: vi.fn(),
   },
 }));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 const { skillsApi } = await import("@/lib/api/skills");
 const api = vi.mocked(skillsApi);
 
@@ -42,10 +44,23 @@ describe("SkillGitSourcePanel", () => {
   test("shows the repository, folder, pinned commit and ref, and up to date", () => {
     renderPanel(gitSkill());
     expect(screen.getByText("https://github.com/acme/agent-skills")).toBeInTheDocument();
-    expect(screen.getByText("terraform-plan")).toBeInTheDocument();
+    expect(screen.getByText("terraform-plan/")).toBeInTheDocument();
     expect(screen.getByText("a1b2c3d")).toBeInTheDocument();
     expect(screen.getByText("main")).toBeInTheDocument();
     expect(screen.getByText("Up to date")).toBeInTheDocument();
+  });
+
+  test("an update shows its commit, commits and files in the status row", () => {
+    renderPanel(
+      gitSkill({
+        update_available: true,
+        latest_commit: "f9e8d7c6b5a4",
+        commits_ahead: 3,
+        files_changed: 2,
+      }),
+    );
+    expect(screen.getByText("Update available")).toBeInTheDocument();
+    expect(screen.getByText("f9e8d7c")).toBeInTheDocument();
   });
 
   test("says when the source was never checked", () => {
@@ -60,42 +75,32 @@ describe("SkillGitSourcePanel", () => {
     await waitFor(() => expect(api.checkSource).toHaveBeenCalledWith("sk-1"));
   });
 
-  test("an available update shows the banner with its range, and Review opens the preview", async () => {
-    api.previewUpdate.mockResolvedValue(updatePreview());
-    renderPanel(
-      gitSkill({
-        update_available: true,
-        latest_commit: "f9e8d7c6b5a4",
-        commits_ahead: 3,
-        files_changed: 2,
-      }),
-    );
-    expect(
-      screen.getByText("An update is available from github.com/acme/agent-skills"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/main moved 3 commits past the pinned a1b2c3d/)).toBeInTheDocument();
-    expect(screen.getByText("Update available")).toBeInTheDocument();
-    expect(screen.getByText("f9e8d7c")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Review update…" }));
-    await waitFor(() => expect(api.previewUpdate).toHaveBeenCalledWith("sk-1"));
-    expect(
-      await screen.findByRole("dialog", { name: "Update terraform-plan" }),
-    ).toBeInTheDocument();
-  });
-
-  test("an unreachable source shows git's message and the last successful check", () => {
-    renderPanel(
-      gitSkill({
-        error: "fatal: repository not found",
-        checked_at: "2026-09-30T09:12:00Z",
-        last_success_at: "2026-09-29T08:00:00Z",
-      }),
-    );
-    expect(screen.getByText("Can't reach github.com/acme/agent-skills")).toBeInTheDocument();
-    expect(screen.getByText("fatal: repository not found")).toBeInTheDocument();
-    expect(screen.getByText(/^Last successful check: /)).toBeInTheDocument();
-    expect(screen.getByText(/^Source unreachable since /)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
-  });
+  acceptance(
+    "web-ui",
+    "changing a skill's source shows the change before anything is replaced",
+    async () => {
+      api.changeSource.mockResolvedValue(updatePreview());
+      renderPanel(gitSkill());
+      fireEvent.click(screen.getByRole("button", { name: "Change source…" }));
+      const dialog = await screen.findByRole("dialog", {
+        name: "Change source of terraform-plan",
+      });
+      expect(dialog).toHaveTextContent("Nothing is replaced yet");
+      const url = screen.getByLabelText(/Repository URL/);
+      expect(url).toHaveValue("https://github.com/acme/agent-skills");
+      fireEvent.change(url, { target: { value: "https://github.com/platform-team/skills" } });
+      fireEvent.click(screen.getByRole("button", { name: "Check source" }));
+      await waitFor(() =>
+        expect(api.changeSource).toHaveBeenCalledWith("sk-1", {
+          url: "https://github.com/platform-team/skills",
+          ref: "main",
+          path: "terraform-plan",
+        }),
+      );
+      expect(await screen.findByRole("button", { name: /^Change to / })).toBeInTheDocument();
+      expect(api.applyUpdate).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(api.cancelStage).toHaveBeenCalled());
+    },
+  );
 });

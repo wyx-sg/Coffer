@@ -1,6 +1,8 @@
-// src/components/custom-tools/ImportSpecStep.tsx — Import step 1 of 2: the group, the spec, and what the spec prefills.
+// src/components/custom-tools/ImportSpecStep.tsx — Import step 1 of 2: the new group's name, the spec, the
+// operations to turn into tools, and the auth, secret and reach the spec prefills.
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -13,7 +15,11 @@ import { defaultPicks, type GroupDraft, type ImportDraft } from "./addFlow";
 import { AuthFields } from "./AuthFields";
 import { DraftReachField } from "./DraftReachField";
 import { FormField } from "./FormField";
+import { OperationPicker } from "./OperationPicker";
 import { SpecField } from "./SpecField";
+import { TryOperation } from "./TryOperation";
+import { useGroupNameError } from "./useGroupNameError";
+import { WaySummary } from "./WaySummary";
 
 interface Props {
   group: GroupDraft;
@@ -21,16 +27,18 @@ interface Props {
   spec: ImportDraft;
   onSpec: (spec: ImportDraft) => void;
   taken: string[];
+  onChangeWay: () => void;
   onCancel: () => void;
   onNext: () => void;
 }
 
-export function ImportSpecStep({ group, onGroup, spec, onSpec, taken, onCancel, onNext }: Props) {
+export function ImportSpecStep(props: Props) {
+  const { group, onGroup, spec, onSpec } = props;
   const { t } = useTranslation();
   const id = useId();
   const read = useReadOpenApi();
   const [tooLarge, setTooLarge] = useState(false);
-  const [fromSpec, setFromSpec] = useState(false);
+  const [trying, setTrying] = useState(false);
 
   const loaded = (reading: OpenApiReading, patch: Partial<ImportDraft>) => {
     onSpec({ ...spec, ...patch, reading, picked: defaultPicks(reading) });
@@ -41,7 +49,6 @@ export function ImportSpecStep({ group, onGroup, spec, onSpec, taken, onCancel, 
         ? { ...group.auth, header: reading.auth_header, prefix: reading.auth_prefix.trim() }
         : group.auth,
     });
-    setFromSpec(Boolean(reading.auth_header));
   };
   const loadUrl = () => {
     setTooLarge(false);
@@ -56,24 +63,25 @@ export function ImportSpecStep({ group, onGroup, spec, onSpec, taken, onCancel, 
     );
   };
 
-  const nameTaken = taken.includes(group.name);
-  const nameError =
-    group.name && !isGroupName(group.name)
-      ? t("customTools.add.nameInvalid")
-      : nameTaken
-        ? t("customTools.add.nameTaken")
-        : undefined;
-  const ready = isGroupName(group.name) && !nameTaken && spec.reading !== null && !read.isPending;
+  const nameError = useGroupNameError(group.name, props.taken);
+  const reading = read.isPending ? null : spec.reading;
+  const ready =
+    isGroupName(group.name) && !nameError && reading !== null && group.baseUrl.trim() !== "";
   const specError = tooLarge ? new Error(t("customTools.import.tooLarge")) : read.error;
 
   return (
     <>
       <div className="flex flex-col gap-4">
+        <WaySummary
+          way="import"
+          sub={t("customTools.add.importSummary")}
+          onChange={props.onChangeWay}
+        />
         <FormField
           label={t("customTools.fields.groupName")}
           htmlFor={`${id}-name`}
           required
-          help={t("customTools.fields.groupNameHelp", {
+          help={t("customTools.import.groupNameHelp", {
             prefix: agentPrefix(group.name || "name"),
           })}
           error={nameError}
@@ -99,39 +107,67 @@ export function ImportSpecStep({ group, onGroup, spec, onSpec, taken, onCancel, 
           reading={spec.reading}
           error={specError}
         />
-        <FormField
-          label={t("customTools.fields.baseUrl")}
-          htmlFor={`${id}-base`}
-          help={t("customTools.fields.baseUrlHelp")}
-        >
-          <Input
-            id={`${id}-base`}
-            className="font-mono"
-            value={group.baseUrl}
-            onChange={(e) => onGroup({ ...group, baseUrl: e.target.value })}
-          />
-        </FormField>
-        <AuthFields
-          value={group.auth}
-          onChange={(auth) => onGroup({ ...group, auth })}
-          headerHelp={fromSpec ? t("customTools.import.authFromSpec") : undefined}
-        />
-        <FormField label={t("customTools.fields.availableTo")}>
-          <DraftReachField
-            value={group.agents}
-            onChange={(agents) => onGroup({ ...group, agents })}
-            defaultLabel={t("scope.everywhere")}
-            defaultSub={t("scope.everywhereSub")}
-          />
-        </FormField>
+        {reading ? (
+          <>
+            <OperationPicker
+              reading={reading}
+              picked={spec.picked}
+              onPicked={(picked) => onSpec({ ...spec, picked })}
+            />
+            {reading.base_url ? null : (
+              <FormField
+                label={t("customTools.fields.baseUrl")}
+                htmlFor={`${id}-base`}
+                required
+                help={t("customTools.import.baseUrlMissing")}
+              >
+                <Input
+                  id={`${id}-base`}
+                  className="font-mono"
+                  placeholder="https://"
+                  value={group.baseUrl}
+                  onChange={(e) => onGroup({ ...group, baseUrl: e.target.value })}
+                />
+              </FormField>
+            )}
+            <AuthFields
+              schemes
+              value={group.auth}
+              onChange={(auth) => onGroup({ ...group, auth })}
+              headerHelp={reading.auth_header ? t("customTools.import.authFromSpec") : undefined}
+            />
+            <FormField
+              label={t("customTools.fields.availableTo")}
+              help={t("customTools.import.availableToHelp")}
+            >
+              <DraftReachField
+                value={group.agents}
+                onChange={(agents) => onGroup({ ...group, agents })}
+              />
+            </FormField>
+            {trying ? <TryOperation reading={reading} group={group} picked={spec.picked} /> : null}
+          </>
+        ) : null}
       </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={onCancel}>
-          {t("common.cancel")}
-        </Button>
-        <Button disabled={!ready || group.baseUrl.trim() === ""} onClick={onNext}>
-          {t("customTools.import.review")}
-        </Button>
+      <DialogFooter className="sm:justify-between">
+        {reading ? (
+          <Button variant="outline" onClick={() => setTrying((v) => !v)}>
+            <Play aria-hidden />
+            {t("customTools.import.try")}
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={props.onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button disabled={!ready || spec.picked.length === 0} onClick={props.onNext}>
+            {reading
+              ? t("customTools.import.reviewCount", { count: spec.picked.length })
+              : t("customTools.import.review")}
+          </Button>
+        </div>
       </DialogFooter>
     </>
   );

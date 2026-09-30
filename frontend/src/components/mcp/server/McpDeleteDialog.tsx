@@ -14,6 +14,7 @@ import { credentialsApi } from "@/lib/api/credentials";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useSecrets } from "@/lib/hooks/useSecrets";
+import { secretLabel } from "./serverState";
 
 interface Props {
   resource: ResourceOut;
@@ -21,6 +22,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** The agents that lose its tools, already worded. */
   agentNames: string;
+  /** How many agents those are (the sentence reads "Both agents…" for two). */
+  agentCount: number;
   toolCount: number;
   onDeleted: () => void;
 }
@@ -36,6 +39,7 @@ export function McpDeleteDialog({
   open,
   onOpenChange,
   agentNames,
+  agentCount,
   toolCount,
   onDeleted,
 }: Props) {
@@ -59,7 +63,21 @@ export function McpDeleteDialog({
       title={t("mcp.page.delete.title", { name: resource.name })}
       description={
         agentNames
-          ? t("mcp.page.delete.body", { agents: agentNames, count: toolCount })
+          ? t(
+              agentCount === 1
+                ? "mcp.page.delete.bodyOne"
+                : agentCount === 2
+                  ? "mcp.page.delete.bodyBoth"
+                  : "mcp.page.delete.bodyMany",
+              {
+                agents: agentNames,
+                agentCount,
+                tools:
+                  toolCount > 0
+                    ? t("mcp.page.itsTools", { count: toolCount })
+                    : t("mcp.page.itsToolsAny"),
+              },
+            )
           : t("mcp.page.delete.bodyNoAgents")
       }
       confirmLabel={del.isPending ? t("common.deleting") : t("mcp.page.delete.confirm")}
@@ -87,10 +105,10 @@ export function McpDeleteDialog({
           <Checkbox checked={dropSecrets} onChange={(e) => setDropSecrets(e.target.checked)} />
           <span className="flex flex-col">
             <span>
-              {t("mcp.page.delete.alsoSecrets", {
-                count: onlyMine.length,
-                names: onlyMine.map((s) => s.ref).join(", "),
-              })}
+              {t("mcp.page.delete.alsoSecrets", { count: onlyMine.length })}{" "}
+              <span className="font-mono">
+                {onlyMine.map((s) => secretLabel(s.ref)).join(", ")}
+              </span>
             </span>
             <span className="text-xs text-text-muted">{t("mcp.page.delete.noOtherUser")}</span>
           </span>

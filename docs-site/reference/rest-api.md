@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 240 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 251 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -116,12 +116,12 @@ The daemon mounts 240 operations in 26 groups. Groups follow the order the daemo
 | [settings](#settings) | 4 |
 | [sync](#sync) | 18 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 36 |
+| [agents](#agents) | 38 |
 | [fs](#fs) | 5 |
-| [skills](#skills) | 19 |
+| [skills](#skills) | 25 |
 | [clis](#clis) | 6 |
-| [mcp](#mcp) | 13 |
-| [custom-tools](#custom-tools) | 13 |
+| [mcp](#mcp) | 15 |
+| [custom-tools](#custom-tools) | 14 |
 | [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 16 |
 | [agent-providers](#agent-providers) | 2 |
@@ -269,6 +269,8 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `POST` | `/api/v1/agents/mcp-import/plan` | What importing the chosen entries would do; writes nothing. |
+| `POST` | `/api/v1/agents/mcp-import/apply` | Perform the plan as it stands now; each entry reports its outcome. |
 | `GET` | `/api/v1/agents` | List Agents |
 | `POST` | `/api/v1/agents` | Register the one agent of ``type``, named by it. |
 | `GET` | `/api/v1/agents/types` | Every supported type with its detection state, registered or not (read-only), so a surface can always show one row per type. |
@@ -320,6 +322,11 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `GET` | `/api/v1/skills/orphans` | List Orphans |
+| `POST` | `/api/v1/skills/orphans/{name}/adopt` | Adopt Orphan |
+| `DELETE` | `/api/v1/skills/orphans/{name}` | Remove Orphan |
+| `GET` | `/api/v1/skills/{uid}/copies/{agent_uid}` | Compare Copy |
+| `POST` | `/api/v1/skills/{uid}/copies/{agent_uid}/resolve` | Resolve Copy |
 | `GET` | `/api/v1/skills` | List Skills |
 | `POST` | `/api/v1/skills/import` | Import Skill |
 | `GET` | `/api/v1/skills/{uid}` | Get Skill |
@@ -333,6 +340,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `DELETE` | `/api/v1/skills/stage/{staging_id}` | Cancel Stage |
 | `POST` | `/api/v1/skills/{uid}/source/check` | Check Source |
 | `POST` | `/api/v1/skills/{uid}/source/preview` | Preview Update |
+| `POST` | `/api/v1/skills/{uid}/source/change` | Stage a new repository / ref / folder for this skill and show the change against its current folder; ``/source/apply`` with the stage takes it. |
 | `GET` | `/api/v1/skills/{uid}/source/compare` | Compare Update |
 | `POST` | `/api/v1/skills/{uid}/source/apply` | Apply Update |
 | `POST` | `/api/v1/skills/{uid}/source/keep` | Keep Mine |
@@ -363,6 +371,8 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `POST` | `/api/v1/resources/mcp_server/{uid}/capabilities/{capability_type}/disable` | Disable a specific capability for the MCP server this uid names. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/refresh` | Invalidate the discovery cache for this server and re-query upstream. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/test` | Open a transient upstream session, run MCP initialize, return health info. |
+| `POST` | `/api/v1/resources/mcp_server/test-config` | Test a config without registering it; persists nothing. |
+| `GET` | `/api/v1/mcp/builtin` | The ``coffer`` server: endpoint, tools, reach and the last 24 hours. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations` | Query invocation records for this server with optional filters. |
 | `GET` | `/api/v1/mcp/invocations` | Every server's invocations on one timeline, newest-first. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations/summary` | This server's calls since ``since``: totals, per calling agent, per tool. |
@@ -376,6 +386,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `GET` | `/api/v1/custom-tools` | List Groups |
 | `POST` | `/api/v1/custom-tools` | Create Group |
 | `POST` | `/api/v1/custom-tools/openapi` | Read a document into draft tools; saves nothing. |
+| `POST` | `/api/v1/custom-tools/test` | Run a request of a group not saved yet: no secret, SSRF-guarded, nothing kept. |
 | `GET` | `/api/v1/custom-tools/{name}` | Get Group |
 | `PATCH` | `/api/v1/custom-tools/{name}` | Update Group |
 | `DELETE` | `/api/v1/custom-tools/{name}` | Delete Group |

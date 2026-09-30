@@ -689,6 +689,132 @@ paths:
       summary: Import Skill
       tags:
       - skills
+  /api/v1/skills/orphans:
+    get:
+      operationId: list_orphans_api_v1_skills_orphans_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOrphanListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Orphans
+      tags:
+      - skills
+  /api/v1/skills/orphans/{name}:
+    delete:
+      operationId: remove_orphan_api_v1_skills_orphans__name__delete
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Remove Orphan
+      tags:
+      - skills
+  /api/v1/skills/orphans/{name}/adopt:
+    post:
+      operationId: adopt_orphan_api_v1_skills_orphans__name__adopt_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Adopt Orphan
+      tags:
+      - skills
   /api/v1/skills/repair:
     post:
       operationId: repair_skills_api_v1_skills_repair_post
@@ -1058,6 +1184,112 @@ paths:
       summary: Get Skill
       tags:
       - skills
+  /api/v1/skills/{uid}/copies/{agent_uid}:
+    get:
+      operationId: compare_copy_api_v1_skills__uid__copies__agent_uid__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillCopyCompareOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Compare Copy
+      tags:
+      - skills
+  /api/v1/skills/{uid}/copies/{agent_uid}/resolve:
+    post:
+      operationId: resolve_copy_api_v1_skills__uid__copies__agent_uid__resolve_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillCopyResolveRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Resolve Copy
+      tags:
+      - skills
   /api/v1/skills/{uid}/files:
     get:
       description: Return the skill's master folder as a read-only file tree.
@@ -1258,6 +1490,55 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Apply Update
+      tags:
+      - skills
+  /api/v1/skills/{uid}/source/change:
+    post:
+      description: |-
+        Stage a new repository / ref / folder for this skill and show the change
+        against its current folder; ``/source/apply`` with the stage takes it.
+      operationId: preview_source_change_api_v1_skills__uid__source_change_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillStageGitRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillUpdatePreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Source Change
       tags:
       - skills
   /api/v1/skills/{uid}/source/check:
@@ -1977,6 +2258,58 @@ components:
       - subject
       title: SkillCommitOut
       type: object
+    SkillCopyCompareOut:
+      description: One agent's folder in the way of the skill's link, against master.
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        changes:
+          items:
+            $ref: '#/components/schemas/SkillFileChangeOut'
+          title: Changes
+          type: array
+        kind:
+          const: replaced_with_regular
+          title: Kind
+          type: string
+        modified_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Modified At
+        path:
+          title: Path
+          type: string
+        skill_uid:
+          title: Skill Uid
+          type: string
+      required:
+      - skill_uid
+      - agent_uid
+      - agent_name
+      - path
+      - kind
+      - modified_at
+      - changes
+      title: SkillCopyCompareOut
+      type: object
+    SkillCopyResolveRequest:
+      properties:
+        keep:
+          enum:
+          - master
+          - agent
+          title: Keep
+          type: string
+      required:
+      - keep
+      title: SkillCopyResolveRequest
+      type: object
     SkillFileChangeOut:
       properties:
         additions:
@@ -2148,6 +2481,50 @@ components:
       - items
       title: SkillListOut
       type: object
+    SkillOrphanListOut:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SkillOrphanOut'
+          title: Items
+          type: array
+      required:
+      - items
+      title: SkillOrphanListOut
+      type: object
+    SkillOrphanOut:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        file_count:
+          title: File Count
+          type: integer
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        valid:
+          title: Valid
+          type: boolean
+      required:
+      - name
+      - path
+      - valid
+      - file_count
+      - description
+      - message
+      title: SkillOrphanOut
+      type: object
     SkillOut:
       properties:
         bindings:
@@ -2174,6 +2551,9 @@ components:
             type: string
           - type: 'null'
           title: Last Synced From Source At
+        master_missing:
+          title: Master Missing
+          type: boolean
         master_path:
           title: Master Path
           type: string
@@ -2227,6 +2607,7 @@ components:
       - scope
       - version_hash
       - master_path
+      - master_missing
       - last_synced_from_source_at
       - created_at
       - updated_at

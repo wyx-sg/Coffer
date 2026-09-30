@@ -23,12 +23,14 @@ flowchart LR
 
 ## Add a group from an OpenAPI spec
 
-On **Custom tools**, choose **Add custom tool**, pick **New group** and name it, then choose **Import an OpenAPI spec**.
+On **Custom tools**, choose **Add custom tool**. The group comes first: pick **New group**, then **Import an OpenAPI spec** and **Continue**. (An OpenAPI import always makes a new group; an existing group only takes requests added by hand.)
 
-1. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found.
-2. Check the **Base URL** (taken from the spec's `servers`) and the **Auth** header (taken from its security scheme, e.g. `Authorization: Bearer`), and pick the **Secret** that goes in it.
-3. Choose **Available to**: the agents the group reaches.
-4. **Review tools**: tick the operations that become tools. Read operations are ticked for you; operations that change data start unticked. Press **Create group**.
+1. Name the group — agents see its tools as `<group>__<tool>`, and the name is fixed once the group exists.
+2. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found, grouped by the spec's tags.
+3. Tick the **operations** that become tools. Reads start ticked; operations that change data start unticked. **Reads only** goes back to that choice; the filter narrows a long list.
+4. Check the **Auth** (taken from the spec's security scheme, e.g. Bearer token) and pick the **Secret** that goes in it, then **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
+5. Optionally **Try an operation**: run one ticked operation once against the spec's base URL, before anything exists (see [Test before you save](#test-before-you-save)).
+6. **Review N tools** shows the group as it will be made, the ticked operations as its tools and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
 
 Each operation becomes a tool named from its `operationId` — `listInvoices` becomes `billing__list_invoices`. Path and query parameters become arguments; a JSON request body becomes one `body` argument.
 
@@ -47,7 +49,7 @@ coffer tool add billing --openapi ./billing.yaml \
 
 ### Re-import when the spec changes
 
-A group made by an import shows its spec and when it was fetched, with **Re-import**. Re-import reads the spec again and shows a preview first: the operations it would **add**, the tools it would **remove** because their operation is gone, and how many it keeps. Nothing changes until you confirm. Kept tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
+A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and lists every change first: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
 
 ```sh
 coffer tool reimport billing                    # preview, then confirm
@@ -57,14 +59,22 @@ coffer tool reimport billing --file ./billing.yaml --add "GET /charges"
 
 ## Add a request by hand
 
-Choose **Add custom tool**, pick an existing group (or create a new one: name, base URL, auth header, secret and reach), then **Add one request by hand**. The tool opens in the editor:
+Choose **Add custom tool** and pick the group it goes in:
 
+- **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button opens the same form.
+- **New group** — pick **Add one request by hand**, then fill in the group: name, base URL, auth header, secret and default reach. **Create group** moves on to its first request; the group is saved together with that request.
+
+The request form asks for:
+
+- **Tool name** — agents see it as `<group>__<tool>`; fixed once added.
 - **Request** — the method and a path template added to the group's base URL. Holes in braces are filled from the arguments: `/services/{service}/deploys?env={env}`. A value is always encoded, so it can never change the path or the host; a query pair whose argument is not given is left out.
 - **Tool description** — what the agent reads to decide when to call it.
 - **Changes data** — on by default for POST, PUT, PATCH and DELETE (see [below](#tools-that-change-data)).
 - **Headers** — the group's auth header is shown from the group; add headers for this request, which may use holes.
 - **Body template** — for POST, PUT or PATCH, JSON with holes: `{"service": {service}, "note": "rollback by {user}"}`. A hole outside quotes becomes the argument's JSON value; inside quotes it becomes text. With no template, the arguments the path and headers did not use are sent as a JSON object.
 - **Arguments** — name, type, whether it is required, and a description for the agent. Every hole must be an argument.
+
+Nothing is saved until **Add to <group>**. A saved tool opens in a drawer on the group's page, where the same fields (except the name) are edited, with its **Available to**, an **On** switch and **Delete tool**; nothing changes until **Save**.
 
 ```sh
 coffer tool op add deploy rollback --method POST \
@@ -74,7 +84,9 @@ coffer tool op add deploy rollback --method POST \
 
 ## Test before you save
 
-The editor's **Test** runs the request once with sample argument values, using the group's base URL and secret, and shows the status, time, size and body. Nothing is saved and nothing is recorded as an agent's call. `coffer tool op test <group> <tool> --arg-value key=value` does the same from a terminal.
+Every request form ends with **Test**: fill in a sample value for each argument and press **Run**. It runs the request once as the form holds it and shows the status, time, size and body — or the API's error body, a timeout (the group's), a connection that failed, or a response cut short at 1 MiB, which is what an agent would get too. A 401 or 403 says the API rejected the secret. Nothing is saved and nothing is recorded as an agent's call. `coffer tool op test <group> <tool> --arg-value key=value` does the same from a terminal.
+
+A request of a group that is **not saved yet** is tested without its secret: a stored secret goes only to a saved group, after you approve it (see below). Its base URL is typed into the form, so Coffer tests it only on a public address it can resolve; a loopback, private or unresolvable host is reported as not tested — add the tool, then test it from the group.
 
 ## Secrets and approval
 
@@ -94,8 +106,9 @@ Each tool also has an on/off switch (**All on · All off** switches every tool o
 
 ## The Custom tools page
 
-The list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A group's page shows, on one page:
+With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A group's page shows, on one page:
 
+- a header with **Edit group** and a **⋯** menu: Edit group, Re-import (for an imported group), Turn off and Delete group;
 - its **definition** — what agents see (`billing__<tool>`), the reach, the base URL, the auth header with the secret's name, and the spec it came from;
 - a one-line summary of the last 24 hours: calls, errors and a link to Activity;
 - the **tools table** — each tool's switch, method and path, changes-data flag, reach (group default or override), and its calls and errors in 24 hours. Choosing a tool opens its editor in a drawer.

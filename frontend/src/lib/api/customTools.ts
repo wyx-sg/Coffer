@@ -20,6 +20,9 @@ export type CustomToolIn = Schemas["CustomToolIn"];
 export type CustomToolPatch = Schemas["CustomToolPatch"];
 export type CustomToolAuthIn = Schemas["CustomToolAuthIn"];
 export type CustomToolTestOut = Schemas["CustomToolTestOut"];
+export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
+export type TestFailure = NonNullable<CustomToolTestOut["failure"]>;
+export type ReimportChange = Schemas["CustomToolReimportChangeOut"];
 export type OpenApiReadIn = Schemas["OpenApiReadIn"];
 export type OpenApiReading = Schemas["OpenApiReadOut"];
 export type ReimportPreview = Schemas["CustomToolReimportPreviewOut"];
@@ -119,6 +122,13 @@ export const customToolsApi = {
       ...group(name),
       body: { tool: draft, arguments: args },
     });
+    if (error) throwApiError(error, "INTERNAL_ERROR", "test failed");
+    return must(data, "test");
+  },
+  /** Run a request of a group not saved yet: the group's settings inline, no
+   *  secret sent, the base URL checked against the SSRF guard; saves nothing. */
+  testUnsaved: async (body: CustomToolUnsavedTestIn): Promise<CustomToolTestOut> => {
+    const { data, error } = await getApiClient().POST("/custom-tools/test", { body });
     if (error) throwApiError(error, "INTERNAL_ERROR", "test failed");
     return must(data, "test");
   },

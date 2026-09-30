@@ -63,15 +63,17 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 ## The Skills page
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and description, or what needs your attention — **Built-in**, **Off**, **Copied**, **Update available**, **Source unreachable**. Tick rows to set the reach of several skills at once or to delete them.
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+
+The open skill's header carries its reach button and a **⋯** menu: **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, an update — with the one action that answers it.
 
 Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
 
 | Tab | What it shows |
 | --- | --- |
-| **Files** | The skill's folder as a tree, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. |
-| **Delivery** | Every agent and the state of its copy: linked, copied, different from the master (after **Check again**), or not delivered and why. The reach button is here too. |
-| **Requires** | The commands the skill says it needs, each linking to its page on the CLIs page. |
+| **Files** | The skill's files beside the open file, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. A binary file offers **Open in default app** and **Reveal in Finder**; a very large file shows its start, read-only. A Git skill shows its source above the files. |
+| **Delivery** | Every agent and the state of its copy: **Linked**, **Copied, not linked** (where links are not allowed), a folder in the way (with **Review…**), or not delivered and why. **Check again** looks at every copy afresh. |
+| **Requires** | The commands the skill says it needs, each with its state and **Open in CLIs**. Installing and logging in happen on the CLIs page. |
 | **History** | The folder's past versions, once the vault records them; until then the tab says so. |
 
 The Skills page lists only the skills Coffer manages. Skills an agent has that Coffer does not manage are on that agent's **Skills** tab, where you can adopt them (see [below](#adopt-skills-an-agent-already-has)).
@@ -162,7 +164,7 @@ coffer skill update terraform-plan
 ```
 
 ```text [Web UI]
-Skills → the skill → Check now, then Review update… when an update is available
+Skills → the skill → Check now, then Review update… on the banner when an update is available
 ```
 
 :::
@@ -174,10 +176,12 @@ If you edited the skill since its pinned commit, the update is a **conflict**:
 | Choice | Web UI | CLI | What happens |
 | --- | --- | --- | --- |
 | Keep mine | **Keep my edits** | `--keep-mine` | Nothing changes. Coffer stops offering this update and tells you again when a newer commit arrives. |
-| Take theirs | **Take the update** | `--take-theirs` | The new commit is applied and your edits are discarded. |
+| Take theirs | **Take the update** | `--take-theirs` | The new commit is applied and your edits are replaced. |
 | Compare | **Compare** | — | Each changed file side by side: your folder, the pinned commit and the new commit. |
 
 If the repository can no longer be reached, the skill keeps working from its pinned copy. Its page shows git's message and when the last check succeeded, and nothing changes until a check succeeds again.
+
+To move a Git skill to another repository, branch or folder, use **Change source…** in its Source block. Coffer clones the new source and shows how it differs from your current version; nothing is replaced until you take it, and the skill keeps its name.
 
 A skill added from a folder or an archive has no source to update from: add it again with **Replace** (`--force`).
 
@@ -336,9 +340,9 @@ A disabled agent receives nothing. Its links are removed, and they come back whe
 | macOS, Linux | A directory symlink. |
 | Windows | A directory symlink; if that is not permitted, a directory junction; if the filesystem supports neither (FAT32, some network shares), a full copy. |
 
-A copied delivery does not follow later edits to the master. The **Skills** page marks such a skill with a **Copied** badge.
+A copied delivery is refreshed after each edit in Coffer. The skill's **Delivery** tab shows that agent's copy as **Copied, not linked**, with the reason.
 
-If something that is not a Coffer link already sits at `<config_dir>/skills/<name>`, Coffer reports a conflict for that skill and leaves the existing file or folder untouched. The rest of the skills are still delivered.
+If something that is not a Coffer link already sits at `<config_dir>/skills/<name>`, Coffer reports a conflict for that skill (a folder in the way) and leaves the existing file or folder untouched. The rest of the skills are still delivered. See [Resolve a folder in the way](#resolve-a-folder-in-the-way).
 
 ## View and edit skill files
 
@@ -360,9 +364,9 @@ Skills → choose the skill → Files tab → pick a file → Edit → Save
 
 :::
 
-The Files tab also offers **Open in editor** and **Reveal in Finder** (your system's file manager) on every file and folder.
+The Files tab also offers **Open in editor** on a text file, and **Open in default app** and **Reveal in Finder** (your system's file manager) on a binary one; the skill's **⋯** menu opens or reveals the whole folder.
 
-Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Re-read the file and apply your change again. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
+Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Your text stays in the editor, marked **Not saved**, with three ways out: **Reload** (take what is on disk), **Compare** (the disk against your text) and **Copy my text**. `⌘S` saves while you edit. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
 
 ## Commands a skill needs
 
@@ -425,7 +429,26 @@ coffer skill verify --fix
 
 `--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `<path>.coffer-backup-<timestamp>`, then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains.
 
-In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent, the path and what to do. **Repair** fixes the missing and tampered links; the rest stay listed for you. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
+In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**; a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
+
+### Resolve a folder in the way
+
+When an agent's copy is a real folder rather than Coffer's link — you, or the agent, replaced the link with an edited copy — the skill shows a banner and its Delivery row offers **Review…**. The dialog compares the folder with the master and offers two choices, confirmed before anything happens:
+
+| Choice | What happens |
+| --- | --- |
+| **Replace it with Coffer's link** | The folder is moved to `~/.coffer/backup/skills/<agent>/` first, then the master is linked in its place. Nothing is lost. |
+| **Adopt this folder** | Its files become the master, so every other agent gets them too; the folder is then backed up and linked the same way. |
+
+The diff shows what happens to the side you are not keeping. Coffer never makes this choice on its own.
+
+### Folders not in your library
+
+A folder in `~/.coffer/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/backup/skills/orphans/` after asking.
+
+### When the master folder is gone
+
+If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers **Remove the skill** (its record and settings); restoring it from History becomes available once the vault records a skill's versions.
 
 ## The built-in `coffer-guide` skill
 
@@ -470,8 +493,7 @@ coffer skill rm release-checklist --force
 ```
 
 ```text [Web UI]
-Skills → the delete action on the row (or Delete on the skill's page)
-       → confirm "Remove skill release-checklist?"
+Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist?"
 ```
 
 :::
@@ -479,6 +501,8 @@ Skills → the delete action on the row (or Delete on the skill's page)
 ::: danger The master folder is the only copy
 Removing a skill deletes `~/.coffer/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
 :::
+
+If an agent's copy is no longer Coffer's link, the delete is refused and nothing changes: the dialog names the folder, and you either restore it from master first or delete that folder yourself.
 
 Removing an agent from Coffer also removes that agent's skill links. The master folders stay.
 

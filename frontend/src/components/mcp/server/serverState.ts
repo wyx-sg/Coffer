@@ -104,6 +104,50 @@ export function shortTime(iso: string, now = new Date()): string {
       });
 }
 
+/** A call's tone: OK quiet, a problem in its status colour. */
+export function callTone(status: "ok" | "error" | "timeout" | "denied"): StatusTone {
+  return status === "ok"
+    ? "ok"
+    : status === "denied"
+      ? "off"
+      : status === "timeout"
+        ? "warn"
+        : "err";
+}
+
+/** A ref as the person knows it: a Secrets-page name, or the key a server's own ref ends in. */
+export function secretLabel(ref: string): string {
+  if (ref.startsWith("secret/")) return ref.slice("secret/".length);
+  const last = ref.split("/").pop();
+  return last || ref;
+}
+
+/** A duration the way the page says it: "412 ms", "1.2 s". */
+export function seconds(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
+}
+
+/** "4 min ago", "2 h ago" within a day; the short clock/date time beyond it. */
+export function relativeTime(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const mins = Math.round((now.getTime() - at.getTime()) / 60_000);
+  if (Number.isNaN(mins)) return iso;
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "short" });
+  if (mins < 60) return rtf.format(-Math.max(mins, 0), "minute");
+  if (mins < 24 * 60) return rtf.format(-Math.round(mins / 60), "hour");
+  return shortTime(iso, now);
+}
+
+/** Names as one phrase: "Claude Code and Codex". */
+export function joinNames(names: readonly string[], locale?: string): string {
+  if (names.length === 0) return "";
+  try {
+    return new Intl.ListFormat(locale, { type: "conjunction" }).format(names);
+  } catch {
+    return names.join(", ");
+  }
+}
+
 /** The install line for a launcher Coffer knows how to name; null for the rest. */
 export function installCommandFor(runner: string): string | null {
   const known: Record<string, string> = {

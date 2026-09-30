@@ -14,21 +14,21 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.http_api import HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.infrastructure.mcp.http_api_client import HttpApiUpstreamConnection
-from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
-from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
+from coffer.infrastructure.mcp.probe import probe_server
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import boundary_resolver, get_credential_store
 from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.mcp.config_test_routes import cancel_on_disconnect
 from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
-from coffer.surfaces.http.schemas import McpTestResultOut
+from coffer.surfaces.http.mcp.probe_schemas import McpTestResultOut, result_out
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -40,6 +40,7 @@ router = APIRouter(
 @router.post("/{uid}/test", response_model=McpTestResultOut)
 async def test_mcp_server(
     uid: str,
+    request: Request,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
     credential_store: Any = Depends(get_credential_store),  # noqa: B008
@@ -59,36 +60,49 @@ async def test_mcp_server(
     resolver = boundary_resolver(credential_store)
     destination = mcp_destination(resource.uid, resource.name, config)
 
-    start = time.monotonic()
-    try:
-        if isinstance(config.transport, StdioTransport):
-            # Offload the blocking credential-store read off the event loop.
+    if isinstance(config.transport, (StdioTransport, HttpTransport)):
+        # The same probe the Add dialog's unsaved-config test runs (spec
+        # mcp-gateway "Test a registered server on demand"): initialize, list
+        # the tools, keep a redacted stderr tail, stop the process group.
+        # Offload the blocking credential-store read off the event loop.
+        try:
             overlay = await asyncio.to_thread(
                 resolver.materialize, config.transport.credential_refs, destination
             )
-            conn: StdioUpstreamConnection | HttpUpstreamConnection | HttpApiUpstreamConnection = (
-                StdioUpstreamConnection(
-                    transport=config.transport,
-                    env_overlay=overlay,
-                    spawn_timeout_seconds=config.spawn_timeout_seconds,
-                    request_timeout_seconds=config.request_timeout_seconds,
-                    # The label, not the identity: this is what the connection puts
-                    # in its spawn diagnostics, and a uid there would tell whoever
-                    # reads them nothing.
-                    server_name=resource.name,
-                )
+        except Exception as e:  # a binding awaiting approval, a missing secret
+            await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC))
+            return McpTestResultOut(
+                ok=False,
+                latency_ms=0,
+                error_code="stored_secret_not_released",
+                error_message=str(e),
+                unreleased_secret_keys=sorted(config.transport.credential_refs),
             )
-        elif isinstance(config.transport, HttpTransport):
-            overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs, destination
-            )
-            conn = HttpUpstreamConnection(
-                transport=config.transport,
-                header_overlay=overlay,
+        result = await cancel_on_disconnect(
+            request,
+            probe_server(
+                config.transport,
+                overlay,
                 spawn_timeout_seconds=config.spawn_timeout_seconds,
                 request_timeout_seconds=config.request_timeout_seconds,
-            )
-        elif isinstance(config.transport, HttpApiTransport):
+                secrets=overlay.values(),
+                # The label, not the identity: this is what diagnostics carry.
+                server_name=resource.name,
+                server_uid=resource.uid,
+                # A registered server's URL was accepted at registration; the
+                # guard is for URLs typed into a form that is not saved.
+                url_guard=None,
+            ),
+        )
+        # Keyed on the identity, so the result survives a later rename.
+        await health_repo.upsert(
+            resource.uid, "healthy" if result.ok else "failing", datetime.now(tz=UTC)
+        )
+        return result_out(result)
+
+    start = time.monotonic()
+    try:
+        if isinstance(config.transport, HttpApiTransport):
             # A custom-tool group: its "connection" is served in-process, so the
             # test proves the config loads and the secret is released for it.
             overlay = await asyncio.to_thread(
@@ -101,6 +115,7 @@ async def test_mcp_server(
             return McpTestResultOut(
                 ok=False,
                 latency_ms=0,
+                error_code="unsupported_transport",
                 error_message=f"unsupported transport: {type(config.transport).__name__}",
             )
         try:
@@ -123,5 +138,6 @@ async def test_mcp_server(
         return McpTestResultOut(
             ok=False,
             latency_ms=latency_ms,
+            error_code="initialize_failed",
             error_message=str(e),
         )

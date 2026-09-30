@@ -54,7 +54,9 @@ describe("SkillUpdateDialog", () => {
   test("previews the range, the commits, the changed files and the selected diff", async () => {
     api.previewUpdate.mockResolvedValue(updatePreview());
     renderDialog();
-    expect(await screen.findByText("Ask before backend changes")).toBeInTheDocument();
+    expect(await screen.findByText(/“Ask before backend changes”/)).toBeInTheDocument();
+    expect(screen.getByText("What will happen")).toBeInTheDocument();
+    expect(screen.getByText(/Moves terraform-plan from a1b2c3d to f9e8d7c/)).toBeInTheDocument();
     expect(screen.getByText("Changes · 2", { selector: "span" })).toBeInTheDocument();
     const diff = screen.getByRole("region", { name: "Changes to SKILL.md" });
     expect(within(diff).getByText("- List replace, destroy or move.")).toBeInTheDocument();
@@ -63,9 +65,7 @@ describe("SkillUpdateDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /scripts\/plan\.sh/ }));
     expect(screen.getByRole("region", { name: "Changes to scripts/plan.sh" })).toBeInTheDocument();
-    expect(
-      screen.getByText("Agents see the change at once through their links."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Only terraform-plan changes.")).toBeInTheDocument();
   });
 
   test("Update to applies the staged update and closes", async () => {
@@ -101,11 +101,13 @@ describe("SkillUpdateDialog", () => {
   test("a conflict offers Keep my edits, Take the update and Compare", async () => {
     api.previewUpdate.mockResolvedValue(conflicted());
     renderDialog();
-    expect(await screen.findByText("terraform-plan changed on both sides")).toBeInTheDocument();
-    const edits = screen.getByRole("list", { name: "Files you edited" });
+    expect(
+      await screen.findByRole("dialog", { name: "terraform-plan changed on both sides" }),
+    ).toBeInTheDocument();
+    const edits = screen.getByLabelText("Files you edited");
     expect(within(edits).getByText("SKILL.md")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Keep my edits" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take the update" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Take the update/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Update to f9e8d7c" })).not.toBeInTheDocument();
   });
@@ -114,7 +116,8 @@ describe("SkillUpdateDialog", () => {
     api.previewUpdate.mockResolvedValue(conflicted());
     api.keepMine.mockResolvedValue(skill.source_status!);
     const { onOpenChange } = renderDialog();
-    fireEvent.click(await screen.findByRole("button", { name: "Keep my edits" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Keep my edits/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
     await waitFor(() => expect(api.keepMine).toHaveBeenCalledWith("sk-1", "f9e8d7c6b5a4"));
     await waitFor(() => expect(api.cancelStage).toHaveBeenCalledWith("upd-1"));
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -125,7 +128,8 @@ describe("SkillUpdateDialog", () => {
     api.previewUpdate.mockResolvedValue(conflicted());
     api.applyUpdate.mockResolvedValue(skill);
     const { onOpenChange } = renderDialog();
-    fireEvent.click(await screen.findByRole("button", { name: "Take the update" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Take the update/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Take the update" }));
     const confirm = await screen.findByRole("dialog", { name: "Discard your edits?" });
     expect(api.applyUpdate).not.toHaveBeenCalled();
     fireEvent.click(within(confirm).getByRole("button", { name: "Take the update" }));

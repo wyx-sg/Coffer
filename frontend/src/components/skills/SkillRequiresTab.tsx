@@ -1,20 +1,16 @@
 // src/components/skills/SkillRequiresTab.tsx — a skill's Requires tab: the commands its SKILL.md declares.
 //
-// The skill's declared commands in their order, each with its state from the
-// CLIs list (GET /clis), so the tab and the CLIs page can never disagree. Each
-// command links to its page on the CLIs page (spec web-ui "Show every CLI a
-// skill requires on the CLIs page"); Install… / Copy command are shortcuts to the
-// same confirmation and copy the CLI page offers. A missing command never stops
-// delivery — the footnote says so.
-import { useState } from "react";
+// Canvas 4.3.07: one row per command — its name, its state on this machine
+// (from the CLIs list, GET /clis, so the tab and the CLIs page can never
+// disagree) and Open in CLIs. Installing and logging in live on the CLIs page
+// (spec web-ui "Show every CLI a skill requires on the CLIs page"); this tab
+// only links there (Principle IV: no install steps here). A missing command
+// never stops delivery — the footnote says so.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Terminal } from "lucide-react";
+import { ArrowRight, RefreshCw, Terminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { CliActionButton } from "@/components/clis/CliActionButton";
-import { CliInstallDialog } from "@/components/clis/CliInstallDialog";
-import { ClisWarnings } from "@/components/clis/ClisWarnings";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { Cli } from "@/lib/api/clis";
@@ -27,83 +23,51 @@ interface Props {
   skill: SkillOut;
 }
 
-function RequirementLine({ cli, skillUid }: { cli: Cli; skillUid: string }) {
+function StateWord({ cli }: { cli: Cli | undefined }) {
   const { t } = useTranslation();
-  const why = cli.needed_by.find((n) => n.skill_uid === skillUid)?.why;
-  switch (cli.status) {
-    case "ready":
-      return (
-        <>
-          {t("skills.requires.readyLine", {
-            command: cli.command,
-            version: cli.version ?? "",
-            path: cli.path ?? "",
-          })}
-        </>
-      );
-    case "missing":
-      return <>{[t("skills.requires.notOnPath"), why].filter(Boolean).join(" ")}</>;
-    case "outdated":
-      return (
-        <>
-          {[t("skills.requires.outdatedLine", { version: cli.version, min: cli.min_version }), why]
-            .filter(Boolean)
-            .join(" ")}
-        </>
-      );
-    case "logged_out":
-      return (
-        <>
-          {t("skills.requires.loggedOutBefore")}{" "}
-          <code className="font-mono text-text">{cli.login.command}</code>{" "}
-          {t("skills.requires.loggedOutAfter")}
-        </>
-      );
-  }
+  if (!cli) return <StatusWord tone="off">{t("skills.requires.unknown")}</StatusWord>;
+  const word =
+    cli.status === "ready"
+      ? [t("skills.requires.found"), cli.version].filter(Boolean).join(" · ")
+      : cli.status === "outdated"
+        ? t("skills.requires.outdated", { version: cli.version, min: cli.min_version })
+        : t(`skills.requires.state.${cli.status}`);
+  return <StatusWord tone={cliTone(cli.status)}>{word}</StatusWord>;
 }
 
 export function SkillRequiresTab({ skill }: Props) {
-  const skillUid = skill.uid;
   const { t, i18n } = useTranslation();
   const { data, error } = useClis();
   const check = useCheckClis();
-  const [installFor, setInstallFor] = useState<Cli | null>(null);
 
   // What the skill declares, in its order (spec skill-manager "Show the
   // commands a skill declares it needs"); each one's state on this machine
   // comes from the CLIs list when it has answered.
   const byCommand = new Map((data?.items ?? []).map((cli) => [cli.command, cli]));
   const rows = skill.requires.map((req) => ({ req, cli: byCommand.get(req.command) }));
-  const warnings = (data?.warnings ?? []).filter((w) => w.skill_uid === skillUid);
-  const missing = rows.filter((r) => r.cli?.status === "missing").map((r) => r.req.command);
   const checked = oldestCheck(rows.flatMap((r) => (r.cli ? [r.cli] : [])));
 
   if (rows.length === 0) {
     return (
-      <div className="space-y-3">
-        <ClisWarnings warnings={warnings} />
-        <EmptyState
-          icon={Terminal}
-          title={t("skills.requires.emptyTitle")}
-          description={t("skills.requires.emptyBody")}
-        />
-      </div>
+      <EmptyState
+        icon={Terminal}
+        title={t("skills.requires.emptyTitle")}
+        description={t("skills.requires.emptyBody")}
+      />
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-label">{t("skills.requires.title")}</h2>
-        <span className="text-xs text-text-muted">
-          {[
-            t("skills.requires.declared"),
-            checked ? t("clis.checkedAgo", { when: relativeTime(checked, i18n.language) }) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-        <div className="ml-auto flex gap-2">
+    <section className="flex flex-col" aria-label={t("skills.requires.title")}>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle pb-2">
+        <h3 className="text-sm font-semibold">{t("skills.requires.title")}</h3>
+        <span className="text-xs text-text-muted">{t("skills.requires.declared")}</span>
+        <span className="ml-auto flex items-center gap-2">
+          {checked ? (
+            <span className="text-xs text-text-muted">
+              {t("clis.checkedAgo", { when: relativeTime(checked, i18n.language) })}
+            </span>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -113,64 +77,46 @@ export function SkillRequiresTab({ skill }: Props) {
             <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
             {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
           </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/clis">{t("skills.requires.openClis")}</Link>
-          </Button>
-        </div>
+          <Link to="/clis" className="text-xs font-label text-accent-text hover:underline">
+            {t("skills.requires.openClis")}
+          </Link>
+        </span>
       </div>
 
-      <ClisWarnings warnings={warnings} />
       {error ? (
-        <p className="text-xs text-danger">
+        <p className="pt-2 text-xs text-danger">
           {t("skills.requires.loadFailed")}: {translateApiError(t, error)}
         </p>
       ) : null}
 
-      <ul
-        className="paper-card divide-y divide-border-subtle"
-        aria-label={t("skills.requires.title")}
-      >
-        {rows.map(({ req, cli }) => (
-          <li key={req.command} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-            <Link
-              to={`/clis/${encodeURIComponent(req.command)}`}
-              className="min-w-28 shrink-0 font-mono text-sm font-label text-accent-text hover:underline"
+      <ul className="divide-y divide-border-subtle">
+        {rows.map(({ req, cli }) => {
+          const href = `/clis/${encodeURIComponent(req.command)}`;
+          return (
+            <li
+              key={req.command}
+              className="grid grid-cols-[8.5rem_minmax(0,1fr)_auto] items-center gap-4 py-3"
             >
-              {req.command}
-              {cli ? null : (
-                <span className="ml-2 font-sans text-xs font-normal text-text-muted">
-                  {req.min_version
-                    ? t("skills.requires.minVersion", { version: req.min_version })
-                    : t("skills.requires.anyVersion")}
-                </span>
-              )}
-            </Link>
-            {cli ? (
-              <>
-                <StatusWord tone={cliTone(cli.status)} className="w-28">
-                  {t(`clis.status.${cli.status}`)}
-                </StatusWord>
-                <span className="min-w-0 flex-1 text-xs text-text-muted">
-                  <RequirementLine cli={cli} skillUid={skillUid} />
-                </span>
-                <CliActionButton
-                  cli={cli}
-                  onInstall={setInstallFor}
-                  copyLabel={t("clis.actions.copyCommand")}
-                />
-              </>
-            ) : null}
-          </li>
-        ))}
+              <Link
+                to={href}
+                className="truncate font-mono text-sm font-label text-accent-text hover:underline"
+              >
+                {req.command}
+              </Link>
+              <StateWord cli={cli} />
+              <Link
+                to={href}
+                className="inline-flex items-center gap-1 text-xs font-label text-accent-text hover:underline"
+              >
+                {t("skills.requires.openInClis")}
+                <ArrowRight className="size-3" aria-hidden />
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
-      <p className="text-xs text-text-muted">
-        {missing.length > 0
-          ? t("skills.requires.footnote", { commands: missing.join(", ") })
-          : t("skills.requires.stillDelivered")}
-      </p>
-
-      <CliInstallDialog cli={installFor} onOpenChange={(open) => !open && setInstallFor(null)} />
-    </div>
+      <p className="pt-3 text-xs text-text-muted">{t("skills.requires.footnote")}</p>
+    </section>
   );
 }

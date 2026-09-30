@@ -1,12 +1,15 @@
 // src/components/skills/SkillRequiresTab.test.tsx — a skill's Requires tab lists what its SKILL.md declares.
 //
-// Real QueryClientProvider; only the api module is mocked.
+// One row per command — name · state · Open in CLIs — and nothing that
+// installs or logs in: those live on the CLIs page. Real QueryClientProvider;
+// only the api module is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { GCLOUD_LOGGED_OUT, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
+import { acceptance } from "@/test/acceptance";
 import type { SkillOut } from "@/lib/api/skills";
 
 import { SkillRequiresTab } from "./SkillRequiresTab";
@@ -62,52 +65,43 @@ describe("SkillRequiresTab", () => {
     });
     renderTab();
 
-    const list = await screen.findByRole("list", { name: "Requires" });
-    await screen.findByText(/Not on PATH\./);
-    const links = within(list).getAllByRole("link");
-    // Only this skill's commands, each opening its page on the CLIs page.
-    expect(links.map((a) => a.getAttribute("href"))).toEqual([
-      "/clis/jq",
-      "/clis/gcloud",
-      "/clis/uv",
-    ]);
+    await screen.findByText("Not installed");
+    expect(screen.getByText("Not logged in")).toBeInTheDocument();
+    expect(screen.getByText(/^Found/)).toBeInTheDocument();
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
     expect(screen.queryByText("docker")).toBeNull();
+    for (const [i, command] of ["jq", "gcloud", "uv"].entries()) {
+      const links = within(rows[i]).getAllByRole("link");
+      expect(links.map((a) => a.getAttribute("href"))).toEqual([
+        `/clis/${command}`,
+        `/clis/${command}`,
+      ]);
+      expect(within(rows[i]).getByRole("link", { name: /Open in CLIs/ })).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Install or log in from its row on the CLIs page/)).toBeInTheDocument();
 
-    expect(
-      screen.getByText(/Not on PATH\. The skill filters issue JSON with it\./),
-    ).toBeInTheDocument();
-    expect(screen.getByText("uv 0.4.18 · /opt/homebrew/bin/uv")).toBeInTheDocument();
-    expect(within(list).getByText("gcloud auth login")).toBeInTheDocument();
-    expect(
-      screen.getByText(/The skill is still delivered\..*needs jq until it is installed\./),
-    ).toBeInTheDocument();
-
-    fireEvent.click(within(list).getByRole("link", { name: "gcloud" }));
+    fireEvent.click(within(rows[1]).getByRole("link", { name: "gcloud" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gcloud");
   });
 
-  test("Install… opens the same confirmation, and Check again re-probes", async () => {
-    api.list.mockResolvedValue({ items: [JQ_MISSING], warnings: [] });
-    api.checkAll.mockResolvedValue({
-      items: [{ ...JQ_MISSING, status: "ready", path: "/opt/homebrew/bin/jq", version: "1.7" }],
-      warnings: [],
-    });
-    renderTab();
-    fireEvent.click(await screen.findByRole("button", { name: "Install…" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByTestId("cli-install-command")).toHaveTextContent("brew install jq");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(api.install).not.toHaveBeenCalled();
-
+  acceptance("web-ui", "the requires tab only links to the CLIs page", async () => {
+    api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
+    api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
+    renderTab("sk-gh-triage", ["jq", "gcloud"]);
+    await screen.findByText("Not installed");
+    expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Copy/ })).toBeNull();
+    expect(screen.queryByText("gcloud auth login")).toBeNull();
+    expect(screen.queryByText(/brew/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("jq 1.7 · /opt/homebrew/bin/jq")).toBeInTheDocument();
-    expect(screen.queryByText(/The skill is still delivered/)).toBeNull();
+    expect(api.install).not.toHaveBeenCalled();
   });
 
   test("a skill that declares nothing says so", async () => {
     api.list.mockResolvedValue({ items: [UV_READY], warnings: [] });
     renderTab("sk-nothing", []);
-    expect(await screen.findByText("This skill declares no commands")).toBeInTheDocument();
+    expect(await screen.findByText("No commands required")).toBeInTheDocument();
   });
 });

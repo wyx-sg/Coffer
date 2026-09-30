@@ -35,6 +35,8 @@ class DraftOperation:
     key: str  # "<METHOD> <path>"
     tool: HttpApiTool
     summary: str | None = None
+    #: The operation's first tag, which the import form groups operations by.
+    tag: str | None = None
 
 
 @dataclass(frozen=True)
@@ -222,7 +224,9 @@ def _operation(
     except ValidationError as e:
         warnings.append(f"{key}: left out ({e.errors()[0].get('msg', 'invalid')})")
         return None
-    return DraftOperation(key=key, tool=tool, summary=summary)
+    tags = op.get("tags")
+    tag = tags[0] if isinstance(tags, list) and tags and isinstance(tags[0], str) else None
+    return DraftOperation(key=key, tool=tool, summary=summary, tag=tag)
 
 
 def read_openapi(

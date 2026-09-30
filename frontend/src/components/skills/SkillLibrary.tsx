@@ -1,21 +1,24 @@
 // frontend/src/components/skills/SkillLibrary.tsx
 // The left pane of the Skills page: the library of managed skills. A filter
 // field (name + description), the All / On / Off switch, Check copies, then
-// "Library N" over one row per skill (SkillLibraryRow) and, while rows are
-// ticked, the selection bar (SkillsBulkBar). Only managed skills are here —
-// an agent's own skills live on that agent's Skills tab.
+// "Library N" over one row per skill (SkillLibraryRow). While rows are ticked
+// the selection bar (SkillsBulkBar) sits under the filter and every row shows
+// its checkbox; otherwise a row shows it on hover. Only managed skills are
+// here — an agent's own skills live on that agent's Skills tab.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
+import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { SkillOut } from "@/lib/api/skills";
+import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
+import { useClis } from "@/lib/hooks/useClis";
 
 type Filter = "all" | "on" | "off";
 
@@ -29,6 +32,15 @@ interface Props {
   onOpenSkill: () => void;
   onCheckCopies: () => void;
   checkingCopies: boolean;
+  /** The last Check copies report, for the rows' "Folder in the way" lines. */
+  drift: SkillDriftEntry[] | undefined;
+  /** Ticked row uids (the page owns them: the reading pane shows the selection). */
+  picked: ReadonlySet<string>;
+  onPickedChange: (picked: ReadonlySet<string>) => void;
+  /** The ticked skills that still exist and can be deleted. */
+  selected: SkillOut[];
+  /** The store folder open in the reading pane (`?orphan=`), if any. */
+  orphan: string | null;
 }
 
 export function SkillLibrary({
@@ -39,12 +51,17 @@ export function SkillLibrary({
   onOpenSkill,
   onCheckCopies,
   checkingCopies,
+  drift,
+  picked,
+  onPickedChange,
+  selected,
+  orphan,
 }: Props) {
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
+  const clis = useClis().data?.items ?? [];
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,15 +72,12 @@ export function SkillLibrary({
     });
   }, [skills, query, filter]);
 
-  // A selection only ever holds rows that still exist and can be deleted.
-  const selected = skills.filter((s) => !s.builtin && picked.has(s.uid));
-  const toggle = (uid: string, on: boolean) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(uid);
-      else next.delete(uid);
-      return next;
-    });
+  const toggle = (uid: string, on: boolean) => {
+    const next = new Set(picked);
+    if (on) next.add(uid);
+    else next.delete(uid);
+    onPickedChange(next);
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -96,6 +110,9 @@ export function SkillLibrary({
             {t("skills.checkCopies")}
           </Button>
         </div>
+        {selected.length > 0 ? (
+          <SkillsBulkBar skills={selected} onDone={() => onPickedChange(new Set())} />
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
@@ -118,6 +135,9 @@ export function SkillLibrary({
                 key={s.uid}
                 skill={s}
                 agents={agents}
+                clis={clis}
+                drift={drift}
+                selecting={selected.length > 0}
                 to={hrefFor(s.name)}
                 current={s.name === selectedName}
                 checked={picked.has(s.uid)}
@@ -127,11 +147,8 @@ export function SkillLibrary({
             ))}
           </ul>
         )}
+        <SkillOrphanList selected={orphan} />
       </div>
-
-      {selected.length > 0 ? (
-        <SkillsBulkBar skills={selected} onDone={() => setPicked(new Set())} />
-      ) : null}
     </div>
   );
 }

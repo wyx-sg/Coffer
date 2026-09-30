@@ -1,4 +1,4 @@
-// src/components/custom-tools/WayCard.tsx — one of the two ways into a custom tool, as a choosable card.
+// src/components/custom-tools/WayCard.tsx — one of the two ways into a new group, as a choosable card.
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -10,9 +10,6 @@ interface Props {
   /** Short facts under the body, one per line. */
   points: string[];
   selected?: boolean;
-  disabled?: boolean;
-  /** A line saying why the card cannot be chosen now. */
-  disabledNote?: string;
   onSelect: () => void;
   /** `radio` inside a choice; `button` where the card acts at once. */
   role?: "radio" | "button";
@@ -24,8 +21,6 @@ export function WayCard({
   body,
   points,
   selected = false,
-  disabled = false,
-  disabledNote,
   onSelect,
   role = "radio",
 }: Props) {
@@ -34,30 +29,25 @@ export function WayCard({
       type="button"
       role={role}
       aria-checked={role === "radio" ? selected : undefined}
-      aria-disabled={disabled || undefined}
-      onClick={() => {
-        if (!disabled) onSelect();
-      }}
+      onClick={onSelect}
       className={cn(
-        "flex w-full flex-col gap-2 rounded-xl border bg-surface-raised p-4 text-left transition-colors duration-fast",
+        "flex w-full items-start gap-3 rounded-xl border bg-surface-raised p-4 text-left transition-colors duration-fast",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
-        selected ? "border-accent bg-accent-soft" : "border-border hover:bg-surface-hover",
-        disabled && "cursor-not-allowed opacity-disabled hover:bg-surface-raised",
+        selected ? "border-text ring-1 ring-text" : "border-border hover:bg-surface-hover",
       )}
     >
-      <span className="flex items-center gap-2 text-sm font-semibold text-text">
-        <Icon className="size-4 text-text-subtle" aria-hidden />
-        {title}
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-text">
+        <Icon className="size-4" aria-hidden />
       </span>
-      <span className="text-xs text-text-muted">{body}</span>
-      <ul className="space-y-0.5 text-xs text-text-muted">
-        {points.map((point) => (
-          <li key={point}>· {point}</li>
-        ))}
-      </ul>
-      {disabled && disabledNote ? (
-        <span className="text-xs text-text-subtle">{disabledNote}</span>
-      ) : null}
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-sm font-semibold text-text">{title}</span>
+        <span className="text-xs text-text-muted">{body}</span>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-text-muted">
+          {points.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+      </span>
     </button>
   );
 }

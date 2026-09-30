@@ -2,7 +2,7 @@
 // line, then a URL with Load (→ Loading… → Reload) or a file read in the browser, and one result line.
 import { useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
+import { Check, RotateCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +78,7 @@ export function SpecField(props: Props) {
             onChange={(e) => props.onUrl(e.target.value)}
           />
           <Button variant="outline" disabled={loading || url.trim() === ""} onClick={props.onLoad}>
+            {reading && !loading ? <RotateCw aria-hidden /> : null}
             {loading
               ? t("customTools.import.loading")
               : reading
@@ -113,10 +114,17 @@ export function SpecField(props: Props) {
         <p role="alert" className="text-xs text-danger">
           {t("customTools.import.readFailed", { reason: translateApiError(t, error) })}
         </p>
-      ) : reading && !loading ? (
+      ) : loading ? (
+        <p className="text-xs text-text-muted">{t("customTools.import.fetching")}</p>
+      ) : reading ? (
         <p className="inline-flex items-center gap-1 text-xs text-success">
           <Check className="size-3.5" aria-hidden />
-          {t("customTools.import.loaded", { count: reading.operations.length })}
+          {[
+            t("customTools.import.loaded", { count: reading.operations.length }),
+            [reading.title, reading.version].filter(Boolean).join(" "),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       ) : (
         <p className="text-xs text-text-muted">

@@ -22,19 +22,19 @@ function server(name: string, over: Partial<NewServer> = {}): NewServer {
 beforeEach(() => vi.clearAllMocks());
 
 describe("importMcpServers", () => {
-  test("sends the title with the registration and writes a restricted reach after it", async () => {
+  test("sends the description with the registration and writes a restricted reach after it", async () => {
     const api = mockApiClient({
       POST: vi.fn().mockResolvedValue({ data: { uid: "u-gh" }, error: undefined }),
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("github", { title: "GitHub" })],
+      servers: [server("github", { description: "GitHub" })],
       created: new Map(),
       reach: { mode: "restricted", agents: ["a-1"] },
       t,
     });
     expect(api.POST.mock.calls[0][1]).toMatchObject({
-      body: { kind: "mcp_server", name: "github", title: "GitHub" },
+      body: { kind: "mcp_server", name: "github", description: "GitHub" },
     });
     expect(scopeApi.put).toHaveBeenCalledWith("u-gh", { agents: ["a-1"] });
     expect(report.created).toEqual([{ name: "github", uid: "u-gh" }]);

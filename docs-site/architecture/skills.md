@@ -75,6 +75,17 @@ Applying validates the new folder — its `SKILL.md` must still name the same sk
 
 If the master folder was edited since the pin, the update is a **conflict**. You choose: keep your edits (the pin stays, and Coffer does not offer that commit again — only a newer one), take the update (your edits are discarded), or compare one file at a time across your folder, the pinned commit and the new commit.
 
+## Resolving what repair will not touch
+
+Automatic repair only puts back a missing or repointed link; it never overwrites a folder Coffer did not make and never picks between two versions. Those cases wait for a person, and each has a confirmed answer:
+
+- **A folder in the way.** The drift report lists a real folder at an agent's link path, whether the delivery was made before or is only wanted now. Comparing it diffs the folder against the master; keeping master moves the folder under `~/.coffer/backup/skills/<agent>/` and links master again, and keeping the agent's version swaps its files into the master first. Only that one agent's copy changes.
+- **A delete over a foreign copy.** Deleting a skill is refused, with nothing changed, while any agent's path holds a folder Coffer did not make — deleting would either leave it behind or remove someone else's files.
+- **A folder no skill claims.** A folder in the skills store with no record can be registered in place or moved to `~/.coffer/backup/skills/orphans/`; it is never hard-deleted.
+- **A missing master.** Every read of a skill says whether its master folder is on disk, so a skill that is off still shows that its folder is gone.
+
+A Git skill's source can also be changed: the new repository, ref and folder are staged like an update, measured against the current folder, and recorded only when the preview is applied.
+
 ## What a skill says it needs
 
 A `SKILL.md` may list the commands it relies on under `requires` — `jq`, `gh>=2.40`, or a mapping with a command and a version. Coffer reads that list from the master folder each time it shows the skill, so an edit is visible at once, and it links each command to its page on the CLIs page. Declaring a requirement changes nothing about delivery: a skill whose command is missing is still delivered, and the agent that follows it will fail at the step that needs the command.

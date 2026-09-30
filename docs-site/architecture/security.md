@@ -300,17 +300,21 @@ A copy of `coffer.db` without its master key yields no secrets, and in a signed 
 
 [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Two adapters fetch from typed input. The first is the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Four paths fetch from typed input. The first is the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
 
 - A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
 - `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
 
 The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (`infrastructure/mcp/openapi_fetch.py`, capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
 
+The third is the MCP servers page's test of a server that is not added yet (`POST /api/v1/resources/mcp_server/test-config`): an HTTP server's typed URL is checked before the test connects, and the MCP SDK follows a redirect only within that URL's own origin, so the test cannot be led to a host the guard did not see. A server on a private or loopback address is tested once it is added. The same test starts a stdio server only for the length of the test, in its own process group that is stopped whole when the test ends, and releases no stored secret to it — only values typed into the form for this test, which are redacted from the stderr lines and the message it returns.
+
+The fourth is the Custom tools page's test of a request in a group that is not saved yet (`POST /api/v1/custom-tools/test`): the typed base URL is checked before the request is sent, the request follows no redirect, and no stored secret is sent, since the group has no approved binding yet. A group on a private host is tested once it is saved; after that its requests are the configured endpoint below.
+
 So a probe of a non-Ollama endpoint on a private or link-local address is refused. Saving and using a connection are not probes, and the guard is not applied to the endpoints you configure as your own:
 
 - **HTTP-transport MCP servers**, whose URL you registered — they commonly run on your own machine or network.
-- **Custom-tool groups**, whose base URL you configured. Their requests follow no redirect, so the auth header only ever goes to that base URL.
+- **Saved custom-tool groups**, whose base URL you configured. Their requests follow no redirect, so the auth header only ever goes to that base URL.
 - **Coffer's own model calls** and **transcription**, which go to the providers you configured.
 - **Telegram and SeaTalk**, the IM platforms' own hosts, including the media URLs they hand back.
 - **Vault sync**, which is a `git` subprocess against the remote you configured.

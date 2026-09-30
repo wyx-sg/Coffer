@@ -1,37 +1,29 @@
 // frontend/src/pages/SkillsPage.tsx — spec skill-manager "Cover skill management on REST, the CLI and the web".
 // The Skills page is the library beside a reading pane (design add-skill-sources
 // decision 8): `/skills`, `/skills/<name>` and `/skills/<name>/<tab>` all render
-// it, the list on the left (SkillLibrary) and, on the right, the open skill
-// (SkillDetailPane, loaded on first open), what Check copies found
-// (SkillCopiesPanel), the first-run state while the library holds nothing of
-// the user's own, or a prompt to choose a skill.
+// it, the list on the left (SkillLibrary) and, on the right, what
+// SkillsReadingPane picks — Check copies, the selection, the open skill, the
+// first run or a prompt to choose a skill.
 //
 // Addressing: a skill is addressed by its fixed NAME; the REST API takes the
 // uid, which comes from the list row the name resolves to. Old addresses keep
 // working — `/skills/<uid>` redirects to the name, `?tab=overview` (the tab
 // that became Delivery) to `/delivery`, `?tab=files` to the bare Files address.
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
-import { PageFallback } from "@/components/PageFallback";
+import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { SkillAddDialog, type SkillAddSource } from "@/components/skills/SkillAddDialog";
-import { SkillCopiesPanel } from "@/components/skills/SkillCopiesPanel";
-import { SkillFirstRun } from "@/components/skills/SkillFirstRun";
 import { SkillLibrary } from "@/components/skills/SkillLibrary";
+import { SkillsReadingPane } from "@/components/skills/SkillsReadingPane";
 import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
 import { canonicalDetailPath, resolveByName, useDetailTab } from "@/lib/detailTabs";
-import { useCheckSkillCopies, useSkills } from "@/lib/hooks/useSkills";
+import { useSkillCopies, useSkills } from "@/lib/hooks/useSkills";
 import { DEFAULT_SKILL_TAB as DEFAULT_TAB, SKILL_TABS as TABS } from "@/lib/skills/tabs";
-
-const SkillDetailPane = lazy(() =>
-  import("@/components/skills/SkillDetailPane").then((m) => ({ default: m.SkillDetailPane })),
-);
 
 /** The old Overview tab is Delivery now; every other old `?tab=` maps as is. */
 function withOverviewAsDelivery(search: string): string {
@@ -47,14 +39,17 @@ export function SkillsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const list = useSkills();
-  const check = useCheckSkillCopies();
+  const copies = useSkillCopies();
   const [addOpen, setAddOpen] = useState(false);
   const [addSource, setAddSource] = useState<SkillAddSource>("folder");
   const [showCopies, setShowCopies] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const skills = list.data ?? [];
   const match = resolveByName(list.data, nameParam);
-  const legacyOverview = new URLSearchParams(location.search).get("tab") === "overview";
+  const search = new URLSearchParams(location.search);
+  const legacyOverview = search.get("tab") === "overview";
+  const orphan = nameParam ? null : search.get("orphan");
   const basePath = `/skills/${encodeURIComponent(nameParam)}`;
   const [tab, setTab] = useDetailTab(TABS, DEFAULT_TAB, basePath, {
     enabled: !!match && !match.byUid && !legacyOverview,
@@ -84,78 +79,29 @@ export function SkillsPage() {
   };
   const checkCopies = () => {
     setShowCopies(true);
-    check.mutate();
+    void copies.refetch();
   };
   const hrefFor = (name: string) =>
     `/skills/${encodeURIComponent(name)}${tab === DEFAULT_TAB ? "" : `/${tab}`}`;
-  const ownSkills = skills.filter((s) => !s.builtin);
-
-  let pane: JSX.Element;
-  if (showCopies) {
-    pane = (
-      <SkillCopiesPanel
-        report={check.data}
-        checking={check.isPending}
-        onCheckAgain={() => check.mutate()}
-        onClose={() => setShowCopies(false)}
-      />
-    );
-  } else if (list.error) {
-    pane = (
-      <EmptyState
-        tone="error"
-        icon={Sparkles}
-        title={t("skills.loadFailed")}
-        description={translateApiError(t, list.error)}
-        action={
-          <Button variant="outline" onClick={() => void list.refetch()}>
-            {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  } else if (list.isPending) {
-    pane = <PageFallback />;
-  } else if (match) {
-    pane = (
-      <Suspense fallback={<PageFallback />}>
-        <SkillDetailPane
-          skill={match.item}
-          tab={tab}
-          onTabChange={setTab}
-          onDeleted={() => navigate("/skills", { replace: true })}
-        />
-      </Suspense>
-    );
-  } else if (nameParam) {
-    pane = (
-      <EmptyState
-        icon={Sparkles}
-        title={t("skills.detail.notFound", { name: nameParam })}
-        description={t("skills.choose.body")}
-      />
-    );
-  } else if (ownSkills.length === 0) {
-    pane = <SkillFirstRun hasBuiltin={skills.length > 0} onAdd={openAdd} />;
-  } else {
-    pane = (
-      <EmptyState
-        icon={Sparkles}
-        title={t("skills.choose.title")}
-        description={t("skills.choose.body")}
-      />
-    );
-  }
+  // A selection only ever holds rows that still exist and can be deleted.
+  const selected = skills.filter((s) => !s.builtin && picked.has(s.uid));
+  const clearSelection = () => setPicked(new Set());
 
   return (
     // Full-bleed like the chat page: Layout pads every page, and this one is a
     // workspace whose two panes each scroll on their own.
     <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">
+      <div className="shrink-0 border-b border-border-subtle px-6 py-3.5">
         <PageHeader
-          icon={Sparkles}
           title={t("skills.title")}
-          subtitle={t("skills.subtitle")}
+          badges={
+            <>
+              {list.data ? <span className="text-sm text-text-muted">{skills.length}</span> : null}
+              <HelpTip>
+                <p className="text-xs">{t("skills.help")}</p>
+              </HelpTip>
+            </>
+          }
           actions={
             <Button onClick={() => openAdd("folder")}>
               <Plus aria-hidden /> {t("skills.add")}
@@ -178,10 +124,34 @@ export function SkillsPage() {
             hrefFor={hrefFor}
             onOpenSkill={() => setShowCopies(false)}
             onCheckCopies={checkCopies}
-            checkingCopies={check.isPending}
+            checkingCopies={copies.isFetching}
+            drift={copies.data?.entries}
+            picked={picked}
+            onPickedChange={setPicked}
+            selected={selected}
+            orphan={orphan}
           />
         }
-        detail={<div className="px-7 pb-5 pt-5">{pane}</div>}
+        detail={
+          <div className="px-7 pb-5 pt-5">
+            <SkillsReadingPane
+              list={list}
+              skills={skills}
+              match={match?.item ?? null}
+              nameParam={nameParam}
+              orphan={orphan}
+              tab={tab}
+              onTabChange={setTab}
+              showCopies={showCopies}
+              onCloseCopies={() => setShowCopies(false)}
+              onCheckCopies={checkCopies}
+              selected={selected}
+              onClearSelection={clearSelection}
+              onAdd={openAdd}
+              onDeleted={() => navigate("/skills", { replace: true })}
+            />
+          </div>
+        }
       />
 
       <SkillAddDialog open={addOpen} onOpenChange={setAddOpen} initialSource={addSource} />

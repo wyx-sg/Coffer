@@ -134,6 +134,17 @@ async def preview_update(
     return preview_out(await sources.preview(uid))
 
 
+@router.post("/{uid}/source/change", response_model=SkillUpdatePreviewOut)
+async def preview_source_change(
+    uid: str,
+    body: SkillStageGitRequest,
+    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
+) -> SkillUpdatePreviewOut:
+    """Stage a new repository / ref / folder for this skill and show the change
+    against its current folder; ``/source/apply`` with the stage takes it."""
+    return preview_out(await sources.change_source(uid, body.url, body.ref, body.path))
+
+
 @router.get("/{uid}/source/compare", response_model=SkillUpdateCompareOut)
 async def compare_update(
     uid: str,

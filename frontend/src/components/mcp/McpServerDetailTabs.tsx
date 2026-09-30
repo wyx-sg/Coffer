@@ -1,40 +1,35 @@
 // frontend/src/components/mcp/McpServerDetailTabs.tsx — the tab strip and panes of the open MCP server.
 //
-// Overview · Tools · Resources · Prompts · Invocations, the tab in the path
-// (`/mcp-servers/<name>/tools`; spec web-ui "Lay out every detail page's tabs
-// alike"). The pane hands in what Overview and Tools show; Resources and
-// Prompts are the shared capability table, Invocations the invocation log
-// scoped to this server (spec web-ui "Scope Activity's calls table to one
-// server on its page").
+// Overview · Tools · N · Resources · N · Prompts · N · Invocations, the tab in
+// the path (`/mcp-servers/<name>/tools`; spec web-ui "Lay out every detail
+// page's tabs alike"). The pane hands in every tab's content and the counts;
+// a count of none is left off.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { components } from "@/lib/api/types";
 import { useDetailTab } from "@/lib/detailTabs";
-import { CapabilityList } from "./CapabilityList";
-import { InvocationsTable } from "./InvocationsTable";
 import { MCP_SERVER_TABS } from "./mcpServerTabs";
 
-type CapabilityListOut = components["schemas"]["CapabilityListOut"];
-
 interface Props {
-  serverUid: string;
   /** The page's bare address (`/mcp-servers/<name>`); a tab is a segment under it. */
   basePath: string;
-  capabilities: CapabilityListOut | undefined;
-  capsError?: unknown;
+  counts: { tools?: number; resources?: number; prompts?: number };
   overview: ReactNode;
   tools: ReactNode;
+  resources: ReactNode;
+  prompts: ReactNode;
+  invocations: ReactNode;
 }
 
 export function McpServerDetailTabs({
-  serverUid,
   basePath,
-  capabilities,
-  capsError,
+  counts,
   overview,
   tools,
+  resources,
+  prompts,
+  invocations,
 }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useDetailTab(MCP_SERVER_TABS, "overview", basePath);
@@ -51,15 +46,15 @@ export function McpServerDetailTabs({
         <TabsTrigger value="overview">{t("mcp.server.tabs.overview")}</TabsTrigger>
         <TabsTrigger value="tools">
           {t("mcp.server.tabs.tools")}
-          {count(capabilities?.tools?.length)}
+          {count(counts.tools)}
         </TabsTrigger>
         <TabsTrigger value="resources">
           {t("mcp.server.tabs.resources")}
-          {count(capabilities?.resources?.length)}
+          {count(counts.resources)}
         </TabsTrigger>
         <TabsTrigger value="prompts">
           {t("mcp.server.tabs.prompts")}
-          {count(capabilities?.prompts?.length)}
+          {count(counts.prompts)}
         </TabsTrigger>
         <TabsTrigger value="invocations">{t("mcp.server.tabs.invocations")}</TabsTrigger>
       </TabsList>
@@ -71,25 +66,13 @@ export function McpServerDetailTabs({
         {tools}
       </TabsContent>
       <TabsContent value="resources" className="pt-5">
-        <CapabilityList
-          serverUid={serverUid}
-          kind="resource"
-          resources={capabilities?.resources}
-          error={capsError}
-          fromCache={capabilities?.from_cache}
-        />
+        {resources}
       </TabsContent>
       <TabsContent value="prompts" className="pt-5">
-        <CapabilityList
-          serverUid={serverUid}
-          kind="prompt"
-          prompts={capabilities?.prompts}
-          error={capsError}
-          fromCache={capabilities?.from_cache}
-        />
+        {prompts}
       </TabsContent>
       <TabsContent value="invocations" className="pt-5">
-        <InvocationsTable serverUid={serverUid} />
+        {invocations}
       </TabsContent>
     </Tabs>
   );

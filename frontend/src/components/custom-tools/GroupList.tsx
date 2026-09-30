@@ -42,10 +42,10 @@ export function GroupList({ groups, loading, selected, onOpen }: Props) {
             <section key={section} aria-label={t(`customTools.list.section.${section}`)}>
               <h2
                 aria-hidden
-                className="mb-1 flex items-center justify-between px-2 text-2xs font-semibold uppercase tracking-wider text-text-subtle"
+                className="mb-1 flex items-center justify-between px-2.5 text-xs font-semibold text-text-muted"
               >
                 {t(`customTools.list.section.${section}`)}
-                <span className="font-normal">{inSection.length}</span>
+                <span className="font-normal tabular-nums">{inSection.length}</span>
               </h2>
               <ul>
                 {inSection.map((group) => (

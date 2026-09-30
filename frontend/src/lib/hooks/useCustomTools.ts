@@ -16,9 +16,11 @@ import {
   type CustomToolGroupIn,
   type CustomToolGroupPatch,
   type CustomToolIn,
+  type CustomToolUnsavedTestIn,
   type OpenApiReadIn,
 } from "@/lib/api/customTools";
 import { translateApiError } from "@/lib/api/errors";
+import { scopeApi } from "@/lib/api/scope";
 import {
   customToolGroupKey,
   customToolsKey,
@@ -71,11 +73,24 @@ export function useCreateCustomToolGroup() {
   });
 }
 
+/** Edit group's Save: the group, then its reach when it changed (`agents`:
+ *  uids, `null` for every agent, `undefined` unchanged). */
 export function useUpdateCustomToolGroup(name: string) {
   const qc = useQueryClient();
   const notice = useApprovalNotice();
   return useMutation({
-    mutationFn: (body: CustomToolGroupPatch) => customToolsApi.update(name, body),
+    mutationFn: async ({
+      body,
+      agents,
+    }: {
+      body: CustomToolGroupPatch;
+      agents?: string[] | null;
+    }) => {
+      const saved = await customToolsApi.update(name, body);
+      if (agents === undefined) return saved;
+      await scopeApi.put(saved.uid, agents === null ? null : { agents });
+      return customToolsApi.get(name);
+    },
     onSuccess: (group) => {
       settle(qc, group);
       notice(group);
@@ -175,6 +190,13 @@ export function useTestCustomTool(group: string) {
   return useMutation({
     mutationFn: ({ tool, args }: { tool: CustomToolIn; args: Record<string, unknown> }) =>
       customToolsApi.test(group, tool, args),
+  });
+}
+
+/** Run a request of a group not saved yet; the form renders the result. */
+export function useTestUnsavedCustomTool() {
+  return useMutation({
+    mutationFn: (body: CustomToolUnsavedTestIn) => customToolsApi.testUnsaved(body),
   });
 }
 

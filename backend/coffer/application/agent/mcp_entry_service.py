@@ -56,7 +56,7 @@ def _source_keys(agent_type: AgentType) -> tuple[str, ...]:
     return descriptor_for(agent_type).resolved_mcp_source_keys()
 
 
-def _container_key(agent_type: AgentType) -> str | None:
+def container_key(agent_type: AgentType) -> str | None:
     """Top-level MCP container key for the agent (None → format default)."""
     inj = descriptor_for(agent_type).mcp
     return inj.container_key if inj else None
@@ -140,7 +140,7 @@ class AgentMcpEntryService:
         self._rs = resource_service
         self._credentials = credentials
 
-    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
+    async def agent(self, uid: str) -> tuple[Resource, AgentConfig]:
         """The agent row and its parsed config.
 
         Both halves, because the write paths audit against the resource itself
@@ -153,9 +153,9 @@ class AgentMcpEntryService:
         return resource, AgentConfig.model_validate(resource.config)
 
     async def _config_for(self, uid: str) -> AgentConfig:
-        return (await self._agent(uid))[1]
+        return (await self.agent(uid))[1]
 
-    def _source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
+    def source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
         cfg_dir = cfg.resolved_config_dir()
         return [spec_for(cfg.type, key, cfg_dir) for key in _source_keys(cfg.type)]
 
@@ -171,16 +171,13 @@ class AgentMcpEntryService:
         cfg = await self._config_for(uid)
         items: list[McpEntry] = []
         parse_errors: list[ParseErrorInfo] = []
-        for spec in self._source_specs(cfg):
+        for spec in self.source_specs(cfg):
             text = self._store.read_text(spec.path)
             if text is None:
                 continue
             try:
-                items.extend(
-                    parse_entries(
-                        spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
-                    )
-                )
+                ck = container_key(cfg.type)
+                items.extend(parse_entries(spec.format, text, source=spec.key, container_key=ck))
             except AgentConfigParseError as e:
                 parse_errors.append(
                     ParseErrorInfo(source=spec.key, path=str(spec.path), error=str(e))
@@ -210,11 +207,11 @@ class AgentMcpEntryService:
         name two files share). Values are still the raw ones here — masking is
         the surface's job, and nothing below it logs them (``repr=False``).
         """
-        spec, _text, parsed = await self._locate(uid, entry, source)
+        spec, _text, parsed = await self.locate(uid, entry, source)
         (annotated,) = await self._annotate([parsed])
         return McpEntryDetail(entry=annotated, path=str(spec.path))
 
-    async def _locate(
+    async def locate(
         self, uid: str, entry: str, source: str | None
     ) -> tuple[ConfigFileSpec, str, McpEntry]:
         """Find the single source file containing ``entry``.
@@ -228,7 +225,7 @@ class AgentMcpEntryService:
         if entry == COFFER_SERVER_KEY:
             raise McpEntryProtected(entry)
         cfg = await self._config_for(uid)
-        specs = self._source_specs(cfg)
+        specs = self.source_specs(cfg)
         if source is not None:
             if source not in _source_keys(cfg.type):
                 raise ConfigFileNotAllowed(cfg.type.value, source)
@@ -242,7 +239,7 @@ class AgentMcpEntryService:
                 continue
             try:
                 parsed = parse_entries(
-                    spec.format, text, source=spec.key, container_key=_container_key(cfg.type)
+                    spec.format, text, source=spec.key, container_key=container_key(cfg.type)
                 )
             except AgentConfigParseError as e:
                 if first_parse_error is None:
@@ -264,9 +261,9 @@ class AgentMcpEntryService:
         self, uid: str, entry: str, *, source: str | None = None, actor: str = "api"
     ) -> None:
         """Remove ``entry`` from the agent config file that contains it."""
-        agent, cfg = await self._agent(uid)
-        spec, _text, _parsed = await self._locate(uid, entry, source)
-        # Re-read immediately before the write, as ``adopt`` does: ``_locate``
+        agent, cfg = await self.agent(uid)
+        spec, _text, _parsed = await self.locate(uid, entry, source)
+        # Re-read immediately before the write, as ``adopt`` does: ``locate``
         # awaits, so the text it returned can be stale by the time we get here.
         # The web UI deletes a whole selection at once and fans the requests out
         # concurrently, which puts several removals against ONE file in flight
@@ -275,7 +272,7 @@ class AgentMcpEntryService:
         # just removed.
         current = self._store.read_text(spec.path) or ""
         new_text = remove_entry_text(
-            spec.format, current, entry, container_key=_container_key(cfg.type)
+            spec.format, current, entry, container_key=container_key(cfg.type)
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
@@ -321,8 +318,8 @@ class AgentMcpEntryService:
         removed; a failure after registration deletes the new resource so the
         agent's file is never left without a working entry.
         """
-        agent, cfg = await self._agent(uid)
-        spec, _text, parsed_entry = await self._locate(uid, entry, source)
+        agent, cfg = await self.agent(uid)
+        spec, _text, parsed_entry = await self.locate(uid, entry, source)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
         unresolved = [k for k in flagged if k not in (secrets or {})]
@@ -373,12 +370,12 @@ class AgentMcpEntryService:
             # Verify the resource is really readable before touching the file.
             await self._rs.get(resource.uid)
             # Re-read the file immediately before the write to avoid a TOCTOU
-            # window: another writer may have modified the file between _locate
+            # window: another writer may have modified the file between locate
             # and here (two awaits above).
             current = self._store.read_text(spec.path) or ""
             try:
                 new_text = remove_entry_text(
-                    spec.format, current, entry, container_key=_container_key(cfg.type)
+                    spec.format, current, entry, container_key=container_key(cfg.type)
                 )
             except McpEntryNotFound:
                 new_text = None  # entry vanished concurrently — nothing to remove
