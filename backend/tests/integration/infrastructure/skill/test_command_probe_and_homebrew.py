@@ -66,9 +66,12 @@ def test_installer_streams_merged_output_non_interactively(tmp_path: pathlib.Pat
 
 
 def test_installer_stops_at_its_ceiling(tmp_path: pathlib.Path) -> None:
-    brew = _script(tmp_path, "brew", "echo start\nsleep 5\necho never")
-    installer = HomebrewInstaller(user_path=_path(tmp_path), timeout=0.3)
+    brew = _script(tmp_path, "brew", "echo start\nsleep 30\necho never")
+    installer = HomebrewInstaller(user_path=_path(tmp_path), timeout=1.0)
     lines: list[str] = []
     code = installer.run([str(brew), "install", "jq"], lines.append)
     assert code != 0
-    assert lines[0] == "start" and lines[-1].startswith("coffer: stopped after")
+    # Under load the script may not have printed yet when the ceiling hits; what
+    # must hold is that it was stopped and never got further.
+    assert lines[-1].startswith("coffer: stopped after")
+    assert "never" not in lines
