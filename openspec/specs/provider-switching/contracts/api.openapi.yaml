@@ -265,6 +265,135 @@ paths:
       summary: Detect Local
       tags:
       - providers
+  /api/v1/providers/order:
+    put:
+      description: |-
+        Reorder the Model providers list — the order fallbacks are tried in
+        (spec provider-switching "Order providers, and fail over in that order").
+        422 unless ``uids`` names every provider exactly once.
+      operationId: reorder_providers_api_v1_providers_order_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderOrderIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Reorder Providers
+      tags:
+      - providers
+  /api/v1/providers/price-list:
+    get:
+      description: The price list in use and its refresh.
+      operationId: get_price_list_api_v1_providers_price_list_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Price List
+      tags:
+      - providers
+    put:
+      description: |-
+        Turn the daily refresh on or off on this machine. Nothing is fetched now;
+        the next tick of the refresh reads the setting.
+      operationId: put_price_list_api_v1_providers_price_list_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceListIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Put Price List
+      tags:
+      - providers
   /api/v1/providers/use-builtin/{agent_type}:
     post:
       description: |-
@@ -557,6 +686,57 @@ paths:
       summary: Set Internal Default Provider
       tags:
       - providers
+  /api/v1/providers/{uid}/prices:
+    post:
+      description: |-
+        Each model's price on this provider, with its source: You set, From
+        <provider>, Bundled or local — or none (spec provider-switching "Resolve
+        each model's price from the provider, its API, or the bundled list").
+        Read-only; nothing is fetched from the network.
+      operationId: model_prices_api_v1_providers__uid__prices_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelPricesIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelPricesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Model Prices
+      tags:
+      - providers
   /api/v1/providers/{uid}/transcribe-default:
     post:
       description: |-
@@ -613,6 +793,55 @@ paths:
       summary: Set Transcribe Default Provider
       tags:
       - providers
+  /api/v1/proxy/routes/{agent_uid}:
+    get:
+      description: The agent's provider and its fallbacks, as the proxy is serving them.
+      operationId: proxy_route_api_v1_proxy_routes__agent_uid__get
+      parameters:
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: query
+        name: model
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyRouteOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Proxy Route
+      tags:
+      - proxy
   /api/v1/proxy/status:
     get:
       description: The supervised proxy's state, as the daemon last saw it.
@@ -689,6 +918,47 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Proxy Token
+      tags:
+      - proxy
+  /api/v1/proxy/tokens/{agent_uid}/hint:
+    get:
+      description: The last four characters of the agent's token, minted on first ask.
+      operationId: proxy_token_hint_api_v1_proxy_tokens__agent_uid__hint_get
+      parameters:
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyTokenHintOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Proxy Token Hint
       tags:
       - proxy
   /api/v1/proxy/tokens/{agent_uid}/rotate:
@@ -1135,8 +1405,8 @@ components:
         What the user says this connection charges for a model, in USD per
         million tokens (web search per thousand requests). Relays and resellers
         price differently from the vendor, so a connection's own price wins over
-        the bundled snapshot when usage is costed (spec provider-switching "Price
-        usage from a bundled snapshot and per-connection prices"). A cache category
+        every other source when usage is costed (spec provider-switching "Resolve
+        each model's price from the provider, its API, or the bundled list"). A cache category
         left out is charged at the input rate, so an estimate errs high.
       properties:
         cache_read:
@@ -1376,6 +1646,169 @@ components:
       - audio
       title: Modality
       type: string
+    ModelPriceOut:
+      description: |-
+        One model's price on a provider and where it came from (spec
+        provider-switching "Resolve each model's price from the provider, its API,
+        or the bundled list"). USD per million tokens; ``source`` ``None`` means no
+        price is known and every rate is ``None`` — shown as "—", never as zero.
+        ``source_name`` names the provider whose API reported it (``provider``) or
+        the price list's provider (``bundled``). ``tiered``: the rates shown are
+        the base tier; past a threshold of input tokens the request pays more.
+      properties:
+        cache_read:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Cache Read
+        cache_write_1h:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Cache Write 1H
+        cache_write_5m:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Cache Write 5M
+        input:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Input
+        model:
+          title: Model
+          type: string
+        output:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Output
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/PriceSource'
+          - type: 'null'
+        source_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Name
+        source_updated:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          title: Source Updated
+        tiered:
+          default: false
+          title: Tiered
+          type: boolean
+      required:
+      - model
+      - source
+      - source_name
+      - input
+      - output
+      - cache_write_5m
+      - cache_write_1h
+      - cache_read
+      - tiered
+      - source_updated
+      title: ModelPriceOut
+      type: object
+    ModelPricesIn:
+      description: The models whose price on this provider to resolve.
+      properties:
+        models:
+          items:
+            type: string
+          maxItems: 1000
+          title: Models
+          type: array
+      required:
+      - models
+      title: ModelPricesIn
+      type: object
+    ModelPricesOut:
+      properties:
+        bundled_version:
+          title: Bundled Version
+          type: string
+        prices:
+          items:
+            $ref: '#/components/schemas/ModelPriceOut'
+          title: Prices
+          type: array
+      required:
+      - prices
+      - bundled_version
+      title: ModelPricesOut
+      type: object
+    PriceListIn:
+      properties:
+        refresh:
+          title: Refresh
+          type: boolean
+      required:
+      - refresh
+      title: PriceListIn
+      type: object
+    PriceListOut:
+      description: |-
+        The price list pricing reads now, and its daily refresh (spec
+        provider-switching "Refresh the bundled price list in the background").
+      properties:
+        last_attempt_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Attempt At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        origin:
+          enum:
+          - bundled
+          - refreshed
+          title: Origin
+          type: string
+        pinned_off:
+          title: Pinned Off
+          type: boolean
+        refresh:
+          title: Refresh
+          type: boolean
+        updated:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          title: Updated
+        version:
+          title: Version
+          type: string
+      required:
+      - version
+      - updated
+      - origin
+      - refresh
+      - pinned_off
+      - last_attempt_at
+      - last_error
+      title: PriceListOut
+      type: object
+    PriceSource:
+      description: Where a model's price came from, in the order they are consulted.
+      enum:
+      - user
+      - provider
+      - bundled
+      - local
+      title: PriceSource
+      type: string
     Protocol:
       description: |-
         Upstream wire protocol a connection speaks (detected, not user-typed).
@@ -1449,6 +1882,9 @@ components:
       title: ProviderCreate
       type: object
     ProviderListOut:
+      description: |-
+        Every connection in Model providers list order — which is also the
+        order the model proxy tries fallbacks in.
       properties:
         providers:
           items:
@@ -1530,6 +1966,20 @@ components:
       - reachable
       title: ProviderModelsOut
       type: object
+    ProviderOrderIn:
+      description: 'The new list order: every connection''s uid, exactly once.'
+      properties:
+        uids:
+          items:
+            type: string
+          maxItems: 500
+          minItems: 1
+          title: Uids
+          type: array
+      required:
+      - uids
+      title: ProviderOrderIn
+      type: object
     ProviderOut:
       description: |-
         An LLM connection as returned by the API (no secret).
@@ -1584,6 +2034,10 @@ components:
         enabled:
           title: Enabled
           type: boolean
+        fallback:
+          default: true
+          title: Fallback
+          type: boolean
         internal_default:
           title: Internal Default
           type: boolean
@@ -1635,6 +2089,7 @@ components:
       - description
       - created_at
       - local_runtime
+      - fallback
       - updated_at
       title: ProviderOut
       type: object
@@ -1668,6 +2123,11 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        fallback:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Fallback
         models:
           anyOf:
           - items:
@@ -1686,6 +2146,56 @@ components:
           - type: 'null'
           title: Secret Value
       title: ProviderPatch
+      type: object
+    ProxyRouteMemberOut:
+      properties:
+        connection_uid:
+          title: Connection Uid
+          type: string
+        local:
+          title: Local
+          type: boolean
+        name:
+          title: Name
+          type: string
+      required:
+      - connection_uid
+      - name
+      - local
+      title: ProxyRouteMemberOut
+      type: object
+    ProxyRouteOut:
+      description: |-
+        Where an agent's requests go (spec provider-switching "Order providers,
+        and fail over in that order"): its provider, and the providers tried next,
+        in order, when it fails before the first byte. ``primary`` is ``None``
+        while the agent runs on its own built-in login, which bypasses the proxy.
+        With ``model``, ``fallbacks`` holds only the providers that offer it —
+        failover never changes the model.
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        fallbacks:
+          items:
+            $ref: '#/components/schemas/ProxyRouteMemberOut'
+          title: Fallbacks
+          type: array
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        primary:
+          anyOf:
+          - $ref: '#/components/schemas/ProxyRouteMemberOut'
+          - type: 'null'
+      required:
+      - agent_uid
+      - model
+      - primary
+      - fallbacks
+      title: ProxyRouteOut
       type: object
     ProxyStatusOut:
       properties:
@@ -1727,6 +2237,22 @@ components:
       - last_error
       - revision
       title: ProxyStatusOut
+      type: object
+    ProxyTokenHintOut:
+      description: |-
+        What the Model tab shows of an agent's token: its last four characters,
+        never the token.
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        last4:
+          title: Last4
+          type: string
+      required:
+      - agent_uid
+      - last4
+      title: ProxyTokenHintOut
       type: object
     ProxyTokenOut:
       properties:

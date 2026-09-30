@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from coffer.domain.usage.pricing import ModelPrice
+from coffer.domain.usage.pricing import ResolvedPrice
 from coffer.domain.usage.quota import QuotaSnapshot, QuotaSource
 from coffer.domain.usage.records import UsageRecord
 
@@ -32,6 +32,25 @@ class PricedRecord:
     cost_usd: float | None
     price_version: str | None
     unpriced: bool
+
+
+@dataclass(frozen=True)
+class FailoverEvent:
+    """One request the proxy moved off a connection before its first byte.
+
+    ``to_*`` is the connection that was tried next, when the same spool pass
+    carried its attempt; ``None`` when it did not (every later candidate was
+    also resting, or its record lands in a later file)."""
+
+    at: datetime
+    agent_uid: str | None
+    agent_type: str | None
+    model: str | None
+    from_uid: str | None
+    from_name: str | None
+    reason: str
+    to_uid: str | None = None
+    to_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,10 +175,19 @@ class SpoolReader(Protocol):
 
 
 class ConnectionPriceLookup(Protocol):
-    async def override_price(
-        self, connection_uid: str | None, model: str | None
-    ) -> ModelPrice | None:
-        """The price the user set on ``connection_uid`` for ``model``, if any."""
+    async def resolve_price(
+        self, connection_uid: str | None, model: str | None, at: datetime
+    ) -> ResolvedPrice | None:
+        """The price a request for ``model`` through ``connection_uid`` at
+        ``at`` is costed at, and where it came from; ``None`` when nothing
+        prices it (spec provider-switching "Resolve each model's price from
+        the provider, its API, or the bundled list")."""
+        ...
+
+
+class FailoverLog(Protocol):
+    async def failed_over(self, event: FailoverEvent) -> None:
+        """Record that the proxy moved a request off one connection."""
         ...
 
 
@@ -193,6 +221,8 @@ __all__ = [
     "ConnectionNames",
     "ConnectionPriceLookup",
     "DailyUsage",
+    "FailoverEvent",
+    "FailoverLog",
     "PricedRecord",
     "QuotaRepo",
     "RequestFilters",

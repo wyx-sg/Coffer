@@ -29,8 +29,10 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     filesTree: vi.fn(),
     fileContent: vi.fn(),
     writeFileContent: vi.fn(),
-    verify: vi.fn(),
+    verify: vi.fn(async () => ({ entries: [] })),
     repair: vi.fn(),
+    compareCopy: vi.fn(),
+    resolveCopy: vi.fn(),
     cancelStage: vi.fn(async () => undefined),
   },
 }));
@@ -101,6 +103,7 @@ beforeEach(() => {
     { uid: CODEX.uid, enabled: true },
   ];
   vi.mocked(skillsApi.filesTree).mockResolvedValue({ root: TREE });
+  vi.mocked(skillsApi.verify).mockResolvedValue({ entries: [] });
   vi.mocked(skillsApi.fileContent).mockImplementation(async (_uid, path) => ({
     path,
     abs_path: `/Users/me/.coffer/skills/hello/${path}`,
@@ -123,7 +126,14 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   renderSkillsPage("/skills/hello");
   // The open skill's pane waits on the library and the skill's detail.
   const tabs = await screen.findAllByRole("tab", {}, { timeout: 5_000 });
-  expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
+  expect(tabs.map((t) => t.textContent?.replace(/\s*·.*$/, ""))).toEqual([
+    "Files",
+    "Delivery",
+    "Requires",
+    "History",
+  ]);
+  // Files counts the folder's files.
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Files" })).toHaveTextContent("· 2"));
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
   // SKILL.md is open and rendered, not raw.
@@ -183,7 +193,7 @@ acceptance("skill-manager", "the delivery tab shows each agent's copy", async ()
   expect(first).toHaveTextContent("~/.claude/skills/hello");
   const second = screen.getByTestId("skill-delivery-codex");
   expect(second).toHaveTextContent("Not delivered");
-  expect(second).toHaveTextContent("Outside the skill’s reach.");
+  expect(second).toHaveTextContent("Not ticked.");
 });
 
 acceptance("skill-manager", "a skill's requires tab links each command", async () => {
@@ -199,8 +209,8 @@ acceptance("skill-manager", "a skill's requires tab links each command", async (
   const jq = await screen.findByRole("link", { name: /^jq/ });
   expect(jq).toHaveAttribute("href", "/clis/jq");
   const gh = screen.getByRole("link", { name: /^gh/ });
-  expect(gh).toHaveTextContent("≥ 2.40");
   expect(gh).toHaveAttribute("href", "/clis/gh");
+  expect(screen.getByRole("tab", { name: "Requires" })).toHaveTextContent("· 2");
   fireEvent.click(gh);
   // The route for /clis/:command renders in the Skills page's place.
   expect(await screen.findByText("cli page")).toBeInTheDocument();
@@ -215,14 +225,16 @@ acceptance(
     const header = (await screen.findByRole("heading", { name: "coffer-guide", level: 2 }))
       .parentElement as HTMLElement;
     expect(within(header).getByTestId("skill-builtin-badge")).toHaveTextContent("Built-in");
-    expect(within(header).getByRole("button", { name: /delete/i })).toBeDisabled();
+    fireEvent.click(within(header).getByRole("button", { name: "More actions for coffer-guide" }));
+    expect(await screen.findByRole("menuitem", { name: "Delete…" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Turn off" })).toBeEnabled();
     expect(screen.getByTestId("skill-builtin-banner")).toHaveTextContent(
       "Coffer writes this skill itself",
     );
-    // Its row wears the mark too, and offers no box for the bulk delete.
+    // Its row wears the mark too, and its box can't be ticked for the bulk delete.
     const list = screen.getByRole("list", { name: "Library" });
     expect(within(list).getByTestId("skill-builtin-badge")).toBeInTheDocument();
-    expect(within(list).queryByRole("checkbox", { name: /coffer-guide/ })).not.toBeInTheDocument();
+    expect(within(list).getByRole("checkbox", { name: /coffer-guide/ })).toBeDisabled();
     // Its files are read-only.
     expect(await screen.findByRole("heading", { name: "Say hello" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
@@ -262,7 +274,6 @@ describe("SkillDetailPane", () => {
     expect(await screen.findByTestId("skill-master-path")).toHaveTextContent(
       "~/.coffer/skills/hello",
     );
-    expect(screen.getByTestId("skill-detail-source")).toHaveTextContent("From /tmp/hello");
     expect(screen.getByText(/^Updated /)).toBeInTheDocument();
   });
 
@@ -270,9 +281,10 @@ describe("SkillDetailPane", () => {
     renderSkillsPage("/skills/hello");
     const header = (await screen.findByRole("heading", { name: "hello", level: 2 }))
       .parentElement as HTMLElement;
-    fireEvent.click(within(header).getByRole("button", { name: /delete/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(header).getByRole("button", { name: "More actions for hello" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete hello?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete skill" }));
     await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledWith("sk-11aa"));
     await waitFor(() => expect(where.url).toBe("/skills"));
   });
@@ -304,6 +316,7 @@ describe("SkillDetailPane", () => {
         ],
       }),
     ];
+    vi.mocked(skillsApi.verify).mockResolvedValueOnce({ entries: [] });
     vi.mocked(skillsApi.verify).mockResolvedValue({
       entries: [
         {
@@ -320,12 +333,12 @@ describe("SkillDetailPane", () => {
     expect(row).toHaveTextContent("Linked");
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(row).toHaveTextContent("Points elsewhere"));
-    expect(row).toHaveTextContent("Relink it to the master.");
+    expect(row).toHaveTextContent("Coffer points it back on its next pass.");
   });
 
   test("a skill that declares no commands says so on Requires", async () => {
     renderSkillsPage("/skills/hello/requires");
-    expect(await screen.findByText("This skill declares no commands")).toBeInTheDocument();
+    expect(await screen.findByText("No commands required")).toBeInTheDocument();
   });
 
   test("an unknown name says there is no such skill", async () => {

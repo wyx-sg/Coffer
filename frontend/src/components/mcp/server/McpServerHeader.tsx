@@ -1,20 +1,44 @@
 // src/components/mcp/server/McpServerHeader.tsx — the open server's header in the MCP servers page's pane (design 4.1.02).
 //
-// Its title (the fixed name when there is none) with the state pill; the line
-// `name · transport · command or URL`; and the actions in the one detail
-// order — reach, then the state's own next step (Test, Test again, Turn on,
-// Replace secret), Edit, and the "⋯" menu: Edit… · Calls and server log ·
-// Copy config as JSON · Turn off / Turn on · Delete….
+// An icon tile tinted by the state, the fixed name in mono with the state
+// pill, one truncated line `transport · command or URL`; and the actions in
+// the one detail order — reach, then the state's own next step (Test, Test
+// again, Turn on, Replace secret), Edit, and the "⋯" menu: Edit… · Calls and
+// server log · Copy config as JSON · Turn off / Turn on · Delete….
 import { useTranslation } from "react-i18next";
-import { Activity, KeyRound, Pencil, Power, Server } from "lucide-react";
+import {
+  CircleAlert,
+  KeyRound,
+  Pencil,
+  Play,
+  Power,
+  RefreshCw,
+  Server,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
 import { StatusPill } from "@/components/status/StatusPill";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { ResourceOut } from "@/lib/api/resources";
+import { cn } from "@/lib/utils";
 import type { ServerState } from "./serverState";
 import { transportOf } from "./serverState";
+
+/** The tile's glyph and tint per state (design 4.1.01–4.1.05). */
+function tileOf(kind: ServerState["kind"]): { icon: LucideIcon; className: string } {
+  if (kind === "failing") return { icon: CircleAlert, className: "bg-danger-soft text-danger" };
+  if (kind === "launcherMissing")
+    return { icon: TriangleAlert, className: "bg-warning-soft text-warning" };
+  if (kind === "secretMissing")
+    return { icon: KeyRound, className: "bg-warning-soft text-warning" };
+  return {
+    icon: Server,
+    className: "border border-border-subtle bg-surface-sunken text-text-muted",
+  };
+}
 
 interface Props {
   resource: ResourceOut;
@@ -60,7 +84,7 @@ export function McpServerHeader({
     const again = state.kind === "failing" || state.kind === "launcherMissing";
     primary = (
       <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
-        <Activity aria-hidden />
+        {again ? <RefreshCw aria-hidden /> : <Play aria-hidden />}
         {testing ? t("mcp.page.testing") : again ? t("mcp.page.testAgain") : t("mcp.page.test")}
       </Button>
     );
@@ -82,49 +106,62 @@ export function McpServerHeader({
     },
   ];
 
+  const tile = tileOf(state.kind);
+  const Icon = tile.icon;
   return (
-    <header className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
-          <Server className="size-4" strokeWidth={1.75} aria-hidden />
-        </span>
-        <h1 className="min-w-0 truncate text-lg font-bold">{resource.title || resource.name}</h1>
-        <StatusPill tone={state.tone}>{t(`mcp.page.state.${state.kind}`)}</StatusPill>
-        <span className="ml-auto inline-flex flex-wrap items-center gap-2">
-          <ScopeControl
-            kind="mcp_server"
-            uid={resource.uid}
-            enabled={resource.enabled}
-            scope={resource.scope ?? null}
-          />
-          {primary}
-          <Button size="sm" variant="outline" onClick={() => onEdit()}>
-            <Pencil aria-hidden /> {t("mcp.page.edit")}
-          </Button>
-          <ActionMenu label={t("mcp.page.menu.label", { name: resource.name })} actions={actions} />
-        </span>
+    <header className="flex min-w-0 items-center gap-3">
+      <span
+        className={cn(
+          "inline-flex size-9 shrink-0 items-center justify-center rounded-lg",
+          tile.className,
+        )}
+        data-testid="mcp-server-tile"
+        data-state={state.kind}
+      >
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Its title when set, its fixed name (mono) otherwise. */}
+          <h1
+            className={cn(
+              "min-w-0 truncate text-lg font-semibold",
+              resource.title ? "" : "font-mono",
+            )}
+          >
+            {resource.title || resource.name}
+          </h1>
+          <StatusPill tone={state.tone}>{t(`mcp.page.state.${state.kind}`)}</StatusPill>
+        </div>
+        <p
+          className="min-w-0 truncate text-xs text-text-muted"
+          data-testid="mcp-server-target"
+          data-visual-volatile
+        >
+          {t(`mcp.page.transport.${transport.type}`)}
+          {transport.target ? (
+            <>
+              <span aria-hidden className="text-text-subtle">
+                {" · "}
+              </span>
+              <span className="font-mono">{transport.target}</span>
+            </>
+          ) : null}
+        </p>
       </div>
-      <p className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-text-muted">
-        <span className="font-mono">{resource.name}</span>
-        <span aria-hidden className="text-text-subtle">
-          ·
-        </span>
-        <span>{t(`mcp.page.transport.${transport.type}`)}</span>
-        {transport.target ? (
-          <>
-            <span aria-hidden className="text-text-subtle">
-              ·
-            </span>
-            <span
-              className="min-w-0 break-all font-mono"
-              data-testid="mcp-server-target"
-              data-visual-volatile
-            >
-              {transport.target}
-            </span>
-          </>
-        ) : null}
-      </p>
+      <span className="inline-flex shrink-0 items-center gap-2">
+        <ScopeControl
+          kind="mcp_server"
+          uid={resource.uid}
+          enabled={resource.enabled}
+          scope={resource.scope ?? null}
+        />
+        {primary}
+        <Button size="sm" variant="outline" onClick={() => onEdit()}>
+          <Pencil aria-hidden /> {t("mcp.page.edit")}
+        </Button>
+        <ActionMenu label={t("mcp.page.menu.label", { name: resource.name })} actions={actions} />
+      </span>
     </header>
   );
 }

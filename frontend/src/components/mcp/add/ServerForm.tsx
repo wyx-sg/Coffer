@@ -2,11 +2,14 @@
 // one-server form (boards Mcp-Add-TestPassed / Mcp-Add-Http / Mcp-Add-Errors).
 //
 // Opened prefilled from a paste that held one server, or empty from the type
-// choice. Nothing is tested before Add — no route tests an unregistered config
-// — so Add registers the server and the dialog tests it right after, on its
-// page. A name another server has is said under the field, both before submit
-// (from the list) and when the daemon answers 409.
-import { useState } from "react";
+// choice. Test runs the unsaved form (`POST /resources/mcp_server/test-config`,
+// spec mcp-gateway "Test an unsaved server config before adding it") and shows
+// what it found before Add server; nothing is saved by it, and an edit after
+// the test retires its result. Add registers the server, which is tested once
+// more on its page. A name another server has is said under the field, both
+// before submit (from the list) and when the daemon answers 409.
+import { useEffect, useState } from "react";
+import { Play, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,10 +17,15 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { translateApiError } from "@/lib/api/errors";
+import { useMcpConfigTest } from "@/lib/hooks/useMcpAddFlow";
 import type { ParsedEnvVar, ParsedServer } from "@/lib/mcp/pasteParse";
 import { shellSplit } from "@/lib/mcp/shellTokens";
 import type { FailedServer, NewServer, ReachIntent } from "../importMcpServers";
 import { missingSecretValues } from "../importMcpServers";
+import { WorkingDirInput } from "../env/TransportInputs";
+import { AddTestResult } from "./AddTestResult";
+import { addTestBodyOf, testKeyOf } from "./addTestBody";
 import { KeyValueRows } from "./KeyValueRows";
 import { NameField } from "./NameField";
 import { nameSendable } from "./nameProblem";
@@ -54,19 +62,26 @@ export function ServerForm({
   const { t } = useTranslation();
   const [type, setType] = useState(initial.transportType);
   const [name, setName] = useState(initial.name);
-  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState(initial.command);
   const [argsText, setArgsText] = useState(initial.args.map(quoteArg).join(" "));
   const [url, setUrl] = useState(initial.url);
   const [rows, setRows] = useState<ParsedEnvVar[]>(initial.env);
   const [reach, setReach] = useState<ReachIntent>({ mode: "everywhere" });
+  const test = useMcpConfigTest();
+  const [testedKey, setTestedKey] = useState<string | null>(null);
+  // Leaving the form stops a test still running.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => test.cancel(), []);
 
   const takenNow = failure?.nameTaken && failure.name === name ? new Set([...taken, name]) : taken;
   const args = shellSplit(argsText);
   const kept = rows.filter((r) => r.key.trim() !== "");
   const server: NewServer = {
     name,
-    title,
+    description,
+    cwd: type === "stdio" ? cwd : "",
     transportType: type,
     command: type === "stdio" ? command.trim() : "",
     args: type === "stdio" ? (args ?? []) : [],
@@ -77,6 +92,14 @@ export function ServerForm({
     type === "stdio"
       ? server.command !== "" && args !== null
       : /^https?:\/\/\S+$/i.test(server.url);
+  const testBody = addTestBodyOf(server);
+  const formKey = testKeyOf(testBody);
+  const result = test.data && testedKey === formKey ? test.data : null;
+  const canTest = !test.isPending && targetOk && missingSecretValues(server).length === 0;
+  const runTest = () => {
+    setTestedKey(formKey);
+    test.mutate(testBody);
+  };
   const canAdd =
     !pending &&
     nameSendable(name, takenNow) &&
@@ -106,9 +129,14 @@ export function ServerForm({
           help={t("mcp.add.nameHelp", { name: name || "name" })}
         />
         <div className="space-y-1.5">
-          <Label htmlFor="add-server-title">{t("mcp.add.title")}</Label>
-          <Input id="add-server-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <p className="text-xs text-text-muted">{t("mcp.add.titleHelp")}</p>
+          <Label htmlFor="add-server-description">{t("mcp.edit.descriptionLabel")}</Label>
+          <Input
+            id="add-server-description"
+            value={description}
+            placeholder={t("mcp.add.descriptionPlaceholder")}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <p className="text-xs text-text-muted">{t("mcp.edit.descriptionHelp")}</p>
         </div>
         {type === "stdio" ? (
           <>
@@ -162,21 +190,36 @@ export function ServerForm({
           keyPlaceholder={type === "stdio" ? "API_KEY" : "Authorization"}
           rows={rows}
           onChange={setRows}
+          storedSecrets
         />
+        {type === "stdio" ? <WorkingDirInput value={cwd} onChange={setCwd} /> : null}
+        {result ? <AddTestResult result={result} transport={type} server={name} /> : null}
+        {test.error && testedKey === formKey ? (
+          <Alert variant="error">
+            <AlertDescription>{translateApiError(t, test.error)}</AlertDescription>
+          </Alert>
+        ) : null}
         {failure && !failure.nameTaken ? (
           <Alert variant="error">
             <AlertDescription>{failure.message}</AlertDescription>
           </Alert>
         ) : null}
         <ReachPick value={reach} onChange={setReach} busy={pending} />
-        <p className="text-xs text-text-muted">{t("mcp.add.testAfterAdd")}</p>
       </div>
       <DialogFooter>
         {onBack ? (
-          <Button variant="ghost" className="sm:mr-auto" onClick={onBack} disabled={pending}>
+          <Button variant="ghost" onClick={onBack} disabled={pending}>
             {t("mcp.add.back")}
           </Button>
         ) : null}
+        <Button variant="outline" className="sm:mr-auto" disabled={!canTest} onClick={runTest}>
+          {result ? <RefreshCw aria-hidden /> : <Play aria-hidden />}
+          {test.isPending
+            ? t("mcp.edit.testing")
+            : result
+              ? t("mcp.edit.testAgain")
+              : t("mcp.edit.test")}
+        </Button>
         <Button variant="outline" onClick={onCancel} disabled={pending}>
           {t("common.cancel")}
         </Button>

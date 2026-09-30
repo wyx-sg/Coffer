@@ -39,6 +39,13 @@ vi.mock("@/components/mcp/server/McpServerPane", () => ({
   ),
 }));
 
+// Coffer's own server, as `GET /mcp/builtin` describes it; off unless a test sets it.
+const builtin: { data: unknown } = { data: undefined };
+vi.mock("@/lib/hooks/useMcpAddFlow", () => ({
+  useBuiltinMcpServer: () => ({ data: builtin.data, isPending: false }),
+  useMcpImportPlan: () => ({ data: undefined, isPending: false }),
+}));
+
 const statusOf: Record<string, unknown> = {};
 vi.mock("@/lib/api/client", () => ({
   getApiClient: () => ({
@@ -126,6 +133,7 @@ function renderAt(path = "/mcp-servers") {
 describe("ResourcesPage", () => {
   beforeEach(() => {
     for (const k of Object.keys(statusOf)) delete statusOf[k];
+    builtin.data = undefined;
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -250,6 +258,44 @@ describe("ResourcesPage", () => {
     expect(screen.getByText("github")).toBeInTheDocument();
     expect(screen.queryByText("billing")).toBeNull();
   });
+
+  acceptance(
+    "web-ui",
+    "the built-in coffer server is listed last and opens read-only",
+    async () => {
+      builtin.data = {
+        name: "coffer",
+        invocation_uid: "coffer",
+        transport: "http",
+        url: "http://127.0.0.1:8000/mcp",
+        status: "healthy",
+        checked_at: new Date().toISOString(),
+        reaches_all_connected_agents: true,
+        connected_agent_uids: ["a-cc"],
+        tool_count: 2,
+        tools: [
+          { name: "search_tools", qualified_name: "coffer__search_tools", description: "Find" },
+          { name: "write", qualified_name: "coffer__write", description: "File a fact" },
+        ],
+        summary: {
+          calls: 0,
+          errors: 0,
+          last_call_at: null,
+          since: new Date().toISOString(),
+          by_agent: [],
+          by_tool: [],
+        },
+      };
+      stubQuery({ data: [server("u-gh", "github")] });
+      renderAt("/mcp-servers/coffer");
+      const groups = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+      expect(groups[groups.length - 1]).toBe("Built-in");
+      expect(await screen.findByTestId("mcp-builtin-pane")).toBeInTheDocument();
+      expect(screen.getByText("coffer__search_tools", { exact: false })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^(Test|Edit)$/ })).toBeNull();
+      expect(screen.getByText("All connected agents")).toBeInTheDocument();
+    },
+  );
 
   test("a custom-tool group's MCP server address opens its Custom tools page", async () => {
     const group = server("u-ct", "billing", {

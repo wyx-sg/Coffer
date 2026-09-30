@@ -494,6 +494,61 @@ async def test_list_capabilities_upstream_unavailable_without_cache_still_errors
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="the saved-switches read answers without reaching the server"
+)
+async def test_list_capabilities_saved_answers_without_reaching_the_server(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``?saved=true`` answers from the saved switches at once — a failing
+    server's page must not wait out the discovery timeout — and with nothing
+    saved it answers empty lists rather than an error."""
+    _with_in_memory(monkeypatch)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(
+        tmp_path, tools=["read_file", "write_file"]
+    )
+    transport = ASGITransport(app=app)
+
+    class _ExplodingDiscovery:
+        async def list_tools(self, name: str, include_disabled: bool = False) -> list:
+            raise AssertionError("saved=true must not reach the server")
+
+        list_resources = list_tools
+        list_prompts = list_tools
+
+    try:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            real = app.dependency_overrides.get(get_capability_discovery)
+            app.dependency_overrides[get_capability_discovery] = lambda: _ExplodingDiscovery()
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities?saved=true")
+            assert r.status_code == 200, r.text
+            assert r.json()["from_cache"] is True
+            assert r.json()["tools"] == []
+
+            if real is None:
+                del app.dependency_overrides[get_capability_discovery]
+            else:
+                app.dependency_overrides[get_capability_discovery] = real
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
+            assert r.status_code == 200, r.text
+
+            app.dependency_overrides[get_capability_discovery] = lambda: _ExplodingDiscovery()
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities?saved=true")
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["from_cache"] is True
+            assert {t["original_name"] for t in body["tools"]} == {"read_file", "write_file"}
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_list_capabilities_requires_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -915,31 +970,18 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
 
     captured: list[str] = []
 
-    # Must patch where the name is looked up (server_test_routes local
-    # binding, since the /test route lives there — Task 20 size-gate split),
-    # not where it is defined. We wrap the real class to intercept __init__.
+    # Must patch where the name is looked up: the /test route runs the shared
+    # probe (infrastructure/mcp/probe.py), which builds the connection. We wrap
+    # the real class to intercept __init__.
     from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection as _RealConn
 
     class _CapturingConn(_RealConn):  # type: ignore[misc]
-        def __init__(  # type: ignore[override]
-            self,
-            transport,
-            env_overlay,
-            spawn_timeout_seconds=30,
-            request_timeout_seconds=120,
-            server_name="upstream",
-        ):
-            captured.append(server_name)
-            super().__init__(
-                transport,
-                env_overlay,
-                spawn_timeout_seconds,
-                request_timeout_seconds,
-                server_name,
-            )
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            captured.append(kwargs.get("server_name", "upstream"))
+            super().__init__(*args, **kwargs)
 
     with mock.patch(
-        "coffer.surfaces.http.mcp.server_test_routes.StdioUpstreamConnection",
+        "coffer.infrastructure.mcp.probe.StdioUpstreamConnection",
         _CapturingConn,
     ):
         try:

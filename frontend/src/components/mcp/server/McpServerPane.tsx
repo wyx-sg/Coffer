@@ -1,10 +1,12 @@
-// src/components/mcp/server/McpServerPane.tsx — the open MCP server in the MCP servers page's reading pane (design 4.1.02–4.1.12).
+// src/components/mcp/server/McpServerPane.tsx — the open MCP server in the MCP servers page's reading pane (design 4.1.02–4.1.12, 4.1.25–4.1.28).
 //
-// The header with the state pill and actions, the callout that answers "why,
-// and what next", then the path tabs. It owns the pane's dialogs and the log
-// drawer; the page owns the address. Everything it reads is persisted state
-// (status, 24 h summary, tiering) except the capability list, which is what
-// the old detail page read too.
+// The header with the state pill and actions, then the path tabs; the
+// Overview opens with the callout that answers "why, and what next". It owns
+// the pane's dialogs and the log drawer; the page owns the address.
+// Everything it reads is persisted state (status, 24 h summary, tiering) except
+// the capability list: live while the server is healthy or not checked yet,
+// the saved switches while it is failing, off or missing something — so a
+// server that doesn't answer never holds the page on the discovery timeout.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -19,24 +21,25 @@ import {
   mcpTieringKey,
 } from "@/lib/api/queryKeys";
 import type { ResourceOut } from "@/lib/api/resources";
-import type { components } from "@/lib/api/types";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
 import { useMcpInvocationSummary, useMcpToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { useTestMcpServer } from "@/lib/hooks/useMcpServerMutations";
 import { useMcpServerStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
+import { McpCallsLog } from "./McpCallsLog";
+import { McpCapabilityTab } from "./McpCapabilityTab";
 import { McpDeleteDialog } from "./McpDeleteDialog";
 import { McpLogDrawer, type LogTab } from "./McpLogDrawer";
 import { McpOverviewTab } from "./McpOverviewTab";
+import { McpSecretFacts } from "./McpSecretFacts";
 import { McpServerHeader } from "./McpServerHeader";
 import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
 import { reachedAgents } from "./reachWords";
-import { serverState } from "./serverState";
-
-type TestResult = components["schemas"]["McpTestResultOut"];
+import { joinNames, serverState } from "./serverState";
+import { failedTest, type TestResult } from "./testResult";
 
 interface Props {
   resource: ResourceOut;
@@ -45,13 +48,22 @@ interface Props {
 }
 
 export function McpServerPane({ resource, basePath, onDeleted }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const uid = resource.uid;
   const { data: agents = [] } = useAgents();
-  const { data: detail } = useMcpServerStatusDetail(uid);
-  const caps = useMcpCapabilities(uid);
+  const detailRead = useMcpServerStatusDetail(uid);
+  const detail = detailRead.data;
+  const state = serverState(resource, detail);
+  const live = !detailRead.isPending && (state.kind === "healthy" || state.kind === "unknown");
+  const liveCaps = useMcpCapabilities(uid, { enabled: live });
+  const savedCaps = useMcpCapabilities(uid, {
+    enabled: !detailRead.isPending && !live,
+    saved: true,
+  });
+  const caps = live ? liveCaps : savedCaps;
+  const capsPending = detailRead.isPending || caps.isPending;
   const summary = useMcpInvocationSummary(uid);
   const { data: tiering } = useMcpToolTiering(uid);
   const runTest = useTestMcpServer(uid);
@@ -61,22 +73,14 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [logTab, setLogTab] = useState<LogTab | null>(null);
 
-  const state = serverState(resource, detail);
-  const toolCount = caps.data?.tools?.length ?? tiering?.tool_count ?? 0;
-  const agentNames = reachedAgents(resource, agents)
-    .map((a) => a.display_name)
-    .join(t("mcp.page.and"));
+  const toolCount = caps.data?.tools?.length || tiering?.tool_count || 0;
+  const agentNames = joinNames(
+    reachedAgents(resource, agents).map((a) => a.display_name),
+    i18n.language,
+  );
   const test: TestResult | null =
-    runTest.data ??
-    (runTest.error
-      ? {
-          ok: false,
-          latency_ms: 0,
-          error_message: runTest.error.message,
-          protocol_version: null,
-          server_capabilities: null,
-        }
-      : null);
+    (runTest.data as TestResult | undefined) ??
+    (runTest.error ? failedTest(runTest.error.message) : null);
 
   const refresh = () => {
     for (const key of [
@@ -88,7 +92,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       void qc.invalidateQueries({ queryKey: key });
   };
   const copyConfig = async () => {
-    // The config carries credential refs only, never a secret value.
+    // The config carries secret refs only, never a secret value.
     try {
       await navigator.clipboard.writeText(
         JSON.stringify({ [resource.name]: resource.config }, null, 2),
@@ -97,6 +101,13 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     }
+  };
+  const capsProps = {
+    serverUid: uid,
+    capabilities: caps.data,
+    pending: capsPending,
+    error: caps.error,
+    summary: summary.data,
   };
 
   return (
@@ -112,50 +123,53 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         onTurn={(on) => (on ? enable : disable).mutate({ kind: "mcp_server", uid })}
         onDelete={() => setDeleting(true)}
       />
-      <McpStatusCallout
-        state={state}
-        detail={detail}
-        tiering={tiering}
-        toolCount={toolCount}
-        agentNames={agentNames}
-        test={test}
-        onOpenLog={() => setLogTab(state.kind === "launcherMissing" ? "log" : "calls")}
-        onReplaceSecret={() => setEdit({ focus: "secret" })}
-      />
       <McpServerDetailTabs
-        serverUid={uid}
         basePath={basePath}
-        capabilities={caps.data}
-        capsError={caps.error}
+        counts={{
+          tools: toolCount,
+          resources: caps.data?.resources?.length,
+          prompts: caps.data?.prompts?.length,
+        }}
         overview={
           <McpOverviewTab
-            resource={resource}
+            enabled={resource.enabled}
+            state={state}
             agents={agents}
             tiering={tiering}
             summary={summary.data}
             summaryPending={summary.isPending}
+            callout={
+              <McpStatusCallout
+                state={state}
+                detail={detail}
+                tiering={tiering}
+                toolCount={toolCount}
+                agentNames={agentNames}
+                test={test}
+                onOpenLog={() => setLogTab(state.kind === "launcherMissing" ? "log" : "calls")}
+                onReplaceSecret={() => setEdit({ focus: "secret" })}
+              />
+            }
+            facts={
+              state.kind === "secretMissing" ? (
+                <McpSecretFacts resource={resource} detail={detail} />
+              ) : null
+            }
             tools={
               <McpTopTools
-                serverUid={uid}
-                capabilities={caps.data}
-                pending={caps.isPending}
-                error={caps.error}
-                summary={summary.data}
+                {...capsProps}
+                state={state}
+                detail={detail}
                 tiering={tiering}
                 toolsHref={`${basePath}/tools`}
               />
             }
           />
         }
-        tools={
-          <McpToolsTab
-            serverUid={uid}
-            capabilities={caps.data}
-            error={caps.error}
-            summary={summary.data}
-            tiering={tiering}
-          />
-        }
+        tools={<McpToolsTab {...capsProps} state={state} detail={detail} tiering={tiering} />}
+        resources={<McpCapabilityTab {...capsProps} kind="resource" />}
+        prompts={<McpCapabilityTab {...capsProps} kind="prompt" />}
+        invocations={<McpCallsLog serverUid={uid} agents={agents} />}
       />
 
       {edit ? (
@@ -171,6 +185,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         open={deleting}
         onOpenChange={setDeleting}
         agentNames={agentNames}
+        agentCount={reachedAgents(resource, agents).length}
         toolCount={toolCount}
         onDeleted={onDeleted}
       />

@@ -64,10 +64,8 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
 
   return (
     <>
-      <p className="text-xs font-label text-text-muted">
-        {t("mcp.add.found", { count: rows.length })}
-      </p>
-      <div className="max-h-[50vh] space-y-2.5 overflow-y-auto pr-1">
+      <p className="text-sm font-label text-text">{t("mcp.add.found", { count: rows.length })}</p>
+      <div className="max-h-[50vh] overflow-y-auto border-b border-border-subtle pr-1">
         {rows.map((row, i) => {
           const failure = failureOf(row.server.name);
           return (
@@ -88,7 +86,7 @@ export function ReviewStep({ initial, taken, added, failures, pending, onBack, o
       <ReachPick value={reach} onChange={setReach} busy={pending} />
       <p className="text-xs text-text-muted">{t("mcp.add.reviewFootnote")}</p>
       <DialogFooter>
-        <Button variant="ghost" className="sm:mr-auto" onClick={onBack} disabled={pending}>
+        <Button variant="outline" onClick={onBack} disabled={pending}>
           {t("mcp.add.back")}
         </Button>
         <Button

@@ -1,26 +1,33 @@
 // frontend/src/components/skills/SkillLibraryRow.tsx
-// One row of the Skills library: the skill's name with its marks (Built-in,
-// Copied), a second line that is its description unless something needs
-// saying (its Git source is unreachable, or an update is waiting), and its
-// reach on the right — Off, All agents, or the badges of the agents it is
-// restricted to. The checkbox beside it feeds the bulk bar; the built-in row
-// has none, since the bar's one destructive action would have to refuse it.
+// One row of the Skills library: the skill's name (with "Built-in" beside
+// Coffer's own), a second line that is its description unless something needs
+// saying (lib/skills/attention.ts — its master is gone, a folder is in the way
+// of an agent's link, a command it needs is missing, its Git source is
+// unreachable or has an update), and its reach on the right — Off, All agents,
+// or the badges of the agents it is restricted to. The checkbox feeds the
+// selection bar; it shows on hover, and on every row while any is ticked. The
+// built-in row's is disabled, since the bar's one destructive action would
+// have to refuse it.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
-import { BuiltinMark, CopiedMark } from "@/components/skills/SkillMarks";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AgentOut } from "@/lib/api/agents";
-import type { SkillOut } from "@/lib/api/skills";
-import { hasCopiedDelivery } from "@/lib/skills/delivery";
+import type { Cli } from "@/lib/api/clis";
+import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
+import { skillAttention, type SkillAttention } from "@/lib/skills/attention";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 
 interface Props {
   skill: SkillOut;
   agents: readonly AgentOut[];
+  clis: readonly Cli[];
+  drift: SkillDriftEntry[] | undefined;
+  /** Any row is ticked: every checkbox shows. */
+  selecting: boolean;
   to: string;
   current: boolean;
   checked: boolean;
@@ -28,24 +35,39 @@ interface Props {
   onOpen: () => void;
 }
 
-function SkillSubline({ skill }: { skill: SkillOut }) {
+function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): string {
   const { t } = useTranslation();
-  const status = skill.source_status;
-  if (status?.error) {
-    return (
-      <span className={cn("truncate text-xs", toneTextClass("warn"))}>
-        {t("skills.sourceUnreachable")}
-      </span>
-    );
+  switch (item.kind) {
+    case "masterMissing":
+      return t("skills.row.masterMissing");
+    case "folderInWay": {
+      const agent = agents.find((a) => a.name === item.agentName);
+      return t("skills.row.folderInWay", { agent: agent?.display_name ?? item.agentName });
+    }
+    case "requires":
+      if (item.missing.length > 0) {
+        return t("skills.row.needsMissing", { command: item.missing[0] });
+      }
+      if (item.loggedOut.length > 0) {
+        return t("skills.row.needsLogin", { command: item.loggedOut[0] });
+      }
+      return t("skills.row.needsNewer", { command: item.outdated[0] });
+    case "sourceUnreachable":
+      return t("skills.sourceUnreachable");
+    case "updateAvailable":
+      return t("skills.updateAvailable");
   }
-  if (status?.update_available) {
-    return (
-      <span className={cn("truncate text-xs", toneTextClass("warn"))}>
-        {t("skills.updateAvailable")}
-      </span>
-    );
-  }
-  return <span className="truncate text-xs text-text-muted">{skill.description}</span>;
+}
+
+function subTone(item: SkillAttention): string {
+  if (item.kind === "masterMissing") return toneTextClass("error");
+  if (item.kind === "updateAvailable") return "text-accent-text";
+  return toneTextClass("warn");
+}
+
+function Subline({ item, agents }: { item: SkillAttention; agents: readonly AgentOut[] }) {
+  const text = useSublineText(item, agents);
+  return <span className={cn("truncate text-xs", subTone(item))}>{text}</span>;
 }
 
 function ReachMark({ skill, agents }: { skill: SkillOut; agents: readonly AgentOut[] }) {
@@ -71,6 +93,9 @@ function ReachMark({ skill, agents }: { skill: SkillOut; agents: readonly AgentO
 export function SkillLibraryRow({
   skill,
   agents,
+  clis,
+  drift,
+  selecting,
   to,
   current,
   checked,
@@ -78,6 +103,7 @@ export function SkillLibraryRow({
   onOpen,
 }: Props) {
   const { t } = useTranslation();
+  const attention = skillAttention(skill, clis, drift)[0];
   return (
     <li
       className={cn(
@@ -85,16 +111,21 @@ export function SkillLibraryRow({
         current ? "bg-surface-selected" : "hover:bg-surface-hover",
       )}
     >
-      {skill.builtin ? (
-        // Keeps the names aligned with the rows that have a checkbox.
-        <span aria-hidden className="size-[15px] shrink-0" />
-      ) : (
+      <span
+        className={cn(
+          "shrink-0 items-center",
+          selecting
+            ? "inline-flex"
+            : "hidden group-focus-within:inline-flex group-hover:inline-flex",
+        )}
+      >
         <Checkbox
           checked={checked}
+          disabled={skill.builtin}
           onChange={(e) => onCheckedChange(e.target.checked)}
           aria-label={`${t("common.bulk.selectRow")}: ${skill.name}`}
         />
-      )}
+      </span>
       <Link
         to={to}
         onClick={onOpen}
@@ -104,10 +135,20 @@ export function SkillLibraryRow({
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate font-mono text-xs font-label">{skill.name}</span>
-            {skill.builtin ? <BuiltinMark /> : null}
-            {hasCopiedDelivery(skill) ? <CopiedMark /> : null}
+            {skill.builtin ? (
+              <span
+                data-testid="skill-builtin-badge"
+                className="text-2xs font-label text-text-muted"
+              >
+                {t("skills.builtinBadge")}
+              </span>
+            ) : null}
           </span>
-          <SkillSubline skill={skill} />
+          {attention ? (
+            <Subline item={attention} agents={agents} />
+          ) : (
+            <span className="truncate text-xs text-text-muted">{skill.description}</span>
+          )}
         </span>
         <span className="shrink-0">
           <ReachMark skill={skill} agents={agents} />

@@ -45,6 +45,10 @@ interface ChangePreviewProps {
   applyDestructive?: boolean;
   /** The note beside the review footer; defaults to the "only these lines" reassurance. */
   note?: string;
+  /** Shown above "What will happen" while reviewing. */
+  lead?: React.ReactNode;
+  /** A line under the diffs while reviewing. */
+  diffNote?: string;
 }
 
 const NO_SUMMARIES: ChangeSummaryLine[] = [];
@@ -72,6 +76,8 @@ export function ChangePreview({
   applyLabel,
   applyDestructive = false,
   note,
+  lead,
+  diffNote,
 }: ChangePreviewProps) {
   const { t } = useTranslation();
   const locked = state === "applying";
@@ -188,7 +194,13 @@ export function ChangePreview({
           {subtitle ? <DialogDescription className="text-xs">{subtitle}</DialogDescription> : null}
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto px-5 pb-[18px] pt-4">
-          <ChangePreviewBody state={state} items={items} summaries={summaries} />
+          <ChangePreviewBody
+            state={state}
+            items={items}
+            summaries={summaries}
+            lead={lead}
+            diffNote={diffNote}
+          />
         </div>
         {footer}
       </DialogContent>

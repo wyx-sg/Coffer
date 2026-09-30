@@ -1,15 +1,18 @@
 // src/components/custom-tools/ToolsTable.tsx — a group's tools: each one's switch, request, changes-data
-// flag, reach override and last 24 hours; All on / All off; a row opens the tool's drawer.
+// flag, reach override and last 24 hours; All on · All off; the pencil (or the row) opens the drawer.
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 
-import { DataTable, type Column } from "@/components/DataTable";
+import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
+import { pickableAgents } from "@/components/reach/reachState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { CustomTool, CustomToolGroup } from "@/lib/api/customTools";
 import { toolsOn } from "@/lib/customTools/groups";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { useSetAllCustomTools, useToggleCustomTool } from "@/lib/hooks/useCustomTools";
+import { cn } from "@/lib/utils";
 
 interface Props {
   group: CustomToolGroup;
@@ -17,8 +20,29 @@ interface Props {
   onAddRequest: () => void;
 }
 
+const GRID = "grid grid-cols-[40px_minmax(0,1fr)_150px_80px_56px_32px] items-center gap-3 px-2";
+
+/** A 24-hour count; a tool with no call in 24 hours reads "—" in both columns. */
+function Count({
+  value,
+  none,
+  danger = false,
+}: {
+  value: number;
+  none: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <span className={cn("text-xs tabular-nums", danger && value > 0 ? "text-danger" : "text-text")}>
+      {none ? "—" : value}
+    </span>
+  );
+}
+
 export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
   const { t } = useTranslation();
+  const { data: agents } = useAgents();
+  const known = pickableAgents(agents);
   const toggle = useToggleCustomTool(group.name);
   const setAll = useSetAllCustomTools(group.name);
   const on = toolsOn(group.tools);
@@ -27,107 +51,143 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
       enabled,
       tools: group.tools.filter((tool) => tool.enabled !== enabled).map((tool) => tool.name),
     });
-
-  const columns: Column<CustomTool>[] = [
-    {
-      key: "enabled",
-      header: <span className="sr-only">{t("customTools.tools.switch")}</span>,
-      className: "w-12",
-      cell: (tool) => (
-        // The switch acts on its own; it never also opens the row.
-        <span onClick={(e) => e.stopPropagation()} className="inline-flex">
-          <Switch
-            checked={tool.enabled}
-            disabled={toggle.isPending || setAll.isPending}
-            aria-label={t("customTools.tools.switchTool", { name: tool.name })}
-            onCheckedChange={(enabled) => toggle.mutate({ tool: tool.name, enabled })}
-          />
-        </span>
-      ),
-    },
-    {
-      key: "tool",
-      header: t("customTools.tools.colTool"),
-      cell: (tool) => (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-mono text-sm font-label">{tool.name}</span>
-            {tool.changes_data ? (
-              <Badge variant="secondary">{t("customTools.tools.changesData")}</Badge>
-            ) : null}
-          </div>
-          <div className="truncate font-mono text-xs text-text-muted">
-            {tool.method} {tool.path}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "reach",
-      header: t("customTools.fields.availableTo"),
-      cell: (tool) =>
-        tool.reach_override === null ? (
-          <span className="text-xs text-text-muted">{t("customTools.tools.groupDefault")}</span>
-        ) : (
-          <Badge variant="outline">{t("customTools.tools.override")}</Badge>
-        ),
-    },
-    {
-      key: "calls",
-      header: t("customTools.tools.colCalls"),
-      className: "text-right",
-      cell: (tool) => <span className="text-xs">{tool.calls_24h}</span>,
-    },
-    {
-      key: "errors",
-      header: t("customTools.tools.colErrors"),
-      className: "text-right",
-      cell: (tool) => (
-        <span className={tool.failures_24h > 0 ? "text-xs text-danger" : "text-xs"}>
-          {tool.failures_24h}
-        </span>
-      ),
-    },
-  ];
+  const overrideBadges = (tool: CustomTool) =>
+    (tool.reach_override ?? []).map((uid) => {
+      const found = known.find((a) => a.uid === uid);
+      return { type: found?.type ?? "", name: found?.name ?? uid };
+    });
 
   return (
-    <section aria-labelledby="ct-tools" className="space-y-2">
+    <section
+      aria-label={t("customTools.tools.title", { on, total: group.tools.length })}
+      className="space-y-1"
+    >
       <div className="flex items-center justify-between gap-3">
-        <h2 id="ct-tools" className="text-sm font-semibold">
-          {t("customTools.tools.title", { on, total: group.tools.length })}
+        <h2 className="flex items-baseline gap-2 text-sm font-semibold">
+          {t("customTools.tools.heading")}
+          <span className="text-xs font-normal text-text-muted">
+            {t("customTools.tools.onCount", { on, total: group.tools.length })}
+          </span>
         </h2>
-        <div className="flex items-center gap-1 text-xs">
-          <Button
-            size="sm"
-            variant="ghost"
+        <div className="flex items-center gap-1.5 text-xs">
+          <button
+            type="button"
+            className="font-label text-accent-text hover:underline disabled:opacity-disabled disabled:no-underline"
             disabled={setAll.isPending || on === group.tools.length}
             onClick={() => switchAll(true)}
           >
             {t("customTools.tools.allOn")}
-          </Button>
+          </button>
           <span className="text-text-subtle">·</span>
-          <Button
-            size="sm"
-            variant="ghost"
+          <button
+            type="button"
+            className="font-label text-accent-text hover:underline disabled:opacity-disabled disabled:no-underline"
             disabled={setAll.isPending || on === 0}
             onClick={() => switchAll(false)}
           >
             {t("customTools.tools.allOff")}
-          </Button>
+          </button>
         </div>
       </div>
-      <DataTable
-        rows={group.tools}
-        columns={columns}
-        rowKey={(tool) => tool.name}
-        onRowClick={(tool) => onOpenTool(tool.name)}
-        pageSize={100}
-        emptyMessage={t("customTools.tools.empty")}
-      />
-      <Button variant="outline" onClick={onAddRequest}>
-        <Plus aria-hidden />
-        {t("customTools.tools.addRequest")}
-      </Button>
+      <div role="table" aria-label={t("customTools.tools.heading")}>
+        <div
+          role="row"
+          className={cn(
+            GRID,
+            "h-8 border-b border-border-subtle text-2xs font-semibold text-text-muted",
+          )}
+        >
+          <span role="columnheader">
+            <span className="sr-only">{t("customTools.tools.switch")}</span>
+          </span>
+          <span role="columnheader">{t("customTools.tools.colTool")}</span>
+          <span role="columnheader">{t("customTools.fields.availableTo")}</span>
+          <span role="columnheader" className="text-right">
+            {t("customTools.tools.colCalls")}
+          </span>
+          <span role="columnheader" className="text-right">
+            {t("customTools.tools.colErrors")}
+          </span>
+          <span />
+        </div>
+        {group.tools.length === 0 ? (
+          <p className="py-4 text-center text-xs text-text-muted">{t("customTools.tools.empty")}</p>
+        ) : null}
+        {group.tools.map((tool) => (
+          <div
+            key={tool.name}
+            role="row"
+            className={cn(
+              GRID,
+              "min-h-[49px] cursor-pointer border-b border-border-subtle py-1.5 hover:bg-surface-hover",
+            )}
+            onClick={() => onOpenTool(tool.name)}
+          >
+            {/* The switch acts on its own; it never also opens the row. */}
+            <span role="cell" onClick={(e) => e.stopPropagation()} className="inline-flex">
+              <Switch
+                checked={tool.enabled}
+                disabled={toggle.isPending || setAll.isPending}
+                aria-label={t("customTools.tools.switchTool", { name: tool.name })}
+                onCheckedChange={(enabled) => toggle.mutate({ tool: tool.name, enabled })}
+              />
+            </span>
+            <span role="cell" className="min-w-0">
+              <span
+                className={cn(
+                  "block truncate font-mono text-sm",
+                  tool.enabled ? "text-text" : "text-text-muted",
+                )}
+              >
+                {tool.name}
+              </span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-xs text-text-muted">
+                  {tool.method} {tool.path}
+                </span>
+                {tool.changes_data ? (
+                  <Badge variant="warning">{t("customTools.tools.changesData")}</Badge>
+                ) : null}
+              </span>
+            </span>
+            <span role="cell" className="flex items-center gap-1.5 text-xs">
+              {tool.reach_override === null ? (
+                <span className="text-text-muted">{t("customTools.tools.groupDefault")}</span>
+              ) : (
+                <>
+                  <AgentBadgeGroup agents={overrideBadges(tool)} />
+                  <span className="text-warning">{t("customTools.tools.override")}</span>
+                </>
+              )}
+            </span>
+            <span role="cell" className="text-right">
+              <Count value={tool.calls_24h} none={tool.calls_24h === 0} />
+            </span>
+            <span role="cell" className="text-right">
+              <Count value={tool.failures_24h} none={tool.calls_24h === 0} danger />
+            </span>
+            <span role="cell">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("customTools.tools.edit", { name: tool.name })}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenTool(tool.name);
+                }}
+              >
+                <Pencil aria-hidden />
+              </Button>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end pt-2">
+        <Button variant="outline" size="sm" onClick={onAddRequest}>
+          <Plus aria-hidden />
+          {t("customTools.tools.addRequest")}
+        </Button>
+      </div>
     </section>
   );
 }

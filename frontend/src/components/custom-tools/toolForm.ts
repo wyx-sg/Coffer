@@ -1,5 +1,5 @@
 // src/components/custom-tools/toolForm.ts — what the tool drawer edits, and the request it sends.
-import type { CustomTool, CustomToolIn, HttpMethod } from "@/lib/api/customTools";
+import type { CustomTool, CustomToolGroup, CustomToolIn, HttpMethod } from "@/lib/api/customTools";
 import { draftOf, emptyDraft } from "@/lib/customTools/drafts";
 import { changesDataByDefault } from "@/lib/customTools/groups";
 import { argsFromSchema, schemaFromArgs, type ArgRow } from "@/lib/customTools/schemaArgs";
@@ -82,4 +82,12 @@ export function formReady(form: ToolForm): boolean {
 export function sameReach(a: string[] | null, b: string[] | null): boolean {
   if (a === null || b === null) return a === b;
   return a.length === b.length && a.every((uid) => b.includes(uid));
+}
+
+/** A saved group's auth as a request form shows it, when a secret is bound. */
+export function groupAuthOf(
+  group: Pick<CustomToolGroup, "auth">,
+): { header: string; prefix: string; secret: string } | null {
+  const auth = group.auth;
+  return auth?.secret ? { header: auth.header, prefix: auth.prefix, secret: auth.secret } : null;
 }

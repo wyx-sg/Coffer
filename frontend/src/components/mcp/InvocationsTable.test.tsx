@@ -4,6 +4,7 @@ import { render, screen, waitFor, fireEvent, act } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { InvocationsTable } from "./InvocationsTable";
+import { McpCallsLog } from "./server/McpCallsLog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ActivityPage } from "@/pages/activity/ActivityPage";
 import { acceptance } from "@/test/acceptance";
@@ -399,12 +400,14 @@ acceptance(
     });
     getApiClientMock.mockReturnValue({ GET: get } as unknown as ReturnType<typeof getApiClient>);
 
-    // Scoped to one server: that server's calls, and no server column.
-    const scoped = render(wrap(<InvocationsTable serverUid="u-filesystem" />));
-    await waitFor(() => expect(screen.getByText("read_file")).toBeInTheDocument());
+    // The server's Invocations tab (the drawer's calls list): that server's
+    // calls, no server column, the newest opened below the list.
+    const scoped = render(wrap(<McpCallsLog serverUid="u-filesystem" agents={[]} />));
+    await waitFor(() => expect(screen.getAllByText("read_file").length).toBeGreaterThan(0));
     expect(get.mock.calls.every((c) => c[1]?.params?.path?.uid === "u-filesystem")).toBe(true);
     expect(get.mock.calls[0][0]).toBe("/resources/mcp_server/{uid}/invocations");
-    expect(screen.queryByRole("columnheader", { name: "Server" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /server/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("mcp-call-detail")).toHaveTextContent("read_file");
     scoped.unmount();
 
     // Activity's MCP calls tab reads the same log unscoped: every server's

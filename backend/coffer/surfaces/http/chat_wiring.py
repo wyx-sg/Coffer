@@ -42,7 +42,8 @@ from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_c
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.provider.introspector import ProviderIntrospector
+from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
+from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
     get_channel_note_reader,
@@ -258,7 +259,14 @@ def wire_chat(
     # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
     #    service resolves credential refs to keys server-side.
-    introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
+    #    What an endpoint's API reports its models cost is remembered here, so
+    #    usage is costed from it without asking per request.
+    introspection_svc = ModelIntrospectionService(
+        ProviderIntrospector(),
+        _credential_resolver,
+        reported_prices=reported_price_store(),
+        default_base_url=PROTOCOL_BASE_URLS.get,
+    )
 
     # 7. The model catalogue — one list of models per managed agent, shared by
     #    the web picker, the channel /model card, and the note each turn tells
@@ -297,7 +305,7 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
-    # The web composer's uploads live in ``~/.coffer/chat-media`` (spec chat
+    # The web composer's uploads live in ``~/.coffer/content/chat-media`` (spec chat
     # "Upload a file for a web message"); the retention sweep over the same
     # directory is bound in ``build_retention_service``.
     set_attachment_service(ChatAttachmentService(FileChatMediaStore(default_chat_media_dir())))

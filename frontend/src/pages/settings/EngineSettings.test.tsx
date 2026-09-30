@@ -97,6 +97,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     title: null,
     internal_default: false,
     transcribe_default: false,
+    fallback: true,
     models: [],
     enabled: true,
     description: null,
@@ -444,7 +445,7 @@ describe("EngineSettings", () => {
     );
     expect(within(section).getByRole("combobox", { name: /^model$/i })).toHaveTextContent("a-chat");
     // One row per pass, the default named rather than blank.
-    expect(screen.getAllByRole("switch")).toHaveLength(3);
+    expect(screen.getAllByRole("switch").filter((s) => s.id !== "price-refresh")).toHaveLength(3);
     expect(screen.getByText("Default (Every 1h)")).toBeInTheDocument();
     expect(screen.getAllByText("Default (Every 6h)")).toHaveLength(2);
 

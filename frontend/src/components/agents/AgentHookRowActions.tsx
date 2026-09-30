@@ -23,12 +23,7 @@ export function AgentHookRowActions({ row, onRepair }: Props) {
   return (
     <span className="flex flex-wrap justify-end gap-2">
       {repair && onRepair ? (
-        <TableActionButton
-          icon={Wrench}
-          label={t("agents.hooksTab.repair")}
-          aria-label={t("agents.hooksTab.repairAria")}
-          onClick={onRepair}
-        />
+        <TableActionButton icon={Wrench} label={t("agents.hooksTab.repair")} onClick={onRepair} />
       ) : null}
       {row.command !== null && open ? (
         <TableActionButton

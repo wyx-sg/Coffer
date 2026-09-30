@@ -218,6 +218,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Orphans */
+        get: operations["list_orphans_api_v1_skills_orphans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/orphans/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Orphan */
+        delete: operations["remove_orphan_api_v1_skills_orphans__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/orphans/{name}/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adopt Orphan */
+        post: operations["adopt_orphan_api_v1_skills_orphans__name__adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/repair": {
         parameters: {
             query?: never;
@@ -355,6 +406,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/{uid}/copies/{agent_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare Copy */
+        get: operations["compare_copy_api_v1_skills__uid__copies__agent_uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/copies/{agent_uid}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Copy */
+        post: operations["resolve_copy_api_v1_skills__uid__copies__agent_uid__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/{uid}/files": {
         parameters: {
             query?: never;
@@ -415,6 +500,27 @@ export interface paths {
         put?: never;
         /** Apply Update */
         post: operations["apply_update_api_v1_skills__uid__source_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/source/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Source Change
+         * @description Stage a new repository / ref / folder for this skill and show the change
+         *     against its current folder; ``/source/apply`` with the stage takes it.
+         */
+        post: operations["preview_source_change_api_v1_skills__uid__source_change_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -765,6 +871,37 @@ export interface components {
             /** Subject */
             subject: string;
         };
+        /**
+         * SkillCopyCompareOut
+         * @description One agent's folder in the way of the skill's link, against master.
+         */
+        SkillCopyCompareOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Changes */
+            changes: components["schemas"]["SkillFileChangeOut"][];
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "replaced_with_regular";
+            /** Modified At */
+            modified_at: string | null;
+            /** Path */
+            path: string;
+            /** Skill Uid */
+            skill_uid: string;
+        };
+        /** SkillCopyResolveRequest */
+        SkillCopyResolveRequest: {
+            /**
+             * Keep
+             * @enum {string}
+             */
+            keep: "master" | "agent";
+        };
         /** SkillFileChangeOut */
         SkillFileChangeOut: {
             /** Additions */
@@ -857,6 +994,26 @@ export interface components {
             /** Items */
             items: components["schemas"]["SkillOut"][];
         };
+        /** SkillOrphanListOut */
+        SkillOrphanListOut: {
+            /** Items */
+            items: components["schemas"]["SkillOrphanOut"][];
+        };
+        /** SkillOrphanOut */
+        SkillOrphanOut: {
+            /** Description */
+            description: string | null;
+            /** File Count */
+            file_count: number;
+            /** Message */
+            message: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Valid */
+            valid: boolean;
+        };
         /** SkillOut */
         SkillOut: {
             /** Bindings */
@@ -874,6 +1031,8 @@ export interface components {
             enabled: boolean;
             /** Last Synced From Source At */
             last_synced_from_source_at: string | null;
+            /** Master Missing */
+            master_missing: boolean;
             /** Master Path */
             master_path: string;
             /** Name */
@@ -1655,6 +1814,130 @@ export interface operations {
             };
         };
     };
+    list_orphans_api_v1_skills_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillOrphanListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_orphan_api_v1_skills_orphans__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adopt_orphan_api_v1_skills_orphans__name__adopt_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     repair_skills_api_v1_skills_repair_post: {
         parameters: {
             query?: never;
@@ -2038,6 +2321,97 @@ export interface operations {
             };
         };
     };
+    compare_copy_api_v1_skills__uid__copies__agent_uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillCopyCompareOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolve_copy_api_v1_skills__uid__copies__agent_uid__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillCopyResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_skill_files_api_v1_skills__uid__files_get: {
         parameters: {
             query?: never;
@@ -2196,6 +2570,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_source_change_api_v1_skills__uid__source_change_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillStageGitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillUpdatePreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

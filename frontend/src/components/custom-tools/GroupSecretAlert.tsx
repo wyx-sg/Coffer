@@ -2,7 +2,7 @@
 // or waits for approval: what fails, and the one way to fix it.
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Plus, TriangleAlert } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -29,19 +29,26 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
   if (group.secret_state !== "missing") return null;
   return (
     <Alert variant="warning">
-      <KeyRound aria-hidden />
-      <AlertTitle>{t("customTools.alert.missingTitle", { secret })}</AlertTitle>
-      <AlertDescription>
-        <p>{t("customTools.alert.missingBody", { count: toolsOn(group.tools) })}</p>
-        <div className="mt-2 flex gap-2">
-          <Button asChild size="sm">
-            <Link to="/secrets">{t("customTools.alert.addSecret")}</Link>
+      <TriangleAlert aria-hidden />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <AlertTitle>{t("customTools.alert.missingTitle", { secret })}</AlertTitle>
+          <AlertDescription>
+            {t("customTools.alert.missingBody", { count: toolsOn(group.tools) })}
+          </AlertDescription>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/secrets">
+              <Plus aria-hidden />
+              {t("customTools.alert.addSecret")}
+            </Link>
           </Button>
           <Button size="sm" variant="outline" onClick={onChooseAnother}>
             {t("customTools.alert.chooseAnother")}
           </Button>
         </div>
-      </AlertDescription>
+      </div>
     </Alert>
   );
 }

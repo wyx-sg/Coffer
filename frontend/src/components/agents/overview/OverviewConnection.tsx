@@ -1,13 +1,12 @@
 // src/components/agents/overview/OverviewConnection.tsx — the Overview's Connection card (boards 2.1.08, 2.1.09, 2.1.11, 2.1.12).
 //
 // One icon + state title + one sentence saying what the connection is and what
-// its one action does, then one row per part the connection lists: the `coffer`
-// MCP entry and — only when the connection lists it — the memory hook, each
-// with where it lives and its health. The action opens the change preview the
-// page owns (connect also repairs); Enable is the agent's switch.
+// its one action does, then one row per part the connection lists (the `coffer`
+// MCP entry and, when listed, the memory hook) with where it lives and its
+// health. The action opens the page's change preview; Enable is the switch.
 import type { ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Link2, Power, Unlink, Wrench } from "lucide-react";
+import { AlertTriangle, Link2, Power, RotateCcw, ShieldAlert, Unlink, Wrench } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
 import { STATUS_TONE } from "@/components/status/statusTone";
@@ -15,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentTypeLabel } from "@/lib/agents/display";
+import { useConnectFailure } from "@/lib/agents/connectFailure";
 import { agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
 import { toneClass } from "@/lib/statusColors";
@@ -22,18 +22,21 @@ import { cn } from "@/lib/utils";
 
 import type { OverviewActions } from "../AgentOverviewTab";
 import { formatLastFired } from "./age";
+import { CopyHooksButton } from "../CopyHooksButton";
 import {
   connectionBodyKey,
+  hookAwaitsApproval,
+  hookEventCount,
   isConnectionCardState,
   partHealth,
   partHealthTone,
+  repairsOnlyHook,
   type ConnectionCardState,
 } from "./connectionCopy";
 import { InlineCode, InlinePath, OverviewSection } from "./OverviewSection";
 import { hookConfigPath, mcpConfigPath } from "./paths";
 
 const K = "agents.overviewTab.connection";
-
 const ICON = { connected: Link2, not_connected: Unlink, needs_repair: Wrench, disabled: Power };
 
 interface Props {
@@ -50,6 +53,7 @@ interface Props {
 export function OverviewConnection(props: Props) {
   const { agent, typeRow, state, connection, hook, failed, actions } = props;
   const { t } = useTranslation();
+  const connectFailure = useConnectFailure(agent.uid);
   if (!isConnectionCardState(state) || !connection) {
     return (
       <OverviewSection title={t(`${K}.heading`)}>
@@ -61,7 +65,9 @@ export function OverviewConnection(props: Props) {
       </OverviewSection>
     );
   }
-  const Icon = ICON[state];
+  const awaiting = hookAwaitsApproval(state, hook);
+  const Icon = awaiting ? ShieldAlert : ICON[state];
+  const tone = awaiting ? "warn" : agentRowTone(state);
   const files = {
     mcpFile: mcpConfigPath(agent, typeRow),
     hookFile: hookConfigPath(agent, hook?.path),
@@ -74,13 +80,17 @@ export function OverviewConnection(props: Props) {
             aria-hidden
             className={cn(
               "inline-flex size-[34px] shrink-0 items-center justify-center rounded-lg",
-              toneClass(STATUS_TONE[agentRowTone(state)]),
+              toneClass(STATUS_TONE[tone]),
             )}
           >
             <Icon className="size-4" />
           </span>
           <div className="flex min-w-0 grow flex-col gap-1">
-            <span className="text-sm font-semibold text-text">{t(`${K}.title.${state}`)}</span>
+            <span className="text-sm font-semibold text-text">
+              {t(`${K}.title.${awaiting ? "hookUntrusted" : state}`, {
+                name: agentTypeLabel(agent.type),
+              })}
+            </span>
             <span className="text-xs leading-normal text-text-muted">
               <Trans
                 i18nKey={connectionBodyKey(state, connection.parts, hook)}
@@ -89,7 +99,15 @@ export function OverviewConnection(props: Props) {
               />
             </span>
           </div>
-          <ConnectionAction state={state} actions={actions} />
+          {awaiting ? (
+            <CopyHooksButton />
+          ) : (
+            <ConnectionAction
+              state={state}
+              hookOnly={repairsOnlyHook(connection.parts)}
+              actions={actions}
+            />
+          )}
         </div>
         <div className="ml-[46px] flex flex-col">
           {connection.parts.map((part, i) => (
@@ -111,8 +129,34 @@ export function OverviewConnection(props: Props) {
             </PartRow>
           ))}
         </div>
+        {connectFailure && (state === "not_connected" || state === "needs_repair") ? (
+          <ConnectFailed reason={connectFailure} onRetry={() => actions.onConnection("connect")} />
+        ) : null}
       </Card>
     </OverviewSection>
+  );
+}
+
+/** The last Connect from this window failed: why, and Try again (board 2.1.09). */
+function ConnectFailed({ reason, onRetry }: { reason: string; onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "ml-[46px] flex items-start gap-2.5 rounded-lg px-3 py-2.5",
+        toneClass(STATUS_TONE.err),
+      )}
+    >
+      <AlertTriangle aria-hidden className="mt-px size-4 shrink-0" />
+      <span className="min-w-0 grow text-xs leading-normal text-text">
+        {t(`${K}.connectFailed`, { reason })}
+      </span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        <RotateCcw aria-hidden />
+        {t(`${K}.tryAgain`)}
+      </Button>
+    </div>
   );
 }
 
@@ -135,7 +179,7 @@ function HookWhere({
     <>
       <Trans
         i18nKey={`${K}.part.hookIn`}
-        values={{ event: hook.event, file }}
+        values={{ count: hookEventCount(hook), file }}
         components={{ path: <InlinePath /> }}
       />
       {formatLastFired(t, hook.last_fired_at)}
@@ -171,9 +215,12 @@ function PartRow({
 
 function ConnectionAction({
   state,
+  hookOnly,
   actions,
 }: {
   state: ConnectionCardState;
+  /** Only the memory hook is off: the repair names it. */
+  hookOnly: boolean;
   actions: OverviewActions;
 }) {
   const { t } = useTranslation();
@@ -195,7 +242,9 @@ function ConnectionAction({
   return (
     <Button size="sm" onClick={() => actions.onConnection("connect")}>
       {state === "needs_repair" ? <Wrench aria-hidden /> : null}
-      {t(`${K}.action.${state === "needs_repair" ? "repair" : "connect"}`)}
+      {t(
+        `${K}.action.${state === "needs_repair" ? (hookOnly ? "repairHook" : "repair") : "connect"}`,
+      )}
     </Button>
   );
 }

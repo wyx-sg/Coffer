@@ -12,7 +12,7 @@ its own and refuses to start on a home that has not been upgraded
    fold the knowledge history in, strip the curation stamps;
 4. write every resource, state document, ciphertext and local file, and
    commit the vault as **one** ``daemon`` commit (``Coffer-Layout: db -> 3``);
-5. rename ``coffer.db`` to ``runs.db`` and upgrade it to head (revision 0117
+5. rename ``coffer.db`` to ``runs.db`` and upgrade it to head (revision 0136
    re-keys the history to uids and drops the moved tables).
 
 ``local/migration.json`` records every step as it happens, so

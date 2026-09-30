@@ -202,6 +202,96 @@ paths:
       summary: List Candidates
       tags:
       - agents
+  /api/v1/agents/mcp-import/apply:
+    post:
+      description: Perform the plan as it stands now; each entry reports its outcome.
+      operationId: apply_import_api_v1_agents_mcp_import_apply_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpImportIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpImportApplyOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Apply Import
+      tags:
+      - agents
+  /api/v1/agents/mcp-import/plan:
+    post:
+      description: What importing the chosen entries would do; writes nothing.
+      operationId: plan_import_api_v1_agents_mcp_import_plan_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpImportIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpImportPlanOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Plan Import
+      tags:
+      - agents
   /api/v1/agents/types:
     get:
       description: |-
@@ -2108,6 +2198,73 @@ components:
       - missing
       title: DetectionState
       type: string
+    DiffHunkOut:
+      properties:
+        header:
+          description: '`@@ -8,24 +8,5 @@ mcpServers`'
+          title: Header
+          type: string
+        lines:
+          items:
+            $ref: '#/components/schemas/DiffLineOut'
+          title: Lines
+          type: array
+        new_count:
+          title: New Count
+          type: integer
+        new_start:
+          title: New Start
+          type: integer
+        old_count:
+          title: Old Count
+          type: integer
+        old_start:
+          title: Old Start
+          type: integer
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+      required:
+      - header
+      - old_start
+      - old_count
+      - new_start
+      - new_count
+      - section
+      - lines
+      title: DiffHunkOut
+      type: object
+    DiffLineOut:
+      properties:
+        kind:
+          enum:
+          - context
+          - add
+          - remove
+          title: Kind
+          type: string
+        new_line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: New Line
+        old_line:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Old Line
+        text:
+          title: Text
+          type: string
+      required:
+      - kind
+      - old_line
+      - new_line
+      - text
+      title: DiffLineOut
+      type: object
     DirChildOut:
       properties:
         modified_at:
@@ -2436,6 +2593,394 @@ components:
       - is_coffer
       - matches_resource
       title: McpEntryOut
+      type: object
+    McpImportAgentOut:
+      properties:
+        connected:
+          description: Its config already holds Coffer's own entry.
+          title: Connected
+          type: boolean
+        display_name:
+          title: Display Name
+          type: string
+        entries_removed:
+          items:
+            type: string
+          title: Entries Removed
+          type: array
+        name:
+          title: Name
+          type: string
+        type:
+          title: Type
+          type: string
+        uid:
+          title: Uid
+          type: string
+      required:
+      - uid
+      - name
+      - display_name
+      - type
+      - connected
+      - entries_removed
+      title: McpImportAgentOut
+      type: object
+    McpImportApplyOut:
+      properties:
+        coffer_entry_results:
+          items:
+            $ref: '#/components/schemas/ReconcileItemOut'
+          title: Coffer Entry Results
+          type: array
+        entries:
+          items:
+            $ref: '#/components/schemas/McpImportEntryResultOut'
+          title: Entries
+          type: array
+        servers_added:
+          items:
+            $ref: '#/components/schemas/McpImportServerAddedOut'
+          title: Servers Added
+          type: array
+      required:
+      - entries
+      - servers_added
+      - coffer_entry_results
+      title: McpImportApplyOut
+      type: object
+    McpImportEntryIn:
+      properties:
+        agent_uid:
+          minLength: 1
+          title: Agent Uid
+          type: string
+        name:
+          minLength: 1
+          title: Name
+          type: string
+        new_name:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: New Name
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      required:
+      - agent_uid
+      - name
+      title: McpImportEntryIn
+      type: object
+    McpImportEntryResultOut:
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        name:
+          title: Name
+          type: string
+        outcome:
+          enum:
+          - added
+          - merged
+          - removed_duplicate
+          - failed
+          - skipped
+          title: Outcome
+          type: string
+        resource_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Uid
+        server_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Server Name
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      required:
+      - agent_uid
+      - name
+      - source
+      - outcome
+      - server_name
+      - resource_uid
+      - error_code
+      - message
+      title: McpImportEntryResultOut
+      type: object
+    McpImportFileOut:
+      properties:
+        added_lines:
+          title: Added Lines
+          type: integer
+        agent_type:
+          title: Agent Type
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        display_path:
+          title: Display Path
+          type: string
+        entries_removed:
+          items:
+            type: string
+          title: Entries Removed
+          type: array
+        hunks:
+          items:
+            $ref: '#/components/schemas/DiffHunkOut'
+          title: Hunks
+          type: array
+        op:
+          const: modify
+          title: Op
+          type: string
+        path:
+          title: Path
+          type: string
+        removed_lines:
+          title: Removed Lines
+          type: integer
+        source:
+          title: Source
+          type: string
+      required:
+      - agent_uid
+      - agent_type
+      - source
+      - op
+      - path
+      - display_path
+      - entries_removed
+      - added_lines
+      - removed_lines
+      - hunks
+      title: McpImportFileOut
+      type: object
+    McpImportIn:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/McpImportEntryIn'
+          maxItems: 200
+          minItems: 1
+          title: Entries
+          type: array
+      required:
+      - entries
+      title: McpImportIn
+      type: object
+    McpImportPlanEntryOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        name:
+          title: Name
+          type: string
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        role:
+          enum:
+          - source
+          - merged
+          - duplicate
+          - unavailable
+          title: Role
+          type: string
+        secret_keys:
+          items:
+            type: string
+          title: Secret Keys
+          type: array
+        secret_refs:
+          additionalProperties:
+            type: string
+          title: Secret Refs
+          type: object
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+        transport:
+          anyOf:
+          - enum:
+            - stdio
+            - http
+            type: string
+          - type: 'null'
+          title: Transport
+      required:
+      - agent_uid
+      - agent_name
+      - name
+      - source
+      - path
+      - role
+      - transport
+      - secret_keys
+      - secret_refs
+      - error_code
+      - error
+      title: McpImportPlanEntryOut
+      type: object
+    McpImportPlanOut:
+      description: 'A dry run: nothing has been written.'
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/McpImportAgentOut'
+          title: Agents
+          type: array
+        changes:
+          items:
+            $ref: '#/components/schemas/ReconcileItemOut'
+          title: Changes
+          type: array
+        coffer_entry_changes:
+          items:
+            $ref: '#/components/schemas/ReconcileItemOut'
+          title: Coffer Entry Changes
+          type: array
+        files:
+          items:
+            $ref: '#/components/schemas/McpImportFileOut'
+          title: Files
+          type: array
+        servers:
+          items:
+            $ref: '#/components/schemas/McpImportServerOut'
+          title: Servers
+          type: array
+        unavailable:
+          items:
+            $ref: '#/components/schemas/McpImportPlanEntryOut'
+          title: Unavailable
+          type: array
+      required:
+      - servers
+      - files
+      - agents
+      - unavailable
+      - changes
+      - coffer_entry_changes
+      title: McpImportPlanOut
+      type: object
+    McpImportServerAddedOut:
+      properties:
+        name:
+          title: Name
+          type: string
+        uid:
+          title: Uid
+          type: string
+      required:
+      - name
+      - uid
+      title: McpImportServerAddedOut
+      type: object
+    McpImportServerOut:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/McpImportPlanEntryOut'
+          title: Entries
+          type: array
+        merged:
+          description: Several entries become this one server.
+          title: Merged
+          type: boolean
+        name:
+          title: Name
+          type: string
+        name_usable:
+          title: Name Usable
+          type: boolean
+        op:
+          enum:
+          - add
+          - duplicate
+          title: Op
+          type: string
+        original_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Name
+        reach_agent_uids:
+          items:
+            type: string
+          title: Reach Agent Uids
+          type: array
+        reaches_all:
+          title: Reaches All
+          type: boolean
+        resource_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Uid
+        settings_differ:
+          description: Merged entries' environment or headers differ; the first entry's are kept.
+          title: Settings Differ
+          type: boolean
+        transport:
+          enum:
+          - stdio
+          - http
+          title: Transport
+          type: string
+      required:
+      - op
+      - name
+      - original_name
+      - name_usable
+      - resource_uid
+      - transport
+      - reach_agent_uids
+      - reaches_all
+      - merged
+      - settings_differ
+      - entries
+      title: McpImportServerOut
       type: object
     MemoryFileContentOut:
       description: One file's contents. No fingerprint — this surface has no write.
@@ -2791,6 +3336,119 @@ components:
       - parse_errors
       - can_uninstall
       title: PluginsOut
+      type: object
+    ReconcileItemOut:
+      description: One difference between what Coffer wants and what is there.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: What Coffer would write; null for a removal.
+          title: After
+        before:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: What is there now, rendered safely; null if absent.
+          title: Before
+        changed_params:
+          items:
+            type: string
+          title: Changed Params
+          type: array
+        disposition:
+          enum:
+          - repair
+          - report
+          - blocked
+          title: Disposition
+          type: string
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        id:
+          description: '`<target>:<key>`; what `POST /reconcile/apply` takes.'
+          title: Id
+          type: string
+        key:
+          title: Key
+          type: string
+        op:
+          enum:
+          - add
+          - modify
+          - remove
+          title: Op
+          type: string
+        outcome:
+          enum:
+          - planned
+          - applied
+          - failed
+          title: Outcome
+          type: string
+        reason:
+          title: Reason
+          type: string
+        reason_code:
+          title: Reason Code
+          type: string
+        since:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When a writing pass first saw this difference.
+          title: Since
+        subject:
+          $ref: '#/components/schemas/ReconcileSubjectOut'
+        target:
+          title: Target
+          type: string
+      required:
+      - id
+      - target
+      - key
+      - op
+      - disposition
+      - reason_code
+      - reason
+      - subject
+      - file
+      - before
+      - after
+      - changed_params
+      - outcome
+      - error
+      - since
+      title: ReconcileItemOut
+      type: object
+    ReconcileSubjectOut:
+      properties:
+        kind:
+          title: Kind
+          type: string
+        title:
+          title: Title
+          type: string
+        uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uid
+      required:
+      - kind
+      - uid
+      - title
+      title: ReconcileSubjectOut
       type: object
     TranscriptMessageOut:
       description: One conversational turn, as the session page renders it.

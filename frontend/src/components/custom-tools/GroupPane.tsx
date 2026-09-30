@@ -1,16 +1,15 @@
 // src/components/custom-tools/GroupPane.tsx — the selected group, as one page with no tabs: header,
 // secret banner, definition, tools table; the tool drawer, Edit group, Re-import and Delete over it.
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Wrench } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import { useCustomToolGroup, useDeleteCustomToolGroup } from "@/lib/hooks/useCustomTools";
-import type { NewRequestState } from "./AddCustomToolDialog";
+import { useCustomToolGroup } from "@/lib/hooks/useCustomTools";
+import { DeleteGroupDialog } from "./DeleteGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { GroupDefinition } from "./GroupDefinition";
 import { GroupHeader } from "./GroupHeader";
@@ -21,30 +20,18 @@ import { ToolsTable } from "./ToolsTable";
 
 interface Props {
   name: string;
+  /** Add request: the Add custom tool flow's request form, on this group. */
+  onAddRequest: () => void;
 }
 
-/** Which tool the drawer shows: a saved one by name, or a new request. */
-type Drawer = { tool: string | null } | null;
-
-export function GroupPane({ name }: Props) {
+export function GroupPane({ name, onAddRequest }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
   const { data: group, isPending, error } = useCustomToolGroup(name);
-  const del = useDeleteCustomToolGroup(name);
-  const [drawer, setDrawer] = useState<Drawer>(null);
+  const [tool, setTool] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [reimportOpen, setReimportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  // Arriving from Add custom tool with a request to add: open the drawer,
-  // and drop the request from history so Back or a refresh does not reopen it.
-  const wantsNew = (location.state as NewRequestState | null)?.newRequest === true;
-  useEffect(() => {
-    if (!wantsNew || !group) return;
-    setDrawer({ tool: null });
-    navigate(location.pathname, { replace: true, state: null });
-  }, [wantsNew, group, navigate, location.pathname]);
 
   if (isPending) {
     return (
@@ -66,48 +53,31 @@ export function GroupPane({ name }: Props) {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 px-7 py-6">
       <GroupHeader
         group={group}
         onEdit={() => setEditOpen(true)}
+        onReimport={() => setReimportOpen(true)}
         onDelete={() => setDeleteOpen(true)}
       />
       <GroupSecretAlert group={group} onChooseAnother={() => setEditOpen(true)} />
       <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
-      <ToolsTable
-        group={group}
-        onOpenTool={(tool) => setDrawer({ tool })}
-        onAddRequest={() => setDrawer({ tool: null })}
-      />
+      <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
       <ToolEditorDrawer
         group={group}
-        toolName={drawer?.tool ?? null}
-        open={drawer !== null}
-        onClose={() => setDrawer(null)}
+        toolName={tool}
+        open={tool !== null}
+        onClose={() => setTool(null)}
       />
       <EditGroupDialog group={group} open={editOpen} onOpenChange={setEditOpen} />
       {group.source ? (
         <ReimportDialog group={group} open={reimportOpen} onOpenChange={setReimportOpen} />
       ) : null}
-      <ConfirmDialog
+      <DeleteGroupDialog
+        group={group}
         open={deleteOpen}
-        onOpenChange={(next) => {
-          setDeleteOpen(next);
-          if (!next) del.reset();
-        }}
-        title={t("customTools.group.deleteTitle", { name: group.name })}
-        description={t("customTools.group.deleteBody", { count: group.tools.length })}
-        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
-        pending={del.isPending}
-        error={del.error}
-        onConfirm={() =>
-          del.mutate(undefined, {
-            onSuccess: () => {
-              setDeleteOpen(false);
-              navigate("/custom-tools");
-            },
-          })
-        }
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => navigate("/custom-tools")}
       />
     </div>
   );

@@ -23,7 +23,7 @@ import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { useApplySkillUpdate, useKeepSkillEdits } from "@/lib/hooks/useSkills";
 import { SkillUpdateCompare } from "./SkillUpdateCompare";
-import { SkillUpdateConflict } from "./SkillUpdateConflict";
+import { SkillUpdateConflict, type ConflictChoice } from "./SkillUpdateConflict";
 import { SkillUpdatePreviewBody } from "./SkillUpdatePreviewBody";
 import { useSkillUpdateStage } from "./SkillUpdateStage";
 import { repoLabel, shortCommit } from "./skillSourceHelpers";
@@ -45,11 +45,13 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
   const [compareFile, setCompareFile] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<unknown>(null);
   const [confirmTake, setConfirmTake] = useState(false);
+  const [choice, setChoice] = useState<ConflictChoice | null>(null);
 
   useEffect(() => {
     setView(preview?.conflict ? "conflict" : "preview");
     setCompareFile(null);
     setApplyError(null);
+    setChoice(null);
   }, [preview]);
 
   const close = () => {
@@ -120,9 +122,8 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
       <SkillUpdateConflict
         name={skill.name}
         preview={preview}
-        keeping={keepEdits.isPending}
-        onKeep={() => void keep().catch(() => undefined)}
-        onTake={() => setConfirmTake(true)}
+        choice={choice}
+        onChoose={setChoice}
       />
     );
   } else if (view === "compare") {
@@ -136,7 +137,7 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
       />
     );
   } else {
-    body = <SkillUpdatePreviewBody preview={preview} />;
+    body = <SkillUpdatePreviewBody preview={preview} skill={skill} />;
   }
 
   return (
@@ -144,7 +145,16 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
         <DialogContent className="flex max-h-[calc(100vh-4rem)] max-w-[980px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="mb-0 shrink-0 gap-[3px] pb-3 pl-5 pr-12 pt-4">
-            <DialogTitle>{t("skillSources.update.title", { name: skill.name })}</DialogTitle>
+            <DialogTitle>
+              {view === "conflict" && preview ? (
+                <>
+                  <span className="font-mono">{skill.name}</span>
+                  {t("skills.update.bothSides")}
+                </>
+              ) : (
+                t("skillSources.update.title", { name: skill.name })
+              )}
+            </DialogTitle>
             <DialogDescription className="text-xs">
               {source ? `${repoLabel(source.url)} · ` : ""}
               <span className="font-mono">{from}</span>
@@ -161,7 +171,11 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
           </div>
           <DialogFooter className="m-0 mt-0 flex-row items-center justify-start gap-2 rounded-none px-5 py-3 sm:justify-start">
             <span className="min-w-0 text-xs text-text-muted">
-              {ready ? t("skillSources.update.agentsNote") : null}
+              {ready
+                ? view === "conflict"
+                  ? t("skills.update.conflictNote")
+                  : t("skills.update.note", { name: skill.name })
+                : null}
             </span>
             <span className="ml-auto flex shrink-0 gap-2">
               {ready && view !== "preview" ? (
@@ -176,8 +190,25 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
                 </Button>
               ) : null}
               <Button type="button" variant="outline" onClick={close}>
-                {ready ? t("skillSources.update.notNow") : t("common.close")}
+                {ready
+                  ? view === "conflict"
+                    ? t("common.cancel")
+                    : t("skillSources.update.notNow")
+                  : t("common.close")}
               </Button>
+              {ready && view === "conflict" ? (
+                <Button
+                  type="button"
+                  disabled={!choice || keepEdits.isPending || applyUpdate.isPending}
+                  onClick={() =>
+                    choice === "keep" ? void keep().catch(() => undefined) : setConfirmTake(true)
+                  }
+                >
+                  {choice === "keep"
+                    ? t("skillSources.conflict.keep")
+                    : t("skillSources.conflict.take")}
+                </Button>
+              ) : null}
               {ready && view === "preview" ? (
                 <Button
                   type="button"

@@ -71,8 +71,8 @@ class CuratedPrice(BaseModel):
     """What the user says this connection charges for a model, in USD per
     million tokens (web search per thousand requests). Relays and resellers
     price differently from the vendor, so a connection's own price wins over
-    the bundled snapshot when usage is costed (spec provider-switching "Price
-    usage from a bundled snapshot and per-connection prices"). A cache category
+    every other source when usage is costed (spec provider-switching "Resolve
+    each model's price from the provider, its API, or the bundled list"). A cache category
     left out is charged at the input rate, so an estimate errs high."""
 
     model_config = ConfigDict(extra="forbid")
@@ -113,7 +113,7 @@ class CuratedModel(BaseModel):
     effort_levels: list[str] | None = None
     #: The level used when the agent's binding names none.
     default_effort: str | None = None
-    #: This connection's own price for the model; ``None``: the bundled one.
+    #: This connection's own price for the model; ``None``: resolved elsewhere.
     price: CuratedPrice | None = None
 
     @model_serializer(mode="wrap")
@@ -221,14 +221,29 @@ class ProviderConfig(BaseModel):
     # connection carries no key and is reached through the model proxy like
     # any other (spec provider-switching "Configure a local model connection").
     local_runtime: LocalRuntime | None = None
+    # Whether the model proxy may send another provider's request here when
+    # that provider fails before its first byte ("Use as fallback for other
+    # providers"; spec provider-switching "Fail over only before the first
+    # content byte"). On by default; a local runtime is never a fallback
+    # whatever this says.
+    fallback: bool = True
+    # Where the connection sits in the Model providers list, which is also the
+    # order fallbacks are tried in. ``None`` sorts after every placed one, by
+    # name, so a connection nobody has moved keeps the old alphabetical place.
+    position: int | None = Field(default=None, ge=0)
 
     @model_serializer(mode="wrap")
     def _omit_absent_runtime(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         """A connection that is no local runtime carries no ``local_runtime``
-        key at all, so every existing document keeps its shape."""
+        key at all, and one at its defaults no ``fallback`` / ``position``, so
+        every existing document keeps its shape."""
         data: dict[str, Any] = handler(self)
         if data.get("local_runtime") is None:
             data.pop("local_runtime", None)
+        if data.get("fallback") is True:
+            data.pop("fallback", None)
+        if data.get("position") is None:
+            data.pop("position", None)
         return data
 
     @field_validator("base_url")
@@ -292,6 +307,11 @@ class ProviderConfig(BaseModel):
         return self
 
     @property
+    def offers_fallback(self) -> bool:
+        """Whether another provider's request may fail over to this one."""
+        return self.fallback and not self.is_local
+
+    @property
     def is_local(self) -> bool:
         """A model runtime on this machine."""
         return self.local_runtime is not None
@@ -313,6 +333,12 @@ class ProviderConfig(BaseModel):
         if model_id is None:
             return None
         return next((m for m in self.models if m.id == model_id), None)
+
+
+def list_order(name: str, position: int | None) -> tuple[int, int, str]:
+    """The sort key of the Model providers list — and of fallback priority:
+    placed connections by position, then the rest by name."""
+    return (0, position, name) if position is not None else (1, 0, name)
 
 
 @dataclass(frozen=True)

@@ -2,10 +2,12 @@
 //
 // The command itself, whole (it wraps, never truncates). Coffer's row adds what
 // its state needs said: a missing hook's consequence in place of a command,
-// Codex's trust rule while the hook is not trusted, and the never-fired panel.
+// the approval panel while Codex has not approved it, Codex's trust rule when
+// it changed since approval, and the never-fired panel.
 import { useTranslation } from "react-i18next";
 
 import { AgentHookNeverFiredPanel } from "@/components/agents/AgentHookNeverFiredPanel";
+import { AgentHookUntrustedPanel } from "@/components/agents/AgentHookUntrustedPanel";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { cofferHookState, type HookRow } from "@/lib/agents/hookRows";
 
@@ -36,7 +38,14 @@ export function AgentHookCommandCell({ row, agentType, onCheckAgain, checking }:
   return (
     <span className="flex flex-col gap-1">
       <span className="break-all font-mono text-xs text-text">{row.command}</span>
-      {state?.word === "untrusted" || state?.word === "modified" ? (
+      {state?.word === "untrusted" ? (
+        <AgentHookUntrustedPanel
+          agentType={agentType}
+          onCheckAgain={onCheckAgain}
+          checking={checking}
+        />
+      ) : null}
+      {state?.word === "modified" ? (
         <span className="text-xs text-text-muted">{t("agents.hooksTab.trustNote")}</span>
       ) : null}
       {state?.word === "neverFired" ? (

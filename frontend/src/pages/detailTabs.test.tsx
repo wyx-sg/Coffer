@@ -28,6 +28,9 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useSkillFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
+  useSkillCopies: vi.fn(() => ({ data: undefined, isFetching: false, refetch: vi.fn() })),
+  useCheckSkillSource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useReadSkillFileNow: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
@@ -56,6 +59,7 @@ const SKILL: SkillOut = {
   scope: null,
   version_hash: "deadbeefcafe1234",
   master_path: "/master/hello",
+  master_missing: false,
   last_synced_from_source_at: null,
   created_at: "2026-05-26T00:00:00Z",
   updated_at: "2026-05-26T00:00:00Z",
@@ -121,11 +125,13 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
     "/mcp-servers/srv/tools",
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
-      serverUid="u-1"
       basePath="/mcp-servers/srv"
-      capabilities={undefined}
+      counts={{}}
       overview={<div>server overview</div>}
       tools={<div>server tools</div>}
+      resources={null}
+      prompts={null}
+      invocations={null}
     />,
   );
   const mcpStrip = strip();
@@ -151,11 +157,13 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
     "/mcp-servers/srv",
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
-      serverUid="u-1"
       basePath="/mcp-servers/srv"
-      capabilities={undefined}
+      counts={{}}
       overview={<div>npx -y srv</div>}
       tools={<div>server tools</div>}
+      resources={null}
+      prompts={null}
+      invocations={null}
     />,
   );
 

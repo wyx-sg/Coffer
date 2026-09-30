@@ -249,7 +249,10 @@ async def apply(
     if stage.skill_uid != skill.uid:
         raise SkillValidationError("stage_for_another_skill", {"path": stage_id})
     source = git_source_of(skill)
-    if _edited(svc, skill, source) and not discard_local_edits:
+    # A change of source was already shown against the current folder, local
+    # edits included, so it has no separate conflict to answer.
+    new_source = stage.new_source
+    if new_source is None and _edited(svc, skill, source) and not discard_local_edits:
         raise SkillUpdateConflict(skill.name)
     result = validate_skill_folder(stage.incoming, size_limit_bytes=svc.size_limit)
     if isinstance(result, ValidationFailure):
@@ -259,7 +262,8 @@ async def apply(
             service=svc.skills,
             src=stage.incoming,
             validation=result,
-            source_meta=source.model_copy(
+            source_meta=new_source
+            or source.model_copy(
                 update={"commit": stage.to_commit, "content_hash": stage.content_hash}
             ),
             event=AuditEventType.SKILL_UPDATED,

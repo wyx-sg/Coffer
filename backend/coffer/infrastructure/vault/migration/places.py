@@ -37,7 +37,7 @@ CLASS_DIRS: tuple[str, ...] = ("vault", "local", "content", "derived")
 #: The last Alembic revision whose tables still hold the pre-vault state: the
 #: upgrade reads the old database there, and the next revision drops them.
 PRE_LAYOUT_REVISION = "0116"
-LAYOUT_REVISION = "0117"
+LAYOUT_REVISION = "0136"
 
 LEGACY_DB = "coffer.db"
 RUNS_DB = "runs.db"

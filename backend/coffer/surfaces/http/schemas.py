@@ -240,14 +240,6 @@ class CapabilityListOut(BaseModel):
     from_cache: bool = False
 
 
-class McpTestResultOut(BaseModel):
-    ok: bool
-    latency_ms: int
-    protocol_version: str | None = None
-    server_capabilities: dict[str, Any] | None = None
-    error_message: str | None = None
-
-
 # --- Credentials ---
 
 

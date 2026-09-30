@@ -24,7 +24,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from coffer.infrastructure.vault.home import derived_root, vault_root
+from coffer.infrastructure.vault.home import content_root, derived_root, vault_root
 
 # Defence-in-depth: even if a caller skips the surface-layer name guard, the
 # master store still rejects names that could escape ``self._root``. Path
@@ -97,6 +97,14 @@ class MasterStore:
     def derived_root(self) -> pathlib.Path:
         """Where the builtin skills' folders live (``DERIVED_SKILL_NAMES``)."""
         return self._derived
+
+    @property
+    def backup_root(self) -> pathlib.Path:
+        """``~/.coffer/content/backup/skills/``: where a folder moved out of an
+        agent's link path, or out of the store, is kept. Content, not vault: a
+        set-aside copy is the person's only copy but is not configuration to
+        sync (ADR storage-is-five-classes-by-nature)."""
+        return content_root() / "backup" / "skills"
 
     def ensure_root(self) -> None:
         self._root.mkdir(parents=True, exist_ok=True)

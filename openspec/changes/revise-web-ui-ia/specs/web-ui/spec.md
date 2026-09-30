@@ -471,16 +471,19 @@ Edits auto-save, like every settings surface: there is no Save button.
 ### Requirement: Scope Activity's calls table to one server on its page
 A server's **Invocations** tab MUST read the same invocation log Activity's MCP
 calls tab reads, scoped to that one server, rather than a second record that
-would have to be kept in step with the first. It lists every call the gateway
-proxied for this server, newest first, filterable by status and time range,
-each row expanding to that call's raw JSON record — the only account of what an
-agent did when the agent is the thing that is broken. Activity's MCP calls tab
-reads every server's calls and names each row's server.
+would have to be kept in step with the first. It renders the one calls list the
+server's "Calls and server log" drawer renders: the calls the gateway proxied
+for this server in the last 24 hours, newest first, All or Errors, one agent or
+all, each row its time, tool, calling agent, result and duration, and the
+chosen call (the newest by default) opened below with its result, how long it
+took and its session — the account of what an agent did when the agent is the
+thing that is broken. Activity's MCP calls tab reads every server's calls and
+names each row's server.
 
 #### Scenario: a server's invocations tab is the Activity calls table scoped to it
 - **GIVEN** a registered MCP server
 - **WHEN** its Invocations tab and Activity's MCP calls tab each render
-- **THEN** the server's tab asks only for that server's calls and drops the server column
+- **THEN** the server's tab asks only for that server's calls, lists them without a server column and opens the newest below the list
 - **AND** Activity's tab asks the cross-server route for every server's calls and names each row's server
 
 ### Requirement: Gather the three records on one Activity page
@@ -1159,16 +1162,32 @@ annotations (`readOnlyHint` false and `destructiveHint` true when it changes
 data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
 to it. The page MUST list the groups grouped by health, the failing ones first,
 each showing its tools. Its header MUST carry one action, **Add custom tool**,
-whose flow asks first for the group — an existing one to join, or a new one to
-create, named in the same step — and then offers two ways in:
+whose flow asks first for the group. An existing group MUST only take a request
+added by hand, which uses that group's base URL and secret; only a **new** group
+offers the two ways in:
 
-- **Import an OpenAPI spec** — from a URL or a file, into a new group; the user
-  picks which operations become tools. A group made by
-  an import MUST offer **Re-import**, which reads the spec again and shows a
-  preview of the operations it would add and remove before anything changes;
-  confirming keeps every kept tool's switch and reach override as they were.
-- **Define one request by hand** — method, path, parameters and body schema —
-  in the group chosen, existing or new.
+- **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
+  ticks which operations become tools, reads ticked and operations that change
+  data unticked, and a review lists the ticked ones as the tools to create and the
+  rest as **Skipped** before **Create group with N tools**. A group made by
+  an import MUST offer **Re-import**, which reads the spec again and lists the
+  change first — operations it would add (reads become tools, switched on;
+  operations that change data are listed but not ticked), tools whose request
+  the spec changed, and tools it would remove — before anything changes;
+  applying keeps every unchanged tool's switch and reach override as they were.
+- **Define one request by hand** — the new group's name, base URL, auth and
+  default reach, then its first request: method, path, headers, body template
+  and arguments.
+
+Every request form MUST end with **Test**, which runs the request as the form
+holds it once and shows the answer, the API's error body, a timeout, a failed
+connection or a response cut short; nothing — neither a new group nor a tool — is
+saved until the form's **Add** or **Save**. A request of a group that is not saved
+yet is tested without its secret (see [mcp-gateway](../mcp-gateway/spec.md) "Test
+a custom tool request before its group is saved"). With no group yet the page
+MUST show only a first-run panel, with Add custom tool in the header and in the
+panel. A group's **⋯** menu MUST offer Edit group, Re-import (for an imported
+group), Turn off and Delete group.
 
 A group's detail page (`/custom-tools/<group>`, and no other route) MUST be one
 page with no tabs: the group's **definition** (base URL, and the auth header with
@@ -1192,11 +1211,24 @@ transport.
 - **WHEN** the spec now has one of those operations removed and a new one added, and the user chooses Re-import
 - **THEN** a preview lists the operation to add and the tool to remove, and nothing changes until the user confirms
 - **AND** after confirming, the kept tools keep their switch and reach override
+- **AND** an added operation that reads data becomes a tool, while one that changes data is listed but not added
 
 #### Scenario: a hand-made request joins an existing group
 - **GIVEN** the `billing` group
 - **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
 - **THEN** the tool is added to `billing`, using its base URL and auth header
+- **AND** the flow offers no Import an OpenAPI spec for `billing`, only for a new group
+
+#### Scenario: a new group made by hand is saved with its first request
+- **GIVEN** no group named `search-api`
+- **WHEN** the user chooses Add custom tool, picks New group and By hand, fills in `search-api` and its base URL, chooses Create group, then fills in the first request and tests it
+- **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with that one tool
+- **AND** the test ran without the group's secret
+
+#### Scenario: the custom tools page with no group shows the first-run panel
+- **GIVEN** no custom-tool group
+- **WHEN** the user opens `/custom-tools`
+- **THEN** the page shows no group list, only a first-run panel with Import an OpenAPI spec and Add one request by hand, and Add custom tool in the header and the panel
 
 #### Scenario: a tool's reach override narrows one tool
 - **GIVEN** the `billing` group reaching Claude Code and Codex

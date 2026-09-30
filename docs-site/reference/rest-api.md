@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 252 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 269 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -117,20 +117,20 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 | [sync](#sync) | 26 |
 | [vault](#vault) | 6 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 36 |
+| [agents](#agents) | 38 |
 | [fs](#fs) | 5 |
-| [skills](#skills) | 19 |
+| [skills](#skills) | 25 |
 | [clis](#clis) | 4 |
-| [mcp](#mcp) | 13 |
-| [custom-tools](#custom-tools) | 13 |
+| [mcp](#mcp) | 15 |
+| [custom-tools](#custom-tools) | 14 |
 | [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 16 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
 | [channels](#channels) | 3 |
-| [providers](#providers) | 10 |
-| [proxy](#proxy) | 3 |
+| [providers](#providers) | 14 |
+| [proxy](#proxy) | 5 |
 | [usage](#usage) | 6 |
 
 ### daemon
@@ -285,6 +285,8 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `POST` | `/api/v1/agents/mcp-import/plan` | What importing the chosen entries would do; writes nothing. |
+| `POST` | `/api/v1/agents/mcp-import/apply` | Perform the plan as it stands now; each entry reports its outcome. |
 | `GET` | `/api/v1/agents` | List Agents |
 | `POST` | `/api/v1/agents` | Register the one agent of ``type``, named by it. |
 | `GET` | `/api/v1/agents/types` | Every supported type with its detection state, registered or not (read-only), so a surface can always show one row per type. |
@@ -336,6 +338,11 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `GET` | `/api/v1/skills/orphans` | List Orphans |
+| `POST` | `/api/v1/skills/orphans/{name}/adopt` | Adopt Orphan |
+| `DELETE` | `/api/v1/skills/orphans/{name}` | Remove Orphan |
+| `GET` | `/api/v1/skills/{uid}/copies/{agent_uid}` | Compare Copy |
+| `POST` | `/api/v1/skills/{uid}/copies/{agent_uid}/resolve` | Resolve Copy |
 | `GET` | `/api/v1/skills` | List Skills |
 | `POST` | `/api/v1/skills/import` | Import Skill |
 | `GET` | `/api/v1/skills/{uid}` | Get Skill |
@@ -349,6 +356,7 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 | `DELETE` | `/api/v1/skills/stage/{staging_id}` | Cancel Stage |
 | `POST` | `/api/v1/skills/{uid}/source/check` | Check Source |
 | `POST` | `/api/v1/skills/{uid}/source/preview` | Preview Update |
+| `POST` | `/api/v1/skills/{uid}/source/change` | Stage a new repository / ref / folder for this skill and show the change against its current folder; ``/source/apply`` with the stage takes it. |
 | `GET` | `/api/v1/skills/{uid}/source/compare` | Compare Update |
 | `POST` | `/api/v1/skills/{uid}/source/apply` | Apply Update |
 | `POST` | `/api/v1/skills/{uid}/source/keep` | Keep Mine |
@@ -377,6 +385,8 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 | `POST` | `/api/v1/resources/mcp_server/{uid}/capabilities/{capability_type}/disable` | Disable a specific capability for the MCP server this uid names. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/refresh` | Invalidate the discovery cache for this server and re-query upstream. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/test` | Open a transient upstream session, run MCP initialize, return health info. |
+| `POST` | `/api/v1/resources/mcp_server/test-config` | Test a config without registering it; persists nothing. |
+| `GET` | `/api/v1/mcp/builtin` | The ``coffer`` server: endpoint, tools, reach and the last 24 hours. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations` | Query invocation records for this server with optional filters. |
 | `GET` | `/api/v1/mcp/invocations` | Every server's invocations on one timeline, newest-first. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations/summary` | This server's calls since ``since``: totals, per calling agent, per tool. |
@@ -390,6 +400,7 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/custom-tools` | List Groups |
 | `POST` | `/api/v1/custom-tools` | Create Group |
 | `POST` | `/api/v1/custom-tools/openapi` | Read a document into draft tools; saves nothing. |
+| `POST` | `/api/v1/custom-tools/test` | Run a request of a group not saved yet: no secret, SSRF-guarded, nothing kept. |
 | `GET` | `/api/v1/custom-tools/{name}` | Get Group |
 | `PATCH` | `/api/v1/custom-tools/{name}` | Update Group |
 | `DELETE` | `/api/v1/custom-tools/{name}` | Delete Group |
@@ -490,12 +501,16 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `GET` | `/api/v1/providers/price-list` | The price list in use and its refresh. |
+| `PUT` | `/api/v1/providers/price-list` | Turn the daily refresh on or off on this machine. |
 | `GET` | `/api/v1/providers` | List all provider profiles. |
 | `POST` | `/api/v1/providers` | Create a provider profile (422 when the credential source is invalid). |
 | `POST` | `/api/v1/providers/detect-local` | Which local model runtime answers where (spec provider-switching "Detect a local model runtime without changing it"). |
 | `GET` | `/api/v1/providers/{uid}` | Get one provider profile (404 if absent). |
 | `PATCH` | `/api/v1/providers/{uid}` | Partially update a provider profile. |
 | `DELETE` | `/api/v1/providers/{uid}` | Delete a provider profile (404 if absent). |
+| `PUT` | `/api/v1/providers/order` | Reorder the Model providers list — the order fallbacks are tried in (spec provider-switching "Order providers, and fail over in that order"). |
+| `POST` | `/api/v1/providers/{uid}/prices` | Each model's price on this provider, with its source: You set, From &lt;provider&gt;, Bundled or local — or none (spec provider-switching "Resolve each model's price from the provider, its API, or the bundled list"). |
 | `POST` | `/api/v1/providers/{uid}/activate` | Switch: make this profile active for its wire format and project it. |
 | `POST` | `/api/v1/providers/use-builtin/{agent_type}` | Switch every agent of this type back to its OWN built-in login: remove Coffer's projection from the native config and clear the active connection covering it. |
 | `POST` | `/api/v1/providers/{uid}/internal-default` | Make this connection Coffer's internal-engine default (≤1 globally). |
@@ -507,6 +522,8 @@ The daemon mounts 252 operations in 27 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/proxy/status` | The supervised proxy's state, as the daemon last saw it. |
 | `GET` | `/api/v1/proxy/tokens/{agent_uid}` | The agent's local proxy token, minted on first ask. |
+| `GET` | `/api/v1/proxy/tokens/{agent_uid}/hint` | The last four characters of the agent's token, minted on first ask. |
+| `GET` | `/api/v1/proxy/routes/{agent_uid}` | The agent's provider and its fallbacks, as the proxy is serving them. |
 | `POST` | `/api/v1/proxy/tokens/{agent_uid}/rotate` | Replace the agent's token; the old one is refused from the next push, which happens before this answers. |
 
 ### usage

@@ -81,6 +81,13 @@ datas = (
             "coffer/application/knowledge/skill_assets",
             "coffer/application/knowledge/skill_assets",
         ),
+        # The bundled model price list (pydantic/genai-prices, MIT) and its
+        # licence. JSON, not a module, so the import graph cannot see it; a
+        # build without it prices nothing from the bundled list.
+        (
+            "coffer/infrastructure/usage/price_list",
+            "coffer/infrastructure/usage/price_list",
+        ),
     ]
     + collect_data_files("mcp", include_py_files=False)
 )

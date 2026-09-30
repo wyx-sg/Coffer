@@ -280,7 +280,20 @@ stateDiagram-v2
 - **Teardown.** A stdio close waits up to 10 seconds for the SDK's own shutdown, which escalates SIGTERM to SIGKILL. The shim then kills every PID recorded for that connection, along with its descendants. Each spawn records a PID file under `~/.coffer/upstream-pids/`, keyed by the server's uid. At startup, the daemon sweeps any files left by a crash.
 - **Logs.** Each stdio upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to `daemon.log`.
 
-The daemon also runs one process-wide supervisor and discovery for the management routes: `GET …/capabilities`, `POST …/refresh` and the capability toggles. `POST /api/v1/resources/mcp_server/{uid}/test` builds a fresh connection and writes the result to the per-uid health row. Scope never gates these routes, so you can always test a server that no session is allowed to see.
+The daemon also runs one process-wide supervisor and discovery for the management routes: `GET …/capabilities`, `POST …/refresh` and the capability toggles. Scope never gates these routes, so you can always test a server that no session is allowed to see.
+
+### Testing a server
+
+One probe (`infrastructure/mcp/probe.py`) serves both tests: `POST /api/v1/resources/mcp_server/{uid}/test` for a registered server, and `POST /api/v1/resources/mcp_server/test-config` for a config the Add dialog has not saved. It builds a fresh connection outside every supervisor, runs `initialize` and `tools/list` (and counts resources and prompts when the server declares them), and answers with the tools, the counts, the newest 20 stderr lines and, on failure, a code: `url_refused`, `spawn_failed`, `exited` (with the exit status), `timeout`, `initialize_failed`, `connect_failed` or `stored_secret_not_released`.
+
+- **Time limit.** The whole test ends within 30 seconds; the server's own spawn and request timeouts are capped by it.
+- **Process group.** A stdio server runs under `/bin/sh`, which waits for it and prints its exit status on stderr, so an early exit reports its code. Its stderr goes to a private temporary file rather than the server's log. When the test ends — passed, failed, out of time, or the client gone (the route watches for the disconnect and cancels) — the whole process group is sent SIGTERM and then SIGKILL (`infrastructure/mcp/process_group.py`), which also reaches a grandchild the server forked after its parent exited.
+- **Secrets.** A registered server's test releases its secrets through its approved binding, as a spawn would. An unsaved config is never given a stored secret: a config citing a stored secret (`secret_refs` in the test request) is not started and answers `stored_secret_not_released`. Values typed into the form's secret rows are set for this test only, and every one is redacted from the stderr lines and the message.
+- **What is kept.** The registered test writes the outcome to the server's health row, as before. The unsaved test writes nothing — no resource, health row, invocation or audit event. A URL typed into the form passes the SSRF guard first (see [Security → Outbound requests](/architecture/security#outbound-requests)).
+
+### The built-in `coffer` server
+
+The MCP servers page lists Coffer's own endpoint last, under Built-in. It is not a resource: `GET /api/v1/mcp/builtin` describes it from what the daemon knows — the bound port (`http://127.0.0.1:<port>/mcp`), the built-in tool list above (switched-off features' tools left out), the agents whose MCP config holds Coffer's entry (supplied by the composition root, `surfaces/http/builtin_server_wiring.py`, since the MCP kind may not read the agent kind), and the last 24 hours of calls logged under the reserved uid `coffer`. Its Invocations tab reads `GET /api/v1/mcp/invocations?uid=coffer`.
 
 ## Notifications and server-initiated requests
 
@@ -338,6 +351,15 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api` (`domai
 ### The secret boundary
 
 The destination is the group; its **target** is `http_api <base_url>` and its slot is the auth header's name, so binding a stored secret, moving the base URL and renaming the header each wait for a person's approval in the desktop app. A group reports its secret as `present`, `missing` or `pending_approval` with the approval ids, and a withheld secret makes the agent's call fail with `SECRET_BINDING_PENDING` having sent nothing. A standalone secret a group binds is never released when the group is deleted: it belongs to the Secrets page.
+
+### Testing a request
+
+`infrastructure/mcp/http_api_runner.py` runs one draft tool with the same request building and sending as a call, and records nothing. There are two entry points:
+
+- **A saved group** (`POST /api/v1/custom-tools/{name}/test`) materialises its secret through the group's approved binding, exactly as a call would.
+- **A group not saved yet** (`POST /api/v1/custom-tools/test`, the group's base URL, headers and timeout inline). It has no binding, so no stored secret is sent and the auth header is left off. Its base URL was typed into a form, so it passes the SSRF guard before anything is sent (see [Security → Outbound requests](/architecture/security#outbound-requests)); an address that is refused, or does not resolve, is reported as not tested.
+
+When no answer came back, a result says how it failed: `request` (the request could not be built), `timeout`, `connect` or `blocked`. A re-import preview also names the kept tools whose request the spec changed — a newly required argument, or a moved method, path or body template — and a reading carries each operation's first tag so the import form can group them.
 
 ### Health
 

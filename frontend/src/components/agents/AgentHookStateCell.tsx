@@ -22,6 +22,8 @@ export function AgentHookStateCell({ row }: { row: HookRow }) {
         <span className="text-2xs text-text-muted">
           {t("agents.hooksTab.fired", { time: timeAgo(firedAt, i18n.language) })}
         </span>
+      ) : state.word === "untrusted" ? (
+        <span className="text-2xs text-text-muted">{t("agents.hooksTab.untrustedSub")}</span>
       ) : null}
     </span>
   );

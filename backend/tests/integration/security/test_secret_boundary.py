@@ -180,7 +180,7 @@ def test_citing_an_existing_secret_from_a_new_server_waits(daemon: BoundaryDaemo
 def test_the_test_route_spawns_nothing_until_approved(
     daemon: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from coffer.surfaces.http.mcp import server_test_routes
+    from coffer.infrastructure.mcp import probe as server_probe
 
     spawned: list[dict[str, str]] = []
 
@@ -191,10 +191,15 @@ def test_the_test_route_spawns_nothing_until_approved(
         async def spawn_and_initialize(self) -> dict[str, Any]:
             return {}
 
+        async def request(self, method: str, params: dict[str, Any]) -> Any:
+            return type("Listed", (), {"tools": []})()
+
         async def close(self) -> None:
             return None
 
-    monkeypatch.setattr(server_test_routes, "StdioUpstreamConnection", _Conn)
+    monkeypatch.setattr(server_probe, "StdioUpstreamConnection", _Conn)
+    # The fake command is not on PATH; the probe's pre-spawn check is not under test.
+    monkeypatch.setattr(server_probe, "_launcher_problem", lambda *_a: None)
     d = daemon
     _first, second = _two_servers(d)
 
@@ -203,7 +208,8 @@ def test_the_test_route_spawns_nothing_until_approved(
     assert spawned == []
 
     d.approve(d.pending(destination_uid=second["uid"])[0]["id"])
-    assert d.client.post(f"/api/v1/resources/mcp_server/{second['uid']}/test").json()["ok"]
+    after = d.client.post(f"/api/v1/resources/mcp_server/{second['uid']}/test").json()
+    assert after["ok"], (after["error_code"], after["error_message"])
     assert spawned == [{"TOKEN": "ghp_boundary_value_1"}]
 
 

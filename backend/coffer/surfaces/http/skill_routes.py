@@ -136,6 +136,9 @@ class SkillOut(BaseModel):
     scope: ScopeOut | None
     version_hash: str
     master_path: str
+    #: The master folder is gone from disk (removed outside Coffer); the row,
+    #: its reach and its history are still here.
+    master_missing: bool
     last_synced_from_source_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -264,6 +267,7 @@ async def _to_skill_out(
         scope=ScopeOut.of(r.scope),
         version_hash=cfg.version_hash,
         master_path=svc.master_path(r.name),
+        master_missing=not pathlib.Path(svc.master_path(r.name)).is_dir(),
         last_synced_from_source_at=cfg.last_synced_from_source_at,
         created_at=r.created_at,
         updated_at=r.updated_at,

@@ -8,6 +8,8 @@ service to know which agents to project into, and the lifespan passes it in.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from dataclasses import dataclass
 
 from fastapi import FastAPI
@@ -16,6 +18,7 @@ from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.provider.kind import make_provider_kind
+from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.projection_reconcile import ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.secret_gate import provider_destination
@@ -28,6 +31,9 @@ from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
+from coffer.infrastructure.usage.bundled_prices import load_bundled_prices
+from coffer.infrastructure.usage.price_refresh import PriceListSource, refresh_pinned_off
 from coffer.surfaces.http.engine_config_composition import (
     internal_default_model_guard,
     internal_engine_connection,
@@ -37,7 +43,8 @@ from coffer.surfaces.http.model_proxy_wiring import (
     proxy_root_now,
     wire_model_proxy,
 )
-from coffer.surfaces.http.provider_dependencies import set_provider_service
+from coffer.surfaces.http.price_list_routes import set_price_list_source
+from coffer.surfaces.http.provider_dependencies import set_price_resolver, set_provider_service
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_secret_boundary,
     on_approval_applied,
@@ -56,6 +63,19 @@ class ProviderWiring:
     internal_connection: InternalEngineConnection
     #: The supervised local model proxy every agent on a connection calls.
     proxy: ModelProxyWiring
+    #: Where a model's price on a provider comes from — shared by the usage
+    #: meter and the Models section, so they never disagree.
+    prices: ProviderPriceResolver
+    #: The bundled price list and its daily refresh.
+    price_list: PriceListSource
+    price_refresh_task: asyncio.Task[None] | None = None
+
+    async def stop_price_refresh(self) -> None:
+        self.price_list.stop()
+        if self.price_refresh_task is not None:
+            self.price_refresh_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self.price_refresh_task
 
 
 def wire_provider_kind(
@@ -113,12 +133,30 @@ def wire_provider_kind(
             deactivate=provider_svc.deactivate,
         )
     )
+    # You set → local → from the provider's API → the bundled list (spec
+    # provider-switching "Resolve each model's price from the provider, its
+    # API, or the bundled list"). The list is read from the build, never
+    # fetched per request: a daily refresh keeps a fresher copy of the list
+    # (spec provider-switching "Refresh the bundled price list in the
+    # background"), and every lookup reads whichever is fresher.
+    price_list = PriceListSource(load_bundled_prices())
+    set_price_list_source(price_list)
+    prices = ProviderPriceResolver(provider_svc, price_list.current, reported_price_store())
+    set_price_resolver(prices)
+    refresh_task = (
+        None
+        if refresh_pinned_off()
+        else asyncio.get_running_loop().create_task(price_list.run(), name="price-refresh")
+    )
     proxy = wire_model_proxy(provider_svc, credential_store, reconciler)
     # An approved key reaches the proxy on the next state push, not before.
     on_approval_applied(proxy.schedule_refresh)
     return ProviderWiring(
         service=provider_svc,
         proxy=proxy,
+        prices=prices,
+        price_list=price_list,
+        price_refresh_task=refresh_task,
         # Tied here because this is where both halves exist: the engine's rule
         # (application.engine) and the kind that knows which row is flagged.
         internal_connection=internal_engine_connection(provider_svc),

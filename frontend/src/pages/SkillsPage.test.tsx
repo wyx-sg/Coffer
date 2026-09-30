@@ -111,7 +111,9 @@ acceptance("skill-manager", "the old overview address opens delivery", async () 
   h.skills = [makeSkill({ uid: "sk-0rel", name: "release-notes" })];
   renderSkillsPage("/skills/sk-0rel?tab=overview");
   await waitFor(() => expect(where.url).toBe("/skills/release-notes/delivery"));
-  expect(await screen.findByRole("tab", { name: "Delivery", selected: true })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("tab", { name: "Delivery", selected: true }, { timeout: 5_000 }),
+  ).toBeInTheDocument();
 });
 
 acceptance(
@@ -131,9 +133,12 @@ acceptance(
         ],
       }),
     ];
-    renderSkillsPage("/skills");
-    const [row] = await libraryRows();
-    expect(within(row).getByTestId("skill-degraded-badge")).toHaveTextContent("Copied");
+    // The Delivery tab says so, as a working delivery: no warning mark in the list.
+    renderSkillsPage("/skills/hello/delivery");
+    const row = await screen.findByTestId("skill-delivery-claude-code");
+    expect(row).toHaveTextContent("Copied, not linked");
+    expect(row).toHaveTextContent("Links aren't allowed in ~/.claude/skills on this machine");
+    expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   },
 );
 
@@ -179,10 +184,11 @@ acceptance("skill-manager", "check agents' copies from the skills page", async (
   fireEvent.click(within(panel).getByRole("button", { name: "Repair" }));
   await waitFor(() => expect(skillsApi.repair).toHaveBeenCalledTimes(1));
   // The missing link is put back; the foreign folder is left and stays listed.
-  await waitFor(() => expect(within(panel).getByText("Repaired by Coffer")).toBeInTheDocument());
+  await waitFor(() => expect(within(panel).getByText("Re-linked by Coffer")).toBeInTheDocument());
   const after = within(panel).getAllByTestId("skill-copy-finding");
   const stays = after.find((f) => f.textContent?.includes("frontend-design"));
-  expect(stays).toHaveTextContent("Needs you");
+  expect(stays).toHaveTextContent("Left alone · needs you");
+  expect(within(stays as HTMLElement).getByRole("button", { name: "Review…" })).toBeInTheDocument();
 });
 
 describe("SkillsPage library", () => {
@@ -267,21 +273,44 @@ describe("SkillsPage library", () => {
     );
   });
 
-  test("ticking rows shows the bulk bar with reach and Delete; the built-in row has no box", async () => {
+  test("ticking rows shows the bulk bar with reach and Delete; the built-in row can't be ticked", async () => {
     h.skills = [BUILTIN_SKILL, makeSkill()];
     renderSkillsPage("/skills");
     await libraryRows();
-    expect(screen.queryByRole("checkbox", { name: /coffer-guide/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /coffer-guide/ })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /hello/ }));
     const bar = screen.getByRole("region", { name: "Selected skills" });
     expect(bar).toHaveTextContent("1 selected");
     expect(within(bar).getByTestId("bulk-reach-control")).toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "Delete" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete 1 skill?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete 1 skill" }));
     await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledWith("sk-11aa"));
   });
+
+  acceptance(
+    "web-ui",
+    "selected skills are set or deleted together from the reading pane",
+    async () => {
+      h.skills = [BUILTIN_SKILL, makeSkill(), makeSkill({ uid: "sk-pdf", name: "pdf" })];
+      renderSkillsPage("/skills");
+      await libraryRows();
+      fireEvent.click(screen.getByRole("checkbox", { name: /hello/ }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /pdf/ }));
+      expect(await screen.findByText("2 skills selected")).toBeInTheDocument();
+      expect(
+        screen.getByText(/hello and pdf\. Set who gets them together, or delete them\./),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("coffer-guide can't be selected.", { exact: false }),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Delete 2 skills…" }));
+      const dialog = await screen.findByRole("dialog", { name: "Delete 2 skills?" });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 skills" }));
+      await waitFor(() => expect(skillsApi.remove).toHaveBeenCalledTimes(2));
+    },
+  );
 
   test("a failed list shows the error with a retry", async () => {
     vi.mocked(skillsApi.list).mockRejectedValueOnce(new Error("boom"));

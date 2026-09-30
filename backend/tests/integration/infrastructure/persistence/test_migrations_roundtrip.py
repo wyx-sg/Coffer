@@ -19,9 +19,9 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0117"
+HEAD_REVISION = "0136"
 #: The last revision whose tables still hold the pre-vault state: a data test
-#: of an older revision reads them here, before 0117 drops them.
+#: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0116"
 
 # Tables that should exist once the full migration chain has been applied.
@@ -255,7 +255,7 @@ PRE_LAYOUT_TABLES = {
 # ``sync_convergence_state`` / ``sync_held_paths`` (0073) and ``sync_runs``
 # (0075). ``memory_overrides`` needs no subtracting: 0070 created it and 0078
 # dropped it again, so head does not carry it either.
-#: 0117: the database becomes ``runs.db`` — every table whose state moved
+#: 0136: the database becomes ``runs.db`` — every table whose state moved
 #: into files is dropped (ADR storage-is-five-classes-by-nature).
 MOVED_OUT_TABLES = {
     "resources",
@@ -1109,7 +1109,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    # 0117's downgrade recreates the moved-out tables empty.
+    # 0136's downgrade recreates the moved-out tables empty.
     command.downgrade(cfg, PRE_LAYOUT_REVISION)
     assert _user_tables(db_path) == PRE_LAYOUT_TABLES
     # 0041 adds channel_thread_conversations (spec channels "Key conversation

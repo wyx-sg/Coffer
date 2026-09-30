@@ -53,7 +53,7 @@ export function OverviewModel({ agent }: { agent: AgentOut }) {
         <InfoRow label={t(`${K}.model.model`)} mono={!!agent.model}>
           {agent.model ?? t(`${K}.model.perConversation`)}
         </InfoRow>
-        <InfoRow label={t(`${K}.model.${agent.type === "codex" ? "reasoningEffort" : "effort"}`)}>
+        <InfoRow label={t(`${K}.model.effort`)}>
           {agent.effort ? capitalize(agent.effort) : t(`${K}.model.defaultEffort`)}
         </InfoRow>
       </dl>

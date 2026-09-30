@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.infrastructure.mcp.invocation_summary import InvocationSummary
+
 
 class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn).
@@ -63,6 +65,28 @@ class InvocationSummaryOut(BaseModel):
     last_call_at: datetime | None = None
     by_agent: list[AgentCallCountOut] = Field(default_factory=list)
     by_tool: list[ToolCallCountOut] = Field(default_factory=list)
+
+
+def invocation_summary_out(summary: InvocationSummary) -> InvocationSummaryOut:
+    """The persisted summary as the page reads it."""
+    return InvocationSummaryOut(
+        since=summary.since,
+        calls=summary.calls,
+        errors=summary.errors,
+        last_call_at=summary.last_call_at,
+        by_agent=[
+            AgentCallCountOut(
+                agent_uid=c.key, calls=c.calls, errors=c.errors, last_call_at=c.last_call_at
+            )
+            for c in summary.by_agent
+        ],
+        by_tool=[
+            ToolCallCountOut(
+                tool=c.key or "", calls=c.calls, errors=c.errors, last_call_at=c.last_call_at
+            )
+            for c in summary.by_tool
+        ],
+    )
 
 
 class McpServerLogLineOut(BaseModel):

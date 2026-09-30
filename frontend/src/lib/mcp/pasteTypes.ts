@@ -4,11 +4,28 @@
 // so each reader (JSON, TOML, command line, URL) can import them without an
 // import cycle through `pasteParse.ts`, which re-exports them.
 
+/**
+ * One KEY / value row: a stdio server's environment variable or an HTTP
+ * server's header. The paste readers fill only the first three fields; the
+ * rest are set by the edit dialog's stored-secret picker (`KeyValueRows`).
+ */
 export interface ParsedEnvVar {
   key: string;
+  /** Plain row: the value. Secret row: a value typed for a new or replaced
+   *  secret ("" = none typed). */
   value: string;
   /** Heuristic default — the user confirms/flips this in the review step. */
   isSecret: boolean;
+  /** Secret row: the stored secret it cites instead of a typed value —
+   *  `secret/<name>` (Secrets page) or the server's own minted ref. Null or
+   *  absent: `value` is stored as a new secret (or, with `storedRef`, written
+   *  through it). Ignored on a plain row. */
+  ref?: string | null;
+  /** Edit only: the ref this row loaded with, so a new value rotates through it. */
+  storedRef?: string | null;
+  /** Edit only: the key this row loaded with (a renamed key cannot keep its
+   *  own stored secret without a new value). */
+  loadedKey?: string | null;
 }
 
 export interface ParsedServer {
