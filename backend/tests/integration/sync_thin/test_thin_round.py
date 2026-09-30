@@ -3,6 +3,8 @@ guard, check out, push (coffer.application.sync.round_*)."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from coffer.application.sync.round_answers import answer, editor_copy
 from coffer.application.sync.round_resume import resume
 from coffer.domain.sync.rounds import RoundStatus
@@ -86,7 +88,7 @@ def test_a_hand_merge_is_refused_while_markers_are_left(pair: tuple[Machine, Mac
     mac.round()
     mini.round()
     path = editor_copy(mini.engine, "knowledge/team/on-call.md")
-    marked = open(path, "rb").read()
+    marked = Path(path).read_bytes()
     assert b"<<<<<<< Mac mini" in marked and b">>>>>>> MacBook Pro" in marked
     import pytest
 
@@ -95,7 +97,7 @@ def test_a_hand_merge_is_refused_while_markers_are_left(pair: tuple[Machine, Mac
     with pytest.raises(SyncConflictMarkersLeft) as caught:
         answer(mini.engine, "knowledge/team/on-call.md", Answer.EDITED)
     assert caught.value.line == 1
-    open(path, "wb").write(b"20 min, a compromise\n")
+    Path(path).write_bytes(b"20 min, a compromise\n")
     answer(mini.engine, "knowledge/team/on-call.md", Answer.EDITED)
     resume(mini.engine, mini.remote, None)
     assert mini.disk("knowledge/team/on-call.md") == b"20 min, a compromise\n"
@@ -142,7 +144,11 @@ def test_moving_a_resource_file_is_not_a_loss(pair: tuple[Machine, Machine]) -> 
             data = mac.disk(f"resources/skill/s{i}.json")
             assert data is not None
             txn.delete(f"resources/skill/s{i}.json", None)
-            txn.write(f"resources/skill/renamed-{i}.json", data.replace(b'"name": "s', b'"name": "r'), None)
+            txn.write(
+                f"resources/skill/renamed-{i}.json",
+                data.replace(b'"name": "s', b'"name": "r'),
+                None,
+            )
     assert mac.round().status is RoundStatus.PUSHED
     assert mini.round().status is RoundStatus.PULLED
 

@@ -40,7 +40,12 @@ class FakeMachine:
     def descriptor(self, *, last_round_at: str | None, last_commit: str | None) -> bytes:
         return (
             json.dumps(
-                {"machine_id": self.id, "format_version": 1, "name": self.name, "last_converged_commit": last_commit},
+                {
+                    "machine_id": self.id,
+                    "format_version": 1,
+                    "name": self.name,
+                    "last_converged_commit": last_commit,
+                },
                 indent=2,
             )
             + "\n"
@@ -90,7 +95,9 @@ class Machine:
     def put(self, path: str, data: bytes | str) -> None:
         body = data.encode() if isinstance(data, str) else data
         current = self.writer.read_disk(path)
-        self.writer.write_file(path, body, meta=USER, expected=Expect.ABSENT if current is None else Expect.HEAD)
+        self.writer.write_file(
+            path, body, meta=USER, expected=Expect.ABSENT if current is None else Expect.HEAD
+        )
 
     def remove(self, *paths: str) -> None:
         with self.writer.begin(USER) as txn:

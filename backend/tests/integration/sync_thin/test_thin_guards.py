@@ -43,7 +43,9 @@ def test_a_local_mass_deletion_is_held_before_it_is_pushed(pair: tuple[Machine, 
     assert resume(mac.engine, mac.remote, None).status is RoundStatus.PUSHED
 
 
-def test_an_incoming_mass_deletion_is_held_and_can_be_restored(pair: tuple[Machine, Machine]) -> None:
+def test_an_incoming_mass_deletion_is_held_and_can_be_restored(
+    pair: tuple[Machine, Machine],
+) -> None:
     mac, mini = pair
     _many(mac, 25)
     mac.round()
@@ -90,7 +92,9 @@ def test_a_round_can_be_rolled_back_keeping_later_edits(pair: tuple[Machine, Mac
     assert mac.disk("knowledge/team/a.md") is None
 
 
-def test_a_round_that_applied_nothing_has_nothing_to_roll_back(pair: tuple[Machine, Machine]) -> None:
+def test_a_round_that_applied_nothing_has_nothing_to_roll_back(
+    pair: tuple[Machine, Machine],
+) -> None:
     mac, _mini = pair
     mac.put("knowledge/team/x.md", "x\n")
     pushed = mac.round()
@@ -125,7 +129,9 @@ def test_credentials_travel_only_when_carried_and_the_fresher_ciphertext_wins(
     assert mini.disk("credentials/provider/p1/key.enc") == _fernet(2000)
 
 
-def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(pair: tuple[Machine, Machine]) -> None:
+def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(
+    pair: tuple[Machine, Machine],
+) -> None:
     mac, mini = pair
     mac.put("credentials/provider/p1/key.enc", _fernet(1000))
     mac.round()
@@ -163,10 +169,18 @@ def test_an_unreachable_remote_is_reported_and_nothing_changes(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("stderr", "problem"),
     [
-        ("ssh: connect to host github.com port 22: Network is unreachable", RemoteProblem.UNREACHABLE),
+        (
+            "ssh: connect to host github.com port 22: Network is unreachable",
+            RemoteProblem.UNREACHABLE,
+        ),
         ("git@github.com: Permission denied (publickey).", RemoteProblem.AUTH_FAILED),
-        ("! [remote rejected] main -> main (protected branch hook declined)", RemoteProblem.PUSH_REJECTED),
+        (
+            "! [remote rejected] main -> main (protected branch hook declined)",
+            RemoteProblem.PUSH_REJECTED,
+        ),
     ],
 )
-def test_remote_failures_are_classified_by_what_a_person_can_do(stderr: str, problem: RemoteProblem) -> None:
+def test_remote_failures_are_classified_by_what_a_person_can_do(
+    stderr: str, problem: RemoteProblem
+) -> None:
     assert classify(stderr) is problem

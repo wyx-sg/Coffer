@@ -15,11 +15,12 @@ from collections import Counter
 from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
 from coffer.application.sync.round_trees import identity_conflicts, settle_machines
 from coffer.domain.sync.joins import AreaCount, JoinKind, JoinPreview
-from coffer.domain.sync.remote import RemoteFailed, SyncRemote
+from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, ConflictReason
 from coffer.domain.vault.errors import VaultFileStale
 from coffer.domain.vault.layout import MACHINES, MANIFEST, area_of
+from coffer.domain.vault.remote_errors import RemoteFailed
 from coffer.domain.vault.writes import CommitResult
 
 

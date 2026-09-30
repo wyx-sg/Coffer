@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from coffer.domain.sync.remote import RemoteFailed, RemoteProblem
+from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.repository import VaultRepository
 

@@ -13,9 +13,10 @@ from __future__ import annotations
 from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
 from coffer.application.sync.round_guard import invalid_files
 from coffer.application.sync.round_trees import identity_conflicts, overrides_for
-from coffer.domain.sync.remote import RemoteFailed, SyncRemote
+from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
 from coffer.domain.sync.stops import HoldDirection, Stop, StopKind
+from coffer.domain.vault.remote_errors import RemoteFailed
 
 
 def resume(

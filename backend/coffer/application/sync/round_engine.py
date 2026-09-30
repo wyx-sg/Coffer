@@ -30,10 +30,11 @@ from coffer.application.sync.round_trees import (
     settle_credentials,
     settle_machines,
 )
-from coffer.domain.sync.remote import RemoteFailed, RemoteProblem, SyncRemote
+from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
 from coffer.domain.vault.errors import VaultFileStale
+from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_DAEMON, CommitMeta
 from coffer.domain.vault.writes import CommitResult, Expect
 
