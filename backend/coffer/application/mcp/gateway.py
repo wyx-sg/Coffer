@@ -105,8 +105,7 @@ class MCPGatewaySession:
         tool_reach: ToolReachRepoPort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
-        # Custom tools' machine-local reach overrides (gateway_tool_gate).
-        self._tool_reach = tool_reach
+        self._tool_reach = tool_reach  # custom tools' reach overrides (gateway_tool_gate)
         self._resources = resource_service
         self._supervisor = supervisor
         self._discovery = discovery
@@ -124,10 +123,8 @@ class MCPGatewaySession:
         # nothing — an unidentified session, which then sees only unscoped
         # servers.
         self._session_agent_uid: str | None = None
-        # Called once when the session is disposed so the composition
-        # root can drop this session's entry from its supervisor registry
-        # (otherwise disposed-but-registered supervisors accumulate for the
-        # daemon's lifetime and the on_delete hook walks dead ones).
+        # Called once on dispose so the composition root drops this session's
+        # supervisor from its registry (else dead ones accumulate).
         self._on_dispose = on_dispose
         # ``is not None``, not ``or``: the registry has a ``__len__``, so one whose
         # every tool is switched off is falsy, and ``or`` would swap it for an
@@ -145,8 +142,7 @@ class MCPGatewaySession:
         # threaded into built-in tool calls; no spec states it any more (its
         # requirement went with the per-project store), the shim still stamps it.
         self._session_cwd: str | None = None
-        # Track which servers we've subscribed to notifications on so we
-        # only attach the handler once per (session, server) pair.
+        # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
         # The event loop holds tasks weakly — an un-referenced
         # ensure_future() task can be garbage-collected mid-flight, silently
@@ -250,7 +246,6 @@ class MCPGatewaySession:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
 
     async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str]]:
-        """The servers this session sees, and the custom tools it must not."""
         rows = await visible_mcp_servers(self._resources, self._session_agent_uid)
         hidden = await hidden_tool_names(rows, self._session_agent_uid, self._tool_reach)
         return [r.name for r in rows], hidden

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useChannels } from "@/lib/hooks/useChannels";
+import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
 import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
@@ -15,6 +16,7 @@ import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useResources } from "@/lib/hooks/useResources";
 import { useSkills } from "@/lib/hooks/useSkills";
+import { isCustomToolGroup } from "@/lib/customTools/groups";
 import { NAV_ENTRIES, SETTINGS_TABS } from "@/lib/navigation";
 import type { ObjectKind, PaletteItem, PaletteObject } from "./paletteItems";
 
@@ -30,10 +32,15 @@ function kindState(q: { status: KindState["status"]; data?: readonly PaletteObje
   return { status: q.status, items: q.data ?? NO_ITEMS };
 }
 
-// One hook per kind, each the list hook that kind's own page reads. Custom
-// tools have no list hook here yet; they join when their page lands.
+// One hook per kind, each the list hook that kind's own page reads.
 const useAgentObjects = () => kindState(useAgents());
-const useMcpServerObjects = () => kindState(useResources("mcp_server"));
+// A custom-tool group is an `mcp_server` too; it is listed as a custom tool.
+const useMcpServerObjects = (): KindState => {
+  const q = useResources("mcp_server");
+  const items = useMemo(() => q.data?.filter((r) => !isCustomToolGroup(r)), [q.data]);
+  return kindState({ status: q.status, data: items });
+};
+const useCustomToolObjects = () => kindState(useCustomToolGroups());
 const useSkillObjects = () => kindState(useSkills());
 const useProviderObjects = () => kindState(useProviders());
 const useChannelObjects = () => kindState(useChannels());
@@ -57,6 +64,7 @@ export const KIND_LIST_HOOKS: Record<ObjectKind, () => KindState> = {
   channel: useChannelObjects,
   knowledge: useKnowledgeObjects,
   memory: useMemoryObjects,
+  customTool: useCustomToolObjects,
   cli: useCliObjects,
 };
 
@@ -69,6 +77,7 @@ export const OBJECT_KINDS: readonly ObjectKind[] = [
   "channel",
   "knowledge",
   "memory",
+  "customTool",
   "cli",
 ];
 

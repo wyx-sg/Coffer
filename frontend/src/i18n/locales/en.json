@@ -3862,6 +3862,7 @@
       "channel": "Channel",
       "knowledge": "Knowledge",
       "memory": "Memory",
+      "customTool": "Custom tool",
       "cli": "CLI"
     }
   },

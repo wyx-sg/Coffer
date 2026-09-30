@@ -1,9 +1,9 @@
 // src/components/skills/SkillRequiresTab.tsx — a skill's Requires tab: the commands its SKILL.md declares.
 //
-// Read from the CLIs list (GET /clis), keeping the rows this skill appears in
-// under `needed_by`, so the tab and the CLIs page can never disagree. Each
-// command links to its page on the CLIs page (spec web-ui "a skill's
-// requirement links to its CLI"); Install… / Copy command are shortcuts to the
+// The skill's declared commands in their order, each with its state from the
+// CLIs list (GET /clis), so the tab and the CLIs page can never disagree. Each
+// command links to its page on the CLIs page (spec web-ui "Show every CLI a
+// skill requires on the CLIs page"); Install… / Copy command are shortcuts to the
 // same confirmation and copy the CLI page offers. A missing command never stops
 // delivery — the footnote says so.
 import { useState } from "react";

@@ -3862,6 +3862,7 @@
       "channel": "消息渠道",
       "knowledge": "知识",
       "memory": "记忆",
+      "customTool": "自定义工具",
       "cli": "命令行工具"
     }
   },

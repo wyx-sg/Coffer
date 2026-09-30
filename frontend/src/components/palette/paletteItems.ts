@@ -21,6 +21,7 @@ export type ObjectKind =
   | "channel"
   | "knowledge"
   | "memory"
+  | "customTool"
   | "cli";
 
 /** Where an entry takes the user. */
@@ -53,6 +54,7 @@ const DETAIL_BASE: Record<ObjectKind, string> = {
   channel: "/channels",
   knowledge: "/knowledge",
   memory: "/memory",
+  customTool: "/custom-tools",
   cli: "/clis",
 };
 
@@ -63,7 +65,12 @@ export interface PaletteObject extends Titled {
 }
 
 // A CLI is addressed by its command, which it carries as its name.
-const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set(["mcpServer", "skill", "cli"]);
+const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set([
+  "mcpServer",
+  "skill",
+  "customTool",
+  "cli",
+]);
 
 export function objectPath(kind: ObjectKind, obj: PaletteObject): string {
   const id =

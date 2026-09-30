@@ -254,7 +254,7 @@ class CustomToolService:
         """Run a draft tool once against the group's base URL and secret.
 
         Nothing is saved and nothing enters the invocation log (spec
-        mcp-gateway "a test runs a draft tool once without saving it"); the
+        mcp-gateway "Manage custom tools on REST and the command line"); the
         secret goes through the same boundary as a call does.
         """
         resource, transport = await self.group(name)
