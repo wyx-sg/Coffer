@@ -157,6 +157,17 @@ class RetentionPolicyListOut(BaseModel):
     policies: list[RetentionPolicyOut]
 
 
+class RetentionPreviewOut(BaseModel):
+    """What shortening one policy's window would delete, counted and not run."""
+
+    table_name: str
+    days: int
+    #: Every row the table holds now.
+    total_rows: int
+    #: The rows older than ``days`` — deleted at the next cleanup once saved.
+    rows_to_delete: int
+
+
 class RetentionPolicyUpdate(BaseModel):
     retention_days: int | None = Field(
         default=None,
@@ -302,6 +313,13 @@ class CredentialRefOut(BaseModel):
 
     ref: str
     present: bool = Field(description="Whether a secret is stored under the ref.")
+    #: Stored, but this Mac's master key cannot open it (it came with the vault
+    #: from a machine holding another key). With ``present`` false, the row is
+    #: "Missing on this Mac".
+    locked: bool = False
+    created_at: str | None = None
+    #: When a consumer last had the value decrypted on this Mac.
+    last_used_at: str | None = None
     cited_by: list[CredentialCiterOut]
     #: The ``coffer://secret/<name>`` a file cites, for a standalone secret.
     uri: str | None = None

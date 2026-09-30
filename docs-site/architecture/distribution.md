@@ -208,7 +208,7 @@ Switching a feature off never deletes, moves or rewrites what it holds; switchin
 
 ## Signing, notarisation and updates
 
-Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the credentials stays green.
+Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the secrets stays green.
 
 | Step | Runs when these are set | What it does |
 | --- | --- | --- |

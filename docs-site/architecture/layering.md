@@ -37,7 +37,7 @@ flowchart TB
 | --- | --- | --- |
 | `domain/` | Entities, value objects and pure rules: `Resource`, `Kind`, `Scope`, audit event names, error codes, each kind's config schemas and domain logic. | The standard library and Pydantic. Nothing else from the project, and none of FastAPI, SQLAlchemy, `sqlite3`, httpx, `keyring` or anyio. |
 | `application/` | Use-case services, the ports (Python `Protocol`s) they need, background workers, the kind factories. | `domain/`. Not `surfaces/`, and not `infrastructure/` — with two named exceptions for the knowledge and memory file substrates. |
-| `infrastructure/` | Adapters: persistence, the credential store, subprocess and HTTP clients, git, file-tree I/O, LLM and agent SDK wrappers. | `domain/`, `application/` ports. Not `surfaces/`. |
+| `infrastructure/` | Adapters: persistence, the secret store, subprocess and HTTP clients, git, file-tree I/O, LLM and agent SDK wrappers. | `domain/`, `application/` ports. Not `surfaces/`. |
 | `surfaces/` | Entry points: the FastAPI app and routes, the Typer CLI, the stdio shim, plus the composition root that wires everything. | Everything below. |
 
 The architectural style is fixed by [Principles](/architecture/principles); the choice of a layer-first layout over vertical slices is explained in [Layer-First Code Layout](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md).
@@ -62,7 +62,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Kind-agnostic core does not import kind-specific code | `resource_service`, `resource_scope_ops` and `resource_delete_ops`, `AuditService`, the retention service and worker, the builtin tool registry, Coffer's own engine modules, `domain.resource`, `domain.scope`, `domain.audit`, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. The one sanctioned exception is Alembic's `migrations/env.py`, which imports every kind's ORM models into one metadata. |
 | Engine confinement: markitdown | Only the channel attachment extractor and the knowledge upload converter may import `markitdown` (or `docling`). |
 | Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec` and `fastembed` may not be imported anywhere. Coffer embeds nothing, and a reintroduction has to be a deliberate change to this contract. |
-| LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, credentials, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
+| LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, secrets, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
 | Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
 
 When two kinds genuinely need the same code, it moves to a kind-agnostic package at the layer root: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (agent transcript readers shared by `agent` and `memory`), [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py) (the hook-trust values the `memory` kind reports and the `agent` kind's hooks listing shows). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example `application.chat.ports.ModelCatalogPort`, which the chat platform uses to read the agent kind's model catalogue without importing it.
@@ -92,7 +92,7 @@ The daemon's lifespan runs a fixed sequence, and each step *returns* a small fro
 
 ```mermaid
 flowchart TB
-  M["Run migrations"] --> C["Credential store and master key"]
+  M["Run migrations"] --> C["Secret store and master key"]
   C --> R["ResourceService, audit, retention"]
   R --> K["Kinds: agent and skill, provider, knowledge, memory, MCP"]
   K --> CH["Chat platform"]

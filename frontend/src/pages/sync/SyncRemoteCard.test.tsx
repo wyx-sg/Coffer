@@ -86,7 +86,7 @@ describe("SyncRemoteCard", () => {
     expect(screen.getByLabelText(/repository url/i)).toHaveValue(
       "https://git.example.com/me/vault.git",
     );
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(screen.getByText(/\/home\/me\/\.coffer\/sync/)).toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe("SyncRemoteCard", () => {
   test("an adopted working tree rides along unchanged rather than resetting", () => {
     stub();
     render(<SyncRemoteCard status={status(true)} />);
-    fireEvent.click(screen.getByLabelText(/include credentials/i));
+    fireEvent.click(screen.getByLabelText(/include secrets/i));
     fireEvent.click(saveButton());
     expect(saveMutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -229,7 +229,7 @@ describe("SyncRemoteCard", () => {
 
     // ...and what the card renders is that ref, never a password field.
     render(<SyncRemoteCard status={status(true)} />);
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
   });
 });

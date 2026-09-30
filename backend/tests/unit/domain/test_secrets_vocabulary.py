@@ -1,4 +1,4 @@
-"""Standalone secret names, their URIs and the output mask (spec credentials
+"""Standalone secret names, their URIs and the output mask (spec secret
 "Resolve standalone secrets into one child with coffer run")."""
 
 from __future__ import annotations

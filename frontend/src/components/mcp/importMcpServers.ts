@@ -88,7 +88,7 @@ async function registerResource(srv: NewServer, config: Record<string, unknown>)
  *  stored sealed and waits for approval in the Coffer app. */
 async function writeCredential(ref: string, value: string): Promise<boolean> {
   const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
   return data?.approval !== undefined && data?.approval !== null;
 }
 

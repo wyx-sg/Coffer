@@ -1,7 +1,7 @@
 // src/components/credentials/scanPlan.ts — pure helpers the Find plaintext keys dialog reads the scan and its dry run through.
 //
 // A scan names where each plaintext value is, never the value (spec
-// credentials "Move plaintext secret files into the store"). A dry run answers
+// secret "Move plaintext secret files into the store"). A dry run answers
 // what an import would move; the review step shows it as the secrets that
 // would be added and the files whose value would become a reference.
 import type { SecretImport, SecretScanFinding } from "@/lib/api/credentials";

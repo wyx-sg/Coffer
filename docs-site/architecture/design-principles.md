@@ -45,7 +45,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 
 Convergence is bidirectional but only under the sync spec's safety rules: git's three-way merge arbitrates, what is applied is a diff against the last state this vault provably held, and a round that would delete more than its configured share stops and asks.
 
-**In the code.** The daemon binds `127.0.0.1` in [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py). Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and credential ciphertext is carried only when you set `--with-credentials`.
+**In the code.** The daemon binds `127.0.0.1` in [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py). Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secrets`.
 
 **Rules out.** A hosted Coffer endpoint; a "Coffer cloud" account; any design where losing the remote loses data; a sync that overwrites a vault wholesale; replicating vault state to a vendor-controlled service.
 
@@ -135,11 +135,11 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches the database, logs, audit or any structured event. All other code holds credential **refs**. The master key is managed only by `coffer.infrastructure.credentials` — a `0600` file beside the database by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches the database, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by `coffer.infrastructure.credentials` — a `0600` file beside the database by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
 
 **Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
 
-**In the code.** An import contract confines `keyring`; another stops the CLI from importing the credential store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an `audit_redactor` so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
+**In the code.** An import contract confines `keyring`; another stops the CLI from importing the secret store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an `audit_redactor` so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
 
 **Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; re-encrypting data to switch key storage (the key moves, the ciphertext does not).
 

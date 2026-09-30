@@ -1,5 +1,5 @@
 """`coffer run`, the plaintext scan and move, and the adoption at upgrade, against
-a real in-process daemon over a throwaway HOME (spec credentials)."""
+a real in-process daemon over a throwaway HOME (spec secret)."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def _run(*argv: str) -> object:
 # --- coffer run -----------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="coffer run sets a secret only in the child")
+@pytest.mark.acceptance(spec="secret", scenario="coffer run sets a secret only in the child")
 def test_coffer_run_sets_a_secret_only_in_the_child(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("secret/db-password", "correct-horse-battery")
@@ -91,9 +91,7 @@ def test_coffer_run_resolves_env_file_references_and_named_variables(
     assert "test True True" in result.output
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="coffer run masks the value in the child's output"
-)
+@pytest.mark.acceptance(spec="secret", scenario="coffer run masks the value in the child's output")
 def test_coffer_run_masks_a_value_split_across_writes(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("secret/db-password", "correct-horse-battery")
@@ -123,7 +121,7 @@ def test_coffer_run_passes_the_exit_status_through(cli: BoundaryDaemon) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a resource's secret cannot be resolved by coffer run"
+    spec="secret", scenario="a resource's secret cannot be resolved by coffer run"
 )
 def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon) -> None:
     d = cli
@@ -166,11 +164,11 @@ def _plaintext(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a scan names plaintext secrets without their values"
+    spec="secret", scenario="a scan names plaintext secrets without their values"
 )
 def test_a_scan_names_plaintext_secrets_without_their_values(cli: BoundaryDaemon) -> None:
     _plaintext(cli.home)
-    result = _runner.invoke(cli_app, ["credentials", "scan", "--json"])
+    result = _runner.invoke(cli_app, ["secret", "scan", "--json"])
 
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
@@ -187,20 +185,18 @@ def test_a_scan_names_plaintext_secrets_without_their_values(cli: BoundaryDaemon
     assert "hunter2hunter2" not in result.output and "abcd1234efgh5678" not in result.output
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="importing moves a value and leaves a reference"
-)
+@pytest.mark.acceptance(spec="secret", scenario="importing moves a value and leaves a reference")
 def test_importing_moves_a_value_and_leaves_a_reference(cli: BoundaryDaemon) -> None:
     d = cli
     env, script = _plaintext(d.home)
     before = (env.read_text(), script.read_text())
 
-    dry = _runner.invoke(cli_app, ["credentials", "import", "--dry-run"])
+    dry = _runner.invoke(cli_app, ["secret", "import", "--dry-run"])
     assert dry.exit_code == 0, dry.output
     assert (env.read_text(), script.read_text()) == before
     assert d.value("secret/db.DB_PASSWORD") is None
 
-    moved = _runner.invoke(cli_app, ["credentials", "import", "--yes"])
+    moved = _runner.invoke(cli_app, ["secret", "import", "--yes"])
 
     assert moved.exit_code == 0, moved.output
     assert d.value("secret/db.DB_PASSWORD") == "hunter2hunter2"
@@ -212,14 +208,14 @@ def test_importing_moves_a_value_and_leaves_a_reference(cli: BoundaryDaemon) -> 
     assert "hunter2hunter2" not in moved.output
     names = sorted(e["details"]["name"] for e in d.audit("secret_imported"))
     assert names == ["db.DB_HOST", "db.DB_PASSWORD", "deploy.api_token"], names
-    again = json.loads(_runner.invoke(cli_app, ["credentials", "scan", "--json"]).output)
+    again = json.loads(_runner.invoke(cli_app, ["secret", "scan", "--json"]).output)
     assert again["findings"] == []
 
 
 # --- adoption at upgrade --------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="bindings in use at upgrade keep working")
+@pytest.mark.acceptance(spec="secret", scenario="bindings in use at upgrade keep working")
 def test_bindings_in_use_at_upgrade_keep_working(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

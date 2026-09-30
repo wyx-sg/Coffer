@@ -191,7 +191,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/KeyMaterialIn'
+              $ref: '#/components/schemas/KeyImportIn'
         required: true
       responses:
         '200':
@@ -213,6 +213,51 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Import Key
+      tags:
+      - sync
+  /api/v1/sync/key/import/preview:
+    post:
+      description: |-
+        Whose key a file holds and whether it is this machine's, changing nothing.
+
+        A passphrase-protected backup is not opened here: its fingerprint is read
+        from the file and checked against the key when it is imported.
+      operationId: preview_key_import_api_v1_sync_key_import_preview_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyMaterialIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Key Import
       tags:
       - sync
   /api/v1/sync/machines:
@@ -908,14 +953,40 @@ components:
       - fingerprint
       title: KeyFingerprintOut
       type: object
+    KeyImportIn:
+      properties:
+        material:
+          title: Material
+          type: string
+        passphrase:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Passphrase
+      required:
+      - material
+      title: KeyImportIn
+      type: object
     KeyImportOut:
       properties:
+        fingerprint:
+          title: Fingerprint
+          type: string
         locked_refs:
           items:
             type: string
           title: Locked Refs
           type: array
+        readable:
+          title: Readable
+          type: integer
+        replaced:
+          title: Replaced
+          type: boolean
       required:
+      - fingerprint
+      - replaced
+      - readable
       - locked_refs
       title: KeyImportOut
       type: object
@@ -927,6 +998,30 @@ components:
       required:
       - material
       title: KeyMaterialIn
+      type: object
+    KeyPreviewOut:
+      description: A key file beside this machine's key, before anything is replaced.
+      properties:
+        current_fingerprint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Fingerprint
+        fingerprint:
+          title: Fingerprint
+          type: string
+        protected:
+          title: Protected
+          type: boolean
+        same:
+          title: Same
+          type: boolean
+      required:
+      - fingerprint
+      - current_fingerprint
+      - same
+      - protected
+      title: KeyPreviewOut
       type: object
     MachineListOut:
       properties:

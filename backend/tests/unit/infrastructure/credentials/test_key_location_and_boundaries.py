@@ -1,4 +1,4 @@
-"""Where the master key lives, and who may reach the keychain (spec credentials).
+"""Where the master key lives, and who may reach the keychain (spec secret).
 
 The keychain is the shared in-memory backend from ``tests.fixtures.keyring``,
 reached through the real ``KeyringAdapter`` — so the adapter's own code runs
@@ -23,7 +23,7 @@ from tests.fixtures.keyring import install_in_memory_keyring
 _BACKEND = pathlib.Path(__file__).resolve().parents[4]
 _COFFER = _BACKEND / "coffer"
 _KEYRING_ADAPTER = _COFFER / "infrastructure" / "credentials" / "keyring_adapter.py"
-_CREDENTIALS_CMD = _COFFER / "surfaces" / "cli" / "credentials_cmd.py"
+_CREDENTIALS_CMD = _COFFER / "surfaces" / "cli" / "secret_cmd.py"
 
 
 def _imported_modules(path: pathlib.Path) -> set[str]:
@@ -39,7 +39,7 @@ def _imported_modules(path: pathlib.Path) -> set[str]:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the master key lives in the file or the keychain, never both"
+    spec="secret", scenario="the master key lives in the file or the keychain, never both"
 )
 def test_the_master_key_lives_in_the_file_or_the_keychain_never_both(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -71,7 +71,7 @@ def test_the_master_key_lives_in_the_file_or_the_keychain_never_both(
     )
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="only the keyring adapter imports keyring")
+@pytest.mark.acceptance(spec="secret", scenario="only the keyring adapter imports keyring")
 def test_only_the_keyring_adapter_imports_keyring() -> None:
     importers = sorted(
         path.relative_to(_COFFER).as_posix()
@@ -81,9 +81,7 @@ def test_only_the_keyring_adapter_imports_keyring() -> None:
     assert importers == [_KEYRING_ADAPTER.relative_to(_COFFER).as_posix()]
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="credential commands import no credential code"
-)
+@pytest.mark.acceptance(spec="secret", scenario="credential commands import no credential code")
 def test_credential_commands_import_no_credential_code() -> None:
     modules = _imported_modules(_CREDENTIALS_CMD)
     forbidden = {
@@ -109,9 +107,7 @@ _FORBIDDEN_FOR_CREDENTIALS_CMD = (
 )
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="credential commands import no credential code"
-)
+@pytest.mark.acceptance(spec="secret", scenario="credential commands import no credential code")
 def test_credential_commands_reach_no_credential_code_even_transitively() -> None:
     """The direct-import scan above misses a helper the command imports that
     itself imports the keyring adapter. Walk the real import graph (the same
@@ -119,7 +115,7 @@ def test_credential_commands_reach_no_credential_code_even_transitively() -> Non
     graph = grimp.build_graph(
         "coffer", include_external_packages=True, exclude_type_checking_imports=True
     )
-    source = "coffer.surfaces.cli.credentials_cmd"
+    source = "coffer.surfaces.cli.secret_cmd"
     assert source in graph.modules
 
     targets = {

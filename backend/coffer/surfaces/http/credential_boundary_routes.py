@@ -1,6 +1,6 @@
 """The secret boundary's routes: approvals, presence grants, `coffer run`, the scan.
 
-Spec credentials "Release plaintext only to a present human in the desktop
+Spec secret "Release plaintext only to a present human in the desktop
 app", "Hold a secret for a new destination until a person approves it",
 "Resolve standalone secrets into one child with coffer run" and "Move
 plaintext secret files into the store"; ADR
@@ -25,7 +25,6 @@ Three kinds of route live here:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 import pathlib
 from typing import Any
@@ -43,7 +42,8 @@ from coffer.domain.credential_errors import (
     SecretNotFound,
 )
 from coffer.domain.secrets import is_valid_secret_name, secret_ref, secret_uri
-from coffer.infrastructure.credentials import plaintext_scan
+from coffer.domain.sync.errors import MasterKeyPassphraseTooShort
+from coffer.infrastructure.credentials import key_backup, plaintext_scan
 from coffer.infrastructure.sync.identity import coffer_dir
 from coffer.infrastructure.sync.paths import skills_root
 from coffer.surfaces.http.auth import require_token
@@ -192,7 +192,7 @@ async def reveal(
 ) -> RevealedSecretOut:
     """A secret's value, for the present human the desktop app just checked."""
     get_presence_grants().redeem("reveal", body.ref, body.nonce, body.signature)
-    value = await asyncio.to_thread(store.get, body.ref)
+    value = await asyncio.to_thread(store.peek, body.ref)
     if value is None:
         raise CredentialMissing(body.ref)
     await audit.record(
@@ -207,12 +207,16 @@ async def export_master_key(
     manager: Any = Depends(get_master_key_manager),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
 ) -> MasterKeyExportOut:
-    """Write the master key backup into the directory the person picked.
+    """Write the passphrase-protected master key backup into the picked directory.
 
     The one way the key reaches a file (ADR master-key-lives-in-the-macos-
-    keychain): mode ``0600``, a name of Coffer's choosing that never
-    overwrites, and the key itself never crosses the API.
+    keychain): a ``.cfk`` backup encrypted under the person's passphrase, mode
+    ``0600``, a name of Coffer's choosing that never overwrites, and the key
+    itself never crosses the API. The passphrase is checked before the grant
+    is spent, so a short one costs no second presence check.
     """
+    if len(body.passphrase) < key_backup.MIN_PASSPHRASE_LENGTH:
+        raise MasterKeyPassphraseTooShort(key_backup.MIN_PASSPHRASE_LENGTH)
     get_presence_grants().redeem("export_master_key", body.directory, body.nonce, body.signature)
     directory = pathlib.Path(body.directory)
     if not directory.is_absolute() or not directory.is_dir():
@@ -220,18 +224,31 @@ async def export_master_key(
     key = await asyncio.to_thread(manager.export_key)
     if not key:
         raise CredentialMissing("master-key")
-    fingerprint = hashlib.sha256(key).hexdigest()[:12]
-    path = directory / f"coffer-master-key-{fingerprint}.key"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(path, flags, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(key + b"\n")
+    text = await asyncio.to_thread(key_backup.wrap, key, body.passphrase)
+    path = await asyncio.to_thread(_write_new_file, directory, key_backup.BACKUP_FILE_NAME, text)
+    fingerprint = key_backup.key_fingerprint(key)
     await audit.record(
         AuditEventType.MASTER_KEY_EXPORTED.value,
         actor="desktop",
         details={"path": str(path), "fingerprint": fingerprint},
     )
     return MasterKeyExportOut(path=str(path), fingerprint=fingerprint)
+
+
+def _write_new_file(directory: pathlib.Path, name: str, text: str) -> pathlib.Path:
+    """Write ``text`` to ``name`` in ``directory``, numbering it rather than overwriting."""
+    stem, suffix = os.path.splitext(name)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    for n in range(1, 100):
+        path = directory / (name if n == 1 else f"{stem}-{n}{suffix}")
+        try:
+            fd = os.open(path, flags, 0o600)
+        except FileExistsError:
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+    raise PresenceGrantInvalid(f"too many key backups already in {directory}")
 
 
 # --- coffer run ------------------------------------------------------------------
@@ -292,6 +309,7 @@ async def scan_plaintext() -> SecretScanOut:
             SecretScanMentionOut(skill=m.skill, path=m.path, line=m.line, mention=m.mention)
             for m in result.mentions
         ],
+        files_checked=result.files_checked,
     )
 
 
@@ -306,13 +324,13 @@ async def import_plaintext(
 
     def put(name: str, value: str) -> bool:
         ref = secret_ref(name)
-        existing = store.get(ref)
+        existing = store.peek(ref)
         if existing is not None:
             return bool(existing == value)
         store.set(ref, value)
         # Read back and compare: the file is rewritten only once the store
         # provably holds the same bytes.
-        return bool(store.get(ref) == value)
+        return bool(store.peek(ref) == value)
 
     result = await asyncio.to_thread(
         plaintext_scan.move,
@@ -324,11 +342,16 @@ async def import_plaintext(
         skip=_COFFERS_OWN_SKILLS,
     )
     if not result.dry_run:
-        for moved in result.moved:
+        # A value stored while its file could not be rewritten is in the store
+        # all the same, so it is audited like a move.
+        stored = [(m.name, m.path) for m in result.moved] + [
+            (s.name, s.path) for s in result.skipped if s.stored
+        ]
+        for name, path in stored:
             await audit.record(
                 AuditEventType.SECRET_IMPORTED.value,
                 actor=actor,
-                details={"name": moved.name, "path": moved.path},
+                details={"name": name, "path": path},
             )
     return SecretImportOut(
         moved=[
@@ -336,7 +359,10 @@ async def import_plaintext(
             for m in result.moved
         ],
         skipped=[
-            SecretImportSkippedOut(id=s.id, path=s.path, reason=s.reason) for s in result.skipped
+            SecretImportSkippedOut(
+                id=s.id, path=s.path, reason=s.reason, name=s.name or None, stored=s.stored
+            )
+            for s in result.skipped
         ],
         dry_run=result.dry_run,
     )

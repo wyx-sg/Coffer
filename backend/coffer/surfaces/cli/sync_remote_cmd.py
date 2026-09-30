@@ -57,10 +57,10 @@ def print_remote(remote: dict[str, Any]) -> None:
     _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
     _console.print(
         f"  every {remote['interval_seconds']}s · "
-        f"credentials {'included' if remote['include_credentials'] else 'excluded'} · "
+        f"secrets {'included' if remote['include_credentials'] else 'excluded'} · "
         f"{'enabled' if remote['enabled'] else 'disabled'}"
     )
-    _console.print(f"  push credential: {remote.get('credential_ref') or '(none)'}")
+    _console.print(f"  push secret: {remote.get('credential_ref') or '(none)'}")
     _console.print(f"  working tree: {remote['worktree_path']}")
 
 
@@ -76,13 +76,13 @@ def remote_set(
     ),
     with_credentials: bool | None = typer.Option(
         None,
-        "--with-credentials/--without-credentials",
-        help="Carry credential ciphertext (never the master key); default off",
+        "--with-secrets/--without-secrets",
+        help="Carry secret ciphertext (never the master key); default off",
     ),
     credential_ref: str | None = typer.Option(
         None,
-        "--credential-ref",
-        help="Name of the push credential in the credential store ('' removes it)",
+        "--secret-ref",
+        help="Name of the secret holding the push token ('' removes it)",
     ),
     worktree: str | None = typer.Option(
         None,

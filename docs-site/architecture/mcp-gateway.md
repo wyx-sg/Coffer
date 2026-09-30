@@ -131,7 +131,7 @@ flowchart TD
   R -->|recovered| N["notifications/tools/list_changed"]
 ```
 
-**Fan-out.** `gateway_aggregate_lists.py` queries every visible server concurrently with `asyncio.gather`, and gives each one a hard budget of `PER_SERVER_LIST_TIMEOUT = 5.0` seconds. A server that times out or is unavailable is left out and logged by name. So is a server whose credential cannot be resolved (`CredentialMissing`, `CredentialLocked`). The rest of the list is unaffected. Without this budget, one dead upstream could hold the whole response for the supervisor's full retry ladder.
+**Fan-out.** `gateway_aggregate_lists.py` queries every visible server concurrently with `asyncio.gather`, and gives each one a hard budget of `PER_SERVER_LIST_TIMEOUT = 5.0` seconds. A server that times out or is unavailable is left out and logged by name. So is a server whose secret cannot be resolved (`CredentialMissing`, `CredentialLocked`). The rest of the list is unaffected. Without this budget, one dead upstream could hold the whole response for the supervisor's full retry ladder.
 
 **Degraded recovery.** Clients cache `tools/list`, and a server that never connected cannot send `list_changed`. So `DegradedTracker` (`gateway_recovery.py`) keeps the names of the servers that failed. It retries them in the background after 2, 8 and 30 seconds. On the first recovery, it invalidates that server's cached tool list and sends `notifications/tools/list_changed` downstream, and the client re-lists.
 
@@ -204,7 +204,7 @@ sequenceDiagram
   participant G as Gateway session
   participant P as Preferences repo
   participant V as Supervisor
-  participant C as Credential resolver
+  participant C as Secret resolver
   participant U as Upstream
   participant L as Invocation log
   A->>S: tools/call jira__get_issue (stdin)
@@ -244,16 +244,16 @@ The pipeline is `_invoke` in `application/mcp/gateway_handlers.py`, which `resou
 7. **Forward.** Send the call with the original name, bounded by the server's request timeout.
 8. **Record.** In a `finally` block, write one row with the elapsed time.
 
-### Credential materialisation
+### Secret materialisation
 
-Server config never holds a secret. `StdioTransport.env` and `HttpTransport.headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `credential_refs`, a map from an env var or header name to a credential ref.
+Server config never holds a secret. `StdioTransport.env` and `HttpTransport.headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `credential_refs`, a map from an env var or header name to a secret ref.
 
 At spawn time, `CredentialResolver.materialize` runs in a worker thread and turns the refs into plaintext from the encrypted store:
 
 - **stdio.** The child's environment is the MCP SDK's minimal default allowlist (`PATH`, `HOME`, `SHELL` and similar), plus the server's static `env`, plus the materialised secrets. The daemon's own `os.environ` is not inherited, so an upstream cannot read tokens the daemon was started with.
 - **HTTP.** The static headers are merged with the materialised headers on the client.
 
-The plaintext lives only in the child's environment or the in-memory HTTP client. It is never persisted or logged. A missing ref raises `CredentialMissing`, which is not retried. See [Credentials](/guides/credentials) and [Security model](/architecture/security).
+The plaintext lives only in the child's environment or the in-memory HTTP client. It is never persisted or logged. A missing ref raises `CredentialMissing`, which is not retried. See [Secret store](/guides/secret-store) and [Security model](/architecture/security).
 
 ## Supervision
 
@@ -272,10 +272,10 @@ stateDiagram-v2
   HEALTHY --> [*]: session disposed
 ```
 
-- **Retry ladder.** Up to four attempts, with waits of 1, 5 and 30 seconds between them (`_RETRY_DELAYS_SECONDS`). Only transient spawn failures are retried: `UpstreamUnavailable`, `UpstreamTimeout`, `OSError`, `ConnectionError` and `TimeoutError`. A config error, a credential error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
+- **Retry ladder.** Up to four attempts, with waits of 1, 5 and 30 seconds between them (`_RETRY_DELAYS_SECONDS`). Only transient spawn failures are retried: `UpstreamUnavailable`, `UpstreamTimeout`, `OSError`, `ConnectionError` and `TimeoutError`. A config error, a secret error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
 - **Cooldown.** After the fourth failure, the entry enters `COOLDOWN` for 60 seconds. Calls during the cooldown fail fast with `UpstreamUnavailable`. The cooldown is checked both before and after taking the per-server spawn lock, so callers queued behind one failing ladder do not each re-run it.
 - **Concurrency.** At most 4 cold starts run at once per supervisor (`COFFER_MCP_MAX_CONCURRENT_SPAWNS`). The slot is held only during build and initialize, never during a backoff sleep.
-- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, disabling or editing a server therefore never waits on a slow ladder. The kind's `on_delete`, `on_enabled_changed` (on disable) and `on_update_config` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or credential refs; re-enabling needs nothing, because the next call spawns afresh.
+- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, disabling or editing a server therefore never waits on a slow ladder. The kind's `on_delete`, `on_enabled_changed` (on disable) and `on_update_config` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or secret refs; re-enabling needs nothing, because the next call spawns afresh.
 - **Crash recovery.** A `tools/call` that fails on the transport evicts the connection, and the next call respawns the server. A transport failure is any non-`MCPError` exception, or an `MCPError` with `CONNECTION_CLOSED`. A well-formed `MCPError` means the upstream answered, so the connection is kept. A timeout does not evict either, and neither does a failure to obtain a connection in the first place.
 - **Teardown.** A stdio close waits up to 10 seconds for the SDK's own shutdown, which escalates SIGTERM to SIGKILL. The shim then kills every PID recorded for that connection, along with its descendants. Each spawn records a PID file under `~/.coffer/upstream-pids/`, keyed by the server's uid. At startup, the daemon sweeps any files left by a crash.
 - **Logs.** Each stdio upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to `daemon.log`.
@@ -375,7 +375,7 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 | [`application/mcp/gateway_notifications.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_notifications.py), [`gateway_server_requests.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_server_requests.py) | Upstream notifications, sampling and roots relay |
 | [`application/mcp/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/supervisor.py), [`discovery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/discovery.py) | Spawn, retry, cooldown, eviction; live lists, cache, preference reconcile |
 | [`application/builtin_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/builtin_tools.py) | `BuiltinTool` and `BuiltinToolRegistry` |
-| [`application/credentials/resolver.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/credentials/resolver.py) | Credential ref materialisation |
+| [`application/credentials/resolver.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/credentials/resolver.py) | Secret ref materialisation |
 | [`domain/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/mcp) | Namespacing, server config, the HTTP API transport and its request rendering, OpenAPI reading, BM25-lite ranker, tiering policy |
 | [`application/mcp/custom_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/custom_tools.py), [`gateway_tool_gate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_tool_gate.py) | Custom-tool groups and the per-tool gate |
 | [`infrastructure/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/mcp) | stdio, HTTP and HTTP API upstream connections, dispatch table, OpenAPI fetch, persistence, buffered invocation writer |
@@ -383,5 +383,5 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 ## Related
 
 - Spec: [mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md), and the scope contract in [resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)
-- Decisions: [One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Capability State Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Envelope-Encrypted Credentials](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- Decisions: [One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Capability State Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Envelope-Encrypted Secrets](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
 - Pages: [Daemon and processes](/architecture/daemon), [Resource framework](/architecture/resource-framework), [Security model](/architecture/security), [Observability](/architecture/observability), [MCP servers](/guides/mcp-servers), [Connect a client](/guides/connect-a-client), [MCP tools](/reference/mcp-tools)

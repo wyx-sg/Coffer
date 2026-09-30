@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0115"
+HEAD_REVISION = "0134"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -193,7 +193,9 @@ HEAD_REVISION = "0115"
 # ``memory`` row, whose kinds no longer carry a switch. 0106 adds the nullable
 # ``resources.title`` column and 0107 the ``resources.rev`` revision — no new
 # table. 0110 is DATA-only (an agent's fast model becomes its Haiku tier); 0111
-# adds the three usage-metering tables.
+# adds the three usage-metering tables. 0134 adds no table: it gives
+# ``credentials`` a nullable ``last_used_at`` (spec secret "List every stored
+# and cited secret with what uses it").
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -217,7 +219,7 @@ EXPECTED_TABLES = {
     "channel_thread_history",
     "channel_outbox",
     # 0112: the secret boundary's approved bindings, pending approvals and
-    # switches (spec credentials "Hold a secret for a new destination until a
+    # switches (spec secret "Hold a secret for a new destination until a
     # person approves it").
     "secret_bindings",
     "secret_approvals",

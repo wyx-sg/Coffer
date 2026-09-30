@@ -20,7 +20,8 @@ export interface paths {
          *     so a vault restored without its secrets can say which ones are missing and
          *     a secret nothing references any more shows up as ``unreferenced``. A
          *     standalone ``secret/<name>`` also lists the skills whose files cite its
-         *     ``coffer://secret/<name>``. Presence only — no value is decrypted, so
+         *     ``coffer://secret/<name>``. A stored ref whose ciphertext this Mac's key
+         *     cannot open is ``locked``. Presence only — no value is decrypted, so
          *     nothing is audited.
          */
         get: operations["list_refs_api_v1_credentials_get"];
@@ -33,7 +34,7 @@ export interface paths {
          *     Replacing the value of a secret an approved destination receives, or of a
          *     standalone secret, waits for the desktop app (202, the value held as
          *     ciphertext): the new value changes what that destination gets (spec
-         *     credentials "Hold a replaced value in use until a person approves it").
+         *     secret "Hold a replaced value in use until a person approves it").
          */
         post: operations["set_secret_api_v1_credentials_post"];
         delete?: never;
@@ -171,11 +172,13 @@ export interface paths {
         put?: never;
         /**
          * Export Master Key
-         * @description Write the master key backup into the directory the person picked.
+         * @description Write the passphrase-protected master key backup into the picked directory.
          *
          *     The one way the key reaches a file (ADR master-key-lives-in-the-macos-
-         *     keychain): mode ``0600``, a name of Coffer's choosing that never
-         *     overwrites, and the key itself never crosses the API.
+         *     keychain): a ``.cfk`` backup encrypted under the person's passphrase, mode
+         *     ``0600``, a name of Coffer's choosing that never overwrites, and the key
+         *     itself never crosses the API. The passphrase is checked before the grant
+         *     is spent, so a short one costs no second presence check.
          */
         post: operations["export_master_key_api_v1_credentials_presence_master_key_export_post"];
         delete?: never;
@@ -359,7 +362,7 @@ export interface paths {
          * @description Turn the approval requirement on (at once) or off (after approval).
          *
          *     Switching it off widens where secrets may go, so it waits for the desktop
-         *     app like any new destination (spec credentials "Turn the protection off
+         *     app like any new destination (spec secret "Turn the protection off
          *     only through the desktop app"): the answer is 202 with the approval id.
          */
         put: operations["put_secret_boundary_settings_api_v1_settings_secret_boundary_put"];
@@ -404,7 +407,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "bind" | "replace_value" | "disable_protection";
+            op: "bind" | "add_secret" | "replace_value" | "disable_protection";
             /** Ref */
             ref: string | null;
             /** Requested By */
@@ -478,6 +481,15 @@ export interface components {
             bindings: components["schemas"]["CredentialBindingOut"][];
             /** Cited By */
             cited_by: components["schemas"]["CredentialCiterOut"][];
+            /** Created At */
+            created_at: string | null;
+            /** Last Used At */
+            last_used_at: string | null;
+            /**
+             * Locked
+             * @default false
+             */
+            locked: boolean;
             /** Mentioned By Skills */
             mentioned_by_skills: string[];
             /**
@@ -576,6 +588,8 @@ export interface components {
             directory: string;
             /** Nonce */
             nonce: string;
+            /** Passphrase */
+            passphrase: string;
             /** Signature */
             signature: string;
         };
@@ -715,10 +729,17 @@ export interface components {
         SecretImportSkippedOut: {
             /** Id */
             id: string;
+            /** Name */
+            name: string | null;
             /** Path */
             path: string;
             /** Reason */
             reason: string;
+            /**
+             * Stored
+             * @default false
+             */
+            stored: boolean;
         };
         /** SecretScanFindingOut */
         SecretScanFindingOut: {
@@ -754,6 +775,11 @@ export interface components {
          * @description Plaintext secrets found in files — where they are, never what they are.
          */
         SecretScanOut: {
+            /**
+             * Files Checked
+             * @default 0
+             */
+            files_checked: number;
             /** Findings */
             findings: components["schemas"]["SecretScanFindingOut"][];
             /** Mentions */

@@ -27,7 +27,7 @@ const guides = [
       { text: 'Custom tools', link: '/guides/custom-tools' },
       { text: 'Model providers', link: '/guides/providers' },
       { text: 'Usage and quota', link: '/guides/usage' },
-      { text: 'Credentials', link: '/guides/credentials' },
+      { text: 'Secret store', link: '/guides/secret-store' },
       { text: 'Secrets', link: '/guides/secrets' },
     ],
   },

@@ -13,7 +13,7 @@ Every lifecycle change is audited (spec resource-framework "Audit every lifecycl
 change"). The audit row records the `ref` only — secret values never appear in
 the audit log.
 
-No route here returns a value (spec credentials "Return no plaintext on any
+No route here returns a value (spec secret "Return no plaintext on any
 route, command or tool"). A value leaves the daemon only through the
 presence-gated reveal in ``credential_boundary_routes``, for the desktop app.
 """
@@ -79,7 +79,7 @@ async def set_secret(
     Replacing the value of a secret an approved destination receives, or of a
     standalone secret, waits for the desktop app (202, the value held as
     ciphertext): the new value changes what that destination gets (spec
-    credentials "Hold a replaced value in use until a person approves it").
+    secret "Hold a replaced value in use until a person approves it").
     """
     boundary = get_secret_boundary()
     # to_thread: the store write blocks on SQLite's busy_timeout; on the
@@ -115,11 +115,19 @@ async def list_refs(
     so a vault restored without its secrets can say which ones are missing and
     a secret nothing references any more shows up as ``unreferenced``. A
     standalone ``secret/<name>`` also lists the skills whose files cite its
-    ``coffer://secret/<name>``. Presence only — no value is decrypted, so
+    ``coffer://secret/<name>``. A stored ref whose ciphertext this Mac's key
+    cannot open is ``locked``. Presence only — no value is decrypted, so
     nothing is audited.
     """
     cited = await resources.cited_credential_refs()
-    stored = {ref for ref, _c, _u in await asyncio.to_thread(store.list_refs)}
+    rows_stored = await asyncio.to_thread(store.list_refs)
+    stored = {ref for ref, _c, _u in rows_stored}
+    created = {ref: c for ref, c, _u in rows_stored}
+    last_used = await asyncio.to_thread(store.last_used)
+    # Checked by each ciphertext's signature against this Mac's key — nothing
+    # is decrypted (spec secret "Show a secret this Mac cannot open as missing
+    # on this Mac").
+    locked = set(await asyncio.to_thread(store.unreadable_refs))
     mentions = await asyncio.to_thread(skills_citing_secrets, skills_root())
     boundary = get_secret_boundary()
     bindings = await asyncio.to_thread(boundary.bindings)
@@ -158,6 +166,9 @@ async def list_refs(
             CredentialRefOut(
                 ref=ref,
                 present=ref in stored,
+                locked=ref in locked,
+                created_at=created.get(ref),
+                last_used_at=last_used.get(ref),
                 cited_by=[
                     CredentialCiterOut(uid=r.uid, kind=r.kind, name=r.name)
                     for r in cited.get(ref, [])
@@ -196,7 +207,7 @@ def _stdio_carries(resource: Resource, ref: str) -> bool:
 
 
 # There is deliberately no `GET /{ref:path}`: no route returns a value (spec
-# credentials "Return no plaintext on any route, command or tool").
+# secret "Return no plaintext on any route, command or tool").
 @router.get("/{ref:path}/exists", response_model=CredentialExistsOut)
 async def secret_exists(
     ref: str,
@@ -265,7 +276,7 @@ async def delete_secret(
     # the event loop would deadlock against the loop's own aiosqlite writer.
     removed = await asyncio.to_thread(store.remove, ref)
     # 204 either way, but only a real removal is a lifecycle change worth an
-    # audit row (spec credentials "Delete a credential idempotently").
+    # audit row (spec secret "Delete a credential idempotently").
     if removed:
         await asyncio.to_thread(get_secret_boundary().forget, ref)
         await audit.record(

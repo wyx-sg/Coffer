@@ -27,6 +27,9 @@ use crate::presence_grant::{self, GrantOp};
 const PICK_FOLDER_TIMEOUT: Duration = Duration::from_secs(600);
 /// Writing the backup file is quick, but it is a disk write behind a request.
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
+/// The daemon refuses a shorter backup passphrase; checking here first spares
+/// the person a Touch ID prompt that could only end in that refusal.
+const MIN_PASSPHRASE_CHARS: usize = 8;
 
 #[derive(serde::Serialize)]
 pub struct PresenceMode {
@@ -81,11 +84,22 @@ pub async fn reveal_secret(app: AppHandle, secret_ref: String) -> Result<String,
     .await
 }
 
-/// Write a backup of the master key into a folder the person picks. The
-/// presence check comes before the picker: the folder is only asked for once a
-/// person has said they mean to export the key at all.
+/// Write a passphrase-protected backup of the master key (`coffer-master-key.cfk`)
+/// into a folder the person picks. The presence check comes before the picker:
+/// the folder is only asked for once a person has said they mean to export the
+/// key at all. The passphrase the page collected goes to the daemon in the
+/// export request and nowhere else — it is not logged, kept, or part of the
+/// signed grant.
 #[tauri::command]
-pub async fn export_master_key_backup(app: AppHandle) -> Result<MasterKeyBackup, String> {
+pub async fn export_master_key_backup(
+    app: AppHandle,
+    passphrase: String,
+) -> Result<MasterKeyBackup, String> {
+    if passphrase.chars().count() < MIN_PASSPHRASE_CHARS {
+        return Err(format!(
+            "the passphrase must be at least {MIN_PASSPHRASE_CHARS} characters"
+        ));
+    }
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
@@ -99,7 +113,12 @@ pub async fn export_master_key_backup(app: AppHandle) -> Result<MasterKeyBackup,
         let (nonce, signature) = daemon.grant(GrantOp::ExportMasterKey, &directory)?;
         let written = daemon.post(
             "/api/v1/credentials/presence/master-key-export",
-            &json!({"directory": directory, "nonce": nonce, "signature": signature}),
+            &json!({
+                "directory": directory,
+                "passphrase": passphrase,
+                "nonce": nonce,
+                "signature": signature,
+            }),
             EXPORT_TIMEOUT,
         )?;
         let field = |name: &str| {

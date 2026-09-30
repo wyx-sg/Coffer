@@ -1,4 +1,4 @@
-"""Presence grants (spec credentials "Release plaintext only to a present human
+"""Presence grants (spec secret "Release plaintext only to a present human
 in the desktop app"; design D1 test vector shared with the desktop shell)."""
 
 from __future__ import annotations

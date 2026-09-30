@@ -98,7 +98,7 @@ def wire_provider_kind(
     )
     set_provider_service(provider_svc)
     # A key goes only to a base URL a person approved, and a key in use is
-    # replaced only after approval (spec credentials "Hold a secret for a new
+    # replaced only after approval (spec secret "Hold a secret for a new
     # destination until a person approves it").
     provider_svc.set_secret_boundary(get_secret_boundary())
     register_resource_destination("provider", _provider_secret_destination)

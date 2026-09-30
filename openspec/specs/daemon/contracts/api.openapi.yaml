@@ -759,6 +759,9 @@ components:
       type: object
     DaemonLogListOut:
       properties:
+        path:
+          title: Path
+          type: string
         records:
           items:
             $ref: '#/components/schemas/DaemonLogRecordOut'
@@ -766,6 +769,7 @@ components:
           type: array
       required:
       - records
+      - path
       title: DaemonLogListOut
       type: object
     DaemonLogRecordOut:
@@ -876,6 +880,19 @@ components:
           - dev
           title: Channel
           type: string
+        commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Commit
+        connected_agents:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Connected Agents
+        data_dir:
+          title: Data Dir
+          type: string
         executable:
           title: Executable
           type: string
@@ -892,6 +909,9 @@ components:
         machine_name:
           title: Machine Name
           type: string
+        pid:
+          title: Pid
+          type: integer
         port:
           title: Port
           type: integer
@@ -923,6 +943,10 @@ components:
       - features
       - machine_id
       - machine_name
+      - pid
+      - commit
+      - data_dir
+      - connected_agents
       title: DaemonStatusOut
       type: object
     EditorOptionOut:

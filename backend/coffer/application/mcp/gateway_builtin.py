@@ -68,7 +68,7 @@ async def dispatch_builtin_tool(
         return _to_call_tool_result(result)
     except Exception as exc:
         duration_ms = int((clock() - started).total_seconds() * 1000)
-        # No secret in the invocation log (spec credentials "Hold plaintext only
+        # No secret in the invocation log (spec secret "Hold plaintext only
         # in memory at the moment of use"): Coffer-authored errors keep their message; arbitrary
         # downstream exceptions are logged as the class name only, so a built-in
         # tool can never leak args/returned content into the invocation log

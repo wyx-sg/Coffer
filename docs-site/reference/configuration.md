@@ -61,7 +61,7 @@ These move a tree away from `~/.coffer`. They exist mainly so tests never touch 
 
 | Name | Default | Effect | Where read |
 | --- | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/coffer.db` | SQLAlchemy URL of the database. The credential master key file (`master.key`) lives beside the database file. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/coffer.db` | SQLAlchemy URL of the database. The secret master key file (`master.key`) lives beside the database file. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
 | `COFFER_KNOWLEDGE_ROOT` | `~/.coffer/knowledge` | Root of the knowledge collections. | [`infrastructure/knowledge/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/knowledge/paths.py) |
 | `COFFER_MEMORY_ROOT` | `~/.coffer/memory` | Root of the derived memory tree. | [`infrastructure/memory/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/memory/paths.py) |
 | `COFFER_SKILLS_ROOT` | `~/.coffer/skills` | Root of the skill master store, and the tree vault sync mirrors. | [`infrastructure/skill/master_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/skill/master_store.py), [`infrastructure/sync/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/sync/paths.py) |
@@ -237,7 +237,7 @@ coffer log prune
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set credentials.storage file\|keychain` |
+| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set secrets.storage file\|keychain` |
 | Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target, and so does a new value for a secret in use. When off, both are approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). | `coffer config set secrets.require_approval on\|off` |
 
 ## Related
@@ -245,6 +245,6 @@ coffer log prune
 - [Files and directories](/reference/filesystem)
 - [Running the daemon](/guides/daemon)
 - [Experimental features](/guides/experimental-features)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [CLI reference](/reference/cli)
 - [Distribution and releases](/architecture/distribution)

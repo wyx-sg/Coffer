@@ -1,5 +1,5 @@
 """Wire models of the secret boundary: approvals, presence grants, `coffer run`,
-the plaintext scan and the boundary's switch (spec credentials).
+the plaintext scan and the boundary's switch (spec secret).
 
 None of these carries a secret value except :class:`RevealedSecretOut` and
 :class:`ResolvedSecretsOut`, and each of those answers only a request that
@@ -59,6 +59,10 @@ class RevealedSecretOut(BaseModel):
 class MasterKeyExportIn(PresenceGrantIn):
     #: The directory the person picked; the file name is Coffer's.
     directory: str = Field(min_length=1, max_length=1024)
+    #: Protects the backup; the import on another machine asks for it. Checked
+    #: by the route (at least eight characters) rather than by the schema, so
+    #: a refusal never logs it. Never stored or recorded.
+    passphrase: str
 
 
 class MasterKeyExportOut(BaseModel):
@@ -70,7 +74,7 @@ class ApprovalOut(BaseModel):
     """A change waiting for a present human in the desktop app."""
 
     id: str
-    op: Literal["bind", "replace_value", "disable_protection"]
+    op: Literal["bind", "add_secret", "replace_value", "disable_protection"]
     status: Literal["pending", "approved", "rejected", "superseded"]
     description: str
     created_at: str
@@ -130,6 +134,8 @@ class SecretScanOut(BaseModel):
 
     findings: list[SecretScanFindingOut]
     mentions: list[SecretScanMentionOut]
+    #: How many files the scan read.
+    files_checked: int = 0
 
 
 class SecretImportIn(BaseModel):
@@ -149,6 +155,11 @@ class SecretImportSkippedOut(BaseModel):
     id: str
     path: str
     reason: str
+    #: The secret the value was stored as, when it was stored.
+    name: str | None = None
+    #: The value is in the store, but its file could not be rewritten and
+    #: still holds it; moving the finding again retries the file.
+    stored: bool = False
 
 
 class SecretImportOut(BaseModel):

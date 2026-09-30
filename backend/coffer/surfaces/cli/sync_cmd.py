@@ -92,7 +92,7 @@ def _print_round(run: dict[str, Any], *, joined: bool = True) -> None:
     for path in run.get("not_applicable") or []:
         _console.print(f"  [dim]not applicable here[/dim]: {path}")
     for ref in run.get("locked_refs") or []:
-        _console.print(f"  [yellow]credential locked[/yellow]: {ref}")
+        _console.print(f"  [yellow]secret locked[/yellow]: {ref}")
     if run.get("locked_refs"):
         _console.print("  run 'coffer sync key import <path>' to unlock them")
 

@@ -12,7 +12,7 @@ A **channel** connects one Telegram bot or one SeaTalk app to Coffer, so you can
 A channel is a registered resource of kind `channel`. It holds:
 
 - the platform type, `telegram` or `seatalk`, and that platform's settings;
-- **references** to its secrets in Coffer's [credential store](/guides/credentials), never the secrets themselves;
+- **references** to its secrets in Coffer's [secret store](/guides/secret-store), never the secrets themselves;
 - a **default agent** — the agent a new conversation on this channel starts on;
 - `runs_on` — the one machine whose daemon runs the channel's adapter.
 
@@ -32,7 +32,7 @@ Both ways store the secret first and register the channel with a reference to it
 
 ```sh [CLI]
 # Store the secret (read from stdin, so it stays out of your shell history)
-coffer credentials set channel/tg/bot-token
+coffer secret set channel/tg/bot-token
 
 # Register the channel; --agent is the agent's type (claude-code or codex)
 coffer channel add my-telegram --type telegram \
@@ -48,9 +48,9 @@ Channels → Add channel
 
 :::
 
-In the web UI, **Add channel** walks three steps. **Platform** shows what each platform supports and what it needs to connect. **Connect** writes the secret to the credential store and registers the channel in one step; for SeaTalk it reminds you to set event delivery to WebSocket in the SeaTalk Developer Portal *after* connecting, since the portal checks that a connection exists. **Pair** issues a code straight away and waits for your message to the bot (see [Pair your account](#pair-your-account)); **Pair later** closes the dialog and leaves the channel unpaired. A name is letters, digits, dash and underscore, at most 64 characters.
+In the web UI, **Add channel** walks three steps. **Platform** shows what each platform supports and what it needs to connect. **Connect** writes the secret to the secret store and registers the channel in one step; for SeaTalk it reminds you to set event delivery to WebSocket in the SeaTalk Developer Portal *after* connecting, since the portal checks that a connection exists. **Pair** issues a code straight away and waits for your message to the bot (see [Pair your account](#pair-your-account)); **Pair later** closes the dialog and leaves the channel unpaired. A name is letters, digits, dash and underscore, at most 64 characters.
 
-A registration whose credential reference does not resolve is rejected and nothing is saved. So is one naming a default agent that is not registered in this vault.
+A registration whose secret reference does not resolve is rejected and nothing is saved. So is one naming a default agent that is not registered in this vault.
 
 A new channel is bound to the machine you register it from and may drive every registered agent. Its adapter starts as soon as it is saved.
 
@@ -391,7 +391,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 - **Agents** — **Default agent** (saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel**.
 
-**Settings** saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — and says **Saving…**, **Saved** or **Couldn't save** at the top. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Directories for /dir**, **Credentials** (the SeaTalk App ID, and the secret or token, masked, with **Replace**), **Runs on** and **Delete…**. A replaced secret is written under the reference the channel already uses and the adapter restarts on it, so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
+**Settings** saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — and says **Saving…**, **Saved** or **Couldn't save** at the top. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Directories for /dir**, **Secrets** (the SeaTalk App ID, and the secret or token, masked, with **Replace**), **Runs on** and **Delete…**. A replaced secret is written under the reference the channel already uses and the adapter restarts on it, so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 From the CLI:
 
@@ -401,7 +401,7 @@ coffer channel show my-telegram
 coffer channel disable my-telegram   # stop the adapter
 coffer channel enable my-telegram    # start it again
 coffer channel rm my-telegram        # stop it and remove the pairing
-printf %s "$NEW_TOKEN" | coffer credentials set channel/tg/bot-token   # rotate
+printf %s "$NEW_TOKEN" | coffer secret set channel/tg/bot-token   # rotate
 ```
 
 ```text
@@ -427,7 +427,7 @@ Owner pairing is the security boundary for everything a channel can do.
 - **Strangers get silence.** A message from anyone who is not the owner produces no reply and no turn in a direct chat, so the bot does not reveal that it is running. In a group, an addressed message from a non-owner gets a short refusal.
 - **A tap is checked like a message.** A button on a selection card never pairs and never switches anything for a non-owner.
 - **Agents run with full permissions.** There is no approval step for tool calls. Anyone who can pair the bot can make an agent act on your machine, so treat a pairing code like a password and generate it only when you are about to use it.
-- **Secrets stay in the vault.** The channel configuration holds only credential references; Coffer refuses a value that looks like a raw secret in a reference field.
+- **Secrets stay in the vault.** The channel configuration holds only secret references; Coffer refuses a value that looks like a raw secret in a reference field.
 - **Nothing is exposed to the network.** Telegram is polled and SeaTalk is an outbound websocket; neither opens a port or needs a public URL.
 
 Pairing codes issued and claimed are written to the audit log, together with the channel's lifecycle changes. Messages, notifications and turns are not; the conversation is their record.
@@ -441,7 +441,7 @@ The channel layer meets the agents only at the turn platform's seams — convers
 - [Telegram setup](/guides/channels-telegram)
 - [SeaTalk setup](/guides/channels-seatalk)
 - [Conversations](/guides/chat) — the same conversations in the browser.
-- [Credentials](/guides/credentials) — where channel secrets live.
+- [Secret store](/guides/secret-store) — where channel secrets live.
 - [Vault sync](/guides/vault-sync) — how a channel's binding and pairing travel between machines.
 - [Security model](/architecture/security)
 - [Spec: channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)

@@ -14,19 +14,21 @@ Coffer answers two different questions, depending on how an agent is signed in:
 
 Open **Usage** in the sidebar (under System). The page answers both questions, in two sections that load independently — if one cannot be read, the other still shows.
 
-**Subscription quota** has one row per agent (Claude Code, Codex) with the plan it is signed in on. Each window — the five-hour and the weekly one — is a meter with how much is used and when it resets ("Resets 16:30 · in 2 h 24 min"). A window at 90% or more turns amber; one at 100% reads **Limit reached** in red. The row ends with when the number was seen and where it came from (_app-server_ for Codex, _last response_ or _status line_ for Claude Code). An agent that has not reported anything yet says **No quota reading yet**, and a window whose reset time has passed shows no number rather than a stale one. If a manual read of Codex fails — its app-server did not answer, say — the row says why, with **Try again**.
+**Subscription quota** has one row per agent (Claude Code, Codex) with the plan it is signed in on. Each window — the five-hour and the weekly one — is a meter with how much is used and when it resets ("Resets 16:30 · in 2 h 24 min"). A window at 90% or more turns amber; one at 100% reads **Limit reached** in red. The row ends with when the number was seen and where it came from (_app-server_ for Codex, _last response_ or _status line_ for Claude Code); Claude Code's row has its own **Refresh**, which re-reads the last number its responses reported. An agent that has not reported anything yet says **No quota reading yet** and waits, and a window whose reset time has passed shows no number rather than a stale one. If a manual read of Codex fails — its app-server exited before answering, say — the row says why, with **Try again**.
+
+An agent switched onto an API-key provider has no plan limit: its row reads **API key · OpenAI** (the provider's vendor), says **No subscription quota**, and points at the section below, where its requests are metered by the provider actually used. An agent on a subscription login that also sent requests through an API-key provider in the range reads "Claude Max login · some requests **via API key**".
 
 **API-key providers** covers every request that went through Coffer's local proxy:
 
-- The period control picks **Today**, **7 days** (the default), **30 days**, **This month** or **Custom…**. A custom range is picked on a calendar; the picker notes the first day that still has per-request detail — older days keep only their daily totals, which the page still reports. The range is part of the page's address, so a refresh, a bookmark or Back keeps it.
+- The period control picks **Today**, **7 days** (the default), **30 days**, **This month** or **Custom…**. A custom range is picked on a calendar; the picker notes the first day that still has per-request detail — older days keep only their daily totals, which the page still reports. Beside it, the **Agent** and **Provider** pills narrow everything below to one agent and one provider. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them.
 - Five figures sum up the range: **Cost (estimated)** with the request count and how many were unpriced, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports).
 - **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
-- The table breaks the range down **By model** (with the provider that served it), **By agent** or **By day**, and ends with a Total row. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
+- The table breaks the range down **By model** (with the provider that served it, and in **By** the agents that used it), **By agent** (a subscription agent's rows tagged **via API key**) or **By day** (newest first, with each day's top agent; the latest week shows first and **Show all** lists the rest), and ends with a Total row — the cost of the priced models. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
 - **Edit prices in Model providers** takes you to the providers, where a model's own price is set.
 
-**Refresh** in the header re-reads everything and asks Codex for its current quota. The **⋯** menu's **Export CSV** downloads the current range in the current breakdown — the same file `coffer usage --csv` writes.
+**Refresh** in the header re-reads everything and asks Codex for its current quota. The **⋯** beside the filters holds **Export CSV**, which downloads the current range, filters and breakdown — the same file `coffer usage --csv` writes with the same options.
 
-On a machine where nothing has gone through the proxy yet, the API-key section says **No API-key usage yet** and links to Model providers: switching an agent onto an API-key provider is what starts the counting. Agents on a subscription login never pass through Coffer, so for them the page only ever shows quota.
+On a machine where nothing has gone through the proxy yet, the API-key section is only its empty state — **No API-key usage yet**, with no range or filters to narrow — and links to Model providers: switching an agent onto an API-key provider is what starts the counting. Agents on a subscription login never pass through Coffer, so for them the page only ever shows quota.
 
 ## Usage of API-key and local providers
 
@@ -50,11 +52,12 @@ coffer usage                          # today, by model
 coffer usage --range 7d --by agent    # last 7 days, by agent
 coffer usage --range month --by day   # this calendar month, day by day
 coffer usage --range custom --from 2026-09-01 --to 2026-09-15
+coffer usage --agent codex --provider openai   # only Codex's requests through the provider "openai"
 coffer usage --csv > usage.csv        # the same summary as CSV
 coffer usage requests --limit 20      # the latest requests, newest first
 ```
 
-Ranges are local days: **today**, **7d** and **30d** (both including today), **month** (this calendar month) and **custom** (both ends inclusive). A row per model names the provider that served it. The REST routes are `GET /api/v1/usage/summary`, `GET /api/v1/usage/requests` and `GET /api/v1/usage/export.csv`.
+Ranges are local days: **today**, **7d** and **30d** (both including today), **month** (this calendar month) and **custom** (both ends inclusive). A row per model names the provider that served it; every row lists the agents that sent its requests, most first. `--agent` takes an agent type (`claude_code`, `codex`) and `--provider` a provider's name; over REST they are the `agent_type` and `connection_uid` query parameters of the summary and the CSV. The REST routes are `GET /api/v1/usage/summary`, `GET /api/v1/usage/requests` and `GET /api/v1/usage/export.csv`.
 
 ### Cost
 

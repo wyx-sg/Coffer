@@ -1,4 +1,4 @@
-"""The secret boundary's rules, over in-memory tables (spec credentials).
+"""The secret boundary's rules, over in-memory tables (spec secret).
 
 "Hold a secret for a new destination until a person approves it", "Hold a
 replaced value in use until a person approves it", "Turn the protection off
@@ -29,7 +29,7 @@ def _gate() -> tuple[SecretBoundary, InMemoryBoundaryStore, FakeSealedValues]:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a value supplied for its destination needs no approval"
+    spec="secret", scenario="a value supplied for its destination needs no approval"
 )
 def test_a_value_stored_moments_ago_for_an_unbound_ref_is_approved() -> None:
     gate, store, values = _gate()
@@ -116,7 +116,7 @@ def test_refresh_supersedes_an_approval_nothing_asks_for() -> None:
     assert gate.get(waiting.id).status == "superseded"
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="replacing a value in use waits for approval")
+@pytest.mark.acceptance(spec="secret", scenario="replacing a value in use waits for approval")
 def test_replacing_a_value_in_use_holds_it_sealed_until_approved() -> None:
     gate, store, values = _gate()
     values.put("gh/token", "old")
@@ -140,8 +140,44 @@ def test_writing_a_new_or_unbound_ref_applies_at_once() -> None:
     assert values.get("new/ref") == "v2"
 
 
+@pytest.mark.acceptance(spec="secret", scenario="adding a standalone secret waits for approval")
+def test_adding_a_standalone_secret_holds_it_sealed_until_approved() -> None:
+    gate, store, values = _gate()
+
+    approval = gate.write("secret/npm-publish-token", "npm-value", actor="ui")
+
+    assert approval is not None and approval.op == "add_secret"
+    assert approval.describe() == "add the new secret 'npm-publish-token'"
+    assert not values.exists("secret/npm-publish-token")
+    assert b"npm-value" not in store.sealed[approval.id]
+    # A newer value for the same new secret replaces the one still waiting.
+    newer = gate.write("secret/npm-publish-token", "npm-value-2", actor="ui")
+    assert newer is not None and gate.get(approval.id).status == "superseded"
+    gate.approve(newer.id, actor="desktop")
+    assert values.get("secret/npm-publish-token") == "npm-value-2"
+
+
+def test_a_rejected_new_secret_is_never_stored() -> None:
+    gate, store, values = _gate()
+    approval = gate.write("secret/npm-publish-token", "npm-value", actor="ui")
+    assert approval is not None
+
+    gate.reject(approval.id, actor="ui")
+
+    assert not values.exists("secret/npm-publish-token")
+    assert approval.id not in store.sealed
+
+
+def test_with_protection_off_a_new_secret_is_stored_at_once() -> None:
+    gate, _store, values = _gate()
+    gate.approve(gate.request_disable("cli").id, actor="desktop")
+
+    assert gate.write("secret/npm-publish-token", "v", actor="ui") is None
+    assert values.get("secret/npm-publish-token") == "v"
+
+
 @pytest.mark.acceptance(
-    spec="credentials", scenario="switching the protection off waits for the desktop app"
+    spec="secret", scenario="switching the protection off waits for the desktop app"
 )
 def test_switching_protection_off_takes_an_approval() -> None:
     gate, _store, values = _gate()

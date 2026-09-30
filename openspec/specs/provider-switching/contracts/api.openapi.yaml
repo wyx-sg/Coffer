@@ -777,6 +777,26 @@ paths:
           $ref: '#/components/schemas/GroupBy'
           default: model
           description: model | agent | day
+      - description: Only requests this agent type sent
+        in: query
+        name: agent_type
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this agent type sent
+          title: Agent Type
+      - description: Only requests this connection served
+        in: query
+        name: connection_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this connection served
+          title: Connection Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -1033,6 +1053,26 @@ paths:
           $ref: '#/components/schemas/GroupBy'
           default: model
           description: model | agent | day
+      - description: Only requests this agent type sent
+        in: query
+        name: agent_type
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this agent type sent
+          title: Agent Type
+      - description: Only requests this connection served
+        in: query
+        name: connection_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this connection served
+          title: Connection Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -2127,6 +2167,11 @@ components:
           - type: string
           - type: 'null'
           title: Agent Type
+        agent_types:
+          items:
+            type: string
+          title: Agent Types
+          type: array
         agent_uid:
           anyOf:
           - type: string
@@ -2165,6 +2210,7 @@ components:
       - agent_uid
       - agent_type
       - day
+      - agent_types
       - totals
       title: UsageSummaryRowOut
       type: object

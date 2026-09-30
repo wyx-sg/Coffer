@@ -1,11 +1,11 @@
 ---
 title: Security model
-description: Coffer's threat model and the mechanisms behind it — the secret boundary against a prompt-injected agent (plaintext only to a present human in the desktop app, approval before a secret goes somewhere new), what stays exposed, loopback binding and the Host and Origin checks, the per-start API token, the envelope-encrypted credential store and the master key, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
+description: Coffer's threat model and the mechanisms behind it — the secret boundary against a prompt-injected agent (plaintext only to a present human in the desktop app, approval before a secret goes somewhere new), what stays exposed, loopback binding and the Host and Origin checks, the per-start API token, the envelope-encrypted secret store and the master key, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
 ---
 
 # Security model
 
-This page states what Coffer defends against and what it does not, then walks through each mechanism that holds the line: the secret boundary, the network boundary, API authentication, the credential store and its master key, outbound requests, agent identity, messaging channels, logging, and sync. It is for engineers reviewing Coffer's security posture and for anyone deciding whether to trust it with their API keys. For day-to-day use of the boundary — `coffer run`, approvals, key backups — see [Secrets](/guides/secrets).
+This page states what Coffer defends against and what it does not, then walks through each mechanism that holds the line: the secret boundary, the network boundary, API authentication, the secret store and its master key, outbound requests, agent identity, messaging channels, logging, and sync. It is for engineers reviewing Coffer's security posture and for anyone deciding whether to trust it with their API keys. For day-to-day use of the boundary — `coffer run`, approvals, key backups — see [Secrets](/guides/secrets).
 
 ## Threat model
 
@@ -32,7 +32,7 @@ Three rules keep those two honest:
 4. **Every listener checks `Host` and `Origin`**, which closes the browser vector. See [The Host and Origin checks](#the-host-and-origin-checks).
 5. **Agents get capabilities, not keys.** The MCP gateway injects an HTTP upstream's headers itself, so an agent sees tool results and never the token.
 
-This is the same pair of moves password managers and agent vendors settled on: a human-presence gate the agent cannot satisfy, and a broker that injects the credential so the agent never holds it.
+This is the same pair of moves password managers and agent vendors settled on: a human-presence gate the agent cannot satisfy, and a broker that injects the secret so the agent never holds it.
 
 ::: danger The boundary holds only in a signed release
 The presence grant that proves "a person approved this" is signed with a key derived from the master key, and only the signed desktop app can read that key — **once Coffer ships binaries signed with an Apple Developer ID**. It does not yet. Until then every build is a development build: the master key is the file `~/.coffer/master.key`, any process running as you can read it, and so a same-user process can forge a grant. **In a development build the secret boundary does not hold.** See [Development builds](#development-builds).
@@ -128,10 +128,10 @@ A process an agent controls cannot read the master key in a signed release, so i
 
 Around the three operations:
 
-- **No other path returns plaintext.** There is no plaintext read route and no `coffer credentials get --show`; `coffer credentials get` checks presence only. There is no key export command or route. The browser UI shows **Open in Coffer app** where these actions would be. The one other place plaintext leaves the daemon is `coffer run`'s resolve of standalone secrets, which is confined to the `secret/` namespace and covered under [What stays exposed](#what-stays-exposed).
-- **The master key never crosses the API.** A key backup is written by the daemon into the folder you chose, as `coffer-master-key-<fingerprint>.key`, mode `0600`, never over an existing file; the response carries only the path and the fingerprint.
+- **No other path returns plaintext.** There is no plaintext read route and no `coffer secret get --show`; `coffer secret get` checks presence only. There is no key export command or route. The browser UI shows **Open in Coffer app** where these actions would be. The one other place plaintext leaves the daemon is `coffer run`'s resolve of standalone secrets, which is confined to the `secret/` namespace and covered under [What stays exposed](#what-stays-exposed).
+- **The master key never crosses the API.** A key backup is written by the daemon into the folder you chose, as `coffer-master-key.cfk`, mode `0600`, never over an existing file; the response carries only the path and the fingerprint. The file holds the key encrypted under a key scrypt derives from a passphrase you type in the app (at least eight characters), so a copy that lands somewhere shared opens nothing without it. The passphrase goes from the page to the shell to the daemon's request and is never stored, logged or audited; validation failures are logged without the submitted values for the same reason.
 - **Every release is audited:** a reveal as `credential_revealed` with the ref only, a backup as `master_key_exported`, an approval as `secret_approval_approved`.
-- **Writing stays open.** Any surface may store a secret: whoever supplies a value already has it.
+- **Writing stays open, with two exceptions.** Any surface may store a resource's secret: whoever supplies a value already has it. A new standalone secret (`secret/<name>`) and a new value for a secret already in use are held encrypted until you approve them in the desktop app, because once stored they reach a `coffer run` child or a destination that was approved for the old value.
 
 ## A secret goes somewhere new only with your approval
 
@@ -160,7 +160,7 @@ Two more changes widen where a secret goes and wait for the same approval:
 - **Replacing a value in use.** A new value for a ref an approved destination receives, or for any standalone secret, is held encrypted until you approve; the old value stays in use. Replacing a channel's bot token with the attacker's bot would redirect your conversations.
 - **Switching the protection off** (`secrets.require_approval`). Switching it on applies at once.
 
-Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface, including `coffer credentials reject`. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; the CLI prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals).
+Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface, including `coffer secret reject`. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; the CLI prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals).
 
 ## Development builds
 
@@ -253,20 +253,20 @@ The desktop shell loads the same frontend as a local asset that nobody served, s
 
 CORS grants exactly the cross-origin entries of the [Origin table](#origin-requests-from-other-sites): the desktop app's origins by default, and the development origins when you opt in. The browser-served UI is same-origin with the API and needs no CORS. CORS never uses a wildcard, and `allow_credentials` is always false, so no cookie is ever attached. CORS and the Origin check read the same list, so they cannot disagree.
 
-## The credential store
+## The secret store
 
 ### Envelope encryption
 
 Secrets live only as **Fernet ciphertext** in the `credentials` table of `~/.coffer/coffer.db`, keyed by a **ref** — a name such as `github-token`. Everything else in Coffer holds refs:
 
 - An MCP server's config maps environment variables or headers to refs in `transport.credential_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `credential_refs`.
-- A channel's bot token or app secret, a provider's API key, and the sync remote's push credential are refs.
+- A channel's bot token or app secret, a provider's API key, and the sync remote's push secret are refs.
 - A **standalone secret** — one that belongs to no resource, such as a database password a skill needs — is a ref under `secret/<name>`, cited from files as `coffer://secret/<name>` and handed to a command by `coffer run` ([Secrets](/guides/secrets)).
 - When you switch an agent onto a provider, the agent is pointed at the [local model proxy](/architecture/model-proxy) on loopback and authenticates with its own local proxy token (`coffer proxy token --agent-uid <uid>`, run by Claude Code's `apiKeyHelper` and Codex's provider `auth` command). The provider's key is never written into an agent's file or environment, and no route or command returns it: the daemon decrypts it and hands it to the proxy, which injects it upstream and holds it in memory only.
 
-Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it, and only after the [secret boundary](#a-secret-goes-somewhere-new-only-with-your-approval) has approved that destination. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a credential that a resource still cites, or a standalone secret a skill cites, is refused with `409`; and deleting a resource releases any credential no remaining resource cites.
+Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it, and only after the [secret boundary](#a-secret-goes-somewhere-new-only-with-your-approval) has approved that destination. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a secret that a resource still cites, or a standalone secret a skill cites, is refused with `409`; and deleting a resource releases any secret no remaining resource cites.
 
-**The daemon is the sole credential-store owner.** Every surface — web UI, CLI, shim, desktop app — reaches secrets through the daemon's `/api/v1/credentials` routes; the CLI never touches the store in-process (an import contract forbids the CLI from importing the credential module or reaching the keychain), so each machine has exactly one reader of the key. Those routes store, list and delete; the only ones that release a value are the desktop app's presence-gated reveal and `coffer run`'s resolve of standalone secrets.
+**The daemon is the sole secret-store owner.** Every surface — web UI, CLI, shim, desktop app — reaches secrets through the daemon's `/api/v1/credentials` routes; the CLI never touches the store in-process (an import contract forbids the CLI from importing the secret module or reaching the keychain), so each machine has exactly one reader of the key. Those routes store, list and delete; the only ones that release a value are the desktop app's presence-gated reveal and `coffer run`'s resolve of standalone secrets.
 
 ### The master key
 
@@ -282,7 +282,7 @@ The one secret outside the database is the Fernet master key, managed by [`Maste
 
 **Upgrade to a signed release.** At its first start a signed release moves a key found in `master.key` or in the old keychain item into its Keychain item: write, read back, compare, then delete the source, audited as `master_key_relocated`. An interruption leaves the source for the next start; two disagreeing keys stop the start, naming both fingerprints. A signed release refuses to move the key back to a file.
 
-**In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set credentials.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
+**In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set secrets.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
 
 Startup is fail-closed in every build. The daemon counts `credentials` rows *before* resolving the key, and creates a new key only when the table is empty. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `CREDENTIAL_LOCKED` rather than creating a second key that would shadow it.
 
@@ -340,20 +340,20 @@ A channel is the one surface through which someone outside your machine can make
 - From then on the channel obeys only messages whose sender is the owner. In a group, a message addressed to the bot by anyone else gets a one-line refusal; in a paired chat, a message from a different member is ignored silently and cannot re-pair the channel; an unpaired direct chat can do nothing but present a pairing code. When a sender's identity cannot be established in a group, the message is refused, never assumed to be the owner's.
 - A channel's **inverted scope** limits which agents it may drive at all, and a channel whose scope is empty does not start.
 
-Channel secrets are refs, resolved from the credential store when the adapter starts.
+Channel secrets are refs, resolved from the secret store when the adapter starts.
 
 ## What goes into logs and audit
 
-- **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted credential.
-- **Audit** records every lifecycle change with its actor. Credential events (`credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's `audit_redactor` first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach `audit_log`. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
-- **The sync history** stores the remote's commit and errors after the push credential has been redacted out.
+- **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.
+- **Audit** records every lifecycle change with its actor. Secret events (`credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's `audit_redactor` first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach `audit_log`. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
+- **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
 ## Sync carries ciphertext only
 
 Vault sync converges the vault with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
 
-- **Credentials travel only if you opt in** (`coffer sync remote set --with-credentials`), and then only as Fernet ciphertext, one `credentials/<ref>.enc` file per secret. What lands in the repository cannot be decrypted on its own.
-- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a key backup on one machine behind a presence check, `coffer sync key import` installs it on another, and `coffer sync key fingerprint` lets you compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
+- **Secrets travel only if you opt in** (`coffer sync remote set --with-secrets`), and then only as Fernet ciphertext, one `credentials/<ref>.enc` file per secret. What lands in the repository cannot be decrypted on its own.
+- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, `coffer sync key import` or **Settings › Security › Import a master key** installs it on another, and `coffer sync key fingerprint` lets you compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
 - **The push token goes only to the URL it was approved for.** Pointing it at a new remote URL waits for an approval, like any new destination.
 - **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, rather than failing silently.
 - **Reach does not travel.** Which resources are enabled, and for which agents, is decided on each machine, so another machine's round can never widen what this one exposes.
@@ -371,7 +371,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - **Every secret as its own Keychain item.** Rejected: vault sync could no longer carry ciphertext between your machines, and one key in an access group already makes a copied store useless.
 - **A file-default master key with a keychain opt-in** (the development arrangement). Kept only for development builds: under an unsigned, frequently rebuilt binary macOS re-prompts on every rebuild, and only a Team ID signature removes that.
 - **A passphrase-derived key.** Rejected for the default: a prompt at every daemon start, and a forgotten passphrase loses every secret.
-- **Persisting the API token across restarts.** Rejected: a long-lived on-disk token that unlocks the credential endpoints is worse than a per-process one.
+- **Persisting the API token across restarts.** Rejected: a long-lived on-disk token that unlocks the secret endpoints is worse than a per-process one.
 - **Putting the token in the URL.** Rejected: URLs leak into history, screenshots and bug reports; a response body does not.
 - **Relying on loopback binding alone.** Rejected: that is exactly the gap DNS rebinding walks through.
 - **Per-tool approval prompts for agents.** Not built: every instruction already comes from the paired owner, so a per-tool prompt would only re-confirm what the owner asked for. Approvals are asked for only where a secret would go somewhere new.
@@ -397,7 +397,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 ## Related
 
 - [Secrets guide](/guides/secrets)
-- [Credentials guide](/guides/credentials)
+- [Secret store guide](/guides/secret-store)
 - [Security policy](/contributing/security) — how to report a vulnerability.
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
@@ -406,4 +406,4 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
 - [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
-- Specs: [credentials](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/credentials/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
+- Specs: [secrets](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)

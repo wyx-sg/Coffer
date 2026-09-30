@@ -15,7 +15,7 @@
 //
 // What stays is the trailing logical key — `bot-token`, `SMART_PAT`. It is not
 // derived from anything mutable, and it is the only thing that makes a ref
-// readable in `coffer credentials list`.
+// readable in `coffer secret list`.
 
 /** A uuid4 as 32 hex characters, the spelling `machine_id` and provider refs
  *  already use.

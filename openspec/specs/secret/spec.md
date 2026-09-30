@@ -1,4 +1,4 @@
-# Credentials
+# Secrets
 
 ## Purpose
 Credentials is the encrypted credential store: the ciphertext, the master key that opens it, the
@@ -19,8 +19,8 @@ no route or command returns a value; a value reaches only a present human in the
 a secret goes to a destination it did not go to before only after that human approves it there.
 
 The capability ships no web page of its own and still satisfies the End-to-End Deliverable Rule: it
-delivers a complete CLI (`coffer credentials set|get|list|rm|approvals|reject|scan|import`,
-`coffer run`, plus the `credentials.storage` and `secrets.require_approval` keys of `coffer config`)
+delivers a complete CLI (`coffer secret set|get|list|rm|approvals|reject|scan|import`,
+`coffer run`, plus the `secrets.storage` and `secrets.require_approval` keys of `coffer config`)
 and a complete route family (`/api/v1/credentials/*` plus `/api/v1/settings/credentials` and
 `/api/v1/settings/secret-boundary`) over its own tables. Approving, revealing and writing a key
 backup have no CLI counterpart on purpose: each needs the desktop app's presence check, and the
@@ -165,23 +165,23 @@ readable, in both directions, across a daemon restart.
 
 ### Requirement: Expose the master key's location on every surface
 Users MUST be able to read and change the key's location from the management API
-(`GET`/`PUT /api/v1/settings/credentials`), from the CLI as the `credentials.storage` setting
-(`coffer config get credentials.storage` and `coffer config set credentials.storage file|keychain`,
+(`GET`/`PUT /api/v1/settings/credentials`), from the CLI as the `secrets.storage` setting
+(`coffer config get secrets.storage` and `coffer config set secrets.storage file|keychain`,
 see [resource-framework](../resource-framework/spec.md), the requirement that defines
 `coffer config`), and from a Settings card that states the consequence and confirms before it
-writes. `coffer config set credentials.storage` MUST refuse any value other than `file` or
+writes. `coffer config set secrets.storage` MUST refuse any value other than `file` or
 `keychain` before calling the route, and a change MUST run the verified relocation of "Verify the
 destination before relocating the master key".
 
 #### Scenario: read and change the master key location from the API and the command line
 - **GIVEN** a running daemon whose master key is in the file beside the database
-- **WHEN** the location is read with `GET /api/v1/settings/credentials` and with `coffer config get credentials.storage`, then changed to the keychain with `PUT /api/v1/settings/credentials`
+- **WHEN** the location is read with `GET /api/v1/settings/credentials` and with `coffer config get secrets.storage`, then changed to the keychain with `PUT /api/v1/settings/credentials`
 - **THEN** both reads report the file location
 - **AND** after the change both surfaces report the keychain, and a previously stored secret still reads back
 
 #### Scenario: move the master key with the config command
 - **GIVEN** a running daemon whose master key is in the file beside the database
-- **WHEN** the user runs `coffer config set credentials.storage keychain`, and then `coffer config set credentials.storage vault`
+- **WHEN** the user runs `coffer config set secrets.storage keychain`, and then `coffer config set secrets.storage vault`
 - **THEN** the first moves the key to the keychain, audited as `master_key_relocated`, and a previously stored secret still reads back
 - **AND** the second exits non-zero naming the accepted values and leaves the key where it is
 
@@ -231,32 +231,32 @@ A Coffer-initiated delete MUST NOT leave any resource citing a reference the sto
 - **THEN** the request is refused with `409 CREDENTIAL_IN_USE`, the message names every citing resource as its kind plus its current name (`channel 'my-bot'`, `mcp_server 'github'`) rather than as a uid — the user has to go and find the thing, and an opaque identity is not what the page they go to shows them, and the ciphertext row is still present afterwards.
 
 ### Requirement: Read a secret on the command line without shell history
-`coffer credentials set <ref>` MUST take the secret from standard input, or from a hidden prompt on
+`coffer secret set <ref>` MUST take the secret from standard input, or from a hidden prompt on
 a terminal, MUST reject an empty value with a non-zero exit, and MUST document `--value` as unsafe
 because it lands in shell history.
 
 #### Scenario: the command line stores a secret without it reaching shell history
 - **GIVEN** a terminal,
-- **WHEN** the user pipes a secret into `coffer credentials set <ref>`, or is prompted for it with the input hidden,
+- **WHEN** the user pipes a secret into `coffer secret set <ref>`, or is prompted for it with the input hidden,
 - **THEN** the secret is stored, an empty value is rejected with a non-zero exit, and passing `--value` instead prints an explicit warning that the value lands in shell history.
 
 ### Requirement: Confirm a command-line delete unless forced
-`coffer credentials rm <ref>` MUST confirm before deleting, unless `--force` is given.
+`coffer secret rm <ref>` MUST confirm before deleting, unless `--force` is given.
 
 #### Scenario: the command line confirms a delete unless forced
 - **GIVEN** a stored credential
-- **WHEN** the user runs `coffer credentials rm <ref>` and declines the confirmation, then runs it again with `--force`
+- **WHEN** the user runs `coffer secret rm <ref>` and declines the confirmation, then runs it again with `--force`
 - **THEN** the declined run leaves the credential stored
 - **AND** the forced run deletes it without asking
 
 ### Requirement: Route every credential command through the daemon
 Every credential command MUST go through the daemon's API and MUST import no credential or keyring
-code of its own. This covers the `coffer credentials` group and the `credentials.storage` setting of
+code of its own. This covers the `coffer secret` group and the `secrets.storage` setting of
 `coffer config`. The daemon is the sole owner of the key, and a CLI that opened the keychain itself
 would be a second reader to keep honest.
 
 #### Scenario: credential commands import no credential code
-- **GIVEN** the `coffer credentials` command module
+- **GIVEN** the `coffer secret` command module
 - **WHEN** its imports are inspected
 - **THEN** it imports neither `keyring` nor any module of the credentials infrastructure package
 - **AND** it reaches the vault only through the daemon client
@@ -265,7 +265,7 @@ would be a second reader to keep honest.
 - **GIVEN** the `coffer config` command module
 - **WHEN** its imports are inspected
 - **THEN** it imports neither `keyring` nor any module of the credentials infrastructure package
-- **AND** it reads and changes `credentials.storage` only through the daemon client
+- **AND** it reads and changes `secrets.storage` only through the daemon client
 
 ### Requirement: Carry references, never secrets, in resource configuration
 A resource's configuration MUST carry credential references and never secret values. Each kind
@@ -348,7 +348,7 @@ plaintext or the master key, with two exceptions this spec names: the desktop
 app's presence-gated reveal and key backup (see "Release plaintext only to a
 present human in the desktop app"), and `coffer run`'s resolve of standalone
 secrets (see "Resolve standalone secrets into one child with coffer run").
-There is no `GET /api/v1/credentials/{ref}`, no `coffer credentials get
+There is no `GET /api/v1/credentials/{ref}`, no `coffer secret get
 --show`, no `POST /api/v1/sync/key/export` and no `coffer sync key export`.
 Writing a secret stays open to every surface: a caller that supplies a value
 already has it. An audit row is not a refusal — a path that returns a value is
@@ -357,19 +357,19 @@ a defect however it is audited
 
 #### Scenario: no route or command hands out a stored value
 - **GIVEN** a running daemon holding a secret under a ref
-- **WHEN** a caller with the daemon's token asks `GET /api/v1/credentials/{ref}`, `POST /api/v1/sync/key/export`, `coffer credentials get <ref> --show` and `coffer sync key export <file>`
+- **WHEN** a caller with the daemon's token asks `GET /api/v1/credentials/{ref}`, `POST /api/v1/sync/key/export`, `coffer secret get <ref> --show` and `coffer sync key export <file>`
 - **THEN** each is refused as a route or command that does not exist
 - **AND** no response or output carries the value or the master key
 
 ### Requirement: Check a secret's presence on the command line
-`coffer credentials get <ref>` MUST print `[redacted]` when the store holds the
+`coffer secret get <ref>` MUST print `[redacted]` when the store holds the
 ref and exit `4` when it does not, by way of the presence probe, which decrypts
 nothing and audits nothing. It MUST offer no option that prints the value; its
 help MUST name the desktop app as the place to see one.
 
 #### Scenario: the command line confirms presence and has no way to print a value
 - **GIVEN** a stored credential
-- **WHEN** the user runs `coffer credentials get <ref>`, and then the same command with `--show`
+- **WHEN** the user runs `coffer secret get <ref>`, and then the same command with `--show`
 - **THEN** the first prints `[redacted]` and records no audit entry
 - **AND** the second is refused as an unknown option and prints nothing of the value
 
@@ -467,21 +467,21 @@ superseded those nothing asks for any more.
 A command that saves a change which then waits for approval — `coffer mcp add`,
 every `coffer <kind> edit` (including `coffer provider edit` with `--secret` or
 `--base-url`), `coffer channel add`, `coffer provider add`, `coffer sync remote
-set`, `coffer credentials set` and `coffer config set secrets.require_approval
+set`, `coffer secret set` and `coffer config set secrets.require_approval
 off` — MUST print `waiting for approval in the Coffer app` with what waits and
 its approval id, and exit `9`; with `--wait` it MUST poll until the person
 answers, exiting `0` once approved and non-zero once rejected. What a change to
 a destination waits on includes a pending replacement of the value of a secret
-that destination cites, not only a pending binding to it. `coffer credentials
+that destination cites, not only a pending binding to it. `coffer secret
 approvals` MUST list what waits (`--all` includes decided ones, `--json` for
-scripts) and `coffer credentials reject <id>` MUST refuse one; no command
+scripts) and `coffer secret reject <id>` MUST refuse one; no command
 approves.
 
 #### Scenario: the command line reports a pending approval and exits 9
 - **GIVEN** a secret already sent to one MCP server
 - **WHEN** the user registers another server citing it with `coffer mcp add`
 - **THEN** the server is registered, the command prints "waiting for approval in the Coffer app" naming the approval, and exits `9`
-- **AND** `coffer credentials approvals` lists that approval
+- **AND** `coffer secret approvals` lists that approval
 
 #### Scenario: the command line waits for the approval with --wait
 - **GIVEN** a command run with `--wait` whose change waits for approval
@@ -490,7 +490,7 @@ approves.
 
 #### Scenario: the command line reports a pending provider key and exits 9
 - **GIVEN** a provider connection whose key is in use
-- **WHEN** the user runs `coffer provider edit` with a new `--secret`, then with a new `--base-url`, and then `coffer provider add` for a second connection citing the same key with `--credential-ref`
+- **WHEN** the user runs `coffer provider edit` with a new `--secret`, then with a new `--base-url`, and then `coffer provider add` for a second connection citing the same key with `--secret-ref`
 - **THEN** each change is saved, and each command prints "waiting for approval in the Coffer app" naming its approval and exits `9`, while the stored key keeps its old value
 - **AND** a `coffer provider edit` that changes only the description exits `0`
 
@@ -554,7 +554,7 @@ agent that runs the command.
 - **THEN** it is refused and no value is returned
 
 ### Requirement: List every stored and cited secret with what uses it
-`coffer credentials list` and `GET /api/v1/credentials` MUST list every ref the
+`coffer secret list` and `GET /api/v1/credentials` MUST list every ref the
 store holds and every ref a registered resource cites, each with whether the
 store holds it, the resources that cite it, for a standalone secret its
 `coffer://secret/<name>` and the skills whose files cite that URI, whether
@@ -568,7 +568,7 @@ MUST forget its approved destinations.
 
 #### Scenario: the command line lists every cited ref with its presence
 - **GIVEN** a registered MCP server citing a stored ref and a registered model provider citing a ref the store does not hold
-- **WHEN** the user runs `coffer credentials list`
+- **WHEN** the user runs `coffer secret list`
 - **THEN** both refs are listed
 - **AND** the MCP server's ref is shown as present and the provider's ref as missing
 
@@ -579,13 +579,13 @@ MUST forget its approved destinations.
 - **AND** the second names the skill, and deleting it is refused naming that skill
 
 ### Requirement: Move plaintext secret files into the store
-`POST /api/v1/credentials/scan` (`coffer credentials scan`) MUST report every
+`POST /api/v1/credentials/scan` (`coffer secret scan`) MUST report every
 plaintext secret in `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json`
 (a flat map of strings) and in the skill master store (assignments whose name
 says password, secret, token or key, and well-known token shapes) by file,
 line, key and proposed name, and every skill that still mentions
 `~/.coffer/secrets/`; it MUST NOT return a value. `POST
-/api/v1/credentials/import` (`coffer credentials import [--id]… [--dry-run]`)
+/api/v1/credentials/import` (`coffer secret import [--id]… [--dry-run]`)
 MUST store each chosen value as `secret/<proposed name>`, confirm the store
 reads back the same value, and only then replace the value in its file with the
 reference, atomically and keeping the file's mode; a name already holding a

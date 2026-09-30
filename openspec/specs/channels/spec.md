@@ -292,7 +292,7 @@ generates each kind's lifecycle verbs), and its channel-specific commands are
   `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
   `--name`, `--title` and `--description`, and it changes only what it is
   given: every switch, setting and ref it is not given keeps its stored value.
-- `coffer credentials set <ref>` rotates a secret under a ref that
+- `coffer secret set <ref>` rotates a secret under a ref that
   `coffer channel show` reports.
 
 Editing a channel's default agent or type settings is served by the detail page

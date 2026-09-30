@@ -733,7 +733,7 @@ def test_adopt_mcp_entry_with_secret(workspace_cli):
     # The secret value landed in the encrypted credential store, keyed by the
     # ref. The CLI only confirms presence (no command prints a value), so the
     # value itself is read from the daemon's own store.
-    r = _runner.invoke(cli_app, ["credentials", "get", ref])
+    r = _runner.invoke(cli_app, ["secret", "get", ref])
     assert r.exit_code == 0, r.output
     assert _SECRET_VALUE not in r.output
     from coffer.surfaces.http.credential_composition import get_credential_store

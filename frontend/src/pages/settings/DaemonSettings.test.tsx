@@ -37,6 +37,10 @@ const STATUS = {
   machine_name: "mac",
   features: {},
   upstream_summary: null,
+  pid: 51233,
+  commit: null,
+  data_dir: "~/.coffer",
+  connected_agents: 2,
 };
 
 type Answer = { data?: unknown; error?: unknown };
@@ -87,9 +91,9 @@ describe("DaemonSettings", () => {
     renderTab();
     const card = await screen.findByTestId("settings-daemon-status");
     expect(within(card).getByText("Running on 127.0.0.1:8000")).toBeInTheDocument();
-    expect(within(card).getByText("0.4.2")).toBeInTheDocument();
-    expect(within(card).getByText("stable")).toBeInTheDocument();
-    expect(within(card).getByText("/Users/u/.coffer/bin/coffer-daemon")).toBeInTheDocument();
+    expect(within(card).getByTestId("settings-daemon-status-line")).toHaveTextContent(
+      /^Up \d+ days? · pid 51233 · 2 agents connected$/,
+    );
     expect(screen.queryByRole("button", { name: /stop|shut ?down/i })).toBeNull();
   });
 
@@ -151,13 +155,15 @@ describe("DaemonSettings", () => {
     await waitFor(() => expect(field).toHaveValue("8000"));
     fireEvent.change(field, { target: { value: "9000" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-    expect(await screen.findByText("Port 9000 is in use by node (pid 4242).")).toBeInTheDocument();
+    expect(await screen.findByText("Port 9000 is in use by node (pid 4242). Pick another port.")).toBeInTheDocument();
     expect(screen.queryByTestId("settings-daemon-port-pending")).toBeNull();
+    // Save stays disabled while the refusal is shown, until the port is edited.
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
 
     fireEvent.change(field, { target: { value: "80" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(
-      await screen.findByText("Choose a whole number from 1024 to 65535."),
+      await screen.findByText("Use a port from 1024 to 65535."),
     ).toBeInTheDocument();
     expect(put).toHaveBeenCalledTimes(1);
   });

@@ -275,10 +275,39 @@ class RestoreIn(BaseModel):
 
 
 class KeyMaterialIn(BaseModel):
+    #: The key file's text as the person picked it: a ``.cfk`` backup or a
+    #: bare key.
     material: str
 
 
+class KeyPreviewOut(BaseModel):
+    """A key file beside this machine's key, before anything is replaced."""
+
+    #: The key in the file (12 hex characters, never the key).
+    fingerprint: str
+    #: This machine's key, or null when it holds none yet.
+    current_fingerprint: str | None
+    #: True when both are the same key, so importing changes nothing.
+    same: bool
+    #: True for a passphrase-protected ``.cfk`` backup.
+    protected: bool
+
+
+class KeyImportIn(BaseModel):
+    material: str
+    #: Opens a ``.cfk`` backup; not needed for a bare key. Never stored or
+    #: recorded.
+    passphrase: str | None = None
+
+
 class KeyImportOut(BaseModel):
+    #: The key this machine now uses.
+    fingerprint: str
+    #: True when a different key was installed before (it is kept as a backup).
+    replaced: bool
+    #: How many stored secrets the key decrypts.
+    readable: int
+    #: The stored secrets it still cannot decrypt.
     locked_refs: list[str]
 
 

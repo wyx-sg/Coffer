@@ -167,7 +167,7 @@ export async function saveMcpServerEdit({
       const { data: written, error: e } = await client.POST("/credentials", {
         body: { ref, value: row.value },
       });
-      if (e) throwApiError(e, "INTERNAL_ERROR", "credential write failed");
+      if (e) throwApiError(e, "INTERNAL_ERROR", "secret write failed");
       if (written?.approval !== undefined) awaitingApproval = true;
       credentialRefs[name] = ref;
       if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
@@ -218,7 +218,7 @@ export async function saveMcpServerEdit({
         params: { path: { ref } },
       });
       if (de) {
-        const msg = de.error?.message ?? "credential delete failed";
+        const msg = de.error?.message ?? "secret delete failed";
         console.warn(`[EditMcpServerDialog] orphan cleanup failed for ${ref}:`, msg);
         orphanWarnings.push(ref);
       }

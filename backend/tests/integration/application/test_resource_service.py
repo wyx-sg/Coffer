@@ -304,7 +304,7 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
 @pytest.mark.asyncio
 async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
     """Every ref any registered resource cites, of whatever kind, keyed to the
-    resources citing it — what ``coffer credentials list`` enumerates. A kind
+    resources citing it — what ``coffer secret list`` enumerates. A kind
     that stores its ref somewhere other than an MCP transport must still count.
     """
 
@@ -544,7 +544,7 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="deleting a resource releases the credentials nothing else cites",
 )
 async def test_delete_releases_credentials_only_it_cited(tmp_path):

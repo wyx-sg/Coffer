@@ -150,9 +150,9 @@ cd frontend && npm install && npm run build && cd ..
 | --- | --- |
 | `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim` | The public names. For a release build these are symlinks into a versioned directory. |
 | `~/.coffer/bin/<version>/` | One directory per deployed build. The current and previous versions are kept, so you can roll back by pointing the links at the older directory. |
-| `~/.coffer/coffer.db` | The SQLite database: resources, settings, audit log, encrypted credentials. |
+| `~/.coffer/coffer.db` | The SQLite database: resources, settings, audit log, encrypted secrets. |
 | `~/.coffer/coffer.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
-| `~/.coffer/master.key` | The credential master key (mode `0600`), unless you moved it to the keychain. |
+| `~/.coffer/master.key` | The secret master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
 | `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, experimental-feature switches. |
 | `~/.coffer/skills/`, `knowledge/`, `memory/` | The file-backed kinds' trees. |
@@ -241,7 +241,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 4. Optionally, delete the vault itself.
 
 ::: danger Deleting ~/.coffer is permanent
-`~/.coffer` holds your database, knowledge collections, skill library and credential master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
+`~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
 :::
 
 ## Release channel

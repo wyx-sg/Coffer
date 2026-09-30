@@ -25,16 +25,27 @@ import asyncio
 import pathlib
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from cryptography.fernet import Fernet, InvalidToken
 
 from coffer.domain.errors import CredentialUnreadable
 
+#: How stale ``last_used_at`` may get before a read stamps it again.
+_USE_STAMP_EVERY = timedelta(minutes=1)
+
 
 class EncryptedCredentialStore:
     def __init__(self, db_path: pathlib.Path, key: bytes) -> None:
         self._db_path = db_path
+        self._fernet = Fernet(key)
+
+    def use_key(self, key: bytes) -> None:
+        """Encrypt and decrypt with ``key`` from now on — an imported master key.
+
+        Nothing stored is re-encrypted: ciphertext written under the previous
+        key stays as it is and reads as unreadable until that key comes back.
+        """
         self._fernet = Fernet(key)
 
     def _connect(self) -> sqlite3.Connection:
@@ -43,16 +54,46 @@ class EncryptedCredentialStore:
         return conn
 
     def get(self, ref: str) -> str | None:
+        """Decrypt ``ref`` for a consumer, and stamp when it was last used.
+
+        The stamp is written at most once per ``_USE_STAMP_EVERY``, so a
+        consumer that resolves on every request does not turn each read into
+        a write. A read that is not a use — a reveal, an import's read-back —
+        goes through :meth:`peek` instead.
+        """
+        return self._read(ref, stamp=True)
+
+    def peek(self, ref: str) -> str | None:
+        """Decrypt ``ref`` without counting it as a use."""
+        return self._read(ref, stamp=False)
+
+    def _read(self, ref: str, *, stamp: bool) -> str | None:
         with closing(self._connect()) as conn:
             row = conn.execute(
-                "SELECT ciphertext FROM credentials WHERE ref = ?", (ref,)
+                "SELECT ciphertext, last_used_at FROM credentials WHERE ref = ?", (ref,)
             ).fetchone()
         if row is None:
             return None
         try:
-            return self._fernet.decrypt(row[0]).decode()
+            value = self._fernet.decrypt(row[0]).decode()
         except InvalidToken as e:
             raise CredentialUnreadable(ref) from e
+        if stamp:
+            self._stamp_use(ref, row[1])
+        return value
+
+    def _stamp_use(self, ref: str, last: str | None) -> None:
+        now = datetime.now(tz=UTC)
+        if last is not None:
+            try:
+                if now - datetime.fromisoformat(last) < _USE_STAMP_EVERY:
+                    return
+            except ValueError:
+                pass
+        with closing(self._connect()) as conn, conn:
+            conn.execute(
+                "UPDATE credentials SET last_used_at = ? WHERE ref = ?", (now.isoformat(), ref)
+            )
 
     def set(self, ref: str, value: str) -> None:
         now = datetime.now(tz=UTC).isoformat()
@@ -85,7 +126,7 @@ class EncryptedCredentialStore:
 
         ``delete`` keeps the ``-> None`` shape the credential ports declare;
         a caller that must act only on a real removal (the HTTP route audits
-        only then — spec credentials "Delete a credential idempotently") uses
+        only then — spec secret "Delete a credential idempotently") uses
         this instead.
         """
         with closing(self._connect()) as conn, conn:
@@ -103,7 +144,7 @@ class EncryptedCredentialStore:
     def list_refs(self) -> list[tuple[str, str, str]]:
         """Every stored ref with its creation and update time, never a value.
 
-        The enumeration the Secrets page and ``coffer credentials list`` need to
+        The enumeration the Secrets page and ``coffer secret list`` need to
         show a stored secret nothing cites (ADR
         standalone-secrets-are-named-references-injected-into-one-child).
         """
@@ -112,6 +153,33 @@ class EncryptedCredentialStore:
                 "SELECT ref, created_at, updated_at FROM credentials ORDER BY ref"
             ).fetchall()
         return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+    def last_used(self) -> dict[str, str]:
+        """``{ref: when it was last used}`` for every stored ref ever used here."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT ref, last_used_at FROM credentials WHERE last_used_at IS NOT NULL"
+            ).fetchall()
+        return {str(r[0]): str(r[1]) for r in rows}
+
+    def unreadable_refs(self) -> list[str]:
+        """Stored refs this machine's master key cannot open — decrypting nothing.
+
+        Each token's HMAC is checked against the key (``extract_timestamp``
+        verifies the signature and reads no plaintext), so a ciphertext that
+        came with the vault from a machine holding another key is found
+        without any value being decrypted (spec secret "Show a secret this Mac
+        cannot open as missing on this Mac").
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute("SELECT ref, ciphertext FROM credentials ORDER BY ref").fetchall()
+        out: list[str] = []
+        for ref, blob in rows:
+            try:
+                self._fernet.extract_timestamp(bytes(blob))
+            except InvalidToken:
+                out.append(str(ref))
+        return out
 
     def seal(self, value: str) -> bytes:
         """Encrypt a value that is not stored yet — a replacement awaiting approval."""

@@ -11,7 +11,7 @@ import pytest
 
 from coffer.application.usage.ingest import UsageIngestService
 from coffer.application.usage.ports import RequestFilters
-from coffer.application.usage.query import GroupBy, UsageQueryService
+from coffer.application.usage.query import GroupBy, SummaryFilters, UsageQueryService
 from coffer.domain.pagination import CursorInvalid
 from coffer.domain.usage.ranges import InvalidRange
 from coffer.infrastructure.persistence.usage_repo import SqlAlchemyUsageRepo
@@ -103,6 +103,33 @@ async def test_summary_by_agent_and_by_day(sm, tmp_path: Path) -> None:  # type:
     assert month.totals.requests == 1  # record 6, 40 days back
     with pytest.raises(InvalidRange):
         await svc.summary("custom", start=date(2026, 8, 2))
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="usage narrowed to one agent and one provider",
+)
+async def test_summary_filters_and_the_agents_behind_each_row(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    svc = await _seed(sm, tmp_path)
+    codex = await svc.summary("today", filters=SummaryFilters(agent_type="codex"))
+    assert [r.model for r in codex.rows] == ["gpt-5.5-codex"]
+    assert codex.totals.requests == 1
+    anthropic = await svc.summary(
+        "today", group_by="agent", filters=SummaryFilters(connection_uid="conn-anthropic")
+    )
+    assert anthropic.totals.requests == 3
+    assert {r.agent_type for r in anthropic.rows} == {"claude_code"}
+    both = SummaryFilters(agent_type="codex", connection_uid="conn-anthropic")
+    assert (await svc.summary("today", filters=both)).totals.requests == 0
+
+    by_model = {r.model: r for r in (await svc.summary("today")).rows}
+    assert by_model["claude-sonnet-4-6"].agent_types == ("claude_code",)
+    by_day = {r.day: r for r in (await svc.summary("7d", group_by="day")).rows}
+    assert by_day[NOW.date().isoformat()].agent_types == ("claude_code", "codex")
+    assert by_day[(NOW.date() - timedelta(days=1)).isoformat()].agent_types == ()
+
+    text = await svc.csv("today", filters=SummaryFilters(agent_type="codex"))
+    assert [r["model"] for r in csv.DictReader(io.StringIO(text))] == ["gpt-5.5-codex"]
 
 
 @pytest.mark.acceptance(

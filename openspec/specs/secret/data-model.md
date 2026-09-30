@@ -15,7 +15,8 @@ CREATE TABLE credentials (
     ref         TEXT PRIMARY KEY,
     ciphertext  BLOB NOT NULL,                -- produced by EncryptedCredentialStore
     created_at  TEXT NOT NULL,                -- ISO-8601, written by the sync store
-    updated_at  TEXT NOT NULL
+    updated_at  TEXT NOT NULL,
+    last_used_at TEXT                         -- machine-local; migration 0134
 );
 ```
 
@@ -25,6 +26,7 @@ CREATE TABLE credentials (
 | `ciphertext` | A Fernet token. Never logged, never audited; its plaintext leaves only through the desktop app's presence-gated reveal. |
 | `created_at` | Set on first write for the ref; a re-write keeps it.                                              |
 | `updated_at` | Set on every write, so rotation is visible without revealing anything.                            |
+| `last_used_at` | When a consumer last had the value decrypted on this machine, stamped at most once a minute; a reveal or an import's read-back does not count. Never synced. NULL until first used. |
 
 There is no `kind` column and no foreign key to `resources`. A reference is
 resolved by string, in the direction resource → credential only, which is why
@@ -79,12 +81,12 @@ CREATE TABLE secret_bindings (          -- a ref approved for one slot of one de
 );
 CREATE TABLE secret_approvals (         -- what waits for the desktop app
     id TEXT PRIMARY KEY,
-    op TEXT NOT NULL,                   -- bind | replace_value | disable_protection
+    op TEXT NOT NULL,                   -- bind | add_secret | replace_value | disable_protection
     status TEXT NOT NULL,               -- pending | approved | rejected | superseded
     created_at TEXT NOT NULL, requested_by TEXT NOT NULL,
     ref TEXT, destination_kind TEXT, destination_uid TEXT, destination_label TEXT,
     slot TEXT, target TEXT, target_fingerprint TEXT,
-    pending_ciphertext BLOB,            -- a replacement value, Fernet-sealed; cleared on any decision
+    pending_ciphertext BLOB,            -- a new or replacement value, Fernet-sealed; cleared on any decision
     decided_at TEXT, decided_by TEXT
 );
 CREATE TABLE secret_boundary_settings ( -- require_approval, adopted_existing_bindings

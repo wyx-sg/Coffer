@@ -1,6 +1,6 @@
 """Wiring for the secret boundary: the gate, the presence grants, the destinations.
 
-Spec credentials "Hold a secret for a new destination until a person approves
+Spec secret "Hold a secret for a new destination until a person approves
 it" and "Release plaintext only to a present human in the desktop app"; ADR
 only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.
 

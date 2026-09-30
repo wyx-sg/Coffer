@@ -11,7 +11,7 @@ PyInstaller freezes the module, and signs the binaries with the
 ``keychain-access-groups`` entitlement for the same group
 (``desktop/entitlements/coffer.entitlements.in``); the desktop shell reads the
 same value at compile time from ``COFFER_KEYCHAIN_ACCESS_GROUP``. An unsigned
-build is never stamped and keeps the development fallback (spec credentials
+build is never stamped and keeps the development fallback (spec secret
 "Keep the master key behind a storage port chosen by the build"). Stdlib only;
 the edit is anchored on the one assignment.
 """

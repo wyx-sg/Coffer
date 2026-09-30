@@ -46,7 +46,7 @@ async def internal_default_connection(
         rc = service._cfg(r)
         if rc.internal_default:
             # Coffer's own engine sends the key to this base URL too: only an
-            # approved one (spec credentials "Hold a secret for a new
+            # approved one (spec secret "Hold a secret for a new
             # destination until a person approves it").
             await require_key(service, r.uid, r.name, rc)
             return ResolvedConnection(config=rc, model=model)

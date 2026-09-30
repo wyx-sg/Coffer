@@ -1473,7 +1473,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 `adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
 `restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`
 — and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-credentials|--without-credentials] [--credential-ref] [--worktree <path>]`,
+`remote set <url> [--branch] [--interval <seconds>] [--with-secrets|--without-secrets] [--secret-ref] [--worktree <path>]`,
 `remote clear`, `remote pause`, `remote resume`, `machine list`,
 `machine rename <name>`, `machine rm <id>`,
 `key import <file>`, `key fingerprint`. There is no `key export`: a key backup
@@ -1493,7 +1493,7 @@ something here (see "Snapshot before applying and roll back from it").
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
 - **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with an optional `--at`, `confirm`, `reject` and `rebuild` with `--yes`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials`, `--credential-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
+- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-secrets`, `--without-secrets`, `--secret-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
 
 #### Scenario: pause and resume a remote from the command line
 - **GIVEN** a configured, enabled sync remote
@@ -1648,7 +1648,7 @@ defaults for every option it is not given.
 - **WHEN** `coffer sync remote set` is run again naming only a new interval
 - **THEN** the stored remote carries the new interval and every other setting
   exactly as it was
-- **AND** running it with `--without-credentials` switches credential sync off
+- **AND** running it with `--without-secrets` switches credential sync off
   and changes nothing else
 
 ### Requirement: Present a Sync page with Runs, Setup and Machines tabs

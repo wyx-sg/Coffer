@@ -100,3 +100,29 @@ export function diffCounts(lines: readonly ValueDiffLine[]): { added: number; re
   }
   return { added, removed };
 }
+
+function leaves(value: unknown, path: string, out: Map<string, string>): void {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      leaves(child, path ? `${path}.${key}` : key, out);
+    }
+    return;
+  }
+  out.set(path, JSON.stringify(value ?? null));
+}
+
+/**
+ * The fields a change touched, by their own names ("url", "type"): every leaf
+ * whose value differs between before and after, named by its last key.
+ */
+export function changedFields(before: unknown, after: unknown): string[] {
+  const a = new Map<string, string>();
+  const b = new Map<string, string>();
+  leaves(before, "", a);
+  leaves(after, "", b);
+  const names = new Set<string>();
+  for (const path of new Set([...a.keys(), ...b.keys()])) {
+    if (a.get(path) !== b.get(path)) names.add(path.split(".").at(-1) || path);
+  }
+  return [...names].filter(Boolean);
+}

@@ -1,4 +1,4 @@
-"""A real in-process daemon for the secret boundary's tests (spec credentials).
+"""A real in-process daemon for the secret boundary's tests (spec secret).
 
 The whole app over a throwaway ``HOME`` and database, the keyring swapped for
 the shared in-memory backend, and helpers that stand in for the desktop app:
@@ -62,7 +62,11 @@ class BoundaryDaemon:
     # --- convenience ---------------------------------------------------------
 
     def store(self, ref: str, value: str) -> None:
+        """Store a value; a new standalone secret is approved as the app would."""
         r = self.client.post("/api/v1/credentials", json={"ref": ref, "value": value})
+        if r.status_code == 202 and r.json()["approval"]["op"] == "add_secret":
+            self.approve(r.json()["approval"]["id"])
+            return
         assert r.status_code == 204, r.text
 
     def value(self, ref: str) -> str | None:

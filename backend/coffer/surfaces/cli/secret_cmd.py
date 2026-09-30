@@ -1,4 +1,4 @@
-"""coffer credentials — manage encrypted credentials (via the daemon).
+"""coffer secret — manage encrypted secrets (via the daemon).
 
 Secrets are Fernet-encrypted into coffer's database; the master key lives in a
 signed release's Keychain access group (in a development build, in
@@ -6,16 +6,16 @@ signed release's Keychain access group (in a development build, in
 through the daemon's HTTP API; secrets never appear in logs / audit /
 structured events.
 
-No command prints a secret's value (spec credentials "Return no plaintext on
+No command prints a secret's value (spec secret "Return no plaintext on
 any route, command or tool"): revealing one takes a present human in the
 Coffer desktop app. Writing one stays open — a caller that supplies a value
 already has it — except that replacing a value something already receives
 waits for approval in the app.
 
-The daemon is the sole credential owner (creator = reader → silent
+The daemon is the sole secret owner (creator = reader → silent
 reads within an app version). The CLI here imports no credential/keyring code.
 Where the master key lives is a setting: ``coffer config get|set
-credentials.storage``.
+secrets.storage``.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._approvals import WAIT_OPTION, settle
 from coffer.surfaces.cli._options import ExitCode
 
-app = typer.Typer(help="Manage encrypted credentials.")
+app = typer.Typer(help="Manage encrypted secrets.")
 _console = Console()
 
 
@@ -48,7 +48,7 @@ def _read_value(value: str | None) -> str:
 @app.command("set")
 def set_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Credential reference key"),
+    ref: str = typer.Argument(..., help="Secret reference key"),
     value: str | None = typer.Option(
         None,
         "--value",
@@ -59,14 +59,14 @@ def set_secret(
     ),
     wait: bool = WAIT_OPTION,
 ) -> None:
-    """Store a secret in the encrypted credential store (via the daemon).
+    """Store a secret in the encrypted secret store (via the daemon).
 
     Without --value the secret is read from stdin, or prompted for. --value
     still stores, but warns that the value lands in your shell history; the
     value itself is never echoed.
 
     \f
-    Spec credentials "Read a secret on the command line without shell history".
+    Spec secret "Read a secret on the command line without shell history".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     if value is not None:
@@ -85,7 +85,7 @@ def set_secret(
         _cli_client.check(r, verbose=verbose)
         if r.status_code == 202:
             # The value replaces one an approved destination receives: it waits,
-            # sealed, for the Coffer app (spec credentials "Hold a replaced
+            # sealed, for the Coffer app (spec secret "Hold a replaced
             # value in use until a person approves it").
             settle(c, [r.json()["approval"]], wait=wait, verbose=verbose)
     typer.echo(f"stored: {ref}")
@@ -94,7 +94,7 @@ def set_secret(
 @app.command("get")
 def get_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Credential reference key"),
+    ref: str = typer.Argument(..., help="Secret reference key"),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Check that a secret is stored, without its value.
@@ -104,7 +104,7 @@ def get_secret(
     it asks for Touch ID or your password each time.
 
     \f
-    Spec credentials "Check a secret's presence on the command line".
+    Spec secret "Check a secret's presence on the command line".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
@@ -149,9 +149,9 @@ def list_refs(
         typer.echo(_json.dumps({"refs": refs}))
         return
     if not refs:
-        typer.echo("(no credential refs registered in any resource)")
+        typer.echo("(no secret refs registered in any resource)")
         return
-    table = Table(title="Credentials")
+    table = Table(title="Secrets")
     table.add_column("Ref")
     table.add_column("Present in store")
     table.add_column("Used by")
@@ -175,17 +175,17 @@ def list_refs(
 @app.command("rm")
 def delete_secret(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Credential reference key"),
+    ref: str = typer.Argument(..., help="Secret reference key"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
 ) -> None:
-    """Delete a secret from the encrypted credential store (via the daemon).
+    """Delete a secret from the encrypted secret store (via the daemon).
 
     Asks first unless --force is given.
 
     \f
-    Spec credentials "Confirm a command-line delete unless forced".
+    Spec secret "Confirm a command-line delete unless forced".
     """
-    if not force and not typer.confirm(f"Delete credential {ref!r}?"):
+    if not force and not typer.confirm(f"Delete secret {ref!r}?"):
         raise typer.Exit(int(ExitCode.GENERIC))
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
@@ -230,7 +230,7 @@ def list_approvals(
 @app.command("reject")
 def reject_approval(
     ctx: typer.Context,
-    approval_id: str = typer.Argument(..., help="Approval id (see `coffer credentials approvals`)"),
+    approval_id: str = typer.Argument(..., help="Approval id (see `coffer secret approvals`)"),
 ) -> None:
     """Refuse a pending approval. Refusing needs no presence check."""
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -249,7 +249,7 @@ def scan_plaintext(
     """Find plaintext secrets in ~/.coffer/secrets/ and in your skills.
 
     Prints where each one is and the name it would get — never the value.
-    Move them into the encrypted store with `coffer credentials import`.
+    Move them into the encrypted store with `coffer secret import`.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()

@@ -11,7 +11,7 @@ available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `m
 `secret_value`, `description`), over the CLI
 (`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>]`)
 and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
---base-url <url> [--secret <value> | --credential-ref <ref> | --local]` takes no model; `--local`
+--base-url <url> [--secret <value> | --secret-ref <ref> | --local]` takes no model; `--local`
 creates a local runtime connection (see "Configure a local model connection"). No command or route
 returns a provider's key: the agents reach a connection through the local model proxy, which injects
 the key itself (see "Reach API-key and local connections through the local model proxy"). Reverting is

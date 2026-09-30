@@ -19,7 +19,7 @@ Every management API error has the same body, and every error response carries a
 {
   "error": {
     "code": "CREDENTIAL_MISSING",
-    "message": "credential not found in the credential store: mcp/jira/token",
+    "message": "secret not found in the secret store: mcp/jira/token",
     "details": {}
   }
 }
@@ -63,29 +63,31 @@ give the status each code is actually sent with.
 | `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation run is already going for this collection. | Wait for the running run to finish; `coffer daemon status` and the UI show it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer config list retention.`. |
 
-## Credentials
+## Secrets
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `CREDENTIAL_MISSING` | 400 | No secret is stored under the referenced credential ref. | Store it: `coffer credentials set <ref>`, or re-enter it in the resource's form. |
-| `CREDENTIAL_IN_USE` | 409 | The credential cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
+| `CREDENTIAL_MISSING` | 400 | No secret is stored under the referenced secret ref. | Store it: `coffer secret set <ref>`, or re-enter it in the resource's form. |
+| `CREDENTIAL_IN_USE` | 409 | The secret cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
 | `CREDENTIAL_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
-| `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Credentials](/guides/credentials). |
-| `MASTER_KEY_MISSING` | 503 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
-| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key. | Point the import at the key backup the desktop app wrote. |
-| `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer credentials reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Secret store](/guides/secret-store). |
+| `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
+| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key, or a `.cfk` backup's fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
+| `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
+| `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
+| `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer secret reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `APPROVAL_PENDING` | 202 | The change was saved as a pending approval instead of being applied: a replaced value that is in use, or switching the protection off. | Approve it in the Coffer desktop app. |
-| `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer credentials approvals --all`. |
+| `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer secret approvals --all`. |
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
 | `SECRET_NAME_INVALID` | 422 | A standalone secret name is not one segment of `[A-Za-z0-9_.-]` of at most 64 characters. | Pick a valid name, such as `orders-db`. |
-| `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<name>` values can be resolved this way; a resource's secret never can. | Store it: `coffer credentials set secret/<name>`. |
+| `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<name>` values can be resolved this way; a resource's secret never can. | Store it: `coffer secret set secret/<name>`. |
 
 ## MCP servers and the gateway
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `UPSTREAM_UNAVAILABLE` | 503 | The upstream MCP server could not be reached, is disabled, or does not support the method. | Run `coffer mcp test <name>`; check the server's command or URL and its credentials. |
+| `UPSTREAM_UNAVAILABLE` | 503 | The upstream MCP server could not be reached, is disabled, or does not support the method. | Run `coffer mcp test <name>`; check the server's command or URL and its secrets. |
 | `UPSTREAM_TIMEOUT` | 504 | The upstream MCP server did not answer in time. | Check the server; retry. |
 | `TOOL_DISABLED` | 403 | The tool, resource or prompt is switched off on its server, the server is outside the calling agent's reach, or the name is not recognised. | Enable it with `coffer mcp cap enable <server> tool:<name>`, or widen the server's reach. |
 | `INVALID_PREFIX` | 400 | A name is not in Coffer's namespaced form (`<server>__<tool>`, `coffer://<server>/<uri>`). | Use the name exactly as `tools/list` or `coffer__search_tools` returned it. See [MCP tools](/reference/mcp-tools#upstream-names). |
@@ -130,7 +132,7 @@ give the status each code is actually sent with.
 | `MCP_ENTRY_NOT_FOUND` | 404 | No MCP entry with that name exists in the agent's config files. | Refresh the agent's MCP list. |
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
-| `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no credential mapping. | Map each listed key to a credential ref when adopting. |
+| `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |
 | `PLUGIN_NOT_FOUND` | 404 | No installed plugin has that identifier. | Refresh the plugin list. |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | This agent type's plugins cannot be enabled or disabled through Coffer. | Use the agent's own tooling. |
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | This agent type's plugins must be uninstalled with the agent's own tooling. | Use the agent's own tooling. |
@@ -201,7 +203,7 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a credential ref. | Pass `--secret` or `--credential-ref`, not both. |
+| `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while it is switched on. | Run `coffer provider builtin <wire>`, edit, then switch again. |
 | `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer config set engine.provider <name>`. |
@@ -237,7 +239,7 @@ These are raised while the daemon starts, before it serves requests. They appear
 | Code | Meaning | Typical fix |
 | --- | --- | --- |
 | `DB_SCHEMA_TOO_NEW` | `~/.coffer/coffer.db` was migrated by a newer or different Coffer build. Mapped to HTTP 409 if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
-| `MASTER_KEY_MISSING` | See [Credentials](#credentials). | |
+| `MASTER_KEY_MISSING` | See [Secrets](#secrets). | |
 
 ## Chat turn errors
 
@@ -282,7 +284,7 @@ mapped by status.
 | `5` | Conflict | The daemon answered `409`. |
 | `6` | Invalid input | The daemon answered `400` or `422`. |
 | `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
-| `8` | Credential issue | The error code was `CREDENTIAL_MISSING` or `CREDENTIAL_LOCKED`. |
+| `8` | Secret issue | The error code was `CREDENTIAL_MISSING` or `CREDENTIAL_LOCKED`. |
 | `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`, or a `202` naming a pending approval). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, or rerun with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.

@@ -131,7 +131,7 @@ fn a_spawned_daemon_leaves_the_apps_process_group() { /* ... */ }
 `make verify-acceptance` runs two checks. First, `openspec validate --all --strict` fails any requirement without a scenario. Then `scripts/audit_acceptance.py` fails on:
 
 - a scenario with no covering marker
-- a marker naming a capability or scenario that does not exist
+- a marker naming a capability or scenario that does not exist (a scenario that a change in progress adds counts as existing, and is listed, until that change is archived)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
 

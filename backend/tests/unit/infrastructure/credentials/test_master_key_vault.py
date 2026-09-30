@@ -1,4 +1,4 @@
-"""The master key in a signed build's Keychain access group (spec credentials
+"""The master key in a signed build's Keychain access group (spec secret
 "Keep the master key behind a storage port chosen by the build").
 
 The access-group backend is exercised through an injected ``SecItemApi`` fake:
@@ -75,7 +75,7 @@ class _FakeSecItem:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a signed build moves a file key into its access group"
+    spec="secret", scenario="a signed build moves a file key into its access group"
 )
 def test_a_signed_build_moves_the_file_key_into_the_vault(tmp_path: pathlib.Path) -> None:
     key_path = tmp_path / "master.key"
@@ -137,9 +137,7 @@ def test_an_import_keeps_the_replaced_key_in_a_second_item(tmp_path: pathlib.Pat
     assert not (tmp_path / "m.key").exists()
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="the access-group item carries no presence flag"
-)
+@pytest.mark.acceptance(spec="secret", scenario="the access-group item carries no presence flag")
 def test_the_access_group_item_is_data_protection_without_access_control() -> None:
     api = _FakeSecItem()
     backend = KeychainAccessGroupBackend("TEAMID.coffer", api)

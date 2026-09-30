@@ -1,4 +1,4 @@
-"""Integration tests for `coffer credentials ...` subcommands.
+"""Integration tests for `coffer secret ...` subcommands.
 
 Every credentials subcommand goes through the daemon HTTP API — the
 CLI never touches credential storage in-process. These tests drive the CLI
@@ -125,11 +125,11 @@ def daemon(monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="the command line stores a secret without it reaching shell history",
 )
 def test_set_writes_through_daemon(daemon):
-    result = runner.invoke(app, ["credentials", "set", "my_token", "--value", "supersecret"])
+    result = runner.invoke(app, ["secret", "set", "my_token", "--value", "supersecret"])
     assert result.exit_code == 0, result.output
     assert "stored: my_token" in result.stdout
     # The secret was created by the daemon, not the CLI process.
@@ -143,11 +143,11 @@ def test_set_writes_through_daemon(daemon):
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="the command line stores a secret without it reaching shell history",
 )
 def test_set_from_stdin_stores_without_warning(daemon):
-    result = runner.invoke(app, ["credentials", "set", "piped_token"], input="pipedsecret\n")
+    result = runner.invoke(app, ["secret", "set", "piped_token"], input="pipedsecret\n")
     assert result.exit_code == 0, result.output
     assert daemon.store["piped_token"] == "pipedsecret"
     assert "stored: piped_token" in result.stdout
@@ -156,36 +156,36 @@ def test_set_from_stdin_stores_without_warning(daemon):
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="the command line confirms presence and has no way to print a value",
 )
 def test_get_has_no_show_flag(daemon):
     daemon.store["my_token"] = "supersecret"
-    result = runner.invoke(app, ["credentials", "get", "my_token", "--show"])
+    result = runner.invoke(app, ["secret", "get", "my_token", "--show"])
     assert result.exit_code == 2, result.output
     assert "supersecret" not in result.output
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="the command line confirms presence and has no way to print a value",
 )
 def test_get_without_show_redacts(daemon):
     daemon.store["tok"] = "s3cr3t"
-    result = runner.invoke(app, ["credentials", "get", "tok"])
+    result = runner.invoke(app, ["secret", "get", "tok"])
     assert result.exit_code == 0
     assert "[redacted]" in result.output
     assert "s3cr3t" not in result.output
 
 
 def test_get_missing_exits_4(daemon):
-    result = runner.invoke(app, ["credentials", "get", "no_such_ref"])
+    result = runner.invoke(app, ["secret", "get", "no_such_ref"])
     assert result.exit_code == 4
 
 
 def test_get_json(daemon):
     daemon.store["k"] = "v"
-    result = runner.invoke(app, ["credentials", "get", "k", "--json"])
+    result = runner.invoke(app, ["secret", "get", "k", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["ref"] == "k"
@@ -199,7 +199,7 @@ def test_get_json(daemon):
 
 def test_rm_force_removes_through_daemon(daemon):
     daemon.store["to_del"] = "x"
-    result = runner.invoke(app, ["credentials", "rm", "to_del", "--force"])
+    result = runner.invoke(app, ["secret", "rm", "to_del", "--force"])
     assert result.exit_code == 0
     assert "deleted: to_del" in result.output
     assert "to_del" not in daemon.store
@@ -207,22 +207,26 @@ def test_rm_force_removes_through_daemon(daemon):
 
 def test_rm_prompts_for_confirmation(daemon):
     daemon.store["protected"] = "val"
-    result = runner.invoke(app, ["credentials", "rm", "protected"], input="n\n")
+    result = runner.invoke(app, ["secret", "rm", "protected"], input="n\n")
     assert result.exit_code != 0
     # Declined → still stored.
     assert daemon.store["protected"] == "val"
 
-    accepted = runner.invoke(app, ["credentials", "rm", "protected"], input="y\n")
+    accepted = runner.invoke(app, ["secret", "rm", "protected"], input="y\n")
     assert accepted.exit_code == 0, accepted.output
     assert "protected" not in daemon.store
 
 
 def test_removed_credentials_commands_are_gone(daemon):
-    """`delete` is `rm`; the master key's location is `coffer config`'s
-    `credentials.storage` key."""
-    for gone in ("delete", "storage"):
-        r = runner.invoke(app, ["credentials", gone, "--help"])
-        assert r.exit_code != 0, gone
+    """The group is `coffer secret`, with no `credentials` alias; `delete` is
+    `rm`; the master key's location is `coffer config`'s `secrets.storage` key."""
+    for argv in (
+        ["credentials", "--help"],
+        ["secret", "delete", "--help"],
+        ["secret", "storage", "--help"],
+    ):
+        r = runner.invoke(app, argv)
+        assert r.exit_code != 0, argv
         assert "No such command" in r.output
 
 
@@ -232,7 +236,7 @@ def test_removed_credentials_commands_are_gone(daemon):
 
 
 def test_set_empty_value_exits_6(daemon):
-    result = runner.invoke(app, ["credentials", "set", "bad_ref", "--value", ""])
+    result = runner.invoke(app, ["secret", "set", "bad_ref", "--value", ""])
     assert result.exit_code == 6
     assert "bad_ref" not in daemon.store
 
@@ -243,7 +247,7 @@ def test_set_empty_value_exits_6(daemon):
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the command line lists every cited ref with its presence"
+    spec="secret", scenario="the command line lists every cited ref with its presence"
 )
 def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
     """Refs cited by any kind are listed — an MCP server's stored ref shows as
@@ -257,7 +261,7 @@ def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
     )
     _use_daemon(monkeypatch, d)
 
-    result = runner.invoke(app, ["credentials", "list"])
+    result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code == 0, result.output
     lines = {line.split()[1]: line for line in result.output.splitlines() if "│" in line}
     assert "yes" in lines["gh_pat"]
@@ -276,7 +280,7 @@ def test_list_json_carries_presence(monkeypatch):
     )
     _use_daemon(monkeypatch, d)
 
-    result = runner.invoke(app, ["credentials", "list", "--json"])
+    result = runner.invoke(app, ["secret", "list", "--json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert [(r["ref"], r["present"]) for r in data["refs"]] == [
@@ -294,7 +298,7 @@ def test_list_daemon_spawn_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: None)
     monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
 
-    result = runner.invoke(app, ["credentials", "list"])
+    result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code == 0
     combined = result.output + (result.stderr or "")
     assert "daemon" in combined.lower() or "no known" in combined.lower()
@@ -321,6 +325,6 @@ def test_credentials_list_5xx_renders_message_exits_nonzero(monkeypatch):
         version=1, pid=99, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
     )
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_HttpErrorClient(), info))
-    result = runner.invoke(app, ["credentials", "list"])
+    result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code != 0
     assert "Traceback" not in (result.output or "")

@@ -117,7 +117,9 @@ The system SHALL <behaviour>.
 Tests cover each scenario through the `acceptance(spec, scenario)` marker — see
 [testing.md](./testing.md) "Acceptance Scenarios — Cross-Tier Markers".
 `scripts/audit_acceptance.py` fails a scenario no test covers, a marker naming
-a scenario that does not exist, and a scenario name used twice in one spec.
+a scenario that does not exist, and a scenario name used twice in one spec. A
+marker naming a scenario an in-flight change adds is accepted and listed until
+that change is archived.
 
 ## Keep the Docs in Sync With the Code
 
@@ -148,7 +150,7 @@ nothing about **whose spec** a mechanism is:
 | Mechanism | Where it lives | Whose spec |
 |---|---|---|
 | Audit log | `domain/audit.py`, `application/audit_service.py` | `resource-framework` |
-| Credentials | `application/credentials/`, `infrastructure/credentials/` | `credentials` |
+| Secrets | `application/credentials/`, `infrastructure/credentials/` | `secret` |
 | Storage | `infrastructure/persistence/` (SQLAlchemy + Alembic; the only data-access path) | — (the startup migration run is `daemon`'s) |
 | Resource framework (kinds, scope, delete) | `domain/resource.py`, `domain/scope.py`, `application/resource_service.py` + `resource_scope_ops.py` / `resource_delete_ops.py` | `resource-framework` |
 | Retention | `domain/retention.py`, `application/retention_registry.py` / `retention_service.py` / `retention_worker.py` | `resource-framework` |

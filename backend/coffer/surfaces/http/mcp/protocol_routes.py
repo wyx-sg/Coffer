@@ -215,7 +215,7 @@ async def handle_post(
             # non-CofferError exceptions (CofferError is handled above), so the
             # class name alone is the safe summary; the full detail is logged
             # server-side via ``_logger.exception``. Mirrors the invocation-log
-            # rule in ``gateway_handlers._safe_error_summary`` (spec credentials
+            # rule in ``gateway_handlers._safe_error_summary`` (spec secret
             # "Hold plaintext only in memory at the moment of use").
             _logger.exception("mcp.post.unexpected", extra={"method": method})
             response = _error_response(

@@ -12,6 +12,12 @@ import { UsagePage } from "./UsagePage";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 vi.mock("@/lib/activity/export", () => ({ saveFile: vi.fn() }));
+// The providers an agent may run on: an active one that reaches an agent type
+// puts that agent on an API key.
+const providerList = vi.hoisted(() => ({ current: [] as Array<Record<string, unknown>> }));
+vi.mock("@/lib/hooks/useProviders", () => ({
+  useProviders: () => ({ data: providerList.current }),
+}));
 
 const { getApiClient } = await import("@/lib/api/client");
 const { saveFile } = await import("@/lib/activity/export");
@@ -60,6 +66,7 @@ const row = (key: string, t: UsageTotals, extra: Partial<UsageSummary["rows"][nu
   agent_type: null,
   agent_uid: null,
   day: null,
+  agent_types: [],
   totals: t,
   ...extra,
 });
@@ -87,7 +94,11 @@ const ALL = totals({
 const BY_MODEL = summary(
   "model",
   [
-    row("m1", SONNET, { model: "claude-sonnet-4-5", connection_name: "Anthropic API" }),
+    row("m1", SONNET, {
+      model: "claude-sonnet-4-5",
+      connection_name: "Anthropic API",
+      agent_types: ["claude_code"],
+    }),
     row("m2", ACME, { model: "acme-coder-large", connection_name: "Acme AI gateway" }),
   ],
   ALL,
@@ -134,6 +145,8 @@ const NO_QUOTA: AgentQuota[] = [
 
 interface Setup {
   empty?: boolean;
+  /** With `empty`: usage exists outside the range (the year the page asks about for first run). */
+  usedBefore?: boolean;
   quota?: AgentQuota[] | "fail";
   refresh?: { refreshed: boolean; reason: string | null };
 }
@@ -145,7 +158,10 @@ function install(setup: Setup = {}) {
     const q = init?.params?.query ?? {};
     switch (path) {
       case "/usage/summary": {
-        if (setup.empty) return Promise.resolve({ data: EMPTY(q.group_by) });
+        const everQuery = q.range === "custom" && q.group_by === "agent";
+        if (setup.empty && !(setup.usedBefore && everQuery)) {
+          return Promise.resolve({ data: EMPTY(q.group_by) });
+        }
         const byGroup = { model: BY_MODEL, day: BY_DAY, agent: BY_AGENT } as const;
         return Promise.resolve({ data: byGroup[q.group_by as keyof typeof byGroup] });
       }
@@ -203,7 +219,10 @@ const usageSection = () => screen.getByRole("region", { name: "API-key providers
 const summaryCalls = (get: ReturnType<typeof install>["get"]) =>
   get.mock.calls.filter(([p]) => p === "/usage/summary").map(([, init]) => init?.params?.query);
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  providerList.current = [];
+});
 
 describe("subscription quota", () => {
   test("each window is a meter with its used share and reset; 90% warns, 100% is the limit", async () => {
@@ -212,7 +231,9 @@ describe("subscription quota", () => {
     const quota = quotaSection();
     expect(await within(quota).findByText("42% used")).toBeInTheDocument();
     expect(within(quota).getByText("Claude Max login")).toBeInTheDocument();
-    expect(within(quota).getByText("ChatGPT Plus login")).toBeInTheDocument();
+    // Codex also sent requests through an API-key provider in the range.
+    expect(within(quota).getByText("ChatGPT Plus login · some requests")).toBeInTheDocument();
+    expect(within(quota).getByText("via API key")).toBeInTheDocument();
     expect(within(quota).getByRole("progressbar", { name: "Weekly" })).toHaveAttribute(
       "aria-valuenow",
       "61",
@@ -269,11 +290,49 @@ describe("subscription quota", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(await screen.findByText("Couldn't reach Codex's app-server")).toBeInTheDocument();
     expect(
-      screen.getByText(/codex app-server did not answer\. Last tried \d\d:\d\d\./),
+      screen.getByText(/codex app-server exited before answering\. Last tried \d\d:\d\d\./),
     ).toBeInTheDocument();
     fireEvent.click(within(quotaSection()).getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post).toHaveBeenCalledWith("/usage/quota/refresh");
+    expect(within(quotaSection()).getByText("No reading")).toBeInTheDocument();
+  });
+
+  test("Claude Code's row re-reads its own quota", async () => {
+    const { get, post } = install();
+    renderPage();
+    const quota = quotaSection();
+    await within(quota).findByText("42% used");
+    const before = get.mock.calls.filter(([p]) => p === "/usage/quota").length;
+    fireEvent.click(within(quota).getByRole("button", { name: "Refresh Claude Code quota" }));
+    await waitFor(() =>
+      expect(get.mock.calls.filter(([p]) => p === "/usage/quota").length).toBe(before + 1),
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("an agent on an API-key provider has no subscription quota and is metered", async () => {
+    providerList.current = [
+      {
+        uid: "p1",
+        name: "personal",
+        title: null,
+        base_url: "https://api.openai.com/v1",
+        enabled: true,
+        is_active: true,
+        local_runtime: false,
+        compatible_agents: ["codex"],
+      },
+    ];
+    install({ quota: NO_QUOTA });
+    renderPage();
+    const quota = quotaSection();
+    expect(await within(quota).findByText("API key · OpenAI")).toBeInTheDocument();
+    expect(within(quota).getByText("No subscription quota")).toBeInTheDocument();
+    expect(within(quota).getByText(/^Codex uses an API key from OpenAI here/)).toBeInTheDocument();
+    expect(within(quota).getByText("Metered")).toBeInTheDocument();
+    // Claude Code is still waiting for its first reading.
+    expect(within(quota).getByText("Waiting")).toBeInTheDocument();
   });
 
   test("a failing quota read leaves the API-key section standing", async () => {
@@ -287,37 +346,45 @@ describe("subscription quota", () => {
 });
 
 describe("API-key usage", () => {
-  acceptance("provider-switching", "a model with no price reads as a dash, never zero", async () => {
-    install();
-    renderPage();
-    const usage = usageSection();
-    expect((await within(usage).findAllByText("$25.81")).length).toBeGreaterThan(0);
-    expect(within(usage).getByText("Cost (estimated)")).toBeInTheDocument();
-    expect(within(usage).getByText("3,092 requests · 47 unpriced")).toBeInTheDocument();
-    expect(within(usage).getAllByText("6.00M").length).toBeGreaterThan(0);
-    expect(within(usage).getAllByText("1.06M").length).toBeGreaterThan(0);
-    // Cost per day: one bar per local day of the range, named in its tooltip.
-    const chart = await within(usage).findByRole("figure", { name: "Cost per day" });
-    expect(within(chart).getAllByRole("img")).toHaveLength(7);
-    expect(within(chart).getByRole("img", { name: "Thu 24 Sep · $25.81" })).toBeInTheDocument();
+  acceptance(
+    "provider-switching",
+    "a model with no price reads as a dash, never zero",
+    async () => {
+      install();
+      renderPage();
+      const usage = usageSection();
+      expect((await within(usage).findAllByText("$25.81")).length).toBeGreaterThan(0);
+      expect(within(usage).getByText("Cost (estimated)")).toBeInTheDocument();
+      expect(within(usage).getByText("3,092 requests · 47 unpriced")).toBeInTheDocument();
+      expect(within(usage).getAllByText("6.00M").length).toBeGreaterThan(0);
+      expect(within(usage).getAllByText("1.06M").length).toBeGreaterThan(0);
+      // Cost per day: one bar per local day of the range, named in its tooltip.
+      const chart = await within(usage).findByRole("figure", { name: "Cost per day" });
+      expect(within(chart).getAllByRole("img")).toHaveLength(7);
+      expect(within(chart).getByRole("img", { name: "Thu 24 Sep · $25.81" })).toBeInTheDocument();
 
-    const table = within(usage).getByRole("table");
-    const rows = within(table).getAllByRole("row");
-    expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
-    // No bundled price and none set on the connection: a dash, never $0.00,
-    // whose note says why and where a price is set.
-    expect(
-      within(rows[2]).getByLabelText(
-        "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
-      ),
-    ).toHaveTextContent(/^—$/);
-    expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
-    expect(within(rows[3]).getByText("Total · 7 days")).toBeInTheDocument();
-    expect(
-      within(usage).getByRole("link", { name: "Edit prices in Model providers" }),
-    ).toHaveAttribute("href", "/model-providers");
-  });
+      const table = within(usage).getByRole("table");
+      const rows = within(table).getAllByRole("row");
+      expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
+      expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
+      expect(within(table).getByRole("columnheader", { name: "By" })).toBeInTheDocument();
+      expect(within(rows[1]).getByLabelText("Claude Code")).toBeInTheDocument();
+      // No bundled price and none set on the connection: a dash, never $0.00,
+      // whose note says why and where a price is set.
+      expect(
+        within(rows[2]).getByLabelText(
+          "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
+        ),
+      ).toHaveTextContent(/^—$/);
+      expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
+      expect(
+        within(rows[3]).getByText("Total · 7 days · cost of priced models"),
+      ).toBeInTheDocument();
+      expect(
+        within(usage).getByRole("link", { name: "Edit prices in Model providers" }),
+      ).toHaveAttribute("href", "/model-providers");
+    },
+  );
 
   test("the range and the breakdown live in the URL and drive the summary", async () => {
     const { get } = install();
@@ -335,6 +402,85 @@ describe("API-key usage", () => {
     );
     expect(await within(usage).findByText("Codex")).toBeInTheDocument();
     expect(within(usage).getByRole("columnheader", { name: "Agent" })).toBeInTheDocument();
+    // Codex has a subscription login, so its API-key requests are tagged.
+    expect(within(usage).getByRole("columnheader", { name: "Via" })).toBeInTheDocument();
+    expect(within(usage).getByText("via API key")).toBeInTheDocument();
+  });
+
+  test("the Agent and Provider pills narrow the summary and the export", async () => {
+    providerList.current = [
+      {
+        uid: "conn-1",
+        name: "anthropic",
+        title: "Anthropic API",
+        base_url: "https://api.anthropic.com",
+        enabled: true,
+        is_active: false,
+        local_runtime: false,
+        compatible_agents: ["claude_code"],
+      },
+    ];
+    const { get } = install();
+    renderPage();
+    const usage = usageSection();
+    await within(usage).findByRole("table");
+    fireEvent.click(within(usage).getByRole("button", { name: /^Agent:/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("?agent=codex"));
+    fireEvent.click(within(usage).getByRole("button", { name: /^Provider:/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "Anthropic API" }));
+    await waitFor(() =>
+      expect(summaryCalls(get)).toContainEqual({
+        range: "7d",
+        group_by: "model",
+        agent_type: "codex",
+        connection_uid: "conn-1",
+      }),
+    );
+    fireEvent.click(within(usage).getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export CSV" }));
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith("/usage/export.csv", {
+        params: {
+          query: { range: "7d", group_by: "model", agent_type: "codex", connection_uid: "conn-1" },
+        },
+        parseAs: "text",
+      }),
+    );
+  });
+
+  test("by day lists the newest day first with its top agent, the latest week before Show all", async () => {
+    const { get } = install();
+    const days = Array.from({ length: 10 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - 9 + i);
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return row(day, totals({ requests: i + 1 }), { day, agent_types: ["codex", "claude_code"] });
+    });
+    const tenDays = summary("day", days, ALL);
+    get.mockImplementation(((
+      path: string,
+      init?: { params?: { query?: Record<string, string> } },
+    ) => {
+      const q = init?.params?.query ?? {};
+      if (path === "/usage/summary") {
+        const byGroup = { model: BY_MODEL, day: tenDays, agent: BY_AGENT } as const;
+        return Promise.resolve({ data: byGroup[q.group_by as keyof typeof byGroup] });
+      }
+      if (path === "/usage/quota") return Promise.resolve({ data: { agents: QUOTA } });
+      return Promise.resolve({ data: undefined });
+    }) as typeof get);
+    renderPage("/usage?by=day");
+    const usage = usageSection();
+    const table = await within(usage).findByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Top agent" })).toBeInTheDocument();
+    const rows = within(table).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent(/· today/);
+    expect(within(rows[1]).getByText("Codex")).toBeInTheDocument();
+    expect(within(table).getByText("3 earlier days ·")).toBeInTheDocument();
+    fireEvent.click(within(table).getByRole("button", { name: "Show all 10" }));
+    // header + 10 days + total
+    expect(within(table).getAllByRole("row")).toHaveLength(12);
   });
 
   test("a custom range opens a picker that says how far back detail is kept", async () => {
@@ -390,14 +536,20 @@ describe("first run", () => {
       "/model-providers",
     );
     expect(within(usage).queryByRole("table")).toBeNull();
+    // Nothing to narrow yet: no range, filters or export.
+    expect(within(usage).queryByRole("group", { name: "Period" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+    // Claude Code has no reading yet; its row waits.
+    expect(within(quotaSection()).getAllByText("Waiting")).toHaveLength(2);
   });
 
-  test("an empty range beside a quota reading only says the range is empty", async () => {
-    install({ empty: true });
+  test("an empty range after earlier usage only says the range is empty", async () => {
+    install({ empty: true, usedBefore: true });
     renderPage();
     expect(
       await within(usageSection()).findByText("No requests in this range"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No API-key usage yet")).toBeNull();
+    expect(within(usageSection()).getByRole("group", { name: "Period" })).toBeInTheDocument();
   });
 });

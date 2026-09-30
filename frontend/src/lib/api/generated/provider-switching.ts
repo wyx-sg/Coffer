@@ -970,6 +970,8 @@ export interface components {
         UsageSummaryRowOut: {
             /** Agent Type */
             agent_type: string | null;
+            /** Agent Types */
+            agent_types: string[];
             /** Agent Uid */
             agent_uid: string | null;
             /** Connection Name */
@@ -1716,6 +1718,10 @@ export interface operations {
                 to?: string | null;
                 /** @description model | agent | day */
                 group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -1936,6 +1942,10 @@ export interface operations {
                 to?: string | null;
                 /** @description model | agent | day */
                 group_by?: components["schemas"]["GroupBy"];
+                /** @description Only requests this agent type sent */
+                agent_type?: string | null;
+                /** @description Only requests this connection served */
+                connection_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

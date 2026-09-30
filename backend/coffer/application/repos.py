@@ -107,4 +107,10 @@ class RetentionRepo(Protocol):
         cutoff: datetime,
         now: datetime,
     ) -> int: ...
+    async def count_rows(
+        self,
+        table: str,
+        timestamp_column: str,
+        cutoff: datetime,
+    ) -> tuple[int, int]: ...
     async def exists(self, table_name: str) -> bool: ...

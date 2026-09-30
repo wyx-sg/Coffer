@@ -152,7 +152,7 @@ def wire_sync(
     # Resolved once and shared — the fingerprint, every round's locked-ref check
     # and the key export/import all read this one — so a key kept in the
     # keychain costs one prompt per daemon start, not one per round.
-    resolved_key = ResolvedMasterKey(master_key)
+    resolved_key = ResolvedMasterKey(master_key, on_install=credential_store.use_key)
     cred_sync = CredentialSyncAdapter(db_path, resolved_key)
     home = str(pathlib.Path.home())
     remotes = SqlAlchemySyncRemoteRepo(sm)

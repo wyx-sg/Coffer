@@ -1,6 +1,6 @@
 """Unit tests for gateway_handlers helpers and the ``_invoke`` pipeline.
 
-Covers a contract adjacent to spec credentials "Hold plaintext only in memory
+Covers a contract adjacent to spec secret "Hold plaintext only in memory
 at the moment of use": arbitrary upstream exception text must
 not leak into the invocation log via str(e). Coffer-internal errors (whose
 text is authored by us) are still preserved for debuggability.

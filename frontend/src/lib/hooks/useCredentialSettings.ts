@@ -14,8 +14,8 @@ export function useCredentialSettings() {
     queryFn: async (): Promise<CredentialSettingsOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/settings/credentials");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "get credential settings failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty credential settings response");
+      if (error) throwApiError(error, "INTERNAL_ERROR", "get secret settings failed");
+      if (!data) throw new ApiError("INTERNAL_ERROR", "empty secret settings response");
       return data;
     },
   });
@@ -27,8 +27,8 @@ export function useUpdateCredentialSettings() {
     mutationFn: async (body: CredentialSettingsIn): Promise<CredentialSettingsOut> => {
       const client = getApiClient();
       const { data, error } = await client.PUT("/settings/credentials", { body });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "update credential settings failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty credential settings response");
+      if (error) throwApiError(error, "INTERNAL_ERROR", "update secret settings failed");
+      if (!data) throw new ApiError("INTERNAL_ERROR", "empty secret settings response");
       return data;
     },
     onSuccess: () => {

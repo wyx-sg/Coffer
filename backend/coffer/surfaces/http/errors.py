@@ -6,6 +6,7 @@ Response shape: {error: {code, message, details}}.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -51,7 +52,7 @@ _STATUS: dict[str, int] = {
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
-    # Ciphertext exists but no key opens it (spec credentials "Refuse to start
+    # Ciphertext exists but no key opens it (spec secret "Refuse to start
     # when the master key is missing"). Same class as CREDENTIAL_LOCKED: the
     # store is unusable until the key comes back, not a bad request.
     "MASTER_KEY_MISSING": 503,
@@ -179,6 +180,8 @@ _STATUS: dict[str, int] = {
     "SYNC_BUNDLE_INVALID": 422,
     "SYNC_SERIALIZATION_INVALID": 422,
     "MASTER_KEY_FILE_INVALID": 422,
+    "MASTER_KEY_PASSPHRASE_WRONG": 422,
+    "MASTER_KEY_PASSPHRASE_TOO_SHORT": 422,
     # vault backup (spec vault-sync "Allow at most one user-owned sync remote").
     # A bad remote is the caller's configuration (422); a git invocation that
     # failed is the remote or the network refusing us, which is an upstream
@@ -316,6 +319,15 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     return out
 
 
+def _without_input(found: Sequence[Any]) -> list[dict[str, Any]]:
+    """Validation errors for the log, minus ``input``: a secret, key or passphrase."""
+    return [
+        {k: v for k, v in dict(e).items() if k not in ("input", "ctx")}
+        for e in found
+        if isinstance(e, Mapping)
+    ]
+
+
 def register(app: FastAPI) -> None:
     """Answer every failure with the envelope, and say so in the OpenAPI document."""
     openapi_document.install(app)
@@ -334,7 +346,7 @@ def register(app: FastAPI) -> None:
         # Log the structured error server-side and return a generic envelope.
         _logger.warning(
             "http.validation_error",
-            extra={"path": str(request.url.path), "errors": exc.errors()},
+            extra={"path": str(request.url.path), "errors": _without_input(exc.errors())},
         )
         body = _envelope("CONFIG_INVALID", "request validation failed")
         resp = JSONResponse(status_code=422, content=body)
@@ -350,7 +362,7 @@ def register(app: FastAPI) -> None:
         # with a raw ``{"detail": [...]}``. Same redaction rationale as above.
         _logger.warning(
             "http.request_validation_error",
-            extra={"path": str(request.url.path), "errors": exc.errors()},
+            extra={"path": str(request.url.path), "errors": _without_input(exc.errors())},
         )
         body = _envelope("CONFIG_INVALID", "request validation failed")
         resp = JSONResponse(status_code=422, content=body)

@@ -53,7 +53,7 @@ make dev
 `make dev` starts the daemon from `backend/` through its real entry point, `python -m coffer.infrastructure.daemon.entry`, with `COFFER_DEV_CORS=1`. It waits until `~/.coffer/daemon.json` exists and `GET /api/v1/daemon/status` answers, and then starts Vite on `http://localhost:5173`. A Vite plugin reads `daemon.json` and injects the daemon's port and API token into the page, so the UI is signed in without any setup. Press Ctrl-C to stop both processes. Backend changes need a restart, because the daemon runs without auto-reload.
 
 ::: danger `make dev` uses your real vault
-Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real database, knowledge, memory, skills and credentials. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 8000. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
+Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real database, knowledge, memory, skills and secrets. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 8000. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
 :::
 
 Always start the daemon through `coffer.infrastructure.daemon.entry`, never with a bare `uvicorn coffer.main:app`. The entry point allocates the port, mints the API token and writes `daemon.json`. Without it every token-gated endpoint answers `503`.

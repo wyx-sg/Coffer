@@ -4,7 +4,7 @@ The key-bearing destination of a provider connection is its **base URL**: the
 local model proxy injects the key into requests to that URL, and Coffer's own
 engine sends it there too. Pointing an existing key at a new base URL is
 sending the secret somewhere new, so it waits for approval in the desktop app
-(spec credentials "Hold a secret for a new destination until a person approves
+(spec secret "Hold a secret for a new destination until a person approves
 it"); until then the connection is no member of the proxy's state and the
 engine cannot use it. Replacing the key of a connection whose key is in use
 waits the same way ("Hold a replaced value in use until a person approves it").

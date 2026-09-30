@@ -10,7 +10,7 @@ A resolver built with a :class:`BoundaryPort` (every one the composition root
 builds) resolves nothing without a destination: it first asks the boundary
 whether each secret may go to that destination's target, and raises
 ``SecretBindingPending`` — injecting nothing — when a person has not approved
-it yet (spec credentials "Hold a secret for a new destination until a person
+it yet (spec secret "Hold a secret for a new destination until a person
 approves it").
 """
 

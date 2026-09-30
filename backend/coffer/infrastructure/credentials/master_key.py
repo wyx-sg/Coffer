@@ -95,7 +95,7 @@ class MasterKeyManager:
         never taken as "no key" when creating is allowed: the key may sit in
         it (opted in through :meth:`relocate`), and a file key created now
         would shadow it on every later start, file-first. So the lock is
-        re-raised and nothing is written (spec credentials "Resolve the master
+        re-raised and nothing is written (spec secret "Resolve the master
         key file-first and create it only for an empty store"). Without
         ``allow_create`` a locked keychain still reads as None — the caller
         then refuses on its own terms.

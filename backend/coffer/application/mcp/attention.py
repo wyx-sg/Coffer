@@ -125,7 +125,7 @@ class McpAttentionSource:
                         uid=server.uid,
                         title=server.name,
                         reason_code="mcp_missing_secret",
-                        reason=f"The credential `{ref}` it uses is not stored on this machine.",
+                        reason=f"The secret `{ref}` it uses is not stored on this machine.",
                         severity=Severity.ERROR,
                         # The credential page's own write, with the ref and no
                         # value: the person supplies the secret there.

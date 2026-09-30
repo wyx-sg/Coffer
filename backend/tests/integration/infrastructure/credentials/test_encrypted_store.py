@@ -16,7 +16,8 @@ CREATE TABLE credentials (
     ref TEXT PRIMARY KEY,
     ciphertext BLOB NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    last_used_at TEXT
 )
 """
 
@@ -80,7 +81,7 @@ def test_plaintext_not_in_db_file(db_path: pathlib.Path, store: EncryptedCredent
     assert b"super-plain-secret" not in db_path.read_bytes()
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="an unreadable ciphertext names its ref")
+@pytest.mark.acceptance(spec="secret", scenario="an unreadable ciphertext names its ref")
 def test_wrong_key_raises_credential_unreadable(db_path: pathlib.Path) -> None:
     EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key()).set("ref", "v")
     other = EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key())

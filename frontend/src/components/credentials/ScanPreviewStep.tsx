@@ -79,31 +79,67 @@ export function ScanPreviewStep({ plan, applying, onBack, onApply }: Props) {
   );
 }
 
-/** What the import did when some findings were skipped. */
-export function ScanResultStep({ result, onClose }: { result: SecretImport; onClose: () => void }) {
+interface ResultProps {
+  result: SecretImport;
+  retrying: boolean;
+  /** Move these findings again: their values are stored, their files not rewritten. */
+  onRetry: (ids: string[]) => void;
+  onClose: () => void;
+}
+
+/** What the import did when some findings were skipped: "Moved 2 of 3 keys". */
+export function ScanResultStep({ result, retrying, onRetry, onClose }: ResultProps) {
   const { t } = useTranslation();
+  const total = result.moved.length + result.skipped.length;
+  const unwritten = result.skipped.filter((s) => s.stored);
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("secrets.scan.resultTitle", { count: result.moved.length })}</DialogTitle>
+        <DialogTitle>
+          {t("secrets.scan.resultTitle", { moved: result.moved.length, count: total })}
+        </DialogTitle>
         <DialogDescription>
-          {t("secrets.scan.skippedSummary", { count: result.skipped.length })}
+          {unwritten.length > 0
+            ? t("secrets.scan.unwrittenSummary", {
+                path: shortPath(unwritten[0].path),
+                name: unwritten[0].name ?? "",
+                reason: unwritten[0].reason,
+              })
+            : t("secrets.scan.skippedSummary", { count: result.skipped.length })}
         </DialogDescription>
       </DialogHeader>
       <ul className="divide-y divide-border-subtle rounded-md border border-border-subtle">
+        {result.moved.map((m) => (
+          <li key={m.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+            <StatusWord tone="ok">{m.name}</StatusWord>
+            <span className="min-w-0 flex-1 truncate text-text-muted" title={m.path}>
+              {shortPath(m.path)}
+            </span>
+          </li>
+        ))}
         {result.skipped.map((s) => (
           <li key={s.id} className="space-y-0.5 px-3 py-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate font-mono text-text" title={s.path}>
-                {shortPath(s.path)}
+              <StatusWord tone="err">{s.name ?? t("secrets.scan.skipped")}</StatusWord>
+              <span className="min-w-0 flex-1 truncate text-text-muted" title={s.path}>
+                {shortPath(s.path)} · {t("secrets.scan.notChanged")}
               </span>
-              <StatusWord tone="warn">{t("secrets.scan.skipped")}</StatusWord>
             </div>
             <p className="text-text-muted">{s.reason}</p>
           </li>
         ))}
       </ul>
-      <DialogFooter>
+      <DialogFooter className="items-center">
+        <span className="mr-auto text-xs text-text-muted">{t("secrets.scan.inActivity")}</span>
+        {unwritten.length > 0 ? (
+          <Button
+            variant="outline"
+            disabled={retrying}
+            onClick={() => onRetry(unwritten.map((s) => s.id))}
+          >
+            {t("secrets.scan.tryAgain")}
+          </Button>
+        ) : null}
         <Button onClick={onClose}>{t("common.done")}</Button>
       </DialogFooter>
     </>

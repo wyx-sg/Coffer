@@ -43,8 +43,8 @@ app = typer.Typer(help="Manage MCP servers and their capabilities")
 
 
 def _parse_credentials(creds: list[str]) -> dict[str, str]:
-    """Parse `--credential KEY=VALUE` repeatable into a dict."""
-    return parse_pairs("--credential", creds, "CREDENTIAL_REF")
+    """Parse `--secret KEY=VALUE` repeatable into a dict."""
+    return parse_pairs("--secret", creds, "SECRET_REF")
 
 
 @app.command("add")
@@ -58,14 +58,14 @@ def add(
     ),
     http: str | None = typer.Option(None, "--http", help="HTTP MCP server URL"),
     credential: list[str] = typer.Option(  # noqa: B008
-        [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
+        [], "--secret", help="ENV_OR_HEADER=SECRET_REF (repeatable)"
     ),
     description: str | None = typer.Option(None, "--description"),
     wait: bool = WAIT_OPTION,
 ) -> None:
     """Register a new MCP server (stdio OR http; pick one).
 
-    A --credential citing a secret that already goes somewhere else waits for
+    A --secret citing a secret that already goes somewhere else waits for
     approval in the Coffer app before the server receives it; the command says
     so and exits 9, or waits with --wait.
     """
@@ -139,7 +139,7 @@ register_kind_verbs(
             "show": "Show one MCP server, by name or uid.",
             "edit": (
                 "Change an MCP server's description, transport, env, headers,"
-                " credential refs or timeouts (its name is fixed). Only the options"
+                " secret refs or timeouts (its name is fixed). Only the options"
                 " given change."
             ),
             "rm": "Remove an MCP server registration.",

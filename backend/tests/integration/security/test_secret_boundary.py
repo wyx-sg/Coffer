@@ -1,4 +1,4 @@
-"""The secret boundary against a real in-process daemon (spec credentials,
+"""The secret boundary against a real in-process daemon (spec secret,
 mcp-gateway, vault-sync).
 
 Only a present human sees a secret's plaintext or sends it somewhere new. The
@@ -17,6 +17,7 @@ import pytest
 from typer.testing import CliRunner
 
 from coffer.domain.credential_errors import SecretBindingPending
+from coffer.infrastructure.credentials import key_backup
 from coffer.surfaces.cli import _approvals
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
@@ -59,14 +60,14 @@ def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
 # --- no plaintext out -----------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="no route or command hands out a stored value")
+@pytest.mark.acceptance(spec="secret", scenario="no route or command hands out a stored value")
 def test_no_route_or_command_hands_out_a_stored_value(cli: BoundaryDaemon) -> None:
     d = cli
     d.store("gh/token", "ghp_never_printed_42")
 
     read = d.client.get("/api/v1/credentials/gh/token")
     export = d.client.post("/api/v1/sync/key/export", json={})
-    shown = _runner.invoke(cli_app, ["credentials", "get", "gh/token", "--show"])
+    shown = _runner.invoke(cli_app, ["secret", "get", "gh/token", "--show"])
     exported = _runner.invoke(cli_app, ["sync", "key", "export", str(d.home / "k")])
 
     assert read.status_code in (404, 405)
@@ -79,7 +80,7 @@ def test_no_route_or_command_hands_out_a_stored_value(cli: BoundaryDaemon) -> No
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a reveal with a valid grant returns the value once"
+    spec="secret", scenario="a reveal with a valid grant returns the value once"
 )
 def test_a_reveal_with_a_valid_grant_returns_the_value_once(daemon: BoundaryDaemon) -> None:
     d = daemon
@@ -97,9 +98,7 @@ def test_a_reveal_with_a_valid_grant_returns_the_value_once(daemon: BoundaryDaem
     assert "ghp_reveal_me_42" not in json.dumps(entries)
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="a grant for one operation authorises nothing else"
-)
+@pytest.mark.acceptance(spec="secret", scenario="a grant for one operation authorises nothing else")
 def test_a_grant_for_one_operation_authorises_nothing_else(daemon: BoundaryDaemon) -> None:
     d = daemon
     d.store("gh/token", "ghp_one")
@@ -126,7 +125,7 @@ def test_a_grant_for_one_operation_authorises_nothing_else(daemon: BoundaryDaemo
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the master key backup is written only against a grant"
+    spec="secret", scenario="the master key backup is written only against a grant"
 )
 def test_the_master_key_backup_is_written_only_against_a_grant(
     daemon: BoundaryDaemon, tmp_path: pathlib.Path
@@ -134,30 +133,82 @@ def test_the_master_key_backup_is_written_only_against_a_grant(
     d = daemon
     target = tmp_path / "picked"
     target.mkdir()
+    passphrase = "correct horse battery"
     refused = d.client.post(
         "/api/v1/credentials/presence/master-key-export",
-        json={"directory": str(target), "nonce": "x" * 16, "signature": "0" * 64},
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            "nonce": "x" * 16,
+            "signature": "0" * 64,
+        },
     )
     assert refused.status_code == 403 and list(target.iterdir()) == []
 
     r = d.client.post(
         "/api/v1/credentials/presence/master-key-export",
-        json={"directory": str(target), **d.grant("export_master_key", str(target))},
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            **d.grant("export_master_key", str(target)),
+        },
     )
 
     assert r.status_code == 200, r.text
     written = pathlib.Path(r.json()["path"])
-    assert written.parent == target and (written.stat().st_mode & 0o777) == 0o600
+    assert written == target / "coffer-master-key.cfk"
+    assert (written.stat().st_mode & 0o777) == 0o600
     key = _master_key()
-    assert written.read_text().strip() == key and key not in r.text
-    assert len(d.audit("master_key_exported")) == 1
+    text = written.read_text()
+    # The file holds the key only under the passphrase; the answer holds neither.
+    assert key not in text and key not in r.text and passphrase not in r.text
+    assert key_backup.unwrap(text, passphrase).decode() == key
+    assert r.json()["fingerprint"] == json.loads(text)["fingerprint"]
+    exported = d.audit("master_key_exported")
+    assert len(exported) == 1 and passphrase not in json.dumps(exported)
+
+    again = d.client.post(
+        "/api/v1/credentials/presence/master-key-export",
+        json={
+            "directory": str(target),
+            "passphrase": passphrase,
+            **d.grant("export_master_key", str(target)),
+        },
+    )
+    assert again.status_code == 200
+    assert pathlib.Path(again.json()["path"]).name == "coffer-master-key-2.cfk"
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a short backup passphrase is refused first")
+def test_a_short_backup_passphrase_is_refused_before_the_grant_is_spent(
+    daemon: BoundaryDaemon, tmp_path: pathlib.Path
+) -> None:
+    d = daemon
+    target = tmp_path / "picked"
+    target.mkdir()
+    grant = d.grant("export_master_key", str(target))
+
+    short = d.client.post(
+        "/api/v1/credentials/presence/master-key-export",
+        json={"directory": str(target), "passphrase": "short", **grant},
+    )
+
+    assert short.status_code == 422
+    assert short.json()["error"]["code"] == "MASTER_KEY_PASSPHRASE_TOO_SHORT"
+    assert list(target.iterdir()) == []
+    # The grant was not spent on the refusal: the same one still exports.
+    r = d.client.post(
+        "/api/v1/credentials/presence/master-key-export",
+        json={"directory": str(target), "passphrase": "long enough now", **grant},
+    )
+    assert r.status_code == 200, r.text
 
 
 # --- new destinations -------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="citing an existing secret from a new MCP server waits for approval",
 )
 def test_citing_an_existing_secret_from_a_new_server_waits(daemon: BoundaryDaemon) -> None:
@@ -206,7 +257,7 @@ def test_the_test_route_spawns_nothing_until_approved(
     assert spawned == [{"TOKEN": "ghp_boundary_value_1"}]
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="changing where a secret goes asks again")
+@pytest.mark.acceptance(spec="secret", scenario="changing where a secret goes asks again")
 def test_changing_where_a_secret_goes_asks_again(daemon: BoundaryDaemon) -> None:
     d = daemon
     first, _second = _two_servers(d)
@@ -227,7 +278,7 @@ def test_changing_where_a_secret_goes_asks_again(daemon: BoundaryDaemon) -> None
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a value supplied for its destination needs no approval"
+    spec="secret", scenario="a value supplied for its destination needs no approval"
 )
 def test_a_value_supplied_for_a_new_server_needs_no_approval(daemon: BoundaryDaemon) -> None:
     d = daemon
@@ -269,7 +320,7 @@ def test_a_stdio_server_with_a_secret_is_marked(daemon: BoundaryDaemon) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the command line reports a pending approval and exits 9"
+    spec="secret", scenario="the command line reports a pending approval and exits 9"
 )
 def test_the_command_line_reports_a_pending_approval_and_exits_9(cli: BoundaryDaemon) -> None:
     d = cli
@@ -278,20 +329,20 @@ def test_the_command_line_reports_a_pending_approval_and_exits_9(cli: BoundaryDa
     d.pending()
 
     added = _runner.invoke(
-        cli_app, ["mcp", "add", "second", "--stdio", "evil.sh", "--credential", "TOKEN=gh/token"]
+        cli_app, ["mcp", "add", "second", "--stdio", "evil.sh", "--secret", "TOKEN=gh/token"]
     )
 
     assert added.exit_code == 9, added.output
     assert "registered: mcp_server second" in added.output
     assert "waiting for approval in the Coffer app" in added.output
-    listed = _runner.invoke(cli_app, ["credentials", "approvals", "--json"])
+    listed = _runner.invoke(cli_app, ["secret", "approvals", "--json"])
     assert listed.exit_code == 0
     [row] = json.loads(listed.output)["approvals"]
     assert row["destination_label"] == "second" and row["id"] in added.output
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the command line waits for the approval with --wait"
+    spec="secret", scenario="the command line waits for the approval with --wait"
 )
 def test_the_command_line_waits_for_the_approval(
     cli: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
@@ -308,7 +359,7 @@ def test_the_command_line_waits_for_the_approval(
     monkeypatch.setattr(_approvals.time, "sleep", the_person_approves)
     added = _runner.invoke(
         cli_app,
-        ["mcp", "add", "second", "--stdio", "b.sh", "--credential", "TOKEN=gh/token", "--wait"],
+        ["mcp", "add", "second", "--stdio", "b.sh", "--secret", "TOKEN=gh/token", "--wait"],
     )
 
     assert added.exit_code == 0, added.output
@@ -319,7 +370,7 @@ def test_rejecting_needs_no_presence(cli: BoundaryDaemon) -> None:
     d = cli
     _first, second = _two_servers(d)
     [waiting] = d.pending(destination_uid=second["uid"])
-    r = _runner.invoke(cli_app, ["credentials", "reject", waiting["id"]])
+    r = _runner.invoke(cli_app, ["secret", "reject", waiting["id"]])
     assert r.exit_code == 0, r.output
     # Refused stays refused for this target: not asked again, still withheld.
     assert d.pending() == []
@@ -328,7 +379,7 @@ def test_rejecting_needs_no_presence(cli: BoundaryDaemon) -> None:
     assert len(d.audit("secret_approval_rejected")) == 1
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="replacing a value in use waits for approval")
+@pytest.mark.acceptance(spec="secret", scenario="replacing a value in use waits for approval")
 def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
     d = daemon
     _two_servers(d)
@@ -349,7 +400,7 @@ def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="switching the protection off waits for the desktop app"
+    spec="secret", scenario="switching the protection off waits for the desktop app"
 )
 def test_switching_the_protection_off_waits(cli: BoundaryDaemon) -> None:
     d = cli
@@ -372,7 +423,7 @@ def test_switching_the_protection_off_waits(cli: BoundaryDaemon) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a secret nothing references is listed as unreferenced"
+    spec="secret", scenario="a secret nothing references is listed as unreferenced"
 )
 def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryDaemon) -> None:
     d = daemon
@@ -430,7 +481,7 @@ def test_a_push_token_pointed_at_a_new_url_waits(daemon: BoundaryDaemon) -> None
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="moving a provider connection's base URL asks again"
+    spec="secret", scenario="moving a provider connection's base URL asks again"
 )
 def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     import asyncio
@@ -489,7 +540,7 @@ def _provider(d: BoundaryDaemon, name: str, base_url: str, **body: Any) -> dict[
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the command line reports a pending provider key and exits 9"
+    spec="secret", scenario="the command line reports a pending provider key and exits 9"
 )
 def test_the_command_line_reports_a_pending_provider_key(cli: BoundaryDaemon) -> None:
     d = cli
@@ -521,7 +572,7 @@ def test_the_command_line_reports_a_pending_provider_key(cli: BoundaryDaemon) ->
             "anthropic",
             "--base-url",
             "https://second.example.org/v1",
-            "--credential-ref",
+            "--secret-ref",
             ref,
         ],
     )

@@ -1,6 +1,6 @@
 """``coffer run`` — hand standalone secrets to one child process, and only it.
 
-Spec credentials "Resolve standalone secrets into one child with coffer run";
+Spec secret "Resolve standalone secrets into one child with coffer run";
 ADR standalone-secrets-are-named-references-injected-into-one-child.
 
     coffer run --secret db-password -- psql -h db.internal
@@ -104,7 +104,7 @@ def run(
     command: the agent is the command's parent and can read its environment.
 
     \f
-    Spec credentials "Resolve standalone secrets into one child with coffer run".
+    Spec secret "Resolve standalone secrets into one child with coffer run".
     """
     command = list(ctx.args)
     if not command:

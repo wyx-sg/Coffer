@@ -53,7 +53,7 @@ An agent on its own subscription login is never pointed at the proxy. The proxy 
 
 ## Tokens
 
-Each managed agent has its own random 256-bit token, minted on first use. It is kept as Fernet ciphertext in the credential store under `proxy-token/<agent_uid>`, a machine-local ref that vault sync never carries.
+Each managed agent has its own random 256-bit token, minted on first use. It is kept as Fernet ciphertext in the secret store under `proxy-token/<agent_uid>`, a machine-local ref that vault sync never carries.
 
 - `coffer proxy token --agent-uid <uid>` prints the token. It is the command both agents run.
 - `coffer proxy rotate <agent>` replaces it. The old token is refused from the moment the command answers.

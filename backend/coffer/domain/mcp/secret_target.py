@@ -1,6 +1,6 @@
 """Where an MCP server's secrets go, as the secret boundary sees it.
 
-The target is what an approval is pinned to (spec credentials "Hold a secret
+The target is what an approval is pinned to (spec secret "Hold a secret
 for a new destination until a person approves it"). For a stdio server it is
 the whole command Coffer spawns — command, arguments, working directory and
 the non-secret environment, because any of them can change what the process

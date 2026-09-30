@@ -1,6 +1,6 @@
 """Startup refuses to run without the key that opens the ciphertext it holds.
 
-spec credentials FR — a master key is never regenerated over live ciphertext,
+spec secret FR — a master key is never regenerated over live ciphertext,
 and a present-but-corrupt key is a named, fatal startup failure rather than a
 silent re-key that orphans every stored secret.
 """
@@ -25,7 +25,8 @@ CREATE TABLE credentials (
     ref TEXT PRIMARY KEY,
     ciphertext BLOB NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    last_used_at TEXT
 )
 """
 
@@ -52,7 +53,7 @@ def _isolate_globals(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="the master key is never regenerated over existing ciphertext",
 )
 async def test_absent_key_over_ciphertext_refuses_to_start(
@@ -77,7 +78,7 @@ async def test_absent_key_over_ciphertext_refuses_to_start(
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="a missing master key is a named, fatal startup failure",
 )
 async def test_corrupt_key_file_is_a_named_fatal_failure(
@@ -129,7 +130,7 @@ class _LockedKeyring:
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="a locked keychain at start creates no key",
 )
 async def test_locked_keychain_with_an_empty_store_refuses_to_start(

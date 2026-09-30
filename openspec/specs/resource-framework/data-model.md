@@ -5,7 +5,7 @@ resource model. ORM models follow these names exactly; the OpenAPI schemas in
 [contracts/api.openapi.yaml](contracts/api.openapi.yaml) match the same field
 names. A kind's own tables are modelled by that kind's spec —
 `mcp_capability_preferences` and `mcp_invocations` by spec mcp-gateway, the
-`credentials` table by spec credentials, and so on for every other kind.
+`credentials` table by spec secret, and so on for every other kind.
 
 These three tables were created by the first Alembic revision
 (`20260520_0001_initial.py`: `resources`, `audit_log`, `retention_policies`).
@@ -140,7 +140,7 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | `"retention_updated"`      | When a retention policy is changed                         |
 
 The enum is **shared**, which is the point of one audit log: spec mcp-gateway
-contributes `capability_enabled` / `capability_disabled`, spec credentials
+contributes `capability_enabled` / `capability_disabled`, spec secret
 contributes `credential_set` / `credential_read` / `credential_deleted` /
 `credential_migrated` / `master_key_relocated`, spec daemon contributes
 `token_rotated`, and every other kind adds its own. A kind adding an event adds

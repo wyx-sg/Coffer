@@ -1,71 +1,113 @@
 // src/components/credentials/SecretsTable.tsx — one group of secrets (in use, or unused) as a table.
 //
-// Name (a standalone secret's name with the reference files cite; any other
-// ref as itself; "Missing" when cited but not stored), what uses it, and the
-// ⋯ menu. A destination waiting for approval and a value other local
-// processes can read are marked beside the name.
+// Name (a standalone secret's name; any other ref as itself), what uses it,
+// when it was last used and created, and the ⋯ menu. Beside the name: "Missing
+// on this Mac" for a ref this Mac has no value for — cited but not stored, or
+// stored under another Mac's master key — whose Last used cell then offers Add
+// value; "Waiting for approval" while a new value, or a new destination, waits
+// in the Coffer app; and a mark for a value other local processes can read.
 import { KeyRound, TerminalSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
-import { StatusWord } from "@/components/status/StatusWord";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CredentialRef } from "@/lib/api/credentials";
 import { SecretRowMenu, type SecretRowAction } from "./SecretRowMenu";
 import { SecretUsedBy } from "./SecretUsedBy";
-import { displayName, hasPendingBinding } from "./secretRows";
+import { displayName, hasPendingBinding, isMissingHere } from "./secretRows";
+import { lastUsedLabel, shortDate } from "./secretTimes";
 
 interface Props {
   rows: CredentialRef[];
+  /** Refs whose new value, or whose adding, waits for approval. */
+  waiting: ReadonlySet<string>;
   isLoading?: boolean;
   emptyMessage: string;
   onAction: (action: SecretRowAction, row: CredentialRef) => void;
 }
 
-function NameCell({ row }: { row: CredentialRef }) {
+function NameCell({ row, waiting }: { row: CredentialRef; waiting: boolean }) {
   const { t } = useTranslation();
   return (
-    <div className="flex min-w-0 items-start gap-2">
-      <KeyRound className="mt-0.5 size-3.5 shrink-0 text-text-muted" aria-hidden />
-      <div className="min-w-0 space-y-0.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-mono text-xs text-text">{displayName(row)}</span>
-          {!row.present ? <StatusWord tone="err">{t("secrets.row.missing")}</StatusWord> : null}
-          {hasPendingBinding(row) ? (
-            <StatusWord tone="warn">{t("secrets.row.pending")}</StatusWord>
-          ) : null}
-          {row.readable_by_local_processes ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  tabIndex={0}
-                  aria-label={t("secrets.row.localReadable")}
-                  className="inline-flex text-text-subtle"
-                >
-                  <TerminalSquare className="size-3.5" aria-hidden />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[260px]">
-                {t("secrets.row.localReadableHint")}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
-        {row.uri ? <p className="truncate font-mono text-2xs text-text-subtle">{row.uri}</p> : null}
-      </div>
+    <div className="flex min-w-0 items-center gap-2">
+      <KeyRound className="size-3.5 shrink-0 text-text-muted" aria-hidden />
+      <span className="truncate font-mono text-xs text-text">{displayName(row)}</span>
+      {isMissingHere(row) ? (
+        <Badge variant="destructive" className="rounded-full">
+          {t("secrets.row.missing")}
+        </Badge>
+      ) : null}
+      {waiting || hasPendingBinding(row) ? (
+        <Badge variant="warning" className="rounded-full">
+          {t("secrets.row.pending")}
+        </Badge>
+      ) : null}
+      {row.readable_by_local_processes ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              tabIndex={0}
+              aria-label={t("secrets.row.localReadable")}
+              className="inline-flex text-text-subtle"
+            >
+              <TerminalSquare className="size-3.5" aria-hidden />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[260px]">
+            {t("secrets.row.localReadableHint")}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
   );
 }
 
-export function SecretsTable({ rows, isLoading = false, emptyMessage, onAction }: Props) {
-  const { t } = useTranslation();
+export function SecretsTable({ rows, waiting, isLoading = false, emptyMessage, onAction }: Props) {
+  const { t, i18n } = useTranslation();
+  const now = new Date();
   const columns: Column<CredentialRef>[] = [
-    { key: "name", header: t("secrets.cols.name"), cell: (row) => <NameCell row={row} /> },
+    {
+      key: "name",
+      header: t("secrets.cols.name"),
+      cell: (row) => <NameCell row={row} waiting={waiting.has(row.ref)} />,
+    },
     {
       key: "usedBy",
       header: t("secrets.cols.usedBy"),
-      className: "w-[260px]",
+      className: "w-[240px]",
       cell: (row) => <SecretUsedBy row={row} />,
+    },
+    {
+      key: "lastUsed",
+      header: t("secrets.cols.lastUsed"),
+      className: "w-[120px]",
+      cell: (row) =>
+        isMissingHere(row) ? (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("secrets.row.addValueFor", { name: displayName(row) })}
+            onClick={() => onAction("replace", row)}
+          >
+            {t("secrets.row.addValue")}
+          </Button>
+        ) : (
+          <span className="text-xs text-text-muted">
+            {lastUsedLabel(row.last_used_at, now, t, i18n.language)}
+          </span>
+        ),
+    },
+    {
+      key: "created",
+      header: t("secrets.cols.created"),
+      className: "w-[88px]",
+      cell: (row) => (
+        <span className="text-xs text-text-muted">
+          {row.created_at ? shortDate(row.created_at, i18n.language) : "—"}
+        </span>
+      ),
     },
     {
       key: "actions",

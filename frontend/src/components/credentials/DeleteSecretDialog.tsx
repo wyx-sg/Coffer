@@ -5,7 +5,7 @@
 // cites is confirmed and deleted. Something may have started citing it since
 // the page loaded: the daemon then refuses with `409 CREDENTIAL_IN_USE` naming
 // each citer, and the dialog turns into that same refusal — while the row
-// stays listed (spec credentials "Refuse to delete a credential still in use").
+// stays listed (spec secret "Refuse to delete a credential still in use").
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,7 @@ import type { CredentialRef } from "@/lib/api/credentials";
 import { ApiError } from "@/lib/api/errors";
 import { useDeleteSecret } from "@/lib/hooks/useSecrets";
 import { citersFromRefusal, citersOf, displayName, referenceOf, type Citer } from "./secretRows";
+import { lastUsedLabel } from "./secretTimes";
 import { useKindLabel } from "./useKindLabel";
 
 interface Props {
@@ -79,7 +80,7 @@ function InUse({
 }
 
 export function DeleteSecretDialog({ row, onOpenChange }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const remove = useDeleteSecret();
   const [refused, setRefused] = useState<Citer[] | null>(null);
@@ -133,9 +134,13 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
       error={inUseError ? undefined : (remove.error ?? undefined)}
       onConfirm={() => void confirm()}
     >
-      <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 text-xs">
+      <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
         <dt className="text-text-muted">{t("secrets.replace.secret")}</dt>
         <dd className="truncate font-mono text-text">{name}</dd>
+        <dt className="text-text-muted">{t("secrets.cols.lastUsed")}</dt>
+        <dd className="text-text">
+          {lastUsedLabel(row.last_used_at, new Date(), t, i18n.language)}
+        </dd>
       </dl>
     </ConfirmDialog>
   );

@@ -1,6 +1,6 @@
 """Secret values must never appear in the DB, logs, or any persisted artefact.
 
-Spec credentials "Hold plaintext only in memory at the moment of use".
+Spec secret "Hold plaintext only in memory at the moment of use".
 
 Drives a representative session with a unique sentinel value written into the
 Fernet-encrypted credential store (the same store the composition root wires),
@@ -53,7 +53,7 @@ from coffer.infrastructure.persistence.repos import (
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="credentials never leak to logs or audit")
+@pytest.mark.acceptance(spec="secret", scenario="credentials never leak to logs or audit")
 @pytest.mark.asyncio
 async def test_secret_value_never_in_db_or_logs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

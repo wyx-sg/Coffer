@@ -118,7 +118,9 @@ export function DaemonPortRow({ disabled, inShell }: Props) {
           <Button
             type="submit"
             variant="outline"
-            disabled={disabled || unchanged || save.isPending || value.trim() === ""}
+            disabled={
+              disabled || unchanged || save.isPending || value.trim() === "" || error !== null
+            }
           >
             {t("settings.daemonTab.save")}
           </Button>
@@ -126,7 +128,7 @@ export function DaemonPortRow({ disabled, inShell }: Props) {
       </SettingRow>
       {pending !== null ? (
         <div
-          className="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-sunken p-3"
+          className="flex flex-col gap-2 rounded-md bg-warning-soft px-3 py-2.5"
           data-testid="settings-daemon-port-pending"
           role="status"
         >
@@ -140,7 +142,7 @@ export function DaemonPortRow({ disabled, inShell }: Props) {
               </span>
             </div>
             {inShell ? (
-              <Button onClick={() => restart.mutate()} disabled={restart.isPending}>
+              <Button size="sm" onClick={() => restart.mutate()} disabled={restart.isPending}>
                 {restart.isPending
                   ? t("daemon.offline.restarting")
                   : t("settings.daemonTab.restartNow")}

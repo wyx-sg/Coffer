@@ -1,4 +1,4 @@
-"""What the encrypted store itself promises (spec credentials).
+"""What the encrypted store itself promises (spec secret).
 
 Real SQLite file, real Fernet key, and the store's own code — the tests read
 the ``credentials`` row back with plain ``sqlite3`` so they see exactly what is
@@ -23,7 +23,8 @@ CREATE TABLE credentials (
     ref TEXT PRIMARY KEY,
     ciphertext BLOB NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    last_used_at TEXT
 )
 """
 
@@ -49,7 +50,7 @@ def _rows(db_path: pathlib.Path, ref: str) -> list[tuple[bytes, str, str]]:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="a stored secret is only ciphertext in the credentials table"
+    spec="secret", scenario="a stored secret is only ciphertext in the credentials table"
 )
 def test_a_stored_secret_is_only_ciphertext_in_the_credentials_table(
     db_path: pathlib.Path,
@@ -69,9 +70,7 @@ def test_a_stored_secret_is_only_ciphertext_in_the_credentials_table(
     assert secret.encode() not in db_path.read_bytes()
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="writing an existing ref re-encrypts it in place"
-)
+@pytest.mark.acceptance(spec="secret", scenario="writing an existing ref re-encrypts it in place")
 def test_writing_an_existing_ref_re_encrypts_it_in_place(db_path: pathlib.Path) -> None:
     key = Fernet.generate_key()
     store = EncryptedCredentialStore(db_path=db_path, key=key)
@@ -92,7 +91,7 @@ def test_writing_an_existing_ref_re_encrypts_it_in_place(db_path: pathlib.Path) 
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="an async caller reaches the store through its async facade"
+    spec="secret", scenario="an async caller reaches the store through its async facade"
 )
 async def test_an_async_caller_reaches_the_store_through_its_async_facade(
     db_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -117,5 +116,6 @@ async def test_an_async_caller_reaches_the_store_through_its_async_facade(
     assert await store.aget("svc/key") is None
 
     # Every blocking SQLite call ran — and none of them on the loop's thread.
-    assert len(seen) == 6
+    # Six calls, plus the first read's use stamp (``last_used_at``).
+    assert len(seen) == 7
     assert all(ident != loop_thread for ident in seen)

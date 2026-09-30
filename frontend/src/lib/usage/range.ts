@@ -1,8 +1,9 @@
 // src/lib/usage/range.ts — the Usage page's range and grouping as URL search params, and local-day arithmetic.
 //
 // The range is addressable state (a refresh or Back keeps it), so it lives in
-// `?range=` / `?from=&to=` / `?by=`; the defaults (7 days, by model) are never
-// spelled out. Days are the machine's local days, as the summary resolves them.
+// `?range=` / `?from=&to=` / `?by=`, with the filters in `?agent=` (an agent
+// type) and `?provider=` (a connection uid); the defaults (7 days, by model,
+// any agent, any provider) are never spelled out. Days are the machine's local days, as the summary resolves them.
 import type { UsageGroupBy, UsageQuery, UsageRangeName } from "@/lib/api/usage";
 
 export const PRESET_RANGES = ["today", "7d", "30d", "month"] as const;
@@ -45,27 +46,35 @@ export function daysBetween(start: string, end: string): string[] {
 export function readUsageQuery(sp: URLSearchParams): UsageQuery {
   const by = sp.get("by");
   const group_by = GROUPINGS.includes(by as UsageGroupBy) ? (by as UsageGroupBy) : DEFAULT_GROUP;
+  const agent = sp.get("agent");
+  const provider = sp.get("provider");
+  const filters = {
+    ...(agent ? { agent_type: agent } : {}),
+    ...(provider ? { connection_uid: provider } : {}),
+  };
   const range = sp.get("range");
   const from = sp.get("from");
   const to = sp.get("to");
   if (range === "custom" && isDay(from) && isDay(to) && from <= to) {
-    return { range: "custom", from, to, group_by };
+    return { range: "custom", from, to, group_by, ...filters };
   }
   const preset = (PRESET_RANGES as readonly string[]).includes(range ?? "")
     ? (range as UsageRangeName)
     : DEFAULT_RANGE;
-  return { range: preset, group_by };
+  return { range: preset, group_by, ...filters };
 }
 
 /** The search params for `q`, keeping any unrelated params `sp` carries. */
 export function writeUsageQuery(sp: URLSearchParams, q: UsageQuery): URLSearchParams {
   const next = new URLSearchParams(sp);
-  for (const k of ["range", "from", "to", "by"]) next.delete(k);
+  for (const k of ["range", "from", "to", "by", "agent", "provider"]) next.delete(k);
   if (q.range !== DEFAULT_RANGE) next.set("range", q.range);
   if (q.range === "custom" && q.from && q.to) {
     next.set("from", q.from);
     next.set("to", q.to);
   }
   if (q.group_by !== DEFAULT_GROUP) next.set("by", q.group_by);
+  if (q.agent_type) next.set("agent", q.agent_type);
+  if (q.connection_uid) next.set("provider", q.connection_uid);
   return next;
 }

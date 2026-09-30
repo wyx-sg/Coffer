@@ -6,6 +6,7 @@
 // agent badges and the client-side predicate.
 import { useMemo } from "react";
 
+import { transportOf, type Transport } from "@/components/mcp/server/serverState";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useResources } from "@/lib/hooks/useResources";
 
@@ -38,6 +39,10 @@ export function useActivityLookups() {
       agentNames: new Map(agents.map((a) => [a.uid, a.name])),
       servers: servers.map((s): ActivityServer => ({ uid: s.uid, label: s.title || s.name })),
       serverNames: new Map(servers.map((s) => [s.uid, s.name])),
+      /** MCP server uid → its transport, for the call drawer's Server line. */
+      serverTransports: new Map<string, Transport["type"]>(
+        servers.map((s) => [s.uid, transportOf(s.config).type]),
+      ),
     };
   }, [agentsQuery.data, serversQuery.data]);
 }

@@ -863,6 +863,55 @@ paths:
       summary: Update Policy
       tags:
       - retention
+  /api/v1/retention/policies/{table_name}/preview:
+    get:
+      description: How many rows a window of ``days`` would delete, before the user confirms it.
+      operationId: preview_policy_api_v1_retention_policies__table_name__preview_get
+      parameters:
+      - in: path
+        name: table_name
+        required: true
+        schema:
+          title: Table Name
+          type: string
+      - in: query
+        name: days
+        required: true
+        schema:
+          maximum: 3650
+          minimum: 1
+          title: Days
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Policy
+      tags:
+      - retention
   /api/v1/retention/prune:
     post:
       operationId: prune_now_api_v1_retention_prune_post
@@ -1732,6 +1781,28 @@ components:
           description: Null = keep forever; 1..3650 days otherwise.
           title: Retention Days
       title: RetentionPolicyUpdate
+      type: object
+    RetentionPreviewOut:
+      description: What shortening one policy's window would delete, counted and not run.
+      properties:
+        days:
+          title: Days
+          type: integer
+        rows_to_delete:
+          title: Rows To Delete
+          type: integer
+        table_name:
+          title: Table Name
+          type: string
+        total_rows:
+          title: Total Rows
+          type: integer
+      required:
+      - table_name
+      - days
+      - total_rows
+      - rows_to_delete
+      title: RetentionPreviewOut
       type: object
     ScopeIn:
       additionalProperties: false

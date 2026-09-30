@@ -78,3 +78,30 @@ def test_the_release_workflow_stamps_stable_before_building_binaries() -> None:
     build_at = next(i for i, run in enumerate(runs) if "build_binaries.sh" in run)
     assert stamp_at < build_at
     assert "refs/tags/v" in str(steps[stamp_at].get("if", ""))
+
+
+def test_stamping_a_commit_records_its_short_hash(copy: Path) -> None:
+    main = _script()["main"]
+    main(["stable", "--commit", "3909da95c0ffee1234567890abcdef1234567890"], target=copy)  # type: ignore[operator]
+    stamped = _load(copy)
+    assert stamped.CHANNEL == "stable"
+    assert stamped.COMMIT == "3909da95"
+
+
+def test_a_build_from_source_carries_no_commit() -> None:
+    assert build_channel.COMMIT is None
+
+
+def test_a_commit_that_is_not_a_hash_is_refused(copy: Path) -> None:
+    main = _script()["main"]
+    with pytest.raises(SystemExit):
+        main(["stable", "--commit", "main; echo x"], target=copy)  # type: ignore[operator]
+    assert _load(copy).COMMIT is None
+
+
+def test_the_release_workflow_stamps_the_commit_being_built() -> None:
+    steps = yaml.safe_load(_RELEASE.read_text())["jobs"]["bundle"]["steps"]
+    run = next(
+        str(s.get("run", "")) for s in steps if "stamp_channel.py stable" in str(s.get("run", ""))
+    )
+    assert '--commit "$GITHUB_SHA"' in run

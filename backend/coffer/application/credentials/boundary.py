@@ -1,6 +1,6 @@
 """The secret boundary: a secret goes somewhere new only with a person's approval.
 
-Spec credentials "Hold a secret for a new destination until a person approves
+Spec secret "Hold a secret for a new destination until a person approves
 it"; ADR only-a-present-human-sees-a-secret-or-sends-it-somewhere-new, rules 2
 and 3. Every consumer that injects a secret — an MCP spawn, a channel adapter,
 the sync push, a provider connection — asks :meth:`SecretBoundary.require`
@@ -272,21 +272,37 @@ class SecretBoundary:
         return is_standalone_ref(ref) or self._store.has_any_binding(ref)
 
     def write(self, ref: str, value: str, *, actor: str) -> SecretApproval | None:
-        """Store ``value`` now, or hold it for approval when ``ref`` is in use.
+        """Store ``value`` now, or hold it, sealed, for the desktop app.
 
-        A new ref, or one nothing was ever sent to, is written at once: the
-        caller supplied the value. Replacing the value of a ref that an
-        approved destination receives — or of a standalone secret — changes
-        what that destination gets, so it waits, sealed, for the desktop app.
+        A new standalone secret (``secret/<name>`` with no value on this
+        machine) waits as ``add_secret``: once stored, any ``coffer run`` can
+        hand it to a child, so a person decides whether it exists. Replacing
+        the value of a ref an approved destination receives — or of a
+        standalone secret — changes what that destination gets, so it waits
+        as ``replace_value``. Any other ref (a resource's own, new or never
+        sent anywhere) is written at once: the caller supplied the value.
         """
-        if not self.protections_on() or not self._values.exists(ref) or not self.in_use(ref):
+        if not self.protections_on():
             self._values.set(ref, value)
             return None
-        for approval in self._store.pending_of_op("replace_value", ref):
-            self._store.decide(approval.id, "superseded", by="system", at=self._stamp())
+        if not self._values.exists(ref):
+            if not is_standalone_ref(ref):
+                self._values.set(ref, value)
+                return None
+            op = "add_secret"
+        elif self.in_use(ref):
+            op = "replace_value"
+        else:
+            self._values.set(ref, value)
+            return None
+        # A newer value for the same secret replaces the one still waiting.
+        for waiting in self._store.pending_of_op("add_secret", ref) + self._store.pending_of_op(
+            "replace_value", ref
+        ):
+            self._store.decide(waiting.id, "superseded", by="system", at=self._stamp())
         approval = SecretApproval(
             id=_secrets.token_hex(8),
-            op="replace_value",
+            op=op,  # type: ignore[arg-type]
             status="pending",
             created_at=self._stamp(),
             requested_by=actor,
@@ -324,7 +340,7 @@ class SecretBoundary:
                     approval_id=approval.id,
                 )
             )
-        elif approval.op == "replace_value":
+        elif approval.op in ("add_secret", "replace_value"):
             assert approval.ref and sealed is not None
             self._values.set(approval.ref, self._values.unseal(sealed))
         else:

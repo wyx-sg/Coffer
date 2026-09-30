@@ -3,7 +3,7 @@
 Entities, fields, and reuse anchors for the provider registry.
 Depends on the agent kind and its config-file store from spec
 [agent-registry](../agent-registry/spec.md), on the Fernet vault from spec
-credentials, and on the kind-agnostic Resource framework.
+secret, and on the kind-agnostic Resource framework.
 
 ## Domain entities (`backend/coffer/domain/provider/`)
 

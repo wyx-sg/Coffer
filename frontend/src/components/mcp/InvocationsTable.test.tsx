@@ -419,7 +419,10 @@ acceptance(
         </TooltipProvider>,
       ),
     );
-    await waitFor(() => expect(screen.getAllByText("fs.read_file").length).toBeGreaterThan(0));
+    // Activity's MCP calls table mutes the server part of `server.tool` in its own span.
+    const fsReadFile = (_: string, el: Element | null) =>
+      el?.hasAttribute("data-call-target") === true && el.textContent === "fs.read_file";
+    await waitFor(() => expect(screen.getAllByText(fsReadFile).length).toBeGreaterThan(0));
     const logReads = get.mock.calls.filter((c) => String(c[0]).includes("invocations"));
     expect(logReads.every((c) => c[0] === "/mcp/invocations")).toBe(true);
     expect(logReads.every((c) => c[1]?.params?.query?.uid === undefined)).toBe(true);

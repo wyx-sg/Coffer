@@ -78,7 +78,7 @@ def _mcp_kinds() -> dict[str, Any]:
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="a legacy keychain secret migrates once and then does nothing",
 )
 async def test_moves_legacy_secret_and_audits() -> None:

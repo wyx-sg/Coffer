@@ -70,9 +70,9 @@ export function daemonLogger(rec: DaemonLogRecord): string {
  * The lines the daemon folded into this record — a traceback's frames, a
  * wrapped message — which belong to it rather than to a row each.
  */
-function daemonContinuation(rec: DaemonLogRecord): string {
+export function daemonContinuation(rec: DaemonLogRecord): string[] {
   const lines = rec.record?.continuation;
-  return Array.isArray(lines) ? lines.filter((l) => typeof l === "string").join(" ") : "";
+  return Array.isArray(lines) ? lines.filter((l): l is string => typeof l === "string") : [];
 }
 
 /**
@@ -82,7 +82,12 @@ function daemonContinuation(rec: DaemonLogRecord): string {
  * them, searching for the exception that caused a failure would find nothing.
  */
 export function daemonSearchHaystack(t: TFunction, rec: DaemonLogRecord): string {
-  return [describeDaemonRecord(t, rec), daemonLogger(rec), rec.level ?? "", daemonContinuation(rec)]
+  return [
+    describeDaemonRecord(t, rec),
+    daemonLogger(rec),
+    rec.level ?? "",
+    daemonContinuation(rec).join(" "),
+  ]
     .join(" ")
     .toLowerCase();
 }

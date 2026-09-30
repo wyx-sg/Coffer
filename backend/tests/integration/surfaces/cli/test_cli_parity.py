@@ -78,7 +78,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # which its scan row names, and nothing of Coffer's put it there to discard.
     "scan": set(),
     # `coffer run [--secret …] -- cmd`: one command, standalone secrets set
-    # only in the child's environment (spec credentials "Resolve standalone
+    # only in the child's environment (spec secret "Resolve standalone
     # secrets into one child with coffer run").
     "run": set(),
     "adopt": {"skill", "mcp"},
@@ -92,11 +92,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # previews then applies an OpenAPI re-read; `op` manages one tool.
     "tool": {*_LIFECYCLE, "add", "scope", "reimport", "op"},
     "tool op": {"add", "edit", "rm", "enable", "disable", "scope", "test"},
-    # `get` checks presence only; no command prints a value (spec credentials
+    # `get` checks presence only; no command prints a value (spec secret
     # "Return no plaintext on any route, command or tool"). `approvals` and
     # `reject` are the terminal's half of the approvals the desktop app
     # approves; `scan` and `import` move plaintext secret files into the store.
-    "credentials": {"set", "get", "list", "rm", "approvals", "reject", "scan", "import"},
+    "secret": {"set", "get", "list", "rm", "approvals", "reject", "scan", "import"},
     # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
     # are its Coffer connection — the gateway entry and the memory hook as one
     # action (spec agent-registry "Connect an agent to Coffer in one action"),
@@ -183,7 +183,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "status",
     },
     # No `export`: a key backup is written only by the desktop app, behind a
-    # presence check (spec credentials "Release plaintext only to a present
+    # presence check (spec secret "Release plaintext only to a present
     # human in the desktop app").
     "sync key": {"import", "fingerprint"},
     # The unified reconciler's read models (spec resource-framework "Converge
@@ -219,8 +219,8 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "scan": {"--agent", "--ref", "--source", "--json"},
     "attention": {"--json"},
     "run": {"--secret", "--env-file", "--no-masking"},
-    # The usage summary's range, grouping and output form.
-    "usage": {"--range", "--from", "--to", "--by", "--json", "--csv"},
+    # The usage summary's range, grouping, filters and output form.
+    "usage": {"--range", "--from", "--to", "--by", "--agent", "--provider", "--json", "--csv"},
     # A name and a title are edited on the kinds that carry them (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the
@@ -246,7 +246,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
         "--http",
         "--env",
         "--header",
-        "--credential",
+        "--secret",
         "--spawn-timeout-seconds",
         "--request-timeout-seconds",
     },
@@ -274,8 +274,8 @@ _CONFIG_KEYS: dict[str, str] = {
     },
     "transcribe.provider": "POST /providers/{uid}/transcribe-default",
     "transcribe.model": "PUT /internal-engine-config/transcribe-model",
-    "credentials.storage": "PUT /settings/credentials",
-    # Turning it off waits for the Coffer app (spec credentials "Turn the
+    "secrets.storage": "PUT /settings/credentials",
+    # Turning it off waits for the Coffer app (spec secret "Turn the
     # protection off only through the desktop app").
     "secrets.require_approval": "PUT /settings/secret-boundary",
     "feature.<key>": "PUT /daemon/features/{key}",

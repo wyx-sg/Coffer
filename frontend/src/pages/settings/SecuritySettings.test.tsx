@@ -13,6 +13,7 @@ import { MemoryRouter } from "react-router-dom";
 import { call } from "@/lib/api/call";
 import { resetApiClient } from "@/lib/api/client";
 import { getCofferToken } from "@/lib/auth";
+import { acceptance } from "@/test/acceptance";
 import { SecuritySettings } from "./SecuritySettings";
 
 // Tested in SecretBoundaryCard.test.tsx; here it would only add two routes.
@@ -23,7 +24,7 @@ let inApp = false;
 const exportBackup = vi.fn();
 vi.mock("@/lib/tauri", () => ({
   presenceAvailable: () => inApp,
-  exportMasterKeyBackup: () => exportBackup(),
+  exportMasterKeyBackup: (passphrase: string) => exportBackup(passphrase),
 }));
 
 const OLD = "old-token-value-abcd";
@@ -36,6 +37,14 @@ let daemonUp = true;
 let rotateFails = false;
 let moveFails = false;
 const seen: { method: string; path: string; token: string | null }[] = [];
+const bodies: Record<string, unknown>[] = [];
+
+// This Mac's key and the one in the other Mac's backup (12 hex, as the daemon
+// answers them).
+const OWN_FP = "7f3a91c25d0e";
+const OTHER_FP = "c04b7719ae62";
+const BACKUP = '{"coffer_master_key_backup": 1, "fingerprint": "c04b7719ae62"}';
+let currentFp = OWN_FP;
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -58,6 +67,32 @@ async function fakeDaemon(input: RequestInfo | URL, init?: RequestInit): Promise
       return json(503, { error: { code: "MASTER_KEY_MISSING", message: "keychain refused" } });
     storage = ((await req.json()) as { master_key_storage: Storage }).master_key_storage;
     return json(200, { master_key_storage: storage });
+  }
+  if (route === "GET /sync/key/fingerprint") return json(200, { fingerprint: currentFp });
+  if (route === "POST /sync/key/import/preview") {
+    const body = (await req.json()) as { material: string };
+    const fp = body.material === BACKUP ? OTHER_FP : OWN_FP;
+    return json(200, {
+      fingerprint: fp,
+      current_fingerprint: currentFp,
+      same: fp === currentFp,
+      protected: body.material === BACKUP,
+    });
+  }
+  if (route === "POST /sync/key/import") {
+    const body = (await req.json()) as { material: string; passphrase: string | null };
+    bodies.push(body);
+    if (body.passphrase !== "correct horse")
+      return json(422, {
+        error: { code: "MASTER_KEY_PASSPHRASE_WRONG", message: "the passphrase does not open" },
+      });
+    currentFp = OTHER_FP;
+    return json(200, {
+      fingerprint: OTHER_FP,
+      replaced: true,
+      readable: 6,
+      locked_refs: ["secret/linear-api-key", "secret/jira-pat-2024"],
+    });
   }
   if (route === "POST /daemon/rotate-token") {
     if (rotateFails)
@@ -91,6 +126,8 @@ beforeEach(() => {
   moveFails = false;
   inApp = false;
   seen.length = 0;
+  bodies.length = 0;
+  currentFp = OWN_FP;
   (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ = OLD;
   resetApiClient();
   vi.stubGlobal("fetch", vi.fn(fakeDaemon));
@@ -113,8 +150,8 @@ describe("SecuritySettings — master key", () => {
   test("a signed build's access-group key reads OK and has nothing to move", async () => {
     storage = "keychain_access_group";
     renderPage();
-    expect(await screen.findByText(/only coffer's signed apps can read it/i)).toBeInTheDocument();
-    expect(screen.getByText("Keychain")).toBeInTheDocument();
+    expect(await screen.findByText("Keychain")).toBeInTheDocument();
+    expect(screen.queryByText(/development build/i)).not.toBeInTheDocument();
     expect(screen.getByText("OK")).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.getByTestId("secret-boundary-card")).toBeInTheDocument();
@@ -174,30 +211,135 @@ describe("SecuritySettings — master key", () => {
     expect(storage).toBe("file");
   });
 
-  test("in a browser the export names the desktop app instead of offering a control", async () => {
+  test("the key fingerprint reads in groups of four", async () => {
     renderPage();
-    expect(await screen.findByText("Open in Coffer app")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /export master key/i })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("key-fingerprint")).toHaveTextContent("7F3A 91C2 5D0E"),
+    );
   });
 
-  test("in the desktop app the export reports where the file went", async () => {
+  acceptance("secret", "the browser offers no master key export", async () => {
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Open in Coffer app to export" });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/only available in the coffer desktop app/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /export master key/i })).toBeNull();
+    expect(exportBackup).not.toHaveBeenCalled();
+  });
+
+  test("in the desktop app the export asks for a passphrase twice, then says where the file went", async () => {
     inApp = true;
     exportBackup.mockResolvedValue({
       path: "/Users/me/Documents/coffer-master-key.cfk",
-      fingerprint: "3f9a11",
+      fingerprint: OWN_FP,
     });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /export master key/i }));
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Master key exported");
+    expect(dialog).toHaveTextContent("Export the master key");
+    const submit = within(dialog).getByRole("button", { name: "Export key…" });
+    expect(submit).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Protect the file with a passphrase"), {
+      target: { value: "correct horse" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Repeat passphrase"), {
+      target: { value: "correct hors" },
+    });
+    expect(dialog).toHaveTextContent("The passphrases don't match.");
+    expect(submit).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Repeat passphrase"), {
+      target: { value: "correct horse" },
+    });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(dialog).toHaveTextContent("Master key exported"));
+    expect(exportBackup).toHaveBeenCalledWith("correct horse");
     expect(dialog).toHaveTextContent(
-      "Saved coffer-master-key.cfk to /Users/me/Documents · recorded in Activity.",
+      "Saved coffer-master-key.cfk to ~/Documents · recorded in Activity.",
     );
-    expect(dialog).toHaveTextContent("3f9a11");
     fireEvent.click(within(dialog).getByRole("button", { name: /done/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  test("a cancelled presence check leaves the export dialog open without an error", async () => {
+    inApp = true;
+    exportBackup.mockRejectedValue("cancelled");
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /export master key/i }));
+    const dialog = await screen.findByRole("dialog");
+    for (const label of ["Protect the file with a passphrase", "Repeat passphrase"])
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value: "long enough" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Export key…" }));
+
+    await waitFor(() => expect(exportBackup).toHaveBeenCalled());
+    expect(screen.getByRole("dialog")).toHaveTextContent("Export the master key");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
+
+  acceptance(
+    "vault-sync",
+    "the security tab replaces a key and names what stays locked",
+    async () => {
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: "Import…" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("Replace this Mac’s master key?");
+      const replace = within(dialog).getByRole("button", { name: "Replace key" });
+      expect(replace).toBeDisabled();
+
+      // jsdom's File has no text(); the page reads the picked file with it.
+      const file = Object.assign(
+        new File([BACKUP], "coffer-master-key.cfk", { type: "application/json" }),
+        { text: async () => BACKUP },
+      );
+      fireEvent.change(within(dialog).getByLabelText("Key file"), { target: { files: [file] } });
+
+      await waitFor(() =>
+        expect(within(dialog).getByTestId("key-in-file")).toHaveTextContent(
+          "C04B 7719 AE62 · different",
+        ),
+      );
+      expect(within(dialog).getByTestId("key-file-name")).toHaveTextContent(
+        "coffer-master-key.cfk",
+      );
+      expect(dialog).toHaveTextContent("7F3A 91C2 5D0E");
+      expect(dialog).toHaveTextContent("Recorded in Activity");
+      // Nothing is replaced by choosing the file.
+      expect(bodies).toHaveLength(0);
+      expect(replace).toBeDisabled();
+
+      fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
+        target: { value: "wrong one" },
+      });
+      fireEvent.click(replace);
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+        "That passphrase doesn't open this key file.",
+      );
+
+      fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
+        target: { value: "correct horse" },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Replace key" }));
+
+      await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Key imported"));
+      const done = screen.getByRole("dialog");
+      expect(done).toHaveTextContent(
+        "This Mac now uses key C04B 7719 AE62, but 2 secrets still can’t be decrypted with it.",
+      );
+      expect(within(done).getByTestId("readable-now")).toHaveTextContent("6 secrets");
+      expect(within(done).getByTestId("still-locked")).toHaveTextContent(
+        "linear-api-key, jira-pat-2024",
+      );
+      expect(within(done).getByRole("button", { name: "Open Secrets" })).toBeInTheDocument();
+      expect(bodies.at(-1)).toEqual({ material: BACKUP, passphrase: "correct horse" });
+      // The fingerprint row follows the key this Mac now uses.
+      fireEvent.click(within(done).getByRole("button", { name: /done/i }));
+      await waitFor(() =>
+        expect(screen.getByTestId("key-fingerprint")).toHaveTextContent("C04B 7719 AE62"),
+      );
+    },
+  );
 });
 
 describe("SecuritySettings — daemon access token", () => {

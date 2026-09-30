@@ -1,4 +1,4 @@
-// src/lib/hooks/useSecrets.ts — every query and mutation behind the Secrets page (spec credentials).
+// src/lib/hooks/useSecrets.ts — every query and mutation behind the Secrets page (spec secret).
 //
 // The list, storing and deleting a value, the plaintext scan and its import,
 // and the desktop app's presence-gated reveal. Nothing here ever caches a
@@ -18,9 +18,13 @@ import {
 import { revealSecret } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
-/** Every stored and cited ref with what uses it. */
-export function useSecrets() {
-  return useQuery({ queryKey: credentialsListKey, queryFn: () => credentialsApi.list() });
+/** Every stored and cited ref with what uses it; read only while `enabled`. */
+export function useSecrets(enabled = true) {
+  return useQuery({
+    queryKey: credentialsListKey,
+    queryFn: () => credentialsApi.list(),
+    enabled,
+  });
 }
 
 function useRefreshSecrets() {

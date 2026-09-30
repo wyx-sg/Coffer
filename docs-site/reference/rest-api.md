@@ -101,20 +101,20 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 240 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 242 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
 | [daemon](#daemon) | 13 |
 | [resources](#resources) | 9 |
 | [audit](#audit) | 1 |
-| [retention](#retention) | 3 |
+| [retention](#retention) | 4 |
 | [upkeep](#upkeep) | 1 |
 | [reconcile](#reconcile) | 3 |
 | [events](#events) | 1 |
 | [credentials](#credentials) | 15 |
 | [settings](#settings) | 4 |
-| [sync](#sync) | 18 |
+| [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
@@ -176,6 +176,7 @@ The daemon mounts 240 operations in 26 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/retention/policies` | List Policies |
 | `PATCH` | `/api/v1/retention/policies/{table_name}` | Update Policy |
+| `GET` | `/api/v1/retention/policies/{table_name}/preview` | How many rows a window of ``days`` would delete, before the user confirms it. |
 | `POST` | `/api/v1/retention/prune` | Prune Now |
 
 ### upkeep
@@ -209,7 +210,7 @@ The daemon mounts 240 operations in 26 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/credentials/presence/status` | Presence Status |
 | `POST` | `/api/v1/credentials/presence/challenge` | A one-time nonce for one operation on one target; the shell signs it. |
 | `POST` | `/api/v1/credentials/presence/reveal` | A secret's value, for the present human the desktop app just checked. |
-| `POST` | `/api/v1/credentials/presence/master-key-export` | Write the master key backup into the directory the person picked. |
+| `POST` | `/api/v1/credentials/presence/master-key-export` | Write the passphrase-protected master key backup into the picked directory. |
 | `POST` | `/api/v1/credentials/secrets/resolve` | Standalone secrets for one `coffer run` child — never a resource's secret. |
 | `POST` | `/api/v1/credentials/scan` | Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store. |
 | `POST` | `/api/v1/credentials/import` | Move plaintext findings into the store, replacing each with its reference. |
@@ -252,6 +253,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `PATCH` | `/api/v1/sync/machines/self` | Rename this machine. |
 | `DELETE` | `/api/v1/sync/machines/{machine_id}` | Retire Machine |
 | `GET` | `/api/v1/sync/key/fingerprint` | Key Fingerprint |
+| `POST` | `/api/v1/sync/key/import/preview` | Whose key a file holds and whether it is this machine's, changing nothing. |
 | `POST` | `/api/v1/sync/key/import` | Import Key |
 
 ### internal-engine

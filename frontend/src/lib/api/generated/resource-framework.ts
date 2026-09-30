@@ -251,6 +251,26 @@ export interface paths {
         patch: operations["update_policy_api_v1_retention_policies__table_name__patch"];
         trace?: never;
     };
+    "/api/v1/retention/policies/{table_name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Policy
+         * @description How many rows a window of ``days`` would delete, before the user confirms it.
+         */
+        get: operations["preview_policy_api_v1_retention_policies__table_name__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retention/prune": {
         parameters: {
             query?: never;
@@ -762,6 +782,20 @@ export interface components {
              * @description Null = keep forever; 1..3650 days otherwise.
              */
             retention_days?: number | null;
+        };
+        /**
+         * RetentionPreviewOut
+         * @description What shortening one policy's window would delete, counted and not run.
+         */
+        RetentionPreviewOut: {
+            /** Days */
+            days: number;
+            /** Rows To Delete */
+            rows_to_delete: number;
+            /** Table Name */
+            table_name: string;
+            /** Total Rows */
+            total_rows: number;
         };
         /**
          * ScopeIn
@@ -1534,6 +1568,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetentionPolicyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_policy_api_v1_retention_policies__table_name__preview_get: {
+        parameters: {
+            query: {
+                days: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

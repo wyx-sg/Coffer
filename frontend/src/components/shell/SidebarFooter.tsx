@@ -13,6 +13,7 @@ import { StatusDot } from "@/components/status/StatusDot";
 import type { StatusTone } from "@/components/status/statusTone";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOpenSettings, useSettingsOpen } from "@/lib/settingsModal";
+import { formatVersion } from "@/lib/version";
 import { shortcutLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { useDaemonFooterState, type DaemonFooterState } from "./useDaemonFooterState";
@@ -116,6 +117,11 @@ export function SidebarFooter({ collapsed }: { collapsed: boolean }) {
         >
           <StatusDot tone={tone} />
           {!collapsed ? <span className="min-w-0 flex-1 truncate">{shortLabel}</span> : null}
+          {!collapsed && state.kind === "running" ? (
+            <span className="shrink-0 text-text-subtle" data-testid="sidebar-version">
+              {formatVersion(state.version)}
+            </span>
+          ) : null}
         </button>
       </RailTooltip>
     </div>

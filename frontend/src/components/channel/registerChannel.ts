@@ -12,7 +12,7 @@ import type { ChannelPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
   const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
 }
 
 /** Best-effort rollback of secrets written before a failed registration. */

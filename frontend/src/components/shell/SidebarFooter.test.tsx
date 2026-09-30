@@ -4,7 +4,7 @@
 // the daemon's state in the shell footer"); they carry plain tests until the
 // change is archived, when its task 7.7 gives them their markers.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
@@ -54,6 +54,8 @@ describe("SidebarFooter", () => {
     renderFooter();
     const state = await screen.findByRole("button", { name: "Daemon running on port 8000" });
     expect(state).toHaveTextContent("Running on port 8000");
+    // The running version, written the way the design shows it.
+    expect(within(state).getByTestId("sidebar-version")).toHaveTextContent("v1.0.0");
     fireEvent.click(state);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
   });
@@ -88,6 +90,7 @@ describe("SidebarFooter", () => {
     renderFooter(true);
     const state = await screen.findByRole("button", { name: "Daemon running on port 8000" });
     expect(state).not.toHaveTextContent("Daemon running");
+    expect(screen.queryByTestId("sidebar-version")).toBeNull();
     // revise-web-ui-ia: web-ui "the collapsed rail keeps Settings as a gear with a tooltip"
     const gear = screen.getByRole("button", { name: "Settings" });
     expect(gear).not.toHaveTextContent("Settings");

@@ -10,7 +10,7 @@ import { useDaemonOutOfDate, useDaemonStatus } from "@/lib/hooks/useDaemon";
 
 export type DaemonFooterState =
   | { kind: "connecting" }
-  | { kind: "running"; port: number; outOfDate: boolean }
+  | { kind: "running"; port: number; outOfDate: boolean; version: string }
   | { kind: "stopping" }
   | { kind: "offline" };
 
@@ -23,5 +23,5 @@ export function useDaemonFooterState(): DaemonFooterState {
   if (status.isError) return { kind: "offline" };
   if (!status.data) return { kind: "connecting" };
   if (status.data.status === "draining") return { kind: "stopping" };
-  return { kind: "running", port: status.data.port, outOfDate };
+  return { kind: "running", port: status.data.port, outOfDate, version: status.data.version };
 }

@@ -92,7 +92,7 @@ def _apply_credentials(transport: dict[str, Any], v: dict[str, Any]) -> None:
     if not creds and not clear:
         return
     merged = {} if clear else dict(transport.get("credential_refs") or {})
-    merged.update(parse_pairs("--credential", creds, "CREDENTIAL_REF"))
+    merged.update(parse_pairs("--secret", creds, "SECRET_REF"))
     transport["credential_refs"] = merged
 
 
@@ -161,8 +161,8 @@ MCP_EDIT_FLAGS = EditFlags(
             str | None,
             typer.Option(None, "--cwd", help="Working directory (stdio); empty clears it"),
         ),
-        _repeat("credential", "--credential", "ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"),
-        _flag("clear_credentials", "--clear-credentials", "Drop every credential ref first"),
+        _repeat("credential", "--secret", "ENV_OR_HEADER=SECRET_REF (repeatable)"),
+        _flag("clear_credentials", "--clear-secrets", "Drop every secret ref first"),
         _opt(
             "spawn_timeout_seconds",
             int | None,

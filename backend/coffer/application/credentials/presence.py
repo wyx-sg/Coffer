@@ -1,6 +1,6 @@
 """Presence grants: the daemon's proof that a present human approved one operation.
 
-Spec credentials "Release plaintext only to a present human in the desktop
+Spec secret "Release plaintext only to a present human in the desktop
 app"; ADR only-a-present-human-sees-a-secret-or-sends-it-somewhere-new, rules
 1 to 3. The desktop shell runs a LocalAuthentication check (Touch ID or the login
 password) for each operation, with no reuse window. When it passes, the shell

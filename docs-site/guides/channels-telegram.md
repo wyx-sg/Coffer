@@ -32,7 +32,7 @@ You do not need to set a description or a command list: Coffer registers the bot
 
 ```sh [CLI]
 # Paste the token at the prompt; it is read from stdin, not your shell history
-coffer credentials set channel/tg/bot-token
+coffer secret set channel/tg/bot-token
 
 coffer channel add my-telegram --type telegram \
   --bot-token-ref channel/tg/bot-token \
@@ -173,11 +173,11 @@ Until you do, `coffer channel show` prints a `warning:` line naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Credentials**), paste the new token in **New bot token** and choose **Replace and restart**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **New bot token** and choose **Replace and restart**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
 
 ```sh
 coffer channel show my-telegram               # find the bot_token_ref
-coffer credentials set channel/tg/bot-token   # paste the new token
+coffer secret set channel/tg/bot-token   # paste the new token
 ```
 
 ## Limits
@@ -216,5 +216,5 @@ The Bot API server does not offer rich messages, so replies use the HTML fallbac
 
 - [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
 - [SeaTalk](/guides/channels-seatalk)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [Spec: channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md)

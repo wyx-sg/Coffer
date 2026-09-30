@@ -17,7 +17,7 @@ import type {
 } from "./generated/agent-registry";
 import type { components as Channels, paths as ChannelsPaths } from "./generated/channels";
 import type { components as Chat, paths as ChatPaths } from "./generated/chat";
-import type { components as Credentials, paths as CredentialsPaths } from "./generated/credentials";
+import type { components as Credentials, paths as CredentialsPaths } from "./generated/secret";
 import type { components as Daemon, paths as DaemonPaths } from "./generated/daemon";
 import type {
   components as InternalEngine,

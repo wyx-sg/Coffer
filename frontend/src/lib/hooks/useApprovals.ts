@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useApprovals.ts
 //
-// The approvals a secret change can wait on (spec credentials, secret
+// The approvals a secret change can wait on (spec secret, secret
 // boundary): the pending list, and the two answers to one. Rejecting is a
 // plain REST call any surface may make; approving runs a presence check in the
 // desktop shell (`approvePending`), which signs the grant and sends the

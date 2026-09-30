@@ -322,7 +322,7 @@ describe("presence-gated actions", () => {
     for (const run of [
       () => presenceMode(),
       () => revealSecret("mcp_server/abc/TOKEN"),
-      () => exportMasterKeyBackup(),
+      () => exportMasterKeyBackup("correct horse"),
       () => approvePending("apr-1"),
     ]) {
       const attempt = run();
@@ -344,10 +344,12 @@ describe("presence-gated actions", () => {
       secretRef: "mcp_server/abc/TOKEN",
     });
 
-    const backup = { path: "/Users/me/coffer-master.key", fingerprint: "ab12" };
+    const backup = { path: "/Users/me/coffer-master-key.cfk", fingerprint: "ab12" };
     invokeMock.mockResolvedValueOnce(backup);
-    await expect(exportMasterKeyBackup()).resolves.toEqual(backup);
-    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup");
+    await expect(exportMasterKeyBackup("correct horse")).resolves.toEqual(backup);
+    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup", {
+      passphrase: "correct horse",
+    });
 
     invokeMock.mockResolvedValueOnce({ id: "apr-1", status: "approved" });
     await expect(approvePending("apr-1")).resolves.toMatchObject({ status: "approved" });

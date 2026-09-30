@@ -10,7 +10,7 @@ label and the internal surrogate `id`), `Kind`, `Scope`,
 `audit_log` and `retention_policies` tables — is modelled by spec
 [resource-framework](../resource-framework/data-model.md). This document covers
 only what the MCP kind adds on top, and the `credentials` table in the same
-database belongs to spec credentials.
+database belongs to spec secret.
 
 This spec's own tables were created by two early Alembic revisions; the lineage
 has grown well past them as later specs landed, so the head revision is whatever

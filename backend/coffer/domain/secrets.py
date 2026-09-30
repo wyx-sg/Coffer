@@ -34,7 +34,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _URI_RE = re.compile(r"coffer://secret/([A-Za-z0-9_.-]{1,64})")
 
 #: What a pending approval asks the person to allow.
-ApprovalOp = Literal["bind", "replace_value", "disable_protection"]
+ApprovalOp = Literal["bind", "add_secret", "replace_value", "disable_protection"]
 ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
@@ -123,6 +123,7 @@ class SecretApproval:
     """A change that waits for a present human in the desktop app.
 
     ``op`` is ``bind`` (a secret to a new destination or target),
+    ``add_secret`` (a new standalone secret; its value waits as ciphertext),
     ``replace_value`` (a new value for a secret already in use; the new value
     waits as ciphertext and never appears here) or ``disable_protection``
     (turning the approval requirement off).
@@ -150,6 +151,9 @@ class SecretApproval:
                 f"send secret {self.ref!r} to {self.destination_kind} "
                 f"{self.destination_label!r} ({self.slot}) at {self.target}"
             )
+        if self.op == "add_secret":
+            name = standalone_name(self.ref or "") or self.ref
+            return f"add the new secret {name!r}"
         if self.op == "replace_value":
             return f"replace the value of secret {self.ref!r}"
         return "turn off approval for new secret destinations"

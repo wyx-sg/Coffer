@@ -56,6 +56,12 @@ class _FakeCredentialStore:
         now = datetime.now(tz=UTC).isoformat()
         return [(ref, now, now) for ref in sorted(self.store)]
 
+    def last_used(self) -> dict[str, str]:
+        return {}
+
+    def unreadable_refs(self) -> list[str]:
+        return []
+
 
 class _FakeAuditRepo:
     """Captures inserted audit entries for assertions."""
@@ -123,7 +129,7 @@ def _build_app(
     return app
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="store and reference a credential")
+@pytest.mark.acceptance(spec="secret", scenario="store and reference a credential")
 @pytest.mark.asyncio
 async def test_set_credential_stores_value() -> None:
     fake = _FakeCredentialStore()
@@ -190,7 +196,7 @@ async def test_set_credential_requires_token() -> None:
     assert fake.store == {}
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="delete a credential frees the reference")
+@pytest.mark.acceptance(spec="secret", scenario="delete a credential frees the reference")
 @pytest.mark.asyncio
 async def test_delete_credential_removes_value() -> None:
     fake = _FakeCredentialStore()
@@ -208,7 +214,7 @@ async def test_delete_credential_removes_value() -> None:
         r2 = await c.delete("/api/v1/credentials/nonexistent.REF")
         assert r2.status_code == 204
     assert fake.store == {}
-    # Spec credentials "Delete a credential idempotently": the deletion is
+    # Spec secret "Delete a credential idempotently": the deletion is
     # audited only when it removed something — the absent ref answers 204 too
     # but records nothing, so exactly one row, for the ref that existed.
     delete_events = [e for e in audit_repo.entries if e.event_type == "credential_deleted"]
@@ -237,7 +243,7 @@ async def test_delete_absent_credential_answers_204_and_records_nothing() -> Non
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="credentials", scenario="a credential in use cannot be deleted")
+@pytest.mark.acceptance(spec="secret", scenario="a credential in use cannot be deleted")
 async def test_delete_referenced_credential_returns_409_with_citations() -> None:
     """Deleting a credential that a resource config still references must be
     refused with 409 and the citing resource names — otherwise the deletion

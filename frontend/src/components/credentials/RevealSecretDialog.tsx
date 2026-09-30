@@ -4,7 +4,7 @@
 // 30 seconds; the reveal is recorded in Activity), then the desktop app's
 // presence check (Touch ID or the login password), then the value with Copy
 // and Hide and a countdown. When the time runs out, or the dialog closes, the
-// value is dropped (spec credentials "Release plaintext only to a present
+// value is dropped (spec secret "Release plaintext only to a present
 // human in the desktop app"). The menu never opens this in a browser.
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
@@ -26,6 +26,7 @@ import { useRevealSecret } from "@/lib/hooks/useSecrets";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn, formatDateTime } from "@/lib/utils";
 import { displayName } from "./secretRows";
+import { shortDate } from "./secretTimes";
 
 /** How long a revealed value stays on screen. */
 const REVEAL_SECONDS = 30;
@@ -36,7 +37,7 @@ interface Props {
 }
 
 export function RevealSecretDialog({ row, onOpenChange }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const reveal = useRevealSecret();
   const [left, setLeft] = useState(REVEAL_SECONDS);
@@ -129,6 +130,16 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
                 </p>
               </div>
             </div>
+            <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-text-muted">{t("secrets.replace.secret")}</dt>
+              <dd className="truncate font-mono text-text">{name}</dd>
+              {row.created_at ? (
+                <>
+                  <dt className="text-text-muted">{t("secrets.cols.created")}</dt>
+                  <dd className="text-text">{shortDate(row.created_at, i18n.language)}</dd>
+                </>
+              ) : null}
+            </dl>
             {reveal.error ? (
               <p role="alert" className="text-xs text-danger">
                 {translateApiError(t, reveal.error)}

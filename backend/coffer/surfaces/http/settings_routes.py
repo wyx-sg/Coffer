@@ -97,7 +97,7 @@ async def put_secret_boundary_settings(
     """Turn the approval requirement on (at once) or off (after approval).
 
     Switching it off widens where secrets may go, so it waits for the desktop
-    app like any new destination (spec credentials "Turn the protection off
+    app like any new destination (spec secret "Turn the protection off
     only through the desktop app"): the answer is 202 with the approval id.
     """
     boundary = get_secret_boundary()

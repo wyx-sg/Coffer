@@ -71,7 +71,7 @@ Coffer's [secret boundary](/guides/secrets) keeps a secret's value, and the deci
 | Action | Where | What it does |
 | --- | --- | --- |
 | **Reveal** or **copy** a secret | the secret, in the app | Shows or copies that one value. Audited as `credential_revealed`. |
-| **Back up the master key** | the app | Writes `coffer-master-key-<fingerprint>.key` (mode `0600`) into a folder you pick. Audited as `master_key_exported`. See [Credentials → Back up the key](/guides/credentials#back-up-the-key). |
+| **Back up the master key** | the app | Asks for a passphrase, then writes `coffer-master-key.cfk` — the key encrypted under it — (mode `0600`) into a folder you pick. Audited as `master_key_exported`. See [Secret store → Back up the key](/guides/secret-store#back-up-the-key). |
 | **Approve** | the approval sheet | Lets a secret go to a new destination or target, applies a replaced value, or switches the protection off. |
 
 Each action runs its own check, with nothing remembered in between:

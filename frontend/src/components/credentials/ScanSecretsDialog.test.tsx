@@ -20,6 +20,7 @@ const { credentialsApi } = await import("@/lib/api/credentials");
 const api = vi.mocked(credentialsApi);
 
 const SCAN: SecretScan = {
+  files_checked: 3,
   findings: [
     {
       id: "f1",
@@ -135,7 +136,9 @@ describe("ScanSecretsDialog", () => {
         skipped: [
           {
             id: "f1",
+            name: "npm-publish-token",
             path: SCAN.findings[0].path,
+            stored: false,
             reason: "secret 'npm-publish-token' already holds another value",
           },
         ],
@@ -149,16 +152,61 @@ describe("ScanSecretsDialog", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Review 1 change" }));
     const preview = await screen.findByRole("dialog", { name: "Review changes" });
     fireEvent.click(within(preview).getByRole("button", { name: "Apply 2 changes" }));
-    const result = await screen.findByRole("dialog", { name: "Moved 0 keys into secrets" });
+    const result = await screen.findByRole("dialog", { name: "Moved 0 of 1 key" });
     expect(result).toHaveTextContent("already holds another value");
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
-  test("a scan that finds nothing says so", async () => {
-    api.scan.mockResolvedValue({ findings: [], mentions: [] });
+  test("a file that cannot be rewritten keeps its key, says so, and can be tried again", async () => {
+    const path = SCAN.findings[0].path;
+    const partial = {
+      dry_run: false,
+      moved: [],
+      skipped: [
+        {
+          id: "f1",
+          path,
+          name: "npm-publish-token",
+          stored: true,
+          reason: "couldn't be rewritten: it is read-only",
+        },
+      ],
+    };
+    api.importFindings
+      .mockResolvedValueOnce({
+        dry_run: true,
+        moved: [{ id: "f1", name: "npm-publish-token", path, uri: "" }],
+        skipped: [],
+      })
+      .mockResolvedValueOnce(partial)
+      .mockResolvedValueOnce({
+        dry_run: false,
+        moved: [{ id: "f1", name: "npm-publish-token", path, uri: "" }],
+        skipped: [],
+      });
     renderDialog();
-    expect(
-      await screen.findByRole("dialog", { name: "No plaintext keys found" }),
-    ).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Tick all" }));
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "Move ~/.coffer/secrets/npm.env line 1" }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review 1 change" }));
+    const preview = await screen.findByRole("dialog", { name: "Review changes" });
+    fireEvent.click(within(preview).getByRole("button", { name: "Apply 2 changes" }));
+    const result = await screen.findByRole("dialog", { name: "Moved 0 of 1 key" });
+    expect(result).toHaveTextContent(
+      "couldn't be rewritten: it is read-only. The key is saved as the secret npm-publish-token",
+    );
+    expect(result).toHaveTextContent("Every change is in Activity");
+    fireEvent.click(within(result).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(api.importFindings).toHaveBeenLastCalledWith(["f1"], false));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  test("a scan that finds nothing says how many files it read", async () => {
+    api.scan.mockResolvedValue({ findings: [], mentions: [], files_checked: 214 });
+    renderDialog();
+    const dialog = await screen.findByRole("dialog", { name: "No plaintext keys found" });
+    expect(dialog).toHaveTextContent("Coffer checked 214 files and found no API keys or tokens");
   });
 });

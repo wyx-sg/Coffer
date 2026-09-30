@@ -75,8 +75,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer mcp tool", "coffer mcp cap list|enable|disable <server> tool:<name>"),
     ("coffer mcp resource", "coffer mcp cap list|enable|disable <server> resource:<uri>"),
     ("coffer mcp prompt", "coffer mcp cap list|enable|disable <server> prompt:<name>"),
-    ("coffer credentials delete", "coffer credentials rm"),
-    ("coffer credentials storage", "coffer config get|set credentials.storage"),
+    # Renamed by the OpenSpec change rename-credentials-capability-to-secret,
+    # with no alias; its old `delete` and `storage` subcommands are covered too.
+    ("coffer credentials", "coffer secret"),
     ("coffer agent detect", "coffer scan"),
     ("coffer agent native-memory", "coffer path agent <name> memory"),
     ("coffer agent native-memory-files", "coffer path agent <name> memory"),
@@ -124,7 +125,7 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
     # Removed by the OpenSpec change add-secret-boundary: no command hands out
-    # the master key (spec credentials "Return no plaintext on any route,
+    # the master key (spec secret "Return no plaintext on any route,
     # command or tool").
     ("coffer sync key export", "export a key backup in the Coffer desktop app"),
     # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
@@ -140,17 +141,26 @@ REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
     # One agent per type (change one-agent-per-type-and-no-titles): the type
     # is the name.
     ("coffer agent add", "--name", "coffer agent add <type> [--config-dir <dir>]"),
-    # No command prints a stored secret (spec credentials "Return no plaintext
+    # No command prints a stored secret (spec secret "Return no plaintext
     # on any route, command or tool").
-    ("coffer credentials get", "--show", "coffer credentials get <ref> (metadata only)"),
+    ("coffer secret get", "--show", "coffer secret get <ref> (metadata only)"),
+    # Renamed with the `coffer secret` group (change
+    # rename-credentials-capability-to-secret): the flags say "secret".
+    ("coffer mcp add", "--credential", "coffer mcp add … --secret ENV_OR_HEADER=<ref>"),
+    ("coffer mcp edit", "--credential", "coffer mcp edit … --secret ENV_OR_HEADER=<ref>"),
+    ("coffer mcp edit", "--clear-credentials", "coffer mcp edit … --clear-secrets"),
+    ("coffer provider add", "--credential-ref", "coffer provider add … --secret-ref <ref>"),
+    ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secrets"),
+    ("coffer sync remote set", "--without-credentials", "coffer sync remote set … --without-secrets"),
+    ("coffer sync remote set", "--credential-ref", "coffer sync remote set … --secret-ref <ref>"),
 )
 
 #: (file, phrase, why this line may name it). The phrase is the removed phrase
 #: as it appears in REMOVED, or "<command> <option>" for REMOVED_OPTIONS.
 _ABSENT = "a requirement or scenario asserting the removed spelling does not exist"
 ALLOWED: tuple[tuple[str, str, str], ...] = (
-    ("openspec/specs/credentials/spec.md", "coffer credentials get --show", _ABSENT),
-    ("openspec/specs/credentials/spec.md", "coffer sync key export", _ABSENT),
+    ("openspec/specs/secret/spec.md", "coffer secret get --show", _ABSENT),
+    ("openspec/specs/secret/spec.md", "coffer sync key export", _ABSENT),
     ("openspec/specs/internal-engine/spec.md", "coffer engine", _ABSENT),
     ("openspec/specs/resource-framework/spec.md", "coffer discard agent", _ABSENT),
     ("openspec/specs/knowledge/spec.md", "coffer__recall", _ABSENT),
@@ -158,7 +168,7 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
-    ("docs-site/architecture/security.md", "coffer credentials get --show", _ABSENT),
+    ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
     # The vault-sync data model is being rewritten on its own branch; delete
     # this entry when that lands (the gate fails once it matches nothing).
     ("openspec/specs/vault-sync/data-model.md", "coffer sync key export", "pending vault-sync rewrite"),

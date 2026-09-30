@@ -100,7 +100,7 @@ async def all_citations(service: ResourceService) -> dict[str, list[Resource]]:
     The whole-vault form of ``citations_of``: one scan over every row, each
     kind asked through its own ``credential_ref_extractor``, so a channel's bot
     token and a provider connection's API key count as much as an MCP server's
-    header. ``coffer credentials list`` reads this to say which cited secrets
+    header. ``coffer secret list`` reads this to say which cited secrets
     the store is missing.
     """
     cited: dict[str, list[Resource]] = {}

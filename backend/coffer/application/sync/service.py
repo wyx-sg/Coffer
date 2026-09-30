@@ -15,7 +15,6 @@ a rewrite is a torn snapshot that git would read as a deliberate change.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +33,7 @@ from coffer.application.sync.ports import (
     SyncRemoteRepoPort,
 )
 from coffer.application.sync.service_history import HistoryMixin
+from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
 from coffer.application.sync.service_remote import RemoteMixin
 from coffer.domain.audit import AuditEventType
@@ -41,13 +41,12 @@ from coffer.domain.error_base import CofferError
 from coffer.domain.secrets import sync_remote_destination
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
-from coffer.domain.sync.errors import MasterKeyFileInvalid
 
 #: Materialised for the length of one push and never written anywhere.
 _TOKEN_KEY = "token"
 
 
-class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
+class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin, KeyMixin):
     """Configure the remote, run a round, resolve a held one."""
 
     def __init__(
@@ -314,7 +313,7 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
             return None
         # The remote's URL is the target the token is approved for: pointing an
         # existing token at a new URL waits for the desktop app (spec
-        # credentials "Hold a secret for a new destination until a person
+        # secret "Hold a secret for a new destination until a person
         # approves it").
         resolved = await asyncio.to_thread(
             self._credentials.materialize,
@@ -323,27 +322,6 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
         )
         token = resolved.get(_TOKEN_KEY)
         return str(token) if token is not None else None
-
-    def key_fingerprint(self) -> str | None:
-        """A short SHA-256 fingerprint of the master key, never the key.
-
-        Two machines showing the same fingerprint hold the same key. It rides
-        in each machine's descriptor, so the machines table can say outright
-        that another machine's credentials will not decrypt here.
-        """
-        key = self._master_key.export_key()
-        return hashlib.sha256(key).hexdigest()[:12] if key else None
-
-    async def import_key(self, material: str) -> list[str]:
-        raw = material.strip().encode("utf-8")
-        if not raw:
-            raise MasterKeyFileInvalid("<import>", "no key material supplied")
-        try:
-            await asyncio.to_thread(self._master_key.install_key, raw)
-        except ValueError as e:
-            raise MasterKeyFileInvalid("<import>", "not a valid Fernet key") from e
-        await self._audit.record(AuditEventType.MASTER_KEY_IMPORTED.value, actor="sync")
-        return await asyncio.to_thread(self._credential_store.locked_refs)
 
     # --- recording ----------------------------------------------------------
 

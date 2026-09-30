@@ -10,7 +10,7 @@ class CredentialMissing(CofferError):  # noqa: N818
     code = "CREDENTIAL_MISSING"
 
     def __init__(self, ref: str) -> None:
-        super().__init__(f"credential not found in the credential store: {ref}")
+        super().__init__(f"secret not found in the secret store: {ref}")
         self.ref = ref
 
 
@@ -37,8 +37,8 @@ class CredentialInUse(CofferError):  # noqa: N818
         self.references = [f"{r.kind} {r.name!r}" for r in citations]
         joined = ", ".join(self.references)
         super().__init__(
-            f"credential {ref!r} is still used by: {joined}; "
-            "detach or delete those resources before deleting the credential"
+            f"secret {ref!r} is still used by: {joined}; "
+            "detach or delete those resources before deleting the secret"
         )
         self.ref = ref
         self.citations = citations
@@ -54,7 +54,7 @@ class CredentialUnreadable(CofferError):  # noqa: N818
     code = "CREDENTIAL_UNREADABLE"
 
     def __init__(self, ref: str) -> None:
-        super().__init__(f"credential {ref!r} cannot be decrypted with the current master key")
+        super().__init__(f"secret {ref!r} cannot be decrypted with the current master key")
         self.ref = ref
 
 
@@ -65,7 +65,7 @@ class MasterKeyMissing(CofferError):  # noqa: N818
 
     def __init__(self, key_path: str) -> None:
         super().__init__(
-            f"credentials exist but master key was not found at {key_path} or in the OS keychain; "
+            f"secrets exist but master key was not found at {key_path} or in the OS keychain; "
             "restore the key file or re-enter your secrets"
         )
         self.key_path = key_path
@@ -145,7 +145,7 @@ class MasterKeyConflict(CofferError):  # noqa: N818
     """Two different master keys, one in the Keychain and one in a source to move.
 
     Fatal at start, never resolved by choosing: the wrong one would orphan
-    every ciphertext the other opens (spec credentials "Keep the master key
+    every ciphertext the other opens (spec secret "Keep the master key
     behind a storage port chosen by the build").
     """
 

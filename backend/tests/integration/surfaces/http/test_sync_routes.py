@@ -17,15 +17,18 @@ that they are gone is asserted, and nothing else in this file mentions them.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import subprocess
 
 import pytest
 import yaml
+from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from coffer.domain.errors import CredentialUnreadable
 from coffer.domain.scope import Scope
 from coffer.domain.sync.backup import (
     DEFAULT_BRANCH,
@@ -33,6 +36,7 @@ from coffer.domain.sync.backup import (
     DEFAULT_WORKTREE,
 )
 from coffer.domain.sync.manifest import SCHEMA_VERSION
+from coffer.infrastructure.credentials import key_backup
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.sync_routes import (
@@ -861,7 +865,7 @@ async def test_key_fingerprint_is_short_and_is_not_the_key(client, fleet) -> Non
 
 async def test_no_sync_route_exports_the_master_key(client, fleet) -> None:
     """The key leaves only through the desktop app's presence-gated export (spec
-    credentials "Return no plaintext on any route, command or tool"); import
+    secret "Return no plaintext on any route, command or tool"); import
     still takes material in."""
     a, _b = fleet
 
@@ -875,7 +879,12 @@ async def test_no_sync_route_exports_the_master_key(client, fleet) -> None:
     imported = await client.post("/api/v1/sync/key/import", json={"material": key.decode()})
 
     assert imported.status_code == 200
-    assert imported.json() == {"locked_refs": []}
+    assert imported.json() == {
+        "fingerprint": a.key_fingerprint(),
+        "replaced": False,
+        "readable": 0,
+        "locked_refs": [],
+    }
     assert a.master_key.export_key() == key
 
 
@@ -900,6 +909,89 @@ async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> No
     assert r.status_code == 200
     # A now holds B's key, so A's own ciphertext is the unreadable one.
     assert r.json()["locked_refs"] == ["mcp/files/token"]
+    assert r.json()["replaced"] is True and r.json()["readable"] == 0
+    # The running store uses the imported key at once: what A stored under its
+    # old key is unreadable now, and a secret saved now is sealed under B's.
+    with pytest.raises(CredentialUnreadable):
+        a.credential_store.get("mcp/files/token")
+    a.set_credential("mcp/new/token", "fresh")
+    assert Fernet(other).decrypt(a.credentials.read_ciphertext("mcp/new/token") or b"") == b"fresh"
+
+
+def _backup(key: bytes, passphrase: str = "correct horse") -> str:
+    return key_backup.wrap(key, passphrase)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an import shows whose key the file holds before replacing"
+)
+async def test_key_import_preview_names_both_keys_and_changes_nothing(client, fleet) -> None:
+    a, b = fleet
+    other = b.master_key.export_key()
+    own = a.master_key.export_key()
+    assert other is not None and own is not None
+
+    different = await client.post(
+        "/api/v1/sync/key/import/preview", json={"material": _backup(other)}
+    )
+    same = await client.post("/api/v1/sync/key/import/preview", json={"material": own.decode()})
+
+    assert different.status_code == 200
+    assert different.json() == {
+        "fingerprint": b.key_fingerprint(),
+        "current_fingerprint": a.key_fingerprint(),
+        "same": False,
+        "protected": True,
+    }
+    assert same.json()["same"] is True and same.json()["protected"] is False
+    assert a.master_key.export_key() == own
+    assert other.decode() not in different.text
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a protected key file opens only with its passphrase"
+)
+async def test_a_protected_key_file_imports_only_with_its_passphrase(client, fleet) -> None:
+    a, b = fleet
+    other = b.master_key.export_key()
+    own = a.master_key.export_key()
+    assert other is not None
+    material = _backup(other)
+
+    wrong = await client.post(
+        "/api/v1/sync/key/import", json={"material": material, "passphrase": "not it at all"}
+    )
+    missing = await client.post("/api/v1/sync/key/import", json={"material": material})
+
+    for r in (wrong, missing):
+        assert r.status_code == 422 and _code(r) == "MASTER_KEY_PASSPHRASE_WRONG"
+        assert "not it at all" not in r.text
+    assert a.master_key.export_key() == own
+
+    right = await client.post(
+        "/api/v1/sync/key/import", json={"material": material, "passphrase": "correct horse"}
+    )
+
+    assert right.status_code == 200, right.text
+    assert right.json()["fingerprint"] == b.key_fingerprint()
+    assert right.json()["replaced"] is True
+    assert a.master_key.export_key() == other
+
+
+async def test_a_key_file_whose_fingerprint_was_edited_is_refused(client, fleet) -> None:
+    a, b = fleet
+    other = b.master_key.export_key()
+    assert other is not None
+    doc = json.loads(_backup(other))
+    doc["fingerprint"] = a.key_fingerprint()
+
+    r = await client.post(
+        "/api/v1/sync/key/import",
+        json={"material": json.dumps(doc), "passphrase": "correct horse"},
+    )
+
+    assert r.status_code == 422 and _code(r) == "MASTER_KEY_FILE_INVALID"
+    assert a.master_key.export_key() != other
 
 
 async def test_key_import_of_empty_material_is_422(client) -> None:
@@ -1063,6 +1155,7 @@ _SYNC_OPERATIONS = {
     ("PATCH", "/machines/self"),
     ("DELETE", "/machines/{id}"),
     ("GET", "/key/fingerprint"),
+    ("POST", "/key/import/preview"),
     ("POST", "/key/import"),
 }
 

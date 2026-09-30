@@ -23,6 +23,7 @@ import logging
 import pathlib
 import sqlite3
 import threading
+from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime
 
@@ -30,6 +31,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from coffer.domain.credential_errors import CredentialLocked
 from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX
+from coffer.infrastructure.credentials import key_backup
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 
 _logger = logging.getLogger(__name__)
@@ -44,8 +46,18 @@ class ResolvedMasterKey:
     it replaces the answer.
     """
 
-    def __init__(self, manager: MasterKeyManager) -> None:
+    def __init__(
+        self,
+        manager: MasterKeyManager,
+        *,
+        on_install: Callable[[bytes], None] | None = None,
+    ) -> None:
         self._manager = manager
+        # Told the new key once it is installed: the running credential store
+        # encrypts and decrypts with the key it was built with, and after an
+        # import that must be the imported one, or a secret saved now would be
+        # sealed under a key this machine no longer keeps.
+        self._on_install = on_install
         self._lock = threading.Lock()
         self._resolved = False
         self._key: bytes | None = None
@@ -76,6 +88,17 @@ class ResolvedMasterKey:
         self._manager.install_key(key)
         with self._lock:
             self._key, self._resolved, self._unreadable = key.strip(), True, False
+        if self._on_install is not None:
+            self._on_install(key.strip())
+
+    def peek_backup(self, material: str) -> tuple[str, bool]:
+        """The fingerprint a key file holds, and whether it needs a passphrase."""
+        info = key_backup.peek(material)
+        return info.fingerprint, info.protected
+
+    def open_backup(self, material: str, passphrase: str | None) -> bytes:
+        """The key a key file holds — a ``.cfk`` opened with its passphrase."""
+        return key_backup.unwrap(material, passphrase)
 
 
 class CredentialSyncAdapter:

@@ -51,7 +51,7 @@ Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start
 
 ```sh [CLI]
 # Paste the App Secret at the prompt; it is read from stdin
-coffer credentials set channel/st/app-secret
+coffer secret set channel/st/app-secret
 
 coffer channel add my-seatalk --type seatalk \
   --app-id <APP_ID> \
@@ -156,7 +156,7 @@ The bot never reads recent messages from a group's main chat. SeaTalk does not g
 
 ### Quoted messages
 
-When you reply by quoting a message, Coffer looks the quoted message up with the bot's own credentials and folds it into the turn as `> sender: …` lines above your text, with its images and files attached. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
+When you reply by quoting a message, Coffer looks the quoted message up with the bot's own secrets and folds it into the turn as `> sender: …` lines above your text, with its images and files attached. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
 
 ### Forwarded chat history
 
@@ -187,7 +187,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Credentials**), paste **New app secret** and choose **Replace and restart**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Credentials**.
+On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste **New app secret** and choose **Replace and restart**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Secrets**.
 
 ## Limits
 
@@ -222,6 +222,6 @@ SeaTalk ended the stream. The full answer is the one sent below.
 
 - [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
 - [Telegram](/guides/channels-telegram)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [Spec: channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)
 - [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)

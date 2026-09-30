@@ -96,6 +96,22 @@ class RetentionService:
             details={"table": table_name, "retention_days": days},
         )
 
+    async def preview(
+        self, table_name: str, days: int, *, now: datetime | None = None
+    ) -> tuple[int, int]:
+        """``(rows kept now, rows a window of ``days`` would delete)`` for one policy's own table.
+
+        What the Settings Data tab asks before a shortening is confirmed; nothing is
+        deleted. A follower has no window of its own, so it has no preview.
+        """
+        table = self._registry.get(table_name)
+        if not table.owns_policy:
+            raise UnknownPrunableTable(f"{table_name!r} follows another table's policy")
+        if days <= 0:
+            raise ValueError(f"days must be positive, got {days}")
+        cutoff = (now or datetime.now(tz=UTC)) - timedelta(days=days)
+        return await self._repo.count_rows(table.sql_table, table.timestamp_column, cutoff)
+
     async def prune(
         self,
         table_name: str | None = None,

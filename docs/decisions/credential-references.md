@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Across Machines](credentials-across-machines.md), [Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md), [Kind Plugin Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [principles](../../docs-site/architecture/principles.md) (Credentials), spec credentials, spec vault-sync, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #406
+**Related**: [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Across Machines](credentials-across-machines.md), [Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md), [Kind Plugin Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [principles](../../docs-site/architecture/principles.md) (Credentials), spec secret, spec vault-sync, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #406
 
 ## Context
 
@@ -35,11 +35,11 @@ Two further forces:
 
 A secret is addressed by an opaque **ref**: slash-separated segments of
 `[A-Za-z0-9_.-]` that mean nothing to the store
-(spec credentials "Address a secret by an opaque reference"). A config carries
+(spec secret "Address a secret by an opaque reference"). A config carries
 refs, never values — for `mcp_server` a `credential_refs` map of env var or
 header name to ref; each kind declares where its refs live through
 `Kind.credential_ref_extractor` (`mcp_server`, `channel` and `provider` do)
-(spec credentials "Carry references, never secrets, in resource configuration").
+(spec secret "Carry references, never secrets, in resource configuration").
 The `mcp_server` config model additionally refuses a static env or header
 value that looks like a secret — `Bearer …`, `ghp_`, `github_pat_`, `sk-`,
 `xoxb-` and its siblings, a JWT prefix — and tells the user to move it into `credential_refs`
@@ -49,7 +49,7 @@ Resolution happens only at the moment of use: `CredentialResolver.materialize`
 (`application/credentials/resolver.py`) turns `{key: ref}` into
 `{key: secret}` for an upstream spawn, header injection or adapter start, and
 the plaintext lives only in that process environment or request
-(spec credentials "Hold plaintext only in memory at the moment of use"). A ref
+(spec secret "Hold plaintext only in memory at the moment of use"). A ref
 the store does not hold raises `CredentialMissing` rather than starting a
 half-configured resource.
 
@@ -57,16 +57,16 @@ The lifecycle is kept whole around the ref:
 
 - **Write first.** A surface that accepts a pasted secret stores it and
   persists only the ref, and removes the credential again if the registration
-  that follows fails (spec credentials "Store a pasted secret before persisting its reference").
+  that follows fails (spec secret "Store a pasted secret before persisting its reference").
 - **No dangling citations.** Deleting a credential is refused with
   `409 CREDENTIAL_IN_USE` while any resource cites it, naming each citer by
   kind and current name. No foreign key can express this — the ref lives
   inside another kind's JSON config — so `ResourceService.find_credential_citations`
   walks every registered config through its kind's extractor
-  (spec credentials "Refuse to delete a credential still in use").
+  (spec secret "Refuse to delete a credential still in use").
 - **No orphans.** Deleting a resource releases the refs nothing else cites,
   on this machine and, through a converged deletion, on every other
-  (spec credentials "Release unshared references when a resource is deleted").
+  (spec secret "Release unshared references when a resource is deleted").
 - **Reads leave a trail.** A deliberate read of a value
   (`GET /api/v1/credentials/{ref}`, `coffer credentials get --show`) is audited
   as `credential_read` with the ref only; the presence probe decrypts nothing

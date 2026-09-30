@@ -23,7 +23,7 @@ import type { ChannelEditPlan } from "./schema";
  *  one in use, so it is stored sealed and waits for approval in the Coffer app. */
 async function writeSecret(ref: string, value: string): Promise<boolean> {
   const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
   return data?.approval !== undefined;
 }
 

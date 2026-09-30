@@ -265,6 +265,8 @@ class CredentialModel(Base):
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+    #: When a consumer last had the value decrypted on this machine (0134).
+    last_used_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SecretBindingModel(Base):

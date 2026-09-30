@@ -1,6 +1,6 @@
 """What the CLI says, and does, when a change waits for the Coffer app.
 
-Spec credentials "Hold a secret for a new destination until a person approves
+Spec secret "Hold a secret for a new destination until a person approves
 it": a secret bound to a new destination, a replaced value that is in use, or
 switching the protection off is saved as a pending approval. Approving takes a
 present human in the desktop app — Touch ID or the login password — which no

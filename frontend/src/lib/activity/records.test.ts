@@ -18,6 +18,7 @@ import {
   DEFAULT_FILTERS,
   filtersNarrow,
   matchesFilters,
+  changeCategory,
   sourcesFor,
   type ActivityFilters,
   type FilterContext,
@@ -110,18 +111,24 @@ describe("sourcesFor", () => {
   test("everything reads all three logs", () => {
     expect(sourcesFor("everything", DEFAULT_FILTERS)).toEqual(["change", "call", "daemon"]);
   });
-  test("a kind narrows everything to one log", () => {
-    expect(sourcesFor("everything", f({ kind: "calls" }))).toEqual(["call"]);
-    expect(sourcesFor("everything", f({ kind: "change:skill" }))).toEqual(["change"]);
-    expect(sourcesFor("everything", f({ kind: "not-daemon" }))).toEqual(["change", "call"]);
+  test("the kinds narrow everything to the logs they name", () => {
+    expect(sourcesFor("everything", f({ kinds: ["calls"] }))).toEqual(["call"]);
+    expect(sourcesFor("everything", f({ kinds: ["change:skill"] }))).toEqual(["change"]);
+    expect(sourcesFor("everything", f({ kinds: ["calls", "changes"] }))).toEqual([
+      "change",
+      "call",
+    ]);
   });
-  test("a server or an agent leaves the daemon log out", () => {
+  test("a server or only agents leave the daemon log out", () => {
     expect(sourcesFor("everything", f({ server: "u-gh" }))).toEqual(["change", "call"]);
-    expect(sourcesFor("everything", f({ by: "agent:a-cc" }))).toEqual(["change", "call"]);
+    expect(sourcesFor("everything", f({ by: ["agent:a-cc", "agent:a-cx"] }))).toEqual([
+      "change",
+      "call",
+    ]);
   });
-  test("a non-agent actor keeps changes, and Coffer keeps its daemon records", () => {
-    expect(sourcesFor("everything", f({ by: "actor:ui" }))).toEqual(["change"]);
-    expect(sourcesFor("everything", f({ by: "actor:system" }))).toEqual(["change", "daemon"]);
+  test("a non-agent who keeps changes, and Coffer keeps its daemon records", () => {
+    expect(sourcesFor("everything", f({ by: ["actor:you"] }))).toEqual(["change"]);
+    expect(sourcesFor("everything", f({ by: ["actor:system"] }))).toEqual(["change", "daemon"]);
   });
 });
 
@@ -138,10 +145,35 @@ describe("matchesFilters", () => {
     const change = fromAudit(
       audit({ id: 3, event_type: "knowledge_written", actor: "Claude Code" }),
     );
-    const filters = f({ by: "agent:a-cc" });
+    const filters = f({ by: ["agent:a-cc"] });
     expect(matchesFilters(mine, "everything", filters, ctx)).toBe(true);
     expect(matchesFilters(theirs, "everything", filters, ctx)).toBe(false);
     expect(matchesFilters(change, "everything", filters, ctx)).toBe(true);
+  });
+
+  test("several who values keep a record that matches any of them", () => {
+    const filters = f({ by: ["agent:a-cc", "actor:you"] });
+    const byUi = fromAudit(audit({ id: 6, actor: "ui" }));
+    const byDesktop = fromAudit(audit({ id: 7, actor: "desktop" }));
+    const byCli = fromAudit(audit({ id: 8, actor: "cli" }));
+    expect(matchesFilters(fromCall(call()), "everything", filters, ctx)).toBe(true);
+    expect(matchesFilters(byUi, "everything", filters, ctx)).toBe(true);
+    expect(matchesFilters(byDesktop, "everything", filters, ctx)).toBe(true);
+    expect(matchesFilters(byCli, "everything", filters, ctx)).toBe(false);
+  });
+
+  test("a change kind with no resource is found by its event's area", () => {
+    const secret = fromAudit(audit({ id: 9, event_type: "credential_set" }));
+    const token = fromAudit(audit({ id: 10, event_type: "token_rotated" }));
+    const skill = fromAudit(audit({ id: 11, resource_kind: "skill", resource_name: "pdf" }));
+    expect(changeCategory(audit({ id: 0, event_type: "master_key_exported" }))).toBe("secret");
+    expect(changeCategory(audit({ id: 0, event_type: "sync_run" }))).toBe("sync");
+    const filters = f({ kinds: ["change:secret", "change:settings"] });
+    expect(matchesFilters(secret, "everything", filters, ctx)).toBe(true);
+    expect(matchesFilters(token, "everything", filters, ctx)).toBe(true);
+    expect(matchesFilters(skill, "everything", filters, ctx)).toBe(false);
+    expect(matchesFilters(skill, "everything", f({ kinds: ["changes"] }), ctx)).toBe(true);
+    expect(matchesFilters(fromCall(call()), "everything", filters, ctx)).toBe(false);
   });
 
   test("a server filter keeps changes to that server", () => {

@@ -272,7 +272,7 @@ class SubprocessSupervisor:
         # (sqlite, or the OS keychain in legacy setups). Offload to a thread
         # so a slow read can't freeze the whole event loop and stall every
         # other concurrent session. Named destination: the boundary injects
-        # nothing into a target nobody approved (spec credentials "Hold a
+        # nothing into a target nobody approved (spec secret "Hold a
         # secret for a new destination until a person approves it") — for a
         # custom-tool group the target is its base URL.
         overlay = await asyncio.to_thread(

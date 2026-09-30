@@ -463,7 +463,9 @@ class VaultMachine:
         kinds["provider"] = make_provider_kind(self.resources)
         # One resolved key shared by the adapter and the service, as the wiring
         # does, so a key imported through the service is what the adapter reads.
-        self.resolved_key = ResolvedMasterKey(self.master_key)
+        self.resolved_key = ResolvedMasterKey(
+            self.master_key, on_install=self.credential_store.use_key
+        )
         self.credentials = CredentialSyncAdapter(self.db_path, self.resolved_key)
 
         self.bundle = Bundle(

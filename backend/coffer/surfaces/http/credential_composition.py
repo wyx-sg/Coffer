@@ -119,7 +119,7 @@ async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> C
         )
     except CredentialLocked as e:
         # The keychain may hold the key; creating one in the file now would
-        # shadow it on every later start (spec credentials "Resolve the master
+        # shadow it on every later start (spec secret "Resolve the master
         # key file-first and create it only for an empty store").
         raise CredentialLocked(
             f"the OS keychain is locked or unreadable ({e}) and may hold Coffer's master "
@@ -157,7 +157,7 @@ async def run_credential_startup(
     The legacy keychain move below, the audit of a master key the signed build
     moved into its Keychain access group, and the one-time adoption of every
     secret binding in use before the secret boundary existed — so upgrading
-    stops nothing that already worked (spec credentials "Hold a secret for a
+    stops nothing that already worked (spec secret "Hold a secret for a
     new destination until a person approves it").
     """
     await run_legacy_keychain_migration(kinds, sm, credential_store, audit)

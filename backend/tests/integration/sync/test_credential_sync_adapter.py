@@ -47,7 +47,7 @@ def db(tmp_path: pathlib.Path) -> pathlib.Path:
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute(
             "CREATE TABLE credentials (ref TEXT PRIMARY KEY, ciphertext BLOB, "
-            "created_at TEXT, updated_at TEXT)"
+            "created_at TEXT, updated_at TEXT, last_used_at TEXT)"
         )
     return path
 
@@ -137,3 +137,33 @@ def test_an_unreadable_key_file_reports_nothing_locked(
     with caplog.at_level("WARNING"):
         assert adapter.locked_refs() == []
     assert [r.getMessage() for r in caplog.records] == ["sync.master_key_unreadable"]
+
+
+def test_an_installed_key_is_used_by_the_running_store_at_once(
+    db: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # The daemon's credential store is built with the key it started with. An
+    # import through the shared resolved key hands it the new one, so a secret
+    # stored right after the import is sealed under the key this machine now
+    # keeps, not under the replaced one (spec vault-sync "Import a master key
+    # after showing whose key it is").
+    from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+
+    old, new = Fernet.generate_key(), Fernet.generate_key()
+    key_path = tmp_path / "keys" / "master.key"
+    key_path.parent.mkdir()
+    key_path.write_bytes(old)
+    store = EncryptedCredentialStore(db, old)
+    resolved = ResolvedMasterKey(
+        MasterKeyManager(key_path, _CountingKeychain(None)), on_install=store.use_key
+    )
+
+    resolved.install_key(new)
+    store.set("secret/after-import", "v")
+
+    with closing(sqlite3.connect(db)) as conn:
+        (blob,) = conn.execute(
+            "SELECT ciphertext FROM credentials WHERE ref = 'secret/after-import'"
+        ).fetchone()
+    assert Fernet(new).decrypt(bytes(blob)) == b"v"
+    assert store.peek("secret/after-import") == "v"

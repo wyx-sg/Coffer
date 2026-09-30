@@ -46,7 +46,7 @@ def add(
     base_url: str = typer.Option(..., "--base-url", help="Upstream endpoint base URL"),
     secret: str | None = typer.Option(None, "--secret", help="API key (stored encrypted)"),
     credential_ref: str | None = typer.Option(
-        None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
+        None, "--secret-ref", help="Reuse an existing secret ref instead of --secret"
     ),
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
@@ -65,13 +65,13 @@ def add(
     it serves and each model's served context window.
 
     For anthropic/openai/unknown supply exactly one of --secret /
-    --credential-ref; an ollama connection needs neither. The new connection
+    --secret-ref; an ollama connection needs neither. The new connection
     starts on the wire's own default reach; route it to specific agents (e.g. an
     openai gateway to Claude Code) with `coffer provider scope <name> --agents
     claude-code`. The model is chosen at the point of use, not on the
     connection.
 
-    A --credential-ref key that already goes somewhere else waits for approval
+    A --secret-ref key that already goes somewhere else waits for approval
     in the Coffer app before this connection may send it: the command says so
     and exits 9, or waits for the answer with --wait.
 
@@ -120,7 +120,7 @@ def add(
             _cli_client.check(t, verbose=verbose)
         typer.echo(f"added provider {data['name']} ({data['protocol']})")
         # An existing key sent to this new base URL waits for the Coffer app
-        # (spec credentials "Hold a secret for a new destination until a person
+        # (spec secret "Hold a secret for a new destination until a person
         # approves it"): say so, and exit 9 unless --wait.
         settle(c, pending_for(c, data["uid"], verbose=verbose), wait=wait, verbose=verbose)
 
@@ -243,7 +243,7 @@ def edit(
         if base_url is not None or secret is not None:
             # The key goes to the new base URL, and a new key replaces one in
             # use, only once a person approves it in the Coffer app (spec
-            # credentials "Hold a secret for a new destination until a person
+            # secret "Hold a secret for a new destination until a person
             # approves it", "Hold a replaced value in use until a person
             # approves it"): say what waits, and exit 9 unless --wait.
             key_ref = _config(current, "credential_ref")

@@ -1,11 +1,13 @@
 // src/components/credentials/ScanSecretsDialog.tsx — Find plaintext keys: scan, tick, review a dry run, apply.
 //
 // Opening it scans `~/.coffer/secrets/` and the skill master store for
-// plaintext values (spec credentials "Move plaintext secret files into the
+// plaintext values (spec secret "Move plaintext secret files into the
 // store"). Every finding starts ticked. Review asks the daemon for a dry run of
 // the ticked ones — nothing is written — and shows the secrets it would add
 // and the files it would rewrite; Apply then runs the import. The dialog
-// closes on success, or, when some were skipped, says which and why.
+// closes on success, or, when some were skipped, says "Moved 2 of 3 keys",
+// which and why, and offers Try again for a file that could not be rewritten.
+// A scan that finds nothing says how many files it read and where it looked.
 import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -101,7 +103,14 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
 
   let body;
   if (step.name === "done") {
-    body = <ScanResultStep result={step.result} onClose={close} />;
+    body = (
+      <ScanResultStep
+        result={step.result}
+        retrying={importer.isPending}
+        onRetry={(ids) => void apply(ids)}
+        onClose={close}
+      />
+    );
   } else if (step.name === "preview") {
     body = (
       <ScanPreviewStep
@@ -140,7 +149,13 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
     body = (
       <>
         <Title>{t("secrets.scan.noneTitle")}</Title>
-        <p className="text-sm text-text-muted">{t("secrets.scan.noneBody")}</p>
+        <p className="text-sm text-text-muted">
+          {t("secrets.scan.noneBody", { count: scan.data?.files_checked ?? 0 })}
+        </p>
+        <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 text-xs">
+          <dt className="text-text-muted">{t("secrets.scan.checked")}</dt>
+          <dd className="font-mono text-text">{t("secrets.scan.checkedWhere")}</dd>
+        </dl>
         <div className="flex justify-end">
           <Button onClick={close}>{t("common.done")}</Button>
         </div>

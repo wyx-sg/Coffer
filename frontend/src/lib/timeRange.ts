@@ -9,6 +9,8 @@
 export const TIME_PRESETS = ["1h", "6h", "24h", "7d", "30d", "all"] as const;
 
 const RANGE_MS: Record<string, number> = {
+  // Activity's shortest window; not one of the shared picker's presets.
+  "15m": 900_000,
   "1h": 3_600_000,
   "6h": 21_600_000,
   "24h": 86_400_000,

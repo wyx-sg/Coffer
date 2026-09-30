@@ -1,5 +1,5 @@
 // frontend/src/lib/api/credentials.ts — /api/v1/credentials: the stored secrets
-// and the approvals they can wait on (spec credentials). Wire types are aliases
+// and the approvals they can wait on (spec secret). Wire types are aliases
 // of the credentials contract's generated schemas.
 //
 // Only the routes a page may call with its token alone live here: listing,
@@ -9,7 +9,7 @@
 // a key backup — needs a presence grant only the desktop shell can sign, so it
 // goes through `@/lib/tauri`, never through a request from here.
 import { call, enc } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/credentials";
+import type { components } from "@/lib/api/generated/secret";
 
 type Schemas = components["schemas"];
 

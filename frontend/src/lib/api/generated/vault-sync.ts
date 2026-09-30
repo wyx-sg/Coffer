@@ -105,6 +105,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/key/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Key Import
+         * @description Whose key a file holds and whether it is this machine's, changing nothing.
+         *
+         *     A passphrase-protected backup is not opened here: its fingerprint is read
+         *     from the file and checked against the key when it is imported.
+         */
+        post: operations["preview_key_import_api_v1_sync_key_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/machines": {
         parameters: {
             query?: never;
@@ -439,15 +462,42 @@ export interface components {
             /** Fingerprint */
             fingerprint: string | null;
         };
+        /** KeyImportIn */
+        KeyImportIn: {
+            /** Material */
+            material: string;
+            /** Passphrase */
+            passphrase?: string | null;
+        };
         /** KeyImportOut */
         KeyImportOut: {
+            /** Fingerprint */
+            fingerprint: string;
             /** Locked Refs */
             locked_refs: string[];
+            /** Readable */
+            readable: number;
+            /** Replaced */
+            replaced: boolean;
         };
         /** KeyMaterialIn */
         KeyMaterialIn: {
             /** Material */
             material: string;
+        };
+        /**
+         * KeyPreviewOut
+         * @description A key file beside this machine's key, before anything is replaced.
+         */
+        KeyPreviewOut: {
+            /** Current Fingerprint */
+            current_fingerprint: string | null;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Protected */
+            protected: boolean;
+            /** Same */
+            same: boolean;
         };
         /** MachineListOut */
         MachineListOut: {
@@ -899,7 +949,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KeyMaterialIn"];
+                "application/json": components["schemas"]["KeyImportIn"];
             };
         };
         responses: {
@@ -910,6 +960,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KeyImportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_key_import_api_v1_sync_key_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyMaterialIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

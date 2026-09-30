@@ -1,4 +1,4 @@
-"""``coffer config`` for ``feature.<key>`` and ``credentials.storage``.
+"""``coffer config`` for ``feature.<key>`` and ``secrets.storage``.
 
 Features run against the real app. The master key is exercised against a
 stand-in route instead: the real relocation would move a key into this
@@ -90,7 +90,7 @@ def test_unsetting_a_feature_returns_it_to_the_channel_default(
     assert rows["feature.memory"]["value"] is (channel == "dev")
 
 
-# --- credentials.storage --------------------------------------------------------------
+# --- secrets.storage --------------------------------------------------------------
 
 
 @pytest.fixture
@@ -118,25 +118,23 @@ def storage_route(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Any]]:
     return calls
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="move the master key with the config command")
+@pytest.mark.acceptance(spec="secret", scenario="move the master key with the config command")
 def test_the_master_key_moves_through_the_config_command(
     storage_route: list[tuple[str, Any]],
 ) -> None:
-    assert (
-        _runner.invoke(cli_app, ["config", "get", "credentials.storage"]).output.strip() == "file"
-    )
+    assert _runner.invoke(cli_app, ["config", "get", "secrets.storage"]).output.strip() == "file"
 
-    moved = _runner.invoke(cli_app, ["config", "set", "credentials.storage", "keychain"])
+    moved = _runner.invoke(cli_app, ["config", "set", "secrets.storage", "keychain"])
     assert moved.exit_code == 0, moved.output
     assert ("PUT", {"master_key_storage": "keychain"}) in storage_route
 
     calls_before = list(storage_route)
-    refused = _runner.invoke(cli_app, ["config", "set", "credentials.storage", "vault"])
+    refused = _runner.invoke(cli_app, ["config", "set", "secrets.storage", "vault"])
     assert refused.exit_code != 0
     assert "file" in refused.output and "keychain" in refused.output
     assert storage_route == calls_before
 
-    back = _runner.invoke(cli_app, ["config", "unset", "credentials.storage"])
+    back = _runner.invoke(cli_app, ["config", "unset", "secrets.storage"])
     assert back.exit_code == 0
     assert storage_route[-1] == ("PUT", {"master_key_storage": "file"})
 
@@ -146,7 +144,7 @@ _CONFIG_MODULES = ("config_cmd.py", "_config_keys.py", "_config_registry.py", "_
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="the config command reaches the master key only through the daemon"
+    spec="secret", scenario="the config command reaches the master key only through the daemon"
 )
 def test_the_config_command_imports_no_credential_code(
     storage_route: list[tuple[str, Any]],
@@ -164,5 +162,5 @@ def test_the_config_command_imports_no_credential_code(
             name
         )
 
-    assert _runner.invoke(cli_app, ["config", "get", "credentials.storage"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["config", "get", "secrets.storage"]).exit_code == 0
     assert storage_route == [("GET", None)]

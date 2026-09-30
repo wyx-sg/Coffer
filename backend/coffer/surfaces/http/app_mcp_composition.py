@@ -125,7 +125,7 @@ def wire_mcp_kind(
     mcp_kind = make_mcp_kind(session_supervisors)
     app.state.kinds["mcp_server"] = mcp_kind
     # Where each server's secrets go, for the secret boundary's adoption and
-    # listing (spec credentials "Hold a secret for a new destination until a
+    # listing (spec secret "Hold a secret for a new destination until a
     # person approves it").
     register_resource_destination("mcp_server", _mcp_secret_destination)
 

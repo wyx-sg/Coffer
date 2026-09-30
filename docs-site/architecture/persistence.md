@@ -43,7 +43,7 @@ Sessions come from an `async_sessionmaker` with `expire_on_commit=False`, so obj
 
 ### The one synchronous path
 
-The encrypted credential store ([`infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py)) deliberately uses the standard-library `sqlite3` module with a short-lived connection per call, because upstream spawning and register-time credential probing are synchronous code paths with no event loop. Async callers go through its `aget` / `aexists` / `aset` / `adelete` wrappers, which run each call in a worker thread. A synchronous call made on the event loop would deadlock against the aiosqlite connection holding the write lock, so the wrappers are mandatory there.
+The encrypted secret store ([`infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py)) deliberately uses the standard-library `sqlite3` module with a short-lived connection per call, because upstream spawning and register-time secret probing are synchronous code paths with no event loop. Async callers go through its `aget` / `aexists` / `aset` / `adelete` wrappers, which run each call in a worker thread. A synchronous call made on the event loop would deadlock against the aiosqlite connection holding the write lock, so the wrappers are mandatory there.
 
 ## Migrations
 
@@ -128,7 +128,7 @@ All four are machine-local. `coffer.db` is not part of the sync bundle, so none 
 
 | Table | Purpose |
 | --- | --- |
-| `sync_remotes` | The one configured remote (a single-row table): URL, branch, interval, working-tree path (default `~/.coffer/sync`), whether credential ciphertext is carried, and the last round's result. |
+| `sync_remotes` | The one configured remote (a single-row table): URL, branch, interval, working-tree path (default `~/.coffer/sync`), whether secret ciphertext is carried, and the last round's result. |
 | `sync_runs` | Every converge round this machine has run. Pruned after 90 days by default. |
 | `sync_convergence_state` | The pointer — the commit this vault has provably absorbed — and any round the deletion guard is holding for confirmation. A single row. |
 | `sync_held_paths` | Paths the exporter must not publish as deletions: ones that failed to apply (retried next round) and ones that cannot apply on this machine. |
@@ -145,7 +145,7 @@ The `alembic_version` table holds the current revision.
 | --- | --- |
 | Resource identity, config and reach | Knowledge documents and their `.inbox/` |
 | Audit log and MCP invocation log | Memory partitions: `MEMORY.md`, `notes/`, `RETIRED.md`, `.raw/` |
-| Credential ciphertext | Skill master folders |
+| Secret ciphertext | Skill master folders |
 | Chat history | Daemon and upstream logs |
 | Sync pointer, history and held paths | The sync working tree (a git repository) |
 | Channel pairings | Downloaded channel media |
@@ -180,7 +180,7 @@ A knowledge collection or memory partition is still a `resources` row — that i
 Tests and development setups redirect the file trees with `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_SKILLS_ROOT` and `COFFER_LOG_DIR`. The full reference is [Files and directories](/reference/filesystem).
 
 ::: warning Back up the key with the database
-`coffer.db` holds credentials only as ciphertext. A copy of the database without the matching `master.key` (or, in keychain mode, the keychain entry) cannot decrypt any secret. Back up `~/.coffer/` as a whole.
+`coffer.db` holds secrets only as ciphertext. A copy of the database without the matching `master.key` (or, in keychain mode, the keychain entry) cannot decrypt any secret. Back up `~/.coffer/` as a whole.
 :::
 
 ## Settings that live outside the database
@@ -205,7 +205,7 @@ Their contents, lifetimes and the reasoning behind each are described once, in [
 | [`backend/coffer/infrastructure/persistence/repos.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/repos.py) | Resource and audit repositories. |
 | [`backend/coffer/infrastructure/persistence/migrations/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations) | Alembic environment and revisions. |
 | [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | Startup migration, backup and too-new guard. |
-| [`backend/coffer/infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py) | The synchronous credential store. |
+| [`backend/coffer/infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py) | The synchronous secret store. |
 | [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`. |
 | [`backend/coffer/infrastructure/daemon/pid_lock.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/pid_lock.py) | `daemon.json`. |
 

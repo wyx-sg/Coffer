@@ -5,7 +5,7 @@
 // behind the same ref (the agents' config files only name the ref, so they do
 // not change). A key already in use does not change at once — the new value
 // waits behind a pending `replace_value` approval in the Coffer app (spec
-// credentials "Hold a replaced value in use until a person approves it") — so
+// secret "Hold a replaced value in use until a person approves it") — so
 // after the write the pending list is read again, and while an approval for
 // this ref waits the dialog says so and offers Review instead of closing.
 import { useEffect, useState } from "react";

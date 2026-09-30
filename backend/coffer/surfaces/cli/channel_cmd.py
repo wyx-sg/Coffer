@@ -72,13 +72,13 @@ def add(
     bot_token_ref: str | None = typer.Option(
         None,
         "--bot-token-ref",
-        help="Credential ref of the Telegram bot token (store it with `coffer credentials set`)",
+        help="Secret ref of the Telegram bot token (store it with `coffer secret set`)",
     ),
     app_id: str | None = typer.Option(None, "--app-id", help="SeaTalk App ID"),
     app_secret_ref: str | None = typer.Option(
         None,
         "--app-secret-ref",
-        help="Credential ref of the SeaTalk app secret (store it with `coffer credentials set`)",
+        help="Secret ref of the SeaTalk app secret (store it with `coffer secret set`)",
     ),
     default_agent: str = typer.Option(
         ...,
@@ -106,8 +106,8 @@ def add(
 ) -> None:
     """Register a channel.
 
-    Its secrets are credential refs: store each secret first with
-    `coffer credentials set`, then pass the ref here.
+    Its secrets are secret refs: store each secret first with
+    `coffer secret set`, then pass the ref here.
 
     \f
     The channel is bound to THIS machine unless ``--runs-on`` names another:

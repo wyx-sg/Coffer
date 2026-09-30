@@ -1,12 +1,15 @@
 // src/components/credentials/PendingApprovalsEntry.tsx
 // A way back to the approvals sheet once it was dismissed: "N changes waiting
-// for approval · Review". Renders nothing while nothing waits. Used on the
-// Secrets page and in Settings › Security.
-import { ShieldAlert } from "lucide-react";
+// for approval · Review", with what approving takes here — Touch ID or the
+// login password in the Coffer app; in a browser, the app (rejecting works
+// anywhere). Renders nothing while nothing waits. Used on the Secrets page and
+// in Settings › Security.
+import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { openApprovalsSheet, usePendingApprovals } from "@/lib/hooks/useApprovals";
+import { presenceAvailable } from "@/lib/tauri";
 
 export function PendingApprovalsEntry() {
   const { t } = useTranslation();
@@ -15,14 +18,22 @@ export function PendingApprovalsEntry() {
   if (count === 0) return null;
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-3"
+      role="status"
+      className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning-soft px-3.5 py-2.5"
       data-testid="pending-approvals-entry"
     >
-      <p className="flex items-center gap-2 text-sm">
-        <ShieldAlert className="size-4 text-status-warn" aria-hidden />
-        {t("credentials.approvals.title", { count })}
-      </p>
-      <Button variant="outline" size="sm" onClick={openApprovalsSheet}>
+      <ShieldCheck className="size-4 shrink-0 text-warning" aria-hidden />
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-sm font-semibold text-text">
+          {t("credentials.approvals.title", { count })}
+        </p>
+        <p className="text-xs text-text-muted">
+          {presenceAvailable()
+            ? t("credentials.approvals.hintShell")
+            : t("credentials.approvals.hintBrowser")}
+        </p>
+      </div>
+      <Button variant="outline" size="sm" className="ml-auto" onClick={openApprovalsSheet}>
         {t("credentials.approvals.review")}
       </Button>
     </div>

@@ -271,7 +271,7 @@ describe("AddChannelDialog", () => {
   });
 
   acceptance(
-    "credentials",
+    "secret",
     "a surface lifts a pasted secret into the store before registering",
     async () => {
       const api = registeringApi();
@@ -335,7 +335,7 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  acceptance("credentials", "a failed registration leaves no orphaned credential", async () => {
+  acceptance("secret", "a failed registration leaves no orphaned credential", async () => {
     const api = registeringApi({
       POST: vi.fn(async (path: string) =>
         path === "/resources"

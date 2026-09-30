@@ -1,4 +1,4 @@
-"""The credential routes and commands against a real in-process daemon (spec credentials).
+"""The credential routes and commands against a real in-process daemon (spec secret).
 
 Every test boots the whole app over a throwaway ``HOME`` and database, with the
 process-wide keyring swapped for the shared in-memory backend — so the master
@@ -106,7 +106,7 @@ def cli(daemon: _Daemon, monkeypatch: pytest.MonkeyPatch) -> _Daemon:
 
 
 @pytest.mark.acceptance(
-    spec="credentials", scenario="storing a credential answers 204 and audits the ref only"
+    spec="secret", scenario="storing a credential answers 204 and audits the ref only"
 )
 def test_storing_a_credential_answers_204_and_audits_the_ref_only(daemon: _Daemon) -> None:
     r = daemon.client.post(
@@ -121,7 +121,7 @@ def test_storing_a_credential_answers_204_and_audits_the_ref_only(daemon: _Daemo
     assert "ghp_store_me_42" not in json.dumps(entries[0])
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="the presence probe records no audit entry")
+@pytest.mark.acceptance(spec="secret", scenario="the presence probe records no audit entry")
 def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
     daemon.client.post("/api/v1/credentials", json={"ref": "gh/token", "value": "ghp_probe"})
     before = daemon.credential_audit()
@@ -135,7 +135,7 @@ def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
     assert daemon.credential_audit() == before
 
 
-@pytest.mark.acceptance(spec="credentials", scenario="credential audit events carry the ref only")
+@pytest.mark.acceptance(spec="secret", scenario="credential audit events carry the ref only")
 def test_credential_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
     secret = "sk-audit-must-never-carry-this"
     daemon.client.post("/api/v1/credentials", json={"ref": "svc/key", "value": secret})
@@ -151,7 +151,7 @@ def test_credential_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="read and change the master key location from the API and the command line",
 )
 def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
@@ -160,7 +160,7 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
 
     r = daemon.client.get("/api/v1/settings/credentials")
     assert r.status_code == 200 and r.json()["master_key_storage"] == "file"
-    shown = _runner.invoke(cli_app, ["config", "get", "credentials.storage"])
+    shown = _runner.invoke(cli_app, ["config", "get", "secrets.storage"])
     assert shown.exit_code == 0, shown.output
     assert "file" in shown.output
 
@@ -172,7 +172,7 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
     assert daemon.client.get("/api/v1/settings/credentials").json()["master_key_storage"] == (
         "keychain"
     )
-    shown = _runner.invoke(cli_app, ["config", "get", "credentials.storage"])
+    shown = _runner.invoke(cli_app, ["config", "get", "secrets.storage"])
     assert shown.exit_code == 0, shown.output
     assert "keychain" in shown.output
     # The key really moved: out of the file, into the (in-memory) keychain.
@@ -182,18 +182,16 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
     assert _value("kept/key") == "v-survives"
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="the command line confirms a delete unless forced"
-)
+@pytest.mark.acceptance(spec="secret", scenario="the command line confirms a delete unless forced")
 def test_the_command_line_confirms_a_delete_unless_forced(cli: _Daemon) -> None:
     daemon = cli
     daemon.client.post("/api/v1/credentials", json={"ref": "to/delete", "value": "v"})
 
-    declined = _runner.invoke(cli_app, ["credentials", "rm", "to/delete"], input="n\n")
+    declined = _runner.invoke(cli_app, ["secret", "rm", "to/delete"], input="n\n")
     assert declined.exit_code != 0
     assert daemon.client.get("/api/v1/credentials/to/delete/exists").json()["present"] is True
 
-    forced = _runner.invoke(cli_app, ["credentials", "rm", "to/delete", "--force"])
+    forced = _runner.invoke(cli_app, ["secret", "rm", "to/delete", "--force"])
     assert forced.exit_code == 0, forced.output
     assert "Delete credential" not in forced.output
     assert daemon.client.get("/api/v1/credentials/to/delete/exists").json()["present"] is False

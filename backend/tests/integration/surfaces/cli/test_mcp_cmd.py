@@ -347,7 +347,7 @@ def test_mcp_add_http(mcp_daemon: Any) -> None:
             "remote",
             "--http",
             "http://example.com/mcp",
-            "--credential",
+            "--secret",
             "Authorization=keychain:myref",
         ],
     )
@@ -591,7 +591,7 @@ def _edit(*args: str) -> Any:
 
 def test_mcp_edit_stdio_replaces_the_command_line_only(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--env", "LOG=debug", "--credential", "TOKEN=mcp_server/x/TOKEN").exit_code == 0
+    assert _edit("--env", "LOG=debug", "--secret", "TOKEN=mcp_server/x/TOKEN").exit_code == 0
     result = _edit("--stdio", "npx -y my-server --flag")
     assert result.exit_code == 0, result.output
     transport = _config_of(uid)["transport"]
@@ -611,9 +611,9 @@ def test_mcp_edit_env_merges_and_clear_env_drops_the_rest(mcp_daemon: Any) -> No
 
 def test_mcp_edit_credentials_merge_and_clear(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--credential", "A=ref/a", "--credential", "B=ref/b").exit_code == 0
+    assert _edit("--secret", "A=ref/a", "--secret", "B=ref/b").exit_code == 0
     assert _config_of(uid)["transport"]["credential_refs"] == {"A": "ref/a", "B": "ref/b"}
-    assert _edit("--clear-credentials").exit_code == 0
+    assert _edit("--clear-secrets").exit_code == 0
     assert _config_of(uid)["transport"]["credential_refs"] == {}
 
 
@@ -655,7 +655,7 @@ def test_mcp_edit_http_url_and_headers(mcp_daemon: Any) -> None:
 
 def test_mcp_edit_switches_transport_keeping_credentials(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--env", "A=1", "--credential", "TOKEN=ref/t").exit_code == 0
+    assert _edit("--env", "A=1", "--secret", "TOKEN=ref/t").exit_code == 0
     result = _edit("--http", "https://example.com/mcp")
     assert result.exit_code == 0, result.output
     transport = _config_of(uid)["transport"]
@@ -955,13 +955,13 @@ def test_mcp_add_empty_stdio_exits_2(mcp_daemon: Any) -> None:
 
 
 def test_mcp_add_bad_credential_format_exits_2(mcp_daemon: Any) -> None:
-    """A `--credential` value without '=' is a typer.BadParameter → exit 2."""
+    """A `--secret` value without '=' is a typer.BadParameter → exit 2."""
     result = _runner.invoke(
         app,
-        ["mcp", "add", "fs", "--stdio", "cat", "--credential", "NO_EQUALS_SIGN"],
+        ["mcp", "add", "fs", "--stdio", "cat", "--secret", "NO_EQUALS_SIGN"],
     )
     assert result.exit_code == 2, result.output
-    assert "credential" in (result.output + (result.stderr or "")).lower()
+    assert "--secret" in (result.output + (result.stderr or "")).lower()
 
 
 # ---------------------------------------------------------------------------

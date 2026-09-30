@@ -76,7 +76,7 @@ def test_returns_none_when_missing_and_create_disallowed(key_path: pathlib.Path)
 
 
 @pytest.mark.acceptance(
-    spec="credentials",
+    spec="secret",
     scenario="relocating the master key verifies the destination before removing the source",
 )
 def test_relocate_to_keychain_moves_key(key_path: pathlib.Path) -> None:

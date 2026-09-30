@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-23
 **Deciders**: Yuxing Wu
-**Related**: [Vault Sync](vault-sync.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credential References](credential-references.md), [Sync Machine Identity](sync-machine-identity.md), [principles](../../docs-site/architecture/principles.md) (Credentials), spec vault-sync, spec credentials, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #381, #415
+**Related**: [Vault Sync](vault-sync.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credential References](credential-references.md), [Sync Machine Identity](sync-machine-identity.md), [principles](../../docs-site/architecture/principles.md) (Credentials), spec vault-sync, spec secret, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #381, #415
 
 ## Context
 

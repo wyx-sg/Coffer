@@ -3,7 +3,7 @@
 // The key is never shown — only the secret reference it is stored under
 // (`secret:` + ref), write-only, with Replace key. A replaced key that is in
 // use waits for approval in the Coffer app before it takes effect (spec
-// credentials "Hold a replaced value in use until a person approves it"), so
+// secret "Hold a replaced value in use until a person approves it"), so
 // while that approval is pending the row says so and offers Review. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection").

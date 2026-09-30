@@ -453,6 +453,8 @@ def test_pydantic_validation_error_is_sanitised(caplog):
     assert "X-Coffer-Trace" in r.headers
     # The structured error IS logged server-side for the operator.
     assert any("http.validation_error" in rec.getMessage() for rec in caplog.records)
+    # ...without the submitted value: the log is no safer a place for it.
+    assert all("secret-token" not in repr(rec.__dict__) for rec in caplog.records)
 
 
 def test_unhandled_exception_returns_500_without_leaking_detail(caplog):

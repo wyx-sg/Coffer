@@ -5,7 +5,7 @@ A signed release is stamped with the access group of Coffer's Team ID
 the ``keychain-access-groups`` entitlement for it. A build from source carries
 ``None`` and therefore keeps the master key in the development fallback (the
 ``0600`` file, or the legacy login-keychain item when opted in), which the
-daemon reports as a development build (spec credentials "Keep the master key
+daemon reports as a development build (spec secret "Keep the master key
 behind a storage port chosen by the build").
 
 Deliberately a constant in the code and not a setting: an environment variable

@@ -1,6 +1,6 @@
 // src/components/credentials/SecretsGroups.tsx — the list, in two groups: in use, and not used by anything.
 //
-// A secret nothing references (spec credentials "List every stored and cited
+// A secret nothing references (spec secret "List every stored and cited
 // secret with what uses it", `unreferenced`) is listed apart, marked safe to
 // delete. The page's search filters both groups.
 import type { ReactNode } from "react";
@@ -13,6 +13,8 @@ import { groupRows } from "./secretRows";
 
 interface Props {
   rows: CredentialRef[];
+  /** Refs whose new value, or whose adding, waits for approval. */
+  waiting: ReadonlySet<string>;
   query: string;
   isLoading: boolean;
   onAction: (action: SecretRowAction, row: CredentialRef) => void;
@@ -45,7 +47,7 @@ function Group({
   );
 }
 
-export function SecretsGroups({ rows, query, isLoading, onAction }: Props) {
+export function SecretsGroups({ rows, waiting, query, isLoading, onAction }: Props) {
   const { t } = useTranslation();
   const { inUse, unused } = groupRows(rows, query);
   const noMatch = t("secrets.noMatch");
@@ -58,6 +60,7 @@ export function SecretsGroups({ rows, query, isLoading, onAction }: Props) {
       >
         <SecretsTable
           rows={inUse}
+          waiting={waiting}
           isLoading={isLoading}
           emptyMessage={query ? noMatch : t("secrets.groups.inUseEmpty")}
           onAction={onAction}
@@ -70,7 +73,12 @@ export function SecretsGroups({ rows, query, isLoading, onAction }: Props) {
           count={unused.length}
           hint={t("secrets.groups.unusedHint")}
         >
-          <SecretsTable rows={unused} emptyMessage={noMatch} onAction={onAction} />
+          <SecretsTable
+            rows={unused}
+            waiting={waiting}
+            emptyMessage={noMatch}
+            onAction={onAction}
+          />
         </Group>
       ) : null}
     </div>

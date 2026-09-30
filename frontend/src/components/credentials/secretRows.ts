@@ -6,13 +6,13 @@
 // uses a ref is every resource citing it plus every skill whose files cite
 // its URI, each with the page it opens (spec web-ui "Manage stored secrets on
 // the Secrets page").
-import type { CredentialRef } from "@/lib/api/credentials";
+import type { Approval, CredentialRef } from "@/lib/api/credentials";
 
 /** The store namespace standalone secrets live under. */
 export const SECRET_PREFIX = "secret/";
 
 /** One segment of letters, digits, `.`, `_` and `-`, at most 64 characters
- *  (spec credentials "Resolve standalone secrets into one child with coffer run"). */
+ *  (spec secret "Resolve standalone secrets into one child with coffer run"). */
 const NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 
 export function isValidSecretName(name: string): boolean {
@@ -96,6 +96,22 @@ export function hasPendingBinding(row: CredentialRef): boolean {
   return row.bindings.some((b) => b.status === "pending");
 }
 
+/** Cited but not stored here, or stored but unopenable with this Mac's master
+ *  key: either way this Mac has no value to hand out (spec secret "Show a
+ *  secret this Mac cannot open as missing on this Mac"). */
+export function isMissingHere(row: CredentialRef): boolean {
+  return !row.present || row.locked;
+}
+
+/** The refs whose new value, or whose adding, waits for approval. */
+export function refsWaiting(approvals: readonly Approval[] | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const a of approvals ?? []) {
+    if ((a.op === "replace_value" || a.op === "add_secret") && a.ref) out.add(a.ref);
+  }
+  return out;
+}
+
 /** The rows matching `query` (name or ref, case-insensitive), split into used and unused. */
 export function groupRows(rows: CredentialRef[], query: string) {
   const q = query.trim().toLowerCase();
@@ -123,5 +139,21 @@ export function citersFromRefusal(details: unknown): Citer[] {
     if (typeof kind !== "string" || typeof name !== "string") return [];
     const id = typeof uid === "string" ? uid : "";
     return [{ key: `${kind}:${id || name}`, kind, name, href: citerHref(kind, name, id) }];
+  });
+}
+
+/** The dialog's title: the one question, or how many wait. */
+export function approvalsTitle(
+  t: (key: string, vars?: Record<string, unknown>) => string,
+  approvals: Approval[],
+  rows: CredentialRef[],
+): string {
+  if (approvals.length !== 1) return t("credentials.approvals.title", { count: approvals.length });
+  const a = approvals[0];
+  const row = rows.find((r) => r.ref === a.ref);
+  const name = row ? displayName(row) : (a.ref ?? "").replace(SECRET_PREFIX, "");
+  return t(`credentials.approvals.question.${a.op}`, {
+    name,
+    destination: a.destination_label ?? "",
   });
 }

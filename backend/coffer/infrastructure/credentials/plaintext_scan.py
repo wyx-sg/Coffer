@@ -1,7 +1,7 @@
 """Find plaintext secrets in files and move them into the encrypted store.
 
 ADR standalone-secrets-are-named-references-injected-into-one-child, "Migration
-of plaintext secret files"; spec credentials "Move plaintext secret files into
+of plaintext secret files"; spec secret "Move plaintext secret files into
 the store". Two places are read:
 
 * ``~/.coffer/secrets/*.env`` (``KEY=VALUE`` lines) and ``*.json`` (a flat map
@@ -82,6 +82,8 @@ class SkillMention:
 class ScanResult:
     findings: list[Finding]
     mentions: list[SkillMention]
+    #: How many files were read, so "nothing found" can say how much was looked at.
+    files_checked: int = 0
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -96,6 +98,10 @@ class Skipped:
     id: str
     path: str
     reason: str
+    #: The value is in the store under ``name`` but the file still holds it:
+    #: the file could not be rewritten.
+    name: str = ""
+    stored: bool = False
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -226,15 +232,18 @@ def _skill_hits(path: pathlib.Path, skill: str) -> tuple[list[_Hit], list[SkillM
 
 def _all_hits(
     secrets_dir: pathlib.Path, skills_root: pathlib.Path, skip: frozenset[str] = frozenset()
-) -> tuple[list[_Hit], list[SkillMention]]:
+) -> tuple[list[_Hit], list[SkillMention], int]:
     hits: list[_Hit] = []
     mentions: list[SkillMention] = []
+    checked = 0
     if secrets_dir.is_dir():
         for path in sorted(secrets_dir.iterdir()):
             if path.is_file() and path.suffix == ".env":
                 hits += _env_hits(path)
+                checked += 1
             elif path.is_file() and path.suffix == ".json":
                 hits += _json_hits(path)
+                checked += 1
     if skills_root.is_dir():
         for path in sorted(skills_root.rglob("*")):
             rel = path.relative_to(skills_root)
@@ -250,7 +259,8 @@ def _all_hits(
             h, m = _skill_hits(path, rel.parts[0])
             hits += h
             mentions += m
-    return hits, mentions
+            checked += 1
+    return hits, mentions, checked
 
 
 def scan(
@@ -258,8 +268,8 @@ def scan(
 ) -> ScanResult:
     """``skip`` names skills that are Coffer's own rendering (its guide), which
     quote commands like ``coffer run --secret PGPASSWORD=orders-db`` on purpose."""
-    hits, mentions = _all_hits(secrets_dir, skills_root, skip)
-    return ScanResult(findings=[h.finding for h in hits], mentions=mentions)
+    hits, mentions, checked = _all_hits(secrets_dir, skills_root, skip)
+    return ScanResult(findings=[h.finding for h in hits], mentions=mentions, files_checked=checked)
 
 
 def _rewrite(path: pathlib.Path, hits: list[_Hit], names: dict[str, str]) -> None:
@@ -302,10 +312,13 @@ def move(
     ``store(name, value)`` stores the value under ``secret/<name>`` and returns
     whether the store now decrypts that name back to exactly ``value``; a name
     already holding a different value is refused by it, and that finding is
-    skipped and its file left alone.
+    skipped and its file left alone. A file that cannot be rewritten (read-only,
+    say) keeps its values: each of its findings is skipped as ``stored`` — the
+    value is in the store, the file still holds it — and the other files are
+    still rewritten. Moving the same finding again retries the file.
     """
     wanted = None if ids is None else set(ids)
-    hits, _ = _all_hits(secrets_dir, skills_root, skip)
+    hits, _, _ = _all_hits(secrets_dir, skills_root, skip)
     chosen = [h for h in hits if wanted is None or h.finding.id in wanted]
     moved: list[Moved] = []
     skipped: list[Skipped] = []
@@ -327,7 +340,22 @@ def move(
         by_file.setdefault(h.finding.path, []).append(h)
         moved.append(Moved(h.finding.id, h.finding.path, name))
     for path, file_hits in by_file.items():
-        _rewrite(pathlib.Path(path), file_hits, names)
+        try:
+            _rewrite(pathlib.Path(path), file_hits, names)
+        except OSError as e:
+            failed = {h.finding.id for h in file_hits}
+            moved = [m for m in moved if m.id not in failed]
+            why = "it is read-only" if isinstance(e, PermissionError) else (e.strerror or str(e))
+            skipped += [
+                Skipped(
+                    h.finding.id,
+                    path,
+                    f"couldn't be rewritten: {why}",
+                    name=names[h.finding.id],
+                    stored=True,
+                )
+                for h in file_hits
+            ]
     return ImportResult(moved=moved, skipped=skipped, dry_run=dry_run)
 
 

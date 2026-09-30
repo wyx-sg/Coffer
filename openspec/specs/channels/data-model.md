@@ -107,7 +107,7 @@ Validation rules:
   migration `0103` (below), in one direction for the data and with no load-time
   shim (house rule). The credential values the two removed refs cited are left
   in the credential store: a migration that deletes secrets could not be undone
-  by its downgrade, and `coffer credentials rm <ref>` removes them on
+  by its downgrade, and `coffer secret rm <ref>` removes them on
   purpose. A document still carrying those keys — from a machine running an
   older build — is read like any other unknown key and ignored.
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
