@@ -287,6 +287,7 @@ _CONFIG_KEYS: dict[str, str] = {
     # Turning it off waits for the Coffer app (spec credentials "Turn the
     # protection off only through the desktop app").
     "secrets.require_approval": "PUT /settings/secret-boundary",
+    "prices.refresh": "PUT /providers/price-list",
     "feature.<key>": "PUT /daemon/features/{key}",
     "retention.<table>": "PATCH /retention/policies/{table_name}",
 }
