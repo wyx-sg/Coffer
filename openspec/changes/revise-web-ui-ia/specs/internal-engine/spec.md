@@ -56,9 +56,9 @@ and change it, applying the four-state rule of
   `curate_owner_machine_id`, `state` and `this_machine_id`, and an owner no machine in a
   non-empty registry claims is printed as the fault it is together with how to take the pass
   back.
-- The Coffer's model section of Settings › General MUST show the owner on a line under the `curate` row, with
-  an action that takes the pass over for this machine and one that clears the
-  owner after a confirmation.
+- The Knowledge page's Automatic popover MUST show the owner as "Curation runs on" once the
+  vault's registry names more than one machine, with a picker of the known machines that
+  names a new owner, and an owner no known machine claims read as the fault it is.
 
 #### Scenario: the route names and clears the curation owner
 - **GIVEN** the internal-engine settings row with a chosen engine model and no
@@ -89,9 +89,10 @@ and change it, applying the four-state rule of
 The Coffer's model section of Settings › General
 ([web-ui](../web-ui/spec.md) "Choose Coffer's model in Settings › General") MUST show and change
 what Coffer's own machinery runs on: the connection and model the engine runs on, the
-connection and model speech to text runs on, and each pass's switch and interval with its
-default named rather than left blank. Edits MUST save on their own — a picker on selection, a
-switch on toggle, an interval on selection — with no Save button.
+connection and model speech to text runs on. Edits MUST save on their own — a picker on
+selection — with no Save button. The section MUST NOT carry the unattended passes' switches and
+intervals or the curation owner: those are shown and changed on the Knowledge and Memory pages,
+whose content the passes upkeep.
 
 - **Engine model** — a picker that chooses the connection flagged `internal_default` and then,
   from that connection's curated `text` models or its probed catalogue, the engine model; the
@@ -106,18 +107,13 @@ switch on toggle, an interval on selection — with no Save button.
   picker whose last test or last call failed reads as failing until a test passes; a picker with
   either half unset reads as not set, and for the engine says that no internal pass runs (see
   "Make every internal pass a clean no-op when nothing is configured").
-- **Upkeep** — below the pickers, one row per pass: a switch, an interval select whose default
-  option names the real number, and — for `curate` alone — a line saying it is Coffer's own
-  model deriving documents from the user's sources, and the curation owner line under that row
-  (see "Report and change the curation owner from every surface").
 
 #### Scenario: the general tab's coffer's model section shows and changes both halves
-- **GIVEN** Settings › General rendered with an internal-default connection and the three passes,
-- **WHEN** the section renders and the operator picks an engine model, toggles one pass and
-  picks an interval,
-- **THEN** the Engine model picker shows the chosen connection and model, the upkeep rows show
-  one row per pass with the default named rather than blank, each edit saves on its own without
-  a Save button, and only the edited value is written (TypeScript acceptance test).
+- **GIVEN** Settings › General rendered with an internal-default connection,
+- **WHEN** the section renders and the operator picks an engine model and a speech-to-text model,
+- **THEN** the Engine model and Speech to text pickers show the chosen connections and models,
+  each edit saves on its own without a Save button, only the edited value is written, and the
+  section shows no upkeep switch, interval or curation owner (TypeScript acceptance test).
 
 #### Scenario: a failed test leaves coffer's model as it was
 - **GIVEN** a speech-to-text model chosen on a connection whose endpoint is unreachable
