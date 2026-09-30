@@ -48,7 +48,7 @@ export function CustomToolsPage() {
                 })
               : undefined
           }
-          actions={firstRun ? null : addButton}
+          actions={addButton}
         />
       </div>
       {error ? (
