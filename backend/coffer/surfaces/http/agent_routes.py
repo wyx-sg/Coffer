@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel
 
 from coffer.application.agent.auto_detect import AgentTypeDetection, AutoDetectService
+from coffer.application.agent.install_handoff import agent_install_handoff
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.detection import DetectionState
@@ -26,6 +27,7 @@ from coffer.surfaces.http.agent_dependencies import (
 from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 router = APIRouter(
     prefix="/api/v1/agents",
@@ -132,6 +134,9 @@ class AgentTypeOut(BaseModel):
 
 class AgentTypesOut(BaseModel):
     types: list[AgentTypeOut]
+    #: While no supported type is installed on this machine: the prompt that
+    #: hands installing one to the person's assistant; ``null`` once one is.
+    install_handoff: HandoffOut | None = None
 
 
 class AgentCandidatesOut(BaseModel):
@@ -222,7 +227,11 @@ async def list_types(
 ) -> AgentTypesOut:
     """Every supported type with its detection state, registered or not
     (read-only), so a surface can always show one row per type."""
-    return AgentTypesOut(types=[_type_out(row) for row in await svc.types()])
+    rows = await svc.types()
+    return AgentTypesOut(
+        types=[_type_out(row) for row in rows],
+        install_handoff=handoff_out(agent_install_handoff(rows)),
+    )
 
 
 @router.get("/candidates", response_model=AgentCandidatesOut)

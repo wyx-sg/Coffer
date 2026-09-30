@@ -22,7 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
-import { useAgentTypes } from "@/lib/hooks/useAgentTypes";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { useAgentInstallHandoff, useAgentTypes } from "@/lib/hooks/useAgentTypes";
 import { formatClock } from "@/lib/overview/time";
 
 const INSTALLED = new Set(["installed_active", "installed_never_run"]);
@@ -38,6 +39,9 @@ export function FirstRunAgents() {
   const [reviewing, setReviewing] = useState<AgentTypeOut[] | null>(null);
   const chosen = found.filter((row) => !unticked.has(row.type));
   const none = types.isSuccess && found.length === 0;
+  // With none installed, installing one is handed to the person's assistant as
+  // a prompt the daemon writes (Principle IV); there is no agent here to ask.
+  const installPrompt = useAgentInstallHandoff(none).data ?? null;
   const scannedAt = types.dataUpdatedAt > 0 ? new Date(types.dataUpdatedAt).toISOString() : null;
   const toggle = (type: string) =>
     setUnticked((prev) => {
@@ -100,10 +104,13 @@ export function FirstRunAgents() {
         )}
         <div className="flex flex-wrap items-center gap-2">
           {none ? (
-            <Button onClick={scan} loading={types.isFetching}>
-              <RefreshCw aria-hidden />
-              {t("overview.firstRun.scan")}
-            </Button>
+            <>
+              <Button onClick={scan} loading={types.isFetching}>
+                <RefreshCw aria-hidden />
+                {t("overview.firstRun.scan")}
+              </Button>
+              {installPrompt ? <AgentHandoff prompt={installPrompt} /> : null}
+            </>
           ) : (
             <Button disabled={chosen.length === 0} onClick={() => setReviewing(chosen)}>
               <Plug aria-hidden />
@@ -179,11 +186,6 @@ function AgentRow({
         <span className="ml-auto whitespace-nowrap text-xs text-text-muted">
           {t(found ? "overview.firstRun.found" : "overview.firstRun.notFound")}
         </span>
-        {/* TODO(handoff): a not-found agent gets a "Copy prompt" hand-off here
-            ("Install Claude Code or Codex on this Mac, then …", built by the
-            daemon like the CLI install prompt; Principle IV) once the CLI
-            branch's components/handoff/AgentHandoff.tsx and its prompt builder
-            land. No install link or vendor URL until then. */}
       </label>
     </li>
   );

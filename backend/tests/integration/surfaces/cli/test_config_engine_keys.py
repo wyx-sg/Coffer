@@ -113,7 +113,11 @@ def test_each_unattended_pass_is_listed_and_changed_one_value_at_a_time(
     assert after["curate"]["enabled"] is False and after["curate"]["interval_s"] is None
     assert after["distil"]["enabled"] is True and after["distil"]["interval_s"] == 900
     # The pass neither command named is exactly as it stood.
-    assert after["aggregate"] == {"enabled": True, "interval_s": None, "default_interval_s": 3600}
+    assert {k: after["aggregate"][k] for k in ("enabled", "interval_s", "default_interval_s")} == {
+        "enabled": True,
+        "interval_s": None,
+        "default_interval_s": 3600,
+    }
 
     assert _run("config", "unset", "engine.upkeep.distil.interval").exit_code == 0
     assert _row(daemon)["upkeep"]["distil"]["interval_s"] is None

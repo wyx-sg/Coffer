@@ -108,7 +108,7 @@ function Landed() {
 }
 
 function renderPage(detail: PluginDetailOut | Error = DETAIL) {
-  api.types.mockResolvedValue({ types: [TYPE_ROW] });
+  api.types.mockResolvedValue({ types: [TYPE_ROW], install_handoff: null });
   api.get.mockResolvedValue(AGENT);
   if (detail instanceof Error) api.plugin.mockRejectedValue(detail);
   else api.plugin.mockResolvedValue(detail);

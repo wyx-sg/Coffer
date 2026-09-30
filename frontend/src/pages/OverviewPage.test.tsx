@@ -251,7 +251,13 @@ function install(setup: Setup = {}) {
               state: "missing",
             },
           ],
+          install_handoff:
+            state.types === "none-found"
+              ? { prompt: "Please install Claude Code or Codex on this Mac, so Coffer can connect it." }
+              : null,
         };
+      case "/agent-providers":
+        return { agents: [] };
       case "/providers":
         return { providers: [{ uid: "p1", name: "anthropic", title: "Anthropic" }] };
       case "/skills":
@@ -456,6 +462,15 @@ describe("overview welcomes a first run with the agents to connect", () => {
     expect(screen.getAllByText("Not found")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Scan again" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Review and connect/ })).toBeNull();
+  });
+
+  acceptance("web-ui", "with no agent found overview offers the install prompt to copy", async () => {
+    install({ agents: [], types: "none-found" });
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    // There is no agent to ask, and no installer link of Coffer's own.
+    expect(screen.queryByRole("button", { name: /ask an agent/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /install/i })).toBeNull();
   });
 });
 

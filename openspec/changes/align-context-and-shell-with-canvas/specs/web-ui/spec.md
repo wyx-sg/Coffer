@@ -85,3 +85,27 @@ until it is fixed.
 - **WHEN** the user chooses Ignore in Codex's menu, then Show, then Stop ignoring on Codex
 - **THEN** Codex leaves the list while the server stays and "1 ignored · Show" appears under it; Show lists Codex again under the list; after Stop ignoring Codex is back in Needs you and nothing is counted as ignored
 - **AND** while Codex is ignored the daemon's attention list carries it only under `ignored`, its counts leave it out, both changes are audited, and ignoring the failing server is refused
+
+### Requirement: Hand installing an agent to the person when none is found
+While no supported agent is installed on this machine, `GET /api/v1/agents/types` MUST carry
+`install_handoff`, a prompt the daemon writes (see
+[skill-manager](../skill-manager/spec.md) "Hand a required command to an agent with a prompt"
+for the shape every hand-off takes) asking the person's assistant to install one of the
+supported agents the way its maker recommends for this machine, run it once, and then come back
+to Scan again; it MUST name no installer, package manager or command, and it MUST be `null` once
+any supported agent is installed. Overview's first run with no agent found MUST offer that
+prompt through **Copy prompt** only: there is no agent of Coffer's to ask, and the page MUST
+carry no install link of its own.
+
+#### Scenario: with no agent found the install prompt is built by the daemon
+- **GIVEN** neither supported agent's program is installed on this machine
+- **WHEN** the types are read, and read again after one is installed
+- **THEN** the first answer carries an install prompt naming both agents and their settings
+  folders, no installer, and the standing rules every hand-off ends with
+- **AND** the second carries none
+
+#### Scenario: with no agent found overview offers the install prompt to copy
+- **GIVEN** a first run on a machine where no supported agent is found
+- **WHEN** Overview renders
+- **THEN** beside Scan again it offers Copy prompt with the daemon's install prompt
+- **AND** it offers no Ask an agent and no install link

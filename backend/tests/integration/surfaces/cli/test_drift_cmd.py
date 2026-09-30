@@ -189,7 +189,7 @@ def test_the_attention_list_and_its_command(daemon: dict[str, Any]) -> None:
     r = client.get("/attention")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body) == {"items", "errors", "counts_by_kind"}
+    assert set(body) == {"items", "errors", "counts_by_kind", "ignored"}
     assert body["errors"] == []
     assert sum(body["counts_by_kind"].values()) == len(body["items"])
     for item in body["items"]:
