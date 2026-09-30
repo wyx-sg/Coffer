@@ -156,7 +156,7 @@ def rollback(
     which the next round pushes; files edited since the round are kept.
 
     \f
-    Spec vault-sync "Snapshot before applying and roll back from it".
+    Spec vault-sync "Snapshot before checking out and roll a round back from it".
     """
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()

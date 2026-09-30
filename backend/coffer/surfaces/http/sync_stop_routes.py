@@ -1,6 +1,6 @@
 """/api/v1/sync — what a round waiting for a person needs
 (spec vault-sync "Report a join before applying it", "Hold a round that would
-lose too much", "Snapshot before applying and roll back from it").
+lose too much", "Snapshot before checking out and roll a round back from it").
 
 A stop is answered file by file — keep this machine's, take the other's, or
 edit a marked-up copy — and nothing is written into the vault until

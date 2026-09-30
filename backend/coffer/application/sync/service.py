@@ -349,8 +349,8 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
 
     async def rollback(self, round_id: int, *, actor: str) -> RoundRecord:
         """Put back what round ``round_id`` changed, as a new commit here; the
-        next round pushes it (spec vault-sync "Snapshot before applying and
-        roll back from it")."""
+        next round pushes it (spec vault-sync "Snapshot before checking out
+        and roll a round back from it")."""
         record = await self._rollable(round_id)
         async with self._lock:
             done = await asyncio.to_thread(

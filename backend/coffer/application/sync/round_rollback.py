@@ -1,5 +1,5 @@
 """Rolling a round back from its safety snapshot
-(spec vault-sync "Snapshot before applying and roll back from it").
+(spec vault-sync "Snapshot before checking out and roll a round back from it").
 
 Before a round checks anything out it tags the vault as it was
 (``coffer/pre-apply/<time>``, the ten newest kept). Rolling back is a new

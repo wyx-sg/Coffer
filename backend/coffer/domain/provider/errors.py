@@ -82,7 +82,7 @@ class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
     """A write would flag a second connection as the internal-engine default.
 
     At most one connection carries ``internal_default`` (spec provider-switching
-    "Keep at most one internal-engine default"), and the one write that may
+    "Keep at most one internal default connection"), and the one write that may
     move it is ``set_internal_default``, which clears the holder first. Any
     other write that sets the flag while a different connection holds it — the
     kind-agnostic resource PATCH or POST — is refused here rather than left to

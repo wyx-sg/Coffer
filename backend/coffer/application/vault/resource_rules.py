@@ -27,7 +27,7 @@ daemon write, a merge — is judged here before it may be committed:
 - a config flag the kind lets only one resource hold (``Kind.exclusive_flags``:
   ``provider``'s ``internal_default``) set while another resource holds it —
   at ``HEAD`` or in the same change — is ``CONFIG_INVALID`` on the file that
-  sets it (spec provider-switching "Keep at most one internal-engine default":
+  sets it (spec provider-switching "Keep at most one internal default connection":
   what a partial unique index enforced in SQL).
 
 Plain-text secrets are not detected here: the detector lives in

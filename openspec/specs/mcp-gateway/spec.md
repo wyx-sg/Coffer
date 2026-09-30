@@ -275,7 +275,10 @@ the server offers MUST be refused with nothing changed.
 ### Requirement: Preserve capability decisions
 The system MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and
 upstream temporary disappearances. A capability is discovered live from the upstream; only the user's
-enable/disable preference and its last-seen timestamp are persisted.
+decisions and when each capability was seen are persisted. A capability switched off is listed in its
+server's preference document in the vault, `state/mcp-preferences/<server name>.json`, which carries the
+server's uid; when this machine first and last saw each capability is a derived record of this machine's,
+in `~/.coffer/derived/derived.db`, because it is a fact about what this machine's upstream offered.
 
 #### Scenario: capability preferences survive upstream changes
 - **GIVEN** the user has disabled a tool on a server,
@@ -289,7 +292,7 @@ The system MUST enable a previously unseen capability by default when it is disc
 #### Scenario: a newly discovered capability is enabled by default
 - **GIVEN** a registered server whose capabilities have already been discovered,
 - **WHEN** an upgrade adds a new tool to that server,
-- **THEN** the new tool is enabled, its first sighting is recorded as the preference row's `first_seen_at`, and the user can disable it through the per-capability toggle ("Toggle individual capabilities").
+- **THEN** the new tool is enabled, its first sighting on this machine is recorded as its `first_seen_at`, and the user can disable it through the per-capability toggle ("Toggle individual capabilities").
 
 ### Requirement: Record invocations without content
 The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
@@ -397,21 +400,20 @@ used for every subsequent list and call.
 - **AND** no built-in tool Coffer advertises in `tools/list` declares `agent` in its input schema.
 
 ### Requirement: Re-enable a server when its preference document is deleted
-The `state/mcp-preferences/<server-uid>` sync state area is this spec's, so this spec defines what deleting one of
-its documents means — [vault-sync](../vault-sync/spec.md) "Let each state area define its document's deletion" requires that of every area and interprets none of them itself. A
-document exists only while something on that server is disabled; deleting it therefore means "nothing is
-disabled here", and Coffer MUST re-enable every capability on that server. The preference rows MUST stay —
-enabled is their default, and their seen-timestamps are this machine's own record of what the server offered,
-not a decision another machine took back. A rel naming a server uid this machine does not register MUST be
-ignored: the deletion cannot have been about anything here. For the same reason this spec MUST NOT publish a
-document for a server with nothing disabled, or a machine that re-enabled everything and a machine that never
+A server's preference document, `state/mcp-preferences/<server name>.json` in the vault, is this spec's, so
+this spec defines what deleting it means ([vault-sync](../vault-sync/spec.md) "Converge shared state areas").
+The document carries the server's uid and exists only while something on that server is disabled; deleting
+it — by hand, or by a sync round that brings another machine's re-enabling — therefore means "nothing is
+disabled here", and Coffer MUST re-enable every capability on that server. When each capability was seen
+MUST stay: it is this machine's own derived record of what the server offered, not a decision another machine
+took back. For the same reason this spec MUST NOT write a document for a server with nothing disabled, or a machine that re-enabled everything and a machine that never
 disabled anything would add and delete the same document at each other every round.
 
 #### Scenario: deleting a server's preference document re-enables everything on it
 - **GIVEN** two registered servers that each have a disabled capability,
-- **WHEN** the preference document of one of them is deleted, along with one naming a server this machine does not register,
-- **THEN** every capability on that server is enabled again and its preference rows remain,
-- **AND** the other server's disabled capability is untouched, the unknown rel changes nothing, and the next export publishes no document for the server with nothing disabled.
+- **WHEN** the preference document of one of them is deleted by a sync commit,
+- **THEN** every capability on that server is enabled again, and each is still listed with when it was seen,
+- **AND** the other server's disabled capability is untouched, and no preference document is written back for the server with nothing disabled.
 
 ### Requirement: Flag tools whose client-visible name is too long
 The system MUST compute, for every discovered tool, the length of the name a client shows for
@@ -542,7 +544,7 @@ session's agent, MUST be left out of `tools/list` and of
 and answered with TOOL_DISABLED. A reach override is a list of agent uids that
 narrows the group's reach for that one tool — an agent the group does not
 reach is not reached by any of its tools — and, like every reach, it is kept on
-this machine only and never travels with sync. Removing a tool or its group
+this machine only, in `~/.coffer/local/tool-reach.json`, and never travels with sync. Removing a tool or its group
 MUST remove its override.
 
 #### Scenario: a switched-off custom tool is hidden and refused

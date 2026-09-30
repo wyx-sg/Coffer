@@ -99,7 +99,7 @@ A background worker (default interval one hour, `DEFAULT_INTERVAL_SECONDS` in
 - **Two guards bound a defect in the apply.** `L` is tagged as a pre-apply
   snapshot (ten kept, `SNAPSHOTS_KEPT` in `application/sync/convergence_ops.py`),
   so rollback is the same machinery run backwards and does not move the pointer
-  (the former vault-sync requirement "Snapshot before applying and roll back from it"). And the
+  (the former vault-sync requirement "Snapshot before checking out and roll a round back from it"). And the
   [deletion breaker](sync-deletion-breaker.md) holds a round that would lose
   too much, in either direction.
 

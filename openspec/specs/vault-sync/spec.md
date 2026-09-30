@@ -37,8 +37,8 @@ Out of scope:
   directory and reading one back is a wholesale overwrite with no base — the
   operation that caused the 2026-07-10 incident — and it has no place beside the
   diff-based apply. The needs it served are met without it: a new machine runs
-  `coffer sync adopt`, an offline medium is a `file://` remote on a USB drive,
-  and handing a copy to someone else is `git clone ~/.coffer/sync`.
+  `coffer sync join`, an offline medium is a `file://` remote on a USB drive,
+  and handing a copy to someone else is `git clone ~/.coffer/vault`.
 - **More than one sync remote.** One rendezvous is what "one vault" means.
 - **A hosted sync endpoint.** Would require a further constitutional amendment.
 - **Syncing conversations, the audit log, or MCP invocation records.** They
@@ -57,431 +57,222 @@ Out of scope:
 ### Requirement: Keep the remote a rendezvous, not a system of record
 Convergence with a user-owned git remote is a bounded exception to the
 constitution's local-first principle (0.6.0): the remote MUST be a
-**rendezvous, not a system of record**. Every machine's vault MUST stay
-complete and authoritative, so the remote can be deleted and rebuilt from any
-single machine without losing anything.
+**rendezvous, not a system of record**. Every machine's vault is a complete git
+repository of its own, so the remote can be deleted and rebuilt from any single
+machine without losing anything.
 
 #### Scenario: a remote rebuilt from one machine loses nothing
-- **GIVEN** a machine that has converged its vault with a remote
-- **WHEN** the remote is replaced by an empty repository and the machine converges with it again
-- **THEN** the new remote holds every document the machine's vault holds
+- **GIVEN** a machine's vault and an empty remote
+- **WHEN** the machine joins the remote
+- **THEN** the remote's branch is the vault's own `HEAD`, holding every committed file
 - **AND** the machine's vault is unchanged
 
 ### Requirement: Converge knowledge files and the skill store
-The markdown files under `~/.coffer/knowledge/<collection>/` and the master
-skill store under `~/.coffer/skills/` MUST converge, mirrored as regular files —
-except a folder in them that is derived output, which is "Withhold derived
-output in both halves".
+The knowledge collections under `vault/knowledge/` and the skill master
+folders under `vault/skills/` are files of the vault repository and MUST
+converge as files, merged by git. Coffer's own generated skill is not among
+them: it lives under `derived/` (see "Withhold derived output in both halves").
 
 #### Scenario: a local-only document survives a round
-- **GIVEN** a knowledge document this vault created and the remote has never
-  seen,
-- **WHEN** a round runs,
-- **THEN** the document is still present locally and is now published to the
-  remote.
+- **GIVEN** a knowledge document each of two machines created and the other has never seen
+- **WHEN** both run a round
+- **THEN** each document is still present where it was written and is now on the other machine too
 
 ### Requirement: Skip symlinks and nested repositories
-Outbound, a symlink MUST be skipped rather than followed — its target is not
-vault content, and a link to a file outside the vault would otherwise be
-published — and anything under a nested `.git` directory MUST be skipped as
-another repository's internals. What was skipped MUST be logged once per round.
-Inbound, a symlink the working tree holds MUST be refused rather than read into
-the vault.
-
-Outbound, Python bytecode — a `__pycache__` directory, or a file ending in
-`.pyc` or `.pyo` — MUST NOT be published either. The interpreter writes it
-beside a skill's scripts whenever they run, so it changes for reasons that are
-not edits. Bytecode already in the working tree MUST be removed by the ordinary
-differential deletion. Leaving bytecode out is policy, not a surprise, so it is
-not logged.
+The vault repository MUST NOT record a symlink (its target is not vault content,
+and a link to a file outside the vault would otherwise be published) or anything
+inside a nested git repository, so neither is ever pushed; Python bytecode
+(`__pycache__/`, `*.pyc`, `*.pyo`), which the interpreter writes beside a skill's
+scripts whenever they run, and editor and system litter are kept out by the
+repository's own exclude file.
 
 #### Scenario: a symlink in the vault is skipped rather than published
-- **GIVEN** a knowledge collection holding a symlink to a file outside the
-  vault,
-- **WHEN** a round serializes the vault,
-- **THEN** the working tree holds no copy of that file, the link is not
-  followed, and the round logs once what it skipped.
+- **GIVEN** a skill folder holding a symlink to a file outside the vault, and a nested git repository beside it
+- **WHEN** the vault settles what is on disk
+- **THEN** only the skill's own file is committed, and nothing is left pending
 
 #### Scenario: Python bytecode beside a skill's scripts is not published
-- **GIVEN** a skill whose `scripts/` holds a `__pycache__/` of `.pyc` files, and
-  a working tree that already carries some of them from an older build,
-- **WHEN** a round serializes the vault,
-- **THEN** the working tree holds the scripts but no bytecode, and nothing is
-  logged as skipped.
-
-### Requirement: Converge resource definitions as serialized documents
-`mcp_server`, `agent`, `skill`, `knowledge`, `provider` and `channel`
-definitions MUST converge, serialized to text from SQLite, which stays the
-system of record. A resource document is identity, title, description and
-config — what the resource *is*. What it reaches is not in it (see "Keep reach
-machine-local").
-
-The `title` is optional in the document. A resource with no title MUST be
-serialized without the key, and a document that carries no `title` MUST leave
-the receiving machine's title empty, so a machine running an older version,
-which writes no `title`, and a newer one converge on the same resource. Setting,
-changing or clearing a title on one machine MUST reach every other machine as a
-modification of that one document. A kind that carries no title (`agent`,
-`mcp_server`, `skill` — [resource-framework](../resource-framework/spec.md) "Carry
-an optional editable title on the kinds that have one") MUST apply a document
-that still carries one, from an older build, with the title ignored rather than
-refuse it.
-
-#### Scenario: a resource document is identity, description and config
-- **GIVEN** a registered resource with a description, a config and a reach of its own
-- **WHEN** it is serialized into a resource document
-- **THEN** the document holds its identity, its description and its config
-- **AND** it holds nothing else — no `enabled` flag and no `scope`
-
-#### Scenario: a resource document carries the title when there is one
-- **GIVEN** a registered resource with a title, a description, a config and a reach of its own
-- **WHEN** it is serialized into a resource document
-- **THEN** the document holds its identity, its title, its description and its config
-- **AND** it holds no `enabled` flag and no `scope`
-
-#### Scenario: a title set on one machine converges to the other
-- **GIVEN** a resource that two converged machines hold, with no title on either
-- **WHEN** the user sets its title on one machine and the two converge
-- **THEN** the other machine shows the same title for the same resource
-- **AND** clearing the title on either machine and converging again leaves it empty on both
-
-#### Scenario: a document without a title leaves the title empty
-- **GIVEN** a resource document that carries no `title` key
-- **WHEN** a machine applies it
-- **THEN** the resource is registered or updated with an empty title and every other field the document carries
-
-#### Scenario: a title on a kind without one is ignored on apply
-- **GIVEN** a document for an MCP server that carries a `title` key, written by an older build
-- **WHEN** a machine applies it
-- **THEN** the server is registered or updated from the document with no title, and the round reports no failure for it
-
-### Requirement: Key resource documents by uid
-A resource document MUST be stored at a path keyed by the resource's **uid**,
-and MUST carry that uid inside it. A machine receiving a document MUST match it
-to a local resource by uid, and MUST create a missing one *at that uid* rather
-than minting its own — two machines holding one resource hold one identity for
-it.
-
-Keying the path by the name made a rename a deletion beside an addition, and
-the receiving machine could not tell that from a delete-and-create: it ran the
-full deletion, which released the secret nothing else cited and dropped the
-kind-owned state the row cascaded to. The name lives inside the document, where
-changing it is a modification of one file
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
-
-#### Scenario: a rename travels as a rename
-- **GIVEN** a resource that both machines hold, whose config cites a secret,
-  and which the receiving machine has given a reach of its own,
-- **WHEN** the user renames it on one machine and the two converge,
-- **THEN** the other machine holds the same resource under the new name — not a
-  new resource — with its secret still in the store, its kind-owned state
-  intact, and the reach that machine set for itself unchanged,
-- **AND** this holds whichever way the new name sorts against the old one,
-  because the ordering of the paths a round applies must not decide whether a
-  rename is lossless.
-
-### Requirement: Let a kind withhold its own rows
-Every kind MUST travel **except one it declares for itself**: a kind sets
-`converges=False` when its rows are derived on each machine rather than
-authored by the user, and `memory` is the only kind that does
-([memory](../memory/spec.md) "Keep the memory tree derived and local"). The rule MUST live on the kind rather than as a list in the
-sync layer; the exporter MUST withhold such rows and the applier MUST ignore
-such a document, so a machine on an older build cannot deliver one either. A
-kind that travels MAY additionally declare that one of its **rows** does not, on
-the same terms and for the same reason (see "Withhold derived output in both
-halves").
-
-#### Scenario: a kind that declares itself derived never reaches the tree
-- **GIVEN** a vault with `memory` partition rows, whose kind declares
-  `converges=False`,
-- **WHEN** a round exports the vault,
-- **THEN** no `resources/memory/*.yaml` document is written, and a document of
-  that kind arriving from the remote is ignored rather than applied.
-
-### Requirement: Carry a channel's document but not its adapter
-A `channel` document MUST travel while its adapter does not. A channel is an
-inbound surface — a polled bot or a held websocket connection, each of which a
-platform serves to one consumer at a time — so the document names the one machine that may answer: `runs_on`, the
-`machine_id` whose daemon starts the adapter ([channels](../channels/spec.md) "Bind each channel to the one machine that runs it"). The other
-machine therefore holds the channel's configuration, its secret references
-and its pairings, so taking over a bot is a rebind rather than a
-re-registration.
-
-A channel's machine binding is not the retired machine axis of `scope` coming
-back. Reach is "which agents, here" — a local answer each machine gives itself.
-The binding is "which machine runs the adapter" — one answer the machines
-share, so it lives in the channel's config and travels with it. A binding
-records a fact no machine can state alone, because it is about which of them
-acts.
-
-#### Scenario: a channel document names the machine that runs it
-- **GIVEN** a `channel` configured on one machine and bound to it
-- **WHEN** a round exports the vault
-- **THEN** the working tree holds a document for the channel like any other resource
-- **AND** that document names the bound machine's `machine_id` as the one that runs its adapter
+- **GIVEN** a skill whose `scripts/` holds a `__pycache__/` of `.pyc` files beside its scripts
+- **WHEN** the vault settles what is on disk
+- **THEN** the scripts are committed and the bytecode is not, and nothing is left pending
 
 ### Requirement: Converge shared state areas
-Module-owned shared state areas that belong to the vault rather than to one
-machine MUST converge: MCP capability preferences, internal engine settings,
-the agent plugin inventory, and channel peer pairings.
+Module-owned shared state that belongs to the vault rather than to one machine
+MUST converge as vault state documents under `vault/state/<area>/`: MCP
+capability switches (`state/mcp-preferences/<server>.json`), channel peer
+pairings (`state/channel-peers/<channel>.json`) and Coffer's own engine settings
+(`state/settings/internal-engine.json`). A state document names its owner by
+uid; an area with nothing but its defaults has no document. The plugin
+inventory is not a state area: it is carried in each machine's descriptor (see
+"Record plugins as an inventory, not a replicator").
 
 #### Scenario: each shared state area reaches the working tree
-- **GIVEN** a vault holding a non-default choice in a shared state area
-- **WHEN** a round exports the vault
-- **THEN** the working tree holds that area's document under `state/<area>/`
-- **AND** the export counts it under that area
+- **GIVEN** a switched-off MCP capability, a channel pairing and a non-default engine setting
+- **WHEN** each is stored
+- **THEN** each is a vault document under its area, named by its owner, and when each capability was first and last seen stays in `derived/`
+- **AND** engine settings at their defaults have no document
 
 ### Requirement: Carry channel pairings as platform identity
-Channel peer pairings MUST travel as **platform identity** — chat id, sender
-id, display name and pairing time, keyed by the channel's uid — because a channel that moved to
-another machine without its pairings would make the owner re-pair from their
-phone on every rebind.
+Channel peer pairings MUST travel as **platform identity** — chat id, sender id,
+display name and pairing time — in the channel's state document, keyed by the
+channel's uid, because a channel that moved to another machine without its
+pairings would make the owner re-pair from their phone on every rebind. Renaming
+the channel MUST move its pairings document in the same commit.
 
 #### Scenario: a channel's pairings travel with it
-- **GIVEN** a paired `channel` on one machine,
-- **WHEN** the two machines converge and the channel is rebound to the other,
-- **THEN** the owner's pairing is present on the machine that now runs it and no
-  re-pairing is asked for, and the conversation pointer each machine holds is
-  its own.
-
-### Requirement: Keep the active conversation pointer local
-The active conversation pointer MUST NOT travel, and neither MUST the agent a
-chat's thread has stuck to. Conversations are machine-local, and a published
-pointer would name a conversation the other machine does not have; the sticky
-agent names an agent installed on this machine, which the other machine may not
-have either.
-
-#### Scenario: the active conversation pointer is not published
-- **GIVEN** a paired chat whose pairing has an active conversation on this machine
-- **WHEN** the pairings state area is exported
-- **THEN** the exported document carries the chat's platform identity
-- **AND** it names no conversation
+- **GIVEN** a paired `channel`
+- **WHEN** the channel is renamed
+- **THEN** one commit moves both the channel's file and its pairings document, and the pairings and the owner's identity are unchanged
 
 ### Requirement: Record plugins as an inventory, not a replicator
-The plugin inventory MUST be an **inventory, not a replicator**: it records
-which plugins each agent has on each machine and MUST write nothing into any
-agent's configuration.
+The plugin inventory MUST be an **inventory, not a replicator**: each machine's
+descriptor lists the agents registered there and the plugins each has, and
+nothing MUST write any of it into any agent's configuration — a descriptor is
+never applied. An agent whose plugins cannot be read is listed with none.
 
 #### Scenario: an arriving plugin inventory writes nothing into an agent
-- **GIVEN** a plugin inventory document another machine published
-- **WHEN** this machine applies it
-- **THEN** no agent's configuration is written
-- **AND** the apply reports nothing to do
+- **GIVEN** a machine with an agent that has a plugin
+- **WHEN** it runs a round
+- **THEN** its descriptor lists the agent's type and the plugin
+- **AND** no machine applies that list to an agent's configuration
 
 ### Requirement: Carry secrets as ciphertext only
-Secrets MUST travel as Fernet **ciphertext only**, and only when the remote
-is configured to carry it.
+Stored secrets MUST travel as Fernet **ciphertext only** — the files
+`vault/secret/<ref>.enc` — and only when the remote is configured to carry them
+(`include_secret`). Until then `secret/` is in the vault repository's exclude
+file and is in no commit. A resource's config names a secret by reference and
+never holds its value.
+
+#### Scenario: ciphertext travels only when the remote carries it
+- **GIVEN** a stored secret on a machine whose remote does not carry secrets
+- **WHEN** it runs a round and the other machine runs one
+- **THEN** the ciphertext is in no commit and the other machine has no copy
+- **AND** once both remotes carry secrets, the ciphertext reaches the other machine byte for byte
 
 #### Scenario: a synced channel carries a secret reference, never a secret
-- **GIVEN** a `channel` whose configuration cites a secret ref for its bot
-  token or its app secret,
-- **WHEN** a round exports the vault,
-- **THEN** the channel's document in the working tree holds the ref and no
-  secret material, and the secrets themselves appear only as Fernet ciphertext
-  and only when the remote is configured to carry secrets.
+- **GIVEN** a `channel` whose configuration cites a secret ref for its bot token or its app secret
+- **WHEN** the channel's resource file is committed and pushed
+- **THEN** the file holds the ref and no secret material, and the secret itself travels only as ciphertext under `secret/` when the remote carries secrets
 
 ### Requirement: Publish one descriptor per machine
-One machine descriptor document per machine MUST travel (see "Write only this
-machine's descriptor").
+One machine descriptor, `vault/machines/<machine_id>.json`, per machine MUST
+travel (see "Write only this machine's descriptor").
 
 #### Scenario: a round publishes this machine's descriptor and no other
-- **GIVEN** a working tree that already holds another machine's descriptor
-- **WHEN** this machine exports its vault
-- **THEN** the tree holds this machine's descriptor at `machines/<machine_id>.yaml`
-- **AND** the other machine's descriptor is left exactly as it was
+- **GIVEN** three machines joined to one remote
+- **WHEN** each runs rounds
+- **THEN** the remote holds one descriptor per machine at `machines/<machine_id>.json`, each written only by its own machine
 
 ### Requirement: Keep machine-local state out of the repository
-Logs, `coffer.db` itself, `daemon-config.json`, PID files, port allocations,
-chat history, conversations, the audit log, MCP invocation records, the whole of
-`~/.coffer/memory/` **and the `memory` partition rows derived from it**, and any
-runtime artifact MUST stay machine-local. The master key MUST **never** be
-written into the repository (see "Never write the master key into the
-repository").
+Only `~/.coffer/vault/` is a repository. Everything true of one machine only
+MUST be stored outside it: `local/` (agents, reach, the sync remote, retention,
+the secret boundary's files, machine-local ciphertext), `content/` (media and
+the chat workspace), `runs.db` (conversations, the audit log, MCP invocation
+records, rounds, usage), `derived/` (the memory tree and everything rebuilt),
+and `daemon-config.json`, `daemon.json`, the master key and logs directly under
+`~/.coffer` ([vault-storage](../vault-storage/spec.md) "Store state in five
+classes by nature"). The master key MUST **never** be written into the vault
+(see "Never write the master key into the repository").
 
 #### Scenario: machine-local files never reach the working tree
-- **GIVEN** a vault whose `~/.coffer` holds `coffer.db`, `daemon-config.json`, a log file and a memory store beside its knowledge
-- **WHEN** a round exports the vault
-- **THEN** the working tree holds the knowledge document
-- **AND** it holds none of the database, the daemon configuration, the log or the memory store
+- **GIVEN** an agent, a machine-local resource and a derived one registered on a machine, and a migrated home's reach, retention and remote settings
+- **WHEN** the vault's history and tree are read
+- **THEN** none of them is in the vault: each is a file under `local/` or `derived/`
 
 ### Requirement: Keep reach machine-local
 **Reach** — a resource's `enabled` flag and its `scope` — is machine-local and
-MUST NOT travel in either direction. They read like two fields but they are one
-thing, written by one control: whether this resource is live here, and for
-which agents. Reach is set on the machine it applies to and each machine sets
-its own. Publishing it would let one machine silently re-answer a question
-another machine had already answered for itself — the laptop that deliberately
-left a server dark would find it live again after the desktop's next round,
-with nothing in the history that reads like a decision anyone made.
+MUST NOT travel in either direction: it is `local/reach.json`, keyed by resource
+uid. They read like two fields but they are one thing, written by one control:
+whether this resource is live here, and for which agents. Publishing it would
+let one machine silently re-answer a question another machine had already
+answered for itself.
 
 #### Scenario: reach stays on the machine it was set on
-- **GIVEN** an `mcp_server` present on both machines, disabled on one of them and
-  restricted to a single agent on the other,
-- **WHEN** the two machines converge,
-- **THEN** each machine still holds the reach it was given — the disabled one is
-  still disabled, the restricted one still restricted — and a later edit to the
-  server's configuration on either machine reaches the other without carrying
-  its reach along.
+- **GIVEN** a resource disabled on this machine and restricted to one agent
+- **WHEN** its reach is stored and the resource's file is committed
+- **THEN** the reach is in `local/reach.json` under the resource's uid and in no commit of the vault
 
 ### Requirement: Withhold derived output in both halves
-**Derived output MUST NOT converge, in either half.** A resource whose bytes
-each machine regenerates for itself — from material that already converges
-plus that machine's own machine-local state — MUST be withheld from the tree and
-MUST be ignored when a document for it arrives. This is the rule of "Let a kind
-withhold its own rows" at the granularity of one **row**: a kind that otherwise
-converges MUST be able to declare that a particular row does not, and that
-row declaration MUST live on the kind rather than as a name the sync layer
-recognises. The master-folder half is a set of tree paths held in the sync
-layer, because the sync layer may not import the kind; a contract test MUST pin
-that set to the kind's own spelling of the name, so the two cannot drift apart
-in silence. The exporter and the applier MUST both consult both halves.
-
-Coffer's own generated skill `coffer-guide` is the case this exists for. Its
-text is rendered locally from the running build, the knowledge files (which
-converge on their own) and **which collections this machine has enabled** — and
-`enabled` is reach, which "Keep reach machine-local" keeps machine-local. So two
-machines holding identical files still render different bytes, each correct
-where it is. Converging it had each round overwrite the other machine's master
-folder and its resource row (whose `version_hash` is that folder's digest), the
-overwritten machine re-render at its next boot or curation pass, and the
-exchange repeat: a commit and an audit event per tick on both machines, forever,
-over an artifact neither machine reads from the other. **Both halves MUST be
-withheld**: the master folder under `skills/`, which "Converge knowledge files
-and the skill store" otherwise mirrors, and the resource document, which
-"Converge resource definitions as serialized documents" otherwise publishes.
+**Derived output MUST NOT converge, in either half**, and it cannot, because it
+is stored under `derived/`, outside the vault. Coffer's own generated skill
+`coffer-guide` is the case this exists for: its text is rendered locally from
+the running build, the knowledge files and which collections this machine has
+enabled — which is reach, and machine-local — so two machines holding identical
+files render different bytes, each correct where it is. **Both halves** are
+derived: its master folder (`derived/skills/coffer-guide/`) and its resource
+file (`derived/resources/skill/coffer-guide.json`). Every other skill is in the
+vault. Memory partitions are derived the same way.
 
 #### Scenario: a locally generated skill is neither published nor overwritten
-- **GIVEN** two machines holding the same knowledge files, one with a
-  collection enabled and the other with it disabled, so each has rendered its
-  own `coffer-guide` master folder and registered its own `skill:coffer-guide`
-  row,
-- **WHEN** both converge, and then converge again,
-- **THEN** neither machine's `SKILL.md` or row has been changed by the other,
-  the remote carries neither `skills/coffer-guide/` nor
-  `resources/skill/coffer-guide.yaml`, the second round publishes and applies
-  nothing, and the knowledge files and an ordinary imported skill converge as
-  usual.
-
-### Requirement: Leave the paths of withheld derived output inert
-Withholding derived output MUST NOT publish its **absence**. A bundle written by
-an earlier build already carries those paths, and an export that converged them
-away would stage a deletion — the one change every machine acts on. A machine
-still running that earlier build has no rule to protect it and would take the
-deletion as leave to unlink its own live copy, and the resource document's
-deletion would reach the row's own delete guard, be refused, and be re-refused
-on every tick because a round re-derives its diff (see "Release a hold whose
-diff no longer breaches"). So the paths MUST be left exactly where they are: not
-published, not applied, not deleted, and never counted by the deletion guard.
-They become inert rather than tidy, which is the cheaper of the two mistakes.
-
-This is the opposite treatment from a withheld **kind** (see "Let a kind
-withhold its own rows"), whose documents are cleared on purpose — those stand on
-nothing at the other end, while a withheld row's document stands on a master
-folder that machine wrote itself and still delivers.
-
-#### Scenario: a derived document an older build published is left in place
-- **GIVEN** a remote holding the generated `coffer-guide` skill's folder and resource document, published by an earlier build
-- **WHEN** a machine on this build converges with it
-- **THEN** those paths are neither applied to this vault nor deleted from the tree
-- **AND** this machine's own generated skill is untouched and no deletion of it is published
+- **GIVEN** Coffer's own skill and a person's imported skill
+- **WHEN** each is filed
+- **THEN** Coffer's own is stored under `derived/` and the person's under the vault, so only the person's can converge
 
 ### Requirement: Allow at most one user-owned sync remote
 A vault MUST have **at most one** sync remote: a git repository the user owns,
-configured with a URL, a branch, a push secret reference, an interval, and
-whether secret ciphertext rides along. Sync MUST be disabled until the user
+configured with a URL, a branch, a push credential reference, the username an
+HTTPS token is sent with, an interval, whether secret ciphertext rides along
+(`include_secret`), and whether it is on. The remote is machine-local
+configuration, `local/sync/remote.json`. Sync MUST be off until the user
 configures it. The interval MUST be at least 60 seconds: a shorter one is
-refused on every surface that sets it — the route, `coffer sync remote set
---interval` and the web form — before anything is stored.
+refused before anything is stored. The username defaults to `coffer`; GitHub and
+GitLab ignore it for a token, while Bitbucket (for example `x-token-auth`) and
+Azure DevOps need a real one, and a username git cannot send — blank, or
+holding a space, `:`, `@` or `/` — MUST be refused. The username and the token
+reach git only through the credential helper's environment.
 
 #### Scenario: sync stays off until a remote is configured
 - **GIVEN** a vault with no sync remote configured
-- **WHEN** a round is requested
-- **THEN** the round is reported as disabled and nothing is committed or pushed
-- **AND** configuring a remote a second time replaces the first rather than adding another
+- **WHEN** the worker ticks and a round is requested over REST
+- **THEN** the worker runs no round, and the request is refused as `SYNC_NO_REMOTE`
 
 #### Scenario: an interval under a minute is refused
-- **GIVEN** a configured sync remote with a 300-second interval
-- **WHEN** the remote is set again with an interval of 59 seconds, through the route and through `coffer sync remote set --interval 59`
-- **THEN** both are refused with a validation error naming the 60-second floor
-- **AND** the stored remote still carries the 300-second interval
+- **GIVEN** a remote being set with an interval of 59 seconds
+- **WHEN** the request is validated
+- **THEN** it is refused naming the 60-second floor, and 60 seconds is accepted
+
+#### Scenario: a token is sent with the username the remote names
+- **GIVEN** a remote with no username and another with `x-token-auth`
+- **WHEN** git is given the push token
+- **THEN** the first sends `coffer` and the second `x-token-auth`, both only through the credential helper's environment
+- **AND** a username with a space, `:`, `@` or `/` is refused
 
 ### Requirement: Refuse a URL or branch git would read as an option
 The URL and the branch become arguments to `git`, so neither MAY begin with `-`
 (git would read it as an option, and `--receive-pack=<cmd>` is a command) and
-the branch MUST pass `git check-ref-format --branch`. Both MUST be refused at
-the API, at the CLI and again by the domain object. The git adapter MUST fence
-every positional argument git lets it fence with `--` and MUST push an explicit
-`refs/heads/` refspec.
+the branch MUST pass the rules of `git check-ref-format --branch`. Both MUST be
+refused at the API, at the CLI and again by the domain object. The git adapter
+MUST fence every positional argument git lets it fence with `--` and MUST push
+an explicit `refs/heads/` refspec.
 
 #### Scenario: a remote URL or branch that git would read as an option is refused
 - **GIVEN** a remote URL beginning with `-`, or a branch beginning with `-` or failing `git check-ref-format --branch`
-- **WHEN** the remote is configured over REST, from the CLI, or built as the domain object
+- **WHEN** the remote is configured over REST or built as the domain object
 - **THEN** each is refused and no remote is stored
-- **AND** a remote that is accepted is pushed to through an explicit `refs/heads/<branch>` refspec
-
-### Requirement: Keep the working tree outside the vault
-The working tree defaults to `~/.coffer/sync`. Every round mirrors the vault
-into it and may `reset --hard` it, so it MUST NOT be at, inside or above any
-vault directory (knowledge, skills, memory), nor at or above `~/.coffer` itself;
-inside `~/.coffer` only the default location is accepted, and a relative path
-MUST be refused. The working tree is set over REST (`PUT /api/v1/sync/remote`
-`worktree_path`) and on the command line (`coffer sync remote set <url>
---worktree <path>`), and both refuse the same paths with the same reason.
-
-#### Scenario: a working tree pointed inside the vault is refused
-- **GIVEN** a request to configure the working tree at a knowledge or skills
-  directory, or at `~/.coffer` itself, or at a relative path,
-- **WHEN** the remote is configured with that working tree over REST, or with
-  `coffer sync remote set <url> --worktree <path>`,
-- **THEN** each is refused with the reason named — a 422 over REST, the route's
-  message and the invalid-input exit code on the command line — and no remote is
-  stored and no repository is created.
-
-### Requirement: Adopt an existing repository only when it is ours
-An existing repository at that location MUST be adopted with its history intact
-— unless it has commits and an `origin` that is neither the configured remote
-nor one Coffer created, in which case it is someone's checkout of something else
-and MUST be refused rather than repointed.
-
-#### Scenario: a foreign checkout at the working tree is refused, not repointed
-- **GIVEN** a repository at the working tree location with commits and an `origin` pointing at another remote Coffer did not create
-- **WHEN** the working tree is prepared for the configured remote
-- **THEN** it is refused and its `origin` is left pointing where it did
-- **AND** an existing repository whose `origin` is the configured remote is adopted with its history intact
-
-### Requirement: Mark and repoint a working tree Coffer made
-A tree Coffer made MUST be marked in its local git config and MAY be repointed
-when the remote's URL changes.
-
-#### Scenario: a working tree Coffer made follows a new remote URL
-- **GIVEN** a working tree Coffer created for one remote
-- **WHEN** the remote's URL is changed and the working tree is prepared again
-- **THEN** the tree's `origin` names the new URL
 
 ### Requirement: Keep the pointer local
-The **pointer** is the commit this vault has provably absorbed, stored locally.
-It is the base of every diff and the only machine identity the algorithm needs,
-and it MUST NOT travel as an input to the algorithm.
+There is no pointer apart from the vault's own history. A round's base MUST be
+the merge base of this vault's `HEAD` and the remote's tip, so what this machine
+has absorbed is exactly what its history shares with the remote; nothing about
+it travels as an input to the algorithm except the `last_converged_commit` a
+returning machine reads back from its own descriptor.
 
 #### Scenario: a round diffs from the pointer stored on this machine
-- **GIVEN** a machine that has converged more than once today, so the commit its published descriptor names is older than its stored pointer
-- **WHEN** a round runs with one new document in the vault
-- **THEN** the round publishes that one document and nothing it published before
-- **AND** the stored pointer advances to the round's commit
+- **GIVEN** two machines that converged, after which one deleted a document the other never touched
+- **WHEN** the other machine, holding a new document of its own, runs a round
+- **THEN** the merge from the shared history applies the deletion and publishes the new document
 
 ### Requirement: Keep machine identity across reinstalls
 `machine_id` MUST survive reinstalling and uninstalling Coffer. A machine that
 comes back under a new identity becomes a ghost: it rejoins as a stranger, its
 old descriptor lingers in the registry with nobody to update it, and anything
-that named it — the curation owner, its own recovered pointer — silently stops
-meaning this machine.
+that named it — the curation owner, a channel's binding — silently stops meaning
+this machine.
 
 #### Scenario: a machine identity survives reinstalling Coffer
-- **GIVEN** a machine whose `~/.coffer` is deleted and Coffer reinstalled, on a
-  host that exposes a stable identifier,
-- **WHEN** it adopts the remote again,
-- **THEN** it returns under the same machine id and its descriptor is updated
-  rather than duplicated, so it rejoins as itself rather than as a stranger.
+- **GIVEN** a machine whose cached identity is lost, on a host that exposes a stable identifier
+- **WHEN** its identity is resolved again and it joins the remote
+- **THEN** it has the same machine id, the remote's registry holds it, and it joins as a returning machine rather than as a stranger
 
 ### Requirement: Derive machine identity from the host
 `machine_id` MUST therefore be derived from the host, not generated by Coffer:
@@ -498,26 +289,24 @@ in `daemon-config.json` and recomputed if that cache is lost.
 ### Requirement: Fall back to a stored identifier and say so
 Where neither host identifier is readable, a UUID MUST be generated once and
 stored at `~/.coffer/machine-id` (mode `0600`). This one does **not** survive
-deleting `~/.coffer`, and the machine surface MUST say so, because such a
-machine reappears under a new id and the old descriptor must be removed by
-hand.
+deleting `~/.coffer`, and the identity MUST say that it was not derived from the
+host, so such a machine is known to reappear under a new id if `~/.coffer` is
+deleted.
 
 #### Scenario: a machine with no host identifier falls back and says so
 - **GIVEN** a host that exposes no readable identifier
 - **WHEN** the machine identity is resolved twice
 - **THEN** a UUID is stored at `~/.coffer/machine-id` with mode `0600`, both resolutions give the same id, and the identity is marked as not derived from the host
-- **AND** the machines table warns that deleting `~/.coffer` makes this a new machine
 
 ### Requirement: Publish only a hash of the host identifier
-The raw host identifier MUST NOT be written into the repository — it is a
-hardware identifier. What travels MUST be `sha256("coffer-machine:" + raw)`
-truncated to 16 hex characters.
+The raw host identifier MUST NOT be written into the vault — it is a hardware
+identifier. What travels MUST be `sha256("coffer-machine:" + raw)` truncated to
+16 hex characters, which also names the machine's one descriptor path.
 
 #### Scenario: the raw host identifier never reaches the repository
-- **GIVEN** a machine whose id is derived from a host identifier,
-- **WHEN** it publishes its descriptor,
-- **THEN** the working tree holds only the truncated hash of that identifier and
-  the raw value appears nowhere in the repository.
+- **GIVEN** a host identifier
+- **WHEN** the machine id is derived from it
+- **THEN** the id is 16 hex characters that do not contain the raw value, and it names exactly one descriptor path
 
 ### Requirement: Treat the machine name as a label
 `machine_name` MUST be a label, not a key: chosen by the user, defaulting from
@@ -531,47 +320,51 @@ own descriptor so it syncs.
   other machines inside that machine's own descriptor on the next round.
 
 ### Requirement: Write only this machine's descriptor
-Each machine MUST write exactly one document, at `machines/<machine_id>.yaml`,
-and MUST write no other machine's. Every machine owning a disjoint path is what
-makes these documents unable to conflict.
+Each machine MUST write exactly one descriptor, at `machines/<machine_id>.json`,
+and MUST write no other machine's — except that retiring another machine
+deletes its descriptor (see "Derive the registry from the descriptors"). Every
+machine owning a disjoint path is what makes these documents unable to
+conflict.
 
 #### Scenario: the machine registry shows every machine and cannot conflict
-- **GIVEN** two machines that have both converged,
-- **WHEN** the machines table is read on either,
-- **THEN** it lists both with their names, last converged day and whether each
-  one's key matches this machine's, marks the local one, and the working tree holds one descriptor
-  per machine with no merge conflict between them.
+- **GIVEN** two machines that have both run rounds
+- **WHEN** the machines table is read on either
+- **THEN** it lists both with their names, when each last ran a round and whether each one's key matches this machine's, marks the local one, and the vault holds one descriptor per machine with no conflict between them
 
 ### Requirement: Derive the registry from the descriptors
-The registry MUST be whatever `machines/*.yaml` currently holds — a derived
-view, never a synced table of its own.
+The registry MUST be whatever `machines/*.json` currently holds — a derived
+view, never a table of its own. Retiring another machine removes its descriptor
+in a commit of this machine's; retiring this machine is refused. A retirement
+MUST survive a remote that moved on meanwhile.
 
 #### Scenario: a retired machine leaves the registry with its descriptor
-- **GIVEN** two machines that have both converged
-- **WHEN** one retires the other
-- **THEN** the other machine's descriptor is gone from the tree and the registry no longer lists it
-- **AND** nothing else in the vault changes
+- **GIVEN** three machines joined to one remote
+- **WHEN** one retires another while the remote has moved on
+- **THEN** the retired machine's descriptor is gone from the vault and the remote, the registry no longer lists it, and the remaining descriptors are untouched
+- **AND** retiring this machine, or a machine the registry does not hold, is refused
 
 ### Requirement: Carry the descriptor fields
-A descriptor MUST carry `name`, `os`, `hostname`, `coffer_version`,
-`last_converged_on`, `last_converged_commit`, `key_fingerprint`, and the names
-of the agents registered on that machine.
+A descriptor MUST carry its `format_version`, `machine_id`, `name`, `os`,
+`hostname`, `coffer_version`, `last_round_at`, `last_converged_commit`,
+`key_fingerprint`, and the agents registered on that machine with their plugins.
+A descriptor from a newer build MUST still be read for the fields this build
+knows.
 
 #### Scenario: a descriptor carries what the machines table shows
-- **GIVEN** a machine with agents registered and a master key
-- **WHEN** it converges and publishes its descriptor
-- **THEN** the descriptor carries its name, operating system, hostname, Coffer version, the day and commit it last converged, its key fingerprint and the names of its agents
+- **GIVEN** a machine with an agent registered and a master key
+- **WHEN** it runs a round
+- **THEN** its descriptor carries its format version, name, operating system, hostname, Coffer version, when it last ran a round, the commit it last converged at, its key fingerprint and its agents
+- **AND** the descriptor reads back to the same fields
 
 ### Requirement: Publish this machine's pointer in its descriptor
-`last_converged_commit` MUST publish this machine's pointer, so the remote can
-hand it back to a machine that lost it (see "Recover a returning machine's base
-from its descriptor").
+`last_converged_commit` MUST publish the commit this machine last converged at,
+so the remote can hand it back to a machine that lost its vault's history (see
+"Recover a returning machine's base from its descriptor").
 
 #### Scenario: a descriptor publishes the pointer this machine reached
-- **GIVEN** a machine that has converged before and holds a pointer
-- **WHEN** a later round publishes its descriptor
-- **THEN** the descriptor names the pointer this machine held when it published
-- **AND** that commit is in the remote's history, so the remote can hand it back
+- **GIVEN** a machine that has converged with the remote
+- **WHEN** its descriptor is read from the remote
+- **THEN** it names the commit the machine last converged at, a commit in the remote's history
 
 ### Requirement: Publish the key fingerprint in the descriptor
 `key_fingerprint` MUST be the same short hash `GET /sync/key/fingerprint`
@@ -584,17 +377,6 @@ by hand.
 - **WHEN** its descriptor is read and `GET /sync/key/fingerprint` is asked on that machine
 - **THEN** the descriptor's `key_fingerprint` is the value the route returns
 - **AND** the machines table says that a peer whose fingerprint differs from this machine's has secrets that cannot be decrypted here
-
-### Requirement: Restamp the convergence day at most once a day
-`last_converged_on` MUST be restamped **at most once per calendar day**, so a
-machine that is running but idle does not commit a heartbeat every round. It
-therefore means "last day this machine converged", and the UI MUST say so.
-
-#### Scenario: an idle machine restamps its descriptor at most once a day
-- **GIVEN** a machine that has already converged today
-- **WHEN** further rounds run the same day with nothing else to say
-- **THEN** its descriptor is not rewritten and no commit is made
-- **AND** the machines table labels the value as the day it last converged
 
 ### Requirement: Scope names agents only
 `scope` MUST name agents, by uid, and nothing else — `{ agents: [...] }`.
@@ -636,459 +418,181 @@ machine only and is not synced, and MUST say where a resource is dormant here.
 - **THEN** it states that reach is set on this machine only and is not synced
 - **AND** an empty agent list is named as dormant
 
-### Requirement: Run the seven round steps in order
-A round MUST be these seven steps **in this order**:
+### Requirement: Run a round as pull, merge, guard, check out, push
+A round MUST be these steps **in this order**:
 
 ```
-0  Repair    — if the working tree's HEAD is not the pointer, reset to the pointer
-1  Serialize — export the vault into the tree (differentially), commit as L;
-               deletion guard on the publish side (pointer..L)
-2  Merge     — fetch, then merge origin/<branch> into L with base merge-base(L, R) → M
-3  Diff      — D := git diff L..M
-4  Guard     — deletion guard on the apply side (D plus the retry set);
-               tag L as the pre-apply snapshot
-5  Apply     — apply D to the vault, path by path
-6  Publish   — push M; pointer := M; unapplied paths join the retry set
+1  Pull      — fetch the remote's branch (tip R); this vault's HEAD is L
+2  Merge     — git merge-tree --write-tree L R, outside the working tree,
+               from their merge base
+3  Stop?     — any conflict or a merged file validation refuses: stop, whole
+4  Guard     — the deletion breaker, incoming (L -> merged) and outgoing
+               (base -> L)
+5  Snapshot  — tag L as refs/tags/coffer/pre-apply/<time>
+6  Check out — move the vault to the merged tree in one compare-and-swap step
+7  Push      — push the merged commit; this machine's descriptor rides along
 ```
 
-The deletion guard runs in both directions, each at the first step that knows
-its diff: what this vault is about to publish is checked right after it is
-committed, before any merge, and what the round is about to apply to this
-vault is checked once the merge has produced it. A breach in either direction
-holds the round before the vault or the remote is touched.
-
-Most concurrent edits are not conflicts: git merges different hunks of one file
-without help.
+Nothing is written to the vault before step 6, so a round that stops, holds or
+fails leaves the vault exactly as it was. Most concurrent edits are not
+conflicts: git merges different hunks of one file without help. A round with
+nothing to pull and nothing to push makes no commit.
 
 #### Scenario: a changed vault converges and pushes
-- **GIVEN** a configured sync remote and a vault with a new knowledge document,
-- **WHEN** a converge round runs,
-- **THEN** the document is committed to the working tree, the commit is pushed
-  to the configured branch, and the pointer advances to it.
+- **GIVEN** two joined machines that each wrote a different knowledge document
+- **WHEN** the first runs a round and then the second
+- **THEN** the first pushes, the second pulls the first's document behind a pre-apply snapshot and pushes its own, and the first then pulls it
 
 #### Scenario: concurrent edits to different parts of one document merge
-- **GIVEN** two machines that each appended a different section to one knowledge
-  document,
-- **WHEN** both converge,
-- **THEN** the document holds both sections and no conflict is reported.
-
-### Requirement: Repair the working tree first
-Step 0 MUST run first: where the working tree's HEAD is not the pointer, it MUST
-be reset to the pointer before anything else happens.
-
-#### Scenario: a drifted working tree is reset to the pointer first
-- **GIVEN** a converged machine whose working tree HEAD was left on a commit other than its pointer, one that dropped a document the vault still holds
-- **WHEN** a round runs
-- **THEN** the tree is reset to the pointer before the vault is serialized
-- **AND** the round publishes no deletion of that document
+- **GIVEN** two machines that each edited a different line of one knowledge document
+- **WHEN** both run rounds
+- **THEN** the document holds both edits and no conflict is reported
 
 ### Requirement: Apply a deletion only when the diff carries one
-A deletion MUST be applied only when it appears in `D` as a deletion. A machine
-that merely *lacks* a document makes no change relative to its own base, and
-that MUST NOT be read as a deletion.
+A deletion MUST be applied only when one side of the three-way merge deleted the
+file relative to the shared base. A machine that merely *lacks* a document it
+never had makes no change relative to that base, and that MUST NOT be read as a
+deletion; a machine that did not touch a file another machine deleted takes the
+deletion rather than resurrecting it.
 
 #### Scenario: a stale machine does not resurrect a deletion
-- **GIVEN** a machine whose pointer predates a deletion the other machine made
-  and pushed,
-- **WHEN** that machine runs its first round after being offline,
-- **THEN** the deletion is applied rather than reverted, because the machine
-  made no change to that path relative to its own base.
-
-### Requirement: Export differentially
-Export MUST write **differentially** — writing changed documents and removing
-documents the vault no longer holds — and MUST NOT clear and rewrite a
-directory.
-
-#### Scenario: a locally deleted resource removes exactly its document
-- **GIVEN** an exported vault holding several resources
-- **WHEN** one resource is deleted locally and the vault is exported again
-- **THEN** exactly that resource's document is removed from the tree
-- **AND** every other document is left in place, unrewritten
-
-### Requirement: Never export a retry-set path as a deletion
-Export MUST NOT delete a path in the retry set. A document this vault failed to
-absorb is pending, not deleted.
-
-#### Scenario: a failed apply holds the path back instead of deleting it
-- **GIVEN** a round in which one resource document cannot be applied here,
-- **WHEN** the next round exports the vault,
-- **THEN** that document is still present in the working tree, it is not
-  committed as a deletion, and the round retries it.
-
-### Requirement: Advance the pointer only on absorption
-The pointer MAY advance to `M` only when the round completes. Any path whose
-application failed MUST join the retry set instead, MUST be re-attempted next
-round, and MUST leave the set on success.
-
-#### Scenario: a held path leaves the retry set once it applies
-- **GIVEN** a document that failed to apply here and joined the retry set
-- **WHEN** a later round runs after the cause of the failure is gone
-- **THEN** the document is applied and leaves the retry set
-- **AND** it is not re-attempted on the round after that
-
-### Requirement: Record inapplicable paths as not applicable here
-A path that fails because it cannot apply on this machine at all — an `agent`
-whose `config_dir` does not exist here — MUST be recorded as **not applicable
-here** rather than pending: preserved like a retry-set path, not retried, not
-reported as an error, and said to be so on the surfaces rather than presented as
-a failure the user has to chase.
-A round re-checks that precondition, never the apply itself: once the agent's
-`config_dir` exists here, the held path is released and applied.
-
-#### Scenario: an agent whose config directory is missing here is not applicable
-- **GIVEN** an `agent` document arriving whose `config_dir` does not exist on this machine
-- **WHEN** a round applies it
-- **THEN** the path is recorded as not applicable here and preserved like a held path
-- **AND** it is neither retried nor reported as a failure
+- **GIVEN** a machine behind the remote, which never touched a document the other machine deleted and pushed
+- **WHEN** that machine runs its next round
+- **THEN** the deletion is applied here, and the document does not come back on the remote
 
 ### Requirement: Tell a new machine from a returning one
-A machine with no pointer is **joining**, and the round MUST tell a new machine
-from a returning one — out of the remote's registry, which either holds this
-machine's id or does not — before it does anything.
+A machine that has never converged with the remote is **joining**, and the join
+MUST tell which case it is before it does anything: **empty** (the remote holds
+nothing: this machine becomes the first and pushes its whole vault), **new**
+(the remote's history shares nothing with this vault and holds no usable base
+for this machine) or **returning** (the remote carries this machine's
+descriptor, whose `last_converged_commit` is still in the remote's history).
 
 #### Scenario: a joining machine is placed from the remote's registry
-- **GIVEN** a machine with no pointer whose id the remote's registry does not hold
-- **WHEN** it adopts the remote
-- **THEN** the round reports that it joined as a new machine
-- **AND** a machine whose id the registry does hold is reported as returning
+- **GIVEN** an empty remote, a remote another machine filled, and a remote holding this machine's own descriptor from before a reinstall
+- **WHEN** each join is previewed
+- **THEN** they are `empty`, `new` and `returning` respectively
 
 ### Requirement: Join a new machine by taking the union
-A **new machine** MUST take the union: its pointer is set to git's empty tree,
-so `D` is a diff from nothing and can structurally contain only additions. It
-takes everything the remote holds, keeps everything it already had, and the next
-round publishes both.
+A **new machine** MUST take the union: files only the remote has are pulled,
+files only this machine has are pushed, identical files need nothing, and a file
+both hold with different content is left exactly as it is here — not pushed, not
+committed over — until the person chooses, per file or for all, to keep this
+machine's (pushed by the next round) or take the remote's. Joining MUST NOT
+delete a file on either side. A machine the registry knows whose recorded base
+is no longer in the remote's history joins the same way. A resource of the same
+name and a different uid stops the join as a conflict (see "Treat the same name
+with a different uid as a conflict").
 
 #### Scenario: a new machine takes the union and deletes nothing
-- **GIVEN** a machine whose id the remote's registry does not hold, with its own
-  vault, and a remote holding a different one,
-- **WHEN** the user runs `coffer sync adopt <url>`,
-- **THEN** everything the remote holds is added locally, everything the machine
-  already held is still present, and the next round publishes both.
+- **GIVEN** a remote holding one machine's vault, and a new machine with files of its own, one of which the remote holds with different content
+- **WHEN** the new machine joins
+- **THEN** everything the remote holds is added here, everything this machine held is still present, the differing file keeps this machine's content and is not pushed, and nothing is deleted on either side
+
+#### Scenario: a differing file waits until the person chooses
+- **GIVEN** a join that left a differing file
+- **WHEN** the person keeps this machine's version, or instead takes the remote's
+- **THEN** keeping it pushes it on the next round, and taking the remote's replaces it here, and either way nothing is left pending
 
 ### Requirement: Recover a returning machine's base from its descriptor
 A **returning machine** MUST recover its base from its own descriptor's
-`last_converged_commit` and proceed as an ordinary stale-machine round: the
-three-way merge takes the remote's deletions, keeps this machine's edits, and
-nothing resurrects.
+`last_converged_commit` and join with an ordinary three-way merge from it: the
+remote's deletions are taken, this machine's own edits and deletions since are
+kept and guarded by the breaker, and nothing resurrects.
 
 #### Scenario: a returning machine does not resurrect what was deleted while it was away
-- **GIVEN** a machine that converged before, lost its pointer to a reinstall
-  while its vault files survived, and a remote from which a skill was deleted in
-  the meantime,
-- **WHEN** that machine joins the remote again,
-- **THEN** its id is recognised in the registry, its base is recovered from its
-  own descriptor, the deletion is applied here rather than undone there, and the
-  round reports that it joined as a returning machine.
+- **GIVEN** a machine that converged before, lost its vault's history to a reinstall while its files survived, and deleted one file while offline
+- **WHEN** it joins the remote again
+- **THEN** the preview says it is returning with its base and lists the deletion, and after the join the file is gone from the other machine too while its kept files are unchanged
 
 ### Requirement: Hold a returning machine's empty vault instead of publishing the loss
-A returning machine whose vault is gone MUST NOT publish the loss. A reinstall
-that took `~/.coffer` with it leaves an empty vault and a valid pointer, which
-the merge would read as "this machine deleted everything"; Coffer cannot tell a
-wiped disk from a deliberate purge, so the publish-side guard (see "Guard both
-directions") MUST stop the round and ask rather than guess.
+A vault that lost its files — a reinstall that took them, a failed restore, a
+stray `rm -rf` — MUST NOT publish the loss. Coffer cannot tell a wiped disk from
+a deliberate purge, so the outgoing deletion breaker (see "Guard both
+directions") MUST hold the round before anything is pushed and ask.
 
 #### Scenario: a returning machine with an empty vault does not publish the loss
-- **GIVEN** a machine that converged before and whose vault was wiped, rejoining
-  a remote holding hundreds of documents,
-- **WHEN** a round runs,
-- **THEN** nothing is pushed as a deletion, the round is recorded as awaiting
-  confirmation naming how many documents it would remove from the remote, and
-  the user can instead rebuild this machine from the remote.
+- **GIVEN** a machine that converged 25 documents and then lost all of them
+- **WHEN** a round runs
+- **THEN** nothing is pushed, the round is `held` on the outgoing side naming the 25 files, and the remote is unchanged until the person confirms
 
 ### Requirement: Report a join before applying it
-Joining MUST be explicit and reported: whichever kind it is, the surfaces MUST
-state, before anything is applied, which case it is, when this machine last
-converged, how many documents the remote has changed since, and how many this
-vault has.
-Only an explicit adopt applies a join: `GET /sync/join` states the join and
-applies nothing, `coffer sync adopt` prints it and asks before applying
-(`--yes` skips the question; with no terminal and no `--yes` it refuses), and
-the web Sync page shows it in a dialog and joins only on confirm. An ordinary
-round — the background worker, `coffer sync now`, `POST /sync/run` — on a
-machine that has not joined MUST apply and push nothing and end as
-`awaiting_join`, carrying the same report.
+Joining MUST be explicit and previewed: before anything is applied the surfaces
+MUST state which case it is, who pushed the remote's newest commit and when,
+what would be pulled and pushed by area, how many files are the same, which
+differ, and — for a returning machine — what the merge would delete or stop on;
+a remote at the wrong layout is refused in the preview. `GET
+/api/v1/sync/join/preview` applies nothing; `POST /api/v1/sync/join` joins as the
+preview said; `coffer sync join` prints the preview and asks before joining
+(`--yes` skips the question); the Sync page shows the preview and joins on the
+person's click.
 
 #### Scenario: a join states its case and its counts before applying
-- **GIVEN** a returning machine with no pointer and a remote that has changed documents since it last converged
-- **WHEN** it joins the remote
-- **THEN** the surfaces state that it is returning, the day it last converged, how many documents the remote has changed since and how many this vault holds, before anything is applied
-
-### Requirement: Rebuild a vault from the remote only on request
-**Rebuild** MUST replace this vault with the remote's, discarding documents only
-this machine holds and pushing nothing. It is destructive on purpose and MUST
-NOT be reached without the user asking for it by name. It is the third answer a
-damaged machine needs, because confirming spreads the loss and rejecting refuses
-the same round forever.
-
-#### Scenario: a damaged machine rebuilds from the remote instead of publishing its loss
-- **GIVEN** a machine whose vault was wiped and whose round is held by the
-  publish-side guard,
-- **WHEN** the user rebuilds it from the remote,
-- **THEN** the vault holds what the remote holds, documents only this machine
-  had are gone, nothing was pushed, and the held round is cleared.
-
-### Requirement: Refuse a returning machine whose base is gone until the user picks
-A returning machine whose recorded base is no longer in the remote's history
-MUST be refused until the user picks: joining as new would resurrect what the
-others deleted, rebuilding would discard what only this one has, and there is no
-safe default.
-
-#### Scenario: a returning machine whose base is gone must choose
-- **GIVEN** a machine the remote's registry holds, with no pointer, whose recorded base is no longer in the remote's history
-- **WHEN** it adopts the remote without saying how to join
-- **THEN** the adopt is refused, naming the choice to make, and nothing is applied or pushed
-- **AND** adopting again with `--keep-local` joins it as new
+- **GIVEN** a machine that has not joined its remote
+- **WHEN** `coffer sync join` runs and the person declines, then runs it again with `--yes`
+- **THEN** the first prints which case the join is and applies nothing, and the second joins
 
 ### Requirement: Detect joining on every round without a pointer
-The join detection MUST run whenever a round starts with no pointer, not only
-under `coffer sync adopt`, so configuring a remote on a machine that has
-forgotten its pointer cannot skip it.
+A round on a machine that has not joined its remote — never joined, or set to
+another URL or branch since — MUST apply and push nothing and end
+`join_required`, so no timer round, `coffer sync now` or `POST
+/api/v1/sync/run` ever joins on its own.
 
 #### Scenario: an ordinary round on a machine without a pointer still detects the join
-- **GIVEN** a machine the remote's registry holds, which has lost its pointer
-- **WHEN** an ordinary round runs rather than `coffer sync adopt`
-- **THEN** the round recognises the machine as returning and recovers its base from its descriptor
-- **AND** it reports the join and ends as `awaiting_join`, applying nothing until the machine adopts
+- **GIVEN** a machine with a remote it has not joined, and a machine whose remote was just set to another URL
+- **WHEN** an ordinary round runs on each
+- **THEN** each ends `join_required` and nothing is applied or pushed
 
 ### Requirement: Apply knowledge, skill and memory-trigger file changes
-For `knowledge/**`, `skills/**` and `memory-triggers/**` — the authored memory
-triggers of `vault/memory-triggers/` ([memory](../memory/spec.md) "Keep
-triggers in the vault, armed only by a person") — an addition or a modification
-MUST write the file and a deletion MUST remove it. A round publishes the three
-trees the same way, and a conflict in any of them is resolved as a file-tree
-conflict.
+What a round applies MUST be a checkout of the merged tree: an added or modified file
+under `knowledge/`, `skills/`, `memory-triggers/`, `resources/`, `state/`,
+`secret/` or `machines/` is written, and a deleted one removed, in the one
+compare-and-swap step that refuses to overwrite a person's unsettled edit (see
+"Never overwrite a person's unsettled edit"). Stores that read the vault reload
+from the new `HEAD`, so an arriving resource file is a resource and an arriving
+state document is in effect without any per-kind import step.
 
 #### Scenario: an arriving file is written and a deleted one removed
-- **GIVEN** a diff that adds a knowledge file and a skill file and deletes another knowledge file
-- **WHEN** it is applied to the vault
-- **THEN** the added files are written into the knowledge and skill stores
-- **AND** the deleted file is removed from the vault
+- **GIVEN** two machines that each wrote a knowledge document
+- **WHEN** both run rounds
+- **THEN** each machine holds the other's document with the same bytes
 
 #### Scenario: an arriving memory trigger is written into the vault
-- **GIVEN** a diff that adds `memory-triggers/<id>.md` and deletes another trigger's file
-- **WHEN** it is applied to the vault
-- **THEN** the trigger's file is written into `vault/memory-triggers/` and the deleted one is removed
-- **AND** a bundle published from this vault carries every file of `vault/memory-triggers/` under `memory-triggers/`
-
-### Requirement: Apply resource documents through the resource service
-For `resources/<kind>/<uid>.yaml`, an addition or a modification MUST upsert
-through the kind-agnostic resource service with `${HOME}` expanded and the
-kind's import gate run, leaving the local resource's reach untouched (see "Keep
-reach machine-local"); a deletion MUST delete the resource. A document whose
-name differs from the local resource's MUST be applied as a **rename** of that
-resource, never as the arrival of a different one.
-
-#### Scenario: an arriving resource document is upserted through the import gate
-- **GIVEN** a resource document for a resource this vault does not hold, and later a modified version of it
-- **WHEN** each is applied
-- **THEN** the first registers the resource at the document's uid and the second updates that same row
-- **AND** a document the kind's import gate refuses writes nothing
-
-### Requirement: Apply state documents through their area's provider
-For `state/<area>/**`, the area's provider MUST apply the document and MUST
-remove it on deletion (see "Let each state area define its document's
-deletion").
-
-#### Scenario: a state document is applied by the provider that claims its area
-- **GIVEN** a state document under `state/<area>/` and a provider registered for that area
-- **WHEN** it is applied
-- **THEN** that area's provider receives it
-- **AND** a document for an area no provider claims is skipped
-
-### Requirement: Apply secret blobs
-For `secret/<ref>.enc`, an addition or a modification MUST write the
-ciphertext subject to the freshness rule (see "Let the fresher secret
-ciphertext win"); a deletion MUST delete the secret.
-
-#### Scenario: a secret blob is written as ciphertext and its deletion deletes the secret
-- **GIVEN** a secret blob arriving for a ref, and later its deletion
-- **WHEN** each is applied
-- **THEN** the ciphertext is written to the secret store, and a blob staler than the one held is refused
-- **AND** the deletion removes the secret
+- **GIVEN** a memory trigger written on one machine
+- **WHEN** it runs a round and the other machine runs one
+- **THEN** the other machine's vault holds the trigger's file under `memory-triggers/` with the same bytes
 
 ### Requirement: Never apply the registry or the manifest
-`machines/*.yaml` and `manifest.json` MUST NOT be applied in either direction —
-the registry is read from the tree, never projected into anything local, and the
-manifest is metadata about the tree.
+`machines/*.json` and `manifest.json` MUST NOT be projected into anything local —
+the registry is read from the vault, and the manifest is metadata about the
+layout — and MUST NOT count towards the deletion breaker.
 
 #### Scenario: the registry and manifest are never applied
-- **GIVEN** a diff that changes `machines/<id>.yaml` and `manifest.json` beside a knowledge file
-- **WHEN** the changes that reach the vault are taken from it
-- **THEN** only the knowledge file is among them
-- **AND** neither the descriptor nor the manifest counts towards the deletion guard
-
-### Requirement: Release unreferenced secrets on deletion
-Deleting a resource MUST release the secrets no remaining resource cites,
-as any other deletion does.
-
-#### Scenario: a remote deletion is applied
-- **GIVEN** a skill present on both machines, deleted on the other one and
-  pushed,
-- **WHEN** a round runs here,
-- **THEN** the skill's files and its registry row are removed here, the
-  secrets no remaining resource cites are released, and the deletion is
-  audited.
+- **GIVEN** a diff that deletes thirty descriptors and the manifest
+- **WHEN** the breaker counts its losses
+- **THEN** it counts none
 
 ### Requirement: Re-run post-import hooks after applying
-After the diff is applied, each kind's post-import hook MUST re-apply its
-machine-local side effects from current state. Everything the unified
-reconciler converges — native config projections, Coffer's MCP entries, skill
-deliveries, delivery hooks — is re-applied by one hook that runs a reconcile
-pass with the import's warrant (see [resource-framework](../resource-framework/spec.md)
-"Converge what Coffer writes outside its database with one reconciler"), and
-the round MUST keep every other reconcile pass out from the start of its apply
-until that pass is done, so no pass judges rows the round has half applied.
-Each item the pass could not bring in step, and each target that failed, is
-reported among the round's failures.
+After a round applied files here, each kind's machine-local side effects MUST be
+brought in step from the new state by one reconcile pass (see "Run the
+reconciler once after a round that applied changes"); a round that applied
+nothing runs none.
 
 #### Scenario: a remote addition lands in the vault
-- **GIVEN** a remote holding an `mcp_server` this vault does not have,
-- **WHEN** a round runs,
-- **THEN** the server is registered locally, its post-import hook has run, and
-  the pointer advances past the commit that added it.
-
-### Requirement: Start nothing when a channel arrives
-A `channel` is upserted by the same row as every other kind, and its arrival
-MUST start nothing: what it carries is a machine binding, and a machine that is
-not the one named simply holds the document. The channel kind's own
-registration checks MUST be relaxed for exactly that case ([channels](../channels/spec.md) "Bind each channel to the one machine that runs it"),
-because a channel bound elsewhere is not judged here against agents this machine
-happens to have.
-
-A binding that names no machine any registry claims is a fault on the channel,
-not permission for this one to start its adapter: [channels](../channels/spec.md) "Bind each channel to the one machine that runs it" owns that
-rule and the fail-closed startup behaviour behind it.
-
-#### Scenario: a channel travels and runs only on the machine it names
-- **GIVEN** a `channel` configured on one machine and bound to it,
-- **WHEN** the two machines converge,
-- **THEN** the channel is registered on the other machine with its binding
-  intact, that machine starts no adapter for it, and the machine it names still
-  runs it.
-
-### Requirement: Let each state area define its document's deletion
-A state document reaches the working tree only while there is a **decision to
-carry**, so its deletion is that decision being taken back. Each state area's
-provider MUST define what deleting its own document means in that area's terms
-and MUST honour it; sync MUST apply the deletion through the provider and MUST
-NOT interpret it for any area. The same rule binds the other direction: an area
-MUST NOT publish a document for its own defaults, or a machine that took its
-choice back and a machine that never made one would add and delete the same
-document at each other every round. The areas that exist today state their own
-terms in spec [mcp-gateway](../mcp-gateway/spec.md) (capability preferences),
-spec [internal-engine](../internal-engine/spec.md) (engine settings) and spec
-[agent-registry](../agent-registry/spec.md) (the plugin inventory).
-
-#### Scenario: a state area decides what its own document's deletion means
-- **GIVEN** a state document whose area is the MCP capability preferences, and
-  the other machine has taken that decision back and pushed the deletion,
-- **WHEN** a round applies the diff here,
-- **THEN** the area's own provider is what performs the removal, sync applies no
-  meaning of its own, and the area publishes no document for its defaults, so
-  the next round has nothing to delete again.
-
-### Requirement: Report per-path failures without aborting
-Per-path failures MUST be reported and MUST NOT abort the round.
-
-#### Scenario: one path that fails to apply does not stop the round
-- **GIVEN** a round whose diff carries one document that cannot be applied here beside others that can
-- **WHEN** the round runs
-- **THEN** the other documents are applied and the round completes
-- **AND** the failing path is reported with its reason
+- **GIVEN** another machine that pushed a knowledge document
+- **WHEN** this machine's round pulls it
+- **THEN** the document is in this vault and one reconcile pass has run
 
 ### Requirement: Let the fresher secret ciphertext win
-Secret blobs MUST NOT reach a text merge. A Fernet token carries its
-encryption time in cleartext, so two ciphertexts for one ref can be ordered
-without the key, and the **fresher encryption wins**. This rule applies to
-`secret/*.enc` and to nothing else.
+Secret ciphertext MUST NOT reach a text merge or a question. A Fernet token
+carries its encryption time in cleartext, so two ciphertexts for one ref can be
+ordered without the key, and the **fresher encryption wins**. This rule applies
+to `secret/**.enc` and to nothing else.
 
 #### Scenario: the fresher secret ciphertext wins
-- **GIVEN** one secret ref re-encrypted on both machines, the other machine's
-  encryption being the older one,
-- **WHEN** the two meet in a round,
-- **THEN** the fresher ciphertext is what both machines hold afterwards,
-  regardless of which commit is newer.
-
-### Requirement: Resolve remaining conflicts with an agent only in the working tree
-Where an internal model is configured, a bounded agent pass MAY resolve the
-remaining conflicts **in the working tree only**, and MUST NOT run against the
-live vault.
-
-#### Scenario: an agent-resolved conflict is validated and reported
-- **GIVEN** a conflicted resource document and an internal model configured,
-- **WHEN** a round runs and the agent's resolution parses and validates,
-- **THEN** the resolution is applied as an ordinary merge result and the round's
-  status names the path as agent-resolved.
-
-### Requirement: Validate an agent's resolution
-That pass's output MUST pass a validation gate — the document parses, a resource
-document validates, and no conflict marker remains — before it is treated as an
-ordinary merge result.
-
-#### Scenario: an agent resolution that fails validation is not applied
-- **GIVEN** a conflicted resource document whose agent resolution leaves a
-  conflict marker,
-- **WHEN** a round runs,
-- **THEN** nothing is applied, the round aborts as an unresolved conflict, and
-  the vault is unchanged.
-
-### Requirement: Report every resolution with its paths
-Resolutions MUST always be reported with their paths, whether or not they
-succeeded: a silent machine merge of the user's own notes is precisely what the
-user would want to know about.
-
-#### Scenario: a resolution that fails is still reported with its path
-- **GIVEN** a conflicted document whose agent resolution fails the validation gate
-- **WHEN** a round runs
-- **THEN** the round's report names that path among its conflicts
-
-### Requirement: Abort the round on an unresolved conflict
-Otherwise the round MUST abort — with no model configured, or when the pass
-fails or its output fails the gate. The vault MUST NOT be touched, the pointer
-MUST NOT move, and the surfaces MUST name the conflicted paths and the working
-tree that holds them.
-
-#### Scenario: a real conflict stops the round without touching the vault
-- **GIVEN** two machines that edited the same lines of one document, and no
-  internal model configured,
-- **WHEN** a round runs,
-- **THEN** the round aborts, the vault is unchanged, the pointer has not moved,
-  and the status names the conflicted path and the working tree holding it.
-
-### Requirement: Snapshot before applying and roll back from it
-Bidirectional convergence writes the vault without a human in the loop, so two
-guards are normative.
-
-Step 4 MUST tag `L` as the pre-apply snapshot, whose tree is by construction the
-vault's state immediately before the apply. Rollback MUST be the same machinery
-run backwards — applying `M..L`. The most recent **ten** snapshots MUST be kept.
-A rollback MUST NOT move the pointer: the reverted vault is an ordinary local
-change, which the next round publishes to the remote. Moving the pointer back
-would make the next round re-derive the diff just undone and apply it again.
-
-A rollback is reached from the Undo of "Offer Undo on one round only when it
-applied something", from `POST /sync/rollback`, and on the command line from
-`coffer sync restore` run with no `--at`, which undoes the last round that
-applied something here. When no round applied anything since the newest
-snapshot, `coffer sync restore` with no `--at` MUST change nothing and say that
-there is nothing to undo.
-
-#### Scenario: a round can be rolled back
-- **GIVEN** a completed round that applied a diff,
-- **WHEN** the user rolls it back,
-- **THEN** the vault returns to the state the pre-apply snapshot holds and the
-  pointer stays where it was, so the next round publishes the undo as an
-  ordinary local change rather than re-applying the diff,
-- **AND** a round that applied nothing here offers no Undo at all, because the
-  snapshot it left is the state the vault is already in.
-
-#### Scenario: restore with no revision undoes the last applied round
-- **GIVEN** a completed round that applied a diff to this machine
-- **WHEN** the user runs `coffer sync restore` without `--at`
-- **THEN** the vault returns to the state that round's pre-apply snapshot holds
-  and the pointer stays where it was
-- **AND** running it when the newest round applied nothing changes nothing and
-  reports that there is nothing to undo
+- **GIVEN** one secret ref re-encrypted on both machines, the other machine's encryption being the fresher one
+- **WHEN** the two meet in a round
+- **THEN** both machines hold the fresher ciphertext, the round pulls it, and there is nothing to ask
 
 ### Requirement: Hold a round that would lose too much
 A round that would **lose** more than **20%** of the documents in an area, or
@@ -1104,150 +608,109 @@ counts as a loss is "Count losses, not deletions".
 - **AND** the thresholds the guard runs with are the published constants of 20% and 20
 
 ### Requirement: Ask the user to confirm a tripped breaker
-A tripped breaker MUST be recorded as needing confirmation, the surfaces MUST
-list what it would remove, and the user accepts or rejects it. What is
-outstanding is a question about one diff, which is why a later round re-derives
-it rather than repeating it (see "Release a hold whose diff no longer breaches"
-and "Record one outstanding confirmation once").
+A tripped breaker MUST hold the round before anything is checked out or pushed
+and record which direction it is — **outgoing** (this machine's own commits
+would remove the files from the remote) or **incoming** (the remote's would
+remove them here) — and which files, grouped by folder with the share of each
+folder they are. The person answers: **delete** them (the round continues and
+applies or pushes the deletions) or **restore** them (the round continues and
+the files are kept, pushed back if the remote had lost them). Both answers are
+on REST (`POST /api/v1/sync/hold/confirm`, `POST /api/v1/sync/hold/restore`), the
+command line (`coffer sync hold --confirm|--restore`) and the Sync page.
 
 #### Scenario: an oversized deletion is held for confirmation
-- **GIVEN** a diff that would delete more documents than the circuit breaker
-  allows,
-- **WHEN** a round runs,
-- **THEN** nothing is applied, the round is recorded as awaiting confirmation
-  with the list of documents it would remove, and `coffer sync confirm` applies
-  it while rejecting it leaves the vault untouched.
+- **GIVEN** a machine that removed 22 documents of one folder, and the machine that receives that deletion
+- **WHEN** each runs a round
+- **THEN** the first is held outgoing and the second incoming, each listing the files by folder, with nothing applied or pushed
+- **AND** confirming pushes the deletion, while restoring keeps the files here and pushes them back
 
 ### Requirement: Guard both directions
-The guard MUST run in **both directions** — over what the round would apply to
-the vault, and equally over what the round's own export would publish as a
-deletion. The second direction is what stops a vault that lost its files to a
-reinstall, a failed restore or a stray `rm -rf` from publishing that loss and
-taking the other machines down with it.
-
-Neither guard replaces the diff-based apply; they bound the damage of a defect
-in it. A machine joining as new has no deletions in either direction and is
-unaffected.
+The breaker MUST run in **both directions** — over what the round would remove
+from this vault, and equally over what this machine's own commits since the
+shared base would remove from the remote. The second is what stops a vault that
+lost its files to a reinstall, a failed restore or a stray `rm -rf` from
+publishing that loss and taking the other machines down with it. A join as a
+new machine deletes nothing in either direction and is unaffected.
 
 #### Scenario: a wiped area is held although rename pairings are consulted
-- **GIVEN** a vault that has lost every document in an area with nothing added
-  in their place — a wiped disk, a failed restore, a stray `rm -rf`,
-- **WHEN** a round runs,
-- **THEN** there is nothing for a pairing to match, the round is held on the
-  publish side, and the loss is not published to the remote.
-
-### Requirement: Guard the retry set with the diff
-On the apply side the guard MUST run over everything the round is about to apply
-— the incoming diff **and** the retry set, since a held path the tree has since
-dropped is absorbed as a deletion.
-
-#### Scenario: the apply-side guard counts held paths the tree dropped
-- **GIVEN** a vault whose retry set holds more paths in one area than the guard allows to be lost, all of which the tree has since dropped
+- **GIVEN** a vault that lost every document in an area with nothing added in their place
 - **WHEN** a round runs
-- **THEN** the round is held on the apply side rather than absorbing those deletions unasked
+- **THEN** there is nothing for a pairing to match, the round is held on the outgoing side, and the loss is not pushed
 
 ### Requirement: Count losses, not deletions
-The guard MUST count what a round **loses**, not what it deletes. A deletion
-with a destination **in the same area of the same diff** is a **move**: it MUST
-NOT count towards either threshold, and it MUST NOT appear in the list a hold
-puts in front of the user, because a document that turned up under another name
-was not removed. A destination MAY be shown two ways — the same content id
-reappearing, or git's own rename detection pairing the two sides — and a
-deletion with neither counts. A pairing that crosses an area MUST be discarded,
-since the guard's unit is the area. The empty document is never paired on
-content, every empty file being identical by construction.
+The breaker MUST count what a round **loses**, not what it deletes. A resource
+file is lost only when its **uid** is gone from the other side: a file that
+disappears while its uid reappears under another name is a move by
+construction. Any other file is a move when its exact bytes land elsewhere in
+the same area, or git's own rename detection pairs it with a file in the same
+area. A move MUST NOT count towards either threshold or appear in the list a
+hold shows. A pairing that crosses an area MUST be discarded, since the
+breaker's unit is the area, and the empty file never pairs on content.
 
 #### Scenario: a re-layout publishes without asking
-- **GIVEN** a vault whose knowledge documents have all been moved into a
-  subdirectory, so the diff carries a deletion and an addition of identical
-  content for nearly every document in the area,
-- **WHEN** a round runs,
-- **THEN** the guard does not hold it, the round publishes unattended, the other
-  machine absorbs the move with no confirmation of its own, and a deletion in
-  the same round that no addition received is still held and listed on its own.
+- **GIVEN** a diff that moves thirty documents into a subfolder of their area with their bytes unchanged, and deletes one more
+- **WHEN** the breaker counts its losses
+- **THEN** only the one deletion is a loss, while the same bytes landing in another area, or two empty files, are not paired
+
+#### Scenario: moving resource files is not a loss
+- **GIVEN** 25 resource files renamed, each keeping its uid
+- **WHEN** the machine that renamed them and the other machine run rounds
+- **THEN** neither round is held
 
 ### Requirement: Ask git about renames separately from the applied diff
-The two tests MUST be asked of git as **separate** questions: the diff a round
-applies stays rename-blind, because the vault applies one path at a time, and
-the guard's reading of the same diff MUST NOT change what is applied or in what
-order.
+The breaker MUST ask git's rename detection as a question of its own, only to
+tell a move from a loss; it MUST NOT change what the merge produces or what is
+checked out.
 
 #### Scenario: a re-layout that rewrites its documents publishes without asking
-- **GIVEN** a vault whose documents have all been moved to new addresses **and
-  edited on the way**, which is what a layout migration does — so the two sides
-  of every change differ and no content id pairs them,
-- **WHEN** a round runs,
-- **THEN** the guard reads git's own rename detection, does not hold the round,
-  and the other machine absorbs the migration with no confirmation of its own.
+- **GIVEN** a document moved to a new folder of its area **and edited on the way**, so no content id pairs the two sides
+- **WHEN** git's rename detection pairs them
+- **THEN** it is a move, while a pairing git finds across areas is still a loss
 
 ### Requirement: Say a vault needs a human where the user already is
-A vault whose last round needs a human — held for confirmation, conflicted,
-failed to push or run, or waiting to join (`awaiting_join`) — MUST say so where
-the user already is, not only on the page built for it. `coffer sync status`
-MUST exit non-zero, the web UI MUST mark its **navigation entry** for the sync
-page, and the desktop shell MUST raise it as a notification and mark its icon. A
-held vault converges no further, and neither does a machine that has not joined
-its remote, so a hold nobody sees is an outage that looks like silence: the
-first one in the field stood for four days.
+A vault whose round needs a human — stopped on conflicts, held by the breaker,
+waiting on an edit, waiting for a join or for a join's differing files, unable
+to sign in, paused in a synchronised folder, or refused for its layout — MUST
+say so where the user already is, not only on the page built for it.
+`coffer sync status` MUST exit non-zero, the web UI MUST mark its **navigation
+entry** for the sync page, the attention list MUST carry an item naming what to
+do, and the desktop shell MUST raise it as a notification and mark its icon. A
+vault that needs a human converges no further, so a question nobody sees is an
+outage that looks like silence.
 
 The web UI's mark MUST be cleared by **visiting the page**, not by the situation
 changing, and MUST NOT return for the same situation. The rounds are
-timer-driven: one broken remote is a fresh round every hour, and a notice that
-re-raised itself on each would cover every page in the app hourly with something
-the user read the first time. A mark keyed on what is wrong — the outcome, the
-error, the direction and areas a hold was raised over — asks once, and asks
-again only when the answer would be different.
+timer-driven, so a notice that re-raised itself on each would cover every page
+hourly with something the user read the first time. A mark keyed on what is
+wrong asks once, and asks again only when the answer would be different.
 
 #### Scenario: a held vault says so where the user already is
-- **GIVEN** a round held at the deletion guard, so nothing converges and
-  nothing is backed up until someone answers it,
-- **WHEN** the user is anywhere other than the sync page — at a terminal, on
-  another page of the web UI, or with only the desktop shell in front of them,
-- **THEN** `coffer sync status` exits non-zero, the web UI's navigation entry
-  for sync is marked, and the shell has marked its icon and raised one
-  notification — once for that condition, not once per poll,
-- **AND** opening the sync page clears the web UI's mark, which does not
-  return while the same thing is wrong, however many rounds re-raise it.
+- **GIVEN** a round held at the deletion guard, so nothing converges and nothing is backed up until someone answers it,
+- **WHEN** the user is anywhere other than the sync page — at a terminal, on another page of the web UI, or with only the desktop shell in front of them,
+- **THEN** `coffer sync status` exits non-zero, the web UI's navigation entry for sync is marked, and the shell has marked its icon and raised one notification — once for that condition, not once per poll,
+- **AND** opening the sync page clears the web UI's mark, which does not return while the same thing is wrong, however many rounds re-raise it.
 
 #### Scenario: a machine that has not joined says so everywhere
-- **GIVEN** a machine with a remote configured that it has not joined, so its
-  round reports `awaiting_join` and converges nothing
+- **GIVEN** a machine with a remote configured that it has not joined, so its round ends `join_required` and converges nothing
 - **WHEN** the user is anywhere other than the sync page
-- **THEN** `coffer sync status` exits non-zero and points at `coffer sync adopt`,
-  the web UI's navigation entry for sync is marked, and the desktop shell marks
-  its icon and raises one notification
+- **THEN** `coffer sync status` points at `coffer sync join`, the web UI's navigation entry for sync is marked, and the desktop shell marks its icon and raises one notification
+
+#### Scenario: the attention list names what a round waits for
+- **GIVEN** a round stopped on a conflict
+- **WHEN** the attention list is read
+- **THEN** it carries one sync item for the conflicts, pointing at the stopped round
 
 ### Requirement: Release a hold whose diff no longer breaches
-A round MUST re-derive its diff even while a confirmation is outstanding, and
-MUST **release** the hold where the direction it was raised for no longer
-breaches. A latch is an unanswered question about one diff, not a state a vault
-sits in: a vault held on a question that no longer arises MUST converge again
-without anyone answering it. A diff that still breaches MUST stay held, and
-re-deriving it MUST NOT move the moment the user was asked.
+A hold is a question about one pair of commits. It MUST stand while neither this
+vault nor the remote moves, and a round in that time answers the same hold
+again; once either side has a new commit the round MUST re-derive its merge and
+breaker, and a hold whose diff no longer breaches MUST be released without
+anyone answering it.
 
 #### Scenario: a hold is released once its diff no longer breaches
-- **GIVEN** a vault held at the deletion guard whose documents have since come
-  back, so the diff that raised the hold no longer breaches it,
-- **WHEN** the next round runs,
-- **THEN** the hold is released without anyone answering it, the round converges
-  normally, and nothing is left waiting on the user.
-
-### Requirement: Record one outstanding confirmation once
-One outstanding confirmation MUST be **one** recorded round and one line in the
-daemon log, however many times the timer re-derives it: the round that first
-reported it is re-stamped rather than joined by a second, and no further audit
-event is written. The surfaces MUST still show the confirmation as outstanding
-and still offer its answers, and answering it MUST produce a further round of
-its own.
-
-#### Scenario: an unanswered confirmation is reported once, not once a tick
-- **GIVEN** a vault held at the deletion guard and a timer that runs a round
-  every interval,
-- **WHEN** several rounds run with nobody answering,
-- **THEN** the history holds **one** round for it rather than one per tick, the
-  audit log holds one event, the Sync page still shows the confirmation as
-  outstanding with the moment it was raised, and answering it produces a further
-  round.
+- **GIVEN** a vault held on the outgoing side after 22 documents were removed
+- **WHEN** the documents are written back and a round runs
+- **THEN** the round is not held and nothing is left waiting on the person
 
 ### Requirement: Run an unattended rewriter on one owner machine
 A worker that rewrites vault content with no human approving the diff is safe on
@@ -1313,46 +776,32 @@ the database.
   because the pass is running on none, and the user can take it over here.
 
 ### Requirement: Never overlap a curation pass and a round
-A curation pass and a converge round MUST NOT overlap. Both write the vault and an
-export taken mid-rewrite is a torn snapshot, so they MUST take the same lock. A
-pass MUST additionally be skipped while a conflict or a pending confirmation is
-outstanding, so a rewrite is never piled onto an unresolved divergence.
+A curation pass and a round MUST NOT overlap. Both write the vault, so they MUST
+take the same lock, and the worker MUST wait for a pass to finish rather than run
+a round under it. A pass MUST additionally be skipped while a round waits for a
+person — a stop on conflicts, a hold, or a join's differing files — so a rewrite
+is never piled onto the very files the person is deciding between.
 
 #### Scenario: a curation pass and a converge round do not overlap
-- **GIVEN** a curation pass in progress,
-- **WHEN** a converge round starts,
-- **THEN** the round waits for the pass to finish before it serializes the
-  vault, so the exported tree is never a half-rewritten corpus.
+- **GIVEN** a curation pass holding the vault lock
+- **WHEN** the sync worker ticks
+- **THEN** no round is recorded until the pass releases the lock, and then one is
 
 #### Scenario: a curation pass is skipped while a round is unresolved
-- **GIVEN** a machine whose last round stopped on a conflict, or that holds a pending confirmation,
-- **WHEN** the unattended curation pass asks whether it may run,
-- **THEN** it is told no, and once a later round converges cleanly with nothing held it is told yes again.
-
-### Requirement: Let an edit beat a curation deletion
-Where the owner's curation pass deleted a document another machine edited, the **edit
-MUST win**: the document survives with its edit, the deletion is dropped, and
-the round MUST NOT report a conflict. A fresh edit is something a person or an
-agent just decided; the deletion is a housekeeping judgement the next pass will
-simply make again.
-
-#### Scenario: an edit outlives a curation deletion
-- **GIVEN** a note the owner's curation pass merged away and deleted, and the same
-  note edited on the other machine before it converged,
-- **WHEN** the two meet in a round,
-- **THEN** the note is still present with its edit, the deletion is dropped, and
-  the round does not report a conflict.
+- **GIVEN** a machine whose last round stopped on a conflict
+- **WHEN** the unattended curation pass asks whether it may run
+- **THEN** it is told no, and once the conflict is answered and the round continued it is told yes again
 
 ### Requirement: Serialize deterministically
-Resource and state serialization MUST be deterministic — sorted keys, normalized
-timestamps, machine-local fields stripped — so that an unchanged vault produces
-an unchanged tree.
+Every vault document MUST be written with one deterministic encoding ([vault-storage](../vault-storage/spec.md)
+"Keep every vault document a JSON object that preserves what it does not
+know"), so an unchanged vault is an unchanged tree and a write that changes
+nothing makes no commit.
 
 #### Scenario: an unchanged vault serializes to an identical tree
-- **GIVEN** a vault that has been exported once
-- **WHEN** it is exported again with nothing changed
-- **THEN** every document in the tree is byte-for-byte what it was
-- **AND** nothing is rewritten
+- **GIVEN** a document written by Coffer
+- **WHEN** it is read and written again with nothing changed
+- **THEN** its bytes are identical and no commit is made
 
 ### Requirement: Make no commit for a round with nothing to say
 A round with nothing to say MUST produce **no commit**, and MUST still be
@@ -1376,53 +825,27 @@ documents alike.
   literal path, and the applied resource names the second machine's own home.
 
 ### Requirement: Store paths outside home verbatim
-Paths outside `$HOME` MUST be stored verbatim. They may fail to apply on another
-machine, which MUST surface as a per-path failure (see "Report per-path failures
-without aborting").
+Paths outside `$HOME` MUST be stored verbatim. Such a path may not exist on
+another machine; that is the resource's business on that machine, not the
+round's.
 
 #### Scenario: a path outside the home directory is stored verbatim
 - **GIVEN** a config value naming an absolute path outside the home directory
-- **WHEN** it is made portable for the tree and expanded again on another machine
+- **WHEN** it is made portable for the vault and expanded again on another machine
 - **THEN** the path is carried exactly as written, with no `${HOME}` sentinel
 
 ### Requirement: Never write the master key into the repository
-The master key MUST never be written into the repository. It is bootstrapped
-onto another machine out-of-band: a backup is written only by the desktop app,
-behind a presence check ([secret](../secret/spec.md) "Release
-plaintext only to a present human in the desktop app"), and installed on the
-other machine with `coffer sync key import`.
+The master key MUST never be written into the vault: it stays in the OS
+credential store or `~/.coffer/master.key`, outside the repository. It is
+bootstrapped onto another machine out-of-band: a backup is written only by the
+desktop app, behind a presence check ([secret](../secret/spec.md)
+"Release plaintext only to a present human in the desktop app"), and installed
+on the other machine with `coffer sync key import`.
 
 #### Scenario: the master key never enters the repository
-- **GIVEN** a remote configured to carry secret ciphertext,
-- **WHEN** a round pushes,
-- **THEN** the tree holds Fernet ciphertext and no key material, and a machine
-  without the key reports those refs locked rather than failing decryption.
-
-### Requirement: Report refs without a key as locked
-A machine holding ciphertext without the key MUST report those refs **locked**
-rather than failing decryption silently. Two absences MUST be told apart. A machine
-that genuinely holds no master key can open none of its ciphertext, so every
-secret ref it holds ciphertext for MUST be reported locked. A key that exists
-but cannot be read right now (a locked or unavailable keychain, an unreadable key
-file) says nothing about which refs would open, so the round MUST report none
-and MUST log that the key was unreadable; the round is still recorded. The key
-MUST be resolved at most once per daemon start, whichever of the three answers
-it gives, so a key kept in the keychain costs at most one prompt.
-
-#### Scenario: secrets this machine cannot decrypt are reported locked
-- **GIVEN** a machine holding secret ciphertext written under a master key it does not hold
-- **WHEN** a master key is imported that still does not decrypt them
-- **THEN** the import names those refs as still locked rather than reporting success silently
-
-#### Scenario: a machine with no master key reports every ref it holds as locked
-- **GIVEN** a machine with no master key file and none in the keychain, holding secret ciphertext that arrived from another machine
-- **WHEN** a converge round runs
-- **THEN** the round's `locked_refs` names every secret ref this machine holds ciphertext for, and the round is recorded with them
-
-#### Scenario: an unreadable key reports no ref locked
-- **GIVEN** a machine holding secret ciphertext whose master key lives in a keychain that is locked
-- **WHEN** a converge round runs
-- **THEN** the round's `locked_refs` is empty, the unreadable key is logged, the round is recorded, and the keychain is not asked again on later rounds
+- **GIVEN** a remote configured to carry secret ciphertext, and a key file beside the vault
+- **WHEN** a round pushes
+- **THEN** the remote holds the ciphertext files and no key material
 
 ### Requirement: Hand the push secret to git as a helper
 The push secret MUST be resolved from the secret store at push time,
@@ -1446,141 +869,85 @@ away on purpose, so there is nothing left to fall back on when it stops.
   reading it from the environment rather than as an answer to a prompt.
 
 ### Requirement: Restore to a revision without discarding later work
-`coffer sync restore --at <rev|date>` MUST move the working tree to a revision
-and apply the difference from the current pointer, so a document deleted last
-week returns without discarding anything the vault gained since. Without
-`--at`, `coffer sync restore` is the rollback of "Snapshot before applying and
-roll back from it".
+Going back to an earlier version of a vault file or folder MUST NOT discard
+anything the vault gained since: restoring writes that version back as a new
+commit through the vault's one write path (`coffer vault restore`, `POST
+/api/v1/vault/restore`, the Skills History tab — [vault-storage](../vault-storage/spec.md)
+"Show, compare and restore any version of a vault file"), touching only the
+paths restored, and the next round publishes it like any other change.
+Undoing what one round did is its rollback (see "Snapshot before checking out
+and roll a round back from it").
 
 #### Scenario: restore brings back a document deleted last week
-- **GIVEN** a remote whose history contains a skill later deleted and converged
-  away,
-- **WHEN** the user runs `coffer sync restore --at <a date before the deletion>`,
-- **THEN** the skill is registered again and everything the vault gained since
-  that date is untouched.
-
-### Requirement: Restore only on request
-Restore MUST always be explicit; a round MUST NOT reach back into history on its
-own.
-
-#### Scenario: a round never reaches back into history
-- **GIVEN** a document that was deleted and whose deletion has converged, so it survives only in the remote's history
-- **WHEN** further rounds run without anyone asking for a restore
-- **THEN** the document stays deleted on every machine
+- **GIVEN** a file with two versions in the vault's history
+- **WHEN** the person restores the first
+- **THEN** the file holds the first version's bytes as a new commit, and no earlier commit is rewritten
 
 ### Requirement: Cover the sync lifecycle on the command line
 The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
-`adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
-`restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`
-— and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-secrets|--without-secrets] [--secret-ref] [--worktree <path>]`,
-`remote clear`, `remote pause`, `remote resume`, `machine list`,
-`machine rename <name>`, `machine rm <id>`,
+`status [--json]`, `history [--limit]`, `rollback <round> [--yes]`,
+`join [--yes]`, `conflicts`, `resolve <path> --mine|--theirs|--edited`,
+`edit <path>`, `continue`, `hold [--confirm|--restore]`,
+`choose [<path> --mine|--theirs]` — and its administration:
+`remote set <url> [--branch] [--interval <seconds>] [--with-secret|--without-secret] [--secret-ref] [--username] [--wait]`,
+`remote clear`, `remote pause`, `remote resume`, `remote check`,
+`machine list`, `machine rename <name>`, `machine rm <id>`,
 `key import <file>`, `key fingerprint`. There is no `key export`: a key backup
-leaves a machine only through the desktop app. An option `remote set` is not given
-keeps the stored remote's value, the working tree included. `remote pause` and
-`remote resume` switch the remote's `enabled` switch off and on (see "Pause a
-configured remote without forgetting it") and change nothing else.
+leaves a machine only through the desktop app. An option `remote set` is not
+given keeps the stored remote's value. `remote pause` and `remote resume` switch
+the remote's `enabled` switch off and on (see "Pause a configured remote without
+forgetting it") and change nothing else.
 
 `status` MUST report the configured remote and every one of its settings — URL,
-branch, interval, whether secrets travel, the push secret ref, the
-working tree and whether the remote is switched on — beside how the last round
-went, in plain and `--json` output; with no remote configured it says so and
-names `remote set`. `restore` without `--at` undoes the last round that applied
-something here (see "Snapshot before applying and roll back from it").
+branch, interval, whether secret ciphertext travels, the push credential ref,
+the username and whether the remote is on — beside this machine, the last round,
+what waits to push and anything waiting for the person, in plain and `--json`
+output; with no remote configured it says so and names `remote set`.
 
 #### Scenario: the command line covers every sync operation
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
-- **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with an optional `--at`, `confirm`, `reject` and `rebuild` with `--yes`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-secrets`, `--without-secrets`, `--secret-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
+- **THEN** it offers every command the requirement names, and no `key export`
 
 #### Scenario: pause and resume a remote from the command line
 - **GIVEN** a configured, enabled sync remote
 - **WHEN** the user runs `coffer sync remote pause`, and then `coffer sync remote resume`
-- **THEN** after the first the stored remote is switched off and a requested round reports `disabled`, and after the second it is switched on again
-- **AND** the URL, branch, interval, secret settings and working tree are unchanged throughout
+- **THEN** after the first the remote is paused and `coffer sync status` exits zero, and after the second it is enabled again
 
 #### Scenario: the status command reports the remote's settings
-- **GIVEN** a configured remote with a non-default branch, interval, push secret ref and working tree, carrying secrets
-- **WHEN** the user runs `coffer sync status --json`
-- **THEN** the output carries the remote's URL, branch, interval, secret setting, push secret ref, working tree and enabled switch as stored
-- **AND** with no remote configured `coffer sync status` says none is configured and names `coffer sync remote set`
+- **GIVEN** a joined machine with a change waiting to push
+- **WHEN** the user runs `coffer sync status`, and then `coffer sync status --json`
+- **THEN** it prints the remote's settings, this machine and what waits to push, and the JSON says the remote is configured
 
 ### Requirement: Cover the same operations over HTTP
 The HTTP API MUST cover the same operations under `/api/v1/sync`:
-`GET|PUT|DELETE /sync/remote`, `POST /sync/run`, `GET /sync/join`, `POST /sync/adopt`,
-`GET /sync/status`, `GET /sync/runs`, `POST /sync/restore`,
-`POST /sync/confirm`, `POST /sync/reject`, `POST /sync/rebuild`,
-`POST /sync/rollback`, `GET /sync/machines`, `PATCH /sync/machines/self`,
-`DELETE /sync/machines/{id}`, `GET /sync/key/fingerprint`,
-`POST /sync/key/import/preview`, `POST /sync/key/import`. No sync route
-returns the master key.
+`GET /status`, `POST /run`, `GET /runs`, `GET /runs/{id}`,
+`GET /runs/{id}/rollback-plan`, `POST /runs/{id}/rollback`,
+`GET|PUT|DELETE /remote`, `POST /remote/check`, `GET /join/preview`,
+`POST /join`, `GET|POST /join-choices`, `GET /stop`,
+`POST /stop/files/answer`, `POST /stop/files/editor`,
+`GET /stop/files/versions`, `POST /continue`, `POST /hold/confirm`,
+`POST /hold/restore`, `GET /machines`, `PATCH /machines/self`,
+`DELETE /machines/{id}`, `GET /key/fingerprint`, `POST /key/import`. No sync
+route returns the master key.
 
 #### Scenario: the HTTP API serves every sync operation
-- **GIVEN** the daemon's HTTP application
-- **WHEN** its routes under `/api/v1/sync` are listed
-- **THEN** every method and path the requirement names is served
-
-### Requirement: Put a held round's answers on its own row
-A round waiting on the user MUST carry its answers on **its own row** — confirm
-(naming the direction, the breached areas and the paths before it runs), reject,
-and, on a `publish` hold, rebuild-from-remote. Only the round the vault is
-**currently** waiting on may carry them: `POST /sync/confirm` acts on the
-vault's present pending state rather than on a round named in the request. There
-is exactly one such row, because one outstanding confirmation is one recorded
-round (see "Record one outstanding confirmation once") — the timer re-stamps it
-rather than adding another each pass — and answering it produces a further round
-rather than rewriting the held one, whose outcome stays `awaiting_confirmation`.
-
-#### Scenario: only the round the vault is waiting on carries its answers
-- **GIVEN** a runs history whose newest round is the hold the vault is waiting on, beside an older round that was once held
-- **WHEN** the Runs tab renders
-- **THEN** the newest round carries confirm, reject and — on a publish hold — rebuild, and the older round carries none of them
-- **AND** once the vault is no longer waiting, no round carries them
+- **GIVEN** the daemon's sync routes
+- **WHEN** they are listed
+- **THEN** every method and path the requirement names is served, and none exports a key
 
 ### Requirement: Show a conflict as a banner
-A **conflict** MUST stay a banner above the table, because its paths have to be
-resolved with the user's own git in a working tree the table has no column
-for.
+A round stopped on conflicts MUST be shown as a card above the runs table, not as
+a row: it lists each conflicting file with the machine whose version it met, the
+three answers (keep this machine's, take the other's, open in the editor and mark
+resolved), how many are answered, and Continue once all are. A hold, a join
+preview and a join's differing files are shown the same way, each on its own
+card with its own answers.
 
 #### Scenario: a conflict is shown as a banner above the runs
-- **GIVEN** a vault whose last round ended in a conflict
+- **GIVEN** a vault whose last round stopped on a conflict
 - **WHEN** the Runs tab renders
-- **THEN** a banner above the table names the conflicted paths and the working tree that holds them
-
-### Requirement: Offer Undo on one round only when it applied something
-At most one row — the newest that reached its pre-apply snapshot, which is the
-round a rollback would reverse — MAY carry an **Undo** action naming the paths
-it would take back, and no other row may, because `POST /sync/rollback` names
-no round and an Undo on every row would run the same call from each. That row
-MUST carry it only when the round **applied something to this machine**: every
-round reaching the apply step tags a snapshot, including one that applies
-nothing, so after a single quiet round the newest snapshot is the vault exactly
-as it already is, and an Undo there offers to restore the state it is already
-in. The action MUST NOT move down to an older round that did apply something —
-the quiet round's snapshot is the newest, so the daemon would reverse to that
-one and leave the older round standing, which is a button naming one round and
-undoing another. The command-line counterpart of Undo is `coffer sync restore`
-with no `--at`. Reaching further back is `coffer sync restore --at` (see "Keep
-point-in-time restore on the command line").
-
-#### Scenario: the undo sits on one round and never moves down
-- **GIVEN** a runs history in which several rounds applied something here
-- **WHEN** the Runs tab renders
-- **THEN** only the newest round that reached its snapshot offers Undo, naming the paths it would take back
-- **AND** when a quiet round sits on top, no row offers Undo rather than an older one
-
-### Requirement: Keep point-in-time restore on the command line
-Restoring at a point in time MUST stay a CLI operation and no page may offer it:
-`--at` names a revision in the *remote's* history, which no route exposes, so a
-page could only offer a blind date box with no preview of what would come
-back.
-
-#### Scenario: no page offers a point-in-time restore
-- **GIVEN** the Sync page with a configured remote and a history of rounds
-- **WHEN** the user looks through its Runs, Setup and Machines tabs
-- **THEN** none of them offers a restore or a date to restore to
+- **THEN** a card above the table names each conflicting file with its answers
 
 ### Requirement: Fold consecutive quiet rounds into one row
 Consecutive rounds that changed **nothing** — no documents either way, no join,
@@ -1615,53 +982,46 @@ vault is in now and the only round that may carry Undo or a hold's answers.
 
 ### Requirement: Pause a configured remote without forgetting it
 A configured remote MUST carry an `enabled` switch, and switching it off MUST
-pause sync without forgetting anything. While it is off every round MUST report
-`disabled`, record nothing, commit and push nothing, and raise no attention on
-any surface — `coffer sync status` exits zero, the web UI does not mark its sync
-entry and the desktop shell marks nothing — even over a round the vault was
-paused on, because a user who met a hold by switching sync off has answered it
-too. The remote, the pointer and the history MUST all be kept, so switching it
-back on resumes where the vault left off. Re-running `coffer sync remote set`
-MUST keep a paused remote paused — it changes what it names and nothing else:
-every option it is not given keeps its stored value, including the branch, the
-interval, whether secrets travel, the push secret and the working tree
-— and a remote configured for the first time is stored enabled, with the
-defaults for every option it is not given.
+pause sync without forgetting anything: the worker runs no timer round, and no
+surface raises attention for it — `coffer sync status` exits zero, the web UI
+does not mark its sync entry and the desktop shell marks nothing — even over a
+round the vault was waiting on, because a user who met a question by switching
+sync off has answered it too. A round the person asks for by name ("Sync now")
+still runs. The remote and the history MUST be kept, so switching it back on
+resumes where the vault left off. Re-running `coffer sync remote set` MUST keep
+a paused remote paused — it changes what it names and nothing else: every option
+it is not given keeps its stored value — and a remote configured for the first
+time is stored enabled, with the defaults for every option it is not given.
 
 #### Scenario: a paused remote runs no round and asks for nothing
-- **GIVEN** a joined vault whose last round is held at the deletion guard, and
-  its remote then switched off
-- **WHEN** a note is written and a round is requested
-- **THEN** the round reports `disabled`, the history is exactly what it was, the
-  note is not on the remote, and the pointer and the remote are kept
-- **AND** `coffer sync status` exits zero, the web UI does not mark its sync
-  entry and the desktop shell marks nothing
+- **GIVEN** a joined vault whose remote is then switched off
+- **WHEN** the worker ticks
+- **THEN** no round is recorded and no next round is scheduled
+- **AND** `coffer sync status` exits zero, the web UI does not mark its sync entry and the desktop shell marks nothing
 
 #### Scenario: reconfiguring a paused remote keeps it paused
 - **GIVEN** a configured remote that has been switched off
 - **WHEN** `coffer sync remote set` is run again with a different interval
-- **THEN** the stored remote carries the new interval and is still switched off
-- **AND** a remote set for the first time is stored switched on
+- **THEN** the remote it sends carries the new interval and is still switched off
+- **AND** a remote set for the first time is sent switched on with the defaults
 
 #### Scenario: reconfiguring a remote changes only what it names
-- **GIVEN** a configured remote with a non-default branch, interval, push
-  secret and working tree, carrying secrets
+- **GIVEN** a configured remote with a non-default branch, interval, push credential and username, carrying secret ciphertext
 - **WHEN** `coffer sync remote set` is run again naming only a new interval
-- **THEN** the stored remote carries the new interval and every other setting
-  exactly as it was
-- **AND** running it with `--without-secrets` switches secret sync off
-  and changes nothing else
+- **THEN** every other setting is sent exactly as it was
+- **AND** running it with `--without-secret` switches secret sync off and changes nothing else
 
 ### Requirement: Present a Sync page with Runs, Setup and Machines tabs
 The web UI MUST present a top-level **Sync** page with **three** tabs. **Runs**,
-the landing tab: every round this machine has run, as a table — when, outcome,
-what it applied here, what it published, the commit. **Setup**: the remote and
-the master key, which are one errand rather than two screens. **Machines**: the
-machine registry, which a user comes back to — to rename this machine or retire
-one that is gone — long after the remote and the key were set. There MUST be no
-Status tab — what a vault is *doing* is the newest row of what it has *been*
-doing, and a separate tab for it put one situation in two places and made it
-actionable in only one.
+the landing tab: the status of sync now (last round, what moved, the next round,
+the machines, what the vault holds, Sync now), the cards for anything waiting on
+the person (conflicts, a hold, a join and its differing files, a problem), what
+waits to push, and every round this machine has run as a table — when, status,
+what it pulled and pushed, the commits, and roll back. **Setup**: the remote
+(with Check repository, whether secret ciphertext travels, pause and resume, and
+Stop syncing), the vault's path with a warning when it sits in a synchronised
+folder, and the master key. **Machines**: the machine registry, where a user
+renames this machine or retires one that is gone.
 
 #### Scenario: the Sync page opens on Runs beside Setup and Machines
 - **GIVEN** the web UI
@@ -1732,3 +1092,247 @@ protected file's passphrase without echoing it.
 - **WHEN** the person chooses the file, types the passphrase and replaces the key
 - **THEN** the dialog showed both fingerprints and "different" before anything was sent to import
 - **AND** afterwards it names the key now in use, how many secrets are readable, and the names of those still locked, with Open Secrets
+
+### Requirement: Record every round
+Every round — timer, `coffer sync now`, `POST /api/v1/sync/run`, a join, a
+continue, an answered hold, a rollback — SHALL be recorded in `runs.db` with its
+status, its trigger, when it started and finished, the commit range it moved the
+vault across, the snapshot it took, the commits it pulled (with the machine that
+wrote each), the files it applied here and pushed, the machines it met and, when
+it stopped or failed, why in words a person can act on. A round that ends in a
+problem — the remote unreachable, sign-in failed, a token waiting for approval —
+MUST be recorded as a round of that status, never raised as an error the caller
+has to catch. The history SHALL be readable newest first, paged, on REST
+(`GET /api/v1/sync/runs`, `GET /api/v1/sync/runs/{id}`) and on the command line
+(`coffer sync history`).
+
+#### Scenario: every round is recorded with what it moved
+- **GIVEN** a joined machine with one new knowledge document waiting to push
+- **WHEN** a round runs
+- **THEN** the history's newest round is `pushed`, names the file it pushed and the commit range it moved across
+- **AND** `GET /api/v1/sync/runs/{id}` returns that round, and an unknown id is `SYNC_ROUND_NOT_FOUND`
+
+### Requirement: Stop the round on any conflict
+A merge that git cannot finish cleanly — both sides changed the same lines, one
+side deleted what the other changed, two resources claim one name — or whose
+merged tree fails validation MUST stop the round whole: nothing is checked out,
+nothing is pushed, this vault's `HEAD` and every file on disk stay as they were,
+and the remote is untouched. Coffer MUST NOT resolve a conflict by itself, by a
+rule or by an agent; the only exception is secret ciphertext (see "Let the
+fresher credential ciphertext win"). Asking again while nobody answered and
+neither side moved changes nothing.
+
+#### Scenario: a real conflict stops the round without touching the vault
+- **GIVEN** two machines that edited the same lines of one document, beside an unrelated change here
+- **WHEN** a round runs
+- **THEN** it ends `stopped` with one conflict naming the other machine, this vault's `HEAD`, the file on disk and the remote's tip are unchanged
+- **AND** a second round before anyone answers is `stopped` again
+
+### Requirement: Answer each conflicting file and continue the round
+A round stopped on conflicts SHALL list each conflicting file with why it
+conflicts (both sides changed it, one side deleted what the other changed, a
+same-name resource with another uid, a merged file validation refused) and the
+machine whose version it met. The person SHALL answer each file — **keep this
+machine's**, **take the other's**, or **edit** it by hand in an editor copy
+Coffer writes under `derived/sync-conflicts/` with git's conflict markers — and
+then continue the round, which validates, guards, snapshots, checks out and
+pushes the resolved tree. An edited answer MUST be refused while a conflict
+marker is left in the file, naming the line. The answers SHALL stand only while
+neither side moves: when this vault or the remote has a new commit, the round is
+asked again. Answering SHALL be reachable on REST (`GET /api/v1/sync/stop`,
+`POST /api/v1/sync/stop/files/answer`, `POST /api/v1/sync/stop/files/editor`,
+`GET /api/v1/sync/stop/files/versions`, `POST /api/v1/sync/continue`), on the
+command line (`coffer sync conflicts`, `resolve <path> --mine|--theirs|--edited`,
+`edit <path>`, `continue`) and on the Sync page.
+
+#### Scenario: keeping this machine's version continues the round
+- **GIVEN** a round stopped because both machines changed the same lines of one document
+- **WHEN** the person keeps this machine's version and continues
+- **THEN** the round pushes that version, the stop is cleared, and the other machine takes it on its next round
+
+#### Scenario: a hand merge with conflict markers left is refused
+- **GIVEN** a stopped round whose conflicting file was opened in the editor copy, which holds git's conflict markers
+- **WHEN** the person answers "edited" with a marker still in the file
+- **THEN** the answer is refused naming the line
+- **AND** once the markers are gone the edited text is what both machines end up holding
+
+#### Scenario: a stop is asked again when the remote moves
+- **GIVEN** a round stopped on a conflict nobody has answered
+- **WHEN** the other machine pushes another change to the same file and a round runs here
+- **THEN** the round stops again on the remote's new commit rather than on the one first asked about
+
+### Requirement: Treat the same name with a different uid as a conflict
+Two resource files of one kind that carry the same `name` and different `uid`s
+are two resources claiming one name. A merge or a join that would bring them
+together SHALL stop on them as a conflict the person answers — keep one, or
+rename one — and MUST NOT pick one by itself or check both out.
+
+#### Scenario: the same name with a different uid stops the round
+- **GIVEN** one machine with an MCP server named `linear` and another with a different MCP server also named `linear`, each with its own uid
+- **WHEN** the second machine's round (or its join) merges with the first's
+- **THEN** the round stops and the conflict's reason is the same name with a different uid
+
+### Requirement: Never overwrite a person's unsettled edit
+A round SHALL check out its merged tree only where the working tree still holds
+what `HEAD` holds. A path the round would change that a person has edited and
+that is not yet committed — an edit still settling, or one validation refused —
+MUST stop the round as waiting on that edit, naming the path; the file on disk
+and `HEAD` MUST stay as they were.
+
+#### Scenario: an invalid hand edit on a path the round changes is never overwritten
+- **GIVEN** a resource file the other machine changed, and on this machine an uncommitted hand edit to the same file that does not parse
+- **WHEN** a round runs here
+- **THEN** the round ends `waiting_on_edit` naming the file, the hand edit is still on disk, and `HEAD` still holds the last valid version
+
+### Requirement: Pause a vault that sits inside a file synchroniser
+A vault inside a folder another tool synchronises — Dropbox, Syncthing, iCloud
+Drive, or a cloud drive under `~/Library/CloudStorage` — would have two
+replicators writing one git repository. A round SHALL detect this and end
+`paused_cloud_folder`, touching nothing, and the status SHALL name the tool so
+the person can move the vault or exclude it.
+
+#### Scenario: a vault in a synchronised folder pauses
+- **GIVEN** a vault whose parent folder carries Syncthing's or Dropbox's marker, or that sits under iCloud Drive or `~/Library/CloudStorage`
+- **WHEN** a round runs
+- **THEN** it ends `paused_cloud_folder` and the status names the synchroniser as a `cloud_folder` problem
+
+### Requirement: Report a remote's failure by what a person can do
+A round that cannot fetch or push SHALL classify git's failure by what a person
+can do about it: `unreachable` (the network or the host), `auth_failed`
+(sign-in failed, or the push token is missing or waiting for approval — the
+status names the token's ref) and `push_failed` (the remote rejected the push,
+for example a protected branch). git's message SHALL be kept, with any
+credential redacted. A failed fetch MUST leave the vault exactly as it was.
+
+#### Scenario: remote failures are reported by what a person can do
+- **GIVEN** git failing with an unreachable host, a refused sign-in, and a rejected push
+- **WHEN** each failure is classified
+- **THEN** they are `unreachable`, `auth_failed` and `push_failed` respectively
+- **AND** a round against a remote that does not exist changes nothing in the vault
+
+#### Scenario: a token waiting for approval is a sign-in problem
+- **GIVEN** a remote whose push token waits for the person's approval
+- **WHEN** a round runs
+- **THEN** it is recorded `auth_failed` naming the token's ref, and the attention list carries a sign-in item
+
+### Requirement: Refuse a remote at another layout
+The remote's `manifest.json` carries the vault layout's `schema_version`. A
+round or a join SHALL refuse a remote at a newer layout (`remote_too_new`) and
+at an older one (`remote_too_old`), leaving this vault untouched. A remote in
+the layout builds before the vault files wrote is never converted: it is
+rebuilt from the first machine that ran the one-time upgrade — pointed at an
+empty branch or remote, which that machine then fills — and every other machine
+upgrades and joins it as a new machine.
+
+#### Scenario: a remote at another layout is refused
+- **GIVEN** a remote whose manifest names a newer layout, and another whose manifest names an older one
+- **WHEN** a round runs against each
+- **THEN** the first ends `remote_too_new` and the second `remote_too_old` with a message saying to rebuild it from a migrated machine
+- **AND** in both cases this vault's `HEAD` is unchanged
+
+#### Scenario: an old remote is rebuilt from the first upgraded machine
+- **GIVEN** two machines that synced through a remote before the upgrade, and the first of them upgraded
+- **WHEN** its round meets the old remote, and it is then pointed at an empty remote and joins, and the second machine upgrades and joins that remote
+- **THEN** the old remote is refused, the first machine fills the empty one, and the second machine joins as new with nothing lost on either
+
+### Requirement: Check a remote before it is saved
+A person SHALL be able to ask what a remote holds before saving it — empty, a
+Coffer vault (with its layout), some other repository, unreachable or refused
+sign-in — through `POST /api/v1/sync/remote/check`, `coffer sync remote check`
+and the Setup tab's "Check repository". Checking MUST keep nothing: no remote is
+stored and the vault is not touched.
+
+#### Scenario: a remote is checked before it is saved
+- **GIVEN** an empty remote, the same remote once a vault has been pushed to it, and a URL that does not exist
+- **WHEN** each is checked
+- **THEN** they read as empty, as a vault at the current layout, and as unreachable or refused with git's message
+- **AND** nothing about the stored remote changed
+
+### Requirement: Run the reconciler once after a round that applied changes
+What another machine changed is this machine's warrant to bring its own side
+effects in step — an agent's native configuration, Coffer's MCP entries, skill
+deliveries. After a round that applied files here, one reconcile pass SHALL run
+with the import's warrant (see [resource-framework](../resource-framework/spec.md)
+"Converge what Coffer writes outside its database with one reconciler"); a round
+that applied nothing MUST NOT run one. A failed pass is logged and the round
+stands.
+
+#### Scenario: a round that applied changes runs one reconcile pass
+- **GIVEN** a joined machine and another machine that pushed a knowledge document
+- **WHEN** this machine's round pulls it, and a further round has nothing to do
+- **THEN** exactly one reconcile pass ran, after the first round
+
+### Requirement: Converge resources as their own files
+`mcp_server`, `skill`, `channel`, `provider` and `knowledge` resources MUST
+converge as their files, `vault/resources/<kind>/<name>.json` — the file is the
+resource, not a serialization of a row kept elsewhere ([vault-storage](../vault-storage/spec.md)
+"Identify a resource by the uid inside its file"). A resource file is identity,
+title, description and config — what the resource *is*; what it reaches is not
+in it (see "Keep reach machine-local"). Agents are machine-local and never
+converge. The `title` is optional: a resource with no title has no `title` key.
+
+#### Scenario: a resource document is identity, description and config
+- **GIVEN** a registered resource with a description, a config and a reach of its own
+- **WHEN** its file is read from the vault
+- **THEN** the file holds its uid, kind, name, description and config
+- **AND** it holds no `enabled` flag and no `scope`, and the vault's history never carries them
+
+### Requirement: Carry a channel's file but not its adapter
+A `channel` file MUST travel while its adapter does not. A channel is an inbound
+surface — a polled bot or a held websocket connection, each of which a platform
+serves to one consumer at a time — so its config names the one machine that may
+answer: `runs_on`, the `machine_id` whose daemon starts the adapter ([channels](../channels/spec.md)
+"Bind each channel to the one machine that runs it"). Every other machine holds
+the channel's configuration, its credential references and its pairings, starts
+nothing for it, and does not judge it against agents it happens to have, so
+taking over a bot is a rebind rather than a re-registration.
+
+A channel's machine binding is not the retired machine axis of `scope` coming
+back. Reach is "which agents, here" — a local answer each machine gives itself.
+The binding is "which machine runs the adapter" — one answer the machines share,
+so it lives in the channel's file and travels with it.
+
+#### Scenario: a channel travels and runs only on the machine it names
+- **GIVEN** a `channel` bound to one machine, held by two
+- **WHEN** both daemons start their channels
+- **THEN** only the machine it names starts an adapter for it, and the other holds the channel and runs nothing
+
+### Requirement: Snapshot before checking out and roll a round back from it
+Bidirectional convergence writes the vault without a human in the loop, so two
+guards are normative. Before a round checks anything out it MUST tag this
+vault's `HEAD` as the pre-apply snapshot, `refs/tags/coffer/pre-apply/<time>`;
+the ten newest are kept. Rolling a round back MUST put back, as one new commit
+naming the snapshot it restored from, what that round changed here — and only
+that: a file edited after the round keeps the edit. The next round publishes the
+rollback like any other local change. A round that applied nothing, or that was
+itself a rollback, MUST be refused with nothing to roll back. A rollback shows
+what it will reverse and what it keeps before it runs (`GET
+/api/v1/sync/runs/{id}/rollback-plan`, `coffer sync rollback <round>` without
+`--yes`), and runs through `POST /api/v1/sync/runs/{id}/rollback`, `coffer sync
+rollback <round> --yes` and the Runs tab.
+
+#### Scenario: a round can be rolled back
+- **GIVEN** a round that applied two files here, one of which was edited afterwards
+- **WHEN** the person rolls the round back
+- **THEN** the untouched file returns to its state before the round, the edited one keeps the edit, the newest commit names the snapshot it restored from, and the other machine takes the rollback on its next round
+
+#### Scenario: a round that applied nothing has nothing to roll back
+- **GIVEN** a round that only pushed, and a round that was a rollback
+- **WHEN** a rollback of either is asked for
+- **THEN** it is refused with nothing to roll back
+
+#### Scenario: a rollback shows its plan first
+- **GIVEN** a round that pulled a change
+- **WHEN** `coffer sync rollback <round>` runs and the person declines
+- **THEN** it has printed what it would reverse and changed nothing, and `--yes` rolls the round back
+
+### Requirement: Report the refs a key cannot open as locked
+A machine holding ciphertext its master key cannot open MUST report those refs
+**locked** rather than failing decryption silently: importing a key MUST answer
+which refs it still cannot open, and the Sync page shows the refs this machine
+cannot decrypt. A key file that is blank or not a key MUST be refused.
+
+#### Scenario: credentials this machine cannot decrypt are reported locked
+- **GIVEN** a machine holding ciphertext written under a master key it does not hold
+- **WHEN** a master key is imported that still does not open it
+- **THEN** the import names those refs as still locked, and a blank or malformed key is refused

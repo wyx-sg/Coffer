@@ -193,13 +193,6 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
     ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
-    # The vault-sync data model is being rewritten on its own branch; delete
-    # this entry when that lands (the gate fails once it matches nothing).
-    (
-        "openspec/specs/vault-sync/data-model.md",
-        "coffer sync key export",
-        "pending vault-sync rewrite",
-    ),
 )
 
 

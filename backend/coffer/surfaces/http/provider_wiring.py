@@ -88,9 +88,9 @@ def wire_provider_kind(
     reconciler: Reconciler,
 ) -> ProviderWiring:
     """Wire the ``provider`` kind (spec provider-switching) into the app."""
-    # Handed the resource table so a direct write cannot flag a second
-    # internal-engine default (spec provider-switching "Keep at most one
-    # internal-engine default").
+    # Handed the resource service so a direct write cannot flag a second
+    # internal default (spec provider-switching "Keep at most one internal
+    # default connection").
     app.state.kinds["provider"] = make_provider_kind(resource_svc)
     provider_svc = ProviderService(
         resources=resource_svc,

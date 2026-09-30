@@ -1,7 +1,7 @@
 """Wire shapes for a round waiting for a person — a stop on conflicts, a
 hold, a join and its differing files, a rollback
 (spec vault-sync "Hold a round that would lose too much", "Report a join
-before applying it", "Snapshot before applying and roll back from it").
+before applying it", "Snapshot before checking out and roll a round back from it").
 
 A file's path is vault-relative and always travels in a body or a query,
 never a path segment: it contains slashes.

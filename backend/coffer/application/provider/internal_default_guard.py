@@ -1,6 +1,6 @@
 """The one-flag rule on every write path but the one that moves it.
 
-Spec provider-switching "Keep at most one internal-engine default". The flag is
+Spec provider-switching "Keep at most one internal default connection". The flag is
 moved by ``set_internal_default`` (``internal_default_ops``), which clears the
 holder before it marks the target. Two other paths can write the flag, and
 neither may leave a second one — which the partial unique index

@@ -4,7 +4,7 @@
 
 Every agent the developer runs keeps its own memory, and none of them can see any of the others'. Claude Code accrues per-fact notes per project; Codex distils its rollouts into task groups and a profile. Both work well and neither leaves its own directory, so the developer re-teaches each agent what the other already knows. Coffer **reads those native memories, without ever writing to them**, distils them into **notes of its own** — one file per topic, in Coffer's own format, filed by repository and by `global` — and hands each agent the **index** of that set at session start, with the absolute path to read the rest the same way it reads its own memory: as files. After the start it hands over two more things (ADR [Memory Reaches a Session at Three Moments](../../../docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)): the few notes a prompt names, and — before a shell command a person has marked as a known trap — that trap's note, holding the command once. What Claude Code learns in the morning, Codex opening the same repository in the afternoon already knows — not because Coffer wrote into Codex's memory, but because Coffer handed it that note's index line.
 
-**Coffer aggregates memory; it does not own it.** Coffer never writes an agent's native memory files, so no agent's own loop is disturbed and nothing has to be reconciled. Everything under `~/.coffer/memory/` is **derived** and may be deleted and rebuilt at any time, which is what makes it safe to rewrite aggressively. It is not a second copy of the agents' words: an agent's raw memory is an input, and the distillation into Coffer's own notes is the layer's value. Reproducing it after a delete gives back an **equivalent** set of notes, not a byte-identical one.
+**Coffer aggregates memory; it does not own it.** Coffer never writes an agent's native memory files, so no agent's own loop is disturbed and nothing has to be reconciled. Everything under `~/.coffer/derived/memory/` is **derived** and may be deleted and rebuilt at any time, which is what makes it safe to rewrite aggressively. It is not a second copy of the agents' words: an agent's raw memory is an input, and the distillation into Coffer's own notes is the layer's value. Reproducing it after a delete gives back an **equivalent** set of notes, not a byte-identical one.
 
 **Memory is not knowledge.** [Knowledge](../knowledge/spec.md) holds what the user or an agent **wrote down about the world**; this layer holds what agents **learned while working** — the user's preferences, a project's decisions, a trap already hit.
 
@@ -20,7 +20,7 @@ Every agent the developer runs keeps its own memory, and none of them can see an
 Both supported agents solved retrieval the same way, and neither built a search engine for it: Claude Code loads **the whole index** into every session (94 entries, ~9k tokens on the maintainer's machine) and reaches a body with a file read; Codex writes **the search terms into the index entry itself**. This layer copies that shape:
 
 ```
-~/.coffer/memory/<partition>/
+~/.coffer/derived/memory/<partition>/
 ├── MEMORY.md     ← the index. What a session is given; what a human opens first.
 ├── notes/        ← Coffer's own notes. One topic per file.
 ├── RETIRED.md    ← what was retired, and why. Also the next pass's exclusion list.
@@ -121,7 +121,7 @@ Only aggregation may write `.raw/`. A raw entry MUST carry the agent, the native
 - **AND** the second aggregation writes an entry with the same id, title, description and body
 
 ### Requirement: Partition by repository plus global
-A **partition** is a top-level directory under `~/.coffer/memory/` and is one `memory` Resource. There MUST be exactly one partition per repository plus one named `global`; no other partitioning axis exists.
+A **partition** is a top-level directory under `~/.coffer/derived/memory/` and is one `memory` Resource. There MUST be exactly one partition per repository plus one named `global`; no other partitioning axis exists.
 
 #### Scenario: produce one partition per repository and one global
 - **GIVEN** raw entries from two different repositories and one entry about the user's own preferences
@@ -189,7 +189,7 @@ Provenance MUST name every raw entry a note was built from, and through them eve
 - **AND** neither raw entry is modified or deleted — `.raw/` is aggregation's alone (see "Distil incrementally in two stages", "Keep distil out of the raw directory")
 
 ### Requirement: Keep the memory tree derived and local
-The whole tree under `~/.coffer/memory/` MUST be derived: deleting it and re-running aggregation and distil MUST reproduce an **equivalent** partition — the same subjects, from the same sources — though not necessarily the same wording, since the notes are a distillation. It MUST NOT converge with the sync remote ([vault-sync](../vault-sync/spec.md)): it is derived from the agents installed on *this* machine, so sending it to another would send notes that machine's own next pass would recompute away. **A partition's Resource row is covered by that prohibition too, not only the files** — the `memory` kind declares `converges=False`, so the exporter withholds such rows and the applier refuses such a document. Losing the machine loses the derived tree, and that is accepted.
+The whole tree under `~/.coffer/derived/memory/` MUST be derived: deleting it and re-running aggregation and distil MUST reproduce an **equivalent** partition — the same subjects, from the same sources — though not necessarily the same wording, since the notes are a distillation. It MUST NOT be in the vault, so it never reaches the sync remote ([vault-sync](../vault-sync/spec.md) "Withhold derived output in both halves"): it is derived from the agents installed on *this* machine, so sending it to another would send notes that machine's own next pass would recompute away. **A partition's resource is covered by that too, not only the files** — the `memory` kind files its resources in the derived class, `~/.coffer/derived/resources/memory/`, where no commit and no round ever reaches them ([vault-storage](../vault-storage/spec.md) "Store state in five classes by nature"). Losing the machine loses the derived tree, and that is accepted.
 
 #### Scenario: deleting the memory tree and re-syncing reproduces an equivalent set
 - **GIVEN** a distilled partition whose directories are then deleted by hand, with the source-digest cache deliberately left behind
@@ -198,10 +198,10 @@ The whole tree under `~/.coffer/memory/` MUST be derived: deleting it and re-run
 - **AND** a digest match alone therefore never suppresses a rebuild — but the notes' wording is **not** required to match the deleted set, because the product is a distillation and not a copy (see "Keep the memory tree derived and local")
 
 #### Scenario: a partition does not travel to the sync remote
-- **GIVEN** a vault with a synced remote, holding a `memory` partition row and an ordinary resource of another kind
-- **WHEN** the vault is exported
-- **THEN** the other kind's document is written and the partition's is not — neither the derived tree nor the Resource row leaves this machine
-- **AND** a partition document an older build had already published is removed by the export, and one arriving in the working tree creates no row here (see "Keep the memory tree derived and local")
+- **GIVEN** the partitions an aggregation and a distil pass produced
+- **WHEN** Coffer's home is listed
+- **THEN** each partition is one resource file under `~/.coffer/derived/resources/memory/` and one directory under `~/.coffer/derived/memory/`, and nothing of either is in the vault, so no commit and no sync round carries them
+- **AND** the `memory` kind files every partition in the derived class
 
 ### Requirement: Write notes in Coffer's own words
 A note's body MUST be **Coffer's own writing**, distilled from one or more raw entries — not a copy of any of them. This reverses the previous design's rule that a stored body had to be the source's own words. That rule bought quotability and cost the product: Codex's memory is prose bullets with no titles, so carrying it verbatim produced 284 entries whose title, description and body were the same sentence three times over, against the 16 entries Codex's own index had already distilled the same material into. Quotability is preserved where it belongs — in `.raw/`, which the note's provenance points at.
@@ -444,12 +444,12 @@ Only **one distil pass per partition** may run at a time, whoever started it. An
 - **AND** the in-flight pass is readable on the shared upkeep-runs surface as `memory` on that partition; once it finishes the runs list is empty again and the next pass runs (see "Run one distil pass per partition at a time")
 
 ### Requirement: Add no table of its own
-This layer MUST add **no table of its own**. Notes, raw entries, the index and partition metadata are files or existing Resource rows.
+This layer MUST add **no table of its own**. Notes, raw entries, the index and partition metadata are files, and each partition is one resource file in the derived class.
 
 #### Scenario: keep partitions in the resources table and files only
-- **GIVEN** a database upgraded to head
+- **GIVEN** a history database upgraded to head
 - **WHEN** its tables are listed after an aggregation and a distil pass
-- **THEN** no table is named for memory, and each partition is one `resources` row of kind `memory`
+- **THEN** no table is named for memory, and each partition is one resource of kind `memory`, filed under `~/.coffer/derived/resources/memory/`
 
 ### Requirement: Confine reads to registered agents' memory paths
 Reading MUST be confined to the memory paths of registered agents' config directories. Every path built from a source's contents MUST pass a traversal guard.
