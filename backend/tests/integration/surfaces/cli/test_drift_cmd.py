@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 from coffer.domain.agent.types import AgentType
 from coffer.surfaces.cli.main import app as cli
 from tests.support.homes import IsolatedHome, fake_agent_dir, make_home
+from tests.support.reconcile import quiet_background_repair
 
 from ._real_app import audit, boot, extract_json
 
@@ -45,6 +46,9 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
         uid = r.json()["uid"]
         r = client.post(f"/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
+        # These tests plant drift for the drift command to find; the pass the
+        # writes above hinted must not repair it first.
+        quiet_background_repair(monkeypatch)
         yield {"client": client, "uid": uid, "home": home, "claude": claude, "shim": shim}
 
 
