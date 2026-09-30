@@ -70,7 +70,7 @@ def test_generated_and_cache_output_is_expected(gate, repo) -> None:
     _write(
         repo,
         ".gitignore",
-        "__pycache__/\n*.pyc\nnode_modules\ndist/\ntest-results/\n.vitepress/cache/\n",
+        "__pycache__/\n*.pyc\nnode_modules\ndist/\ntest-results/\n.vitepress/cache/\n*.egg-info/\n",
     )
     _write(repo, "backend/coffer/__pycache__/a.cpython-312.pyc")
     _write(repo, "backend/tests/b.pyc")
@@ -78,6 +78,7 @@ def test_generated_and_cache_output_is_expected(gate, repo) -> None:
     _write(repo, "e2e/visual/test-results/diff.png")
     _write(repo, "docs-site/.vitepress/cache/deps.json")
     _write(repo, "frontend/src/dist/bundle.js")
+    _write(repo, "backend/coffer.egg-info/PKG-INFO")
     assert gate.hidden_paths(repo) == []
 
 

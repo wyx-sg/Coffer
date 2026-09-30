@@ -67,6 +67,8 @@ GENERATED_DIRS = frozenset(
         ".cache",
     }
 )
+#: Folder-name suffixes that are packaging output wherever they appear.
+GENERATED_DIR_SUFFIXES = (".egg-info",)
 #: File names or suffixes that are generated wherever they appear.
 GENERATED_FILES = (".pyc", ".pyo", ".ds_store", ".tsbuildinfo", ".log", ".coverage")
 #: Output folders that are only generated under one parent.
@@ -119,6 +121,8 @@ def _git(root: Path, *args: str) -> str:
 def is_generated(rel: str) -> bool:
     parts = [p.lower() for p in rel.rstrip("/").split("/")]
     if any(p in GENERATED_DIRS for p in parts):
+        return True
+    if any(p.endswith(GENERATED_DIR_SUFFIXES) for p in parts):
         return True
     if not rel.endswith("/") and parts[-1].endswith(GENERATED_FILES):
         return True
