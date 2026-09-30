@@ -2,7 +2,7 @@
 // The Skills page as a library beside a reading pane (spec skill-manager
 // "Cover skill management on REST, the CLI and the web", "Report skill drift
 // on request"): what the library lists and marks, the first-run state, the
-// selection bar, Check copies, and the old addresses that must keep working.
+// selection bar and Check copies.
 // Only the network boundary is mocked — the skills, agents and generic
 // resource api modules.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -11,7 +11,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { AgentOut } from "@/lib/api/agents";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
-import { BUILTIN_SKILL, makeAgent, makeSkill, renderSkillsPage, where } from "@/test/skillsPageKit";
+import { BUILTIN_SKILL, makeAgent, makeSkill, renderSkillsPage } from "@/test/skillsPageKit";
 
 const h = vi.hoisted(() => ({
   skills: [] as SkillOut[],
@@ -105,15 +105,6 @@ acceptance("skill-manager", "the skills page lists only managed skills", async (
   expect(await libraryRows()).toHaveLength(0);
   expect(screen.getByText(/own skills are on each agent’s Skills tab/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute("href", "/agents");
-});
-
-acceptance("skill-manager", "the old overview address opens delivery", async () => {
-  h.skills = [makeSkill({ uid: "sk-0rel", name: "release-notes" })];
-  renderSkillsPage("/skills/sk-0rel?tab=overview");
-  await waitFor(() => expect(where.url).toBe("/skills/release-notes/delivery"));
-  expect(
-    await screen.findByRole("tab", { name: "Delivery", selected: true }, { timeout: 5_000 }),
-  ).toBeInTheDocument();
 });
 
 acceptance(

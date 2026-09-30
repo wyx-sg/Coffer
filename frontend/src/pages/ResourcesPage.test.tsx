@@ -224,12 +224,6 @@ describe("ResourcesPage", () => {
     await waitFor(() => expect(screen.getByTestId("pane")).toHaveTextContent("pane: linear"));
   });
 
-  test("an old uid address redirects to the name address, keeping the tab", async () => {
-    stubQuery({ data: [server("u-github", "github")] });
-    renderAt("/mcp-servers/u-github?tab=tools");
-    await waitFor(() => expect(where.url).toBe("/mcp-servers/github/tools"));
-  });
-
   test("filtering narrows the list by name or command", async () => {
     stubQuery({ data: [server("u1", "github"), server("u2", "linear")] });
     renderAt();

@@ -128,7 +128,7 @@ It has five tabs, in this order:
 
 **Each tab has its own address.** Opening a tab changes the URL to `/settings/<tab>`, so a bookmark or a shared link opens that tab directly. Close the window with **×**, **Escape**, a click outside it or the browser's **Back** button: you return to the page underneath, at its own address. If you load a `/settings/<tab>` address fresh, it opens over **Overview**, and closing it lands on `/`.
 
-**Old addresses still work.** `/settings/engine` and `/settings/embedding` open **General**; `/settings/llm-connections`, `/settings/models` and `/settings/providers` open **Model providers**; `/settings/sync` opens **Sync**.
+`/settings/sync` opens **Sync**.
 
 The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon is CLI-only (`coffer daemon stop`): stopping it from the page would take the page down with it. Rotating the access token is on **Settings › Security** (or `coffer daemon rotate-token`); the page installs the new token and keeps working, and other open tabs and clients using the old one stop until they load the new one. Revealing or copying a secret, backing up the master key and approving a pending [approval](/guides/secrets#approvals) exist only in the [desktop app](/guides/desktop-app#presence-checks-and-approvals), because each needs a Touch ID or password check a browser cannot run; a browser tab shows **Open in Coffer app** in their place.
 
@@ -159,7 +159,7 @@ Switch between **English** and **简体中文** in the version menu at the foot 
 
 **Empty, loading and error states are explicit.** An empty list shows a welcome card with one next step, such as **Add server**. A loading list keeps its header over skeleton rows. A failed request shows a readable message, never a generic error code.
 
-**Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a not-found page with the sidebar intact: it names the address, suggests the closest page when one is close (**Did you mean /mcp-servers**), and offers **Back to Overview** and **Search Coffer** (the palette).
+**An unknown path shows a not-found page.** Any address the app does not answer shows a not-found page with the sidebar intact: it names the address, suggests the closest page when one is close (**Did you mean /mcp-servers**), and offers **Back to Overview** and **Search Coffer** (the palette).
 
 File trees and previews — on the skill, knowledge and agent pages, and a memory partition's list — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 

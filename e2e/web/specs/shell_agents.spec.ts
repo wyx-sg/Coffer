@@ -2,7 +2,7 @@
 //
 // The Agents page and the agent detail page against the real daemon: the two
 // fixed rows, adding an agent through the change preview, and the nine path
-// tabs (with an old uid address redirected).
+// tabs.
 //
 // Detection looks for `claude` / `codex` on the daemon's PATH. start_daemon.sh
 // puts `$HOME/bin` of the isolated HOME on it, so a machine without Codex (CI)
@@ -130,7 +130,7 @@ test("adding an agent previews the change, then registers and connects it", asyn
 });
 
 // Scenario (revise-web-ui-ia, agent-registry): "the agent detail page carries nine tabs"
-test("the detail page's nine tabs each have their own address, and an old uid address redirects", async ({
+test("the detail page's nine tabs each have their own address", async ({
   page,
 }) => {
   ensureCodexProgram();
@@ -140,12 +140,7 @@ test("the detail page's nine tabs each have their own address, and an old uid ad
     expect((await api("POST", "/agents", { type: "codex", config_dir: configDir })).status).toBe(
       201,
     );
-    const uid = await resolveResourceUid("agent", "codex");
-    expect(uid).not.toBeNull();
-
-    // An address from before the rebuild: the uid and an old ?tab= value.
-    await page.goto(`/agents/${uid}?tab=mcpServers`);
-    await expect(page).toHaveURL(/\/agents\/codex\/mcp-servers$/, { timeout: 10_000 });
+    await page.goto("/agents/codex/mcp-servers");
 
     const tabs = page.getByRole("tab");
     await expect(tabs).toHaveCount(9);

@@ -120,9 +120,9 @@ or back-button MUST be a route param (`/conversations/:id`, `/agents/:type`), no
 state. "Which item is selected" is navigation, not UI state. The same holds one
 level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
-(`lib/detailTabs.ts`), which also redirects old `?tab=` links; skills and MCP
+(`lib/detailTabs.ts`), which sends an unknown `:tab` to the bare address; skills and MCP
 servers are keyed by their fixed name, agents by their type, renamable kinds
-by uid. Skills, MCP servers, model providers, agents, knowledge
+by uid. Skills, MCP servers, agents, knowledge
 (`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
 (`/memory/<uid>/delivered`) follow it; Sync and Activity still use `?tab=`
 until their rebuild, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).

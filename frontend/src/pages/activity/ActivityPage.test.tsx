@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation, useRoutes } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
@@ -36,7 +36,6 @@ vi.mock("@/lib/activity/export", async (importOriginal) => {
 
 const { getApiClient } = await import("@/lib/api/client");
 const { ActivityPage } = await import("./ActivityPage");
-const { routes } = await import("@/router");
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
@@ -419,7 +418,7 @@ test("a failed call opens with its error first", async () => {
   expect(within(drawer).getByRole("alert")).toHaveTextContent("Connection refused");
   expect(within(drawer).getByRole("link", { name: "Open github" })).toHaveAttribute(
     "href",
-    "/mcp-servers/u-github",
+    "/mcp-servers/github",
   );
 });
 
@@ -455,30 +454,6 @@ acceptance("web-ui", "a failing record shows its error inside its own tab", asyn
   openTab(/^Changes/);
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
   expect(screen.queryByText("Not found.")).not.toBeInTheDocument();
-});
-
-acceptance("web-ui", "legacy /audit redirects to activity", async () => {
-  mockApi();
-  let path = "";
-  function Probe() {
-    path = useLocation().pathname;
-    return null;
-  }
-  function AppRoutes() {
-    return useRoutes(routes);
-  }
-  render(
-    wrap(
-      <>
-        <AppRoutes />
-        <Probe />
-      </>,
-      ["/audit"],
-    ),
-  );
-  await waitFor(() => expect(path).toBe("/activity"));
-  expect(await screen.findByRole("heading", { name: /Activity/ })).toBeInTheDocument();
-  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });
 
 acceptance("web-ui", "each activity tab reads its owner's route", async () => {

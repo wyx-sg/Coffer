@@ -56,7 +56,6 @@ A modal that is only state, though, cannot be linked to, reloaded or reached wit
 - **Opening** moves the URL to the tab's address and records the page underneath, which keeps rendering at its own route.
 - **Closing** — with **×**, **Escape**, a click outside, or the browser's **Back** — returns to the background page's own address, exactly as it was.
 - **A fresh load** of `/settings/<tab>` has no page underneath to return to, so it opens over Overview, and closing lands on `/`.
-- **Old addresses redirect** to where their content now lives, so a bookmark from before the regrouping still opens something sensible.
 
 The **Settings** row is highlighted only while the modal is open. It is labelled with the word, not just a gear, because an icon alone at the foot of a long list is easy to miss; on the collapsed rail, where there is no room for words, the gear carries a tooltip.
 
@@ -108,7 +107,7 @@ Which identifier fills `<id>` depends on whether the kind can be renamed:
 - **Skills and MCP servers** are addressed by their **name**, because the name is fixed once registered and is what you already recognise — `/mcp-servers/github/tools`.
 - **Kinds you can rename** — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable **uid**, so renaming never breaks a link.
 
-Old addresses — a tab given as `?tab=`, or a skill or MCP server addressed by uid — redirect to the current form. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>/history?file=<document>` for a document's History, `/knowledge/<uid>/inbox` for its Inbox — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. Pages not yet rebuilt, such as Sync, still carry their tab as `?tab=` until their turn comes.
+An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>/history?file=<document>` for a document's History, `/knowledge/<uid>/inbox` for its Inbox — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. Pages not yet rebuilt, such as Sync, still carry their tab as `?tab=` until their turn comes.
 
 A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=seatalk&agent=codex` narrows it by source and agent, and a channel links to its own conversations as `/conversations?channel=<uid>`. The filters stay on the address when a conversation opens beside the list (`/conversations/<id>?channel=<uid>`), and the draft that **New conversation** opens is `/conversations/new` — a place, but not yet a conversation: the first send creates the row and moves the address to its id.
 

@@ -253,7 +253,10 @@ function install(setup: Setup = {}) {
           ],
           install_handoff:
             state.types === "none-found"
-              ? { prompt: "Please install Claude Code or Codex on this Mac, so Coffer can connect it." }
+              ? {
+                  prompt:
+                    "Please install Claude Code or Codex on this Mac, so Coffer can connect it.",
+                }
               : null,
         };
       case "/agent-providers":
@@ -357,23 +360,23 @@ describe("overview lists what needs the user, most severe first", () => {
     );
     expect(within(jira).getByRole("link", { name: /^jira/ })).toHaveAttribute(
       "href",
-      "/mcp-servers/m-jira",
+      "/mcp-servers/jira",
     );
     expect(within(jira).getByText(/Since/)).toBeInTheDocument();
 
     expect(within(rows[1]).getByRole("link", { name: /^Test again/ })).toHaveAttribute(
       "href",
-      "/mcp-servers/m-github",
+      "/mcp-servers/github",
     );
     expect(within(rows[2]).getByRole("link", { name: /^Repair drift/ })).toHaveAttribute(
       "href",
-      "/skills/s-review",
+      "/skills/code-review",
     );
     const codex = rows[3];
     expect(within(codex).getByRole("img", { name: "Needs attention" })).toBeInTheDocument();
     expect(within(codex).getByRole("link", { name: /^Connect/ })).toHaveAttribute(
       "href",
-      "/agents/a-codex",
+      "/agents/codex",
     );
     // No since for an item that has none.
     expect(within(codex).queryByText(/Since/)).toBeNull();
@@ -464,14 +467,18 @@ describe("overview welcomes a first run with the agents to connect", () => {
     expect(screen.queryByRole("button", { name: /Review and connect/ })).toBeNull();
   });
 
-  acceptance("web-ui", "with no agent found overview offers the install prompt to copy", async () => {
-    install({ agents: [], types: "none-found" });
-    renderPage();
-    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
-    // There is no agent to ask, and no installer link of Coffer's own.
-    expect(screen.queryByRole("button", { name: /ask an agent/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /install/i })).toBeNull();
-  });
+  acceptance(
+    "web-ui",
+    "with no agent found overview offers the install prompt to copy",
+    async () => {
+      install({ agents: [], types: "none-found" });
+      renderPage();
+      expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+      // There is no agent to ask, and no installer link of Coffer's own.
+      expect(screen.queryByRole("button", { name: /ask an agent/i })).toBeNull();
+      expect(screen.queryByRole("link", { name: /install/i })).toBeNull();
+    },
+  );
 });
 
 // scenario (web-ui, revise-web-ui-ia): one area failing to load leaves the rest of overview working
@@ -572,11 +579,11 @@ acceptance(
     expect(within(row).getAllByRole("link")).toHaveLength(2);
     expect(within(row).getByRole("link", { name: /^Repair hook/ })).toHaveAttribute(
       "href",
-      "/agents/a-claude/hooks",
+      "/agents/claude_code/hooks",
     );
     expect(within(row).getByRole("link", { name: /^Claude Code/ })).toHaveAttribute(
       "href",
-      "/agents/a-claude",
+      "/agents/claude_code",
     );
     // Not an item that can be ignored: no menu.
     expect(within(row).queryByRole("button", { name: /More for/ })).toBeNull();

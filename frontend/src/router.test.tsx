@@ -1,6 +1,7 @@
 // frontend/src/router.test.tsx
-// The real route table under a memory router: where the index lands, and that
-// legacy bookmarks resolve to a live surface instead of "page not found".
+// The real route table under a memory router: where the index lands, that
+// every page resolves to a live surface, and that an unknown address is
+// "page not found".
 // (A memory router rather than a data router: react-router's data-router
 // navigation builds a fetch Request, and jsdom's AbortSignal is not the one
 // undici's Request accepts.)
@@ -99,30 +100,21 @@ acceptance("web-ui", "the index opens the Agents page", async () => {
   }
 });
 
-acceptance("web-ui", "legacy resource paths redirect instead of 404ing", async () => {
+test("an address the app does not answer is page not found", async () => {
   mockApi();
-  const location = renderAt("/resources");
-
-  await waitFor(() => expect(location.pathname).toBe("/mcp-servers"));
-  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+  for (const path of ["/chat", "/resources", "/audit"]) {
+    const location = renderAt(path);
+    expect(await screen.findByText("Nothing lives at this address")).toBeInTheDocument();
+    expect(location.pathname).toBe(path);
+    cleanup();
+  }
 });
 
-test("the old Chat addresses open Conversations", async () => {
-  mockApi();
-  const list = renderAt("/chat");
-  await waitFor(() => expect(list.pathname).toBe("/conversations"));
-  const one = renderAt("/chat/conv-1");
-  await waitFor(() => expect(one.pathname).toBe("/conversations/conv-1"));
-});
-
-test("the old Settings addresses land on a live tab", async () => {
+test("the Settings addresses land on a live tab", async () => {
   mockApi();
   for (const [from, to] of [
     ["/settings", "/settings/general"],
-    ["/settings/engine", "/settings/general"],
-    ["/settings/embedding", "/settings/general"],
     ["/settings/nope", "/settings/general"],
-    ["/settings/llm-connections", "/model-providers"],
     ["/settings/sync", "/sync"],
   ] as const) {
     const location = renderAt(from);

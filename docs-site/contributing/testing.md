@@ -115,7 +115,7 @@ acceptance("chat", "chat runs on the built-in model when no connection", () => {
 ```ts [Playwright]
 import { acceptance } from "./_acceptance";
 
-acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
+acceptance("web-ui", "activity gives each record its own tab", async ({ page }) => {
   // ...
 });
 ```

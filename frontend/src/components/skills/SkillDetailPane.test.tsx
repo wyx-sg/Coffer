@@ -258,16 +258,6 @@ describe("SkillDetailPane", () => {
     await waitFor(() => expect(where.url).toBe("/skills/hello"));
   });
 
-  test("an old uid address lands on the name address, on the same tab", async () => {
-    renderSkillsPage("/skills/sk-11aa/requires");
-    await waitFor(() => expect(where.url).toBe("/skills/hello/requires"));
-  });
-
-  test("?tab=files is the bare Files address", async () => {
-    renderSkillsPage("/skills/hello?tab=files");
-    await waitFor(() => expect(where.url).toBe("/skills/hello"));
-  });
-
   test("the open file is kept in ?file=", async () => {
     renderSkillsPage("/skills/hello?file=run.sh");
     await waitFor(() => expect(skillsApi.fileContent).toHaveBeenCalledWith("sk-11aa", "run.sh"));

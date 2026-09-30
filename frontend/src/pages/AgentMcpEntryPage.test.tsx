@@ -185,16 +185,6 @@ describe("AgentMcpEntryPage", () => {
     },
   );
 
-  test("an old uid address is replaced by the type address", async () => {
-    stub();
-    renderAt("/agents/u-cc/mcp-servers/skynet?source=global");
-    await screen.findByText(CONFIG_PATH);
-    expect(screen.getByRole("link", { name: /Back to MCP servers/ })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/mcp-servers",
-    );
-  });
-
   test("an http entry shows its URL and header names; values never render", async () => {
     stub({
       transport: "http",

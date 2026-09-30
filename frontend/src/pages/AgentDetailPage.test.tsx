@@ -91,7 +91,6 @@ function mockRoute(opts: { added?: boolean; rowState?: AgentRowState; typeRow?: 
     isPending: false,
     error: null,
     notAdded: !added,
-    redirecting: false,
   } as unknown as ReturnType<typeof routeMod.useAgentRoute>);
   vi.mocked(actionsMod.useAgentRowActions).mockReturnValue({
     state: opts.rowState ?? "connected",

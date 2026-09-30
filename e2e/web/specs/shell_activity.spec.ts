@@ -16,7 +16,6 @@ import { expect, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { acceptance } from "./_acceptance";
 import {
   beforeEachInjectToken,
   deregisterMcpServer,
@@ -60,17 +59,14 @@ async function registerFakeServer(name: string): Promise<void> {
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
-acceptance(
-  "web-ui",
-  "legacy /audit redirects to activity",
+test(
+  "activity opens on Everything with one tab per record",
   async ({ page }) => {
     const name = generateUniqueName("e2eactivity");
     try {
       await registerFakeServer(name);
 
-      // The old bookmark, not /activity — the redirect is what is under test.
-      await page.goto("/audit");
-      await expect(page).toHaveURL(/\/activity$/);
+      await page.goto("/activity");
 
       await expect(
         page.getByRole("heading", { name: /^Activity$/ }),

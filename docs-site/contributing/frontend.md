@@ -104,7 +104,8 @@ export function useRemoveSkill() {
 | Ephemeral UI (open, collapsed, draft input) | `useState` in the component |
 | A preference that survives reload | `src/lib/preferences.ts` (`localStorage`) |
 | Which item is open | A route parameter: `/conversations/:id`, `/agents/:type` |
-| Which tab or file is selected | A search parameter (`?tab=`, `?file=`) through `useSearchParams`. The default tab is the absence of the parameter |
+| Which detail tab is selected | The last path segment: `/<kind>/<id>/<tab>`, the default tab at the bare path (`src/lib/detailTabs.ts`) |
+| Which file is selected | A search parameter (`?file=`) through `useSearchParams` |
 
 Anything a user expects to survive a refresh, a deep link or the back button belongs in the URL.
 
@@ -133,7 +134,7 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 | `Skeleton` | Loading states keep the real shape of the surface. Never show a blank screen or a "Loading…" card |
 | `ConfirmDialog` | Every destructive confirmation, never `window.confirm`. It receives `pending` while the mutation runs and closes only in `onSuccess`, so a failed delete stays open with its error |
 | `Alert` (`warning` variant) | A non-fatal caution, such as an unusual but working configuration. Not a toast, and not a destructive alert |
-| Tabs in the URL | Detail pages keep their tab in `?tab=` |
+| Tabs in the URL | Detail pages keep their tab in the path, `/<kind>/<id>/<tab>` |
 | Title over name | A resource of a kind that carries a title (provider, channel, knowledge collection, memory partition) shows its `title` when set and its `name` otherwise. Agents, MCP servers and skills carry no title and always show their name: an MCP server's and a skill's name is fixed once registered (`409 NAME_IMMUTABLE`), and an agent's is its type, so their edit forms offer neither a rename nor a title |
 
 Code style: named exports only, and one component per file. The first line of each file is a comment with its path and purpose, such as `// src/components/EmptyState.tsx — …`. Props are declared as a local `interface Props`. Type-only imports use `import type`. There is no `any` in `src`. Use `unknown` and narrow it.

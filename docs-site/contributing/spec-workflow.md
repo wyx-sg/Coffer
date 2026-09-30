@@ -169,7 +169,7 @@ async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(
 ```ts [Vitest / Playwright]
 import { acceptance } from "@/test/acceptance"; // e2e specs import ./_acceptance
 
-acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
+acceptance("web-ui", "activity gives each record its own tab", async ({ page }) => {
   // ...
 });
 ```

@@ -1,4 +1,4 @@
-// src/lib/hooks/useAgentRoute.test.tsx — type → uid, and the old uid / ?tab= / Conversations addresses redirected.
+// src/lib/hooks/useAgentRoute.test.tsx — type → uid; a segment that is not a type names no agent.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -43,7 +43,6 @@ function Probe() {
         type: route.type,
         uid: route.uid,
         notAdded: route.notAdded,
-        redirecting: route.redirecting,
       })}
     </output>
   );
@@ -74,7 +73,6 @@ describe("useAgentRoute", () => {
       type: "claude_code",
       uid: "agt_cc",
       notAdded: false,
-      redirecting: false,
     });
   });
 
@@ -84,33 +82,14 @@ describe("useAgentRoute", () => {
     expect(probe()).toMatchObject({ type: "codex", uid: "", notAdded: true });
   });
 
-  test("an old uid address is replaced by the type, the rest kept", () => {
+  test("a segment that is not a type names no agent and stays where it is", () => {
     mockData();
-    const probe = renderAt("/agents/agt_cc/mcp-servers/github?source=x");
+    const probe = renderAt("/agents/agt_cc/skills");
     expect(probe()).toMatchObject({
-      at: "/agents/claude_code/mcp-servers/github?source=x",
-      type: "claude_code",
-    });
-  });
-
-  test("old tab forms land on today's tab", () => {
-    mockData();
-    expect(renderAt("/agents/agt_cc?tab=mcpServers")()).toMatchObject({
-      at: "/agents/claude_code/mcp-servers",
-    });
-  });
-
-  test("the old Conversations session page opens the session on the Sessions tab", () => {
-    mockData();
-    expect(renderAt("/agents/claude_code/conversations?path=%2Fs.jsonl")()).toMatchObject({
-      at: "/agents/claude_code/sessions?session=%2Fs.jsonl",
-    });
-  });
-
-  test("an old memory-store address moves under /memory/store", () => {
-    mockData();
-    expect(renderAt("/agents/agt_cc/memory?dir=%2Fm")()).toMatchObject({
-      at: "/agents/claude_code/memory/store?dir=%2Fm",
+      at: "/agents/agt_cc/skills",
+      type: null,
+      uid: "",
+      notAdded: false,
     });
   });
 });

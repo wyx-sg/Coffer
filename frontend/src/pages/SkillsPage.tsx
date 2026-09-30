@@ -6,11 +6,9 @@
 // first run or a prompt to choose a skill.
 //
 // Addressing: a skill is addressed by its fixed NAME; the REST API takes the
-// uid, which comes from the list row the name resolves to. Old addresses keep
-// working — `/skills/<uid>` redirects to the name, `?tab=overview` (the tab
-// that became Delivery) to `/delivery`, `?tab=files` to the bare Files address.
+// uid, which comes from the list row the name resolves to.
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 
@@ -21,21 +19,13 @@ import { SkillAddDialog, type SkillAddSource } from "@/components/skills/SkillAd
 import { SkillLibrary } from "@/components/skills/SkillLibrary";
 import { SkillsReadingPane } from "@/components/skills/SkillsReadingPane";
 import { Button } from "@/components/ui/button";
-import { canonicalDetailPath, resolveByName, useDetailTab } from "@/lib/detailTabs";
+import { useDetailTab } from "@/lib/detailTabs";
 import { useSkillCopies, useSkills } from "@/lib/hooks/useSkills";
 import { DEFAULT_SKILL_TAB as DEFAULT_TAB, SKILL_TABS as TABS } from "@/lib/skills/tabs";
 
-/** The old Overview tab is Delivery now; every other old `?tab=` maps as is. */
-function withOverviewAsDelivery(search: string): string {
-  const params = new URLSearchParams(search);
-  if (params.get("tab") === "overview") params.set("tab", "delivery");
-  const s = params.toString();
-  return s ? `?${s}` : "";
-}
-
 export function SkillsPage() {
   const { t } = useTranslation();
-  const { name: nameParam = "", tab: pathTab } = useParams<{ name?: string; tab?: string }>();
+  const { name: nameParam = "" } = useParams<{ name?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const list = useSkills();
@@ -46,32 +36,10 @@ export function SkillsPage() {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const skills = list.data ?? [];
-  const match = resolveByName(list.data, nameParam);
-  const search = new URLSearchParams(location.search);
-  const legacyOverview = search.get("tab") === "overview";
-  const orphan = nameParam ? null : search.get("orphan");
+  const match = nameParam ? skills.find((s) => s.name === nameParam) : undefined;
+  const orphan = nameParam ? null : new URLSearchParams(location.search).get("orphan");
   const basePath = `/skills/${encodeURIComponent(nameParam)}`;
-  const [tab, setTab] = useDetailTab(TABS, DEFAULT_TAB, basePath, {
-    enabled: !!match && !match.byUid && !legacyOverview,
-  });
-
-  // An old address: the uid form, or the tab that was renamed. One redirect
-  // lands on the canonical form of both at once.
-  if (match && (match.byUid || legacyOverview)) {
-    return (
-      <Navigate
-        replace
-        state={location.state}
-        to={canonicalDetailPath(
-          `/skills/${encodeURIComponent(match.item.name)}`,
-          pathTab,
-          withOverviewAsDelivery(location.search),
-          TABS,
-          DEFAULT_TAB,
-        )}
-      />
-    );
-  }
+  const [tab, setTab] = useDetailTab(TABS, DEFAULT_TAB, basePath, { enabled: !!match });
 
   const openAdd = (source: SkillAddSource) => {
     setAddSource(source);
@@ -120,7 +88,7 @@ export function SkillsPage() {
           <SkillLibrary
             skills={skills}
             isLoading={list.isPending}
-            selectedName={match?.item.name ?? null}
+            selectedName={match?.name ?? null}
             hrefFor={hrefFor}
             onOpenSkill={() => setShowCopies(false)}
             onCheckCopies={checkCopies}
@@ -137,7 +105,7 @@ export function SkillsPage() {
             <SkillsReadingPane
               list={list}
               skills={skills}
-              match={match?.item ?? null}
+              match={match ?? null}
               nameParam={nameParam}
               orphan={orphan}
               tab={tab}
