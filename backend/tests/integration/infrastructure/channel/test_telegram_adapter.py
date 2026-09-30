@@ -859,24 +859,6 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         await adapter.stop()
 
 
-async def test_knowledge_off_keeps_kb_out_of_the_registered_menus(
-    fake_telegram: FakeTelegram,
-) -> None:
-    """The adapter hands its knowledge switch to the menu registration (spec
-    channels/telegram "Register command menus per chat scope and language")."""
-    adapter = make_telegram_adapter(fake_telegram, knowledge_enabled=False)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    try:
-        await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
-        registered = fake_telegram.calls_for("setMyCommands")
-        assert len(registered) == 6
-        assert all(
-            "kb" not in {entry["command"] for entry in call["commands"]} for call in registered
-        )
-    finally:
-        await adapter.stop()
-
-
 async def test_a_group_command_naming_this_bot_arrives_as_the_bare_command(
     fake_telegram: FakeTelegram,
 ) -> None:

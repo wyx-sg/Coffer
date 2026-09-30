@@ -56,8 +56,8 @@ pure function). The builtins never count against the budget. At or under the
 budget, every upstream tool is listed. Over it, upstream tools are ranked by
 invocation count over the last 90 days, with catalogue order breaking ties.
 Each server's best-ranked tool is reserved first, so no enabled server
-disappears; the remaining slots are filled in pure rank order. With every
-experimental feature on, there are two builtins (`write`, `search_tools`), so
+disappears; the remaining slots are filled in pure rank order. There are two
+builtins (`write`, `search_tools`), so
 a session lists at most 52 tools.
 
 **Hidden is not disabled.** `tools/call` gates on the capability preference

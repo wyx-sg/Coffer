@@ -59,16 +59,12 @@ class _Agents:
 class _Part:
     key: str
     types: frozenset[AgentType] = frozenset(AgentType)
-    on: bool = True
     installed: set[str] = field(default_factory=set)
     log: list[tuple[str, str, str]] = field(default_factory=list)
     broken: set[str] = field(default_factory=set)
 
     def supports(self, agent_type: AgentType) -> bool:
         return agent_type in self.types
-
-    def enabled(self) -> bool:
-        return self.on
 
     async def status(self, agent_uid: str) -> PartStatus:
         if agent_uid in self.broken:
@@ -128,14 +124,6 @@ async def test_connect_stops_at_the_first_refusal_before_later_parts() -> None:
     assert hook.log == []
 
 
-async def test_a_switched_off_part_is_neither_listed_nor_installed() -> None:
-    svc, _mcp, hook = _svc(_agent("a1"), hook=_Part("memory_hook", on=False))
-    status = await svc.connect("a1", actor="alice")
-    assert [p.key for p in status.parts] == ["mcp"]
-    assert status.state is ConnectionState.CONNECTED
-    assert hook.log == []
-
-
 async def test_a_part_the_type_lacks_is_neither_listed_nor_removed() -> None:
     hook = _Part("memory_hook", types=frozenset({AgentType.CODEX}))
     svc, _mcp, _ = _svc(_agent("a1"), hook=hook)
@@ -148,16 +136,6 @@ async def test_some_parts_installed_reads_partial() -> None:
     svc, mcp, _hook = _svc(_agent("a1"))
     mcp.installed.add("a1")
     assert (await svc.status("a1")).state is ConnectionState.PARTIAL
-
-
-async def test_disconnect_removes_a_part_that_is_switched_off_now() -> None:
-    hook = _Part("memory_hook", on=False, installed={"a1"})
-    svc, mcp, _ = _svc(_agent("a1"), hook=hook)
-    mcp.installed.add("a1")
-    status = await svc.disconnect("a1", actor="bob")
-    assert status.state is ConnectionState.DISCONNECTED
-    assert hook.log == [("remove", "a1", "bob")]
-    assert "a1" not in hook.installed
 
 
 async def test_an_unknown_agent_is_not_found() -> None:

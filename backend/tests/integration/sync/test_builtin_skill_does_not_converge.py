@@ -78,7 +78,7 @@ def _guide_text(*enabled: str) -> str:
             path=path, title=title, description=description, actor="agent", updated_at=""
         )
         catalogue.append((entry, [document]))
-    return render("~/.coffer/knowledge", catalogue)
+    return render("~/.coffer/knowledge", catalogue, memory_root="~/.coffer/memory")
 
 
 def _builtin_config(text: str) -> dict[str, object]:

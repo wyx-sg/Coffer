@@ -154,7 +154,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/coffer.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
 | `~/.coffer/master.key` | The credential master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
-| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, experimental-feature switches. |
+| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
 | `~/.coffer/skills/`, `knowledge/`, `memory/` | The file-backed kinds' trees. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
@@ -246,7 +246,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Release channel
 
-Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default for the experimental features (Sync, Knowledge and Memory): off on `stable`, on on `dev`. You can switch any of them on each machine under **Settings → General** or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
+Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default of an experimental feature: off on `stable`, on on `dev`. No feature is experimental right now; Sync, Knowledge and Memory graduated at 1.0 and are always on. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

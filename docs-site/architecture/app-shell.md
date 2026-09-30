@@ -37,7 +37,7 @@ The alternatives — keeping the role groups, one big Resources group, a flat li
 
 ### Experimental entries
 
-Knowledge, Memory and Sync are experimental features. The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and a switched-on one carries an **Experimental** marker so its status is never a surprise. Features are switched on the command line, so a switched-off page's notice states the fact and offers no link to a setting that does not exist.
+An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and a switched-on one carries an **Experimental** label so its status is never a surprise. No entry belongs to one right now: Knowledge, Memory and Sync graduated at 1.0 and are ordinary entries.
 
 ## One list of names and routes
 

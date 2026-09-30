@@ -16,7 +16,7 @@ Convergence has to meet four constraints that pull against each other:
 - **Local-first.** Each machine's vault stays complete and authoritative. The remote is a rendezvous, never a system of record: you can delete it and rebuild it from any single machine.
 - **Deletions must propagate**, or the machines never agree, and **absence must never be mistaken for deletion**, or one stale machine erases what the others hold.
 - **Secrets travel only as ciphertext**, and the master key never enters the repository.
-- **Nothing is on by default.** Sync is an experimental feature (`vault_sync`) and does nothing until you configure a remote.
+- **Nothing happens by default.** Sync does nothing until you configure a remote.
 
 ## The design in decisions
 
@@ -239,7 +239,7 @@ The sync package imports no kind. Kinds contribute at the composition root throu
 
 **Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered: the laptop that left a server dark would find it live after the desktop's next round. See [Resource framework](/architecture/resource-framework).
 
-**Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own feature switches. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
+**Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own knowledge and memory root paths. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
 
 **Channels** travel with a `runs_on` field naming the one `machine_id` whose daemon starts the adapter. The document, its credential references and its pairings converge, so taking over a bot on another machine is a rebind rather than a re-registration. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
 
@@ -293,7 +293,7 @@ Each refuses a remote layout newer than the build first.
 The knowledge [curation pass](/architecture/knowledge) also rewrites vault content with no human approving the diff. Two rules keep it and sync apart:
 
 - **One lock.** `ConvergeService` owns an `asyncio.Lock` that every round, confirm, reject, rollback, restore and rebuild takes. The composition root hands the same lock to the curation pass (`set_vault_write_lock`), so an export never captures a half-finished rewrite.
-- **One owner machine.** Two machines folding the same inbox item into different documents would merge cleanly and hold the knowledge twice, and git would see nothing wrong. So the curation owner is a `machine_id` carried in the synced `internal-engine` settings document, and the pass is a no-op on every other machine. It is also skipped while a round holds a confirmation or last stopped on a conflict (`divergence_outstanding`), so a rewrite never moves documents underneath a question you are about to answer. With `vault_sync` switched off the vault is treated as single-machine and only curation's own switch is read.
+- **One owner machine.** Two machines folding the same inbox item into different documents would merge cleanly and hold the knowledge twice, and git would see nothing wrong. So the curation owner is a `machine_id` carried in the synced `internal-engine` settings document, and the pass is a no-op on every other machine. It is also skipped while a round holds a confirmation or last stopped on a conflict (`divergence_outstanding`), so a rewrite never moves documents underneath a question you are about to answer.
 
 An owner that names a machine the registry does not hold is reported as a fault, not folded into "runs elsewhere", because the pass then runs nowhere.
 
@@ -308,7 +308,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 
 ## The worker
 
-`ConvergeWorker` (`application/sync/worker.py`) runs one round 30 seconds after the daemon starts and then on the remote's interval, which defaults to one hour (`coffer sync remote set --interval`) and is never shorter than 60 seconds: every surface refuses a smaller value, and a remote stored with one before the floor existed loads as 60. With no remote configured, or with the remote paused, a round is a `disabled` no-op and the worker re-checks every 15 minutes. It checks the `vault_sync` feature at the top of every tick and skips the round while the feature is off. Quiet outcomes (`ok`, `no_change`, `awaiting_join`, a hold already reported) log at debug level; anything new that needs you logs a warning. Every recorded round also writes a `sync_run` audit event.
+`ConvergeWorker` (`application/sync/worker.py`) runs one round 30 seconds after the daemon starts and then on the remote's interval, which defaults to one hour (`coffer sync remote set --interval`) and is never shorter than 60 seconds: every surface refuses a smaller value, and a remote stored with one before the floor existed loads as 60. With no remote configured, or with the remote paused, a round is a `disabled` no-op and the worker re-checks every 15 minutes. Quiet outcomes (`ok`, `no_change`, `awaiting_join`, a hold already reported) log at debug level; anything new that needs you logs a warning. Every recorded round also writes a `sync_run` audit event.
 
 ## Trade-offs and alternatives
 
@@ -346,4 +346,4 @@ The cost is real: Coffer writes your vault without a human in the loop. That is 
 
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
 - Decision records: [Vault Sync](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Resource Identity Is an Immutable uid](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md), [Envelope-Encrypted Credentials](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
-- [Vault sync guide](/guides/vault-sync) · [Knowledge architecture](/architecture/knowledge) · [Persistence](/architecture/persistence) · [Security model](/architecture/security) · [Experimental features](/guides/experimental-features)
+- [Vault sync guide](/guides/vault-sync) · [Knowledge architecture](/architecture/knowledge) · [Persistence](/architecture/persistence) · [Security model](/architecture/security)

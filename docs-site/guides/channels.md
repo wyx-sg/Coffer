@@ -132,7 +132,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it, since a channel turn runs no hook of Coffer's.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it, since a channel turn runs no hook of Coffer's.
 
 ## Commands
 
@@ -230,7 +230,7 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids: the conversation's title (or its `🧵#N` mark), the agent, the model, the effort, the directory, and whether a turn is running or how many messages wait. In a direct chat it also lists the parallel threads, each with its agent and whether it is running, waiting or idle.
 
-`/help` lists the commands and says that anything else goes to the agent. `/kb` appears in the help and the menus only while the Knowledge feature is on; while it is off, `/kb` answers that knowledge is switched off. See [Experimental features](/guides/experimental-features).
+`/help` lists the commands and says that anything else goes to the agent.
 
 On a platform with buttons both answers are cards with **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. The help also arrives once, right after you pair, which is how a platform with no command menu (SeaTalk) shows you what the bot accepts.
 

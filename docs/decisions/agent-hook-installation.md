@@ -57,8 +57,7 @@ Coffer's command starts with a no-op `: coffer-memory;`, so an entry is
 recognised as Coffer's by that prefix regardless of what follows. Install
 inserts or replaces only Coffer's entry on its event; remove takes out only
 that entry and drops an event array or `hooks` object it leaves empty. Install
-and remove are explicit acts, each audited. Every fire is audited. At boot, and
-on every `memory` feature switch, Coffer compares the command installed with
+and remove are explicit acts, each audited. Every fire is audited. At boot, Coffer compares the command installed with
 the command this build would write, and reinstalls where they differ.
 
 - **Pros.** Foreign entries on the same event, other events and unrelated keys
@@ -149,10 +148,6 @@ one this build would write.**
   place. It is best-effort per agent,
   and it never installs a hook for an agent that has none — that would be a
   silent install.
-- **Follows the `memory` feature.** Switching `memory` off removes every
-  Coffer hook and remembers, on this machine, which agents it removed them from;
-  switching it on puts them back into exactly those agents, then repairs
-  (a reconcile pass with the switch's warrant).
 - **Named by uid.** The command names the agent by its immutable uid, not its
   editable name — a string that sits in someone else's file for months must not
   reference a label.

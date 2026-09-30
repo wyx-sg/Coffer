@@ -17,8 +17,10 @@ vi.mock("@/lib/api/clis", () => ({
 vi.mock("@/lib/hooks/useSync", () => ({
   useSyncStatus: () => ({ data: undefined, isError: false }),
 }));
-vi.mock("@/lib/hooks/useFeatures", () => ({
+vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
   useFeatureEnabled: () => true,
+  useFeatureMap: () => ({}),
 }));
 const { clisApi } = await import("@/lib/api/clis");
 const api = vi.mocked(clisApi);

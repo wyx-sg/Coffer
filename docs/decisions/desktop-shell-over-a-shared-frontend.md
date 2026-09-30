@@ -52,9 +52,7 @@ owns exactly four things:
 1. **A window with a Dock icon and a Cmd-Tab entry.** Closing it hides to the
    tray rather than exiting (`tray.rs`).
 2. **A resident tray** with Open Coffer, Restart daemon, Quit, and a Sync entry
-   that exists only while the `vault_sync` experimental feature is on
-   (`sync_gate.rs` reads `features.vault_sync` from the unauthenticated
-   `/api/v1/daemon/status`; `sync_watch.rs`, `sync_presentation.rs` and
+   (`sync_watch.rs`, `sync_presentation.rs` and
    `sync_alert.rs` badge the icon and raise the notification of spec vault-sync
    "Say a vault needs a human where the user already is").
 3. **Detect-or-spawn at launch** (`resolve.rs`), by a fixed chain: a live daemon

@@ -66,12 +66,11 @@ def _row_converges(config: dict[str, object]) -> bool:
 
     Every skill a person imported does. Coffer's own does not: its master
     folder is rendered locally from the running build, the knowledge files
-    (which converge on their own) and **this machine's own inputs** — its
-    experimental-feature switches, which decide which sections of the manual
-    render, and its own knowledge root path — which deliberately stay home.
+    (which converge on their own) and **this machine's own inputs** — its own
+    knowledge and memory root paths — which deliberately stay home.
 
-    So two machines holding identical knowledge but different feature switches
-    render different bytes, each correct where it is.
+    So two machines holding identical knowledge but different roots render
+    different bytes, each correct where it is.
     Publishing either — the folder or the row whose ``version_hash`` is that
     folder's digest — makes the other overwrite it, and the overwritten machine
     re-renders on its next boot or curation tick and publishes back. That is a

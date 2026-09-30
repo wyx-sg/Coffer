@@ -229,10 +229,6 @@ The daemon mounts 251 operations in 26 groups. Groups follow the order the daemo
 
 ### sync
 
-::: tip Experimental feature `vault_sync`
-Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sync` is off.
-:::
-
 | Method | Path | Summary |
 | --- | --- | --- |
 | `POST` | `/api/v1/sync/run` | Run Round |
@@ -400,10 +396,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 
 ### knowledge
 
-::: tip Experimental feature `knowledge`
-Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `knowledge` is off.
-:::
-
 | Method | Path | Summary |
 | --- | --- | --- |
 | `GET` | `/api/v1/knowledge/collections` | List Collections |
@@ -423,10 +415,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `knowledg
 | `POST` | `/api/v1/knowledge/changes/{version}/undo` | Undo a curation pass as a whole. |
 
 ### memory
-
-::: tip Experimental feature `memory`
-Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` is off.
-:::
 
 | Method | Path | Summary |
 | --- | --- | --- |

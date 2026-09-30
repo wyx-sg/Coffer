@@ -64,11 +64,6 @@ _FOREIGN_SESSION = {"hooks": [{"type": "command", "command": "/skynet/sessionSta
 _FOREIGN_STOP = {"hooks": [{"type": "command", "command": "/skynet/stop.sh"}]}
 
 
-class _MemoryOn:
-    def is_enabled(self, key: str) -> bool:
-        return key == "memory"
-
-
 @dataclass
 class _Rig:
     home: IsolatedHome
@@ -117,9 +112,7 @@ async def rig(isolated_home: IsolatedHome) -> AsyncIterator[_Rig]:
     )
     reconciler = Reconciler(audit=audit)
     built = _Rig(isolated_home, agents, mcp, delivery, audit, repo, reconciler, engine)
-    reconciler.register(
-        DeliveryHookTarget(delivery=delivery, features=_MemoryOn(), connected=built.connected)
-    )
+    reconciler.register(DeliveryHookTarget(delivery=delivery, connected=built.connected))
     try:
         yield built
     finally:

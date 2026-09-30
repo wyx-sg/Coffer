@@ -373,13 +373,13 @@ The skill's **body** MUST be one merged manual: Coffer's own — its two built-i
 - **AND** the frontmatter `description` names the collection's subject, taken from the collection's own `README.md`, so a model matching on it has something to match
 
 #### Scenario: the manual names two tools, the memory root and the log reader
-- **GIVEN** the `knowledge` and `memory` features switched on
+- **GIVEN** a vault with one collection
 - **WHEN** the skill is rendered
 - **THEN** its manual names exactly two built-in tools, `coffer__search_tools` and `coffer__write`, and names neither `coffer__recall` nor `coffer__diagnose`
 - **AND** it names the memory root with the instruction to search it with the agent's own tools, and names `coffer log` and `coffer path logs` as the way to read Coffer's own logs
 
 ### Requirement: Keep the handshake instructions to what a skill cannot carry
-The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the names of its two built-in tools (`coffer__write`, `coffer__search_tools`) so they are recognisable in a tool list, one line saying that Coffer's memory notes are files under the memory root read with the agent's own tools and that Coffer's own logs are read with `coffer log`, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it. A built-in tool whose experimental feature is switched off is not in the tool list, and the instructions MUST NOT name it either, nor the memory root while the memory feature is off ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents").
+The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the names of its two built-in tools (`coffer__write`, `coffer__search_tools`) so they are recognisable in a tool list, one line saying that Coffer's memory notes are files under the memory root read with the agent's own tools and that Coffer's own logs are read with `coffer log`, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it. A built-in tool whose experimental feature is switched off is not in the tool list, and the instructions MUST NOT name it either ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents").
 
 #### Scenario: the handshake names Coffer's tools and points at the skill
 - **GIVEN** a real daemon driven over its `/mcp` endpoint by the MCP SDK

@@ -88,8 +88,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // Give agents things they know.
     labelKey: "nav.group.context",
     entries: [
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, feature: "knowledge" },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain, feature: "memory" },
+      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain },
     ],
   },
   {
@@ -99,7 +99,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { to: "/secrets", labelKey: "nav.secrets", icon: KeyRound },
       { to: "/activity", labelKey: "nav.activity", icon: ScrollText },
       { to: "/usage", labelKey: "nav.usage", icon: Gauge },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "vault_sync" },
+      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw },
     ],
   },
 ];
