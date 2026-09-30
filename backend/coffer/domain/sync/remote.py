@@ -20,9 +20,10 @@ from typing import Any
 from coffer.domain.error_base import CofferError
 
 DEFAULT_BRANCH = "main"
-#: The username an HTTPS token is sent with when none is set. GitHub and
-#: GitLab ignore it (GitLab: any non-blank value); Bitbucket and Azure DevOps
-#: need a real one, or a fixed one such as ``x-token-auth``.
+#: The username an HTTPS token is sent with when none is set. GitHub ignores
+#: it; GitLab documents ``oauth2`` (or the account's user name) for a token;
+#: Bitbucket and Azure DevOps need a real one, or a fixed one such as
+#: ``x-token-auth``.
 DEFAULT_USERNAME = "coffer"
 DEFAULT_INTERVAL_SECONDS = 3600
 MIN_INTERVAL_SECONDS = 60

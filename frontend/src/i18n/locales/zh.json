@@ -1515,13 +1515,8 @@
         "title": "保险库",
         "size_one": "{{size}} · {{versions}} 个版本",
         "size_other": "{{size}} · {{versions}} 个版本",
-        "description": "一个保存每个版本的 git 仓库。包含配置、技能、知识和加密的密钥。",
-        "notRepository": "你的配置、技能和知识。Coffer 第一次启动时会把它建成 git 仓库。",
-        "latest": "最新版本",
-        "latestValue": "{{when}} · {{writer}}",
-        "sync": "同步",
-        "syncOn": "已同步到你的远端",
-        "syncOff": "仅本机"
+        "description": "会同步 —— 一个 git 仓库。包含配置、技能、知识和加密的 secret。",
+        "notRepository": "你的配置、技能和知识。Coffer 第一次启动时会把它建成 git 仓库。"
       },
       "local": {
         "title": "本地内容",
@@ -1714,7 +1709,7 @@
     "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。",
     "PORT_OUT_OF_RANGE": "请选择 1024 到 65535 之间的端口。",
     "PORT_IN_USE": "该端口已被其他程序占用，请换一个。",
-    "GIT_MISSING": "未安装 git。Coffer 用 git 保存 vault 的历史；在 macOS 上运行 xcode-select --install 后重启 Coffer。",
+    "GIT_MISSING": "未安装 git。Coffer 用 git 保存并同步 vault 的历史；安装 git 后重启 Coffer。",
     "SYNC_CONFLICT_MARKERS_LEFT": "文件中仍有冲突标记。删除标记并保存后，再标记为已解决。",
     "SYNC_MACHINE_NAME_INVALID": "无法使用这个机器名。请使用简短、非空的名字。",
     "SYNC_MACHINE_NOT_FOUND": "没有使用该 id 与此远端同步的机器。",
@@ -1743,7 +1738,8 @@
     "MASTER_KEY_PASSPHRASE_WRONG": "这个口令打不开这个密钥文件。",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
-    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以在最近改动中恢复。"
+    "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以在最近改动中恢复。",
+    "SYNC_SECRET_NOT_EDITABLE": "加密的 secret 不能手动编辑。请保留本机的版本，或采用另一台的版本。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",

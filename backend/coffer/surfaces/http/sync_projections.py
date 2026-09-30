@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 
 from coffer.application.sync.views import MachineView, StoppedRound, SyncStatus
+from coffer.domain.sync.handoffs import is_secret_file
 from coffer.domain.sync.joins import JoinPreview
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord
 from coffer.domain.sync.stops import ConflictFile
+from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.sync_schemas import (
     AgentInventoryOut,
     AreaCountsOut,
@@ -109,6 +111,7 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
             message=problem.message,
             secret_ref=problem.secret_ref,
             since=problem.since,
+            handoff=handoff_out(problem.handoff),
         )
         if problem
         else None,
@@ -118,7 +121,9 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
     )
 
 
-def conflict_out(c: ConflictFile, editor_path: str | None = None) -> ConflictFileOut:
+def conflict_out(
+    c: ConflictFile, editor_path: str | None = None, *, agent_merge: bool = False
+) -> ConflictFileOut:
     return ConflictFileOut(
         path=c.path,
         area=c.area,
@@ -129,6 +134,8 @@ def conflict_out(c: ConflictFile, editor_path: str | None = None) -> ConflictFil
         other_path=c.other_path,
         answer=c.answer,
         editor_path=editor_path,
+        secret=is_secret_file(c.path),
+        agent_merge=agent_merge,
     )
 
 
@@ -141,7 +148,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
         local=stop.local,
         remote=stop.remote,
         join=stop.join,
-        files=[conflict_out(f.file, f.editor_path) for f in s.files],
+        files=[conflict_out(f.file, f.editor_path, agent_merge=f.agent_merge) for f in s.files],
         unanswered=len(stop.unanswered),
         hold=HoldOut(
             direction=hold.direction.value,
@@ -155,6 +162,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
         )
         if hold
         else None,
+        handoff=handoff_out(s.handoff),
     )
 
 

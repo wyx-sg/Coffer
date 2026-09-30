@@ -64,9 +64,6 @@ const STORAGE: StorageSummary = {
     path: "/Users/u/.coffer/vault",
     bytes: 13_002_342,
     versions: 1382,
-    latest_time: "2026-09-30T08:00:00Z",
-    latest_writer: "agent:claude_code",
-    sync_configured: true,
   },
   local_content: {
     folder: "/Users/u/.coffer",
@@ -159,25 +156,13 @@ describe("DataSettings", () => {
     expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/vault");
   });
 
-  test("the vault block names the newest version's writer and whether it syncs", async () => {
+  test("the vault block shows its size, versions and location, as drawn", async () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
-    expect(await within(vault).findByText(/· Claude Code$/)).toBeInTheDocument();
-    expect(within(vault).getByText("Synced to your remote")).toBeInTheDocument();
-  });
-
-  test("a vault that syncs nowhere says it is this machine's only", async () => {
-    mockApi({
-      storage: {
-        ...STORAGE,
-        vault: { ...STORAGE.vault, latest_writer: "disk", sync_configured: false },
-      },
-    });
-    render(wrap(<DataSettings />));
-    const vault = await screen.findByTestId("settings-data-vault");
-    expect(await within(vault).findByText(/· Edited on disk$/)).toBeInTheDocument();
-    expect(within(vault).getByText("This machine only")).toBeInTheDocument();
+    expect(await within(vault).findByText(/1,382 versions/)).toBeInTheDocument();
+    expect(within(vault).getByText(/Synced — a git repository/)).toBeInTheDocument();
+    expect(within(vault).queryByText("Latest version")).toBeNull();
   });
 
   test("a vault not created yet says it becomes a repository at first start", async () => {
@@ -188,15 +173,11 @@ describe("DataSettings", () => {
           path: "/Users/u/.coffer/vault",
           bytes: 0,
           versions: null,
-          latest_time: null,
-          latest_writer: null,
-          sync_configured: false,
         },
       },
     });
     render(wrap(<DataSettings />));
     expect(await screen.findByText(/makes it a git repository/i)).toBeInTheDocument();
-    expect(screen.queryByText("Latest version")).toBeNull();
   });
 
   // revise-web-ui-ia: web-ui "clear expired now removes what retention has

@@ -2534,6 +2534,7 @@ Exits 1 while a round waits for a person — stopped on conflicts, held, unable 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
+| `--prompt` | option | flag |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing) to your agent |
 
 ### sync history
 
@@ -2582,20 +2583,25 @@ coffer sync conflicts [OPTIONS]
 
 The files the stopped round waits on (or the held deletions).
 
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--prompt` | option | flag |  | Print the prompt that hands merging the conflicting files to your agent |
+
 ### sync resolve
 
 ```sh
-coffer sync resolve [OPTIONS] PATH
+coffer sync resolve [OPTIONS] [PATH]
 ```
 
-Answer one conflicting file. Nothing is written until 'continue'.
+Answer one conflicting file, or record an agent's merge of them all with --merged. Nothing is written until 'continue'.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | Vault-relative path of a conflicting file |
+| `PATH` | argument | text |  | Vault-relative path of a conflicting file (not with --merged) |
 | `--mine` | option | flag |  | Keep this machine's version |
 | `--theirs` | option | flag |  | Take the other machine's version |
 | `--edited` | option | flag |  | Take the hand-merged copy 'coffer sync edit' opened |
+| `--merged` | option | flag |  | Record an agent's merge: every file handed to it takes its merged copy |
 
 ### sync edit
 
@@ -2671,7 +2677,7 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `--interval` | option | integer |  | Seconds between automatic rounds (default 3600) |
 | `--with-secret / --without-secret` | option | boolean |  | Carry the encrypted secrets (ciphertext, never the master key); default off |
 | `--secret-ref` | option | text |  | Name of the push token in the secret store ('' removes it) |
-| `--username` | option | text |  | Username sent with an HTTPS token (default coffer; Bitbucket and Azure DevOps need a real one) |
+| `--username` | option | text |  | User name an HTTPS token is sent with, for a host that does not imply it (default coffer; GitLab: oauth2 or your user name; Bitbucket and Azure DevOps need a real one) |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### sync remote clear

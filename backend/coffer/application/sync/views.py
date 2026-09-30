@@ -43,12 +43,15 @@ class Problem:
     """Why sync is not working right now, in terms of what a person can do.
 
     ``kind``: ``unreachable`` / ``auth_failed`` / ``push_failed`` /
-    ``cloud_folder`` / ``layout`` / ``failed``."""
+    ``cloud_folder`` / ``layout`` / ``git_missing`` / ``failed``. ``handoff``
+    is the prompt for the person's agent when the fix is outside Coffer
+    (spec vault-sync "Hand a remote's failure to an agent")."""
 
     kind: str
     message: str
     secret_ref: str | None = None
     since: str | None = None
+    handoff: str | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,11 @@ class StoppedFile:
     file: ConflictFile
     #: The hand-merge copy under ``derived/sync-conflicts/``, once opened.
     editor_path: str | None = None
+    #: An encrypted secret: answered with this machine's or the other's only.
+    secret: bool = False
+    #: Whether an agent may merge it (spec vault-sync "Hand a conflict's
+    #: merge to an agent").
+    agent_merge: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +104,8 @@ class StoppedRound:
     #: The machines whose changes raised the stop (incoming), by label.
     machines: tuple[str, ...] = ()
     confirmed: bool = False
+    #: The prompt handing the agent-mergeable files to an agent, or ``None``.
+    handoff: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +120,8 @@ class FileVersions:
     #: The unified diff taking the other machine's version makes here.
     take_theirs: str
     binary: bool = False
+    #: The hand-merge copy as saved, once it exists (never for a secret).
+    edited: str | None = None
 
 
 @dataclass(frozen=True)

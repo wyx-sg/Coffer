@@ -8,6 +8,12 @@ vault until the round continues with every file answered. The editor answer
 opens a marked-up copy under ``derived/sync-conflicts/`` — the vault's own
 file never receives a conflict marker — and saving it back is refused while a
 marker is left in it.
+
+An agent may merge the files both machines edited: it edits the same
+marked-up copies, and the person records every copy it merged at once with
+**I merged it** (:func:`mark_merged`, spec vault-sync "Hand a conflict's merge
+to an agent"). An encrypted secret is never hand-merged: it is answered with
+one side or the other.
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ import re
 
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.domain.error_base import CofferError
+from coffer.domain.sync.handoffs import agent_mergeable, is_secret_file
 from coffer.domain.sync.stops import Answer, ConflictFile, Stop, StopKind
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import CommitResult
@@ -43,6 +50,23 @@ class SyncConflictMarkersLeft(CofferError):  # noqa: N818
         )
 
 
+class SyncSecretNotEditable(CofferError):  # noqa: N818
+    """An encrypted secret has no hand-merged version: keep one side. Maps to 422."""
+
+    code = "SYNC_SECRET_NOT_EDITABLE"
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(
+            f"{path} is an encrypted secret: keep this machine's version or take the other's"
+        )
+
+
+def _marker_line(data: bytes) -> int | None:
+    match = _MARKER.search(data)
+    return data[: match.start()].count(b"\n") + 1 if match else None
+
+
 def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
     """Record ``choice`` for ``path`` in the stopped round. For ``edited``,
     the person's saved copy is read and checked for markers now."""
@@ -52,12 +76,14 @@ def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
         raise SyncNothingStopped("no round is stopped on conflicts")
     edited: str | None = None
     if choice is Answer.EDITED:
+        if is_secret_file(path):
+            raise SyncSecretNotEditable(path)
         data = d.scratch.read(path) if d.scratch else None
         if data is None:
             raise SyncNothingStopped(f"open {path} in the editor first")
-        match = _MARKER.search(data)
-        if match:
-            raise SyncConflictMarkersLeft(path, data[: match.start()].count(b"\n") + 1)
+        line = _marker_line(data)
+        if line is not None:
+            raise SyncConflictMarkersLeft(path, line)
         edited = d.git.hash(data)
     try:
         updated = stop.with_answer(path, choice, edited)
@@ -75,6 +101,8 @@ def editor_copy(engine: RoundEngine, path: str) -> str:
     found = _find(stop.conflicts if stop else (), path)
     if stop is None or found is None or d.scratch is None:
         raise SyncNothingStopped(f"{path} is not one of the stopped round's files")
+    if is_secret_file(path):
+        raise SyncSecretNotEditable(path)
     existing = d.scratch.read(path)
     if existing is not None:
         return d.scratch.write(path, existing)
@@ -86,6 +114,33 @@ def editor_copy(engine: RoundEngine, path: str) -> str:
         ours, base, theirs, (d.machine.label(), found.theirs_machine or "the other machine")
     )
     return d.scratch.write(path, marked)
+
+
+def mark_merged(engine: RoundEngine) -> Stop:
+    """ "I merged it": record ``edited`` for every unanswered file an agent may
+    merge, from its marked-up copy. Every copy is checked before any answer is
+    recorded, so a copy with a marker left refuses the whole request."""
+    d = engine.d
+    stop = d.state.stop()
+    if stop is None or stop.kind is not StopKind.CONFLICTS:
+        raise SyncNothingStopped("no round is stopped on conflicts")
+    handed = [c for c in stop.unanswered if agent_mergeable(c)]
+    if not handed:
+        raise SyncNothingStopped("no file of the stopped round is waiting for an agent's merge")
+    blobs: dict[str, str] = {}
+    for c in handed:
+        data = d.scratch.read(c.path) if d.scratch else None
+        if data is None:
+            raise SyncNothingStopped(f"{c.path} has no marked-up copy to merge yet")
+        line = _marker_line(data)
+        if line is not None:
+            raise SyncConflictMarkersLeft(c.path, line)
+        blobs[c.path] = d.git.hash(data)
+    updated = stop
+    for path, blob in blobs.items():
+        updated = updated.with_answer(path, Answer.EDITED, blob)
+    d.state.set_stop(updated)
+    return updated
 
 
 def confirm_hold(engine: RoundEngine) -> Stop:
@@ -183,9 +238,11 @@ def _find(
 __all__ = [
     "SyncConflictMarkersLeft",
     "SyncNothingStopped",
+    "SyncSecretNotEditable",
     "answer",
     "choose_join",
     "confirm_hold",
     "editor_copy",
+    "mark_merged",
     "restore_held",
 ]

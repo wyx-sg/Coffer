@@ -25,7 +25,9 @@ import subprocess
 from pathlib import Path
 
 from coffer.domain.error_base import CofferError
+from coffer.domain.git_handoff import git_missing_details
 from coffer.domain.vault.writers import author_name
+from coffer.infrastructure.platform.host import machine_label
 
 LOCAL_TIMEOUT_S = 60.0
 NETWORK_TIMEOUT_S = 120.0
@@ -77,8 +79,15 @@ class GitMissing(CofferError):  # noqa: N818
 
     def __init__(self) -> None:
         super().__init__(
-            "git is not installed. Coffer keeps the vault's history with git; on macOS run "
-            "`xcode-select --install`, then restart Coffer."
+            "git is not installed. Coffer keeps the vault's history and syncs it with git; "
+            "install git, then restart Coffer."
+        )
+        # How git is installed depends on the machine, so the error names no
+        # installer: its details carry the install hand-off for the person's
+        # agent (``domain/git_handoff.py``), which the web UI offers and the
+        # CLI prints.
+        self.error_details = git_missing_details(
+            machine_label(), needed_for="keeping the vault's history and syncing it"
         )
 
 

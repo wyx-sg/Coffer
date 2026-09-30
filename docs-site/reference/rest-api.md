@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 279 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 280 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -114,7 +114,7 @@ The daemon mounts 279 operations in 27 groups. Groups follow the order the daemo
 | [events](#events) | 1 |
 | [secrets](#secrets) | 15 |
 | [settings](#settings) | 4 |
-| [sync](#sync) | 27 |
+| [sync](#sync) | 28 |
 | [vault](#vault) | 6 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 38 |
@@ -243,6 +243,7 @@ The daemon mounts 279 operations in 27 groups. Groups follow the order the daemo
 | `POST` | `/api/v1/sync/join-choices` | Keep this machine's version (pushed by the next round) or take the remote's, for one or several of a join's differing files. |
 | `GET` | `/api/v1/sync/stop` | Stop |
 | `POST` | `/api/v1/sync/stop/files/answer` | Record an answer for one file; ``edited`` reads the saved editor copy and refuses it while a conflict marker is left in it. |
+| `POST` | `/api/v1/sync/stop/merged` | "I merged it": record the saved copy of every file handed to an agent as its answer. |
 | `POST` | `/api/v1/sync/stop/files/editor` | Write (once) git's marked-up merge of the file outside the vault and answer where it is. |
 | `GET` | `/api/v1/sync/stop/files/versions` | File Versions |
 | `POST` | `/api/v1/sync/continue` | Continue the stopped round once every file is answered: the resolved tree is validated, guarded, snapshotted, checked out and pushed. |

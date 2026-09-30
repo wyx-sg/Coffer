@@ -90,6 +90,14 @@ async def answer(body: FileAnswerIn) -> StopStateOut:
     return await _stop_state()
 
 
+@router.post("/stop/merged", response_model=StopStateOut)
+async def merged() -> StopStateOut:
+    """ "I merged it": record the saved copy of every file handed to an agent
+    as its answer. Refused whole while any copy still has a conflict marker."""
+    await get_sync_service().mark_merged()
+    return await _stop_state()
+
+
 @router.post("/stop/files/editor", response_model=EditorCopyOut)
 async def open_editor(body: FilePathIn) -> EditorCopyOut:
     """Write (once) git's marked-up merge of the file outside the vault and
@@ -110,6 +118,7 @@ async def file_versions(path: str = Query(min_length=1)) -> FileVersionsOut:
         base=found.base,
         take_theirs=found.take_theirs,
         binary=found.binary,
+        edited=found.edited,
     )
 
 

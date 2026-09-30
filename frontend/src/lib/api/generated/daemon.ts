@@ -664,14 +664,8 @@ export interface components {
         VaultUsageOut: {
             /** Bytes */
             bytes: number;
-            /** Latest Time */
-            latest_time: string | null;
-            /** Latest Writer */
-            latest_writer: string | null;
             /** Path */
             path: string;
-            /** Sync Configured */
-            sync_configured: boolean;
             /** Versions */
             versions: number | null;
         };

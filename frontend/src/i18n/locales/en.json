@@ -1515,13 +1515,8 @@
         "title": "Vault",
         "size_one": "{{size}} · {{versions}} version",
         "size_other": "{{size}} · {{versions}} versions",
-        "description": "A git repository with every version. Config, skills, knowledge and encrypted secrets.",
-        "notRepository": "Your configuration, skills and knowledge. Coffer makes it a git repository the first time it starts.",
-        "latest": "Latest version",
-        "latestValue": "{{when}} · {{writer}}",
-        "sync": "Sync",
-        "syncOn": "Synced to your remote",
-        "syncOff": "This machine only"
+        "description": "Synced — a git repository. Config, skills, knowledge and encrypted secrets.",
+        "notRepository": "Your configuration, skills and knowledge. Coffer makes it a git repository the first time it starts."
       },
       "local": {
         "title": "Local content",
@@ -1714,7 +1709,7 @@
     "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
     "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
     "PORT_IN_USE": "That port is in use by another program. Pick another one.",
-    "GIT_MISSING": "git is not installed. Coffer keeps the vault's history with git; on macOS run xcode-select --install, then restart Coffer.",
+    "GIT_MISSING": "git is not installed. Coffer keeps the vault's history and syncs it with git; install git, then restart Coffer.",
     "SYNC_CONFLICT_MARKERS_LEFT": "The file still has conflict markers. Remove them, save, then mark it resolved.",
     "SYNC_MACHINE_NAME_INVALID": "That machine name can't be used. Use a short, non-empty name.",
     "SYNC_MACHINE_NOT_FOUND": "No machine with that id syncs with this remote.",
@@ -1743,7 +1738,8 @@
     "MASTER_KEY_PASSPHRASE_WRONG": "That passphrase doesn't open this key file.",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
     "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
-    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes."
+    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes.",
+    "SYNC_SECRET_NOT_EDITABLE": "An encrypted secret can't be edited by hand. Keep this Mac's version or take the other's."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",

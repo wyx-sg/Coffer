@@ -98,6 +98,11 @@ def _print_stop(state: dict[str, Any]) -> None:
             f" · {other} {f.get('theirs_time') or '—'}  → {answer}"
         )
     _console.print("  resolve each with 'coffer sync resolve PATH --mine|--theirs|--edited'")
+    if stopped.get("handoff"):
+        _console.print(
+            "  merge with an agent: 'coffer sync conflicts --prompt' prints the prompt; "
+            "'coffer sync resolve --merged' records its merge"
+        )
 
 
 def register(app: typer.Typer) -> None:
@@ -124,27 +129,66 @@ def register(app: typer.Typer) -> None:
             print_round(r.json())
 
     @app.command("conflicts")
-    def conflicts(ctx: typer.Context) -> None:
-        """The files the stopped round waits on (or the held deletions)."""
+    def conflicts(
+        ctx: typer.Context,
+        prompt: bool = typer.Option(
+            False,
+            "--prompt",
+            help="Print the prompt that hands merging the conflicting files to your agent",
+        ),
+    ) -> None:
+        """The files the stopped round waits on (or the held deletions).
+
+        \f
+        Spec vault-sync "Hand a conflict's merge to an agent".
+        """
         c, _info = _cli_client.client_or_exit()
         with c:
             r = c.get("/sync/stop")
             _cli_client.check(r, verbose=_verbose(ctx))
-            _print_stop(r.json())
+            state = r.json()
+        if prompt:
+            handoff = (state.get("round") or {}).get("handoff")
+            if not handoff:
+                typer.echo("no conflicting file is waiting for an agent's merge", err=True)
+                raise typer.Exit(int(ExitCode.CONFLICT))
+            typer.echo(handoff["prompt"])
+            return
+        _print_stop(state)
 
     @app.command("resolve")
     def resolve(
         ctx: typer.Context,
-        path: str = typer.Argument(..., help="Vault-relative path of a conflicting file"),
+        path: str | None = typer.Argument(
+            None, help="Vault-relative path of a conflicting file (not with --merged)"
+        ),
         mine: bool = typer.Option(False, "--mine", help="Keep this machine's version"),
         theirs: bool = typer.Option(False, "--theirs", help="Take the other machine's version"),
         edited: bool = typer.Option(
             False, "--edited", help="Take the hand-merged copy 'coffer sync edit' opened"
         ),
+        merged: bool = typer.Option(
+            False,
+            "--merged",
+            help="Record an agent's merge: every file handed to it takes its merged copy",
+        ),
     ) -> None:
-        """Answer one conflicting file. Nothing is written until 'continue'."""
-        choice = _answer(mine, theirs, edited)
+        """Answer one conflicting file, or record an agent's merge of them all
+        with --merged. Nothing is written until 'continue'."""
         c, _info = _cli_client.client_or_exit()
+        if merged:
+            if path is not None or mine or theirs or edited:
+                typer.echo("--merged takes no PATH and no other answer", err=True)
+                raise typer.Exit(int(ExitCode.INVALID_USAGE))
+            with c:
+                r = c.post("/sync/stop/merged", json={})
+                _cli_client.check(r, verbose=_verbose(ctx))
+                _print_stop(r.json())
+            return
+        if path is None:
+            typer.echo("name the file to resolve, or pass --merged", err=True)
+            raise typer.Exit(int(ExitCode.INVALID_USAGE))
+        choice = _answer(mine, theirs, edited)
         with c:
             r = c.post("/sync/stop/files/answer", json={"path": path, "answer": choice})
             _cli_client.check(r, verbose=_verbose(ctx))
