@@ -43,9 +43,10 @@ describe("ConfirmDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  test("confirm button is disabled while pending", () => {
-    renderDialog({ pending: true });
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  test("while pending the confirm button says so and Cancel is disabled", () => {
+    renderDialog({ pending: true, pendingLabel: "Deleting…" });
+    expect(screen.getByRole("button", { name: "Deleting…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
 
   test("renders the detail a sentence cannot carry", () => {

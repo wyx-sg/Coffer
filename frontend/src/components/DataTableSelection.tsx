@@ -69,11 +69,13 @@ export function BulkBar({
   onClear: () => void;
   children: ReactNode;
 }) {
+  // Foundations-Tables "Bulk bar": a 40px raised strip on the overlay shadow,
+  // r10 — the count, the actions (safe first, destructive last), then Clear.
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md border bg-surface-sunken px-3 py-2">
-      <span className="text-sm font-medium">{label}</span>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
-      <TableActionButton icon={X} label={clearLabel} className="ml-auto" onClick={onClear} />
+    <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl bg-surface-raised py-[7px] pl-3 pr-2 shadow-overlay">
+      <span className="mr-2 text-sm font-label text-text">{label}</span>
+      {children}
+      <TableActionButton icon={X} label={clearLabel} onClick={onClear} />
     </div>
   );
 }
@@ -92,7 +94,7 @@ export function SelectAllHeadCell({
   className?: string;
 }) {
   return (
-    <TableHead className={cn("h-10 w-10", className)}>
+    <TableHead className={cn("w-8", className)}>
       <Checkbox
         checked={checked}
         indeterminate={indeterminate}
@@ -115,9 +117,9 @@ export function RowSelectCell({
   /** When false, render a spacer cell (no checkbox) to keep columns aligned. */
   selectable?: boolean;
 }) {
-  if (!selectable) return <TableCell className="w-10" />;
+  if (!selectable) return <TableCell className="w-8" />;
   return (
-    <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
+    <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
       <Checkbox checked={checked} aria-label={ariaLabel} onChange={onToggle} />
     </TableCell>
   );

@@ -28,6 +28,7 @@ const TONE: Record<DaemonFooterState["kind"], StatusTone> = {
   running: "ok",
   connecting: "off",
   stopping: "warn",
+  reconnecting: "warn",
   offline: "err",
 };
 

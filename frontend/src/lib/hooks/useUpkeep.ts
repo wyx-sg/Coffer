@@ -53,6 +53,13 @@ export function useUpkeepRun(kind: UpkeepKind, uid: string): UpkeepRunOut | null
   return (data ?? []).find((run: UpkeepRunOut) => run.kind === kind && run.name === uid) ?? null;
 }
 
+/** Every pass of one kind in flight right now — for a list that marks each
+ *  row it covers, where one hook per row is not an option. */
+export function useUpkeepRunsOf(kind: UpkeepKind): UpkeepRunOut[] {
+  const { data } = useUpkeepRuns();
+  return (data ?? []).filter((run: UpkeepRunOut) => run.kind === kind);
+}
+
 /** Is a pass running over this one partition / collection (by uid) right now? */
 export function useUpkeepRunning(kind: UpkeepKind, uid: string): boolean {
   return useUpkeepRun(kind, uid) !== null;

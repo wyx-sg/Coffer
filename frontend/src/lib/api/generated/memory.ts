@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reading */
+        get: operations["reading_api_v1_memory_reading_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/sync": {
         parameters: {
             query?: never;
@@ -601,6 +618,8 @@ export interface components {
          *     ``.raw/``, which is what keeps a paraphrase traceable.
          */
         NoteOut: {
+            /** Agents */
+            agents: string[];
             /** Body */
             body: string;
             /** Created At */
@@ -635,6 +654,8 @@ export interface components {
          *     facts were served as current for weeks.
          */
         NoteSummaryOut: {
+            /** Agents */
+            agents: string[];
             /** Created At */
             created_at: string;
             /** Description */
@@ -689,6 +710,8 @@ export interface components {
          *     partition for a non-repository directory").
          */
         PartitionOut: {
+            /** Distilled At */
+            distilled_at: string | null;
             /** Name */
             name: string;
             /** Note Count */
@@ -697,12 +720,62 @@ export interface components {
             repository_key: string;
             /** Repository Path */
             repository_path: string;
+            /** Sample */
+            sample: string | null;
+            /** Sources */
+            sources: string[];
             /** Title */
             title: string | null;
             /** Uid */
             uid: string;
             /** Unresolvable */
             unresolvable: boolean;
+            /** Waiting Agents */
+            waiting_agents: string[];
+            /**
+             * Waiting Entries
+             * @default 0
+             */
+            waiting_entries: number;
+        };
+        /**
+         * ReadFailureOut
+         * @description One agent's memory the last read could not parse.
+         */
+        ReadFailureOut: {
+            /**
+             * Agent
+             * @description The agent's resource name; empty when not recorded.
+             */
+            agent: string;
+            /**
+             * Last Read At
+             * @description When that agent's memory was last read with nothing failing, if known. Its memories stay as that read left them.
+             */
+            last_read_at: string | null;
+            /**
+             * Path
+             * @description The native source that would not parse.
+             */
+            path: string;
+            /**
+             * Reason
+             * @description Why it would not parse.
+             */
+            reason: string;
+        };
+        /**
+         * ReadingOut
+         * @description The last read of the agents' memory.
+         */
+        ReadingOut: {
+            /** Failures */
+            failures: components["schemas"]["ReadFailureOut"][];
+            /**
+             * Read At
+             * @description When the last read finished; null before the first.
+             */
+            read_at: string | null;
         };
         /** RetiredListOut */
         RetiredListOut: {
@@ -1208,6 +1281,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetiredListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reading_api_v1_memory_reading_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

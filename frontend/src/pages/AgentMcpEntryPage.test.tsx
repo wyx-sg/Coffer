@@ -106,7 +106,7 @@ const TYPE_ROW = {
 } as const;
 
 function stub(entry: Partial<McpEntryDetailOut> = {}) {
-  api.types.mockResolvedValue({ types: [TYPE_ROW] });
+  api.types.mockResolvedValue({ types: [TYPE_ROW], install_handoff: null });
   api.get.mockResolvedValue(AGENT);
   api.listConfigFiles.mockResolvedValue({ items: [] });
   api.mcpEntry.mockResolvedValue({ ...ENTRY, ...entry });

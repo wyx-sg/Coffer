@@ -470,17 +470,14 @@ def test_the_knowledge_routes_require_the_daemon_token(client) -> None:  # type:
     assert resp.status_code == 401
 
 
-def test_collection_list_carries_the_resource_title(client) -> None:  # type: ignore[no-untyped-def]
+def test_collection_list_carries_no_title(client) -> None:  # type: ignore[no-untyped-def]
     """spec resource-framework "Carry an optional editable title on the kinds that have one":
-    the collection list carries the title set through the kind-agnostic update,
-    while ``name`` stays the directory name the file routes take."""
+    ``knowledge`` is not one of them — a collection is shown by its folder
+    name, which is also what the file routes take."""
     _create_collection(client, "team")
     rows = client.get("/api/v1/knowledge/collections").json()["collections"]
     row = next(r for r in rows if r["name"] == "team")
-    assert row["title"] is None
+    assert "title" not in row
 
     resp = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
-    assert resp.status_code == 200, resp.text
-    rows = client.get("/api/v1/knowledge/collections").json()["collections"]
-    row = next(r for r in rows if r["uid"] == row["uid"])
-    assert (row["name"], row["title"]) == ("team", "Team notes")
+    assert resp.status_code == 422, resp.text

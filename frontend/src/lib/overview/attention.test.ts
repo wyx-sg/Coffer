@@ -2,7 +2,14 @@
 import { describe, expect, test } from "vitest";
 
 import type { AttentionItem } from "@/lib/hooks/useAttention";
-import { actionLabelKey, actionPage, itemPage, severityTone, sortAttention } from "./attention";
+import {
+  actionLabelKey,
+  actionPage,
+  itemActionLabelKey,
+  itemPage,
+  severityTone,
+  sortAttention,
+} from "./attention";
 
 function item(over: Partial<AttentionItem>): AttentionItem {
   return {
@@ -64,6 +71,24 @@ describe("pages", () => {
     expect(actionPage(secret)).toBe("/secrets");
     expect(itemPage(secret)).toBe("/mcp-servers/m1");
   });
+});
+
+test("a memory-hook problem opens the agent's Hooks tab and repairs as a hook", () => {
+  const hook = item({
+    kind: "agent",
+    uid: "a1",
+    reason_code: "stale_command",
+    action: { verb: "repair", method: "POST", path: "/api/v1/reconcile/apply", body: null },
+  });
+  expect(actionPage(hook)).toBe("/agents/a1/hooks");
+  expect(itemPage(hook)).toBe("/agents/a1");
+  expect(itemActionLabelKey(hook)).toBe("overview.actions.repairHook");
+  const untrusted = item({ ...hook, reason_code: "hook_untrusted" });
+  expect(actionPage(untrusted)).toBe("/agents/a1/hooks");
+  // Only a hook reason on an agent: a skill's drift keeps its own page and label.
+  const drift = item({ ...hook, kind: "skill", uid: "s1", reason_code: "link_missing" });
+  expect(actionPage(drift)).toBe("/skills/s1");
+  expect(itemActionLabelKey(drift)).toBe("overview.actions.repair");
 });
 
 test("an action label comes from its verb, falling back to Open", () => {

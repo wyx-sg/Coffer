@@ -84,9 +84,6 @@ export function KnowledgeAddDocumentDialog(props: Props) {
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("knowledge.add.title")}</DialogTitle>
-          <DialogDescription>
-            {props.modelSet === false ? t("knowledge.add.hintNoModel") : t("knowledge.add.hint")}
-          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -121,6 +118,13 @@ export function KnowledgeAddDocumentDialog(props: Props) {
               onChange={(e) => setBody(e.target.value)}
             />
           </div>
+          {/* Under the fields, as board 5.1.16 has it: where the text goes,
+              named, once the collection is chosen. */}
+          <DialogDescription className="text-xs leading-[1.45] text-text-subtle">
+            {props.modelSet === false
+              ? t("knowledge.add.hintNoModel")
+              : t("knowledge.add.hint", { collection })}
+          </DialogDescription>
           {submit.error ? (
             <p role="alert" className="text-sm text-danger">
               {translateApiError(t, submit.error)}
@@ -128,7 +132,7 @@ export function KnowledgeAddDocumentDialog(props: Props) {
           ) : null}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => props.onOpenChange(false)}>
+          <Button variant="outline" onClick={() => props.onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
           <Button

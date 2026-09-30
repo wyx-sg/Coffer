@@ -462,10 +462,24 @@ components:
           - type: integer
           - type: 'null'
           title: Interval S
+        last_pass_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Pass At
+        next_pass_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Next Pass At
       required:
       - enabled
       - interval_s
       - default_interval_s
+      - last_pass_at
+      - next_pass_at
       title: UpkeepSettingOut
       type: object
     UpkeepUpdate:

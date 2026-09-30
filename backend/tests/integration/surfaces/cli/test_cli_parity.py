@@ -231,7 +231,8 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # The usage summary's range, grouping and output form.
     "usage": {"--range", "--from", "--to", "--by", "--json", "--csv"},
     # A name and a title are edited on the kinds that carry them (design D1).
-    "knowledge edit": {"--name", "--title"},
+    # A collection is named by its folder: a name and a description, no title.
+    "knowledge edit": {"--name", "--description"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
     # `model` / `effort` / `tier_models` / `wire_api` the projector reads. Its

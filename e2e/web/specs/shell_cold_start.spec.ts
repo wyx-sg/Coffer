@@ -103,10 +103,14 @@ acceptance(
 
     await page.goto("/");
 
+    // For the first 10s of failures the page stays under the reconnecting
+    // bar (board 1.2.17); then the offline state takes its place in the
+    // workspace (board 1.2.18).
+    await expect(page.getByTestId("daemon-reconnecting")).toBeVisible();
     const banner = page.getByTestId("daemon-banner");
-    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toBeVisible({ timeout: 25_000 });
     // The recovery affordance is the restart command — the browser cannot
-    // restart the daemon, and the status poll clears the banner on its own.
+    // restart the daemon, and the retries clear the state on their own.
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
     // The footer agrees with the banner: it reads offline, never running.
     await expect(page.getByTestId("sidebar-daemon")).toHaveAccessibleName(
@@ -133,7 +137,7 @@ acceptance(
     await page.goto("/");
 
     const banner = page.getByTestId("daemon-banner");
-    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toBeVisible({ timeout: 25_000 });
     // A concrete recovery affordance appears (not a generic "error").
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
     // Sidebar must still be reachable so the user can orient.

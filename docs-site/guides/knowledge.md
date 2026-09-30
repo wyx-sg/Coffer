@@ -86,7 +86,7 @@ Knowledge → New collection → Name, What belongs in here → Create collectio
 
 :::
 
-This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. From then on the README is the description; edit the file to change it. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it; `--title` sets the title Coffer's pages show in place of the name.
+This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. On the Knowledge page, **New collection** asks for both the name and what belongs in the collection. A collection has no title: every page and listing shows it by its folder name. Its description is the opening paragraph of the README: change it with **Edit description** on the collection's page, with `coffer knowledge edit payments --description "…"`, or in the file itself. Either way only that paragraph changes, and anything written under it stays. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it.
 
 List what you have:
 
@@ -94,7 +94,7 @@ List what you have:
 coffer knowledge list
 ```
 
-The **Knowledge** page shows the same list with each collection's description, its number of documents, and how many items are **Pending**.
+The **Knowledge** page's tree shows the same list, each collection with its number of documents and, under it, its **Inbox** with how many items wait. That count is the only place items waiting show up: the sidebar has no badge for them.
 
 ## Add knowledge
 
@@ -202,7 +202,7 @@ A pass can only retire a document whose content it has already written elsewhere
 
 Curation runs on a background sweep, every hour by default, starting about a minute after the daemon starts. New items are therefore curated within the hour; to have them curated now, curate by hand (below). Each sweep takes inbox items first, oldest first, then edited documents, and runs a few passes per collection.
 
-Change the switch or the interval under **Settings › General → Coffer's model → Automatic upkeep → Curate new knowledge into documents**, or on the CLI:
+Change the switch or the interval from the Knowledge page's header: **Automatic · hourly** beside the title opens a popover with the switch, the interval, when the last pass ran and the next one is due, and **Curate now**. On the CLI:
 
 ```sh
 coffer config list engine.upkeep.
@@ -271,7 +271,7 @@ If Coffer's model is not configured, nothing waits: each submission becomes a do
 A pass rewrites documents that [vault sync](/guides/vault-sync) carries between machines. If two machines both curated, the same item would be folded into two different documents. So curation runs on one **owner machine** only.
 
 - With no owner named, curation runs wherever the vault is open — correct for a single machine.
-- To name this machine: **Settings › General → Coffer's model → Automatic upkeep → Run curation on this machine**, or `coffer config set engine.curate_owner this`.
+- To name the owner: once the vault spans several Macs, the Knowledge header's **Automatic** popover shows **Curation runs on** with a picker of the Macs; or run `coffer config set engine.curate_owner this` on the Mac that should curate.
 - `coffer config get engine.curate_owner` reports the current owner, and flags an owner that no known machine claims (in that state curation runs nowhere); `coffer config unset engine.curate_owner` removes it.
 
 Curation and a sync round never run at the same time, and curation is skipped while a sync conflict or confirmation is outstanding.
@@ -313,9 +313,9 @@ Knowledge → choose the collection in the tree → choose a document
 
 :::
 
-The Knowledge page is one tree beside a reading pane, both filling the window. At the top of the tree is **Recent changes**; below it every collection, each opening to its **Inbox** — with the number of items waiting — and its documents. Choosing a collection shows what belongs in it and one status line, **Documents N · Waiting M · Curated** *(when)*; **Waiting** opens the Inbox, and while a Curate now run is draining it the line reads **Curating · n of m**. Choosing a document renders it, with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)) and a **⋯** menu, on two tabs: **Document** and **History** (see [History and undo](#history-and-undo)). The Inbox lists the items waiting to be curated — *curated automatically within the hour* — with the one quiet **Curate now**; an item opens read-only, with who wrote it and when, and it leaves the Inbox once curation has filed it.
+The Knowledge page is one tree beside a reading pane, both filling the window under the page header, which carries **Automatic · hourly** (curation's switch, interval and **Curate now**), **Upload** and **Add a document**. At the top of the tree is **Recent changes**; below it every collection by its folder name, each opening to its **Inbox** — with the number of items waiting — and its documents, each shown by its file name. Choosing a collection shows its name, what belongs in it with **Edit description**, and one status row, **Documents N · Waiting M · Curated** *(when)*; **Waiting** opens the Inbox, and while a Curate now run is draining it the row reads **Curating · n of m**. A collection with nothing in it yet offers **Add a document**, **Upload** and **Reveal folder** instead. Choosing a document renders it, with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)) and a **⋯** menu, on two tabs: **Document** and **History** (see [History and undo](#history-and-undo)). Beside the document, **On this page** lists its headings, **Properties** says who edited it last, when it was created and how many inbox items it was curated from, and the file actions — **Open in editor**, **Reveal in Finder**, **Delete document…** — repeat the ⋯ menu. The Inbox lists the items waiting to be curated — *curated automatically within the hour* — with a quiet **Curate now**, and the Inbox node expands to list them in the tree; an item opens read-only, with who wrote it and when, and it leaves the Inbox once curation has filed it.
 
-The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. While Coffer's model is not set there is no Inbox and no Curate now; one line says that items become documents as they arrive and links to **Settings › General**.
+The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. While Coffer's model is not set there is no Inbox, no Automatic control and no Curate now; one line under the page title, *Set Coffer's model to curate new items into your documents*, links to **Settings › General**, and until then items become documents as they arrive.
 
 The documents are plain files: `coffer path knowledge` prints the knowledge root, and `coffer path knowledge <collection>` one collection's directory, so you read and grep them with your own tools.
 
@@ -358,7 +358,7 @@ coffer knowledge changes 8d41e07         # one change in full, with each documen
 
 Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. The items still waiting in each inbox are listed separately, with who submitted them and when.
 
-On the Knowledge page, a document's **History** tab lists its versions newest first with their writers; choosing one shows its diff against the version before, with **Restore this version**. **Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day and filterable by who wrote it (Everyone, Agents, You) and by collection, with the items waiting and **Curate now** above it. Choosing a change shows every document it touched, each with its diff and a link to its History.
+On the Knowledge page, a document's **History** tab lists its versions newest first with their writers; choosing one shows its diff against the version before (**Changes in this version**) or against the document as it is now (**Compare with current**), with **Restore this version** on an older one. **Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day and filterable by who wrote it (Everyone, Agents, You) and by collection, with the items waiting and **Curate now** above it — while a run is going it reads **Curating · n of m**. A curation pass links to **See the pass**, which shows every document it touched, each with its diff and a link to its History; a delete carries **Restore** (see [Delete documents and collections](#delete-documents-and-collections)).
 
 ### Undo a curation pass
 
@@ -370,7 +370,7 @@ coffer knowledge undo 8d41e07
 
 Every document the pass wrote or retired goes back exactly as it was before the pass, and documents it created are removed, in one new change written by you. Curation does not redo the pass afterwards. The item the pass curated stays out of the inbox; its text is still in the history.
 
-On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first.
+On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first, listing each document and what the undo does to it. A refused undo closes the question and the pass's page reads **Not undone**, naming the document that changed since; an undone pass reads **Undone**, with who undid it and when.
 
 - If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead.
 - Only a curation pass can be undone this way (`KNOWLEDGE_NOT_A_PASS` otherwise). For any other change, restore the document's earlier version.
@@ -405,8 +405,8 @@ Knowledge → choose the collection → Danger zone → Delete… → type its n
 
 :::
 
-::: tip Deleting a document is a version too
-A deleted document stays in the [history](#history-and-undo). Find it with `coffer knowledge changes` and put it back with `coffer knowledge restore`, naming the version before the delete.
+::: tip A delete can be restored
+A deleted document or collection stays in the [history](#history-and-undo). **Recent changes** lists the delete with **Restore**, which puts back exactly what it removed — a document into its collection, a collection with its documents, its README and the items that were waiting in its Inbox — as one new change by you. On the CLI, find the delete with `coffer knowledge changes` and run `coffer knowledge restore --deleted <version>`. A restore is refused, with nothing written, when a document is back at the same path or a collection of the same name exists again.
 :::
 
 ## What not to put in knowledge

@@ -1,7 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeStatsLine.tsx
 //
-// A collection's one status line (spec knowledge "Present a collection as one
-// tree in the web UI"): *Documents N · Waiting M · Curated <time>*. Waiting
+// A collection's one status row (spec knowledge "Present a collection as one
+// tree in the web UI"; board 5.1.13): *Documents N · Waiting M · Curated
+// <time>*, each a small label over its value. Waiting
 // links to the Inbox; while a Curate now run is draining it reads
 // "Curating · n of m" instead of the curated time, straight from the daemon's
 // in-flight list — no dialog, no toast. With Coffer's model not set nothing
@@ -27,9 +28,9 @@ interface Props {
 
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="text-text-subtle">{label}</span>
-      <span className="tabular-nums text-text">{children}</span>
+    <span className="flex min-w-[110px] flex-col gap-0.5">
+      <span className="text-xs text-text-muted">{label}</span>
+      <span className="text-lg font-bold tabular-nums text-text">{children}</span>
     </span>
   );
 }
@@ -43,28 +44,27 @@ export function KnowledgeStatsLine({ collection, modelSet }: Props) {
   );
 
   return (
-    <p
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
-      data-testid="knowledge-stats"
-    >
+    <p className="flex flex-wrap items-center gap-x-7 gap-y-2" data-testid="knowledge-stats">
       <Stat label={t("knowledge.stats.documents")}>{collection.document_count}</Stat>
       {modelSet ? (
         <>
           <Stat label={t("knowledge.stats.waiting")}>
             <Link
               to={collectionPath(collection.uid, "inbox")}
-              className="underline-offset-4 hover:underline"
+              className="text-accent-text underline-offset-4 hover:underline"
             >
               {collection.pending_count}
             </Link>
           </Stat>
-          {run ? (
-            <span className="text-text-muted">{curatingLabel(t, run)}</span>
-          ) : (
-            <Stat label={t("knowledge.stats.curated")}>
-              {lastPass ? timeAgo(lastPass.time, i18n.language) : t("knowledge.stats.never")}
-            </Stat>
-          )}
+          <Stat label={t("knowledge.stats.curated")}>
+            {run ? (
+              <span className="text-sm font-book text-text-muted">{curatingLabel(t, run)}</span>
+            ) : lastPass ? (
+              timeAgo(lastPass.time, i18n.language)
+            ) : (
+              t("knowledge.stats.never")
+            )}
+          </Stat>
         </>
       ) : null}
     </p>

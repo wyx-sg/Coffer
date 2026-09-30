@@ -113,6 +113,7 @@ def list_collections() -> tuple[CollectionEntry, ...]:
             description=readme_description(d.name),
             document_count=count_files(d, markdown_only=True),
             pending_count=_count_inbox(d.name),
+            folder_path=str(d),
         )
         for d in found
     )

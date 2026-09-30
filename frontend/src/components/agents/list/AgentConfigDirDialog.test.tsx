@@ -50,7 +50,7 @@ describe("AgentConfigDirDialog", () => {
       const dialog = screen.getByRole("dialog");
       expect(within(dialog).getByText(/Coffer looks in ~\/\.claude unless/)).toBeInTheDocument();
 
-      fireEvent.click(within(dialog).getByRole("button", { name: /browse/i }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /choose/i }));
       await waitFor(() => expect(screen.getByDisplayValue(HOME)).toBeInTheDocument());
       // The native dialog answered, so the in-app folder browser never opened.
       expect(screen.getAllByRole("dialog")).toHaveLength(1);

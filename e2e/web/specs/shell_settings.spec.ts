@@ -2,7 +2,7 @@
 //
 // Settings as a modal over the current page (change revise-web-ui-ia): five
 // tabs grouped by what they manage (General, Security, Data, Daemon, About),
-// each at /settings/<tab>; the sidebar language switcher; and no shutdown
+// each at /settings/<tab>; the version menu's language switch; and no shutdown
 // control anywhere. The first two markers still name the scenarios of the
 // Settings page the change replaces; they follow its scenario names at archive.
 
@@ -66,7 +66,7 @@ acceptance(
     // first pinned to a card heading it renders itself, so a pane that failed
     // to mount can't satisfy the absence checks vacuously.
     const panes: [string, RegExp][] = [
-      ["general", /^Automatic upkeep$/], // GeneralSettings -> Coffer's model
+      ["general", /^Coffer's model$/], // GeneralSettings -> Coffer's model
       ["security", /^Encryption$/], // SecuritySettings
       ["data", /^Vault$/], // DataSettings
       ["daemon", /^Startup$/], // DaemonSettings
@@ -83,8 +83,8 @@ acceptance(
       ).toHaveCount(0);
     }
 
-    // The About tab carries no language selector (the sidebar switcher is
-    // the single source) and no developer-only resource-kind list.
+    // The About tab carries no language selector (the version menu and
+    // General carry it) and no developer-only resource-kind list.
     await page.goto("/settings/about");
     await expect(
       page.getByTestId("settings-modal").getByRole("combobox"),
@@ -168,8 +168,13 @@ acceptance(
       page.getByRole("link", { name: /MCP servers/i }).first(),
     ).toBeVisible();
 
-    // The sidebar language switcher is a button group (EN / 中).
-    await page.getByRole("button", { name: "中" }).click();
+    // Language lives in the version menu the sidebar footer opens, each
+    // locale named in its own language (board 1.2.06).
+    await page.getByTestId("sidebar-daemon").click();
+    await page
+      .getByTestId("version-menu")
+      .getByRole("radio", { name: /简体中文/ })
+      .click();
 
     // Sidebar labels switch to Chinese within the same frame.
     await expect(

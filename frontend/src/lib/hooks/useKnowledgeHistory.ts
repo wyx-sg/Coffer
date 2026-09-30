@@ -17,10 +17,13 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
+  describeCollection,
   getChange,
   getHistory,
+  getVersionBody,
   getVersionDiff,
   listChanges,
+  restoreDeleted,
   restoreVersion,
   undoPass,
 } from "@/lib/api/knowledge";
@@ -30,6 +33,7 @@ import {
   knowledgeFileKey,
   knowledgeHistoryKey,
   knowledgeKey,
+  knowledgeVersionBodyKey,
   knowledgeVersionDiffKey,
 } from "@/lib/api/queryKeys";
 
@@ -76,10 +80,22 @@ export function useVersionDiff(path: string | null, version: string | null) {
   });
 }
 
+/** A document's body as one version left it — Compare with current sets it
+ *  against the document as it is now. */
+export function useVersionBody(path: string | null, version: string | null, enabled = true) {
+  return useQuery({
+    queryKey: knowledgeVersionBodyKey(path ?? "", version ?? ""),
+    queryFn: () => getVersionBody(path as string, version as string),
+    enabled: enabled && Boolean(path && version),
+  });
+}
+
 /**
  * Put one version of a document back, as a new version naming the user. The
  * restored body goes straight into the file's cache entry, and the rest of the
  * knowledge subtree — its History, the timeline, the tree — is invalidated.
+ * The caller toasts the success (it names the version's date); a refusal is
+ * toasted here.
  */
 export function useRestoreVersion() {
   const qc = useQueryClient();
@@ -90,7 +106,6 @@ export function useRestoreVersion() {
     onSuccess: (file) => {
       qc.setQueryData(knowledgeFileKey(file.path), file);
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      toast.success(t("knowledge.history.restored"));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
@@ -105,6 +120,32 @@ export function useUndoPass() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (version: string) => undoPass(version),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
+  });
+}
+
+/**
+ * Put back what a delete removed — a document, or a whole collection with its
+ * documents, README and waiting items (spec knowledge "Restore a deleted
+ * collection or document from Recent changes"). No `onError` toast: Recent
+ * changes says in place, on the row, why a restore was refused (the path or
+ * the collection's name is taken again).
+ */
+export function useRestoreDeleted() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) => restoreDeleted(version),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
+  });
+}
+
+/** Rewrite a collection's description — its README's opening paragraph. A
+ *  collection has no title; this is the one thing about it a person edits
+ *  here besides its documents. */
+export function useDescribeCollection(uid: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (description: string) => describeCollection(uid, description),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }

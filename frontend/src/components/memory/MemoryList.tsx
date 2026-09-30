@@ -11,6 +11,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { NoteSummaryOut, RetiredNoteOut } from "@/lib/api/memoryTypes";
+import { AgentSources } from "./partitionFacts";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -18,9 +19,12 @@ interface Props {
   retired: RetiredNoteOut[];
   selected: string | null;
   onSelect: (slug: string) => void;
+  /** The agents the partition came from: a memory learned from all of them
+   *  reads "All agents" instead of a row of badges. */
+  sources?: readonly string[];
 }
 
-export function MemoryList({ memories, retired, selected, onSelect }: Props) {
+export function MemoryList({ memories, retired, selected, onSelect, sources = [] }: Props) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col">
@@ -34,14 +38,19 @@ export function MemoryList({ memories, retired, selected, onSelect }: Props) {
                 aria-current={active ? "true" : undefined}
                 onClick={() => onSelect(m.slug)}
                 className={cn(
-                  "flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left",
+                  "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left",
                   active ? "bg-surface-selected" : "hover:bg-surface-hover",
                 )}
               >
-                <span className="truncate text-sm font-label text-text">{m.title}</span>
-                {m.description ? (
-                  <span className="truncate text-xs text-text-muted">{m.description}</span>
-                ) : null}
+                <span className="flex min-w-0 grow flex-col gap-0.5">
+                  <span className="truncate text-sm font-label text-text">{m.title}</span>
+                  {m.description ? (
+                    <span className="truncate text-xs text-text-muted">{m.description}</span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 pt-0.5">
+                  <AgentSources agents={m.agents ?? []} everyone={sources} />
+                </span>
               </button>
             </li>
           );

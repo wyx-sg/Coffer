@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 255 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 261 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -110,7 +110,7 @@ The daemon mounts 255 operations in 26 groups. Groups follow the order the daemo
 | [audit](#audit) | 1 |
 | [retention](#retention) | 3 |
 | [upkeep](#upkeep) | 1 |
-| [reconcile](#reconcile) | 3 |
+| [reconcile](#reconcile) | 5 |
 | [events](#events) | 1 |
 | [credentials](#credentials) | 15 |
 | [settings](#settings) | 4 |
@@ -122,8 +122,8 @@ The daemon mounts 255 operations in 26 groups. Groups follow the order the daemo
 | [clis](#clis) | 4 |
 | [mcp](#mcp) | 15 |
 | [custom-tools](#custom-tools) | 14 |
-| [knowledge](#knowledge) | 15 |
-| [memory](#memory) | 16 |
+| [knowledge](#knowledge) | 18 |
+| [memory](#memory) | 17 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -191,6 +191,8 @@ The daemon mounts 255 operations in 26 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/reconcile/plan` | Every difference a pass would find now, and what it would do about it. |
 | `POST` | `/api/v1/reconcile/apply` | Apply the named differences now. |
 | `GET` | `/api/v1/attention` | What needs a person now, across every kind whose feature is on — each item with one action, the route its own page calls. |
+| `PUT` | `/api/v1/attention/ignored/{key}` | Ignore the informational item ``key`` on this machine: it leaves ``items`` and the counts and is listed under ``ignored``. |
+| `DELETE` | `/api/v1/attention/ignored/{key}` | Stop ignoring ``key``; a key that is not ignored is a no-op. |
 
 ### events
 
@@ -407,10 +409,13 @@ The daemon mounts 255 operations in 26 groups. Groups follow the order the daemo
 | `POST` | `/api/v1/knowledge/upload` | Upload |
 | `GET` | `/api/v1/knowledge/history` | A document's versions, newest first, each with its writer and time. |
 | `GET` | `/api/v1/knowledge/history/diff` | What one version did to the document. |
+| `GET` | `/api/v1/knowledge/history/version` | The document's body as one version left it. |
 | `POST` | `/api/v1/knowledge/history/restore` | Put one version of a document back, as a new change naming the user. |
 | `GET` | `/api/v1/knowledge/changes` | Recent changes across every collection (or one, by its name), newest first, with the items still waiting in each inbox. |
 | `GET` | `/api/v1/knowledge/changes/{version}` | One change in full: every document it touched, with its diff. |
 | `POST` | `/api/v1/knowledge/changes/{version}/undo` | Undo a curation pass as a whole. |
+| `POST` | `/api/v1/knowledge/changes/{version}/restore` | Put back what a delete removed — a document, or a whole collection with its documents, README and waiting items — as one new change naming the user. |
+| `PUT` | `/api/v1/knowledge/collections/{uid}/description` | Rewrite the opening paragraph of the collection's README. |
 
 ### memory
 
@@ -432,6 +437,7 @@ The daemon mounts 255 operations in 26 groups. Groups follow the order the daemo
 | `DELETE` | `/api/v1/memory/triggers/{trigger_id}` | Delete Trigger |
 | `GET` | `/api/v1/memory/deliveries` | Deliveries |
 | `GET` | `/api/v1/memory/partitions/{uid}/delivered` | Delivered |
+| `GET` | `/api/v1/memory/reading` | Reading |
 
 ### agent-providers
 

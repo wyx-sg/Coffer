@@ -38,6 +38,8 @@ export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
+/** The install hand-off the types read carries while no agent is installed. */
+export const agentInstallHandoffKey = ["agents", "types", "install-handoff"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
@@ -179,6 +181,8 @@ export const knowledgeChangeKey = (version: string) =>
 export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
+export const knowledgeVersionBodyKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "body", version] as const;
 
 // --- memory — partitions, their memories, what is delivered ---------------
 
@@ -193,6 +197,7 @@ export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "
 export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
 export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
+export const memoryReadingKey = ["memory", "reading"] as const;
 
 // --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
 

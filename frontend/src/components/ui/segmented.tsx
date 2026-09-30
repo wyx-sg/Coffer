@@ -30,7 +30,8 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={label}
       className={cn(
-        "inline-flex shrink-0 gap-0.5 rounded-md border border-border-subtle bg-surface-sunken p-0.5",
+        // Track: 3px inset, items 2 apart, r7 — 32 high around 24px items.
+        "inline-flex shrink-0 gap-0.5 rounded-md border border-border-subtle bg-surface-sunken p-[3px]",
         className,
       )}
     >
@@ -45,7 +46,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               "h-6 whitespace-nowrap rounded-sm px-2.5 text-xs font-label transition-colors duration-fast",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-50",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-disabled",
               pressed
                 ? "bg-surface-raised text-text shadow-lifted"
                 : "text-text-muted hover:text-text",

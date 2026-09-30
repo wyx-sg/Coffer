@@ -451,6 +451,40 @@ paths:
       summary: List Retired
       tags:
       - memory
+  /api/v1/memory/reading:
+    get:
+      operationId: reading_api_v1_memory_reading_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Reading
+      tags:
+      - memory
   /api/v1/memory/sync:
     post:
       description: |-
@@ -1143,6 +1177,11 @@ components:
         sources are named in ``origins`` and kept verbatim under the partition's
         ``.raw/``, which is what keeps a paraphrase traceable.
       properties:
+        agents:
+          items:
+            type: string
+          title: Agents
+          type: array
         body:
           title: Body
           type: string
@@ -1190,6 +1229,7 @@ components:
       - search_terms
       - created_at
       - updated_at
+      - agents
       - body
       - origins
       title: NoteOut
@@ -1204,6 +1244,11 @@ components:
         client. The previous design left that filtering to the reader and 11 dead
         facts were served as current for weeks.
       properties:
+        agents:
+          items:
+            type: string
+          title: Agents
+          type: array
         created_at:
           title: Created At
           type: string
@@ -1243,6 +1288,7 @@ components:
       - search_terms
       - created_at
       - updated_at
+      - agents
       title: NoteSummaryOut
       type: object
     OriginOut:
@@ -1295,6 +1341,12 @@ components:
         permanent partitions ("Identify a partition by its repository", "Create no
         partition for a non-repository directory").
       properties:
+        distilled_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Distilled At
         name:
           title: Name
           type: string
@@ -1307,6 +1359,16 @@ components:
         repository_path:
           title: Repository Path
           type: string
+        sample:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sample
+        sources:
+          items:
+            type: string
+          title: Sources
+          type: array
         title:
           anyOf:
           - type: string
@@ -1318,6 +1380,15 @@ components:
         unresolvable:
           title: Unresolvable
           type: boolean
+        waiting_agents:
+          items:
+            type: string
+          title: Waiting Agents
+          type: array
+        waiting_entries:
+          default: 0
+          title: Waiting Entries
+          type: integer
       required:
       - uid
       - name
@@ -1326,7 +1397,61 @@ components:
       - note_count
       - unresolvable
       - title
+      - distilled_at
+      - sample
+      - sources
+      - waiting_entries
+      - waiting_agents
       title: PartitionOut
+      type: object
+    ReadFailureOut:
+      description: One agent's memory the last read could not parse.
+      properties:
+        agent:
+          description: The agent's resource name; empty when not recorded.
+          title: Agent
+          type: string
+        last_read_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When that agent's memory was last read with nothing failing, if known. Its memories stay as that read left them.
+          title: Last Read At
+        path:
+          description: The native source that would not parse.
+          title: Path
+          type: string
+        reason:
+          description: Why it would not parse.
+          title: Reason
+          type: string
+      required:
+      - agent
+      - path
+      - reason
+      - last_read_at
+      title: ReadFailureOut
+      type: object
+    ReadingOut:
+      description: The last read of the agents' memory.
+      properties:
+        failures:
+          items:
+            $ref: '#/components/schemas/ReadFailureOut'
+          title: Failures
+          type: array
+        read_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: When the last read finished; null before the first.
+          title: Read At
+      required:
+      - read_at
+      - failures
+      title: ReadingOut
       type: object
     RetiredListOut:
       properties:

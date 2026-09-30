@@ -11,9 +11,16 @@
 // own metrics. Two controls doing the same job in the same dialog should not
 // look like they came from different programs, so the display and the row
 // live here and each picker supplies only its own button.
+//
+// Foundations-Pickers "Folder picker": the field is the 30px text field with
+// the value in mono 12 (the read-only look while it only displays), and the
+// picker's button sits outside it at the same height. `invalid` is the
+// "folder missing" state: a danger border, the old path left visible, and the
+// caller's message under the row.
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   /** What is currently chosen, as text: a path, or a filename. */
@@ -28,6 +35,8 @@ interface Props {
   onClear?: () => void;
   /** When given, the display is editable and reports each typed or pasted value. */
   onType?: (value: string) => void;
+  /** The chosen value no longer resolves (e.g. the folder was moved). */
+  invalid?: boolean;
 }
 
 export function PickerField({
@@ -38,16 +47,16 @@ export function PickerField({
   action,
   onClear,
   onType,
+  invalid = false,
 }: Props) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2">
-      <input
+      <Input
         id={inputId}
         aria-label={ariaLabel}
-        className={`block w-full rounded-md border px-2 py-1 font-mono text-xs ${
-          onType ? "bg-background" : "bg-muted"
-        }`}
+        aria-invalid={invalid || undefined}
+        className="min-w-0 truncate font-mono text-xs"
         placeholder={placeholder}
         value={value ?? ""}
         readOnly={!onType}

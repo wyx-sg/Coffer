@@ -10,21 +10,24 @@
 // the daemon's state. Objects are fetched only while the palette is open — the
 // panel's content, and with it every list hook, mounts only then — and each
 // kind reports on its own, so one failing list leaves the others working.
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+// An empty query shows the last few choices (Recent) and every page; a query
+// shows its best hit, then the rest grouped by kind (`usePaletteModel`).
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { DialogOverlay } from "@/components/ui/dialog";
-import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { useFeatureMap } from "@/lib/hooks/useFeatures";
 import { useOpenSettings } from "@/lib/settingsModal";
 import { cn } from "@/lib/utils";
-import { Hint, PaletteRow, StatusLine } from "./PaletteParts";
-import { filterItems, objectItem, type ObjectKind, type PaletteItem } from "./paletteItems";
+import { Kbd } from "@/components/ui/kbd";
+import { Hint } from "./PaletteParts";
+import { PaletteList } from "./PaletteList";
+import type { PaletteItem } from "./paletteItems";
+import { rememberChoice } from "./paletteRecent";
 import { KindSource } from "./KindSource";
-import { OBJECT_KINDS, usePageItems, type KindState } from "./paletteSources";
+import { usePaletteModel } from "./usePaletteModel";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -69,53 +72,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   );
 }
 
-const NO_KINDS: readonly ObjectKind[] = [];
-
 function PaletteBody({ close }: { close: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const openSettings = useOpenSettings();
-  const features = useFeatureMap();
-  // Objects are asked for once the daemon has answered: while it cannot be
-  // reached the palette lists Pages only.
-  const daemon = useDaemonStatus();
-  const offline = daemon.isError;
-  const reachable = !offline && daemon.data !== undefined;
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [kinds, setKinds] = useState<Partial<Record<ObjectKind, KindState>>>({});
+  const model = usePaletteModel(query);
+  const { visible } = model;
   const listRef = useRef<HTMLDivElement>(null);
   const baseId = useId();
-
-  const onKindState = useCallback((kind: ObjectKind, state: KindState) => {
-    setKinds((prev) => ({ ...prev, [kind]: state }));
-  }, []);
-
-  const liveKinds = reachable ? OBJECT_KINDS : NO_KINDS;
-
-  const pageItems = usePageItems(features);
-
-  const objectItems = useMemo<PaletteItem[]>(
-    () =>
-      liveKinds.flatMap((kind) => {
-        const state = kinds[kind];
-        if (!state || state.status !== "success") return [];
-        const kindLabel = t(`palette.kind.${kind}`);
-        return state.items.map((obj) => objectItem(kind, obj, kindLabel));
-      }),
-    [liveKinds, kinds, t],
-  );
-
-  const loading =
-    (!offline && !reachable) ||
-    liveKinds.some((kind) => (kinds[kind]?.status ?? "pending") === "pending");
-  const failed = liveKinds.filter((kind) => kinds[kind]?.status === "error");
-
-  const pages = useMemo(() => filterItems(pageItems, query), [pageItems, query]);
-  const objects = useMemo(() => filterItems(objectItems, query), [objectItems, query]);
-  const visible = useMemo(() => [...pages, ...objects], [pages, objects]);
   const selected = visible.length === 0 ? -1 : Math.min(active, visible.length - 1);
-  const optionId = (item: PaletteItem) => `${baseId}-${item.id}`;
 
   useEffect(() => {
     setActive(0);
@@ -128,6 +95,7 @@ function PaletteBody({ close }: { close: () => void }) {
   }, [selected]);
 
   const choose = (item: PaletteItem) => {
+    rememberChoice(item);
     close();
     if (item.target.type === "settings") openSettings(item.target.tab);
     else navigate(item.target.to);
@@ -141,34 +109,20 @@ function PaletteBody({ close }: { close: () => void }) {
       setActive((selected + step + visible.length) % visible.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const item = visible[selected];
-      if (item) choose(item);
+      const row = visible[selected];
+      if (row) choose(row.item);
     }
   };
 
-  const showObjectsGroup = !offline && (objects.length > 0 || loading || failed.length > 0);
-  const noResults = query.trim() !== "" && visible.length === 0;
   const listboxId = `${baseId}-listbox`;
-
-  const renderRow = (item: PaletteItem, index: number) => (
-    <PaletteRow
-      key={item.id}
-      item={item}
-      index={index}
-      id={optionId(item)}
-      selected={index === selected}
-      onHover={() => index !== selected && setActive(index)}
-      onChoose={() => choose(item)}
-    />
-  );
 
   return (
     <>
-      {liveKinds.map((kind) => (
-        <KindSource key={kind} kind={kind} onState={onKindState} />
+      {model.liveKinds.map((kind) => (
+        <KindSource key={kind} kind={kind} onState={model.onKindState} />
       ))}
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-subtle px-4">
-        <Search className="size-4 shrink-0 text-text-subtle" aria-hidden />
+        <Search className="size-4 shrink-0 text-text-muted" aria-hidden />
         {/* No autoFocus: the dialog focuses its first field on open, and an
             autoFocus would run first and hide from Radix the element focus
             must return to on close. */}
@@ -177,55 +131,40 @@ function PaletteBody({ close }: { close: () => void }) {
           aria-expanded
           aria-autocomplete="list"
           aria-controls={listboxId}
-          aria-activedescendant={selected >= 0 ? optionId(visible[selected]) : undefined}
+          aria-activedescendant={selected >= 0 ? `${baseId}-${visible[selected].key}` : undefined}
           aria-label={t("palette.placeholder")}
           placeholder={t("palette.placeholder")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
-          className="h-full min-w-0 flex-1 bg-transparent text-md text-text outline-none placeholder:text-text-subtle"
+          className="h-full min-w-0 flex-1 bg-transparent text-md text-text outline-none placeholder:text-text-muted"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={t("palette.close")}
+          onClick={close}
+          className="shrink-0 cursor-pointer"
+        >
+          <Kbd>esc</Kbd>
+        </button>
+      </div>
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col">
+        <PaletteList
+          model={model}
+          query={query}
+          listboxId={listboxId}
+          baseId={baseId}
+          selected={selected}
+          onHover={setActive}
+          onChoose={choose}
         />
       </div>
-      <div
-        ref={listRef}
-        id={listboxId}
-        role="listbox"
-        aria-label={t("palette.label")}
-        className="min-h-0 flex-1 overflow-y-auto py-1.5"
-      >
-        {pages.length > 0 ? (
-          <div role="group" aria-labelledby={`${baseId}-pages`}>
-            <div id={`${baseId}-pages`} className="nav-group-label">
-              {t("palette.pages")}
-            </div>
-            {pages.map((item, i) => renderRow(item, i))}
-          </div>
-        ) : null}
-        {showObjectsGroup ? (
-          <div role="group" aria-labelledby={`${baseId}-objects`}>
-            <div id={`${baseId}-objects`} className="nav-group-label">
-              {t("palette.objects")}
-            </div>
-            {objects.map((item, i) => renderRow(item, pages.length + i))}
-            {loading ? <StatusLine>{t("palette.loading")}</StatusLine> : null}
-            {failed.map((kind) => (
-              <StatusLine key={kind} tone="danger">
-                {t("palette.failed", { kind: t(`palette.kind.${kind}`) })}
-              </StatusLine>
-            ))}
-          </div>
-        ) : null}
-        {noResults ? (
-          <p role="status" className="px-5 py-6 text-center text-sm text-text-muted">
-            {t("palette.noResults", { query: query.trim() })}
-          </p>
-        ) : null}
-        {offline ? <StatusLine>{t("palette.offline")}</StatusLine> : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-4 border-t border-border-subtle bg-surface-footer px-4 py-2 text-xs text-text-muted">
+      <div className="flex shrink-0 items-center gap-3.5 border-t border-border-subtle px-4 py-2 text-xs text-text-muted">
         <Hint keys="↑↓" label={t("palette.navigate")} />
         <Hint keys="↵" label={t("palette.open")} />
         <Hint keys="esc" label={t("palette.close")} />
+        <span className="ml-auto truncate">{t("palette.footerNote")}</span>
       </div>
     </>
   );

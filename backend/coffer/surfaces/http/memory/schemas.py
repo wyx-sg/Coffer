@@ -18,6 +18,7 @@ makes "both sides" checkable rather than remembered.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -61,6 +62,17 @@ class PartitionOut(BaseModel):
     #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
     title: str | None = None
+    #: When a distil pass last finished over this partition; ``null`` if none
+    #: has ("Present a partition as its memories").
+    distilled_at: datetime | None = None
+    #: One memory's line to show the partition by — the most recently updated.
+    sample: str | None = None
+    #: The agents (resource names) this partition's memory came from.
+    sources: list[str] = Field(default_factory=list)
+    #: Entries read from the agents that no distil pass has decided on yet, and
+    #: which agents they came from.
+    waiting_entries: int = 0
+    waiting_agents: list[str] = Field(default_factory=list)
 
 
 class PartitionListOut(BaseModel):
@@ -103,6 +115,9 @@ class NoteSummaryOut(BaseModel):
     search_terms: list[str]
     created_at: str
     updated_at: str
+    #: The agents (resource names) this memory was learned from, read off its
+    #: provenance — what the list shows beside each memory.
+    agents: list[str] = Field(default_factory=list)
 
 
 class NoteListOut(BaseModel):

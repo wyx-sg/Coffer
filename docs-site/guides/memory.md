@@ -88,7 +88,7 @@ Only the distil pass sends memory content anywhere, and only to the model endpoi
 
 ### Change the schedule
 
-Under **Settings › General → Coffer's model → Automatic upkeep**, each pass has a switch and an interval. On the CLI:
+In the Memory header, **Automatic · hourly** opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. The header shows when the agents' memory was last read, and says so when an agent's memory could not be read; while **Update memory** runs it reads *Distilling 2 of 5 partitions*. Each pass keeps its own switch and interval on the CLI:
 
 ```sh
 coffer config list engine.upkeep.

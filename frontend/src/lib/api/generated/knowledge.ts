@@ -45,6 +45,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/changes/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Deleted
+         * @description Put back what a delete removed — a document, or a whole collection with
+         *     its documents, README and waiting items — as one new change naming the user.
+         *     409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
+         *     the path or the name is taken again; nothing is written then.
+         */
+        post: operations["restore_deleted_api_v1_knowledge_changes__version__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/changes/{version}/undo": {
         parameters: {
             query?: never;
@@ -109,6 +132,26 @@ export interface paths {
          *     curation with a sync round").
          */
         post: operations["curate_api_v1_knowledge_collections__uid__curate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{uid}/description": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Describe Collection
+         * @description Rewrite the opening paragraph of the collection's README.
+         */
+        put: operations["describe_collection_api_v1_knowledge_collections__uid__description_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -188,6 +231,26 @@ export interface paths {
          * @description Put one version of a document back, as a new change naming the user.
          */
         post: operations["restore_version_api_v1_knowledge_history_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Version Body
+         * @description The document's body as one version left it.
+         */
+        get: operations["version_body_api_v1_knowledge_history_version_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -347,6 +410,14 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * CollectionDescribeIn
+         * @description A collection's new description: its README's opening paragraph.
+         */
+        CollectionDescribeIn: {
+            /** Description */
+            description: string;
+        };
         /** CollectionListOut */
         CollectionListOut: {
             /** Collections */
@@ -361,6 +432,11 @@ export interface components {
              * @default 0
              */
             document_count: number;
+            /**
+             * Folder Path
+             * @default
+             */
+            folder_path: string;
             /** Name */
             name: string;
             /**
@@ -368,8 +444,6 @@ export interface components {
              * @default 0
              */
             pending_count: number;
-            /** Title */
-            title: string | null;
             /** Uid */
             uid: string;
         };
@@ -690,6 +764,18 @@ export interface components {
             path: string;
         };
         /**
+         * VersionBodyOut
+         * @description A document's body as one version left it, for Compare with current.
+         */
+        VersionBodyOut: {
+            /** Body */
+            body: string;
+            /** Path */
+            path: string;
+            /** Version */
+            version: string;
+        };
+        /**
          * VersionDiffOut
          * @description One version's diff of one document.
          */
@@ -821,6 +907,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeDetailOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_deleted_api_v1_knowledge_changes__version__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -996,6 +1125,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurationRunOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    describe_collection_api_v1_knowledge_collections__uid__description_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionDescribeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1254,6 +1430,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    version_body_api_v1_knowledge_history_version_get: {
+        parameters: {
+            query: {
+                path: string;
+                version: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionBodyOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

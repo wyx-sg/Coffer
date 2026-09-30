@@ -112,6 +112,59 @@ paths:
       summary: Change Detail
       tags:
       - knowledge
+  /api/v1/knowledge/changes/{version}/restore:
+    post:
+      description: |-
+        Put back what a delete removed — a document, or a whole collection with
+        its documents, README and waiting items — as one new change naming the user.
+        409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
+        the path or the name is taken again; nothing is written then.
+      operationId: restore_deleted_api_v1_knowledge_changes__version__restore_post
+      parameters:
+      - in: path
+        name: version
+        required: true
+        schema:
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restore Deleted
+      tags:
+      - knowledge
   /api/v1/knowledge/changes/{version}/undo:
     post:
       description: |-
@@ -311,6 +364,61 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Curate
+      tags:
+      - knowledge
+  /api/v1/knowledge/collections/{uid}/description:
+    put:
+      description: Rewrite the opening paragraph of the collection's README.
+      operationId: describe_collection_api_v1_knowledge_collections__uid__description_put
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionDescribeIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Describe Collection
       tags:
       - knowledge
   /api/v1/knowledge/file:
@@ -583,6 +691,55 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Restore Version
+      tags:
+      - knowledge
+  /api/v1/knowledge/history/version:
+    get:
+      description: The document's body as one version left it.
+      operationId: version_body_api_v1_knowledge_history_version_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          minLength: 4
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionBodyOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Version Body
       tags:
       - knowledge
   /api/v1/knowledge/material:
@@ -883,6 +1040,18 @@ components:
       - name
       title: CollectionCreate
       type: object
+    CollectionDescribeIn:
+      description: 'A collection''s new description: its README''s opening paragraph.'
+      properties:
+        description:
+          maxLength: 2000
+          minLength: 1
+          title: Description
+          type: string
+      required:
+      - description
+      title: CollectionDescribeIn
+      type: object
     CollectionListOut:
       properties:
         collections:
@@ -903,6 +1072,10 @@ components:
           default: 0
           title: Document Count
           type: integer
+        folder_path:
+          default: ''
+          title: Folder Path
+          type: string
         name:
           title: Name
           type: string
@@ -910,11 +1083,6 @@ components:
           default: 0
           title: Pending Count
           type: integer
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         uid:
           title: Uid
           type: string
@@ -924,7 +1092,7 @@ components:
       - description
       - document_count
       - pending_count
-      - title
+      - folder_path
       title: CollectionOut
       type: object
     CurationOut:
@@ -1399,6 +1567,24 @@ components:
       - directories
       - files
       title: TreeOut
+      type: object
+    VersionBodyOut:
+      description: A document's body as one version left it, for Compare with current.
+      properties:
+        body:
+          title: Body
+          type: string
+        path:
+          title: Path
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - path
+      - version
+      - body
+      title: VersionBodyOut
       type: object
     VersionDiffOut:
       description: One version's diff of one document.

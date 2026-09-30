@@ -10,29 +10,36 @@
 // width the user drags between 200 and 300px (spec web-ui "Resize every split
 // view by its divider"), and collapses to a 56px icon rail (the choice persists
 // in localStorage); below md it is always the icon rail, so narrow viewports
-// keep their navigation. Collapsed rows get a tooltip and the language switcher
-// folds into a globe popover.
-import { useState } from "react";
+// keep their navigation. Collapsed rows get a tooltip, and the expand control
+// moves from the brand row to the rail's footer (board 1.2.02). Theme and
+// language live in the version menu the footer opens.
+//
+// The daemon's connection states are drawn in the workspace, in line
+// (board 1.2.17 / 1.2.18): while reconnecting the page stays under a bar,
+// dimmed and inert; once offline it makes way for the offline screen; when the
+// daemon answers again every query refetches and a toast says so.
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useRoutes, type RouteObject } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
 import { isSettingsPath } from "@/lib/navigation";
 import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { CofferLogo } from "./brand/CofferLogo";
-import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
-import { FloatingBanners } from "./FloatingBanners";
+import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
 import { SidebarNav } from "./SidebarNav";
 import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
+import { useDaemonConnectionDriver } from "./shell/daemonConnection";
 import { SidebarFooter } from "./shell/SidebarFooter";
-import { SidebarLanguage } from "./shell/SidebarLanguage";
 import { SidebarSearch } from "./shell/SidebarSearch";
+import { usePaletteRequests } from "./shell/paletteRequest";
 import { useShellShortcuts } from "./shell/useShellShortcuts";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
@@ -77,6 +84,15 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const settingsOpen = isSettingsPath(location.pathname);
   const openSettings = useOpenSettings();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const { toast } = useToast();
+  const daemon = useDaemonConnectionDriver(() => toast.success(t("daemon.reconnect.reconnected")));
+  const phase = daemon.connection.phase;
+  // A dimmed page must not take keystrokes either; `inert` is not a React prop yet.
+  const pageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    pageRef.current?.toggleAttribute("inert", phase === "reconnecting");
+  }, [phase]);
 
   const [collapsedPref, setCollapsedPref] = useState(readCollapsed);
   // Where matchMedia is unavailable (jsdom) treat the viewport as md+.
@@ -97,6 +113,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
     });
   };
 
+  usePaletteRequests(openPalette);
   useShellShortcuts({
     togglePalette: () => setPaletteOpen((open) => !open),
     openSettings: () => {
@@ -117,14 +134,6 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         >
           {t("nav.skipToContent")}
         </a>
-        {/* Floats over the whole app (fixed, top-centered) — rendered at the
-            root so it overlays the sidebar too and never shifts page content.
-            A vault that needs answering is a dot on the Sync entry instead
-            (spec vault-sync "Say a vault needs a human where the user already
-            is"). */}
-        <FloatingBanners>
-          <DaemonOfflineBanner />
-        </FloatingBanners>
         {/* Once for the whole app: a secret change waiting for a present
             human is answered wherever the user is, not on one page. */}
         <PendingApprovalsSheet />
@@ -141,7 +150,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
           <div
             className={cn(
               "flex items-center pt-3.5",
-              collapsed ? "flex-col justify-center gap-1 px-2" : "justify-between px-4",
+              collapsed ? "justify-center px-2" : "justify-between px-4",
             )}
           >
             <Link
@@ -151,30 +160,27 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
             >
               <CofferLogo size={22} markOnly={collapsed} />
             </Link>
-            {/* Expanding is only possible at md+; narrower viewports are
-                always the icon rail, so the toggle is hidden there. */}
-            {isMd ? (
+            {/* Collapsing is only possible at md+ (narrower viewports are
+                always the icon rail); the rail expands from its footer. */}
+            {isMd && !collapsed ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={toggleCollapsed}
-                aria-label={t(collapsed ? "nav.expand" : "nav.collapse")}
-                className={cn("shrink-0 text-muted-foreground", collapsed && "h-6 w-6")}
+                aria-label={t("nav.collapse")}
+                className="shrink-0 text-text-subtle"
               >
-                {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+                <PanelLeftClose />
               </Button>
             ) : null}
           </div>
 
-          <SidebarSearch collapsed={collapsed} onOpen={() => setPaletteOpen(true)} />
+          <SidebarSearch collapsed={collapsed} onOpen={openPalette} />
 
           <SidebarNav collapsed={collapsed} pathname={pageLocation.pathname} />
 
-          <div>
-            <SidebarFooter collapsed={collapsed} />
-            <SidebarLanguage collapsed={collapsed} />
-          </div>
+          <SidebarFooter collapsed={collapsed} onExpand={isMd ? toggleCollapsed : undefined} />
         </aside>
         {collapsed ? null : (
           <SplitDivider
@@ -186,10 +192,26 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
             label={t("nav.resizeSidebar")}
           />
         )}
-        <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
-          {/* Full-width — the content tracks the sidebar, so collapsing it
-              genuinely widens the working area. */}
-          <div className="w-full px-6 py-10 md:px-10">{page}</div>
+        <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
+          <DaemonStatusBar connection={daemon.connection} onRetry={daemon.retryNow} />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {phase === "offline" ? (
+              <DaemonOfflineState connection={daemon.connection} onRetry={daemon.retryNow} />
+            ) : (
+              // Full-width — the content tracks the sidebar, so collapsing it
+              // genuinely widens the working area.
+              <div
+                ref={pageRef}
+                aria-busy={phase === "reconnecting" || undefined}
+                className={cn(
+                  "w-full px-6 py-10 md:px-10",
+                  phase === "reconnecting" && "pointer-events-none select-none opacity-[.55]",
+                )}
+              >
+                {page}
+              </div>
+            )}
+          </div>
         </main>
       </div>
       {settingsOpen ? <SettingsRoutes routes={settingsRoutes} /> : null}

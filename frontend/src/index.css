@@ -222,13 +222,27 @@
   ::selection {
     background-color: rgb(var(--accent) / 0.2);
   }
-  /* Motion confirms cause and effect; with reduced motion every transform
-     goes, fades are capped at the fast duration and loops stop. */
+  /* Motion confirms cause and effect (Foundations-Motion). With reduced
+     motion every transform goes, fades stay but are capped at the fast
+     duration, and loops stop:
+     - the enter/exit animations (tailwindcss-animate) keep their fade but lose
+       their scale, slide and spin, and run for 120ms;
+     - an infinite animation (shimmer, spinner) plays once, then holds still;
+     - transitions (hover fills, the switch knob, a pressed button's scale)
+       snap instead of tweening, so nothing moves or resizes on screen. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
-      animation-duration: 1ms !important;
+      --tw-enter-scale: 1 !important;
+      --tw-exit-scale: 1 !important;
+      --tw-enter-rotate: 0 !important;
+      --tw-exit-rotate: 0 !important;
+      --tw-enter-translate-x: 0 !important;
+      --tw-enter-translate-y: 0 !important;
+      --tw-exit-translate-x: 0 !important;
+      --tw-exit-translate-y: 0 !important;
+      animation-duration: var(--duration-fast) !important;
       animation-iteration-count: 1 !important;
       transition-duration: 1ms !important;
       scroll-behavior: auto !important;
@@ -237,9 +251,11 @@
 }
 
 @layer components {
-  /* Sidebar group label (caption role: 11 / 600) */
+  /* Sidebar and palette group label (label role: 11 / 600, sentence case,
+     padding 0 10 4). The space above a group belongs to the list that
+     stacks the groups, not to the label. */
   .nav-group-label {
-    @apply px-3 pb-1 pt-4 text-2xs font-semibold uppercase tracking-wider text-text-subtle;
+    @apply px-2.5 pb-1 text-2xs font-semibold text-text-subtle;
   }
 
   /* A flat card: hairline, no shadow (elevation 0). */

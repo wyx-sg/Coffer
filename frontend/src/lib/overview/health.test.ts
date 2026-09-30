@@ -31,7 +31,19 @@ test("skills count the distinct agents they reach", () => {
   expect(deliveredAgentCount([{ bindings: [b("a"), b("b")] }, { bindings: [b("a")] }])).toBe(2);
 });
 
-test("custom tools and CLIs have no area", () => {
-  expect(AREAS.map((a) => a.to)).not.toContain("/custom-tools");
-  expect(AREAS.map((a) => a.to)).not.toContain("/clis");
+test("every sidebar area but Overview, Conversations and Activity has a tile, in the board's order", () => {
+  expect(AREAS.map((a) => a.to)).toEqual([
+    "/agents",
+    "/mcp-servers",
+    "/skills",
+    "/knowledge",
+    "/memory",
+    "/model-providers",
+    "/channels",
+    "/sync",
+    "/custom-tools",
+    "/clis",
+    "/secrets",
+    "/usage",
+  ]);
 });

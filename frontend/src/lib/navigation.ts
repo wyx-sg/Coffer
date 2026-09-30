@@ -133,3 +133,34 @@ export function settingsPath(tab: SettingsTabId = "general"): string {
 export function isSettingsPath(pathname: string): boolean {
   return pathname === "/settings" || pathname.startsWith("/settings/");
 }
+
+/** Edit distance between two short strings. */
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i += 1) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const next = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = next;
+    }
+  }
+  return row[b.length];
+}
+
+/** The sidebar page nearest an unknown address (the 404's "Did you mean"):
+ *  the page nearest the address's first segment, or null when none is close. */
+export function closestPage(pathname: string): string | null {
+  const head = pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+  if (!head) return null;
+  let best: { to: string; score: number } | null = null;
+  for (const { to } of NAV_ENTRIES) {
+    const name = to.slice(1);
+    if (!name) continue;
+    // A prefix of a page's address ("mcp" of "mcp-servers") is as close as it gets.
+    const score = name.startsWith(head) ? 0 : distance(head, name);
+    if (best === null || score < best.score) best = { to, score };
+  }
+  return best && best.score <= Math.max(2, Math.floor(head.length / 3)) ? best.to : null;
+}

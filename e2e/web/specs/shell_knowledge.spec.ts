@@ -46,25 +46,44 @@ async function createCollection(page: Page, name: string, description: string) {
 }
 
 /** Submit an ITEM. Where it lands is the layer's decision, never a caller's. */
-async function submitItem(page: Page, collection: string, title: string, body: string) {
+async function submitItem(
+  page: Page,
+  collection: string,
+  title: string,
+  body: string,
+) {
   const { base, headers } = api();
   const res = await page.request.post(`${base}/knowledge/material`, {
     headers,
     data: { collection, title, description: "a first fact", body },
   });
   expect(res.ok()).toBe(true);
-  return (await res.json()) as { status: "pending" | "written"; path: string | null };
+  return (await res.json()) as {
+    status: "pending" | "written";
+    path: string | null;
+  };
 }
 
 test("a collection is one tree; a document is read, edited and shows up in its History", async ({
   page,
 }) => {
   const name = `e2e-tree-${Date.now()}`;
-  const collection = await createCollection(page, name, "An end-to-end collection");
-  const submitted = await submitItem(page, name, "Top level note", "The first body.");
+  const collection = await createCollection(
+    page,
+    name,
+    "An end-to-end collection",
+  );
+  const submitted = await submitItem(
+    page,
+    name,
+    "Top level note",
+    "The first body.",
+  );
 
   await page.goto("/knowledge");
-  const tree = page.getByRole("navigation", { name: "Collections and documents" });
+  const tree = page.getByRole("navigation", {
+    name: "Collections and documents",
+  });
   await tree.getByRole("button", { name: new RegExp(`^${name}`) }).click();
   await expect(page).toHaveURL(new RegExp(`/knowledge/${collection.uid}$`));
   await expect(page.getByText("An end-to-end collection")).toBeVisible();
@@ -74,37 +93,55 @@ test("a collection is one tree; a document is read, edited and shows up in its H
 
   if (submitted.status === "pending") {
     // Waiting in the Inbox: not a document yet.
-    await expect(tree.getByRole("button", { name: /Inbox/ })).toContainText("1");
+    await expect(tree.getByRole("button", { name: /Inbox/ })).toContainText(
+      "1",
+    );
     return;
   }
 
   // Written on the spot (no model): a document in the tree, and the page says
   // how items become documents instead of offering an Inbox.
-  await expect(page.getByText(/Items become documents as they arrive/)).toBeVisible();
+  await expect(
+    page.getByText(
+      /Set Coffer's model to curate new items into your documents/,
+    ),
+  ).toBeVisible();
   await expect(tree.getByRole("button", { name: /^Inbox/ })).toHaveCount(0);
-  await tree.getByRole("button", { name: "Top level note" }).click();
+  // The tree names a document by its file, as it is on disk.
+  const fileName = (submitted.path ?? "").split("/").pop() ?? "";
+  await tree.getByRole("button", { name: fileName, exact: true }).click();
   await expect(page).toHaveURL(/\?file=/);
   await expect(page.getByText("The first body.")).toBeVisible();
 
   // The body-only editor: title and description read-only above it.
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: `Edit ${submitted.path}` });
   await expect(editor).toBeVisible();
-  await expect(page.getByText("Frontmatter · read-only here")).toBeVisible();
+  await expect(
+    page.getByText("Read-only here · curation keeps it current"),
+  ).toBeVisible();
   await editor.fill("The edited body.");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("The edited body.")).toBeVisible();
 
   // The save is a version naming you, in the document's History.
-  await page.getByRole("tab", { name: "History" }).dispatchEvent("mousedown");
-  await expect(page).toHaveURL(new RegExp(`/knowledge/${collection.uid}/history\\?file=`));
-  await expect(page.getByText(/versions · newest first/)).toBeVisible();
-  await expect(page.getByRole("button", { name: /^You.*Current/ })).toBeVisible();
+  await page.getByRole("link", { name: /^History/ }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/knowledge/${collection.uid}/history\\?file=`),
+  );
+  await expect(page.getByText("newest first")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^You.*Current/ }),
+  ).toBeVisible();
 
   // …and on the cross-collection timeline.
-  await page.getByRole("link", { name: /Recent changes/ }).first().click();
+  await page
+    .getByRole("link", { name: /Recent changes/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/knowledge$/);
+  await expect(page.getByText("edited", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByRole("link", { name: new RegExp(`You.*edited`) }).first(),
+    page.getByRole("link", { name: fileName, exact: true }).first(),
   ).toBeVisible();
 });

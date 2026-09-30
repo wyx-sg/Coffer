@@ -27,6 +27,10 @@ class AuditEventType(StrEnum):
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     RETENTION_UPDATED = "retention_updated"
+    # spec web-ui "Let the user ignore an unconnected agent on Overview": an
+    # informational "needs you" item ignored on this machine, or no longer.
+    ATTENTION_IGNORED = "attention_ignored"
+    ATTENTION_UNIGNORED = "attention_unignored"
     # Settings > Data "Rebuildable cache": the memory tree and the transcript
     # summary cache were cleared, to be rebuilt by the next memory update.
     STORAGE_CACHE_CLEARED = "storage_cache_cleared"
