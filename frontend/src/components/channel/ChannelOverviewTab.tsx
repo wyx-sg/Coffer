@@ -16,8 +16,8 @@ import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { channelConversationsHref } from "@/lib/channels/tabs";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
+import { displayName } from "@/lib/resourceTitle";
 import { formatDateTime } from "@/lib/utils";
-import { channelHeading } from "./channelLabels";
 
 function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -119,19 +119,16 @@ export function ChannelOverviewTab({
           </Row>
         </div>
         <p className="text-xs leading-normal text-text-muted">
-          {t("channels.overview.agents.help", { agentCommand: "/agent" })}
+          {t("channels.overview.agents.help")}
         </p>
         <Link
           to={channelConversationsHref(channel.uid)}
           className="inline-flex w-fit items-center gap-1 text-sm font-label text-accent-text hover:underline"
           data-testid="channel-conversations-link"
         >
-          {t("channels.overview.conversations")}
+          {t("channels.overview.conversations", { name: displayName(channel) })}
           <ArrowRight className="size-3.5" aria-hidden />
         </Link>
-        <span className="text-xs text-text-muted">
-          {t("channels.overview.conversationsHint", { name: channelHeading(channel) })}
-        </span>
       </Section>
     </div>
   );

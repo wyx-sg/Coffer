@@ -17,7 +17,12 @@
 // the chat provider key `claude_code`), so the values below are opaque too.
 import { describe, expect, test } from "vitest";
 
-import { honoursRequireMention, parseDirectories, planChannelEdit } from "./editChannel";
+import {
+  honoursRequireMention,
+  normaliseDirectory,
+  planChannelEdit,
+  storedDefaultDirectory,
+} from "./editChannel";
 import {
   parseBurstWait,
   parseNotifyAfter,
@@ -303,15 +308,11 @@ describe("planChannelEdit", () => {
       directories: ["/srv/app"],
     };
 
-    test("the plan carries the directories trimmed, without a trailing / or blank lines", () => {
-      const { directories } = parseDirectories("  /Users/me/projects/ \n\n/srv/app\n/srv/app/\n/");
-      const plan = planChannelEdit({
-        ...TG,
-        config,
-        values: { default_agent: AGENT_A, directories },
-      });
-
-      expect(plan.config.directories).toEqual(["/Users/me/projects", "/srv/app", "/"]);
+    test("a typed directory is normalised, and a relative one is refused", () => {
+      expect(normaliseDirectory("  /Users/me/projects/ ")).toBe("/Users/me/projects");
+      expect(normaliseDirectory("/")).toBe("/");
+      expect(normaliseDirectory("projects")).toBeNull();
+      expect(normaliseDirectory("~/code")).toBeNull();
     });
 
     test("an unchanged list is not rewritten, and an empty one clears it", () => {
@@ -325,15 +326,27 @@ describe("planChannelEdit", () => {
       const cleared = planChannelEdit({
         ...TG,
         config,
-        values: { default_agent: AGENT_A, directories: parseDirectories("\n  \n").directories },
+        values: { default_agent: AGENT_A, directories: [] },
       });
       expect(cleared.config.directories).toEqual([]);
     });
 
-    test("a relative path is rejected", () => {
-      const parsed = parseDirectories("/srv/app\nprojects\n~/code");
-      expect(parsed.invalid).toEqual(["projects", "~/code"]);
-      expect(parsed.directories).toEqual(["/srv/app"]);
+    test("the default directory is written into the default agent config and cleared from it", () => {
+      const withModel = { ...config, default_agent_config: { model: "opus" } };
+      const set = planChannelEdit({
+        ...TG,
+        config: withModel,
+        values: { default_agent: AGENT_A, default_directory: "/srv/app" },
+      });
+      expect(set.config.default_agent_config).toEqual({ model: "opus", cwd: "/srv/app" });
+      expect(storedDefaultDirectory(set.config)).toBe("/srv/app");
+
+      const cleared = planChannelEdit({
+        ...TG,
+        config: { ...config, default_agent_config: { cwd: "/srv/app" } },
+        values: { default_agent: AGENT_A, default_directory: null },
+      });
+      expect(cleared.config.default_agent_config).toBeNull();
     });
   });
 });

@@ -86,8 +86,20 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
 describe("DraftThread", () => {
   test("shows the draft's composer right away, with no welcome page", () => {
     renderDraft();
-    expect(screen.getByText(/your first message starts the conversation/i)).toBeInTheDocument();
+    expect(screen.getByText("New conversation with Claude Code")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+  });
+
+  test("says what the first turn runs with: folder, model and effort, when chosen", () => {
+    renderDraft({ cwd: "/Users/me/WorkEnv/AI/Coffer", modelValue: "opus", effortValue: "high" });
+    expect(
+      screen.getByText("~/WorkEnv/AI/Coffer · Opus 5 · high effort — send a message to start."),
+    ).toBeInTheDocument();
+  });
+
+  test("leaves out the model and effort that were not chosen", () => {
+    renderDraft();
+    expect(screen.getByText("Coffer’s workspace — send a message to start.")).toBeInTheDocument();
   });
 
   test("sends the typed first message through onSend", () => {
@@ -122,7 +134,7 @@ describe("DraftThread", () => {
     // to its built-in login").
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
-    expect(screen.getByText(/your first message starts the conversation/i)).toBeInTheDocument();
+    expect(screen.getByText("New conversation with Claude Code")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
   });

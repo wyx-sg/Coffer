@@ -108,14 +108,24 @@ describe("Composer", () => {
     expect(onStop).toHaveBeenCalled();
   });
 
-  test("Stop replaces Send in place while streaming — one button, beside the input", () => {
+  test("Stop replaces Send in place while streaming — one button, in the toolbar", () => {
     render(<Composer onSend={vi.fn()} streaming onStop={vi.fn()} />);
     // The attach button stays; Stop takes Send's slot.
     expect(screen.getAllByRole("button")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
     const stop = screen.getByRole("button", { name: /stop/i });
-    // Same slot as Send: a sibling of the textarea, not a row underneath it.
-    expect(stop.parentElement).toBe(screen.getByRole("textbox").parentElement);
+    // Same slot as Send: the toolbar under the text, beside the paperclip.
+    expect(stop.parentElement).toBe(
+      screen.getByRole("button", { name: /attach files/i }).parentElement,
+    );
+  });
+
+  test("the reply box is two rows: the text on top, attach and Send under it", () => {
+    render(<Composer onSend={vi.fn()} />);
+    const toolbar = screen.getByRole("button", { name: /send/i }).parentElement!;
+    expect(toolbar).toContainElement(screen.getByRole("button", { name: /attach files/i }));
+    expect(toolbar).not.toContainElement(screen.getByRole("textbox"));
+    expect(screen.getByRole("textbox").nextElementSibling).toBe(toolbar);
   });
 
   test("without an onStop handler, streaming keeps the Send button", () => {

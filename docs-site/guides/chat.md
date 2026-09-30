@@ -143,7 +143,7 @@ A message holds up to 32,768 characters of text and up to 10 attached files. Att
 - drop files onto the composer — while you drag, only the composer changes: its border takes the accent colour and it reads **Drop to attach**;
 - paste an image, for example a screenshot, into the message box.
 
-Each file uploads the moment you add it and shows as a chip with its name and size. **Send** stays disabled while a file is uploading, and while a failed file is still attached: its chip says why it failed, and removing it with **×** lets you send the rest. A message may carry files and no text; it is stored with a short line naming the files.
+Each file uploads the moment you add it and shows as a chip with its name and size. A file over the size limit, or past the tenth, is not attached at all: one line under the reply box says which file and why. **Send** stays disabled while a file is uploading, and while a file the daemon refused is still attached: its chip says why it failed, and removing it with **×** lets you send the rest. A message may carry files and no text; it is stored with a short line naming the files.
 
 | Limit | Value |
 | --- | --- |
@@ -179,7 +179,7 @@ The filters above the list are part of the URL, so a filtered list is a link:
 
 - **All sources / Coffer / SeaTalk / Telegram** — `?source=seatalk`.
 - **All agents** or one agent — `?agent=codex`.
-- One channel — `?channel=<uid>`. A channel's **Conversations from this channel** link on the Channels page opens this; the list shows a **Channel: *name*** chip whose **×** goes back to every source.
+- One channel — `?channel=<uid>`. A channel's **Conversations from *name*** link on the Channels page opens this; the list keeps the source switch and shows a **Channel: *name*** chip beside the agent filter, whose **×** clears it. When no conversation matches the filters, **Clear filters** resets them.
 - **Archived** — the archived conversations instead of the active ones.
 
 Opening a conversation puts the list beside it, with the same filters and a **Search conversations** box that filters the loaded list by title. The divider between them can be dragged. The conversation's header carries a **⋯** menu:
@@ -187,9 +187,9 @@ Opening a conversation puts the list beside it, with the same filters and a **Se
 | Action | Effect |
 | --- | --- |
 | **Rename** | Sets a title Coffer will not overwrite. |
-| **Archive** | Moves it to **Archived** without deleting anything. |
+| **Archive** | Moves it to **Archived** at once, without deleting anything. |
 | **Restore** | Returns an archived conversation to the active list. |
-| **Delete** | Permanently removes the conversation and all its messages, and cancels a turn running in it. |
+| **Delete…** | Asks first, then removes Coffer's copy of the conversation and its messages and cancels a turn running in it. The agent's own session files are left alone; archive a conversation to keep it. |
 
 An archived conversation opens read-only: its history reads normally, the composer and the model and effort controls are disabled, and **Restore to continue** is offered in their place.
 

@@ -9,7 +9,7 @@ import { MessageSquare, Plus } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { isFiltered } from "@/lib/conversations/filters";
+import { clearFilters, isFiltered, type SourceFilter } from "@/lib/conversations/filters";
 import type { ChatController } from "@/lib/hooks/useChatController";
 import { ConversationsFilterBar } from "./ConversationsFilterBar";
 import { ConversationsTable } from "./ConversationsTable";
@@ -20,9 +20,17 @@ interface Props {
   agentNames: ReadonlyMap<string, string>;
   /** The narrowed-to channel's label, when the list is filtered to one channel. */
   channelLabel: string | null;
+  /** The narrowed-to channel's platform, which the source switch shows. */
+  channelSource?: SourceFilter | null;
 }
 
-export function ConversationsIndex({ c, onNew, agentNames, channelLabel }: Props) {
+export function ConversationsIndex({
+  c,
+  onNew,
+  agentNames,
+  channelLabel,
+  channelSource = null,
+}: Props) {
   const { t } = useTranslation();
   const none = !c.listLoading && c.allConversations.length === 0;
   const newButton = (
@@ -59,14 +67,26 @@ export function ConversationsIndex({ c, onNew, agentNames, channelLabel }: Props
             onChange={c.setFilters}
             agents={c.agents}
             channelLabel={channelLabel}
+            channelSource={channelSource}
           />
           {!c.listLoading && c.listConversations.length === 0 ? (
             <EmptyState
               icon={MessageSquare}
               title={
-                c.filters.archived
+                c.filters.archived && !isFiltered(c.filters)
                   ? t("conversations.history.archivedEmpty")
                   : t("conversations.list.noMatches")
+              }
+              action={
+                isFiltered(c.filters) ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => c.setFilters(clearFilters(c.filters))}
+                  >
+                    {t("conversations.list.clearFilters")}
+                  </Button>
+                ) : undefined
               }
             />
           ) : (
@@ -76,6 +96,7 @@ export function ConversationsIndex({ c, onNew, agentNames, channelLabel }: Props
                 isLoading={c.listLoading}
                 agentNames={agentNames}
                 hrefFor={c.pathFor}
+                notice={c.filters.archived ? t("conversations.history.archivedHelp") : undefined}
               />
             </div>
           )}
