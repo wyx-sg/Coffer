@@ -11,6 +11,7 @@ import { MemoryRouter, useLocation, useRoutes } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import { routes } from "@/router";
+import { cli } from "@/test/cliFixtures";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
@@ -21,6 +22,7 @@ function mockApi() {
     Promise.resolve({
       data: {
         resources: [],
+        groups: [],
         agents: [],
         candidates: [],
         entries: [],
@@ -127,12 +129,41 @@ test("the old Settings addresses land on a live tab", async () => {
 
 test("every page the shell adds resolves to a page of its own", async () => {
   mockApi();
-  for (const path of ["/custom-tools", "/clis", "/secrets", "/usage"]) {
+  for (const path of ["/secrets", "/usage"]) {
     renderAt(path);
   }
   // Each page is code-split, so they arrive one by one.
-  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(4), {
+  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(2), {
     timeout: 5_000,
   });
+  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+});
+
+test("the CLIs page and a command's address each resolve to their own page", async () => {
+  const get = mockApi();
+  const empty = get.getMockImplementation()!;
+  get.mockImplementation((path: string) =>
+    path === "/clis/{command}"
+      ? Promise.resolve({ data: cli({ command: "gh" }), error: undefined })
+      : empty(path),
+  );
+  renderAt("/clis");
+  renderAt("/clis/gh");
+  await waitFor(() => expect(screen.getByRole("heading", { name: "CLIs" })).toBeInTheDocument(), {
+    timeout: 5_000,
+  });
+  // The detail page, titled by the command it is addressed by.
+  await waitFor(() => expect(screen.getByRole("heading", { name: "gh" })).toBeInTheDocument());
+  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+});
+
+test("the Custom tools page and a group's address both resolve to the Custom tools page", async () => {
+  mockApi();
+  renderAt("/custom-tools");
+  renderAt("/custom-tools/billing");
+  await waitFor(
+    () => expect(screen.getAllByRole("heading", { name: "Custom tools" })).toHaveLength(2),
+    { timeout: 5_000 },
+  );
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });

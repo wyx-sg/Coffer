@@ -1,9 +1,10 @@
 // frontend/src/pages/SkillDetailPage.tsx
 // Per-skill detail page (mirrors AgentDetailPage): the shared PageHeader with
 // a back link, the skill's name and the fixed-name badge, reach + Delete as
-// actions, and two tabs — Overview and Files (a
+// actions, and three tabs — Overview, Files (a
 // tree + content viewer of the skill's master folder, read-only for a builtin
-// skill since Coffer rewrites it at every start). The page is addressed by
+// skill since Coffer rewrites it at every start) and Requires (the commands its
+// SKILL.md declares, each linking to its page on the CLIs page). The page is addressed by
 // the skill's NAME (fixed at creation, unique among skills) and the open tab
 // lives in the path (`/skills/<name>/files`), so a reload lands on the same
 // tab. The REST API addresses a skill by uid, so the name is resolved against
@@ -19,6 +20,7 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { FixedNameBadge } from "@/components/resource/FixedName";
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
+import { SkillRequiresTab } from "@/components/skills/SkillRequiresTab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -27,7 +29,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { canonicalDetailPath, resolveByName, useDetailTab } from "@/lib/detailTabs";
 import { useRemoveSkill, useSkill, useSkills } from "@/lib/hooks/useSkills";
 
-const TABS = ["overview", "files"] as const;
+const TABS = ["overview", "files", "requires"] as const;
 
 export function SkillDetailPage() {
   const { t } = useTranslation();
@@ -123,6 +125,7 @@ export function SkillDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">{t("skills.detail.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="files">{t("skills.detail.tabs.files")}</TabsTrigger>
+          <TabsTrigger value="requires">{t("skills.detail.tabs.requires")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="pt-6">
@@ -131,6 +134,10 @@ export function SkillDetailPage() {
 
         <TabsContent value="files" className="pt-6">
           <SkillFileTree uid={skill.uid} builtin={skill.builtin} />
+        </TabsContent>
+
+        <TabsContent value="requires" className="pt-6">
+          <SkillRequiresTab skillUid={skill.uid} />
         </TabsContent>
       </Tabs>
 

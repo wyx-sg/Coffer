@@ -66,13 +66,49 @@ Pydantic `BaseModel`. Discriminator value: `"http"`.
 | `headers`         | `dict[str, str]`   | static headers; same secret regex as `env`                   |
 | `credential_refs` | `dict[str, str]`   | maps `header_name → ref` into the encrypted credential store |
 
+### `HttpApiTransport` (`domain/mcp/http_api.py`)
+
+Pydantic `BaseModel`. Discriminator value: `"http_api"`. A **custom-tool
+group**: the gateway answers `tools/list` from `tools` and makes each tool's
+HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
+
+| Field             | Type                     | Notes                                                                                   |
+| ----------------- | ------------------------ | --------------------------------------------------------------------------------------- |
+| `type`            | `Literal["http_api"]`    | discriminator                                                                           |
+| `base_url`        | `pydantic.HttpUrl`       | `http`/`https`, no query or fragment; each tool's path is appended                      |
+| `headers`         | `dict[str, str]`         | static group headers; no `{argument}` hole; same secret regex as `env`                  |
+| `auth_header`     | `str \| None`            | the header the secret goes in, e.g. `Authorization`                                     |
+| `auth_prefix`     | `str`                    | prepended to the secret's value, e.g. `Bearer `                                         |
+| `credential_refs` | `dict[str, str]`         | at most `{auth_header: ref}`; the API binds a Secrets-page name as `secret/<name>`      |
+| `timeout_seconds` | `int`                    | default `30`; range `1–300`; per request                                                |
+| `source`          | `OpenApiSource \| None`  | where an import came from: `kind` (`url`/`file`), `location`, `title`, `version`, `fetched_at`, `skipped` operation keys |
+| `tools`           | `list[HttpApiTool]`      | unique names                                                                            |
+
+`HttpApiTool`:
+
+| Field           | Type                    | Notes                                                                        |
+| --------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `name`          | `str`                   | `^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$`, no `__`; agents see `<group>__<name>`   |
+| `description`   | `str`                   | what the agent reads to decide                                               |
+| `method`        | `GET\|POST\|PUT\|PATCH\|DELETE` |                                                                  |
+| `path`          | `str`                   | relative path template; `{argument}` holes in the path or the query          |
+| `headers`       | `dict[str, str]`        | may hold holes                                                               |
+| `body_template` | `str \| None`           | JSON text with holes                                                         |
+| `input_schema`  | `dict[str, Any]`        | JSON Schema object; every hole must be a declared property                   |
+| `enabled`       | `bool`                  | the tool's switch — travels with the config, like capability toggles         |
+| `changes_data`  | `bool \| None`          | `None` follows the method (on for all but GET); drives the MCP annotations   |
+| `operation`     | `str \| None`           | `"<METHOD> <path>"` of the imported operation, for re-import                 |
+
+A tool's **reach override** is not in the config: reach is machine-local, so it
+is the `mcp_tool_reach` table below.
+
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
 
 Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server`.
 
 | Field                     | Type                                                                      | Notes                                                                 |
 | ------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `transport`               | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                                          |
+| `transport`               | `Annotated[StdioTransport \| HttpTransport \| HttpApiTransport, Field(discriminator="type")]` | tagged union                                             |
 | `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
 
@@ -95,6 +131,7 @@ persisted (per [Capability State Model](../../../docs/decisions/capability-state
 | `name` | `str` (original, no prefix) |
 | `description` | `str \| None` |
 | `input_schema` | `dict[str, Any]` (JSON schema) |
+| `annotations` | `dict[str, Any] \| None` (the upstream's MCP annotations, wire spelling; passed to the agent) |
 
 `MCPResource`:
 | Field | Type |
@@ -194,6 +231,15 @@ CREATE TABLE mcp_server_health (
     checked_at     TIMESTAMP NOT NULL
 );
 
+-- MCP-specific: custom tools' machine-local reach overrides (revision 0113)
+CREATE TABLE mcp_tool_reach (
+    resource_uid   TEXT      NOT NULL,                    -- the custom-tool group's uid
+    tool           TEXT      NOT NULL,                    -- the tool's name in the group
+    agents_json    TEXT      NOT NULL,                    -- JSON list of agent uids the tool still reaches
+    updated_at     TIMESTAMP NOT NULL,
+    PRIMARY KEY (resource_uid, tool)
+);
+
 ```
 
 ## SQLAlchemy mapping (summary)
@@ -206,6 +252,7 @@ registered against the same `Base.metadata` as every other spec's:
 | `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`       |
 | `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/invocation_writer.py` |
 | `MCPServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`       |
+| `MCPToolReachModel`            | `mcp_tool_reach`             | `infrastructure/mcp/tool_reach_repo.py`   |
 
 Conversion between rows and domain entities is by private module functions:
 `_pref_to_domain` in `persistence.py`, and `_inv_to_domain` / `_inv_to_model`
@@ -218,6 +265,7 @@ reads a row as a `(status, checked_at)` tuple.
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
 | `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade.                                                |
+| `mcp_tool_reach`                          | rows are deleted by the custom-tool service with their tool (removed, renamed away, dropped by a re-import) and with their group; keyed by the group's `uid`, never synced (spec vault-sync "Keep reach machine-local"). |
 | `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0097), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
 
 The kind-agnostic rules these sit under — what a rename does to the audit trail

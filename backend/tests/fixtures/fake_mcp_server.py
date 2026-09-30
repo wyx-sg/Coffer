@@ -12,6 +12,7 @@ CLI flags shape its behaviour:
     --crash-after-calls N                    Exit after Nth tools/call (scenario=crash)
     --init-delay-ms N                        Sleep before initialize (scenario=slow)
     --notify-list-changed-after N            Emit tools/list_changed after Nth call
+    --read-only-tools NAME [NAME ...]        Tools listed with the readOnlyHint annotation
     --no-resources                           Do NOT register a resources/list handler,
                                              so the SDK replies -32601 METHOD_NOT_FOUND
                                              (models a tools-only upstream)
@@ -55,6 +56,7 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any], dict[str, Any]
         "list_changed_fired": False,
         "progress_steps": args.progress_steps,
         "progress_delay_ms": args.progress_delay_ms,
+        "read_only": set(args.read_only_tools or []),
     }
 
     async def on_list_tools(
@@ -72,6 +74,11 @@ def _build_server(args: argparse.Namespace) -> tuple[Server[Any], dict[str, Any]
                     name=name,
                     description=f"fake tool {name}",
                     inputSchema={"type": "object", "properties": {}},
+                    annotations=(
+                        mcp_types.ToolAnnotations(read_only_hint=True)
+                        if name in state["read_only"]
+                        else None
+                    ),
                 )
                 for name in tools
             ]
@@ -286,6 +293,7 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--tools", nargs="*", default=["read_file", "write_file"])
     p.add_argument("--resources", nargs="*", default=[])
+    p.add_argument("--read-only-tools", nargs="*", default=[])
     p.add_argument("--prompts", nargs="*", default=[])
     p.add_argument("--crash-after-calls", type=int, default=None)
     p.add_argument("--init-delay-ms", type=int, default=0)

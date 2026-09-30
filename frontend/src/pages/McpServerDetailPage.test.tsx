@@ -23,7 +23,7 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 // The page is addressed by the server's NAME and resolves it to the uid
 // against the MCP servers list; the list is stubbed here so each test's GET
 // mock only has to answer the per-server reads.
-let listed: Array<{ uid: string; name: string }> = [];
+let listed: Array<{ uid: string; name: string; config?: unknown }> = [];
 vi.mock("@/lib/hooks/useResources", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useResources")>()),
   useResources: vi.fn(() => ({ data: listed, isPending: false, error: null })),
@@ -72,6 +72,10 @@ function wrap(ui: React.ReactNode, route = "/mcp-servers/fs") {
             }
           />
           <Route path="/mcp-servers" element={<div data-testid="resources-page">resources</div>} />
+          <Route
+            path="/custom-tools/:group"
+            element={<div data-testid="custom-tools-page">custom tools</div>}
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -82,6 +86,23 @@ describe("McpServerDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listed = [stdioResource];
+  });
+
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "a custom-tool group's MCP server address opens its Custom tools page"
+  test("an http_api server's address redirects to its Custom tools page", async () => {
+    listed = [
+      {
+        ...stdioResource,
+        uid: "u-billing",
+        name: "billing",
+        config: { transport: { type: "http_api", base_url: "https://billing.example" } },
+      },
+    ];
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+    } as unknown as ReturnType<typeof getApiClient>);
+    render(wrap(<McpServerDetailPage />, "/mcp-servers/billing/tools"));
+    expect(await screen.findByTestId("custom-tools-page")).toBeInTheDocument();
   });
 
   test("renders resource name, description, and config JSON", async () => {

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useChannels } from "@/lib/hooks/useChannels";
+import { useClis } from "@/lib/hooks/useClis";
 import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
@@ -30,7 +31,7 @@ function kindState(q: { status: KindState["status"]; data?: readonly PaletteObje
 }
 
 // One hook per kind, each the list hook that kind's own page reads. Custom
-// tools and CLIs have no list route yet; they join when their pages land.
+// tools have no list hook here yet; they join when their page lands.
 const useAgentObjects = () => kindState(useAgents());
 const useMcpServerObjects = () => kindState(useResources("mcp_server"));
 const useSkillObjects = () => kindState(useSkills());
@@ -38,6 +39,15 @@ const useProviderObjects = () => kindState(useProviders());
 const useChannelObjects = () => kindState(useChannels());
 const useKnowledgeObjects = () => kindState(useKnowledgeCollections());
 const useMemoryObjects = () => kindState(useMemoryPartitions());
+// A command has no uid: it is its own identity, so it stands in as both.
+const useCliObjects = (): KindState => {
+  const q = useClis();
+  const items = useMemo(
+    () => q.data?.items.map((cli) => ({ uid: cli.command, name: cli.command, title: cli.title })),
+    [q.data],
+  );
+  return kindState({ status: q.status, data: items });
+};
 
 export const KIND_LIST_HOOKS: Record<ObjectKind, () => KindState> = {
   agent: useAgentObjects,
@@ -47,6 +57,7 @@ export const KIND_LIST_HOOKS: Record<ObjectKind, () => KindState> = {
   channel: useChannelObjects,
   knowledge: useKnowledgeObjects,
   memory: useMemoryObjects,
+  cli: useCliObjects,
 };
 
 /** Kinds in the order their objects are listed. */
@@ -58,6 +69,7 @@ export const OBJECT_KINDS: readonly ObjectKind[] = [
   "channel",
   "knowledge",
   "memory",
+  "cli",
 ];
 
 /** The experimental feature a kind belongs to; while it is not switched on the

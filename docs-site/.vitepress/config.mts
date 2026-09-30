@@ -24,6 +24,7 @@ const guides = [
       { text: 'Agents', link: '/guides/agents' },
       { text: 'Connect a client', link: '/guides/connect-a-client' },
       { text: 'MCP servers', link: '/guides/mcp-servers' },
+      { text: 'Custom tools', link: '/guides/custom-tools' },
       { text: 'Model providers', link: '/guides/providers' },
       { text: 'Usage and quota', link: '/guides/usage' },
       { text: 'Credentials', link: '/guides/credentials' },
@@ -34,6 +35,7 @@ const guides = [
     text: 'What agents share',
     items: [
       { text: 'Skills', link: '/guides/skills' },
+      { text: 'CLIs', link: '/guides/clis' },
       { text: 'Writing skill libraries', link: '/guides/writing-skill-libraries' },
       { text: 'Knowledge', link: '/guides/knowledge' },
       { text: 'Memory', link: '/guides/memory' },
@@ -98,6 +100,7 @@ const architecture = [
     items: [
       { text: 'Knowledge', link: '/architecture/knowledge' },
       { text: 'Memory', link: '/architecture/memory' },
+      { text: 'Skill requirements', link: '/architecture/skill-requirements' },
       { text: 'Vault sync', link: '/architecture/vault-sync' },
     ],
   },

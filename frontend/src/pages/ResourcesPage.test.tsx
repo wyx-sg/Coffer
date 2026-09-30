@@ -119,4 +119,30 @@ describe("ResourcesPage", () => {
     expect(screen.getByText("srv-b")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add mcp server/i })).toBeInTheDocument();
   });
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "the MCP servers list leaves custom tools out"
+  test("leaves custom-tool groups (http_api servers) out of the MCP servers list", () => {
+    const group = {
+      ...resource("u-ct", "billing", "mcp_server"),
+      config: { transport: { type: "http_api", base_url: "https://billing.example" } },
+    } as unknown as ResourceOut;
+    const server = {
+      ...resource("u-gh", "github", "mcp_server"),
+      config: { transport: { type: "stdio", command: "gh-mcp" } },
+    } as unknown as ResourceOut;
+    stubQuery({ data: [group, server] });
+    render(wrap(<ResourcesPage />));
+    const table = screen.getByTestId("mcp-table");
+    expect(table).toHaveTextContent("github");
+    expect(table).not.toHaveTextContent("billing");
+  });
+
+  test("shows the welcome card when every mcp_server is a custom-tool group", () => {
+    const group = {
+      ...resource("u-ct", "billing", "mcp_server"),
+      config: { transport: { type: "http_api" } },
+    } as unknown as ResourceOut;
+    stubQuery({ data: [group] });
+    render(wrap(<ResourcesPage />));
+    expect(screen.queryByTestId("mcp-table")).not.toBeInTheDocument();
+  });
 });

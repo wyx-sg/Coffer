@@ -116,6 +116,8 @@ def mcp_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, An
     if not any(values.get(f) not in (None, False, []) for f in _FLAGS):
         return None
     config = copy.deepcopy(resource.get("config") or {})
+    if (config.get("transport") or {}).get("type") == "http_api":
+        _fail("this is a custom-tool group; change it with `coffer tool edit` or `tool op edit`")
     transport = _apply_transport(dict(config.get("transport") or {}), values)
     _apply_plain(transport, values)
     _apply_credentials(transport, values)

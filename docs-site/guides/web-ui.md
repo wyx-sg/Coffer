@@ -52,9 +52,9 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Run | **Conversations** | `/conversations` | Conversations with Claude Code or Codex, including those started from a channel. See [Chat](/guides/chat). |
 | Run | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM. See [Channels](/guides/channels). |
 | Capabilities | **MCP servers** | `/mcp-servers` | The upstream MCP servers Coffer aggregates behind one endpoint. See [MCP servers](/guides/mcp-servers). |
-| Capabilities | **Custom tools** | `/custom-tools` | Tools you define yourself for your agents. |
+| Capabilities | **Custom tools** | `/custom-tools` | HTTP API requests your agents call as tools — see [Custom tools](/guides/custom-tools). |
 | Capabilities | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
-| Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed. |
+| Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed — see [CLIs](/guides/clis). |
 | Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
 | Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
 | System | **Secrets** | `/secrets` | The credentials stored in the vault. |
@@ -65,7 +65,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 
 ::: info Pages still being built
-**Overview**, **Custom tools**, **CLIs**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today. **Secrets** already carries one live part: while anything waits for [approval](/guides/secrets#approvals), it shows how many, with **Review** to reopen the approvals window.
+**Overview**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today. **Secrets** already carries one live part: while anything waits for [approval](/guides/secrets#approvals), it shows how many, with **Review** to reopen the approvals window.
 :::
 
 **Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).

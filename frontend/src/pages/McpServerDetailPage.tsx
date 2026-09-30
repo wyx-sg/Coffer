@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
 import { canonicalDetailPath, resolveByName } from "@/lib/detailTabs";
+import { isCustomToolGroup } from "@/lib/customTools/groups";
 import { useResource, useResources } from "@/lib/hooks/useResources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
@@ -83,6 +84,11 @@ export function McpServerDetailPage() {
   const handleDelete = () => {
     del.mutate({ kind: "mcp_server", uid }, { onSuccess: () => navigate("/mcp-servers") });
   };
+
+  // A custom-tool group is an `mcp_server` whose page is on Custom tools.
+  if (match && isCustomToolGroup(match.item)) {
+    return <Navigate replace to={`/custom-tools/${encodeURIComponent(match.item.name)}`} />;
+  }
 
   // An old uid address: go to the same tab of the name address.
   if (match?.byUid) {

@@ -103,6 +103,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Clis
+         * @description Every command a managed skill requires, problems first.
+         */
+        get: operations["list_clis_api_v1_clis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clis/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Clis
+         * @description Probe every required command again.
+         */
+        post: operations["check_clis_api_v1_clis_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clis/{command}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cli
+         * @description One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it.
+         */
+        get: operations["get_cli_api_v1_clis__command__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clis/{command}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Cli
+         * @description Probe one required command again.
+         */
+        post: operations["check_cli_api_v1_clis__command__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clis/{command}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cli Install
+         * @description The latest install job for the command: its state, exit code and output.
+         */
+        get: operations["get_cli_install_api_v1_clis__command__install_get"];
+        put?: never;
+        /**
+         * Install Cli
+         * @description Start ``brew install|upgrade <formula>``; refused unless the command is
+         *     missing or outdated, ``formula`` is the declared one and Homebrew is found.
+         */
+        post: operations["install_cli_api_v1_clis__command__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills": {
         parameters: {
             query?: never;
@@ -260,6 +365,127 @@ export interface components {
              * @enum {string}
              */
             type: "builtin";
+        };
+        /**
+         * CliInstallIn
+         * @description The formula the confirmation showed; it must equal the declared one.
+         */
+        CliInstallIn: {
+            /** Formula */
+            formula: string;
+        };
+        /** CliInstallOut */
+        CliInstallOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "install" | "upgrade";
+            /** Argv */
+            argv: string[];
+            /** Command */
+            command: string;
+            /** Exit Code */
+            exit_code: number | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** First Line */
+            first_line: number;
+            /** Formula */
+            formula: string;
+            /** Lines */
+            lines: string[];
+            /** Next Line */
+            next_line: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "succeeded" | "failed";
+        };
+        /** CliListOut */
+        CliListOut: {
+            /** Items */
+            items: components["schemas"]["CliOut"][];
+            /** Warnings */
+            warnings: components["schemas"]["CliWarningOut"][];
+        };
+        /**
+         * CliLoginOut
+         * @description ``state`` is ``None`` when the command was not found, so its login check
+         *     could not run. ``command`` is the login command to copy — Coffer never
+         *     runs it. ``check`` is the declared login check.
+         */
+        CliLoginOut: {
+            /** Check */
+            check: string[] | null;
+            /** Command */
+            command: string | null;
+            /** State */
+            state: ("logged_in" | "logged_out" | "not_needed") | null;
+        };
+        /**
+         * CliNeededByOut
+         * @description One skill that requires the command, with what it asked for.
+         */
+        CliNeededByOut: {
+            /** Min Version */
+            min_version: string | null;
+            /** Skill Name */
+            skill_name: string;
+            /** Skill Uid */
+            skill_uid: string;
+            /** Why */
+            why: string | null;
+        };
+        /** CliOut */
+        CliOut: {
+            /** Brew */
+            brew: string | null;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Command */
+            command: string;
+            /** Install Command */
+            install_command: string | null;
+            /** Install State */
+            install_state: ("running" | "succeeded" | "failed") | null;
+            login: components["schemas"]["CliLoginOut"];
+            /** Min Version */
+            min_version: string | null;
+            /** Needed By */
+            needed_by: components["schemas"]["CliNeededByOut"][];
+            /** Path */
+            path: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "missing" | "outdated" | "logged_out" | "ready";
+            /** Title */
+            title: string | null;
+            /** Version */
+            version: string | null;
+        };
+        /**
+         * CliWarningOut
+         * @description A ``requires:`` entry a skill declares that was skipped, and why.
+         */
+        CliWarningOut: {
+            /** Message */
+            message: string;
+            /** Skill Name */
+            skill_name: string;
+            /** Skill Uid */
+            skill_uid: string;
         };
         /**
          * DriftEntryOut
@@ -809,6 +1035,262 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillFileContentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_clis_api_v1_clis_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_clis_api_v1_clis_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cli_api_v1_clis__command__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_cli_api_v1_clis__command__check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cli_install_api_v1_clis__command__install_get: {
+        parameters: {
+            query?: {
+                /** @description Only output lines from this number on. */
+                since?: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliInstallOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    install_cli_api_v1_clis__command__install_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliInstallIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliInstallOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING, Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
+from coffer.application.mcp.gateway_coerce import (
+    coerce_call_result,
+    coerce_prompt_result,
+    coerce_read_result,
+)
+from coffer.application.mcp.gateway_tool_gate import custom_tool_denial
 from coffer.application.mcp.invocation_outcome import (
     INBAND_TOOL_ERROR,
     answered_rpc_error,
@@ -30,7 +37,6 @@ from coffer.domain.errors import (
     InvalidPrefix,
     ToolDisabled,
     UpstreamTimeout,
-    UpstreamUnavailable,
 )
 from coffer.domain.mcp.capability import CapabilityType, MCPInvocation
 from coffer.domain.mcp.namespace import (
@@ -170,6 +176,7 @@ async def _invoke(
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
     session_agent_uid: str | None = None,
+    tool_reach: ToolReachRepoPort | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -242,6 +249,14 @@ async def _invoke(
         await _record("denied")
         raise
 
+    # A custom tool switched off, or outside its reach override, is refused like
+    # a disabled capability (spec mcp-gateway "Switch off or narrow one custom tool").
+    if spec.capability_type == "tool":
+        denial = await custom_tool_denial(resource, original, session_agent_uid, tool_reach)
+        if denial is not None:
+            await _record("denied")
+            raise ToolDisabled(denial)
+
     # The clock starts BEFORE the upstream is obtained, and obtaining it sits
     # inside the recorded block: a call that fails because the upstream would
     # not start (cooldown, an exhausted spawn ladder) is still a call, and spec
@@ -309,44 +324,6 @@ async def handle_resources_read(params: dict[str, Any], **kw: Any) -> Any:
 
 async def handle_prompts_get(params: dict[str, Any], **kw: Any) -> Any:
     return await _invoke(params, _PROMPT_SPEC, **kw)
-
-
-# --------------------------------------------------------------------------- #
-# SDK result coercion                                                           #
-# --------------------------------------------------------------------------- #
-
-
-def _coerce_result(sdk_result: Any, method: str) -> dict[str, Any]:
-    """Convert an mcp SDK result object to a JSON-friendly dict.
-
-    Raises UpstreamUnavailable when the result is neither a Pydantic model
-    nor a dict — previously the tools/call path returned ``{"content": []}``
-    which silently masked SDK contract drift. ``method`` only
-    flavours the error message.
-
-    A single implementation behind the three thin wrappers below,
-    which used to be byte-identical except for that message.
-    """
-    if hasattr(sdk_result, "model_dump"):
-        dumped: dict[str, Any] = sdk_result.model_dump(
-            exclude_none=True, mode="json", by_alias=True
-        )
-        return dumped
-    if isinstance(sdk_result, dict):
-        return sdk_result
-    raise UpstreamUnavailable(f"upstream returned unparseable {method} result")
-
-
-def coerce_call_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "tools/call")
-
-
-def coerce_read_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "resources/read")
-
-
-def coerce_prompt_result(sdk_result: Any) -> dict[str, Any]:
-    return _coerce_result(sdk_result, "prompts/get")
 
 
 # --------------------------------------------------------------------------- #

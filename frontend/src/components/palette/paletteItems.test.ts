@@ -62,4 +62,10 @@ describe("objectItem", () => {
     expect(objectPath("channel", o("c"))).toBe("/channels/c");
     expect(objectPath("agent", o("a"))).toBe("/agents/a");
   });
+
+  test("a CLI opens its page by its command, and is found by its title too", () => {
+    const item = objectItem("cli", { uid: "gh", name: "gh", title: "GitHub CLI" }, "CLI");
+    expect(item.target).toEqual({ type: "route", to: "/clis/gh" });
+    expect(item.haystack).toEqual(["GitHub CLI", "gh"]);
+  });
 });

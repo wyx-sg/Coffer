@@ -242,6 +242,21 @@ export const credentialsKey = ["credentials"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
+/** `GET /credentials` — every stored or cited ref, what a secret picker lists. */
+export const credentialRefsKey = ["credentials", "refs"] as const;
+
+// customTools — keyed on a group's NAME, fixed once made and its routes' only id.
+export const customToolsKey = ["customTools"] as const;
+export const customToolGroupKey = (name: string) => ["customTools", name] as const;
+
+// ---------------------------------------------------------------------------
+// clis — the commands managed skills require (/clis)
+// ---------------------------------------------------------------------------
+
+export const clisKey = ["clis"] as const;
+/** One command. Keyed on the command itself: it is the row's only identity,
+ *  and no rename exists that could strand the entry. */
+export const cliKey = (command: string) => ["clis", command] as const;
 
 // ---------------------------------------------------------------------------
 // settings — daemon-side settings the Settings pages edit
@@ -277,6 +292,8 @@ export function ownListKeyForKind(kind: string): QueryKey | undefined {
       return memoryPartitionsKey;
     case "channel":
       return channelsKey;
+    case "mcp_server": // a custom-tool group's page reads `customToolsKey`
+      return customToolsKey;
     default:
       return undefined;
   }

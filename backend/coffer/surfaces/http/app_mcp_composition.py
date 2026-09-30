@@ -19,13 +19,16 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.mcp.custom_tool_import import CustomToolImporter
+from coffer.application.mcp.custom_tool_views import GroupViewer
+from coffer.application.mcp.custom_tools import CustomToolService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
@@ -50,13 +53,17 @@ from coffer.infrastructure.channel.seatalk_media import default_media_dir
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.factory import build_upstream
+from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
+from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
     MCPServerHealthRepo,
+    MCPToolReachRepo,
 )
 from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.surfaces.http.credential_composition import boundary_resolver
+from coffer.surfaces.http.mcp.custom_tool_dependencies import set_custom_tool_services
 from coffer.surfaces.http.mcp.dependencies import (
     set_capability_discovery,
     set_health_repo,
@@ -64,7 +71,10 @@ from coffer.surfaces.http.mcp.dependencies import (
     set_mcp_session_factory,
     set_preferences_repo,
 )
-from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
+from coffer.surfaces.http.secret_boundary_wiring import (
+    optional_secret_boundary,
+    register_resource_destination,
+)
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 _log = logging.getLogger(__name__)
@@ -105,6 +115,8 @@ def wire_mcp_kind(
     sync.state_providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
     inv_repo = MCPInvocationRepo(sm)
     health_repo = MCPServerHealthRepo(sm)
+    # Custom tools' machine-local reach overrides (migration 0113).
+    tool_reach = MCPToolReachRepo(sm)
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
@@ -175,6 +187,7 @@ def wire_mcp_kind(
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
             builtin_tools=builtin_tools,
+            tool_reach=tool_reach,
         )
 
     # 6. Set ALL the MCP dependency providers
@@ -183,11 +196,40 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
+    wire_custom_tools(resource_svc, audit, credential_store, tool_reach, inv_repo)
     return McpWiring(
         process_supervisor=process_supervisor,
         session_supervisors=session_supervisors,
         invocation_repo=inv_repo,
     )
+
+
+def wire_custom_tools(
+    resource_svc: ResourceService,
+    audit: AuditService,
+    credential_store: EncryptedCredentialStore,
+    tool_reach: MCPToolReachRepo,
+    inv_repo: MCPInvocationRepo,
+) -> CustomToolService:
+    """Custom-tool groups (design add-http-custom-tools §9): the service behind
+    ``/api/v1/custom-tools`` and ``coffer tool``."""
+    viewer = GroupViewer(
+        reach=tool_reach,
+        outcomes=inv_repo,
+        secrets=credential_store,
+        boundary=optional_secret_boundary,
+        clock=lambda: datetime.now(tz=UTC),
+    )
+    service = CustomToolService(
+        resources=resource_svc,
+        audit=audit,
+        reach=tool_reach,
+        viewer=viewer,
+        resolver=lambda: boundary_resolver(credential_store),
+        runner=HttpApiToolRunner(),
+    )
+    set_custom_tool_services(service, CustomToolImporter(service, OpenApiDocumentSource()))
+    return service
 
 
 def build_prunable_registry() -> PrunableRegistry:

@@ -20,6 +20,8 @@ from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
 from coffer.application.mcp.attention import McpAttentionSource
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill.cli_attention import CliAttentionSource
+from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.service import ConvergeService
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -35,6 +37,7 @@ def build_attention_sources(
     sync_service: ConvergeService | None,
     channel_service: ChannelService | None,
     health_repo: MCPServerHealthRepo | None,
+    cli_service: CliRequirementService | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -51,6 +54,8 @@ def build_attention_sources(
         sources.append(ChannelAttentionSource(resources=resource_svc, channels=channel_service))
     if sync_service is not None:
         sources.append(SyncAttentionSource(sync=sync_service))
+    if cli_service is not None:
+        sources.append(CliAttentionSource(cli_service))
     return sources
 
 
@@ -66,6 +71,7 @@ def lifespan_attention_sources(
     health store) looked up where they were published."""
     from coffer.surfaces.http.agent_dependencies import get_auto_detect_service
     from coffer.surfaces.http.channel_routes import get_channel_service
+    from coffer.surfaces.http.cli_dependencies import get_cli_requirement_service_optional
     from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 
     return build_attention_sources(
@@ -76,6 +82,7 @@ def lifespan_attention_sources(
         sync_service=sync_service,
         channel_service=get_channel_service(),
         health_repo=get_health_repo_optional(),
+        cli_service=get_cli_requirement_service_optional(),
     )
 
 

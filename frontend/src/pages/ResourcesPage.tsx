@@ -8,6 +8,7 @@ import { McpServersTable } from "@/components/mcp/McpServersTable";
 import { WelcomePanel } from "./resources/WelcomePanel";
 import { useResources } from "@/lib/hooks/useResources";
 import { translateApiError } from "@/lib/api/errors";
+import { isCustomToolGroup } from "@/lib/customTools/groups";
 
 /**
  * The MCP servers surface (nav: "MCP servers"; route /mcp-servers). Empty →
@@ -24,7 +25,9 @@ import { translateApiError } from "@/lib/api/errors";
 export function ResourcesPage() {
   const { t } = useTranslation();
   const { data: resources, isPending, error } = useResources("mcp_server");
-  const visible = resources ?? [];
+  // Custom-tool groups are `mcp_server`s too, but they live on the Custom
+  // tools page (spec web-ui "Manage custom tools on their own page").
+  const visible = (resources ?? []).filter((r) => !isCustomToolGroup(r));
   const hasResources = visible.length > 0;
 
   return (

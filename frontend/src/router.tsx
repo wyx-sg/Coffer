@@ -84,7 +84,17 @@ const pageRoutes: RouteObject[] = [
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
+  // One custom-tool group, by its fixed name — one page with no tabs.
+  {
+    path: "custom-tools/:group",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  // One required command, by the command itself — one page with no tabs.
+  {
+    path: "clis/:command",
+    element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
+  },
   { path: "agents", element: <AgentsPage /> },
   {
     path: "agents/:uid",

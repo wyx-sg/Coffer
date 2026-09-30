@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 196 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 215 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -119,7 +119,9 @@ The daemon mounts 196 operations in 24 groups. Groups follow the order the daemo
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
+| [clis](#clis) | 6 |
 | [mcp](#mcp) | 10 |
+| [custom-tools](#custom-tools) | 13 |
 | [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 8 |
 | [agent-providers](#agent-providers) | 2 |
@@ -324,6 +326,17 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `GET` | `/api/v1/skills/{uid}/files/content` | Read a single file's contents from the skill's master folder. |
 | `PUT` | `/api/v1/skills/{uid}/files/content` | Overwrite one existing text file in the skill's master folder. |
 
+### clis
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/clis` | Every command a managed skill requires, problems first. |
+| `POST` | `/api/v1/clis/check` | Probe every required command again. |
+| `GET` | `/api/v1/clis/{command}` | One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
+| `POST` | `/api/v1/clis/{command}/check` | Probe one required command again. |
+| `GET` | `/api/v1/clis/{command}/install` | The latest install job for the command: its state, exit code and output. |
+| `POST` | `/api/v1/clis/{command}/install` | Start ``brew install\|upgrade <formula>``; refused unless the command is missing or outdated, ``formula`` is the declared one and Homebrew is found. |
+
 ### mcp
 
 | Method | Path | Summary |
@@ -338,6 +351,24 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `POST` | `/api/v1/resources/mcp_server/{uid}/test` | Open a transient upstream session, run MCP initialize, return health info. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations` | Query invocation records for this server with optional filters. |
 | `GET` | `/api/v1/mcp/invocations` | Every server's invocations on one timeline, newest-first. |
+
+### custom-tools
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/custom-tools` | List Groups |
+| `POST` | `/api/v1/custom-tools` | Create Group |
+| `POST` | `/api/v1/custom-tools/openapi` | Read a document into draft tools; saves nothing. |
+| `GET` | `/api/v1/custom-tools/{name}` | Get Group |
+| `PATCH` | `/api/v1/custom-tools/{name}` | Update Group |
+| `DELETE` | `/api/v1/custom-tools/{name}` | Delete Group |
+| `POST` | `/api/v1/custom-tools/{name}/tools` | Add Tool |
+| `PATCH` | `/api/v1/custom-tools/{name}/tools/{tool}` | Update Tool |
+| `DELETE` | `/api/v1/custom-tools/{name}/tools/{tool}` | Delete Tool |
+| `PUT` | `/api/v1/custom-tools/{name}/tools/{tool}/reach` | Set Tool Reach |
+| `POST` | `/api/v1/custom-tools/{name}/test` | Run a draft tool once; saves nothing and records no invocation. |
+| `POST` | `/api/v1/custom-tools/{name}/reimport/preview` | Preview Reimport |
+| `POST` | `/api/v1/custom-tools/{name}/reimport` | Apply Reimport |
 
 ### knowledge
 

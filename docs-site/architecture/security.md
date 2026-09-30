@@ -296,19 +296,26 @@ A copy of `coffer.db` without its master key yields no secrets, and in a signed 
 
 [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Today one adapter fetches from typed input: the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Two adapters fetch from typed input. The first is the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
 
 - A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
 - `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
 
+The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (`infrastructure/mcp/openapi_fetch.py`, capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
+
 So a probe of a non-Ollama endpoint on a private or link-local address is refused. Saving and using a connection are not probes, and the guard is not applied to the endpoints you configure as your own:
 
 - **HTTP-transport MCP servers**, whose URL you registered — they commonly run on your own machine or network.
+- **Custom-tool groups**, whose base URL you configured. Their requests follow no redirect, so the auth header only ever goes to that base URL.
 - **Coffer's own model calls** and **transcription**, which go to the providers you configured.
 - **Telegram and SeaTalk**, the IM platforms' own hosts, including the media URLs they hand back.
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.
+
+## Commands Coffer runs for skill requirements
+
+A skill can declare the command-line tools it needs ([Skill requirements](/architecture/skill-requirements)), and checking them runs two things on your machine: `<command> --version`, and the skill's login check. Both are held to the command the skill names — a bare name looked up on your `PATH`, and a login check whose first word must be that same command — and run as argv, never through a shell, with `stdin` closed and a timeout. A login check's output is discarded unread, so an account name or token it prints is never captured, logged or shown; only its exit status counts. Installing runs `brew install|upgrade <formula>` as you, never with `sudo`, and only after a person confirmed that exact command. Coffer never runs a login command.
 
 ## Agent identity
 

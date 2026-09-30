@@ -11,9 +11,8 @@
 import { displayName, titleOf, type Titled } from "@/lib/resourceTitle";
 import type { SettingsTabId } from "@/lib/navigation";
 
-/** The object kinds the palette lists. Custom tools and CLIs are listed too by
- *  the spec, but they have no list route yet; they join here when their pages
- *  land. */
+/** The object kinds the palette lists. Custom tools are listed too by the
+ *  spec; they join here when their page lands. */
 export type ObjectKind =
   | "agent"
   | "mcpServer"
@@ -21,12 +20,11 @@ export type ObjectKind =
   | "provider"
   | "channel"
   | "knowledge"
-  | "memory";
+  | "memory"
+  | "cli";
 
 /** Where an entry takes the user. */
-type PaletteTarget =
-  | { type: "route"; to: string }
-  | { type: "settings"; tab: SettingsTabId };
+type PaletteTarget = { type: "route"; to: string } | { type: "settings"; tab: SettingsTabId };
 
 export interface PaletteItem {
   /** Unique across the palette, and a valid DOM id fragment once prefixed. */
@@ -54,6 +52,7 @@ const DETAIL_BASE: Record<ObjectKind, string> = {
   channel: "/channels",
   knowledge: "/knowledge",
   memory: "/memory",
+  cli: "/clis",
 };
 
 /** Every listed object carries a uid, a name and an optional title. */
@@ -61,7 +60,8 @@ export interface PaletteObject extends Titled {
   uid: string;
 }
 
-const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set(["mcpServer", "skill"]);
+// A CLI is addressed by its command, which it carries as its name.
+const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set(["mcpServer", "skill", "cli"]);
 
 export function objectPath(kind: ObjectKind, obj: PaletteObject): string {
   const id = ADDRESSED_BY_NAME.has(kind) ? obj.name : obj.uid;

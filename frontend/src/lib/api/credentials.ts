@@ -18,7 +18,12 @@ export type ApprovalList = Schemas["ApprovalListOut"];
 
 export type SecretBoundarySettings = Schemas["SecretBoundarySettingsOut"];
 
+/** Every stored or cited ref — presence and references, never a value. */
+export type CredentialList = Schemas["CredentialListOut"];
+
 export const credentialsApi = {
+  /** Every stored ref and every ref a resource cites (presence only). */
+  listRefs: () => call<CredentialList>("/credentials"),
   /** Every approval still waiting, newest first. */
   pendingApprovals: () => call<ApprovalList>("/credentials/approvals?status=pending"),
   /** Whether the approval requirement is on, and the approval that would switch it off. */

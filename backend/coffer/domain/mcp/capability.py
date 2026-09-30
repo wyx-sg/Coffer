@@ -34,6 +34,10 @@ class MCPTool(BaseModel):
     name: str
     description: str | None = None
     input_schema: dict[str, Any]
+    #: The MCP annotations the upstream declared (``readOnlyHint``,
+    #: ``destructiveHint``, …), in their wire spelling; passed to the agent as
+    #: they are (spec mcp-gateway "Annotate every tool with whether it changes data").
+    annotations: dict[str, Any] | None = None
 
 
 class MCPResource(BaseModel):

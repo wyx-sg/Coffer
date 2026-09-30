@@ -51,6 +51,7 @@ from coffer.infrastructure.mcp.invocation_writer import (
     MCPInvocationModel,
     MCPInvocationRepo,
 )
+from coffer.infrastructure.mcp.tool_reach_repo import MCPToolReachModel, MCPToolReachRepo
 from coffer.infrastructure.persistence.base import Base
 
 __all__ = [
@@ -61,6 +62,8 @@ __all__ = [
     "MCPInvocationRepo",
     "MCPServerHealthModel",
     "MCPServerHealthRepo",
+    "MCPToolReachModel",
+    "MCPToolReachRepo",
 ]
 
 

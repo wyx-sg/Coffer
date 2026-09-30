@@ -308,6 +308,7 @@ async def run_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    hidden: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Aggregate the catalogue, then search it.
 
@@ -317,7 +318,7 @@ async def run_tool_search(
     reachable is more useful than one that refuses, and ``tools/list`` is the
     path that owns the degraded-server retry.
     """
-    outcome = await list_tools_across(discovery, ensure_subscribed, servers)
+    outcome = await list_tools_across(discovery, ensure_subscribed, servers, hidden)
     return await dispatch_tool_search(
         params=params,
         aggregated_tools=outcome.items,

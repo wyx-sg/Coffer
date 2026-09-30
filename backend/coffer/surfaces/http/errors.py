@@ -23,6 +23,13 @@ _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
+    # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
+    "CUSTOM_TOOL_NOT_FOUND": 404,
+    "NOT_A_CUSTOM_TOOL_GROUP": 404,
+    "CUSTOM_TOOL_EXISTS": 409,
+    "OPENAPI_UNREADABLE": 422,
+    "NOT_IMPORTED_FROM_OPENAPI": 409,
+    "OPENAPI_FILE_NEEDED": 422,
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "AGENT_TYPE_REGISTERED": 409,
@@ -95,6 +102,15 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "SKILL_FILE_STALE": 409,
+    # The commands skills require (spec skill-manager "Install a required
+    # command only through Homebrew and only when asked"): every refusal runs
+    # nothing.
+    "CLI_NOT_REQUIRED": 404,
+    "CLI_INSTALL_NOT_FOUND": 404,
+    "CLI_FORMULA_MISMATCH": 422,
+    "CLI_NOT_INSTALLABLE": 409,
+    "HOMEBREW_NOT_FOUND": 409,
+    "CLI_INSTALL_RUNNING": 409,
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,

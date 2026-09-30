@@ -348,6 +348,265 @@ paths:
       summary: Read Unmanaged Skill File
       tags:
       - agents
+  /api/v1/clis:
+    get:
+      description: Every command a managed skill requires, problems first.
+      operationId: list_clis_api_v1_clis_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Clis
+      tags:
+      - clis
+  /api/v1/clis/check:
+    post:
+      description: Probe every required command again.
+      operationId: check_clis_api_v1_clis_check_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Clis
+      tags:
+      - clis
+  /api/v1/clis/{command}:
+    get:
+      description: One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it.
+      operationId: get_cli_api_v1_clis__command__get
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Cli
+      tags:
+      - clis
+  /api/v1/clis/{command}/check:
+    post:
+      description: Probe one required command again.
+      operationId: check_cli_api_v1_clis__command__check_post
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Cli
+      tags:
+      - clis
+  /api/v1/clis/{command}/install:
+    get:
+      description: 'The latest install job for the command: its state, exit code and output.'
+      operationId: get_cli_install_api_v1_clis__command__install_get
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - description: Only output lines from this number on.
+        in: query
+        name: since
+        required: false
+        schema:
+          default: 0
+          description: Only output lines from this number on.
+          minimum: 0
+          title: Since
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliInstallOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Cli Install
+      tags:
+      - clis
+    post:
+      description: |-
+        Start ``brew install|upgrade <formula>``; refused unless the command is
+        missing or outdated, ``formula`` is the declared one and Homebrew is found.
+      operationId: install_cli_api_v1_clis__command__install_post
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliInstallIn'
+        required: true
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliInstallOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Install Cli
+      tags:
+      - clis
   /api/v1/skills:
     get:
       operationId: list_skills_api_v1_skills_get
@@ -763,6 +1022,256 @@ components:
       required:
       - type
       title: BuiltinSourceOut
+      type: object
+    CliInstallIn:
+      description: The formula the confirmation showed; it must equal the declared one.
+      properties:
+        formula:
+          maxLength: 128
+          minLength: 1
+          title: Formula
+          type: string
+      required:
+      - formula
+      title: CliInstallIn
+      type: object
+    CliInstallOut:
+      properties:
+        action:
+          enum:
+          - install
+          - upgrade
+          title: Action
+          type: string
+        argv:
+          items:
+            type: string
+          title: Argv
+          type: array
+        command:
+          title: Command
+          type: string
+        exit_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Exit Code
+        finished_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Finished At
+        first_line:
+          title: First Line
+          type: integer
+        formula:
+          title: Formula
+          type: string
+        lines:
+          items:
+            type: string
+          title: Lines
+          type: array
+        next_line:
+          title: Next Line
+          type: integer
+        started_at:
+          format: date-time
+          title: Started At
+          type: string
+        state:
+          enum:
+          - running
+          - succeeded
+          - failed
+          title: State
+          type: string
+      required:
+      - command
+      - formula
+      - action
+      - argv
+      - state
+      - exit_code
+      - started_at
+      - finished_at
+      - first_line
+      - lines
+      - next_line
+      title: CliInstallOut
+      type: object
+    CliListOut:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/CliOut'
+          title: Items
+          type: array
+        warnings:
+          items:
+            $ref: '#/components/schemas/CliWarningOut'
+          title: Warnings
+          type: array
+      required:
+      - items
+      - warnings
+      title: CliListOut
+      type: object
+    CliLoginOut:
+      description: |-
+        ``state`` is ``None`` when the command was not found, so its login check
+        could not run. ``command`` is the login command to copy — Coffer never
+        runs it. ``check`` is the declared login check.
+      properties:
+        check:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Check
+        command:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Command
+        state:
+          anyOf:
+          - enum:
+            - logged_in
+            - logged_out
+            - not_needed
+            type: string
+          - type: 'null'
+          title: State
+      required:
+      - state
+      - check
+      - command
+      title: CliLoginOut
+      type: object
+    CliNeededByOut:
+      description: One skill that requires the command, with what it asked for.
+      properties:
+        min_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Version
+        skill_name:
+          title: Skill Name
+          type: string
+        skill_uid:
+          title: Skill Uid
+          type: string
+        why:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Why
+      required:
+      - skill_uid
+      - skill_name
+      - min_version
+      - why
+      title: CliNeededByOut
+      type: object
+    CliOut:
+      properties:
+        brew:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Brew
+        checked_at:
+          format: date-time
+          title: Checked At
+          type: string
+        command:
+          title: Command
+          type: string
+        install_command:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Install Command
+        install_state:
+          anyOf:
+          - enum:
+            - running
+            - succeeded
+            - failed
+            type: string
+          - type: 'null'
+          title: Install State
+        login:
+          $ref: '#/components/schemas/CliLoginOut'
+        min_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Version
+        needed_by:
+          items:
+            $ref: '#/components/schemas/CliNeededByOut'
+          title: Needed By
+          type: array
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        status:
+          enum:
+          - missing
+          - outdated
+          - logged_out
+          - ready
+          title: Status
+          type: string
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - command
+      - title
+      - status
+      - path
+      - version
+      - min_version
+      - login
+      - brew
+      - install_command
+      - install_state
+      - needed_by
+      - checked_at
+      title: CliOut
+      type: object
+    CliWarningOut:
+      description: A ``requires:`` entry a skill declares that was skipped, and why.
+      properties:
+        message:
+          title: Message
+          type: string
+        skill_name:
+          title: Skill Name
+          type: string
+        skill_uid:
+          title: Skill Uid
+          type: string
+      required:
+      - skill_uid
+      - skill_name
+      - message
+      title: CliWarningOut
       type: object
     DriftEntryOut:
       description: |-

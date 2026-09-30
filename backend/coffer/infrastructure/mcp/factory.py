@@ -9,19 +9,21 @@ and there is no hidden importlib fallback.
 
 from __future__ import annotations
 
-from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
+from coffer.domain.mcp.http_api import HttpApiTransport
+from coffer.domain.mcp.server_config import AnyTransport, StdioTransport
 from coffer.domain.resource import Resource
+from coffer.infrastructure.mcp.http_api_client import HttpApiUpstreamConnection
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 
 
 def build_upstream(
-    transport: HttpTransport | StdioTransport,
+    transport: AnyTransport,
     overlay: dict[str, str],
     spawn_timeout: int,
     request_timeout: int,
     server: Resource,
-) -> StdioUpstreamConnection | HttpUpstreamConnection:
+) -> StdioUpstreamConnection | HttpUpstreamConnection | HttpApiUpstreamConnection:
     """Build the right upstream connection for ``transport``.
 
     The resource is split here, once, into the two things a connection actually
@@ -30,8 +32,14 @@ def build_upstream(
     they carried a uuid. ``server.uid`` is the IDENTITY: the stdio adapter
     records a PID file per spawned child, and that file has to keep naming the
     same server after a rename (ADR resource-identity-is-an-immutable-uid). The
-    HTTP adapter spawns nothing, so it is handed only the label.
+    HTTP adapter spawns nothing, so it is handed only the label. A custom-tool
+    group (``http_api``) is served in-process from its config; its overlay is
+    the one secret its auth header carries.
     """
+    if isinstance(transport, HttpApiTransport):
+        return HttpApiUpstreamConnection(
+            transport=transport, header_overlay=overlay, server_name=server.name
+        )
     if isinstance(transport, StdioTransport):
         return StdioUpstreamConnection(
             transport=transport,

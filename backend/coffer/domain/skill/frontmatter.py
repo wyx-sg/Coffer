@@ -77,7 +77,7 @@ def rewrite_name(text: str, new_name: str) -> str | None:
     writes by hand and edits in Coffer's own editor — dropping their comments
     and reordering their keys as a side effect of a rename.
 
-    ``_parse_frontmatter`` in the validator cannot be reused: it hands back
+    ``parse_frontmatter`` in the validator cannot be reused: it hands back
     parsed YAML, and this needs to know WHICH LINE to touch.
 
     ``new_name`` is assumed to have passed :func:`validate_frontmatter_name`,

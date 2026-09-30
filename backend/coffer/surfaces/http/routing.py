@@ -39,6 +39,7 @@ from coffer.surfaces.http.chat.agent_provider_routes import router as agent_prov
 from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
+from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.credential_boundary_routes import router as credential_boundary_router
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.event_routes import router as event_router
@@ -49,6 +50,7 @@ from coffer.surfaces.http.internal_engine_routes import router as internal_engin
 from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
+from coffer.surfaces.http.mcp.custom_tool_routes import router as custom_tool_router
 from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as mcp_invocation_aggregate_router,
 )
@@ -102,10 +104,12 @@ def include_all_routers(app: FastAPI) -> None:
         fs_router,
         skill_router,
         skill_file_router,
+        cli_router,  # the commands skills require (spec skill-manager)
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
         mcp_server_test_router,
+        custom_tool_router,  # spec mcp-gateway: custom-tool groups
         mcp_invocation_router,
         mcp_invocation_aggregate_router,
         knowledge_router,  # the one knowledge kind (experimental: knowledge)
