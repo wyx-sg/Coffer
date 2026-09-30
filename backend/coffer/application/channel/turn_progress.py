@@ -2,7 +2,8 @@
 
 Pure formatting split out of ``turn_render`` (which reached its size budget):
 a tool call becomes ``⏳ Read · wedding.json`` — the tool, and the one detail
-from its input that says what it is actually doing.
+from its input that says what it is actually doing. In a group only the tool name
+is shown (see "Render replies by the adapter's declared capabilities").
 """
 
 from __future__ import annotations
@@ -24,12 +25,18 @@ def _host(url: str) -> str:
     return url.split("://", 1)[-1].split("/", 1)[0]
 
 
-def _describe_tool(tool_name: str, tool_input: object) -> str:
+def _describe_tool(tool_name: str, tool_input: object, *, chat_kind: str = "direct") -> str:
     """A short human descriptor of what a tool call is doing, drawn from its
     input — so channel progress reads '⏳ Bash · list the desktop' instead of a
-    bare '⏳ Bash'. Best-effort and defensive: unknown tools or odd inputs fall
-    back to the first string argument, or to nothing."""
-    if not isinstance(tool_input, dict):
+    bare '⏳ Bash'.
+
+    A group chat gets no descriptor at all: everyone in it reads the line, and the
+    input can carry a command, a query or a path. In a direct chat only fields
+    written to be read are used — never a raw command, and never a guess at "the
+    first string argument", which for an unknown tool can be a token or a SQL
+    statement. Anything else yields nothing.
+    """
+    if chat_kind == "group" or not isinstance(tool_input, dict):
         return ""
 
     def field_str(key: str) -> str:
@@ -38,7 +45,7 @@ def _describe_tool(tool_name: str, tool_input: object) -> str:
 
     name = tool_name.lower()
     if name in ("bash", "shell", "exec"):
-        return field_str("description") or field_str("command")
+        return field_str("description")
     if name in ("read", "write", "edit", "multiedit", "notebookedit"):
         return _basename(field_str("file_path"))
     if name in ("grep", "glob"):
@@ -49,9 +56,6 @@ def _describe_tool(tool_name: str, tool_input: object) -> str:
         return _host(field_str("url"))
     if name == "websearch":
         return field_str("query")
-    for value in tool_input.values():
-        if isinstance(value, str) and value:
-            return value
     return ""
 
 

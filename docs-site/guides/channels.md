@@ -84,7 +84,7 @@ Pairing again from a different account replaces the owner. The previous owner's 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/workspace`, and every later message continues it.
 
 - A 👀 reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
-- The reply grows in place while the agent works, with one progress line per tool call, such as `⏳ Bash · list the desktop` and `✅ Read · wedding.json`.
+- The reply grows in place while the agent works, with one progress line per tool call, such as `⏳ Bash · list the desktop` and `✅ Read · wedding.json`. In a group the line names only the tool (`⏳ Bash`), because everyone there reads it; a direct chat adds the agent's own one-line description or the file name, never the raw command.
 - A turn that fails, is stopped, or hits the tool-iteration limit ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
