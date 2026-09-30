@@ -184,7 +184,7 @@ An archived conversation opens read-only: its history reads normally, the compos
 
 ### Retention
 
-Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change either window, or set it to **Keep forever**, under **Settings → Data**: **Auto-archive idle chats** and **Delete archived chats**. Archiving is reversible; deletion is not.
+Coffer archives a conversation with no new message for 7 days and deletes archived conversations 30 days after they were archived. Change the deletion window, or set it to **Keep forever**, under **Settings → Data → History → Conversations**; the archive window is `coffer config set retention.conversations_archive <days>`. Archiving is reversible; deletion is not.
 
 ## Chat and the agent's own sessions
 
