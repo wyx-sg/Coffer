@@ -1,14 +1,20 @@
 // e2e/visual/specs/routes.visual.spec.ts
 //
-// Visual baseline: each sidebar route, the Settings modal, every agent detail tab and the Knowledge page with a collection, in light and dark, on a fresh
+// Visual baseline: each sidebar route, the Settings modal and its tabs, every agent detail tab, one MCP server open and the Knowledge page with a collection, in light and dark, on a fresh
 // daemon, compared against the committed screenshot for this platform.
 // Pages behind an experimental gate render their gate notice — that notice is
 // the baseline for them until the feature is on by default.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { VISUAL_HOME } from "../env";
+
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
 
 type Theme = "light" | "dark";
 
@@ -38,6 +44,9 @@ const ROUTES: RouteCase[] = [
   { name: "sync", path: "/sync" },
   // Settings is a modal over the page underneath (Overview on a fresh load).
   { name: "settings", path: "/settings", finalPath: /\/settings\/general$/ },
+  { name: "settings-data", path: "/settings/data" },
+  { name: "settings-daemon", path: "/settings/daemon" },
+  { name: "settings-about", path: "/settings/about" },
 ];
 
 const THEMES: Theme[] = ["light", "dark"];
@@ -106,7 +115,9 @@ function timeDependent(page: Page): Locator[] {
     // daemon's own log lines, how many were written) — marked by the page.
     page.locator("[data-visual-volatile]"),
     // Dates as the UI formats them ("30 Sep 2026", "Sep 30, 2026").
-    page.getByText(/\b(\d{1,2} [A-Z][a-z]{2} \d{4}|[A-Z][a-z]{2} \d{1,2}, \d{4})\b/),
+    page.getByText(
+      /\b(\d{1,2} [A-Z][a-z]{2} \d{4}|[A-Z][a-z]{2} \d{1,2}, \d{4})\b/,
+    ),
   ];
 }
 
@@ -152,7 +163,9 @@ test.beforeAll(() => {
     codex: "codex-cli 0.41.0",
   };
   for (const [name, version] of Object.entries(programs)) {
-    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho "${version}"\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho "${version}"\n`, {
+      mode: 0o755,
+    });
   }
 });
 
@@ -191,11 +204,21 @@ const AGENT_TABS = [
 
 test.describe("agent detail", () => {
   test.beforeAll(async () => {
-    const json = fs.readFileSync(path.join(VISUAL_HOME, ".coffer", "daemon.json"), "utf-8");
+    const json = fs.readFileSync(
+      path.join(VISUAL_HOME, ".coffer", "daemon.json"),
+      "utf-8",
+    );
     const { token, port } = JSON.parse(json) as { token: string; port: number };
-    const headers = { "Content-Type": "application/json", "X-Coffer-Token": token };
-    const listed = await fetch(`http://127.0.0.1:${port}/api/v1/agents/types`, { headers });
-    const { types } = (await listed.json()) as { types: { type: string; uid: string | null }[] };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Coffer-Token": token,
+    };
+    const listed = await fetch(`http://127.0.0.1:${port}/api/v1/agents/types`, {
+      headers,
+    });
+    const { types } = (await listed.json()) as {
+      types: { type: string; uid: string | null }[];
+    };
     if (types.some((row) => row.type === "claude_code" && row.uid)) return;
     const created = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
       method: "POST",
@@ -208,9 +231,14 @@ test.describe("agent detail", () => {
   for (const [tab, suffix] of AGENT_TABS) {
     for (const theme of THEMES) {
       test(`agent-${tab} (${theme})`, async ({ page }) => {
-        await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+        await page.emulateMedia({
+          colorScheme: theme,
+          reducedMotion: "reduce",
+        });
         await page.goto(`/agents/claude_code${suffix}`);
-        await expect(page).toHaveURL(new RegExp(`/agents/claude_code${suffix}$`));
+        await expect(page).toHaveURL(
+          new RegExp(`/agents/claude_code${suffix}$`),
+        );
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await expect(page.getByRole("tab")).toHaveCount(9);
         await settle(page);
@@ -235,12 +263,20 @@ test.describe("knowledge collection", () => {
   const document = `${collection}/daemon-port.md`;
 
   test.beforeAll(async () => {
-    const json = fs.readFileSync(path.join(VISUAL_HOME, ".coffer", "daemon.json"), "utf-8");
+    const json = fs.readFileSync(
+      path.join(VISUAL_HOME, ".coffer", "daemon.json"),
+      "utf-8",
+    );
     const { token, port } = JSON.parse(json) as { token: string; port: number };
     const base = `http://127.0.0.1:${port}/api/v1/knowledge`;
-    const headers = { "Content-Type": "application/json", "X-Coffer-Token": token };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Coffer-Token": token,
+    };
     const listed = await fetch(`${base}/collections`, { headers });
-    const { collections } = (await listed.json()) as { collections: { uid: string; name: string }[] };
+    const { collections } = (await listed.json()) as {
+      collections: { uid: string; name: string }[];
+    };
     const existing = collections.find((c) => c.name === collection);
     if (existing) {
       uid = existing.uid;
@@ -249,13 +285,22 @@ test.describe("knowledge collection", () => {
     const created = await fetch(`${base}/collections`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ name: collection, description: "How the daemon and its shim fit together." }),
+      body: JSON.stringify({
+        name: collection,
+        description: "How the daemon and its shim fit together.",
+      }),
     });
     expect(created.status).toBe(201);
     uid = ((await created.json()) as { uid: string }).uid;
     for (const [title, body] of [
-      ["Daemon port", "# Daemon port\n\nThe daemon binds one fixed port, read before the database opens.\n\n## Startup\n\n- The shell waits for the health check.\n"],
-      ["Vault sync", "# Vault sync\n\nA sync round takes the vault lock; curation waits for it.\n"],
+      [
+        "Daemon port",
+        "# Daemon port\n\nThe daemon binds one fixed port, read before the database opens.\n\n## Startup\n\n- The shell waits for the health check.\n",
+      ],
+      [
+        "Vault sync",
+        "# Vault sync\n\nA sync round takes the vault lock; curation waits for it.\n",
+      ],
     ]) {
       const res = await fetch(`${base}/material`, {
         method: "POST",
@@ -268,15 +313,24 @@ test.describe("knowledge collection", () => {
 
   const VIEWS: [string, () => string][] = [
     ["knowledge-collection", () => `/knowledge/${uid}`],
-    ["knowledge-document", () => `/knowledge/${uid}?file=${encodeURIComponent(document)}`],
-    ["knowledge-history", () => `/knowledge/${uid}/history?file=${encodeURIComponent(document)}`],
+    [
+      "knowledge-document",
+      () => `/knowledge/${uid}?file=${encodeURIComponent(document)}`,
+    ],
+    [
+      "knowledge-history",
+      () => `/knowledge/${uid}/history?file=${encodeURIComponent(document)}`,
+    ],
     ["knowledge-recent", () => "/knowledge"],
   ];
 
   for (const [name, address] of VIEWS) {
     for (const theme of THEMES) {
       test(`${name} (${theme})`, async ({ page }) => {
-        await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+        await page.emulateMedia({
+          colorScheme: theme,
+          reducedMotion: "reduce",
+        });
         await page.goto(address());
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await expect(
@@ -284,6 +338,106 @@ test.describe("knowledge collection", () => {
         ).toBeVisible();
         await settle(page);
         await expect(page).toHaveScreenshot(`${name}-${theme}.png`, {
+          fullPage: false,
+          mask: [...timeDependent(page), ...runDependent(page)],
+        });
+      });
+    }
+  }
+});
+
+/**
+ * One MCP server open on the MCP servers page: its Overview and its Tools tab.
+ * The server is the suite's fake stdio server; a test in beforeAll records it
+ * healthy and discovery lists its tools, so the page reads the same every run.
+ */
+test.describe("mcp server", () => {
+  const name = "visual-files";
+
+  test.beforeAll(async () => {
+    const json = fs.readFileSync(
+      path.join(VISUAL_HOME, ".coffer", "daemon.json"),
+      "utf-8",
+    );
+    const { token, port } = JSON.parse(json) as { token: string; port: number };
+    const base = `http://127.0.0.1:${port}/api/v1`;
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Coffer-Token": token,
+    };
+    const root = REPO_ROOT;
+    const listed = await fetch(`${base}/resources?kind=mcp_server`, {
+      headers,
+    });
+    const { resources } = (await listed.json()) as {
+      resources: { uid: string; name: string }[];
+    };
+    let uid = resources.find((r) => r.name === name)?.uid;
+    if (!uid) {
+      const created = await fetch(`${base}/resources`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          kind: "mcp_server",
+          name,
+          config: {
+            transport: {
+              type: "stdio",
+              command: path.join(root, ".venv/bin/python3"),
+              args: [
+                path.join(root, "backend/tests/fixtures/fake_mcp_server.py"),
+                "--scenario",
+                "basic",
+                "--tools",
+                "read_file",
+                "write_file",
+                "list_directory",
+              ],
+            },
+          },
+        }),
+      });
+      expect(created.status).toBe(201);
+      uid = ((await created.json()) as { uid: string }).uid;
+    }
+    expect(
+      (
+        await fetch(`${base}/resources/mcp_server/${uid}/test`, {
+          method: "POST",
+          headers,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await fetch(`${base}/resources/mcp_server/${uid}/refresh`, {
+          method: "POST",
+          headers,
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
+  for (const [tab, suffix] of [
+    ["overview", ""],
+    ["tools", "/tools"],
+  ] as const) {
+    for (const theme of THEMES) {
+      test(`mcp-server-${tab} (${theme})`, async ({ page }) => {
+        await page.emulateMedia({
+          colorScheme: theme,
+          reducedMotion: "reduce",
+        });
+        await page.goto(`/mcp-servers/${name}${suffix}`);
+        await expect(page).toHaveURL(
+          new RegExp(`/mcp-servers/${name}${suffix}$`),
+        );
+        await expect(page.getByTestId("mcp-server-pane")).toBeVisible();
+        await expect(
+          page.getByText("read_file", { exact: true }).first(),
+        ).toBeVisible();
+        await settle(page);
+        await expect(page).toHaveScreenshot(`mcp-server-${tab}-${theme}.png`, {
           fullPage: false,
           mask: [...timeDependent(page), ...runDependent(page)],
         });
