@@ -84,7 +84,7 @@ Before anything is forwarded, the proxy refuses:
 
 ## Failover
 
-A request can fail over only **before the first content byte** reaches the agent. The proxy holds a streamed response until its first content event — `content_block_start` on the Anthropic wire, the first output item or delta on the Responses wire — bounded to a few kilobytes and seconds, so an error that arrives first can still be retried invisibly. After the first content byte the proxy never switches. The error or truncation goes to the agent, and the agent's own retry lands on a healthy member, because the failure has marked this one.
+A request can fail over only **before the first content byte** reaches the agent. The proxy holds a streamed response until its first content event — `content_block_start` on the Anthropic wire, the first output item or delta on the Responses wire — bounded to 64 KiB and 5 seconds, so an error that arrives first can still be retried invisibly. Past either bound the proxy stops holding and relays what it has. After the first content byte the proxy never switches. The error or truncation goes to the agent, and the agent's own retry lands on a healthy member, because the failure has marked this one.
 
 - **What fails over:** a connect, TLS or DNS error; a 5xx, 529 or 429 status; 401 or 403 (the key is at fault, not the request); a first-byte timeout; an error event before the first content event.
 - **What never fails over:** 400, 404 and 413. The request is at fault, so a retry elsewhere would fail the same way.
