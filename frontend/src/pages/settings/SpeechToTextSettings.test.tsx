@@ -1,14 +1,16 @@
-// Settings → Coffer's model → Speech to text: the connection and model Coffer
-// transcribes voice with.
+// frontend/src/pages/settings/SpeechToTextSettings.test.tsx
 //
-// The card's whole job is to make an OFF state legible. Transcription has two
+// Settings › General › Coffer's model › Speech to text: the connection and
+// model Coffer transcribes voice with.
+//
+// The picker's first job is to make an unset state legible. Transcription has two
 // halves — a connection flagged `transcribe_default` and a model — and no
 // fallback to the engine's connection, so a vault with neither half set
 // transcribes nothing and hands the agent the audio file untouched. That is the
 // safe default, not a fault, and these assert that the card says so in words
 // rather than rendering two empty dropdowns and leaving the reader to guess.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { SpeechToTextSettings } from "./SpeechToTextSettings";
 import type { InternalEngineConfig } from "@/lib/api/internalEngine";
@@ -33,8 +35,11 @@ vi.mock("@/lib/hooks/useInternalEngine", () => ({
 }));
 // The model list probes the endpoint when a connection curates nothing; the
 // tests that care about the list curate one instead, so the probe never fires.
+const listMutate = vi.fn();
+const chatProbe = vi.fn();
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: () => ({ mutate: vi.fn(), isPending: false }),
+  useListProviderModels: () => ({ mutate: listMutate, isPending: false }),
+  useTestConnection: () => ({ mutate: chatProbe, isPending: false }),
 }));
 
 /** An opaque uid per fixture NAME. The connection dropdown carries the uid as
@@ -86,38 +91,41 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SpeechToTextSettings", () => {
-  test("with no connection marked, it says transcription is off and what off means", () => {
-    // Not an error state: the recording simply stays on the machine.
+  test("with no connection marked, it reads as not set and says what that means", () => {
+    // Not an error state: the agent simply receives the audio file.
     render(<SpeechToTextSettings />);
 
-    expect(screen.getByText("Transcription is off.")).toBeInTheDocument();
-    expect(screen.getByText(/never leaves this machine/i)).toBeInTheDocument();
+    const state = screen.getByTestId("model-state");
+    expect(state).toHaveTextContent(/not set/i);
+    expect(state).toHaveTextContent(/reach the agent as audio files/i);
   });
 
-  test("a connection marked but no model chosen is still off", () => {
+  test("a connection marked but no model chosen is still not set", () => {
     // Both halves are needed, and neither substitutes for the other.
     providers = [makeProvider({ name: "a", transcribe_default: true })];
     render(<SpeechToTextSettings />);
 
-    expect(screen.getByText("Transcription is off.")).toBeInTheDocument();
+    expect(screen.getByTestId("model-state")).toHaveTextContent(/not set/i);
   });
 
-  test("with both halves chosen it says transcription is on", () => {
+  test("with both halves chosen it reads as set", () => {
     providers = [makeProvider({ name: "a", transcribe_default: true })];
     config = { transcribe_model: "whisper-1" };
     render(<SpeechToTextSettings />);
 
-    expect(screen.getByText("Transcription is on.")).toBeInTheDocument();
-    expect(screen.queryByText("Transcription is off.")).toBeNull();
+    expect(screen.getByTestId("model-state")).toHaveTextContent(/^set$/i);
+    expect(screen.getByRole("button", { name: /test speech to text/i })).toBeEnabled();
   });
 
-  test("the card names a second connection rather than borrowing the engine's", () => {
+  test("the picker names a second connection rather than borrowing the engine's", () => {
     // The reason the flag exists at all: a chat gateway commonly serves no
     // transcription endpoint, so nothing falls back to the engine's connection.
+    providers = [makeProvider({ name: "a", internal_default: true })];
     render(<SpeechToTextSettings />);
 
-    expect(screen.getByRole("combobox", { name: /transcription provider/i })).toBeInTheDocument();
-    expect(screen.getByText(/serves no transcription endpoint at all/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /transcription provider/i })).toHaveTextContent(
+      "Choose a provider",
+    );
   });
 
   test("choosing a connection marks that one as where speech goes", () => {
@@ -199,5 +207,66 @@ describe("SpeechToTextSettings", () => {
     expect(screen.getByRole("combobox", { name: /transcription model/i })).toHaveTextContent(
       "some-private-stt",
     );
+  });
+
+  describe("Test asks the endpoint for its model list, never a chat request", () => {
+    /** A chosen pair on a curated connection, with the listing the endpoint answers. */
+    function testWith(listing: {
+      models: { id: string; modality: string }[];
+      message: string;
+      reachable?: boolean;
+    }) {
+      providers = [
+        makeProvider({
+          name: "a",
+          transcribe_default: true,
+          models: [{ id: "whisper-1", modality: "audio" }],
+        }),
+      ];
+      config = { transcribe_model: "whisper-1" };
+      listMutate.mockImplementation((_probe, opts) => opts?.onSuccess?.(listing));
+      render(<SpeechToTextSettings />);
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /test speech to text/i }));
+      });
+      expect(listMutate).toHaveBeenCalledWith(
+        { provider: "openai", base_url: "https://gw/openai", credential_ref: "provider/acme/key" },
+        expect.anything(),
+      );
+      expect(chatProbe).not.toHaveBeenCalled();
+      return screen.getByTestId("model-state");
+    }
+
+    test("a listing that names the chosen model reads as answering", () => {
+      const state = testWith({
+        models: [{ id: "whisper-1", modality: "audio" }],
+        message: "",
+      });
+      expect(state).toHaveTextContent(/answering/i);
+    });
+
+    test("a listing without the chosen model fails inline", () => {
+      const state = testWith({ models: [{ id: "tts-1", modality: "audio" }], message: "" });
+      expect(state).toHaveTextContent(/failing/i);
+      expect(state).toHaveTextContent("The endpoint didn't list whisper-1");
+      expect(setModel).not.toHaveBeenCalled();
+    });
+
+    test("an endpoint that answers but lists nothing is reachable, not failing", () => {
+      const state = testWith({
+        models: [],
+        message: "the endpoint listed no models",
+        reachable: true,
+      });
+      expect(state).toHaveTextContent(/reachable/i);
+      expect(state).toHaveTextContent(/couldn't be checked/i);
+      expect(state).not.toHaveTextContent(/failing/i);
+    });
+
+    test("an endpoint that could not be listed fails with its own message", () => {
+      const state = testWith({ models: [], message: "401 invalid api key", reachable: false });
+      expect(state).toHaveTextContent(/failing/i);
+      expect(state).toHaveTextContent("401 invalid api key");
+    });
   });
 });

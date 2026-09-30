@@ -117,7 +117,8 @@ menus, popovers), `rounded-2xl` 12 (dialogs, the palette), `rounded-full`
 - Focus is keyboard-only (`focus-visible:`): 2px `ring-focus-ring` with a 2px
   offset over the surface; text fields use `border-accent` plus a 3px
   `ring-accent-soft` halo; full-bleed rows an inset ring.
-- z-order: `z-sticky` 10, `z-menu` 40, `z-dialog` 50, `z-toast` 60,
+- z-order: `z-sticky` 10, `z-dialog` 50, `z-menu` 55 (above the dialog, so
+  a select or menu opened inside one is not under its scrim), `z-toast` 60,
   `z-tooltip` 70. Disabled: `opacity-disabled` (.45); a disabled text field
   `opacity-field-disabled` (.6) so its value stays selectable.
 

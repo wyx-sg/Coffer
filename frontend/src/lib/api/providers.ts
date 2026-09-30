@@ -84,10 +84,10 @@ export type ActivateOut = Schemas["ActivateOut"];
 
 export type DeactivateOut = Schemas["DeactivateOut"];
 
-/** True only for anthropic/openai/unknown connections — ollama has no key. */
-export function wireNeedsCredential(wire: Protocol): boolean {
-  return wire !== "ollama";
-}
+/** One runtime answering at a loopback URL, with the models it serves. */
+export type LocalRuntimeFound = Schemas["LocalRuntimeOut"];
+
+export type DetectLocalOut = Schemas["DetectLocalOut"];
 
 // ---------------------------------------------------------------------------
 // API object
@@ -112,6 +112,15 @@ export const providersApi = {
   // kind uses.
 
   remove: (uid: string) => call<void>(`/providers/${enc(uid)}`, { method: "DELETE" }),
+
+  /** Which local model runtime answers at a loopback URL — or, with `null`, at
+   *  each runtime's default port. Read-only: nothing is pulled or loaded; a
+   *  non-loopback URL is refused as 422. */
+  detectLocal: (baseUrl: string | null) =>
+    call<DetectLocalOut>("/providers/detect-local", {
+      method: "POST",
+      body: { base_url: baseUrl },
+    }),
 
   activate: (uid: string) =>
     call<ActivateOut>(`/providers/${enc(uid)}/activate`, { method: "POST" }),

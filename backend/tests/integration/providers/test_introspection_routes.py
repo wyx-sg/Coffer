@@ -63,6 +63,7 @@ async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
         {"id": "gpt-4o-mini", "modality": "text"},
         {"id": "text-embedding-3-small", "modality": "embedding"},
     ]
+    assert r.json()["reachable"] is True
 
 
 async def test_list_models_degrades(client) -> None:  # type: ignore[no-untyped-def]
@@ -70,6 +71,7 @@ async def test_list_models_degrades(client) -> None:  # type: ignore[no-untyped-
     assert r.status_code == 200
     assert r.json()["models"] == []
     assert "connection refused" in r.json()["message"]
+    assert r.json()["reachable"] is False
 
 
 @pytest.mark.acceptance(spec="provider-switching", scenario="test a model connection")
