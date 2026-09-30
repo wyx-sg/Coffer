@@ -371,6 +371,54 @@ paths:
       summary: Put Residency
       tags:
       - daemon
+  /api/v1/daemon/restart:
+    post:
+      description: |-
+        Start a successor, then exit once this answer is sent.
+
+        The successor binds the configured port (``port``), or this one when a
+        test port range is in force. 500 when the successor cannot be started;
+        this daemon then keeps serving.
+      operationId: restart_daemon_api_v1_daemon_restart_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonRestartOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restart Daemon
+      tags:
+      - daemon
   /api/v1/daemon/rotate-token:
     post:
       operationId: rotate_token_api_v1_daemon_rotate_token_post
@@ -460,6 +508,40 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Get Status
+      tags:
+      - daemon
+  /api/v1/daemon/upgrade:
+    get:
+      operationId: get_upgrade_api_v1_daemon_upgrade_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonUpgradeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Upgrade
       tags:
       - daemon
   /api/v1/fs/browse:
@@ -872,6 +954,16 @@ components:
       - login_service_installed
       title: DaemonResidencyOut
       type: object
+    DaemonRestartOut:
+      description: A restart under way (spec daemon "Restart itself on request").
+      properties:
+        port:
+          title: Port
+          type: integer
+      required:
+      - port
+      title: DaemonRestartOut
+      type: object
     DaemonStatusOut:
       properties:
         channel:
@@ -948,6 +1040,23 @@ components:
       - data_dir
       - connected_agents
       title: DaemonStatusOut
+      type: object
+    DaemonUpgradeOut:
+      description: How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent").
+      properties:
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+        install_method:
+          enum:
+          - binaries
+          - app
+          - source
+          title: Install Method
+          type: string
+      required:
+      - install_method
+      - handoff
+      title: DaemonUpgradeOut
       type: object
     EditorOptionOut:
       properties:
@@ -1132,6 +1241,18 @@ components:
       required:
       - path
       title: FsRevealRequest
+      type: object
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
       type: object
     HistoryUsageOut:
       properties:

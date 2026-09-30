@@ -578,6 +578,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/{uid}/source/merged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Merged
+         * @description "I merged it" (spec skill-manager "Record an update merged into local
+         *     edits"): pin the skill to the upstream commit its local edits were merged
+         *     with, leaving the master folder's files as they are.
+         */
+        post: operations["record_merged_api_v1_skills__uid__source_merged_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/{uid}/source/preview": {
         parameters: {
             query?: never;
@@ -731,11 +753,10 @@ export interface components {
         DriftEntryOut: {
             /** Agent Name */
             agent_name: string;
+            handoff: components["schemas"]["HandoffOut"] | null;
             kind: components["schemas"]["DriftKind"];
             /** Skill Name */
             skill_name: string;
-            /** Suggested Remedy */
-            suggested_remedy: string;
             /** Target Path */
             target_path: string;
         };
@@ -1188,6 +1209,11 @@ export interface components {
             /** Commit */
             commit?: string | null;
         };
+        /** SkillUpdateMergedRequest */
+        SkillUpdateMergedRequest: {
+            /** Commit */
+            commit: string;
+        };
         /**
          * SkillUpdatePreviewOut
          * @description What taking the source's newest commit would do. Staged until
@@ -1202,6 +1228,7 @@ export interface components {
             conflict: boolean;
             /** From Commit */
             from_commit: string;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Local Changes */
             local_changes: components["schemas"]["SkillFileChangeOut"][];
             /** Staging Id */
@@ -2749,6 +2776,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillSourceStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    record_merged_api_v1_skills__uid__source_merged_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillUpdateMergedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

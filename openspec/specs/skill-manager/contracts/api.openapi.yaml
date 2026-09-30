@@ -1577,6 +1577,64 @@ paths:
       summary: Keep Mine
       tags:
       - skills
+  /api/v1/skills/{uid}/source/merged:
+    post:
+      description: |-
+        "I merged it" (spec skill-manager "Record an update merged into local
+        edits"): pin the skill to the upstream commit its local edits were merged
+        with, leaving the master folder's files as they are.
+      operationId: record_merged_api_v1_skills__uid__source_merged_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillUpdateMergedRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Record Merged
+      tags:
+      - skills
   /api/v1/skills/{uid}/source/preview:
     post:
       operationId: preview_update_api_v1_skills__uid__source_preview_post
@@ -1846,13 +1904,14 @@ components:
         agent_name:
           title: Agent Name
           type: string
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         kind:
           $ref: '#/components/schemas/DriftKind'
         skill_name:
           title: Skill Name
-          type: string
-        suggested_remedy:
-          title: Suggested Remedy
           type: string
         target_path:
           title: Target Path
@@ -1862,7 +1921,7 @@ components:
       - agent_name
       - kind
       - target_path
-      - suggested_remedy
+      - handoff
       title: DriftEntryOut
       type: object
     DriftKind:
@@ -2680,6 +2739,17 @@ components:
           title: Commit
       title: SkillUpdateKeepRequest
       type: object
+    SkillUpdateMergedRequest:
+      properties:
+        commit:
+          maxLength: 64
+          minLength: 7
+          title: Commit
+          type: string
+      required:
+      - commit
+      title: SkillUpdateMergedRequest
+      type: object
     SkillUpdatePreviewOut:
       description: |-
         What taking the source's newest commit would do. Staged until
@@ -2701,6 +2771,10 @@ components:
         from_commit:
           title: From Commit
           type: string
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         local_changes:
           items:
             $ref: '#/components/schemas/SkillFileChangeOut'
@@ -2724,6 +2798,7 @@ components:
       - changes
       - conflict
       - local_changes
+      - handoff
       title: SkillUpdatePreviewOut
       type: object
     StagedSkillOut:

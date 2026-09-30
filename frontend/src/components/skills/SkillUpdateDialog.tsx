@@ -1,5 +1,5 @@
 // src/components/skills/SkillUpdateDialog.tsx
-// Review an update of a Git-imported skill: the commit range, its commits and file changes with a diff — or, over local edits, the conflict and its three choices.
+// Review an update of a Git-imported skill: the commit range, its commits and file changes with a diff — or, over local edits, the conflict and its choices (keep, take, merge with an agent).
 //
 // Spec skill-manager "Update a Git-imported skill from its source". Opening
 // the dialog stages the new commit (useSkillUpdateStage); every way out that
@@ -19,11 +19,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { useApplySkillUpdate, useKeepSkillEdits } from "@/lib/hooks/useSkills";
 import { SkillUpdateCompare } from "./SkillUpdateCompare";
 import { SkillUpdateConflict, type ConflictChoice } from "./SkillUpdateConflict";
+import { SkillUpdateConflictAction } from "./SkillUpdateConflictAction";
 import { SkillUpdatePreviewBody } from "./SkillUpdatePreviewBody";
 import { useSkillUpdateStage } from "./SkillUpdateStage";
 import { repoLabel, shortCommit } from "./skillSourceHelpers";
@@ -92,13 +95,17 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
 
   let body: ReactNode;
   if (error) {
+    const handoff = errorHandoff(error);
     body = (
-      <p role="alert" className="text-sm text-danger">
-        {/* git's own message says what it could not reach; the generic copy would hide it. */}
-        {error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE"
-          ? error.envelopeMessage
-          : translateApiError(t, error)}
-      </p>
+      <div className="flex flex-col gap-2">
+        <p role="alert" className="text-sm text-danger">
+          {/* git's own message says what it could not reach; the generic copy would hide it. */}
+          {error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE"
+            ? error.envelopeMessage
+            : translateApiError(t, error)}
+        </p>
+        {handoff ? <AgentHandoff prompt={handoff} size="sm" /> : null}
+      </div>
     );
   } else if (!preview) {
     body = (
@@ -197,17 +204,16 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
                   : t("common.close")}
               </Button>
               {ready && view === "conflict" ? (
-                <Button
-                  type="button"
-                  disabled={!choice || keepEdits.isPending || applyUpdate.isPending}
-                  onClick={() =>
-                    choice === "keep" ? void keep().catch(() => undefined) : setConfirmTake(true)
-                  }
-                >
-                  {choice === "keep"
-                    ? t("skillSources.conflict.keep")
-                    : t("skillSources.conflict.take")}
-                </Button>
+                <SkillUpdateConflictAction
+                  uid={skill.uid}
+                  name={skill.name}
+                  preview={preview}
+                  choice={choice}
+                  busy={keepEdits.isPending || applyUpdate.isPending}
+                  onKeep={() => void keep().catch(() => undefined)}
+                  onTake={() => setConfirmTake(true)}
+                  onMerged={close}
+                />
               ) : null}
               {ready && view === "preview" ? (
                 <Button

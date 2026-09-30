@@ -116,13 +116,13 @@ _STATUS: dict[str, int] = {
     # skills from a Git repository", "Update a Git-imported skill from its
     # source"): an expired stage is a missing thing; git failing to fetch is
     # the upstream refusing us (502, like the vault remote); an update over a
-    # local edit is a state conflict; updating a folder-added skill is too.
+    # local edit, a merge for no waiting update, a folder-added skill: 409.
     "SKILL_STAGING_NOT_FOUND": 404,
     "SKILL_SOURCE_UNREACHABLE": 502,
     "SKILL_UPDATE_CONFLICT": 409,
+    "SKILL_UPDATE_NOT_PENDING": 409,
     "SKILL_NOT_FROM_GIT": 409,
-    # An agent's copy Coffer did not make stops a delete; a copy that is not a
-    # folder in the way has nothing to resolve; an orphan that is not there.
+    # A copy Coffer didn't make stops a delete; one not in the way, or no orphan.
     "SKILL_COPY_NOT_OURS": 409,
     "SKILL_COPY_NOT_DIFFERING": 409,
     "SKILL_ORPHAN_NOT_FOUND": 404,

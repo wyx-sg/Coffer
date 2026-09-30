@@ -232,6 +232,34 @@ describe("the header says what state the channel is in", () => {
 });
 
 acceptance(
+  "channels/seatalk",
+  "a missing sdk is handed to an agent from the channel page",
+  async () => {
+    // The download stays with the person (a link to SeaTalk's portal); the
+    // rest is the daemon's hand-off, offered beside the header's Retry.
+    serve([
+      [
+        TEAM,
+        makeStatus(TEAM, {
+          inbound: { websocket_state: "sdk_missing", websocket_error: "not found in /v" },
+          handoff: { prompt: "Please put SeaTalk's WebSocket SDK where Coffer loads it from" },
+        }),
+      ],
+    ]);
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    const banner = await screen.findByTestId("channel-banner");
+    expect(banner.dataset.state).toBe("sdkMissing");
+    expect(within(banner).getByRole("link", { name: "SeaTalk Open Platform" })).toHaveAttribute(
+      "href",
+      "https://open.seatalk.io/docs/WebSocket-Event-Callback",
+    );
+    expect(within(banner).getByRole("button", { name: /Copy prompt/ })).toBeInTheDocument();
+    expect(within(banner).queryByText("not found in /v")).not.toBeInTheDocument();
+    expect(within(header()).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  },
+);
+
+acceptance(
   "channels",
   "channel status reports runtime, pairing, and callback details",
   async () => {

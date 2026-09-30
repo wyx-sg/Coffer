@@ -1834,6 +1834,10 @@ components:
           - type: string
           - type: 'null'
           title: Effort
+        install_handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         model:
           anyOf:
           - type: string
@@ -1882,6 +1886,7 @@ components:
       - wire_api
       - state
       - version
+      - install_handoff
       - created_at
       - updated_at
       title: AgentOut
@@ -1942,6 +1947,10 @@ components:
         display_name:
           title: Display Name
           type: string
+        install_handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         name:
           title: Name
           type: string
@@ -1979,6 +1988,7 @@ components:
       - uid
       - addable
       - other_config_dir
+      - install_handoff
       title: AgentTypeOut
       type: object
     AgentTypesOut:

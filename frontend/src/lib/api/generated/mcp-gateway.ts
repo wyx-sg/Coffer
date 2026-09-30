@@ -897,6 +897,15 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
         };
         /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
+        /**
          * InvocationListOut
          * @description One page of the invocation log, newest first.
          */
@@ -1143,6 +1152,7 @@ export interface components {
         McpServerStatusOut: {
             /** Failing Since */
             failing_since: string | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Last Checked At */
             last_checked_at: string | null;
             /** Last Error */
@@ -1212,6 +1222,8 @@ export interface components {
              * @description Set when error_code is exited.
              */
             exit_code: number | null;
+            /** @description A failed test of a registered server: the prompt that hands the chore to an agent — installing its missing launcher, or finding why it fails. Null when the test passed, the fix is a stored secret, or the config is not saved. */
+            handoff: components["schemas"]["HandoffOut"] | null;
             /**
              * Latency Ms
              * @description From the start of the test to its outcome.

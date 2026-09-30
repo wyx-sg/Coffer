@@ -1361,3 +1361,5 @@ async def test_status_reports_missing_runner(client_and_ctx, monkeypatch) -> Non
     )
     r = await client.get(f"/api/v1/resources/mcp_server/{synced.uid}/status")
     assert r.json()["missing_runner"] == "uvx"
+    # Installing it is handed to an agent, not done by Coffer.
+    assert "Please install `uvx`" in r.json()["handoff"]["prompt"]

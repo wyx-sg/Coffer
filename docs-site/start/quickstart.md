@@ -213,8 +213,8 @@ ls -l ~/.claude/skills
 ```
 
 ```text
-coffer-guide -> /Users/you/.coffer/skills/coffer-guide
-commit-message -> /Users/you/.coffer/skills/commit-message
+coffer-guide -> /Users/you/.coffer/derived/skills/coffer-guide
+commit-message -> /Users/you/.coffer/vault/skills/commit-message
 ```
 
 Some things to know:

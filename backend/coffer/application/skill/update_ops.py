@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.skill.lifecycle_ops import register_from_validated
 from coffer.application.skill.staging import UpdateStage, remove_dir
+from coffer.application.skill.update_handoff import merge_handoff
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
 from coffer.domain.resource import Resource
@@ -57,6 +58,9 @@ class UpdatePreview:
     #: The master folder no longer matches the pinned commit's content.
     conflict: bool
     local_changes: list[FileChange]
+    #: With a conflict: the prompt that hands merging the update into the
+    #: local edits to an agent (``update_handoff``).
+    handoff: str | None = None
 
 
 @dataclass(frozen=True)
@@ -184,15 +188,27 @@ async def preview(svc: SkillSourceService, skill: Resource) -> UpdatePreview:
         master = pathlib.Path(svc.skills._store.paths_for(skill.name).folder)
         conflict = _edited(svc, skill, source)
         local = diff_folders(pinned, master) if conflict else []
+        changes = diff_folders(pinned, incoming)
         view = UpdatePreview(
             stage_id=stage_id,
             skill_uid=skill.uid,
             from_commit=source.commit,
             to_commit=latest,
             commits=commits,
-            changes=diff_folders(pinned, incoming),
+            changes=changes,
             conflict=conflict,
             local_changes=local,
+            handoff=merge_handoff(
+                name=skill.name,
+                master=master,
+                source=source,
+                to_commit=latest,
+                commits=commits,
+                changes=changes,
+                local_changes=local,
+            )
+            if conflict and latest != source.commit
+            else None,
         )
     except BaseException:
         remove_dir(stage_dir)

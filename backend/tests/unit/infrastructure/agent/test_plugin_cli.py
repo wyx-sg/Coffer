@@ -30,7 +30,13 @@ def test_uninstall_runs_expected_argv() -> None:
     ):
         ClaudePluginCli().uninstall("plugin-a@npm")
     run.assert_called_once()
-    assert run.call_args.args[0] == ["claude", "plugin", "uninstall", "plugin-a@npm"]
+    assert run.call_args.args[0] == ["/usr/bin/claude", "plugin", "uninstall", "plugin-a@npm"]
+
+
+def test_the_cli_is_looked_up_on_the_agent_path() -> None:
+    with mock.patch("shutil.which", return_value="/opt/bin/claude") as which:
+        assert ClaudePluginCli(user_path=lambda: "/opt/bin:/usr/bin").available() is True
+    which.assert_called_once_with("claude", path="/opt/bin:/usr/bin")
 
 
 def test_uninstall_missing_cli_raises() -> None:

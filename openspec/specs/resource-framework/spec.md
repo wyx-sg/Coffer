@@ -660,13 +660,24 @@ minimum or not logged in (kind `cli`, the command as the uid). Each item MUST ca
 reason code with one sentence, a severity (`error`, `warning`, `info`), when
 the condition was first seen where that is known, and exactly one action: a
 verb and the REST route and body the kind's own page uses — the list has no
-write of its own. A source that fails MUST be reported beside the others'
+write of its own. An item whose fix is a chore for an agent (Principle IV,
+AI-Native) MUST also carry `handoff`, the same prompt the kind's own page
+offers for it, and its reason sentence MUST then name no command to run; an
+item whose action alone is the fix carries a `null` `handoff`.
+`coffer attention` MUST mark each item that has one, and
+`coffer attention --prompt <key>` MUST print that item's prompt exactly as the
+route serves it. A source that fails MUST be reported beside the others'
 items, and the answer MUST count the items per kind.
 
 #### Scenario: each item carries one action from its kind's own page
 - **GIVEN** an MCP server whose last test failed and a partially connected agent
 - **WHEN** the user reads the attention list
 - **THEN** the server's item offers `test` through `POST /api/v1/resources/mcp_server/{uid}/test`, the agent's offers `connect` through `POST /api/v1/agents/{uid}/coffer-connection`, errors sort before warnings, and the counts name one item for each kind
+
+#### Scenario: an item that is a chore carries its kind's hand-off
+- **GIVEN** an attention item whose kind hands its fix to an agent, and another whose action is the fix
+- **WHEN** the attention list is read, and `coffer attention --prompt <key>` is run for each
+- **THEN** the first carries `handoff.prompt` and the command prints exactly that text, while the second carries a `null` `handoff` and the command exits non-zero saying there is nothing to hand off
 
 #### Scenario: a failing source does not hide the others
 - **GIVEN** one source that raises and one that has an item

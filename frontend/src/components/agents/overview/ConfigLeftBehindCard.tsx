@@ -6,17 +6,14 @@
 // Revealing the folder or taking the agent off the list stay in the ⋯ menu.
 import { Trans, useTranslation } from "react-i18next";
 
-import {
-  abbreviateHomePath,
-  agentInstallCommand,
-  agentProgramName,
-  agentTypeLabel,
-} from "@/lib/agents/display";
+import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConfigFiles } from "@/lib/hooks/useAgents";
 
 import type { OverviewActions } from "../AgentOverviewTab";
-import { FixWay, InstallCommand, LastKnownRows, ProblemBanner } from "./FixParts";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+
+import { FixWay, LastKnownRows, ProblemBanner } from "./FixParts";
 import { useDetectionCheck } from "./useDetectionCheck";
 import { InfoRow, InlineCode, OverviewSection } from "./OverviewSection";
 import { baseName } from "./paths";
@@ -56,7 +53,9 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
         <OverviewSection title={t(`${K}.waysToFix`)}>
           <ul className="flex flex-col">
             <FixWay title={t(`${K}.install.title`, { name })} body={t(`${K}.install.body`)}>
-              <InstallCommand command={agentInstallCommand(agent.type)} />
+              {agent.install_handoff ? (
+                <AgentHandoff prompt={agent.install_handoff.prompt} size="sm" />
+              ) : null}
             </FixWay>
           </ul>
         </OverviewSection>

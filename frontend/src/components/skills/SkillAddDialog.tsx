@@ -3,8 +3,7 @@
 //
 // Spec skill-manager "Cover skill management on REST, the CLI and the web" (the
 // dialog), "Import a skill from a local path", "Add skills from an archive" and
-// "Add skills from a Git repository". The stage (useSkillAddStage) is cancelled
-// whenever it leaves the screen; there is no create-from-scratch source.
+// "Add skills from a Git repository". The stage (useSkillAddStage) is cancelled whenever it leaves the screen.
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +23,7 @@ import { useApplySkillReach } from "@/lib/hooks/useSkillCopies";
 import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
 import { SkillAddReach } from "./SkillAddReach";
 import { SkillAddRefusal } from "./SkillAddRefusal";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import {
   SkillAddArchiveField,
   SkillAddFolderField,
@@ -147,7 +147,8 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
   const unreachable =
     source === "git" &&
     s.stageError instanceof ApiError &&
-    s.stageError.code === "SKILL_SOURCE_UNREACHABLE";
+    s.stageError.code === "SKILL_SOURCE_UNREACHABLE" &&
+    !errorHandoff(s.stageError);
   const cloning = source === "git" && s.looking;
 
   return (

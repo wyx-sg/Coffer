@@ -178,6 +178,15 @@ If you edited the skill since its pinned commit, the update is a **conflict**:
 | Keep mine | **Keep my edits** | `--keep-mine` | Nothing changes. Coffer stops offering this update and tells you again when a newer commit arrives. |
 | Take theirs | **Take the update** | `--take-theirs` | The new commit is applied and your edits are replaced. |
 | Compare | **Compare** | — | Each changed file side by side: your folder, the pinned commit and the new commit. |
+| Merge with an agent | **Merge with an agent**, then **I merged it** | `--prompt`, then `--merged <commit>` | Your agent merges the update into your edits; recording it moves the pin and keeps the files. |
+
+Coffer does not merge two versions of a skill itself. **Merge with an agent** gives you a prompt to copy, or **Ask an agent** starts a conversation with it filled in (nothing is sent until you press Send). The prompt names the skill's master folder as the only place to edit, the files you edited since the pin, the pinned and new commits with their messages, and the repository to read the update from. The agent keeps what your edits were for, takes the update's fixes, and shows you the diff; it does not record the merge itself. When the files look right, choose **I merged it** and confirm, or run:
+
+```sh
+coffer skill update <name> --merged <commit>
+```
+
+This moves the pin to that commit and leaves the master folder exactly as the merge left it. Your merged edits still count as local edits against the new pin, so the next update is a conflict again, listing only the edits you carried over — never one that silently replaces them. Only the update that is waiting can be recorded: the pinned commit, or a commit that is not on the branch, is refused with `SKILL_UPDATE_NOT_PENDING`. To do the merge by hand instead, edit the files in the master folder (`coffer path skill <name>`), then record it the same way.
 
 If the repository can no longer be reached, the skill keeps working from its pinned copy. Its page shows git's message and when the last check succeeded, and nothing changes until a check succeeds again.
 
@@ -402,7 +411,7 @@ Drift is any disagreement between what Coffer recorded as delivered and what is 
 
 ### Automatic repair at startup
 
-Every time the daemon starts, Coffer re-creates missing links and re-points tampered ones. Each repair is recorded in the audit log with a system actor. The other three kinds are left as found and written to the daemon log with the skill, agent, path and a suggested remedy. A failure during this check never stops the daemon from starting.
+Every time the daemon starts, Coffer re-creates missing links and re-points tampered ones. Each repair is recorded in the audit log with a system actor. The other three kinds are left as found and written to the daemon log with the skill, agent, path and a reason. A failure during this check never stops the daemon from starting.
 
 ### Check by hand
 
@@ -429,7 +438,9 @@ coffer skill verify --fix
 
 `--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `<path>.coffer-backup-<timestamp>`, then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains.
 
-In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**; a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
+In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**, which puts it back; a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
+
+Those three kinds need a judgement Coffer does not make for you — which of two folders to keep, what a stray folder is, where a lost master can be found — so each also offers a prompt for your agent, with **Copy prompt** and **Ask an agent** beside the finding, in the compare dialog, on the folder's pane and on the Files tab. The agent looks and tells you which button to press; it moves, deletes and edits nothing itself. The same prompts appear on the Overview's "needs you" list, and `coffer skill verify --prompt` prints them.
 
 ### Resolve a folder in the way
 
@@ -440,15 +451,15 @@ When an agent's copy is a real folder rather than Coffer's link — you, or the 
 | **Replace it with Coffer's link** | The folder is moved to `~/.coffer/content/backup/skills/<agent>/` first, then the master is linked in its place. Nothing is lost. |
 | **Adopt this folder** | Its files become the master, so every other agent gets them too; the folder is then backed up and linked the same way. |
 
-The diff shows what happens to the side you are not keeping. Coffer never makes this choice on its own.
+The diff shows what happens to the side you are not keeping. Coffer never makes this choice on its own. Not sure which to keep? The dialog's prompt asks your agent to compare the folder with the master and recommend one of the two.
 
 ### Folders not in your library
 
-A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking.
+A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking. The pane's prompt asks your agent to read the folder and tell you which of the two to choose.
 
 ### When the master folder is gone
 
-If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers **Remove the skill** (its record and settings). The folder's versions are still in the vault's history, so you can bring it back from the terminal: `coffer vault history skills/<name>/` lists them, and `coffer vault restore skills/<name>/ <version>` puts the folder back as it was in the version before it was removed. The **Restore it from History** choice beside **Remove the skill** is shown but cannot be chosen yet.
+If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers two ways forward. **Restore it from History** puts back the newest version of `skills/<name>/` that still had files, as a new version of the vault; it cannot be chosen when the vault has no such version. **Remove the skill** removes its record and settings. From the terminal, `coffer vault history skills/<name>/` lists the folder's versions and `coffer vault restore skills/<name>/ <version>` puts one back. The tab's prompt asks your agent to look for a copy — in `~/.coffer/content/backup/skills/`, in an agent's skills folder, or at the skill's source (`coffer skill show <name> --json`) — and, once you agree, to copy it back to `~/.coffer/vault/skills/<name>/`; Coffer links it to your agents again on its next pass.
 
 ## The built-in `coffer-guide` skill
 

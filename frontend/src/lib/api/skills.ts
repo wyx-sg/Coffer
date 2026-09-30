@@ -97,6 +97,9 @@ export const skillsApi = {
       method: "POST",
       body: { commit },
     }),
+  /** "I merged it": pin to `commit`, leaving the master's files as they are. */
+  markMerged: (uid: string, commit: string) =>
+    call<SkillOut>(`/skills/${enc(uid)}/source/merged`, { method: "POST", body: { commit } }),
 
   changeSource: (uid: string, body: SkillStageGit) =>
     call<SkillUpdatePreview>(`/skills/${enc(uid)}/source/change`, { method: "POST", body }),

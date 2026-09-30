@@ -328,7 +328,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 Every change to a collection is kept as a version: your saves and deletes, each curation pass, a submission that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `curation` (with the item it curated and who submitted it), `sync` or `disk` — so you can always tell who changed what.
 
-The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `coffer vault history knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the daemon does not start and names the install step.
+The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `coffer vault history knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the daemon does not start and names the install step. If git goes missing while the daemon runs, every write keeps working and the history commands answer `KNOWLEDGE_HISTORY_UNAVAILABLE`. That refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab and **Recent changes** offer it (**Copy prompt**, or **Ask an agent**), and the history commands print it.
 
 ### Look at a document's history
 
@@ -369,7 +369,7 @@ Every document the pass wrote or retired goes back exactly as it was before the 
 
 On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first, listing each document and what the undo does to it. A refused undo closes the question and the pass's page reads **Not undone**, naming the document that changed since; an undone pass reads **Undone**, with who undid it and when.
 
-- If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead.
+- If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead — or undo the pass by hand while keeping the later edits: the refusal carries a prompt for your agent, offered on the pass's page and printed by `coffer knowledge undo`, that names the pass, each document it touched, the ones edited since, and `git -C ~/.coffer/vault show <version> -- knowledge` for reading what the pass did. The agent edits only the files; Coffer records what it writes as an edit on disk.
 - Only a curation pass can be undone this way (`KNOWLEDGE_NOT_A_PASS` otherwise). For any other change, restore the document's earlier version.
 
 ## Delete documents and collections

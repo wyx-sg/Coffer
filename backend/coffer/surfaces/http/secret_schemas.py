@@ -13,6 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 _GRANT_OPS = Literal["reveal", "approve", "export_master_key"]
 
 
@@ -136,6 +138,10 @@ class SecretScanOut(BaseModel):
     mentions: list[SecretScanMentionOut]
     #: How many files the scan read.
     files_checked: int = 0
+    #: With mentions: rewriting those skills to get their values through
+    #: `coffer run`, handed to the person's agent. Names places and secret
+    #: names only, never a value.
+    handoff: HandoffOut | None
 
 
 class SecretImportIn(BaseModel):

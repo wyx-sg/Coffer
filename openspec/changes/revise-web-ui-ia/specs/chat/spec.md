@@ -64,7 +64,14 @@ The draft is not a conversation row. **New conversation** opens a blank draft su
 and the **first send** is what creates the conversation — so a user who opens
 the page and changes their mind leaves nothing behind. Where no managed agent
 is available at all, the draft MUST be replaced by a state saying how to get
-one rather than by a composer that can only fail.
+one rather than by a composer that can only fail, and the New conversation
+dialog MUST say the same. While no supported agent is installed on this machine
+that state MUST offer the daemon's install prompt (`GET /api/v1/agents/types`
+`install_handoff`, see [web-ui](../web-ui/spec.md) "Hand installing an agent to
+the person when none is found") through **Copy prompt** only — there is no agent
+of Coffer's to ask — and name no install command; once one is installed but
+none is added, it MUST link to the Agents page instead, where adding is
+Coffer's own action.
 
 When the conversation is created but the daemon refuses its first message (for
 example `ATTACHMENT_NOT_FOUND`), the message MUST NOT be lost: its text and
@@ -77,6 +84,12 @@ refusal is shown in the thread's banner, without a Retry.
 - **THEN** the conversation is created by that send and the turn runs in it;
   opening the draft and leaving creates nothing. With no managed agent
   available, the draft is replaced by a state saying how to get one.
+
+#### Scenario: with no managed agent the draft offers the install prompt to copy
+- **GIVEN** no supported agent installed on this machine, so no managed agent is available
+- **WHEN** the user opens the New conversation draft
+- **THEN** it offers Copy prompt with the daemon's install prompt, and no Ask an agent and no install command
+- **AND** once an agent is installed but not added, the same state links to the Agents page instead
 
 #### Scenario: a draft's first message refused after its conversation is created keeps its text and files
 - **GIVEN** the draft surface with typed text and an attached file

@@ -5,15 +5,19 @@
 // delete). Restore puts back the newest version of `skills/<name>/` that still
 // had files, as a new version (spec vault-storage "Show, compare and restore
 // any version of a vault file"); with no such version it can't be chosen.
+// The drift finding's hand-off asks an agent to look for a copy that can be
+// put back.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw, Trash2 } from "lucide-react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillChoiceCards } from "@/components/skills/SkillChoiceCards";
 import { SkillDeleteDialog } from "@/components/skills/SkillDeleteDialog";
 import { Button } from "@/components/ui/button";
 import type { SkillOut } from "@/lib/api/skills";
 import type { VaultVersionOut } from "@/lib/api/vault";
+import { useSkillCopies } from "@/lib/hooks/useSkills";
 import { useRestoreVaultVersion, useVaultHistory } from "@/lib/hooks/useVaultHistory";
 
 type Way = "restore" | "remove";
@@ -31,6 +35,9 @@ export function SkillMissingMaster({ skill, onDeleted }: Props) {
   const history = useVaultHistory(folder);
   const restore = useRestoreVaultVersion();
   const lastGood = lastVersionWithFiles(history.data?.versions ?? []);
+  const handoff = useSkillCopies().data?.entries.find(
+    (e) => e.kind === "missing_master" && e.skill_name === skill.name,
+  )?.handoff;
 
   return (
     <section className="flex flex-col gap-3" aria-label={t("skills.missing.label")}>
@@ -55,6 +62,12 @@ export function SkillMissingMaster({ skill, onDeleted }: Props) {
           },
         ]}
       />
+      {handoff ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-xs text-text-muted">{t("skills.missing.askAgent")}</span>
+          <AgentHandoff prompt={handoff.prompt} size="sm" />
+        </div>
+      ) : null}
       <div className="flex justify-end">
         {way === "remove" ? (
           <Button variant="destructive" onClick={() => setDeleting(true)}>

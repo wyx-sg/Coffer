@@ -111,8 +111,8 @@ Work through these causes in order:
 | The server is disabled on this machine, or its reach does not include this agent. | The server's reach control, or `coffer mcp scope <name>`. | Enable it, or add the agent: `coffer mcp enable <name>`, `coffer mcp scope <name> --agents <agent>`. |
 | The agent's session reports no identity, so it sees only unscoped servers. | The agent's MCP entry runs `coffer-mcp-shim` without `--agent-uid`. | Connect the agent again: `coffer agent connect <agent>`. |
 | The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp cap list <name>`. | Switch it on there, or with `coffer mcp cap enable <name> tool:<tool>`. |
-| The server cannot start: its launcher is missing. | The server shows `npx is not installed on this machine` (or `uvx`, …). | Install that runtime, then **Refresh capabilities**. Coffer does not install runtimes. |
-| The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or secrets. A server that misses discovery is retried in the background and its tools reappear when it answers. |
+| The server cannot start: its launcher is missing. | The server shows `npx isn't found on this machine` (or `uvx`, …). | Install that runtime where the daemon's `PATH` reaches (an app started from the Dock or Finder does not read your shell's startup files), then **Test**. Coffer does not install runtimes; its callout's **Copy prompt** (or `coffer mcp handoff <name>`) hands the install to your agent with the command line and `PATH` it needs. |
+| The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or secrets. A server that misses discovery is retried in the background and its tools reappear when it answers. The failing callout's **Copy prompt** (or `coffer mcp test <name> --prompt`) hands the diagnosis to your agent, with the error and the stderr tail and without any secret value. |
 
 See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-client).
 
@@ -140,7 +140,7 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Cause.** The page belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default in release builds. No feature is experimental right now, so a current build does not show this notice.
 
-**Fix.** Switch the feature on under **Settings → General**, or with `coffer config set feature.<key> on`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
+**Fix.** Press **Switch on** on the notice, switch it under **Settings → General**, or run `coffer config set feature.<key> on`. If the notice says `COFFER_FEATURES` holds it off, the feature is pinned in the daemon's environment; change it where the daemon is started.
 
 ## Secrets and macOS keychain prompts
 

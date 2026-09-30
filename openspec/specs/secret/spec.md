@@ -607,7 +607,19 @@ plaintext secret in `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json`
 says password, secret, token or key, and well-known token shapes) by file,
 line, key and proposed name, every skill that still mentions
 `~/.coffer/secrets/`, and how many files it read (`files_checked`); it MUST NOT
-return a value. `POST /api/v1/secrets/import` (`coffer secret import
+return a value. When a skill still mentions `~/.coffer/secrets/`, the scan MUST
+also carry `handoff`, a prompt (Principle IV, AI-Native) that asks the person's
+agent to rewrite each such command to get its value through
+`coffer run --secret ENV=NAME -- …` or `coffer run --env-file` with
+`coffer://secret/<name>` references, to show the person the diff, and never to
+print, copy or read a value; the prompt names only each mention's skill, file,
+line and the path it reads, and the secret name each key of a secrets file
+becomes — never a value and never a file's contents. With no mention the scan
+carries a `null` `handoff`. The Find plaintext keys dialog keeps listing the
+mentions for the person to update by hand and offers Copy prompt and, where a
+managed agent is available, Ask an agent beside them;
+`coffer secret scan --prompt` prints the same prompt.
+`POST /api/v1/secrets/import` (`coffer secret import
 [--id]… [--dry-run]`) MUST store each chosen value as `secret/<proposed name>`,
 confirm the store reads back the same value, and only then replace the value in
 its file with the reference, atomically and keeping the file's mode; a name
@@ -622,6 +634,12 @@ the file; `--dry-run` writes nothing. Each value stored MUST be audited as
 - **GIVEN** a `~/.coffer/secrets/db.env` holding a password and a skill whose script assigns a token
 - **WHEN** the scan runs
 - **THEN** both are reported with their file, key and proposed name, and the response contains neither value
+
+#### Scenario: a skill still reading a secrets file is handed to an agent
+- **GIVEN** a `~/.coffer/secrets/db.env` holding a password and a skill whose script sources that file
+- **WHEN** the scan runs
+- **THEN** its hand-off names the skill, the script's path and line and the file it reads, the secret names the file's keys become and how `coffer run` hands a secret to one command, and asks for the diff
+- **AND** the prompt contains no value from either file, `coffer secret scan --prompt` prints the same text, and nothing on disk has changed
 
 #### Scenario: importing moves a value and leaves a reference
 - **GIVEN** those findings

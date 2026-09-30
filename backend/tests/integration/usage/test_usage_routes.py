@@ -146,6 +146,50 @@ async def test_quota_routes(wired) -> None:  # type: ignore[no-untyped-def]
     assert claude["windows"][0]["source"] == "claude_statusline"
 
 
+class _Agents:
+    """The registry, holding one Claude Code agent at a custom config dir."""
+
+    def __init__(self, config_dir: Path) -> None:
+        self._row = type(
+            "Row", (), {"config": {"type": "claude_code", "config_dir": str(config_dir)}}
+        )
+
+    async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Any]:
+        return [self._row]
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="the quota page hands the statusline opt-in to an agent"
+)
+async def test_claude_codes_empty_row_hands_the_statusline_opt_in_to_an_agent(  # type: ignore[no-untyped-def]
+    wired, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.surfaces.http import dependencies
+
+    client, _, _ = wired
+    home = tmp_path / "cc-home"
+    monkeypatch.setattr(dependencies, "_resource_service", _Agents(home))
+    rows = {a["agent_type"]: a for a in (await client.get("/api/v1/usage/quota")).json()["agents"]}
+
+    assert rows["codex"]["handoff"] is None
+    prompt = rows["claude_code"]["handoff"]["prompt"]
+    # The registered agent's own settings file, the wrapper's exact form, and
+    # the diff shown first; nothing about a token or a quota endpoint.
+    assert f"{home / 'settings.json'}" in prompt
+    assert "coffer usage statusline -- " in prompt
+    assert "`coffer usage statusline` alone" in prompt
+    assert "show me the diff" in prompt
+    assert "oauth" not in prompt.lower() and "token" not in prompt.lower()
+
+    # Once a value is seen, the row has nothing to hand off.
+    await client.post(
+        "/api/v1/usage/quota/statusline",
+        json={"rate_limits": {"five_hour": {"used_percentage": 18, "resets_at": _LATER}}},
+    )
+    rows = {a["agent_type"]: a for a in (await client.get("/api/v1/usage/quota")).json()["agents"]}
+    assert rows["claude_code"]["handoff"] is None
+
+
 async def test_routes_require_the_token(wired) -> None:  # type: ignore[no-untyped-def]
     client, _, _ = wired
     r = await client.get("/api/v1/usage/quota", headers={"X-Coffer-Token": "wrong"})

@@ -324,7 +324,7 @@ describe("SkillDetailPane", () => {
           agent_name: "codex",
           kind: "tampered_link",
           target_path: "/Users/me/.codex/skills/hello",
-          suggested_remedy: "Relink it to the master.",
+          handoff: null,
         },
       ],
     });

@@ -443,6 +443,15 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
         /** MasterKeyExportIn */
         MasterKeyExportIn: {
             /** Directory */
@@ -733,6 +742,7 @@ export interface components {
             files_checked: number;
             /** Findings */
             findings: components["schemas"]["SecretScanFindingOut"][];
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Mentions */
             mentions: components["schemas"]["SecretScanMentionOut"][];
         };

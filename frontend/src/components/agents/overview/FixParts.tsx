@@ -1,16 +1,15 @@
 // src/components/agents/overview/FixParts.tsx — the pieces both problem states share (boards 2.1.13, 2.1.14).
 //
 // A toned banner that says what is wrong with a Check again button, a "Ways to
-// fix it" list of titled rows, the install command to copy, and the right
+// fix it" list of titled rows, and the right
 // column's last-known configuration (model, provider, Coffer connection, last
 // seen). Check again re-reads detection — the types query every agent page reads.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Copy, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import { STATUS_TONE, type StatusTone } from "@/components/status/statusTone";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
 import type { AgentOut } from "@/lib/api/agents";
 import { useAgentConnection } from "@/lib/hooks/useAgents";
 import { toneClass } from "@/lib/statusColors";
@@ -79,24 +78,6 @@ export function FixWay({
       </div>
       {children ? <span className="flex shrink-0 items-center gap-1.5">{children}</span> : null}
     </li>
-  );
-}
-
-export function InstallCommand({ command }: { command: string }) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const copy = () =>
-    void navigator.clipboard
-      ?.writeText(command)
-      .then(() => toast.success(t("common.copied")))
-      .catch(() => undefined);
-  return (
-    <>
-      <code className="break-all font-mono text-xs text-text">{command}</code>
-      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={t(`${K}.copyCommand`)}>
-        <Copy aria-hidden />
-      </Button>
-    </>
   );
 }
 

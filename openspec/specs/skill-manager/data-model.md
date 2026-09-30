@@ -164,15 +164,18 @@ that this agent currently holds a delivered copy — not a user-facing axis.
 
 ### `DriftKind` (`domain/skill/drift.py`)
 
-String-valued enum.
+String-valued enum. A drift entry carries the kind, never remedy text: each
+surface says what to do in its own words (the CLI's `DRIFT_REMEDIES` names its
+commands; the web UI translates the kind). The three kinds no pass settles also
+carry a `handoff` prompt (`application/skill/drift_handoff.py`).
 
-| Value                   | Meaning                                       | Suggested remedy                      |
+| Value                   | Meaning                                       | What to do                            |
 | ----------------------- | --------------------------------------------- | ------------------------------------- |
-| `missing_link`          | a delivered copy is recorded but no target on disk | run the opt-in repair to re-link |
-| `tampered_link`         | symlink target is not Coffer's master         | run the opt-in repair (backs up, then re-links) |
-| `replaced_with_regular` | path is a regular file/dir instead of a link  | manual: move the foreign file/dir away; the next reconcile or repair re-links (repair never touches it) |
-| `missing_master`        | binding refers to a master folder that's gone | re-import                             |
-| `orphan_master`         | master folder on disk has no skill resource   | adopt or remove                       |
+| `missing_link`          | a delivered copy is recorded but no target on disk | Repair / the opt-in repair re-links |
+| `tampered_link`         | symlink target is not Coffer's master         | Repair (backs up, then re-links)      |
+| `replaced_with_regular` | path is a regular file/dir instead of a link  | keep master or the agent's version (repair never touches it); hand-off: compare and advise |
+| `missing_master`        | binding refers to a master folder that's gone | remove the skill, or restore the folder from the vault's history; hand-off: find a copy |
+| `orphan_master`         | master folder on disk has no skill resource   | add to library or delete; hand-off: say what it is |
 
 ### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
 

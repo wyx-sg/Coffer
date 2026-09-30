@@ -6,13 +6,17 @@
 // Download and restart, or a failed check that keeps the last good time — and
 // asks it to act. A busy control shows it and takes no second press. In a
 // browser there is nothing to control: a page the daemon serves cannot replace
-// the app, so the section says who installs updates and offers no button.
+// the app, so the section says who installs updates and offers no update
+// button — only the daemon's hand-off that has an agent upgrade this copy the
+// way it was installed (`GET /daemon/upgrade`).
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw } from "lucide-react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { useUpgradeHandoff } from "@/lib/hooks/useDaemon";
 import { useShellUpdates } from "@/lib/hooks/useShellUpdates";
 import type { UpdateStatus } from "@/lib/shellUpdates";
 import { formatDateTime, formatLocalDateTime } from "@/lib/utils";
@@ -25,6 +29,7 @@ function percent(status: UpdateStatus): string {
 export function UpdatesSection() {
   const { t } = useTranslation();
   const { inShell, status, actionError, check, install, setAutoCheck } = useShellUpdates();
+  const upgrade = useUpgradeHandoff(!inShell);
 
   if (!inShell || (status && !status.configured)) {
     return (
@@ -32,8 +37,13 @@ export function UpdatesSection() {
         <CardHeader>
           <CardTitle>{t("settings.about.updates.title")}</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {inShell ? t("settings.about.updates.unconfigured") : t("settings.about.updates.browser")}
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            {inShell
+              ? t("settings.about.updates.unconfigured")
+              : t("settings.about.updates.browser")}
+          </p>
+          {!inShell && upgrade.data ? <AgentHandoff prompt={upgrade.data} size="sm" /> : null}
         </CardContent>
       </Card>
     );
@@ -52,7 +62,9 @@ export function UpdatesSection() {
 
   let headline: string;
   if (failed) {
-    headline = offer ? t("settings.about.updates.installFailed") : t("settings.about.updates.failed");
+    headline = offer
+      ? t("settings.about.updates.installFailed")
+      : t("settings.about.updates.failed");
   } else if (offer) {
     headline = t("settings.about.updates.available", { version: offer.version });
   } else if (status?.lastCheckedAt) {

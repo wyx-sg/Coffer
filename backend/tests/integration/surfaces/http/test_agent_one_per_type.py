@@ -218,6 +218,17 @@ def test_list_every_supported_type_whether_added_or_not(home: pathlib.Path) -> N
         for row in rows:
             assert {"display_name", "default_skill_dir", "other_config_dir"} <= set(row)
 
+        # Claude Code's program is not found beside its folder: the type row
+        # and the agent's own record carry the same reinstall prompt; Codex's
+        # program is found, so it has none, and neither has the first-run one.
+        assert claude["state"] == "config_only"
+        prompt = claude["install_handoff"]["prompt"]
+        assert prompt.startswith("Please reinstall Claude Code")
+        assert str(home / "claude-home") in prompt
+        assert codex["install_handoff"] is None
+        assert r.json()["install_handoff"] is None
+        assert c.get(f"/api/v1/agents/{uid}").json()["install_handoff"]["prompt"] == prompt
+
         # The read registered, created and audited nothing.
         assert [a["uid"] for a in c.get("/api/v1/agents").json()["items"]] == [uid]
         assert not (home / ".codex").exists()

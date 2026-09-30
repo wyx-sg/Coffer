@@ -42,6 +42,7 @@ from coffer.surfaces.cli._kind_verbs import (
     register_kind_verbs,
     verbose_of,
 )
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref
 
 app = typer.Typer(help="Manage registered AI agents")
@@ -160,6 +161,38 @@ def show(
     else:
         typer.echo(f"coffer_connection: {_connection.state_label(conn['state'])}")
         _connection.echo_parts(conn)
+    if data.get("install_handoff"):
+        typer.echo(f"hand off: coffer agent prompt {data['name']}  (its program is not found)")
+
+
+@app.command("prompt")
+def prompt(
+    ctx: typer.Context,
+    agent_type: str = typer.Argument(..., metavar="TYPE", help="claude-code | codex"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """Print the prompt to give your agent to install TYPE's program.
+
+    Offered while the program is not found, added or not — the same words the
+    Agents page copies (spec agent-registry "Hand installing an agent's
+    program to an agent").
+    """
+    wanted = agent_type.replace("_", "-")
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/agents/types")
+        _cli_client.check(r, verbose=verbose_of(ctx))
+    row = next((t for t in r.json()["types"] if t["name"] == wanted), None)
+    if row is None:
+        typer.echo(f"unknown agent type: {agent_type} (claude-code | codex)", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    if output_json:
+        typer.echo(_json.dumps({"name": row["name"], "handoff": row["install_handoff"]}, indent=2))
+        return
+    if row["install_handoff"] is None:
+        typer.echo(f"{row['name']} is installed; there is nothing to hand off.", err=True)
+        raise typer.Exit(int(ExitCode.CONFLICT))
+    typer.echo(row["install_handoff"]["prompt"])
 
 
 @app.command("edit")

@@ -47,11 +47,11 @@ import asyncio
 import logging
 import pathlib
 import re
-import shutil
 from typing import IO
 
 from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.infrastructure.agent.claude_effort import claude_effort_levels
+from coffer.infrastructure.platform.user_path import which_on_user_path
 
 _log = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ class ClaudeBinaryModelDiscovery:
         """The real executable behind the launcher. ``resolve()`` matters: the
         entry on PATH is a symlink into a per-version directory, and the version
         directory is what makes the cache key move on upgrade."""
-        found = shutil.which(self._binary_name)
+        found = which_on_user_path(self._binary_name)
         if found is None:
             return None
         try:

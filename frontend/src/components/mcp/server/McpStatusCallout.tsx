@@ -1,17 +1,17 @@
 // src/components/mcp/server/McpStatusCallout.tsx — the "why, and what next" at the top of the open server's Overview (design 4.1.01–4.1.06).
 //
 // A test the user just ran speaks first (passed: what it listed; failed: why,
-// with its stderr one click away). Otherwise the state's own callout: a
-// failing server's last error, since when, who can't call it and its last
-// successful call, with View log; a missing launcher, with Open in CLIs; a
-// secret this Mac does not hold, with Replace secret; an Off server's
-// explanation; many tools behind search. Nothing for a healthy server with
-// nothing to say.
-import { useState } from "react";
-import { Link } from "react-router-dom";
+// with its stderr one click away and the diagnosis hand-off beside it).
+// Otherwise the state's own callout: a failing server's last error, since
+// when, who can't call it and its last successful call, with View log and the
+// diagnosis hand-off; a missing launcher, with the install hand-off (the
+// backend's prompt — which installer fits is the agent's call, so no install
+// command is named here); a secret this Mac does not hold, with Replace
+// secret; an Off server's explanation; many tools behind search. Nothing for
+// a healthy server with nothing to say.
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowRight,
   Check,
   CircleAlert,
   KeyRound,
@@ -21,22 +21,27 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { CopyableCommand } from "@/components/settings/CopyableCommand";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { McpCallout as Callout } from "./McpCallout";
-import {
-  installCommandFor,
-  seconds,
-  shortTime,
-  type ServerState,
-  secretLabel,
-} from "./serverState";
+import { seconds, shortTime, type ServerState, secretLabel } from "./serverState";
 import type { TestResult } from "./testResult";
 
 /** A clause that opens the sentence starts with a capital. */
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A callout's own action with the backend's hand-off beside it, when it has one. */
+function withHandoff(action: ReactNode, prompt: string | undefined) {
+  if (!prompt) return action;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {action}
+      <AgentHandoff prompt={prompt} size="sm" />
+    </div>
+  );
+}
 
 interface Props {
   state: ServerState;
@@ -125,7 +130,7 @@ export function McpStatusCallout({
         icon={CircleAlert}
         testId="mcp-test-result"
         title={t("mcp.page.testFailed", { took })}
-        action={stderrButton}
+        action={withHandoff(stderrButton, test.handoff?.prompt)}
       >
         {test.error_message}
         {tail}
@@ -141,29 +146,15 @@ export function McpStatusCallout({
   }
   if (state.kind === "launcherMissing" && detail?.missing_runner) {
     const runner = detail.missing_runner;
-    const install = installCommandFor(runner);
     return (
       <Callout
         tint="warn"
         icon={TriangleAlert}
         testId="mcp-callout-launcher"
         title={t("mcp.page.launcherTitle", { runner })}
-        action={
-          <Button size="sm" variant="outline" className="bg-surface-raised" asChild>
-            <Link to="/clis">
-              <ArrowRight aria-hidden /> {t("mcp.page.openInClis")}
-            </Link>
-          </Button>
-        }
+        action={withHandoff(null, detail.handoff?.prompt)}
       >
-        <p>{t("mcp.page.launcherBodyWho", { runner, who, tools })}</p>
-        {install ? (
-          <div className="mt-2 max-w-md">
-            <CopyableCommand command={install} />
-          </div>
-        ) : (
-          <p className="mt-1">{t("mcp.missingRunnerHint", { runner })}</p>
-        )}
+        {t("mcp.page.launcherBodyWho", { runner, who, tools })}
       </Callout>
     );
   }
@@ -204,7 +195,7 @@ export function McpStatusCallout({
         icon={CircleAlert}
         testId="mcp-callout-failing"
         title={detail?.last_error ?? t("mcp.page.failingTitle")}
-        action={viewLog}
+        action={withHandoff(viewLog, detail?.handoff?.prompt)}
       >
         {facts.length > 0 ? `${sentence(facts.join(" · "))}. ` : ""}
         {t("mcp.page.failingBodyWho", { who, tools })}

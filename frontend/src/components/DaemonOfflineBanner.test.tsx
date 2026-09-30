@@ -16,6 +16,7 @@ vi.mock("@/lib/hooks/useDaemon", async (importOriginal) => ({
 // Browser host by default — the Tauri branch gets its own describe block below.
 vi.mock("@/lib/tauri", () => ({
   isTauri: () => false,
+  inDesktopShell: () => false,
   restartDaemon: vi.fn(),
   applyDaemonConnection: vi.fn(),
   connectToShellDaemon: vi.fn(),
@@ -160,6 +161,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true });
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
+      inDesktopShell: () => true,
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: vi.fn().mockResolvedValue(undefined),
     }));
@@ -183,6 +185,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     const restartDaemonMock = vi.fn().mockRejectedValue(new Error("permission denied"));
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
+      inDesktopShell: () => true,
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: vi.fn(),
     }));
@@ -211,6 +214,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     const connectMock = vi.fn();
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
+      inDesktopShell: () => true,
       restartDaemon: restartDaemonMock,
       applyDaemonConnection: applyMock,
       connectToShellDaemon: connectMock,
@@ -258,6 +262,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       );
     vi.doMock("@/lib/tauri", () => ({
       isTauri: () => true,
+      inDesktopShell: () => true,
       restartDaemon: restartDaemonMock,
       applyDaemonConnection: vi.fn(),
       connectToShellDaemon: vi.fn(),

@@ -36,7 +36,8 @@ Coffer is AI-native: a chore that depends on the machine — installing, setting
 
 - **`domain/handoff.py`** holds `Handoff(task, facts, steps)` and `render_handoff()`. A feature supplies what it knows; the renderer writes one task sentence, the facts as `-` lines, the steps one per line, and then the rules every hand-off ends with — check with the person before anything that needs `sudo` or changes system settings, and leave any login to the person without handling their credentials.
 - **The prompt is built on the daemon** and served on the feature's own REST response as `handoff: {prompt}` (the shared `HandoffOut` schema) and by its command line, so a copied prompt and a printed one are the same words.
-- **The web UI shows it with one component**, `AgentHandoff`: **Copy prompt**, and **Ask an agent**, which opens a new conversation with a Coffer-managed agent with the prompt in the composer. The person presses Send; nothing is sent for them, because a managed agent runs with full permissions.
+- **The web UI shows it with one component**, `AgentHandoff`: **Copy prompt**, and **Ask an agent**, which opens a new conversation with a Coffer-managed agent with the prompt in the composer. The person presses Send; nothing is sent for them, because a managed agent runs with full permissions. With no managed agent available — the agent that is missing is the one that would be asked, or none is added yet — only Copy prompt is offered.
+- **The attention list carries it too.** An `AttentionItem` whose fix is a chore has an optional `handoff`, the same prompt its kind's page offers, and a reason sentence that names no command. The Overview's Needs you row offers it in the row's ⋯ menu, and `coffer attention --prompt <key>` prints it.
 
 For a required command the facts are:
 

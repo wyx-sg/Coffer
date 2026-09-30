@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import pathlib
 from dataclasses import dataclass
+from functools import cache
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.auto_detect import AutoDetectService
@@ -46,6 +47,8 @@ from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScan
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
+from coffer.infrastructure.platform.host import machine_label
+from coffer.infrastructure.platform.user_path import UserPath
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
@@ -183,7 +186,14 @@ def wire_agent_and_skill_kinds(
         config_file_store=config_file_store,
     )
     # Two-signal detection: the agents' dependency probe facets + the dirs.
-    auto_detect_svc = AutoDetectService(agent_service=agent_svc, catalog=agent_catalog)
+    # An agent whose program is not found is handed to an agent to install,
+    # with this machine and the PATH the probes look on (UserPath) as facts.
+    auto_detect_svc = AutoDetectService(
+        agent_service=agent_svc,
+        catalog=agent_catalog,
+        machine=cache(machine_label),
+        lookup_path=UserPath(),
+    )
     agent_config_file_svc = AgentConfigFileService(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
@@ -229,7 +239,8 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         detail_reader=FsPluginDetailReader(),
-        cli_runner=ClaudePluginCli(),
+        # Found on the same PATH detection finds `claude` on.
+        cli_runner=ClaudePluginCli(user_path=UserPath()),
     )
 
     # Read-only listing of every hook in the agent's native config, Coffer's

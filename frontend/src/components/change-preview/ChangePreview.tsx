@@ -45,6 +45,8 @@ interface ChangePreviewProps {
   applyDestructive?: boolean;
   /** The note beside the review footer; defaults to the "only these lines" reassurance. */
   note?: string;
+  /** Beside Retry once a change failed — e.g. the refusal's hand-off to an agent. */
+  failedNote?: React.ReactNode;
   /** Shown above "What will happen" while reviewing. */
   lead?: React.ReactNode;
   /** A line under the diffs while reviewing. */
@@ -53,7 +55,7 @@ interface ChangePreviewProps {
 
 const NO_SUMMARIES: ChangeSummaryLine[] = [];
 
-function Footer({ note, children }: { note?: string; children: React.ReactNode }) {
+function Footer({ note, children }: { note?: React.ReactNode; children: React.ReactNode }) {
   return (
     <DialogFooter className="m-0 mt-0 flex-row items-center justify-start gap-2 rounded-none px-5 py-3 sm:justify-start">
       <span className="min-w-0 text-xs text-text-muted">{note}</span>
@@ -76,6 +78,7 @@ export function ChangePreview({
   applyLabel,
   applyDestructive = false,
   note,
+  failedNote,
   lead,
   diffNote,
 }: ChangePreviewProps) {
@@ -159,7 +162,7 @@ export function ChangePreview({
       break;
     case "failed":
       footer = (
-        <Footer>
+        <Footer note={failedNote}>
           <Button variant="outline" onClick={close}>
             {t("common.close")}
           </Button>

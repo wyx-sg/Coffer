@@ -227,6 +227,34 @@ def test_a_local_edit_is_409_until_taken_or_kept(c: TestClient, up: Upstream) ->
     assert "mine" not in (_master() / "SKILL.md").read_text()
 
 
+def test_a_conflict_hands_off_the_merge_and_merged_moves_the_pin(
+    c: TestClient, up: Upstream
+) -> None:
+    item = _add(c, up, path="skills/review")
+    uid, first = item["uid"], item["source"]["commit"]
+    (_master() / "SKILL.md").write_text(skill_md("review", "mine"))
+    new = _move(up)
+
+    p = c.post(f"/api/v1/skills/{uid}/source/preview").json()
+    assert p["conflict"] is True
+    assert str(_master()) in p["handoff"]["prompt"] and new in p["handoff"]["prompt"]
+    assert c.delete(f"/api/v1/skills/stage/{p['staging_id']}").status_code == 204
+
+    # Not the update: the pinned commit is refused with a coded error.
+    r = c.post(f"/api/v1/skills/{uid}/source/merged", json={"commit": first})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SKILL_UPDATE_NOT_PENDING"
+
+    r = c.post(f"/api/v1/skills/{uid}/source/merged", json={"commit": new})
+    assert r.status_code == 200, r.text
+    assert r.json()["source"]["commit"] == new
+    assert r.json()["source_status"]["update_available"] is False
+    assert "mine" in (_master() / "SKILL.md").read_text()
+    audit = c.get("/api/v1/audit", params={"event_type": "skill_update_merged"}).json()
+    [event] = [e for e in audit["entries"] if e["resource_name"] == "review"]
+    assert (event["details"]["from_commit"], event["details"]["to_commit"]) == (first, new)
+    assert stage_dirs(get_skill_source_service()) == []
+
+
 def test_an_unreachable_source_on_check_is_reported_not_raised(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid = item["uid"]

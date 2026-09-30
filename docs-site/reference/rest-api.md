@@ -101,11 +101,11 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 277 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 280 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
-| [daemon](#daemon) | 13 |
+| [daemon](#daemon) | 15 |
 | [resources](#resources) | 9 |
 | [audit](#audit) | 1 |
 | [retention](#retention) | 4 |
@@ -119,7 +119,7 @@ The daemon mounts 277 operations in 27 groups. Groups follow the order the daemo
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 38 |
 | [fs](#fs) | 5 |
-| [skills](#skills) | 25 |
+| [skills](#skills) | 26 |
 | [clis](#clis) | 4 |
 | [mcp](#mcp) | 15 |
 | [custom-tools](#custom-tools) | 14 |
@@ -145,6 +145,8 @@ The daemon mounts 277 operations in 27 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/daemon/logs` | The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon`` reads, for the human looking at the Activity page. |
 | `GET` | `/api/v1/daemon/port` | Get Daemon Port |
 | `PUT` | `/api/v1/daemon/port` | Save the port of the next start; refused in place when it cannot be bound. |
+| `POST` | `/api/v1/daemon/restart` | Start a successor, then exit once this answer is sent. |
+| `GET` | `/api/v1/daemon/upgrade` | Get Upgrade |
 | `GET` | `/api/v1/storage` | Storage Summary |
 | `POST` | `/api/v1/storage/cache/clear` | Delete the memory tree's files and the transcript summary cache. |
 | `GET` | `/api/v1/daemon/features` | List Features |
@@ -364,6 +366,7 @@ The daemon mounts 277 operations in 27 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/skills/{uid}/source/compare` | Compare Update |
 | `POST` | `/api/v1/skills/{uid}/source/apply` | Apply Update |
 | `POST` | `/api/v1/skills/{uid}/source/keep` | Keep Mine |
+| `POST` | `/api/v1/skills/{uid}/source/merged` | "I merged it" (spec skill-manager "Record an update merged into local edits"): pin the skill to the upstream commit its local edits were merged with, leaving the master folder's files as they are. |
 | `GET` | `/api/v1/skills/{uid}/files` | Return the skill's master folder as a read-only file tree. |
 | `GET` | `/api/v1/skills/{uid}/files/content` | Read a single file's contents from the skill's master folder. |
 | `PUT` | `/api/v1/skills/{uid}/files/content` | Overwrite one existing text file in the skill's master folder, as one vault commit naming the writer. |

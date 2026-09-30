@@ -153,23 +153,40 @@ describe("AgentsPage", () => {
 
   // Scenario (revise-web-ui-ia, agent-registry): "an agent that is not installed shows how to install it"
   // Scenario (revise-web-ui-ia, agent-registry): "a leftover config directory reads as config left behind"
-  test("not installed and config left behind show the command to copy and no Add", async () => {
+  test("not installed and config left behind offer the install prompt and no Add", async () => {
     setDaemon(
       fakeDaemon({
         types: [
-          typeRow({ type: "claude_code", state: "missing", addable: false, version: null }),
-          typeRow({ type: "codex", state: "config_only", addable: false, version: null }),
+          typeRow({
+            type: "claude_code",
+            state: "missing",
+            addable: false,
+            version: null,
+            install_handoff: { prompt: "Please install Claude Code on this machine." },
+          }),
+          typeRow({
+            type: "codex",
+            state: "config_only",
+            addable: false,
+            version: null,
+            install_handoff: { prompt: "Please reinstall OpenAI Codex on this machine." },
+          }),
         ],
       }),
     );
     renderPage();
-    await waitFor(() => expect(screen.getAllByText("Copy command")).toHaveLength(2));
-    const claude = rowOf("Claude Code");
+    const claude = await waitFor(() => rowOf("Claude Code"));
+    await waitFor(() =>
+      expect(within(claude).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument(),
+    );
+    expect(within(rowOf("Codex")).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
     expect(within(claude).getAllByText("Not installed").length).toBeGreaterThan(0);
-    expect(claude).toHaveTextContent("npm install -g @anthropic-ai/claude-code");
+    expect(claude).toHaveTextContent("An agent can install it — copy the prompt");
+    expect(document.body).not.toHaveTextContent(/npm|install -g/);
     expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
     expect(screen.getByText("Config left behind — program not found")).toBeInTheDocument();
-    // The warning under the Codex row names the folder, the program and the command.
+    // The warning under the Codex row names the folder and the program, and
+    // offers the reinstall prompt.
     const notice = screen.getByText(/is still here but there is no/);
     expect(notice).toHaveTextContent("~/.codex is still here but there is no codex on PATH");
     expect(screen.getByRole("button", { name: "Reveal folder" })).toBeInTheDocument();

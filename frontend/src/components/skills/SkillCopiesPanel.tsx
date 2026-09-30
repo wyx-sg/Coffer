@@ -7,7 +7,10 @@
 // master (its page) or a folder that is not in the library (its pane); Repair
 // a missing or repointed link. Checking changes nothing on disk; Coffer
 // repairs a missing link on its own and never overwrites a folder it didn't
-// make, so those wait here for the reader.
+// make, so those wait here for the reader — each with the backend's hand-off
+// (compare the folder, say what an orphan is, find a lost master) beside its
+// button (spec skill-manager "Hand unsettled skill drift to an agent with a
+// prompt").
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -15,6 +18,7 @@ import { CheckCircle2, RefreshCw, X } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { EmptyState } from "@/components/EmptyState";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillCopyDialog } from "@/components/skills/SkillCopyDialog";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -66,6 +70,11 @@ function Finding({
         <span className="text-xs text-text-muted">
           {t(`skills.copies.about.${entry.kind}`, { path: abbreviateHomePath(entry.target_path) })}
         </span>
+        {entry.handoff && !repaired ? (
+          <span className="pt-1">
+            <AgentHandoff prompt={entry.handoff.prompt} size="sm" />
+          </span>
+        ) : null}
       </span>
       <StatusWord tone={repaired ? "ok" : "warn"}>{status}</StatusWord>
       <span className="justify-self-end">

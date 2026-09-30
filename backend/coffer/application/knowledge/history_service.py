@@ -21,12 +21,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+from collections.abc import Callable
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge import collection_writes
 from coffer.application.knowledge.recording import recording, settle
 from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.undo_handoff import undo_pass_handoff
 from coffer.domain.audit import AuditEventType
+from coffer.domain.git_handoff import git_missing_details
 from coffer.domain.knowledge.entry import CollectionEntry, KnowledgeFile
 from coffer.domain.knowledge.errors import (
     KnowledgeFileNotFound,
@@ -74,16 +77,24 @@ class KnowledgeHistoryService:
         knowledge: KnowledgeService,
         history: KnowledgeHistory | None,
         audit: AuditService,
+        machine: Callable[[], str] = lambda: "this machine",
     ) -> None:
         self._knowledge = knowledge
         self._history = history
         self._audit = audit
+        #: The OS and architecture, for the install-git hand-off.
+        self._machine = machine
 
     def _require(self) -> KnowledgeHistory:
         history = self._history
-        if history is None or not history.available():
-            raise KnowledgeHistoryUnavailable("git is not available on this machine")
-        return history
+        if history is not None and history.available():
+            return history
+        if history is None or not history.git_installed():
+            raise KnowledgeHistoryUnavailable(
+                "git is not installed on this machine",
+                git_missing_details(self._machine(), needed_for="the knowledge history"),
+            )
+        raise KnowledgeHistoryUnavailable("the vault has no history repository")
 
     async def _settled(self) -> KnowledgeHistory:
         history = await asyncio.to_thread(self._require)
@@ -304,10 +315,26 @@ class KnowledgeHistoryService:
         if change.meta.operation != OP_PASS:
             raise KnowledgeNotAPass(version)
         documents = [d.path for d in change.documents if _is_document(d.path)]
+        changed_since: dict[str, str] = {}
         for relpath in documents:
             later = await asyncio.to_thread(history.later, change.version, relpath)
             if later is not None:
-                raise KnowledgeUndoConflict(change.version, relpath, later)
+                changed_since[relpath] = later
+        if changed_since:
+            document, later = next(iter(changed_since.items()))
+            raise KnowledgeUndoConflict(
+                change.version,
+                document,
+                later,
+                handoff=undo_pass_handoff(
+                    root=paths.knowledge_root(),
+                    repo=history.writer().repo.root,
+                    prefix=paths.VAULT_PREFIX,
+                    change=change,
+                    documents=documents,
+                    changed_since=changed_since,
+                ),
+            )
         meta = CommitMeta(
             WRITER_USER,
             OP_UNDO,

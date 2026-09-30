@@ -8,7 +8,10 @@ what the Add skill dialog sees: the archive is uploaded (``POST
 /skills/stage/git``), and nothing is added until the user answers the prompt
 (or passes ``--yes``); a no, or a choice the command cannot make, removes the
 stage. ``update`` previews, asks, and applies — refusing a conflict with a
-local edit until ``--take-theirs`` or ``--keep-mine`` says which side wins.
+local edit until ``--take-theirs`` or ``--keep-mine`` says which side wins;
+``--prompt`` prints the hand-off that asks an agent to merge the two instead,
+and ``--merged <commit>`` records that merge (spec skill-manager "Record an
+update merged into local edits").
 """
 
 from __future__ import annotations
@@ -185,16 +188,43 @@ def register(app: typer.Typer) -> None:
         keep_mine: bool = typer.Option(
             False, "--keep-mine", help="Keep local edits and stop offering this update"
         ),
+        prompt: bool = typer.Option(
+            False,
+            "--prompt",
+            help="Print the prompt that hands merging the update into your edits to an agent",
+        ),
+        merged: str | None = typer.Option(
+            None,
+            "--merged",
+            metavar="COMMIT",
+            help=(
+                "Record that your edits were merged with the update at COMMIT: the pin "
+                "moves there and the files stay as they are"
+            ),
+        ),
         output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
     ) -> None:
         """Check a Git-imported skill for updates, preview one and apply it."""
         verbose = verbose_of(ctx)
-        if take_theirs and keep_mine:
-            typer.echo("choose one of --take-theirs and --keep-mine", err=True)
+        if sum([take_theirs, keep_mine, prompt, merged is not None]) > 1:
+            typer.echo("choose one of --take-theirs, --keep-mine, --prompt and --merged", err=True)
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         c, _info = _cli_client.client_or_exit()
         with c:
             uid = resolve_ref(c, "skill", ref, verbose=verbose)["uid"]
+            if merged is not None:
+                m = c.post(
+                    f"/skills/{uid}/source/merged",
+                    json={"commit": merged},
+                    timeout=_GIT_TIMEOUT_S,
+                )
+                _cli_client.check(m, verbose=verbose)
+                source = m.json()["source"]
+                typer.echo(
+                    f"recorded: skill {m.json()['name']} is pinned at {source['commit'][:7]}; "
+                    "its files were kept as they are"
+                )
+                return
             if check_only:
                 r = c.post(f"/skills/{uid}/source/check", timeout=_GIT_TIMEOUT_S)
                 _cli_client.check(r, verbose=verbose)
@@ -230,12 +260,20 @@ def register(app: typer.Typer) -> None:
                     _cli_client.check(k, verbose=verbose)
                     typer.echo(f"kept your version; {p['to_commit'][:7]} will not be offered again")
                     raise typer.Exit(0)
+                if prompt:
+                    if not p["handoff"]:
+                        typer.echo("no local edits to merge: the update applies as it is")
+                        raise typer.Exit(0)
+                    typer.echo(p["handoff"]["prompt"])
+                    raise typer.Exit(0)
                 if p["conflict"]:
                     _print_changes("your edits since the pin:", p["local_changes"])
                     if not take_theirs:
                         typer.echo(
                             "the skill was edited since its pinned commit; pass --take-theirs "
-                            "to apply and discard the edits, or --keep-mine to keep them",
+                            "to apply and discard the edits, or --keep-mine to keep them; "
+                            "--prompt hands merging them to an agent, and --merged "
+                            f"{p['to_commit']} records the merge",
                             err=True,
                         )
                         raise typer.Exit(int(ExitCode.CONFLICT))

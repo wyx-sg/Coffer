@@ -15,7 +15,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
 from coffer.surfaces.http.dependencies import get_actor
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 if TYPE_CHECKING:
     from coffer.application.channel.service import ChannelService
@@ -98,6 +100,11 @@ class ChannelStatusOut(BaseModel):
     #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
     title: str | None = None
+    #: While the websocket reports ``sdk_missing``: the prompt that has the
+    #: person's agent put SeaTalk's SDK where the daemon loads it from (spec
+    #: channels/seatalk "Load the websocket client library from an
+    #: operator-supplied directory"). ``None`` in every other state.
+    handoff: HandoffOut | None = None
 
 
 class NotifyIn(BaseModel):
@@ -154,6 +161,11 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         ],
         runs_on=status.runs_on,
         runs_here=status.runs_here,
+        handoff=handoff_out(
+            sdk_missing_handoff(status.name)
+            if inbound is not None and inbound.websocket_state == "sdk_missing"
+            else None
+        ),
     )
 
 

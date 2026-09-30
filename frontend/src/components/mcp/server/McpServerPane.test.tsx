@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ToastProvider } from "@/components/ui/toast";
+import { acceptance } from "@/test/acceptance";
 import type { ResourceOut } from "@/lib/api/resources";
 import { McpServerPane } from "./McpServerPane";
 
@@ -213,12 +214,77 @@ describe("McpServerPane", () => {
     expect(await screen.findByTestId("mcp-log-drawer")).toBeInTheDocument();
   });
 
-  test("a missing launcher names the command that installs it", async () => {
-    api.status = { status: "failing", missing_runner: "uvx" };
-    renderPane(DUCKDB);
-    const callout = await screen.findByTestId("mcp-callout-launcher");
-    expect(within(callout).getByText("uvx is not installed on this Mac")).toBeInTheDocument();
-    expect(within(callout).getByText("brew install uv")).toBeInTheDocument();
+  acceptance(
+    "web-ui",
+    "a missing launcher offers the hand-off, not an install command",
+    async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText },
+        configurable: true,
+        writable: true,
+      });
+      const prompt =
+        "Please install `uvx` on this machine so Coffer can start the MCP server duckdb.";
+      api.status = { status: "failing", missing_runner: "uvx", handoff: { prompt } };
+      renderPane(DUCKDB);
+      const callout = await screen.findByTestId("mcp-callout-launcher");
+      expect(within(callout).getByText("uvx isn't found on this machine")).toBeInTheDocument();
+      expect(callout).not.toHaveTextContent(/brew/);
+      fireEvent.click(within(callout).getByRole("button", { name: "Copy prompt" }));
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(prompt));
+    },
+  );
+
+  acceptance("web-ui", "a failed test offers a diagnosis hand-off beside View log", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+    const prompt =
+      "Please find out why the MCP server sentry, which Coffer runs for my agents, fails.";
+    api.post.mockResolvedValue({
+      data: {
+        ok: false,
+        latency_ms: 812,
+        error_message: "Connection refused by mcp.sentry.dev",
+        error_code: "connect_failed",
+        exit_code: null,
+        protocol_version: null,
+        server_capabilities: null,
+        tools: [],
+        tool_count: 0,
+        resource_count: null,
+        prompt_count: null,
+        stderr_tail: [],
+        unreleased_secret_keys: [],
+        handoff: { prompt },
+      },
+      error: undefined,
+    });
+    api.status = { status: "healthy" };
+    renderPane();
+    fireEvent.click(await screen.findByRole("button", { name: /^test$/i }));
+    const result = await screen.findByTestId("mcp-test-result");
+    expect(result).toHaveTextContent("Connection refused by mcp.sentry.dev");
+    expect(within(result).getByRole("button", { name: /view log/i })).toBeInTheDocument();
+    fireEvent.click(within(result).getByRole("button", { name: "Copy prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(prompt));
+    expect(screen.getAllByRole("button", { name: /^test( again)?$/i }).length).toBeGreaterThan(0);
+  });
+
+  test("a failing server offers its diagnosis hand-off beside View log", async () => {
+    api.status = {
+      status: "failing",
+      last_error: "exited with status 1",
+      handoff: { prompt: "Please find out why the MCP server sentry fails." },
+    };
+    renderPane();
+    const callout = await screen.findByTestId("mcp-callout-failing");
+    expect(within(callout).getByRole("button", { name: /view log/i })).toBeInTheDocument();
+    expect(within(callout).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
   });
 
   test("a secret missing on this Mac is named and offers Replace secret", async () => {

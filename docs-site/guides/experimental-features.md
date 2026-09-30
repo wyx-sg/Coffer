@@ -42,6 +42,7 @@ While a feature is registered, it shows up in three places:
 
 - **Settings → General** gets an experimental-features section with one switch per feature.
 - **The sidebar** labels the feature's entry **Experimental**, so nobody takes it for a finished part of the product.
+- **The feature's pages**, while it is off, show a notice with **Switch on**, which makes the same switch as Settings → General and opens the page at once, and **Open Settings**. A feature pinned by `COFFER_FEATURES` says so instead and has no button.
 - **`coffer config`** gets a `feature.<key>` key:
 
 ```sh

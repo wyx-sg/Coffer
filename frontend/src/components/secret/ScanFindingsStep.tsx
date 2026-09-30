@@ -3,9 +3,12 @@
 // Each finding says where it is (file and line), the key it is assigned to,
 // and the secret it would become. Values are never shown — the scan does not
 // return them. Skills that still point at `~/.coffer/secrets/` are listed
-// beneath, since moving a file's values does not rewrite those mentions.
+// beneath, since moving a file's values does not rewrite those mentions; the
+// backend's hand-off asks an agent to rewrite them to use `coffer run` (it
+// names files, lines and secret names, never a value).
 import { useTranslation } from "react-i18next";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -103,6 +106,11 @@ export function ScanFindingsStep({
               </li>
             ))}
           </ul>
+          {scan.handoff ? (
+            <div className="pt-1">
+              <AgentHandoff prompt={scan.handoff.prompt} size="sm" />
+            </div>
+          ) : null}
         </div>
       ) : null}
       <p className="text-xs text-text-muted">{t("secrets.scan.hint")}</p>

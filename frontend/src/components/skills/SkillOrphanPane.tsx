@@ -3,13 +3,16 @@
 // where it is, whether its SKILL.md is valid and how many files it holds, why
 // no agent gets it, and the three things to do — Add to library… (registers
 // the folder in place, reach as for a fresh import), Reveal in Finder, and
-// Delete folder… (moved to ~/.coffer/content/backup/, confirmed first).
+// Delete folder… (moved to ~/.coffer/content/backup/, confirmed first) — with
+// the drift finding's hand-off, which asks an agent to look at the folder and
+// say which of the two to press.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Folder, FolderOpen, Plus, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -20,6 +23,7 @@ import {
   useRemoveSkillOrphan,
   useSkillOrphans,
 } from "@/lib/hooks/useSkillCopies";
+import { useSkillCopies } from "@/lib/hooks/useSkills";
 
 export function SkillOrphanPane({ name }: { name: string }) {
   const { t } = useTranslation();
@@ -31,6 +35,10 @@ export function SkillOrphanPane({ name }: { name: string }) {
   const remove = useRemoveSkillOrphan();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const orphan = orphans.data?.find((o) => o.name === name);
+  // The drift report's finding for this folder carries the hand-off.
+  const handoff = useSkillCopies().data?.entries.find(
+    (e) => e.kind === "orphan_master" && e.skill_name === name,
+  )?.handoff;
 
   if (!orphan) {
     return orphans.isPending ? null : (
@@ -79,6 +87,12 @@ export function SkillOrphanPane({ name }: { name: string }) {
           <Trash2 aria-hidden /> {t("skills.orphan.delete")}
         </Button>
       </div>
+      {handoff ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-xs text-text-muted">{t("skills.orphan.askAgent")}</span>
+          <AgentHandoff prompt={handoff.prompt} size="sm" />
+        </div>
+      ) : null}
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}

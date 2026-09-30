@@ -354,6 +354,7 @@ export interface components {
         /** AttentionItemOut */
         AttentionItemOut: {
             action: components["schemas"]["AttentionActionOut"];
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Ignorable */
             ignorable: boolean;
             /**
@@ -502,6 +503,15 @@ export interface components {
          *     HeartbeatEventOut.
          */
         EventStreamMessage: components["schemas"]["ChangeEventOut"] | components["schemas"]["ResyncEventOut"] | components["schemas"]["HeartbeatEventOut"];
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
+        };
         /**
          * HeartbeatEventOut
          * @description The data of a `heartbeat` event: sent at a fixed interval while nothing changes.

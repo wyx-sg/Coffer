@@ -48,6 +48,7 @@ const AGENT: AgentOut = {
   wire_api: null,
   version: null,
   state: "installed_active",
+  install_handoff: null,
   created_at: "",
   updated_at: "",
 };

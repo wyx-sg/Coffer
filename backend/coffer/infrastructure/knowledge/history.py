@@ -148,6 +148,10 @@ class KnowledgeHistory:
             return False
         return True
 
+    def git_installed(self) -> bool:
+        """Whether this machine has a ``git`` on the daemon's PATH at all."""
+        return git.git_available()
+
     def files_of(self, relpath: str) -> list[str]:
         """Every vault path ``relpath`` stands for: itself when it names a
         file, else every file under it on disk or at ``HEAD``."""

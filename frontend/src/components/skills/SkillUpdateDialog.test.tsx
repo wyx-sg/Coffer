@@ -3,7 +3,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
+import { acceptance } from "@/test/acceptance";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
 import { gitSkill, updatePreview } from "./skillSourceTestData";
 
@@ -13,8 +15,12 @@ vi.mock("@/lib/api/skills", () => ({
     cancelStage: vi.fn(),
     applyUpdate: vi.fn(),
     keepMine: vi.fn(),
+    markMerged: vi.fn(),
     compareUpdate: vi.fn(),
   },
+}));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
 }));
 const { skillsApi } = await import("@/lib/api/skills");
 const api = vi.mocked(skillsApi);
@@ -26,15 +32,20 @@ function renderDialog() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <SkillUpdateDialog skill={skill} open onOpenChange={onOpenChange} />
+      <MemoryRouter>
+        <SkillUpdateDialog skill={skill} open onOpenChange={onOpenChange} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
   return { onOpenChange };
 }
 
+const MERGE_PROMPT = "Skill terraform-plan has local edits, and its source has an update.";
+
 const conflicted = () =>
   updatePreview({
     conflict: true,
+    handoff: { prompt: MERGE_PROMPT },
     local_changes: [
       {
         path: "SKILL.md",
@@ -140,6 +151,46 @@ describe("SkillUpdateDialog", () => {
       }),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  acceptance("skill-manager", "a conflict hands merging the update to an agent", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    api.previewUpdate.mockResolvedValue(conflicted());
+    renderDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: /Merge with an agent/ }));
+    const box = screen.getByTestId("skill-update-merge-handoff");
+    fireEvent.click(within(box).getByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(MERGE_PROMPT);
+    // The two manual choices stay.
+    expect(screen.getByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Take the update/ })).toBeInTheDocument();
+  });
+
+  acceptance(
+    "skill-manager",
+    "recording a merge moves the pin and keeps the merged files",
+    async () => {
+      api.previewUpdate.mockResolvedValue(conflicted());
+      api.markMerged.mockResolvedValue(skill);
+      const { onOpenChange } = renderDialog();
+      fireEvent.click(await screen.findByRole("radio", { name: /Merge with an agent/ }));
+      fireEvent.click(screen.getByRole("button", { name: "I merged it" }));
+      const confirm = await screen.findByRole("dialog", { name: "Record the merge?" });
+      expect(api.markMerged).not.toHaveBeenCalled();
+      fireEvent.click(within(confirm).getByRole("button", { name: "I merged it" }));
+      await waitFor(() => expect(api.markMerged).toHaveBeenCalledWith("sk-1", "f9e8d7c6b5a4"));
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+      expect(api.cancelStage).toHaveBeenCalledWith("upd-1");
+      expect(api.applyUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  test("without a hand-off there is no merge choice", async () => {
+    api.previewUpdate.mockResolvedValue({ ...conflicted(), handoff: null });
+    renderDialog();
+    expect(await screen.findByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Merge with an agent/ })).not.toBeInTheDocument();
   });
 
   test("Compare shows the local, pinned and new versions of a file", async () => {

@@ -6,7 +6,9 @@
 // owner". Coffer installs no plugins, so every row is the agent's own. A row
 // carries the plugin's version, marketplace and state, an enabled switch and
 // Uninstall (hidden when the listing says it cannot run now); its name opens the
-// plugin's own page — rows do not expand.
+// plugin's own page — rows do not expand. When Uninstall cannot run because
+// Claude Code's program is not found, the tab offers the agent's reinstall
+// hand-off beside saying so.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -15,6 +17,7 @@ import { PackageMinus, Puzzle } from "lucide-react";
 import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { DataTable, type Column } from "@/components/DataTable";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -139,6 +142,12 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
             </ul>
           </AlertDescription>
         </Alert>
+      ) : null}
+      {!codex && plugins.data && !canUninstall && agent.install_handoff ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-muted">
+          <span>{t("agents.pluginsTab.programMissing", { agent: agentName })}</span>
+          <AgentHandoff prompt={agent.install_handoff.prompt} size="sm" />
+        </div>
       ) : null}
       <AgentKindTab
         rows={rows}

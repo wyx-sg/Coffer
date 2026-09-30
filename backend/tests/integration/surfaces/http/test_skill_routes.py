@@ -426,9 +426,19 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         missing = next(e for e in entries if e["skill_name"] == "fix-me")
         assert missing["agent_name"] == "claude-code"
         # The entry is exactly these five fields — no uid rides along, so a
-        # client cannot start addressing one entry out of the report.
-        fields = {"skill_name", "agent_name", "kind", "target_path", "suggested_remedy"}
+        # client cannot start addressing one entry out of the report, and no
+        # remedy text: each surface says the remedy for a kind in its own words.
+        fields = {"skill_name", "agent_name", "kind", "target_path", "handoff"}
         assert set(missing) == fields
+        # Repair is the fix for a missing link, so nothing is handed off.
+        assert missing["handoff"] is None
+        # A folder in the way is handed to an agent: compare, advise, touch nothing.
+        foreign = next(e for e in entries if e["skill_name"] == "foreign")
+        prompt = foreign["handoff"]["prompt"]
+        assert str(foreign_link) in prompt
+        assert str(tmp_path / ".coffer" / "vault" / "skills" / "foreign") in prompt
+        assert "Adopt this folder" in prompt and "Replace it with Coffer's link" in prompt
+        assert "Do not move, delete or edit any folder yourself" in prompt
         # What it prints is a LABEL, not an address: the name does not resolve
         # against a skill route, and a client that wants the resource behind it
         # goes the one way a name may still find one — the resources lookup.
@@ -439,6 +449,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # A folder on disk with no row behind it: nothing to look up at all,
         # which is why the report is in names and why repair skips the kind.
         assert orphan["skill_name"] == "adopted-by-nobody"
+        assert orphan["target_path"] in orphan["handoff"]["prompt"]
         lookup = c.get("/api/v1/resources", params={"kind": "skill", "name": orphan["skill_name"]})
         assert lookup.json()["resources"] == [], lookup.text
 

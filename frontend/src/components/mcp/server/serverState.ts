@@ -148,21 +148,6 @@ export function joinNames(names: readonly string[], locale?: string): string {
   }
 }
 
-/** The install line for a launcher Coffer knows how to name; null for the rest. */
-export function installCommandFor(runner: string): string | null {
-  const known: Record<string, string> = {
-    uvx: "brew install uv",
-    uv: "brew install uv",
-    npx: "brew install node",
-    node: "brew install node",
-    bunx: "brew install oven-sh/bun/bun",
-    bun: "brew install oven-sh/bun/bun",
-    docker: "brew install --cask docker",
-    deno: "brew install deno",
-  };
-  return known[runner] ?? null;
-}
-
 /** Each tool's last-24-hours calls and errors, by its original name. */
 export function usageByTool(summary: InvocationSummary | undefined) {
   return new Map(

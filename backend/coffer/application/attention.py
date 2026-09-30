@@ -9,7 +9,10 @@ An item names one resource, a stable ``reason_code`` with one sentence a
 person can read, when the condition was first seen when anything knows that,
 and **one** action: a verb and the REST route the kind's own page already uses
 for it. The Overview therefore never has a write of its own — acting on an item
-is the same call the item's page would make.
+is the same call the item's page would make. An item whose fix is a chore for
+an agent (installing a launcher, diagnosing a failing server) also carries the
+kind's hand-off prompt, so the Overview row offers the same hand-off as the
+page; its ``reason`` then names no command.
 
 A source is added by the kind that owns the signal, registered at the
 composition root. A signal nothing records yet (a provider key the endpoint
@@ -71,6 +74,10 @@ class AttentionItem:
     severity: Severity
     action: AttentionAction
     since: datetime | None = None
+    #: The prompt that hands this item's chore to an agent (``domain/handoff.py``),
+    #: when it is one — the same text the kind's own page offers; ``None`` when
+    #: the action alone is the fix.
+    handoff: str | None = None
 
 
 @dataclass(frozen=True)

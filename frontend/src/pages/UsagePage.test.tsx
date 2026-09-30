@@ -125,6 +125,7 @@ const QUOTA: AgentQuota[] = [
     plan: "max",
     has_value: true,
     last_observed_at: null,
+    handoff: null,
     windows: [win("five_hour", "5-hour window", 42, 2), win("seven_day", "Weekly", 61, 60)],
   },
   {
@@ -132,15 +133,31 @@ const QUOTA: AgentQuota[] = [
     plan: "plus",
     has_value: true,
     last_observed_at: null,
+    handoff: null,
     windows: [
       win("primary", "Primary · 5 h", 91, 1),
       win("secondary", "Secondary · 7 days", 100, 130.5),
     ],
   },
 ];
+const STATUSLINE_PROMPT = "Please set up Coffer's status line wrapper for Claude Code.";
 const NO_QUOTA: AgentQuota[] = [
-  { agent_type: "claude_code", plan: null, has_value: false, last_observed_at: null, windows: [] },
-  { agent_type: "codex", plan: null, has_value: false, last_observed_at: null, windows: [] },
+  {
+    agent_type: "claude_code",
+    plan: null,
+    has_value: false,
+    last_observed_at: null,
+    windows: [],
+    handoff: { prompt: STATUSLINE_PROMPT },
+  },
+  {
+    agent_type: "codex",
+    plan: null,
+    has_value: false,
+    last_observed_at: null,
+    windows: [],
+    handoff: null,
+  },
 ];
 
 interface Setup {
@@ -240,7 +257,10 @@ describe("subscription quota", () => {
     );
     expect(within(quota).getByText("91% used")).toHaveClass("text-warning");
     expect(within(quota).getByText("Limit reached")).toHaveClass("text-danger");
-    expect(within(quota).getByText(/^Resets \d\d:\d\d · in 1 h/)).toBeInTheDocument();
+    // A reset past midnight also names its day.
+    expect(
+      within(quota).getByText(/^Resets (\w{3} \d{1,2} \w{3} )?\d\d:\d\d · in 1 h/),
+    ).toBeInTheDocument();
     // The window reset in 130.5 h is at its limit, so it counts down too.
     expect(within(quota).getByText(/· in 5 d 10 h$/)).toBeInTheDocument();
     expect(within(quota).getAllByText(/^as of \d\d:\d\d$/)).toHaveLength(2);
@@ -270,15 +290,27 @@ describe("subscription quota", () => {
     expect(within(quota).queryByText(/% used/)).toBeNull();
   });
 
-  test("the statusline wrapper is described, never switched on by the page", async () => {
-    install({ quota: NO_QUOTA });
-    renderPage();
-    const quota = quotaSection();
-    expect(
-      await within(quota).findByText("coffer usage statusline -- <your statusLine command>"),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("switch")).toBeNull();
-  });
+  acceptance(
+    "provider-switching",
+    "the quota page hands the statusline opt-in to an agent",
+    async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      install({ quota: NO_QUOTA });
+      renderPage();
+      const quota = quotaSection();
+      expect(
+        await within(quota).findByText(/have your agent point Claude Code's status line/),
+      ).toBeInTheDocument();
+      // One hand-off, on Claude Code's row only; the page never switches it on.
+      const copy = within(quota).getAllByRole("button", { name: "Copy prompt" });
+      expect(copy).toHaveLength(1);
+      fireEvent.click(copy[0]);
+      expect(writeText).toHaveBeenCalledWith(STATUSLINE_PROMPT);
+      expect(within(quota).queryByText(/coffer usage statusline/)).toBeNull();
+      expect(screen.queryByRole("switch")).toBeNull();
+    },
+  );
 
   test("a Codex read that did not happen says why, with a retry", async () => {
     const { post } = install({

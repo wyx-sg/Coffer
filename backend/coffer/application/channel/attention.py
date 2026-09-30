@@ -4,8 +4,11 @@ Asked only of enabled channels bound to this machine — a channel another
 machine runs is not this daemon's to report on:
 
 - ``channel_reconnecting`` — its SeaTalk websocket is (re)connecting;
-- ``channel_disconnected`` — the websocket was kicked by another connection,
-  failed, or the SDK is missing; the reason carries the recorded error text;
+- ``channel_sdk_missing`` — SeaTalk's WebSocket SDK is not where the daemon
+  loads it from; the item carries the hand-off that puts it there
+  (``sdk_handoff``), and its reason names no command;
+- ``channel_disconnected`` — the websocket was kicked by another connection or
+  failed; the reason carries the recorded error text;
 - ``channel_not_running`` — the adapter is not running and no websocket state
   explains why (a Telegram adapter whose start failed).
 
@@ -16,7 +19,7 @@ did not start. A source for it needs that signal recorded first.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
@@ -26,7 +29,7 @@ from coffer.domain.resource import Resource
 KIND = "channel"
 #: The websocket's recorded error is shown verbatim, cut to a readable length.
 _ERROR_MAX = 200
-_DISCONNECTED = frozenset({"kicked", "error", "sdk_missing"})
+_DISCONNECTED = frozenset({"kicked", "error"})
 
 
 class ChannelListPort(Protocol):
@@ -48,9 +51,17 @@ class ChannelAttentionSource:
     name = "channel"
     feature: str | None = None
 
-    def __init__(self, *, resources: ChannelListPort, channels: ChannelStatusPort) -> None:
+    def __init__(
+        self,
+        *,
+        resources: ChannelListPort,
+        channels: ChannelStatusPort,
+        sdk_handoff: Callable[[str], str] | None = None,
+    ) -> None:
         self._resources = resources
         self._channels = channels
+        #: A channel's name → the prompt that puts the SeaTalk SDK in place.
+        self._sdk_handoff = sdk_handoff
 
     async def items(self) -> Sequence[AttentionItem]:
         out: list[AttentionItem] = []
@@ -65,7 +76,12 @@ class ChannelAttentionSource:
             return None
         ws_state = status.inbound.websocket_state if status.inbound is not None else None
         ws_error = status.inbound.websocket_error if status.inbound is not None else None
-        if ws_state == "connecting":
+        handoff: str | None = None
+        if ws_state == "sdk_missing":
+            code, severity = "channel_sdk_missing", Severity.ERROR
+            reason = "SeaTalk's WebSocket SDK is not on this machine, so it receives nothing."
+            handoff = self._sdk_handoff(status.name) if self._sdk_handoff else None
+        elif ws_state == "connecting":
             code, severity = "channel_reconnecting", Severity.WARNING
             reason = "Its connection to the platform is being re-established."
         elif ws_state in _DISCONNECTED:
@@ -87,6 +103,7 @@ class ChannelAttentionSource:
             action=AttentionAction(
                 verb="check", method="GET", path=f"/api/v1/channels/{status.uid}/status"
             ),
+            handoff=handoff,
         )
 
 

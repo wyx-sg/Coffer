@@ -4,7 +4,9 @@
 // file the change writes, the lines Coffer adds or takes out, and a sentence
 // per agent on what it gets or loses — nothing is written until the user
 // confirms. The items are frozen at Apply, so the connection read refreshing
-// under a running write does not reshape the list being ticked off.
+// under a running write does not reshape the list being ticked off. A failure
+// whose refusal carries a hand-off (a missing coffer-mcp-shim) offers it
+// beside Retry.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +15,7 @@ import {
   type ChangeItem,
   type ChangePreviewState,
 } from "@/components/change-preview/ChangePreview";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import {
   createsConfigDir,
   partsToInstall,
@@ -113,6 +116,9 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
     return p ? { ...item, status: p.status, error: p.error } : item;
   });
   const failedAny = items.some((i) => i.status === "failed");
+  const failedHandoff = Object.values(runner.progress).find(
+    (p) => p?.status === "failed" && p.handoff,
+  )?.handoff;
 
   let state: ChangePreviewState;
   if (runner.phase === "applying") state = "applying";
@@ -158,6 +164,7 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
       applyLabel={disconnect ? t("agents.change.disconnect.confirm") : undefined}
       applyDestructive={disconnect}
       note={disconnect ? t("agents.change.disconnect.note") : undefined}
+      failedNote={failedHandoff ? <AgentHandoff prompt={failedHandoff} size="sm" /> : undefined}
     />
   );
 }

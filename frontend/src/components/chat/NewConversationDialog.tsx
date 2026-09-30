@@ -5,6 +5,7 @@
 // tab and switch in the conversation's header. An agent that cannot run a turn
 // on this machine is listed but cannot be chosen. The folder is optional — left
 // blank, the turn runs in Coffer's own workspace — and opens on the last one used.
+// With no agent that can run, it says how to get one (NoManagedAgentHelp).
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import { readLastWorkingDir } from "@/lib/conversations/lastWorkingDir";
+import { NoManagedAgentHelp } from "./NoManagedAgentHelp";
 
 interface Props {
   open: boolean;
@@ -65,7 +67,7 @@ export function NewConversationDialog({ open, onOpenChange, agents, onStart }: P
           <DialogDescription>{t("conversations.new.hint")}</DialogDescription>
         </DialogHeader>
         {agents.length === 0 || !firstAvailable ? (
-          <p className="text-sm text-text-muted">{t("conversations.draft.noAgentBody")}</p>
+          <NoManagedAgentHelp layout="inline" />
         ) : (
           <form
             id={`${id}-form`}

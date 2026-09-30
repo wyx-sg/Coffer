@@ -556,7 +556,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
         installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
 
         calls: list[list[str]] = []
-        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: "/usr/bin/claude")
         monkeypatch.setattr(
             "subprocess.run",
             lambda argv, **k: (
@@ -567,7 +567,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
 
         r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 204, r.text
-        assert calls == [["claude", "plugin", "uninstall", "q1@mk"]]
+        assert calls == [["/usr/bin/claude", "plugin", "uninstall", "q1@mk"]]
         assert installed.read_bytes() == installed_before
         assert settings.read_bytes() == settings_before
 
@@ -576,7 +576,7 @@ def test_claude_plugin_cli_failure_is_422(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59952)
     with _client(app) as c:
         uid = _register_claude(c, tmp_path)
-        monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: "/usr/bin/claude")
         monkeypatch.setattr(
             "subprocess.run",
             lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr="no such plugin"),
@@ -601,7 +601,7 @@ def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
         settings = tmp_path / ".claude" / "settings.json"
         before = settings.read_bytes()
 
-        monkeypatch.setattr("shutil.which", lambda _exe: None)
+        monkeypatch.setattr("shutil.which", lambda _exe, path=None: None)
 
         r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 422, r.text

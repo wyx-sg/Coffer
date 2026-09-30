@@ -135,6 +135,7 @@ class _World:
             knowledge=self.knowledge,
             history=self.history,
             audit=self.audit,  # type: ignore[arg-type]
+            machine=lambda: "a test machine",
         )
 
     async def curate(
@@ -343,6 +344,54 @@ async def test_an_undo_over_a_later_edit_is_refused_naming_the_document(world: _
     assert (await world.histories.versions(alpha))[0].change.version == head
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a refused undo carries a prompt for undoing the pass by hand"
+)
+async def test_a_refused_undo_carries_the_by_hand_prompt(world: _World) -> None:
+    alpha, _beta, _gamma = await _three_documents(world)
+    world.can_merge = True
+    item = await world.knowledge.submit(
+        collection="shopee",
+        title="News",
+        description="d",
+        body="b",
+        actor_kind=ACTOR_USER,
+        actor=ACTOR_USER,
+    )
+    await world.curate(
+        "shopee",
+        Pending(material=item.pending),
+        [
+            (
+                "write_document",
+                {"path": alpha, "title": "Alpha", "description": "d", "body": "By the pass."},
+            )
+        ],
+    )
+    pass_version = (await world.histories.versions(alpha))[0].change.version
+    await _save(world, alpha, "The user's own words.")
+    later = (await world.histories.versions(alpha))[0].change.version
+
+    with pytest.raises(KnowledgeUndoConflict) as refused:
+        await world.histories.undo(pass_version, actor=ACTOR_USER)
+
+    details = refused.value.error_details
+    assert (details["document"], details["later_version"]) == (alpha, later)
+    prompt = details["handoff"]["prompt"]  # type: ignore[index]
+    # The history is the vault repository's; the knowledge folder is
+    # ``knowledge/`` inside it.
+    root = str(vault_root())
+    # The pass, the document edited since and its version, where to read the
+    # diffs, and that the later edits stay and nothing is committed by hand.
+    assert pass_version in prompt and later in prompt
+    assert f"{alpha} (last changed in {later})" in prompt
+    assert f"git -C {root} show {pass_version} -- knowledge" in prompt
+    assert "-- knowledge/<document>" in prompt
+    assert "keep the edits made to those documents since" in prompt
+    assert "Do not commit" in prompt
+    assert _body(alpha) == "The user's own words."
+
+
 @pytest.mark.acceptance(spec="knowledge", scenario="an edit on disk becomes a version of its own")
 async def test_an_edit_on_disk_is_committed_before_coffers_next_write(world: _World) -> None:
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
@@ -507,6 +556,7 @@ async def test_the_feed_pages_by_cursor(world: _World) -> None:
     assert len(seen) == len(set(seen)) == 4
 
 
+@pytest.mark.acceptance(spec="knowledge", scenario="no git hands installing it to an agent")
 async def test_without_git_writes_work_and_history_says_so(
     world: _World, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
@@ -520,7 +570,17 @@ async def test_without_git_writes_work_and_history_says_so(
     )
     assert added.document is not None
     assert not (vault_root() / ".git").exists()
-    with pytest.raises(KnowledgeHistoryUnavailable):
+    with pytest.raises(KnowledgeHistoryUnavailable) as refused:
         await world.histories.versions(added.document.path)
+    # The refusal carries the install hand-off: the machine, what needed git,
+    # and how to confirm it — never an install command.
+    details = refused.value.error_details
+    assert details["reason"] == "git_missing"
+    prompt = details["handoff"]["prompt"]  # type: ignore[index]
+    assert prompt.startswith("Please install git on this machine.")
+    assert "This machine: a test machine." in prompt
+    assert "`git --version`" in prompt
+    assert "brew" not in prompt and "xcode-select" not in prompt
+    assert "install" not in str(refused.value).replace("not installed", "")
     assert inbox.inbox_items("shopee") == ()
     assert KIND_KNOWLEDGE == "knowledge"

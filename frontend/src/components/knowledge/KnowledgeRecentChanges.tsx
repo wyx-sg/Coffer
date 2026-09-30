@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeRow } from "@/components/knowledge/KnowledgeChangeRow";
 import { KnowledgeWaitingList } from "@/components/knowledge/KnowledgeWaitingList";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { translateApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import {
@@ -57,6 +59,8 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
   const undone = undoneVersions(all);
   const restored = restoredVersions(all);
   const shown = all.filter((c) => withinDays(c.time, 7) && matchesWriter(c, writer));
+  // With git missing the refusal carries the prompt for installing it.
+  const gitHandoff = errorHandoff(changes.error);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -109,7 +113,13 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
               title={t("knowledge.recent.failed")}
               description={translateApiError(t, changes.error)}
               action={<Button onClick={() => void changes.refetch()}>{t("common.retry")}</Button>}
-            />
+            >
+              {gitHandoff ? (
+                <div className="flex justify-center">
+                  <AgentHandoff prompt={gitHandoff} size="sm" />
+                </div>
+              ) : null}
+            </EmptyState>
           ) : shown.length === 0 ? (
             <EmptyState icon={History} title={t("knowledge.recent.empty")} />
           ) : (

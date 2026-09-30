@@ -3,7 +3,9 @@
 One item per command that is ``missing``, ``outdated`` or ``logged_out``
 (reason codes ``cli_missing``, ``cli_outdated``, ``cli_logged_out``), kind
 ``cli`` with the command as the uid, each a warning whose action is ``check``
-— the CLIs page's own Check again. It reads the service's cache, probing only
+— the CLIs page's own Check again — and the CLIs page's hand-off prompt
+(which names the login command for a command that is not logged in, so the
+reason names none). It reads the service's cache, probing only
 commands nothing was checked for yet.
 """
 
@@ -25,8 +27,7 @@ def _reason(view: CliView) -> str:
         return f"{row.command} is not on the agent's PATH; needed by {skills}."
     if view.status is CliStatus.OUTDATED:
         return f"{row.command} {probe.version} is older than {row.min_version}, needed by {skills}."
-    hint = f" Run `{row.login}` in a terminal." if row.login else ""
-    return f"{row.command} is not logged in; needed by {skills}.{hint}"
+    return f"{row.command} is not logged in; needed by {skills}."
 
 
 class CliAttentionSource:
@@ -51,6 +52,7 @@ class CliAttentionSource:
                     method="POST",
                     path=f"/api/v1/clis/{view.required.command}/check",
                 ),
+                handoff=view.handoff,
             )
             for view in listing.items
             if view.status is not CliStatus.READY

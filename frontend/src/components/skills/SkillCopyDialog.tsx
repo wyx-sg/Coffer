@@ -8,10 +8,13 @@
 //     first, then the master is linked in its place;
 //   Adopt this folder — its files become the master, so every other agent
 //     gets them too.
-// The diff shows what happens to the side the reader is not keeping.
+// The diff shows what happens to the side the reader is not keeping. The
+// finding's hand-off asks an agent to compare the two and advise; the choice
+// stays these two buttons.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { SkillChoiceCards } from "@/components/skills/SkillChoiceCards";
 import { SkillUpdateDiff } from "@/components/skills/SkillUpdateDiff";
 import { reverseChange } from "@/components/skills/skillSourceHelpers";
@@ -110,6 +113,12 @@ export function SkillCopyDialog({ skill, entry, onOpenChange }: Props) {
               },
             ]}
           />
+          {entry?.handoff ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="text-xs text-text-muted">{t("skills.copy.askAgent")}</span>
+              <AgentHandoff prompt={entry.handoff.prompt} size="sm" />
+            </div>
+          ) : null}
           {compare.isPending ? (
             <Skeleton className="h-32 w-full" />
           ) : compare.error ? (

@@ -184,6 +184,37 @@ def test_a_scan_names_plaintext_secrets_without_their_values(cli: BoundaryDaemon
     assert "hunter2hunter2" not in result.output and "abcd1234efgh5678" not in result.output
 
 
+@pytest.mark.acceptance(
+    spec="secret", scenario="a skill still reading a secrets file is handed to an agent"
+)
+def test_a_scan_hands_rewriting_the_mentions_to_an_agent(cli: BoundaryDaemon) -> None:
+    env, script = _plaintext(cli.home)
+    body = json.loads(_runner.invoke(cli_app, ["secret", "scan", "--json"]).output)
+    prompt = body["handoff"]["prompt"]
+    # Where, and which names — the skill, the file and line, the secret names.
+    assert f"deploy: {script}:3 reads ~/.coffer/secrets/db.env" in prompt
+    assert "coffer://secret/db.DB_PASSWORD" in prompt
+    assert "coffer run --secret ENV=NAME" in prompt
+    assert "Show me the diff" in prompt
+    # Never a value, from either file.
+    assert "hunter2hunter2" not in prompt and "abcd1234efgh5678" not in prompt
+    assert "db.internal" not in prompt
+    # The command line prints the same words.
+    printed = _runner.invoke(cli_app, ["secret", "scan", "--prompt"])
+    assert printed.exit_code == 0, printed.output
+    assert printed.output.strip() == prompt.strip()
+    # Nothing was changed by asking.
+    assert "hunter2hunter2" in env.read_text()
+
+
+def test_a_scan_without_mentions_hands_nothing_off(cli: BoundaryDaemon) -> None:
+    secrets = cli.home / ".coffer" / "secrets"
+    secrets.mkdir(parents=True)
+    (secrets / "db.env").write_text("DB_PASSWORD=hunter2hunter2\n")
+    body = json.loads(_runner.invoke(cli_app, ["secret", "scan", "--json"]).output)
+    assert body["mentions"] == [] and body["handoff"] is None
+
+
 @pytest.mark.acceptance(spec="secret", scenario="importing moves a value and leaves a reference")
 def test_importing_moves_a_value_and_leaves_a_reference(cli: BoundaryDaemon) -> None:
     d = cli
