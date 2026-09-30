@@ -4,9 +4,9 @@ Consumes one turn's event queue and turns it into IM traffic, strategy
 selected from the adapter's declared capabilities (never its type):
 - supports_live_text → ONE surface the renderer keeps updating for the whole
   turn: tool activity first, each line describing the call ('⏳ Bash · list the
-  desktop') from its input, then the reply text taking that same surface over
-  as it arrives. Telegram's surface is a message it edits; SeaTalk's is a
-  message stream. The renderer never knows which.
+  desktop') from its input (the tool name alone in a group), then the reply text
+  taking that same surface over as it arrives. Telegram's surface is a message it
+  edits; SeaTalk's is a message stream. The renderer never knows which.
 
 A clean success sends no trailing fact summary on any channel — the reply is
 the completion signal. Only a turn that ended abnormally (failed, interrupted,
@@ -148,7 +148,8 @@ class TurnRenderer:
                 await self._stream_text(progress, parts)
             elif isinstance(event, ToolCall):
                 tool_ids.add(event.tool_use_id)
-                descriptor = _describe_tool(event.tool_name, event.tool_input)
+                call = (event.tool_name, event.tool_input)
+                descriptor = _describe_tool(*call, chat_kind=self.chat_kind)
                 progress.desc[event.tool_use_id] = descriptor
                 progress.lines[event.tool_use_id] = _progress_line(
                     "⏳", event.tool_name, descriptor

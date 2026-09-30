@@ -48,7 +48,11 @@ def _clock(*values: float) -> Callable[[], float]:
 
 
 async def _render(
-    adapter: FakeChannelAdapter, events: list[Any], *, now: Callable[[], float] | None = None
+    adapter: FakeChannelAdapter,
+    events: list[Any],
+    *,
+    now: Callable[[], float] | None = None,
+    chat_kind: str = "direct",
 ) -> None:
     async def send(text: str) -> None:
         await adapter.send_text("owner", text)
@@ -60,6 +64,7 @@ async def _render(
         conversation_id="c1",
         send=send,
         now=now or _clock(0.0),
+        chat_kind=chat_kind,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
     for event in events:
@@ -87,7 +92,7 @@ async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
 
     # The first send is the progress message created on ToolCall, labelled with
     # a descriptor drawn from the call's input…
-    assert adapter.sent[0] == ("owner", "⏳ search · cats")
+    assert adapter.sent[0] == ("owner", "⏳ search")
     progress_id = "m1"  # ids are issued in send order
     # …which is deleted when the turn finishes, before the final reply.
     assert adapter.deleted == [("owner", progress_id)]
@@ -210,6 +215,42 @@ async def test_progress_line_uses_the_file_basename_for_a_read() -> None:
     await _render(adapter, events)
 
     assert adapter.sent[0] == ("owner", "⏳ Read · wedding.json")
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a group's progress lines name only the tool",
+)
+async def test_group_progress_line_names_only_the_tool() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        ToolCall(
+            tool_use_id="t1",
+            tool_name="Bash",
+            tool_input={"command": "cat ~/.ssh/id_rsa", "description": "list the desktop"},
+        ),
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events, chat_kind="group")
+
+    assert adapter.sent[0] == ("owner", "⏳ Bash")
+
+
+async def test_direct_progress_line_never_shows_a_raw_command_or_guessed_argument() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
+    events = [
+        ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "rm -rf build"}),
+        ToolCall(tool_use_id="t2", tool_name="mysql_query", tool_input={"sql": "select 1"}),
+        TextDelta(text="done"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    shown = " ".join(text for _, text in adapter.sent)
+    assert "rm -rf" not in shown and "select 1" not in shown
 
 
 @pytest.mark.acceptance(
@@ -397,7 +438,7 @@ async def test_reply_text_streams_into_the_status_message() -> None:
     await _render(adapter, events, now=_ticking())
 
     # Before any text, the status message shows the tool-progress line…
-    assert adapter.sent[0] == ("owner", "⏳ search · cats")
+    assert adapter.sent[0] == ("owner", "⏳ search")
     # …then the SAME single message is edited with the growing reply text (plain,
     # not HTML), so the user watches the answer materialize.
     assert ("owner", "m1", "I found") in adapter.edits
@@ -709,7 +750,7 @@ async def test_streaming_transport_grows_one_message_instead_of_sending_fragment
     # The surface opens the moment the turn starts, with the acknowledgement —
     # the reply grows out of that same message.
     assert live.snapshots[0] == "⏳ Got it — working on this…"
-    assert live.snapshots[1] == "⏳ search · cats"
+    assert live.snapshots[1] == "⏳ search"
     assert live.snapshots[2:] == ["I found", "I found three", "I found three cats."]
     assert live.closed and live.final == "I found three cats."
     # Exactly ONE message reached the chat (the stream's own), routed into the
