@@ -73,7 +73,8 @@ keychain (service `coffer`, opt-in) (spec secret "Keep the master key in exactly
 - **One-time legacy migration.** At startup, keychain secrets from the earlier
   design that registered resources still cite are encrypted into the store
   (`run_legacy_keychain_migration`); a locked keychain skips and retries on the
-  next start (spec secret "Migrate legacy keychain secrets once at startup").
+  next start. (Removed for 1.0, which keeps no backward compatibility; the
+  owner's one-time upgrade step moves any leftover keychain secret.)
 
 Pros: zero keychain prompts by default under an unsigned, frequently rebuilt
 binary; at most one prompt per daemon start in keychain mode, for the single
