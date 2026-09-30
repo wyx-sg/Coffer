@@ -15,14 +15,10 @@
 // curate with: the page shows no Inbox and no Curate now, only one line
 // pointing to Settings › General.
 //
-// Nothing auto-provisions a collection (spec knowledge "Create collections
-// only deliberately"), so an empty list is the first-run welcome.
-//
-// The page is a workspace (boards 5.1.01–5.1.29): full-bleed like Skills, a
-// header over a hairline — the title, the Automatic control (curation's
-// switch, interval and Curate now; absent while Coffer's model is not set) and
-// Upload / Add a document — then the tree and the pane, each scrolling on its
-// own down to the bottom of the window.
+// Nothing auto-provisions a collection, so an empty list is the first-run
+// welcome. The page is a workspace (boards 5.1.01–5.1.29): a header with the
+// title, the Automatic control and Upload / Add a document, then the tree and
+// the pane, each scrolling on its own.
 import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
