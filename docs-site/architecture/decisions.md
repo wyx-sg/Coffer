@@ -21,7 +21,7 @@ A decision earns a record when it is hard to change later, constrains more than 
 
 Each record states **one** decision under four headings — **Context**, **Options Considered** (the chosen option included, each argued on its merits), **Decision** and **Consequences** — and is named by its title in kebab case, never by a number. The directory records the live design: when a decision changes, the record that owns it is rewritten to read as if written today, with the design it replaced argued as one of its options; when the thing it decided is removed, the record is deleted. The authoring rules are in the [directory README](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md).
 
-Every record listed here is `Accepted`.
+Every record carries its own status. The records grouped by area below are `Accepted`: they are in effect and state the live design. The records under [Proposed](#proposed) are drafted for the 1.0 rearchitecture and not yet adopted: they describe where the design is going, and the user accepts each one. The [directory README](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md) is the authoritative index; when this page and a record's own `Status` line disagree, the record wins.
 
 
 ## Resource framework & persistence
@@ -34,6 +34,7 @@ Explained in: [Resource framework](/architecture/resource-framework), [Persisten
 | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After | [`kind-plugin-contract`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/kind-plugin-contract.md) |
 | Resource Identity Is an Immutable `uid`, Not the Name | [`resource-identity-is-an-immutable-uid`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md) |
 | Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind | [`per-agent-resource-scope`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md) |
+| Names Visible to Agents Are Fixed | [`names-visible-to-agents-are-fixed`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md) |
 | Resource Reach Is Machine-Local and Never Converges | [`resource-reach-is-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-reach-is-machine-local.md) |
 | Code Layout Is Layer-First, With One Subdirectory per Kind | [`code-layout-layer-first`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md) |
 | Kinds Are Wired Explicitly by One Composition Root, With No Global Registry | [`composition-root-explicit-wiring`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/composition-root-explicit-wiring.md) |
@@ -78,7 +79,7 @@ Explained in: [Agents](/guides/agents), [Model providers](/guides/providers).
 | Writing Agent-Native Config Safely | [`writing-agent-native-config-safely`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/writing-agent-native-config-safely.md) |
 | Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
 | LLM Connections Are Projected Into Each Agent's Own Config File | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
-| Provider Keys Never Land in an Agent's Native Config | [`provider-keys-never-land-in-native-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-keys-never-land-in-native-config.md) |
+| Provider Keys Never Land in an Agent's Native Config (revised by the proposed local model proxy record below) | [`provider-keys-never-land-in-native-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-keys-never-land-in-native-config.md) |
 | The Model Catalogue Is Read Back From the Installed Agent | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
 | Coffer's Own Model Is an Internal Engine, Not a Persona or a Tool | [`coffer-model-is-an-internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-model-is-an-internal-engine.md) |
 | The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
@@ -128,3 +129,29 @@ Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architec
 | Envelope-Encrypted Credential Store | [`envelope-encrypted-credential-store`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md) |
 | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |
 | Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository | [`credentials-across-machines`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md) |
+
+## Proposed
+
+Explained in: [Reconciler](/architecture/reconciler), [Agent facets](/architecture/agent-facets), [Platform port](/architecture/platform), [Model proxy](/architecture/model-proxy), [Security model](/architecture/security), [Vault sync](/architecture/vault-sync), [Memory](/architecture/memory).
+
+These records are `Proposed`: drafted, not yet adopted.
+
+| Decision | Record |
+| --- | --- |
+| One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters | [`one-level-triggered-reconciler-compares-parameters`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md) |
+| Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) |
+| The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract | [`wire-contract-generated-from-the-pydantic-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) |
+| Platform Differences Live Behind One Platform Port; Only macOS Ships | [`platform-differences-live-behind-one-platform-port`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/platform-differences-live-behind-one-platform-port.md) |
+| Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process | [`standalone-secrets-are-named-references-injected-into-one-child`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md) |
+| Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy | [`storage-is-five-classes-by-nature`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md) |
+| A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label | [`identity-is-the-uid-inside-the-file`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md) |
+| Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades | [`every-vault-file-carries-its-format-version`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md) |
+| Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer | [`every-vault-write-is-a-validated-commit-naming-its-writer`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md) |
+| Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person | [`sync-applies-clean-merges-and-stops-on-any-conflict`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md) |
+| Reach Is a Machine-Local Predicate Over an Extensible Context | [`reach-is-a-machine-local-predicate-over-a-context`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/reach-is-a-machine-local-predicate-over-a-context.md) |
+| API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
+| Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
+| The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault | [`master-key-lives-in-the-macos-keychain`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md) |
+| Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) |
+| Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) |
+| The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System (supersedes `sidebar-grouped-by-role` once accepted) | [`sidebar-grouped-by-what-the-person-comes-to-do`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md) |
