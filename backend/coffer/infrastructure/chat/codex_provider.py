@@ -34,6 +34,7 @@ from coffer.infrastructure.chat.codex_app_server import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
@@ -65,6 +66,7 @@ class CodexAppServerProvider:
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         observe_quota: QuotaObserver | None = None,
+        retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -91,6 +93,9 @@ class CodexAppServerProvider:
         # Where Codex's ``account/rateLimits/updated`` goes (the usage kind's
         # quota service, bound at the composition root). ``None`` ⇒ dropped.
         self._observe_quota = observe_quota
+        # A channel turn's per-prompt notes (spec memory "Retrieve the notes a
+        # prompt names for a channel turn"). ``None`` ⇒ none.
+        self._retrieve_memory = retrieve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -172,6 +177,13 @@ class CodexAppServerProvider:
             # document attachments to text").
             document_extractor=default_document_extractor(),
             observe_quota=self._observe_quota,
+            prompt_memory=bind_prompt_memory(
+                self._retrieve_memory,
+                channel_uid=conv.channel_uid or "",
+                agent_key=self.agent_key,
+                cwd=config.cwd,
+                conversation_id=conversation_id,
+            ),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

@@ -40,6 +40,7 @@ from coffer.infrastructure.agent.model_discovery import (
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.provider.introspector import ProviderIntrospector
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
@@ -167,13 +168,16 @@ def wire_chat(
     agent_catalog: AgentCatalog,
     compose_memory_context: MemoryContextComposer | None = None,
     observe_quota: QuotaObserver | None = None,
+    retrieve_memory: MemoryRetriever | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
 
     ``compose_memory_context`` is the memory kind's closure
-    (``memory_wiring.memory_context_composer``) every provider appends to a
+    (``memory_turn_wiring.memory_context_composer``) every provider appends to a
     channel turn's system prompt (spec memory "Deliver to channel turns through
-    the system prompt"); ``None`` wires no memory append.
+    the system prompt"); ``None`` wires no memory append. ``retrieve_memory``
+    ranks each channel turn's prompt against the notes (spec memory "Retrieve
+    the notes a prompt names for a channel turn"); ``None`` wires none.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
     former ``builtin`` chat persona is retired (ADR coffer-model-is-an-internal-engine).
@@ -224,6 +228,7 @@ def wire_chat(
         # provider-switching "Show a subscription's official quota as of when
         # it was seen").
         observe_quota=observe_quota,
+        retrieve_memory=retrieve_memory,
     )
 
     # 4. Application services + the agent-agnostic turn orchestrator.

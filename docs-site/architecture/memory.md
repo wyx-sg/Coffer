@@ -423,9 +423,12 @@ The same target follows the `memory` feature switch. Switching memory off remove
 
 ### Channel turns
 
-A turn that arrives from Telegram or SeaTalk runs no session-start hook, so the memory payload travels in its system prompt instead. `memory_context_composer` in `surfaces/http/memory_wiring.py` closes over `MemoryService` and the feature switch; `wire_chat` hands it to both agent providers, and `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path a terminal session would. The system-prompt append carries the session-start index only; prompt-time retrieval and the guard are not composed into it.
+A turn that arrives from Telegram or SeaTalk runs no hook of Coffer's, so Coffer delivers memory to it itself, through two closures in `surfaces/http/memory_turn_wiring.py` that `wire_chat` hands to both agent providers:
 
-The composer answers nothing, and the turn carries no memory header, while the `memory` feature is off (read per turn), when the composed index is empty, or when the tree cannot be read (logged; memory is an append to the turn, not a precondition of it). A turn from the web Conversations page gets no append: it receives memory through the agent's own hook, so no turn gets it twice.
+- `memory_context_composer` closes over `MemoryService` and the feature switch. `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path in its system prompt that a terminal session would.
+- `memory_turn_retriever` closes over `TurnRetrieval` (`application/memory/turn_retrieval.py`) and the feature switch. The provider binds it to the turn (`infrastructure/chat/prompt_memory.py`) only for a channel-driven turn, and the adapter adds what it returns after the user's text in the prompt it sends — where a `UserPromptSubmit` hook's context lands, so the notes stay in the agent's own session. `TurnRetrieval` calls the same `RetrievalService` the hook answers through, with `conversation:<id>` as the session id, so a note is given once per conversation; it records the delivery as a `prompt` fire of the answering agent, with event `ChannelTurn`. The message stored in the conversation is the user's own text.
+
+Each closure answers nothing while the `memory` feature is off (read per turn), when it finds nothing, or when the tree cannot be read (logged; memory is an addition to the turn, not a precondition of it). The guard is not applied to channel turns. A turn from the web Conversations page gets neither: it receives memory through the agent's own hook, so no turn gets it twice.
 
 ### Rules about every turn are not memory's job
 
@@ -481,7 +484,8 @@ Both are on by default. They read the agents' files and write only the derived t
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
 | Paths, raw store, note store, digest cache, trigger files, notes-read count | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
 | Transcript `cwd` lookup shared with the agent kind | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| Wiring, workers, the delivery-hook target, the channel-turn composer | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| Wiring, workers, the delivery-hook target | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| The channel-turn composer and per-prompt retriever | [`surfaces/http/memory_turn_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_turn_wiring.py), [`application/memory/turn_retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/turn_retrieval.py) |
 | REST routes | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
 | CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py), [`memory_hook_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_hook_cmd.py) (`hook`, `trigger`, `delivered`) |
 

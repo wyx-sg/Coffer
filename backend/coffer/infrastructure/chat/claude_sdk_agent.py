@@ -47,6 +47,7 @@ from coffer.infrastructure.chat.document_extract import (
     extract_document_attachments,
     prompt_with_document_text,
 )
+from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
 from coffer.infrastructure.chat.quota_observe import forward_quota
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
@@ -171,6 +172,7 @@ class ClaudeSdkAgentAdapter:
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
         observe_quota: QuotaObserver | None = None,
+        prompt_memory: PromptMemory | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -185,6 +187,8 @@ class ClaudeSdkAgentAdapter:
         # ``rate_limit_event``; forwarded as-is (``.raw`` keeps the @internal
         # ``unifiedWindows``), never affecting the turn.
         self._observe_quota = observe_quota
+        # A channel turn's retrieval: the notes its prompt names.
+        self._prompt_memory = prompt_memory
 
     async def run_turn(
         self,
@@ -295,6 +299,7 @@ class ClaudeSdkAgentAdapter:
             attachments, self._document_extractor
         )
         prompt = prompt_with_transcripts(last_user_text(history), transcripts)
+        prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)
         if not content:
