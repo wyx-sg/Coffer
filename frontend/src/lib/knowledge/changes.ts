@@ -13,6 +13,7 @@
 import type { TFunction } from "i18next";
 
 import { agentTypeLabel } from "@/lib/agents/display";
+import { timeAgo } from "@/lib/agents/hookRows";
 import type { ChangeOut } from "@/lib/api/knowledge";
 import { pathInCollection } from "@/lib/knowledge/routes";
 
@@ -72,6 +73,59 @@ export function changeSentence(t: TFunction, change: ChangeOut): string {
   });
 }
 
+/** What a version did to the one document whose History lists it, e.g.
+ *  "Curated Codex's item", "Edited in Coffer" (board 5.1.03). */
+export function versionSentence(t: TFunction, change: ChangeOut): string {
+  if (!WORDED_OPERATIONS.has(change.operation)) return change.summary;
+  return t(`knowledge.changes.version.${change.operation}`, {
+    agent: agentLabel(t, change.agent),
+  });
+}
+
+/** Operations whose timeline row names no document: they are about the
+ *  collection, or about an item not yet a document. */
+const COLLECTION_OPERATIONS = new Set(["create", "baseline", "submit", "remove"]);
+
+/** Whether a restore brought back a whole collection: it put back the
+ *  collection's own README, which only a deleted collection loses. */
+function isCollectionRestore(change: ChangeOut): boolean {
+  const name = change.collections[0];
+  return (
+    change.operation === "restore" &&
+    Boolean(name) &&
+    change.documents.some((d) => d.path === `${name}/README.md`)
+  );
+}
+
+/** A timeline row's words (board 5.1.07): the verb after the writer's name,
+ *  and the document it links to — "curated Codex's item into" ·
+ *  `daemon/port.md` — or, for a change about a whole collection (deleted,
+ *  restored), the collection instead. `more` counts the other documents a
+ *  change touched. */
+export function feedWords(
+  t: TFunction,
+  change: ChangeOut,
+): { verb: string; document: string | null; collection: string | null; more: number } {
+  const whole = change.operation === "remove" || isCollectionRestore(change);
+  const verb = isCollectionRestore(change)
+    ? t("knowledge.changes.verb.restoreCollection")
+    : WORDED_OPERATIONS.has(change.operation)
+      ? t(`knowledge.changes.verb.${change.operation}`, { agent: agentLabel(t, change.agent) })
+      : change.summary;
+  if (whole) {
+    return { verb, document: null, collection: change.collections[0] ?? null, more: 0 };
+  }
+  if (COLLECTION_OPERATIONS.has(change.operation) || change.documents.length === 0) {
+    return { verb, document: null, collection: null, more: 0 };
+  }
+  return {
+    verb,
+    document: change.documents[0].path,
+    collection: null,
+    more: change.documents.length - 1,
+  };
+}
+
 /** Whether a change passes the writer filter. A curation pass is the agents'
  *  (it curates what agents and uploads submitted); your own saves, restores
  *  and undos are yours. */
@@ -114,4 +168,45 @@ export function groupByDay(changes: ChangeOut[], now = new Date()): [string, Cha
 /** A pass that a later change has undone — the version the undo names. */
 export function undoneVersions(changes: ChangeOut[]): Set<string> {
   return new Set(changes.map((c) => c.undoes).filter((v): v is string => Boolean(v)));
+}
+
+/** A change's time as the boards write it (5.1.03): "Today 12:04",
+ *  "Yesterday 18:40", or "26 Sep 10:12" further back. */
+export function whenLabel(t: TFunction, iso: string, locale: string, now = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = dayKey(iso, now);
+  if (day === "today") return t("knowledge.when.today", { time });
+  if (day === "yesterday") return t("knowledge.when.yesterday", { time });
+  const date = d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+  return `${date} ${time}`;
+}
+
+/** A timeline row's time (5.1.07): relative within today ("2 hours ago"),
+ *  the day and the clock before that. */
+export function feedTime(t: TFunction, iso: string, locale: string, now = new Date()): string {
+  if (dayKey(iso, now) !== "today") return whenLabel(t, iso, locale, now);
+  return timeAgo(iso, locale, now.getTime());
+}
+
+/** Whether a change removed something a person can put back from Recent
+ *  changes — a deleted document or a deleted collection (spec knowledge
+ *  "Restore a deleted collection or document from Recent changes"). */
+export function isRestorableDelete(change: ChangeOut): boolean {
+  return (
+    (change.operation === "delete" || change.operation === "remove") &&
+    change.documents.some((d) => d.status === "removed")
+  );
+}
+
+/** The deletes a later change has already put back — the version each
+ *  restore names. */
+export function restoredVersions(changes: ChangeOut[]): Set<string> {
+  return new Set(
+    changes
+      .filter((c) => c.operation === "restore")
+      .map((c) => c.restored_from)
+      .filter((v): v is string => Boolean(v)),
+  );
 }

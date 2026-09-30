@@ -9,56 +9,45 @@
 //
 // The PATCH is addressed to the server's uid, and so are the secret refs:
 // `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/secretRef`. Nothing here
-// reads the server's NAME any more. It used to, twice — refs were built as
-// `<name>.<key>` and the orphan cleanup below decided which refs this server
-// owned by testing for that same `<name>.` prefix — and the pair of them made
-// the name a key into the encrypted store: rename the server and its own refs
-// stopped looking like its own. That was unreachable only while `mcp_server`
-// could not be renamed at all; rename is now a field on `PATCH
-// /resources/{uid}` for every kind, which is what reached it.
+// reads the server's NAME: a ref built from the name would make the name a key
+// into the encrypted store, and rename is a field on `PATCH /resources/{uid}`.
+//
+// Which Secret row cites which ref, and which typed value is written where, is
+// `env/rowsModel.ts` (`secretPlanOf`); this file does the writes in order.
 import type { TFunction } from "i18next";
 
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 import { isMintedSecretRef, mintSecretRef } from "@/lib/secretRef";
-import type { CredRow } from "./SecretRowEditor";
+import type { ParsedEnvVar } from "@/lib/mcp/pasteTypes";
+import { secretRefsOf, plainMapOf, secretPlanOf } from "./env/rowsModel";
 import { withTimeouts, type Timeouts } from "./serverTimeouts";
+
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-export function secretRefsOf(config: unknown): Record<string, string> {
-  const transport = (config as Record<string, unknown> | null)?.transport;
-  const refs = (transport as Record<string, unknown> | undefined)?.secret_refs;
-  const out: Record<string, string> = {};
-  if (refs && typeof refs === "object") {
-    for (const [k, v] of Object.entries(refs)) {
-      if (typeof v === "string") out[k] = v;
-    }
-  }
-  return out;
-}
-
 /** The config JSON minus the fields with their own controls — secrets and
- * the two timeouts. Both are merged back in on save, so the textarea never
- * competes with a structured field over the same key. */
-function configWithoutOwnControls(config: unknown): string {
+ * the two timeouts. Both are merged back in on save. */
+function configWithoutOwnControls(config: unknown): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(config ?? {})) as Record<string, unknown>;
   const transport = clone.transport as Record<string, unknown> | undefined;
   if (transport) delete transport.secret_refs;
   delete clone.spawn_timeout_seconds;
   delete clone.request_timeout_seconds;
-  return JSON.stringify(clone, null, 2);
+  return clone;
 }
 
 /** The transport fields the edit form shows as fields: where the server is
- *  reached (URL, or command + arguments) and its plain, non-secret values
- *  (a stdio server's `env`, an HTTP server's `headers`). */
+ *  reached (URL, or command + arguments + working directory) and its plain,
+ *  non-secret values (a stdio server's `env`, an HTTP server's `headers`). */
 export interface TransportFields {
   type: "stdio" | "http";
   url: string;
   command: string;
   args: string[];
+  /** stdio: the folder the command starts in; "" = not set. */
+  cwd: string;
   plain: { key: string; value: string }[];
 }
 
@@ -80,23 +69,36 @@ export function transportFieldsOf(config: unknown): TransportFields {
     url: typeof tr.url === "string" ? tr.url : "",
     command: typeof tr.command === "string" ? tr.command : "",
     args: Array.isArray(tr.args) ? tr.args.map(String) : [],
+    cwd: typeof tr.cwd === "string" ? tr.cwd : "",
     plain: stringMap(http ? tr.headers : tr.env),
   };
+}
+
+/** What the form holds for the transport: its fields and every row. Only the
+ *  Plain rows land in `env` / `headers`; Secret rows go to secret_refs. */
+export interface TransportForm {
+  type: "stdio" | "http";
+  url: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  rows: ParsedEnvVar[];
 }
 
 /** The config JSON the save path takes: the stored config (minus the fields
  *  with their own controls) with the form's transport fields written over it,
  *  so every key the form does not show is kept as it was. */
-export function configTextFrom(config: unknown, fields: TransportFields): string {
-  const base = JSON.parse(configWithoutOwnControls(config)) as Record<string, unknown>;
+export function configTextFrom(config: unknown, form: TransportForm): string {
+  const base = configWithoutOwnControls(config);
   const transport = { ...((base.transport as Record<string, unknown>) ?? {}) };
-  const plain = Object.fromEntries(
-    fields.plain.filter((r) => r.key.trim() !== "").map((r) => [r.key.trim(), r.value]),
-  );
-  if (fields.type === "http") {
-    Object.assign(transport, { url: fields.url.trim(), headers: plain });
+  const plain = plainMapOf(form.rows);
+  if (form.type === "http") {
+    Object.assign(transport, { url: form.url.trim(), headers: plain });
   } else {
-    Object.assign(transport, { command: fields.command.trim(), args: fields.args, env: plain });
+    Object.assign(transport, { command: form.command.trim(), args: form.args, env: plain });
+    const cwd = form.cwd.trim();
+    if (cwd === "") delete transport.cwd;
+    else transport.cwd = cwd;
   }
   return JSON.stringify({ ...base, transport });
 }
@@ -107,7 +109,8 @@ export interface SaveArgs {
   /** The title to store; left out, the stored title is not touched. */
   title?: string;
   configText: string;
-  creds: CredRow[];
+  /** Every Environment / Headers row; the Secret ones are resolved here. */
+  rows: ParsedEnvVar[];
   timeouts: Timeouts;
   t: TFunction;
 }
@@ -116,7 +119,7 @@ export async function saveMcpServerEdit({
   resource,
   description,
   configText,
-  creds,
+  rows,
   timeouts,
   title,
   t,
@@ -129,52 +132,29 @@ export async function saveMcpServerEdit({
   }
   const client = getApiClient();
 
-  // Pre-validate before any secret write: a row renamed without a
-  // new value can't be moved in the encrypted store blind (we don't hold
-  // the plaintext), so require the secret to be re-entered under the new
-  // name rather than silently leaving the ref pointing at the old name.
-  for (const row of creds) {
-    const name = row.name.trim();
-    if (name === "" || row.value !== "" || !row.originalRef) continue;
-    if (row.originalName !== null && name !== row.originalName) {
-      throw new Error(t("mcp.edit.errRenameNeedsValue", { name }));
-    }
-  }
+  // Validated before any secret write: a Secret row with neither a value
+  // nor a stored secret, or one renamed while it keeps its own stored secret
+  // (we don't hold the plaintext to move it), is refused here.
+  const plan = secretPlanOf(rows, t);
 
-  // Build secret_refs; write new / rotated secret values first.
-  // Track secret refs we create that are BRAND NEW (not a rotation
-  // of an existing ref) so we can clean them up if the PATCH below
-  // fails — otherwise a config the backend rejects would orphan the secret.
+  // Write new / rotated secret values first. Track the refs that are BRAND NEW
+  // (not a rotation of an existing ref) so they can be cleaned up if the PATCH
+  // below fails — otherwise a config the backend rejects would orphan them.
   const originalRefSet = new Set(Object.values(secretRefsOf(resource.config)));
-  const secretRefs: Record<string, string> = {};
+  const secretRefs: Record<string, string> = { ...plan.cited };
   const newlyWrittenRefs: string[] = [];
   // Set when the daemon answered 202: a new value replaces one in use, so it is
   // stored sealed and waits for approval in the Coffer app.
   let awaitingApproval = false;
-  for (const row of creds) {
-    const name = row.name.trim();
-    if (name === "") continue;
-    if (row.value !== "") {
-      // Rotating an existing row writes THROUGH its existing ref; only a row
-      // with no ref yet, or one whose key was renamed (so its ref's trailing
-      // label would lie), gets a freshly minted address. Minting on every
-      // rotation would move the secret, and a move crosses the sync remote as
-      // a delete plus an add of something the other machine cannot place.
-      const ref =
-        row.originalRef && row.originalName === name
-          ? row.originalRef
-          : mintSecretRef("mcp_server", name);
-      const { data: written, error: e } = await client.POST("/secrets", {
-        body: { ref, value: row.value },
-      });
-      if (e) throwApiError(e, "INTERNAL_ERROR", "secret write failed");
-      if (written?.approval !== undefined) awaitingApproval = true;
-      secretRefs[name] = ref;
-      if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
-    } else if (row.originalRef) {
-      // Unchanged name → keep the existing secret under its ref.
-      secretRefs[name] = row.originalRef;
-    }
+  for (const typed of plan.typed) {
+    const ref = typed.rotate ?? mintSecretRef("mcp_server", typed.key);
+    const { data: written, error: e } = await client.POST("/secrets", {
+      body: { ref, value: typed.value },
+    });
+    if (e) throwApiError(e, "INTERNAL_ERROR", "secret write failed");
+    if (written?.approval !== undefined) awaitingApproval = true;
+    secretRefs[typed.key] = ref;
+    if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
   }
 
   const transport = {
@@ -190,9 +170,9 @@ export async function saveMcpServerEdit({
     },
   });
   if (pe) {
-    // PATCH rejected the config — delete the brand-new secret entries
-    // we just wrote so they don't dangle (best-effort; rotations of
-    // existing refs are left, since the unchanged config still uses them).
+    // PATCH rejected the config — delete the brand-new secret entries we
+    // just wrote so they don't dangle (best-effort; rotations of existing refs
+    // are left, since the unchanged config still uses them).
     for (const ref of newlyWrittenRefs) {
       try {
         await client.DELETE("/secrets/{ref}", { params: { path: { ref } } });
@@ -204,12 +184,10 @@ export async function saveMcpServerEdit({
   }
 
   // Clean up secret store entries this server no longer references — but
-  // only ones Coffer minted for it, never a ref the user typed or pasted here
-  // to share one secret between two servers. Ownership is the ref's SHAPE, not
-  // the server's name: a minted ref carries a uuid nothing else produced, and
-  // it keeps meaning that after a rename, which the old `<name>.` prefix test
-  // did not. A failed cleanup must not roll back the successful PATCH above;
-  // we log a warning and let the user re-trigger if needed.
+  // only ones Coffer minted for it, never a Secrets-page secret or a ref the
+  // user wrote by hand to share one secret between two servers. Ownership is
+  // the ref's SHAPE (a minted ref carries a uuid nothing else produced), not
+  // the server's name. A failed cleanup must not roll back the PATCH above.
   const newRefs = new Set(Object.values(secretRefs));
   const orphanWarnings: string[] = [];
   for (const ref of Object.values(secretRefsOf(resource.config))) {

@@ -6,7 +6,7 @@ import { throwApiError, translateApiError } from "@/lib/api/errors";
 import { useToast } from "@/components/ui/toast";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 
-export type CapabilityType = "tool" | "resource" | "prompt";
+type CapabilityType = "tool" | "resource" | "prompt";
 
 interface ToggleInput {
   serverUid: string;

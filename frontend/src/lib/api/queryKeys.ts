@@ -38,6 +38,8 @@ export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
+/** The install hand-off the types read carries while no agent is installed. */
+export const agentInstallHandoffKey = ["agents", "types", "install-handoff"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
@@ -89,31 +91,9 @@ export const agentProvidersKey = ["agentProviders"] as const;
 export const agentProviderModelsKey = (agentKey: string) =>
   ["agentProviders", agentKey, "models"] as const;
 
-// --- skills ----------------------------------------------------------------
-
-export const skillsKey = ["skills"] as const;
-export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
-export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file", path] as const;
-/** One file's three versions in a staged update (local, pinned, incoming). */
-export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
-  ["skills", uid, "compare", stagingId, path] as const;
-
-// --- mcp — per-server discovery, health and invocation log -----------------
-
-export const mcpCapabilitiesKey = (serverUid: string) =>
-  ["mcp", "capabilities", serverUid] as const;
-/** Prefix of every server's status: a change to any MCP server refreshes them. */
-const mcpStatusesKey = ["mcp", "status"] as const;
-export const mcpStatusKey = (serverUid: string) => [...mcpStatusesKey, serverUid] as const;
-export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unknown>) =>
-  ["mcp", "invocations", serverUid, filters] as const;
-/** The gateway-wide invocation log (every server) — the Activity page. */
-export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
-  ["mcp", "invocations", "all", filters] as const;
-/** The server page's reads: the last 24 hours, its own log, the tiering split. */
-export const mcpSummaryKey = (serverUid: string) => ["mcp", "summary", serverUid] as const;
-export const mcpLogKey = (serverUid: string) => ["mcp", "log", serverUid] as const;
-export const mcpTieringKey = (serverUid: string) => ["mcp", "tiering", serverUid] as const;
+// --- skills, mcp, customTools — in queryKeys.capabilities.ts ---------------
+export * from "./queryKeys.capabilities";
+import { customToolsKey, mcpStatusesKey, skillsKey } from "./queryKeys.capabilities";
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
@@ -128,6 +108,12 @@ export const providerKey = (uid: string) => ["providers", uid] as const;
 /** The models a connection's endpoint reports. NOT under `providerKey(uid)`:
  *  it changes with the ENDPOINT, not with every connection mutation. */
 export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as const;
+
+/** Model prices: under `providerKey(uid)` (a PATCH refetches); `listedAt` refetches after a listing. */
+export const providerPricesKey = (uid: string, models: readonly string[], listedAt: number) =>
+  ["providers", uid, "prices", models, listedAt] as const;
+
+// The model proxy's query keys live beside its api, in lib/api/proxy.ts.
 
 /** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
 export const localRuntimesKey = (baseUrl: string | null) => ["localRuntimes", baseUrl] as const;
@@ -195,6 +181,8 @@ export const knowledgeChangeKey = (version: string) =>
 export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
+export const knowledgeVersionBodyKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "body", version] as const;
 
 // --- memory — partitions, their memories, what is delivered ---------------
 
@@ -209,6 +197,7 @@ export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "
 export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
 export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
+export const memoryReadingKey = ["memory", "reading"] as const;
 
 // --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
 
@@ -240,10 +229,6 @@ export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
 export const secretScanKey = ["secrets", "scan"] as const;
-
-// customTools — keyed on a group's NAME, fixed once made and its routes' only id.
-export const customToolsKey = ["customTools"] as const;
-export const customToolGroupKey = (name: string) => ["customTools", name] as const;
 
 // ---------------------------------------------------------------------------
 // clis — the commands managed skills require (/clis)

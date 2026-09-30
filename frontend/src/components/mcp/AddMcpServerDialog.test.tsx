@@ -155,7 +155,11 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Name")).toBe("github");
     expect(value("Command")).toBe("npx");
     expect(value("Arguments")).toBe("-y @modelcontextprotocol/server-github");
-    expect(screen.getByRole("switch", { name: "GITHUB_TOKEN is a secret" })).toBeChecked();
+    expect(
+      within(screen.getByRole("group", { name: "How GITHUB_TOKEN is kept" })).getByRole("button", {
+        name: "Secret",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent(/^github$/));
@@ -195,8 +199,16 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(value("Name")).toBe("docs");
     expect(value("Command")).toBe("uvx");
     expect(value("Arguments")).toBe("docs-mcp --verbose");
-    expect(screen.getByRole("switch", { name: "DOCS_TOKEN is a secret" })).toBeChecked();
-    expect(screen.getByRole("switch", { name: "REGION is a secret" })).not.toBeChecked();
+    expect(
+      within(screen.getByRole("group", { name: "How DOCS_TOKEN is kept" })).getByRole("button", {
+        name: "Secret",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(screen.getByRole("group", { name: "How REGION is kept" })).getByRole("button", {
+        name: "Secret",
+      }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   // revise-web-ui-ia: web-ui "unreadable input offers a manual type choice" — the acceptance marker is added when the change is archived.
@@ -223,7 +235,7 @@ describe("AddMcpServerDialog — paste box", () => {
   });
 
   // revise-web-ui-ia: web-ui "the add dialog links to importing from agents" — the acceptance marker is added when the change is archived.
-  test("the dialog links to importing from agents and offers no custom tool", async () => {
+  acceptance("web-ui", "the import review shows each file's diff before it imports", async () => {
     vi.mocked(agentsApi.mcpEntries).mockResolvedValue({
       items: [
         {
@@ -243,23 +255,82 @@ describe("AddMcpServerDialog — paste box", () => {
       ],
       parse_errors: [],
     } as never);
-    vi.mocked(agentsApi.adoptMcpEntry).mockResolvedValue({
-      uid: "u-jira",
-      kind: "mcp_server",
-      name: "jira",
-    } as never);
+    const entry = { agent_uid: "a-claude", name: "jira", source: "claude_json" };
+    const plan = {
+      servers: [
+        {
+          op: "add",
+          name: "jira",
+          original_name: null,
+          name_usable: true,
+          resource_uid: null,
+          transport: "stdio",
+          reach_agent_uids: ["a-claude"],
+          reaches_all: false,
+          merged: false,
+          settings_differ: false,
+          entries: [{ ...entry, agent_name: "claude-code", role: "source" }],
+        },
+      ],
+      files: [
+        {
+          agent_uid: "a-claude",
+          agent_type: "claude_code",
+          source: "claude_json",
+          op: "modify",
+          path: "/h/.claude.json",
+          display_path: "~/.claude.json",
+          entries_removed: ["jira"],
+          added_lines: 0,
+          removed_lines: 1,
+          hunks: [
+            {
+              header: "@@ -1,3 +1,2 @@ mcpServers",
+              lines: [{ kind: "remove", old_line: 2, new_line: null, text: '"jira": {…}' }],
+            },
+          ],
+        },
+      ],
+      agents: [
+        {
+          uid: "a-claude",
+          name: "claude-code",
+          display_name: "Claude Code",
+          type: "claude_code",
+          connected: true,
+          entries_removed: ["jira"],
+        },
+      ],
+      unavailable: [],
+      changes: [],
+      coffer_entry_changes: [],
+    };
+    postOverride = (path) => {
+      if (path === "/agents/mcp-import/plan") return { data: plan, error: undefined };
+      if (path === "/agents/mcp-import/apply")
+        return {
+          data: {
+            entries: [{ ...entry, outcome: "added", server_name: "jira", resource_uid: "u-jira" }],
+            servers_added: [{ name: "jira", uid: "u-jira" }],
+            coffer_entry_results: [],
+          },
+          error: undefined,
+        };
+      return undefined;
+    };
     renderDialog();
     const link = await screen.findByRole("button", { name: "Import from your agents · 1 found" });
     expect(document.body.textContent).not.toMatch(/custom tool|OpenAPI|HTTP request/i);
 
     fireEvent.click(link);
     expect(screen.getByText("Review import")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Import 1 server" }));
+    // The plan is read before anything is written: the file's diff is shown.
+    expect((await screen.findAllByText("~/.claude.json")).length).toBeGreaterThan(0);
+    fireEvent.click(await screen.findByRole("button", { name: "Import 1 server" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(agentsApi.adoptMcpEntry).toHaveBeenCalledWith("a-claude", "jira", {
-      source: "claude_json",
-      secrets: { JIRA_TOKEN: "mcp/claude-code/jira/JIRA_TOKEN" },
-    });
+    const applied = calls.find(([path]) => path === "/agents/mcp-import/apply");
+    expect(applied?.[1]?.body).toEqual({ entries: [entry] });
+    expect(agentsApi.adoptMcpEntry).not.toHaveBeenCalled();
   });
 });
 
@@ -303,7 +374,11 @@ describe("AddMcpServerDialog — form", () => {
       }),
     );
     await continueWhenRead();
-    expect(screen.getByRole("switch", { name: "Authorization is a secret" })).toBeChecked();
+    expect(
+      within(screen.getByRole("group", { name: "How Authorization is kept" })).getByRole("button", {
+        name: "Secret",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("api"));
 
@@ -328,7 +403,7 @@ describe("AddMcpServerDialog — form", () => {
     await continueWhenRead();
     expect(screen.getByText(/Enter the value of Authorization/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add server" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Value of Authorization"), {
+    fireEvent.change(screen.getByLabelText("New value of Authorization"), {
       target: { value: "Bearer t0k" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
@@ -371,7 +446,7 @@ acceptance("web-ui", "the import review shows each server's fixed name", async (
   const names = screen.getAllByLabelText("Name") as HTMLInputElement[];
   expect(names.map((n) => n.value)).toEqual(["my-server", "github-tools", LONG]);
   expect(screen.getByText("Renamed from My Server.")).toBeInTheDocument();
-  expect(screen.getAllByText("Can't be changed once added.")).toHaveLength(2);
+  expect(screen.getByText(/^Names are fixed once added\./)).toBeInTheDocument();
 
   // Only the 30-character name is flagged, naming the limit, and nothing is sent.
   const flag = screen.getByRole("alert");
@@ -398,4 +473,39 @@ test("opened by the page on Import from your agents, it starts on that view", as
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "open on import" }));
   expect(await screen.findByText("Review import")).toBeInTheDocument();
+});
+
+acceptance("web-ui", "the add form tests the unsaved server before Add server", async () => {
+  postOverride = (path) =>
+    path === "/resources/mcp_server/test-config"
+      ? {
+          data: {
+            ok: true,
+            latency_ms: 1400,
+            tool_count: 2,
+            resource_count: 0,
+            prompt_count: 0,
+            tools: [
+              { name: "get_issue", description: null },
+              { name: "list_issues", description: null },
+            ],
+            stderr_tail: ["ready"],
+          },
+          error: undefined,
+        }
+      : undefined;
+  renderDialog();
+  paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
+  await continueWhenRead();
+  fireEvent.click(screen.getByRole("button", { name: "Test" }));
+  expect(await screen.findByText("Test passed in 1.4 s")).toBeInTheDocument();
+  expect(screen.getByText("list_issues")).toBeInTheDocument();
+  const tested = calls.find(([path]) => path === "/resources/mcp_server/test-config");
+  expect(tested?.[1]?.body).toMatchObject({
+    transport: { type: "stdio", command: "npx", env: {}, secret_refs: {} },
+    secret_values: { GITHUB_TOKEN: "ghp_x" },
+  });
+  // Testing saved nothing: no registration and no secret written.
+  expect(calls.some(([path]) => path === "/resources" || path === "/secrets")).toBe(false);
+  expect(screen.getByRole("button", { name: "Test again" })).toBeInTheDocument();
 });

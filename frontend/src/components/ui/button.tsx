@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 // Kinds (Foundations name → variant):
@@ -16,6 +17,9 @@ import { cn } from "@/lib/utils";
 // height: `icon` and `icon-md` are 30 (md), `icon-sm` is 26 (sm).
 // Every kind has a 1px border (transparent where the board says "no border")
 // so switching kind never shifts layout by a pixel.
+// `loading`: the spinner replaces the leading icon, the width is kept (the
+// label stays), the button is disabled and reads busy at opacity .8 rather
+// than the disabled .45 — it is working, not unavailable.
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-label",
@@ -63,13 +67,33 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Waiting on the action it started: spinner in place of the icon, disabled,
+   *  `aria-busy`. Ignored with `asChild` (the child owns its content). */
+  loading?: boolean;
 }
 
+// While loading, the caller's own icons step aside for the spinner.
+const LOADING = "disabled:opacity-80 [&>svg:not([data-spinner])]:hidden";
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ className, variant, size, asChild = false, loading = false, ...props }, ref) => {
+    if (asChild) {
+      return (
+        <Slot className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      );
+    }
+    const { children, disabled, ...rest } = props;
     return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <button
+        className={cn(buttonVariants({ variant, size, className }), loading && LOADING)}
+        ref={ref}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        {...rest}
+      >
+        {loading ? <Spinner /> : null}
+        {children}
+      </button>
     );
   },
 );

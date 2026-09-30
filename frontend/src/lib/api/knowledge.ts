@@ -38,6 +38,7 @@ import type {
   FileSave,
   IngestedDocumentOut,
   MaterialIn,
+  VersionBodyOut,
   SubmissionOut,
   TreeOut,
   VersionDiffOut,
@@ -189,6 +190,30 @@ export function getHistory(path: string): Promise<DocumentHistoryOut> {
 /** What one version did to the document, against the version before it. */
 export function getVersionDiff(path: string, version: string): Promise<VersionDiffOut> {
   return call<VersionDiffOut>(`${ROOT}/history/diff?path=${enc(path)}&version=${enc(version)}`);
+}
+
+/** A document's body as one version left it — what Compare with current reads. */
+export function getVersionBody(path: string, version: string): Promise<VersionBodyOut> {
+  return call<VersionBodyOut>(`${ROOT}/history/version?path=${enc(path)}&version=${enc(version)}`);
+}
+
+/**
+ * Put back what a delete removed — a document, or a whole collection with its
+ * documents, README and waiting items — as one new change naming the user.
+ * Refused with 409 when the path (`KNOWLEDGE_RESTORE_CONFLICT`) or the
+ * collection's name (`KNOWLEDGE_COLLECTION_EXISTS`) is taken again.
+ */
+export function restoreDeleted(version: string): Promise<ChangeOut> {
+  return call<ChangeOut>(`${ROOT}/changes/${enc(version)}/restore`, { method: "POST" });
+}
+
+/** Rewrite a collection's description — the opening paragraph of its README.
+ *  A collection has no title: its heading is its folder name. */
+export function describeCollection(uid: string, description: string): Promise<CollectionOut> {
+  return call<CollectionOut>(`${ROOT}/collections/${enc(uid)}/description`, {
+    method: "PUT",
+    body: { description },
+  });
 }
 
 /** Put one version back, as a NEW version naming the user — the past is never rewritten. */

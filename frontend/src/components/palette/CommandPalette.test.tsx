@@ -47,6 +47,8 @@ function never(): Promise<unknown> {
 }
 
 beforeEach(() => {
+  // The Recent group is remembered per browser; every test starts without one.
+  localStorage.clear();
   features = { fake_feature: false };
   daemonUp = true;
   callAnswers = {
@@ -113,7 +115,8 @@ function renderPalette() {
 
 const input = () => screen.getByRole("combobox");
 const type = (text: string) => fireEvent.change(input(), { target: { value: text } });
-const options = () => screen.queryAllByRole("option").map((o) => o.textContent ?? "");
+/** Each row's label (its meta — kind, status, shortcut — left out). */
+const options = () => screen.queryAllByTestId("palette-row-label").map((o) => o.textContent ?? "");
 const group = (name: string) => screen.getByRole("group", { name });
 
 /** Wait until the daemon status has answered (the feature gates depend on it). */
@@ -139,9 +142,9 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     type("github");
-    expect(within(group("Objects")).getByRole("option")).toHaveTextContent("Octo bridge");
+    expect(within(group("Best match")).getByRole("option")).toHaveTextContent("Octo bridge");
     type("octo");
-    const row = within(group("Objects")).getByRole("option");
+    const row = within(group("Best match")).getByRole("option");
     expect(row).toHaveTextContent("github-mcp");
     expect(row).toHaveTextContent("MCP server");
     fireEvent.click(row);
@@ -150,20 +153,33 @@ describe("CommandPalette", () => {
   });
 
   // revise-web-ui-ia: web-ui "the palette offers no actions"
-  test("every entry navigates and choosing one sends no request that changes state", async () => {
+  test("the palette offers no actions: every entry navigates and none sends a write", async () => {
     renderPalette();
     await settled();
-    const count = screen.getAllByRole("option").length;
-    // 15 sidebar entries + 5 Settings tabs + one MCP server, one skill, one collection.
-    expect(count).toBe(23);
+    const pages = () => within(group("Pages")).getAllByRole("option");
+    // An empty query lists every page: 15 sidebar entries + 5 Settings tabs.
+    const count = pages().length;
+    expect(count).toBe(20);
     const seen: string[] = [];
     for (let i = 0; i < count; i += 1) {
       fireEvent.click(screen.getByText("reopen"));
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(count));
-      fireEvent.click(screen.getAllByRole("option")[i]);
+      await waitFor(() => expect(pages()).toHaveLength(count));
+      fireEvent.click(pages()[i]);
       seen.push(screen.getByTestId("location").textContent ?? "");
     }
-    expect(new Set(seen).size).toBe(count);
+    // Objects are listed under a query: each one opens its detail page.
+    for (const [query, label] of [
+      ["github-mcp", "Octo bridge"],
+      ["pdf", "pdf"],
+      ["team-notes", "team-notes"],
+    ]) {
+      fireEvent.click(screen.getByText("reopen"));
+      type(query);
+      await waitFor(() => expect(options()[0]).toBe(label));
+      fireEvent.keyDown(input(), { key: "Enter" });
+      seen.push(screen.getByTestId("location").textContent ?? "");
+    }
+    expect(new Set(seen).size).toBe(count + 3);
     expect(api.POST).not.toHaveBeenCalled();
     expect(api.PATCH).not.toHaveBeenCalled();
     expect(api.DELETE).not.toHaveBeenCalled();
@@ -193,8 +209,8 @@ describe("CommandPalette", () => {
     for (const path of Object.keys(callAnswers)) callAnswers[path] = never;
     renderPalette();
     type("act");
-    expect(within(group("Pages")).getByRole("option")).toHaveTextContent("Activity");
-    expect(within(group("Objects")).getByText("Loading…")).toBeInTheDocument();
+    expect(within(group("Best match")).getByRole("option")).toHaveTextContent("Activity");
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
     fireEvent.keyDown(input(), { key: "Enter" });
     expect(screen.getByTestId("location")).toHaveTextContent("/activity");
   });
@@ -204,11 +220,12 @@ describe("CommandPalette", () => {
     callAnswers["/skills"] = () => Promise.reject(new ApiError("INTERNAL_ERROR", "boom"));
     renderPalette();
     await settled();
-    const objects = group("Objects");
-    expect(within(objects).getByText("Skill: couldn't load the list")).toBeInTheDocument();
-    const server = within(objects).getByRole("option", { name: /Octo bridge/ });
-    expect(within(objects).queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
     expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
+    type("o");
+    expect(within(group("Skills")).getByText("Skill: couldn't load the list")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
+    type("octo");
+    const server = screen.getByRole("option", { name: /Octo bridge/ });
     fireEvent.click(server);
     expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/github-mcp");
   });
@@ -253,6 +270,25 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input(), { key: "ArrowUp" });
     const last = screen.getAllByRole("option").at(-1)!;
     expect(last).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("an empty query shows the last choices under Recent above every page", async () => {
+    renderPalette();
+    await settled();
+    expect(screen.queryByRole("group", { name: "Recent" })).not.toBeInTheDocument();
+    type("octo");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    fireEvent.click(screen.getByText("reopen"));
+    type("usage");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    fireEvent.click(screen.getByText("reopen"));
+    await waitFor(() => expect(group("Recent")).toBeInTheDocument());
+    const recent = within(group("Recent")).getAllByRole("option");
+    expect(recent.map((r) => within(r).getByTestId("palette-row-label").textContent)).toEqual([
+      "Usage",
+      "Octo bridge",
+    ]);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
   });
 
   test("Escape closes the palette and focus returns where it was", async () => {

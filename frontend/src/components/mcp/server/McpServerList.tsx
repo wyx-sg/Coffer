@@ -3,7 +3,8 @@
 // "Filter servers" (name, title and command or URL), then the servers grouped
 // by what needs the user — Needs attention (failing, launcher missing, secret
 // missing, each with its reason), Healthy, Not checked yet, Off — with a count
-// each, and the selection bar while rows are ticked. Each row reads its own
+// each, then Built-in (Coffer's own `coffer` server, read-only), and the
+// selection bar while rows are ticked. Each row reads its own
 // status and tiering (both cheap, persisted reads), so the grouping is done
 // here from the cached answers the rows share.
 import { useMemo, useState } from "react";
@@ -14,18 +15,30 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
+import { McpBuiltinRow } from "./McpBuiltinRow";
 import { McpServerListRow } from "./McpServerListRow";
 import { McpServersBulkBar } from "./McpServersBulkBar";
 import { GROUP_ORDER, serverState, transportOf, type ServerGroup } from "./serverState";
+
+/** The fixed name of Coffer's own server, and its address on this page. */
+export const BUILTIN_NAME = "coffer";
 
 interface Props {
   servers: ResourceOut[];
   isLoading: boolean;
   selectedName: string | null;
   hrefFor: (name: string) => string;
+  /** The built-in `coffer` server is the open one. */
+  builtinSelected?: boolean;
 }
 
-export function McpServerList({ servers, isLoading, selectedName, hrefFor }: Props) {
+export function McpServerList({
+  servers,
+  isLoading,
+  selectedName,
+  hrefFor,
+  builtinSelected = false,
+}: Props) {
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const [query, setQuery] = useState("");
@@ -74,7 +87,7 @@ export function McpServerList({ servers, isLoading, selectedName, hrefFor }: Pro
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : shown === 0 && servers.length > 0 ? (
+        ) : shown === 0 && servers.length > 0 && query.trim() !== "" ? (
           <p className="px-2.5 py-3 text-xs text-text-muted">{t("mcp.page.noMatches")}</p>
         ) : (
           GROUP_ORDER.map((group) => {
@@ -107,6 +120,9 @@ export function McpServerList({ servers, isLoading, selectedName, hrefFor }: Pro
               </section>
             );
           })
+        )}
+        {isLoading ? null : (
+          <McpBuiltinRow query={query} to={hrefFor(BUILTIN_NAME)} current={builtinSelected} />
         )}
       </div>
       {selected.length > 0 ? (

@@ -98,6 +98,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/mcp-import/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Import
+         * @description Perform the plan as it stands now; each entry reports its outcome.
+         */
+        post: operations["apply_import_api_v1_agents_mcp_import_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/mcp-import/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Import
+         * @description What importing the chosen entries would do; writes nothing.
+         */
+        post: operations["plan_import_api_v1_agents_mcp_import_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/types": {
         parameters: {
             query?: never;
@@ -592,6 +632,7 @@ export interface components {
         };
         /** AgentTypesOut */
         AgentTypesOut: {
+            install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Types */
             types: components["schemas"]["AgentTypeOut"][];
         };
@@ -695,6 +736,40 @@ export interface components {
          * @enum {string}
          */
         DetectionState: "installed_active" | "installed_never_run" | "config_only" | "missing";
+        /** DiffHunkOut */
+        DiffHunkOut: {
+            /**
+             * Header
+             * @description `@@ -8,24 +8,5 @@ mcpServers`
+             */
+            header: string;
+            /** Lines */
+            lines: components["schemas"]["DiffLineOut"][];
+            /** New Count */
+            new_count: number;
+            /** New Start */
+            new_start: number;
+            /** Old Count */
+            old_count: number;
+            /** Old Start */
+            old_start: number;
+            /** Section */
+            section: string | null;
+        };
+        /** DiffLineOut */
+        DiffLineOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "context" | "add" | "remove";
+            /** New Line */
+            new_line: number | null;
+            /** Old Line */
+            old_line: number | null;
+            /** Text */
+            text: string;
+        };
         /** DirChildOut */
         DirChildOut: {
             /**
@@ -727,6 +802,15 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /**
          * HookHealth
@@ -862,6 +946,189 @@ export interface components {
             transport: "stdio" | "http";
             /** Url */
             url: string | null;
+        };
+        /** McpImportAgentOut */
+        McpImportAgentOut: {
+            /**
+             * Connected
+             * @description Its config already holds Coffer's own entry.
+             */
+            connected: boolean;
+            /** Display Name */
+            display_name: string;
+            /** Entries Removed */
+            entries_removed: string[];
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Uid */
+            uid: string;
+        };
+        /** McpImportApplyOut */
+        McpImportApplyOut: {
+            /** Coffer Entry Results */
+            coffer_entry_results: components["schemas"]["ReconcileItemOut"][];
+            /** Entries */
+            entries: components["schemas"]["McpImportEntryResultOut"][];
+            /** Servers Added */
+            servers_added: components["schemas"]["McpImportServerAddedOut"][];
+        };
+        /** McpImportEntryIn */
+        McpImportEntryIn: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Name */
+            name: string;
+            /** New Name */
+            new_name?: string | null;
+            /** Source */
+            source?: string | null;
+        };
+        /** McpImportEntryResultOut */
+        McpImportEntryResultOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Message */
+            message: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "added" | "merged" | "removed_duplicate" | "failed" | "skipped";
+            /** Resource Uid */
+            resource_uid: string | null;
+            /** Server Name */
+            server_name: string | null;
+            /** Source */
+            source: string | null;
+        };
+        /** McpImportFileOut */
+        McpImportFileOut: {
+            /** Added Lines */
+            added_lines: number;
+            /** Agent Type */
+            agent_type: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Display Path */
+            display_path: string;
+            /** Entries Removed */
+            entries_removed: string[];
+            /** Hunks */
+            hunks: components["schemas"]["DiffHunkOut"][];
+            /**
+             * Op
+             * @constant
+             */
+            op: "modify";
+            /** Path */
+            path: string;
+            /** Removed Lines */
+            removed_lines: number;
+            /** Source */
+            source: string;
+        };
+        /** McpImportIn */
+        McpImportIn: {
+            /** Entries */
+            entries: components["schemas"]["McpImportEntryIn"][];
+        };
+        /** McpImportPlanEntryOut */
+        McpImportPlanEntryOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Error */
+            error: string | null;
+            /** Error Code */
+            error_code: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "source" | "merged" | "duplicate" | "unavailable";
+            /** Secret Keys */
+            secret_keys: string[];
+            /** Secret Refs */
+            secret_refs: {
+                [key: string]: string;
+            };
+            /** Source */
+            source: string | null;
+            /** Transport */
+            transport: ("stdio" | "http") | null;
+        };
+        /**
+         * McpImportPlanOut
+         * @description A dry run: nothing has been written.
+         */
+        McpImportPlanOut: {
+            /** Agents */
+            agents: components["schemas"]["McpImportAgentOut"][];
+            /** Changes */
+            changes: components["schemas"]["ReconcileItemOut"][];
+            /** Coffer Entry Changes */
+            coffer_entry_changes: components["schemas"]["ReconcileItemOut"][];
+            /** Files */
+            files: components["schemas"]["McpImportFileOut"][];
+            /** Servers */
+            servers: components["schemas"]["McpImportServerOut"][];
+            /** Unavailable */
+            unavailable: components["schemas"]["McpImportPlanEntryOut"][];
+        };
+        /** McpImportServerAddedOut */
+        McpImportServerAddedOut: {
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+        };
+        /** McpImportServerOut */
+        McpImportServerOut: {
+            /** Entries */
+            entries: components["schemas"]["McpImportPlanEntryOut"][];
+            /**
+             * Merged
+             * @description Several entries become this one server.
+             */
+            merged: boolean;
+            /** Name */
+            name: string;
+            /** Name Usable */
+            name_usable: boolean;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "duplicate";
+            /** Original Name */
+            original_name: string | null;
+            /** Reach Agent Uids */
+            reach_agent_uids: string[];
+            /** Reaches All */
+            reaches_all: boolean;
+            /** Resource Uid */
+            resource_uid: string | null;
+            /**
+             * Settings Differ
+             * @description Merged entries' environment or headers differ; the first entry's are kept.
+             */
+            settings_differ: boolean;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "stdio" | "http";
         };
         /**
          * MemoryFileContentOut
@@ -1032,6 +1299,71 @@ export interface components {
             marketplaces: components["schemas"]["MarketplaceOut"][];
             /** Parse Errors */
             parse_errors: components["schemas"]["ParseErrorOut"][];
+        };
+        /**
+         * ReconcileItemOut
+         * @description One difference between what Coffer wants and what is there.
+         */
+        ReconcileItemOut: {
+            /**
+             * After
+             * @description What Coffer would write; null for a removal.
+             */
+            after: string | null;
+            /**
+             * Before
+             * @description What is there now, rendered safely; null if absent.
+             */
+            before: string | null;
+            /** Changed Params */
+            changed_params: string[];
+            /**
+             * Disposition
+             * @enum {string}
+             */
+            disposition: "repair" | "report" | "blocked";
+            /** Error */
+            error: string | null;
+            /** File */
+            file: string | null;
+            /**
+             * Id
+             * @description `<target>:<key>`; what `POST /reconcile/apply` takes.
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "modify" | "remove";
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "planned" | "applied" | "failed";
+            /** Reason */
+            reason: string;
+            /** Reason Code */
+            reason_code: string;
+            /**
+             * Since
+             * @description When a writing pass first saw this difference.
+             */
+            since: string | null;
+            subject: components["schemas"]["ReconcileSubjectOut"];
+            /** Target */
+            target: string;
+        };
+        /** ReconcileSubjectOut */
+        ReconcileSubjectOut: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Uid */
+            uid: string | null;
         };
         /**
          * TranscriptMessageOut
@@ -1273,6 +1605,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCandidatesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_import_api_v1_agents_mcp_import_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpImportApplyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    plan_import_api_v1_agents_mcp_import_plan_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpImportPlanOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

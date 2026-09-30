@@ -1,17 +1,14 @@
-// src/components/providers/ProviderDetail.tsx — the open provider: header, the key-rejected banner, Overview | Models.
+// src/components/providers/ProviderDetail.tsx — the open provider: header, the key-rejected banner, then one column.
 //
-// The tab lives in the path (`/model-providers/<uid>` for Overview,
-// `/model-providers/<uid>/models`) through useDetailTab, so a refresh or a
-// deep link lands on it. The dialogs the header and the Overview open —
+// No tabs (canvas 2.2): Used by, Endpoint and Models read top to bottom at
+// `/model-providers/<uid>`. The dialogs the header and the Endpoint open —
 // Edit, Replace key, Delete — are owned here, once.
 import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Provider } from "@/lib/api/providers";
-import { useDetailTab } from "@/lib/detailTabs";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
 import { authStatusOf, probeStatus, type ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
@@ -19,11 +16,10 @@ import { DeleteProviderDialog } from "./DeleteProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
 import { KeyRejectedBanner } from "./KeyRejectedBanner";
 import { ProviderDetailHeader } from "./ProviderDetailHeader";
-import { ProviderModelsTab } from "./ProviderModelsTab";
-import { ProviderOverview } from "./ProviderOverview";
+import { ProviderEndpoint } from "./ProviderEndpoint";
+import { ProviderModels } from "./ProviderModels";
+import { ProviderUsedBy } from "./ProviderUsedBy";
 import { ReplaceKeyDialog } from "./ReplaceKeyDialog";
-
-const TABS = ["overview", "models"] as const;
 
 interface Props {
   provider: Provider;
@@ -47,16 +43,6 @@ export function ProviderDetail({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [open, setOpen] = useState<Open>(null);
-  const [tab, setTab] = useDetailTab(
-    TABS,
-    "overview",
-    `/model-providers/${encodeURIComponent(provider.uid)}`,
-  );
-
-  const listed = endpoint.data?.models.length ?? 0;
-  const offered = provider.models.length || listed;
-  const count =
-    endpoint.data && listed > 0 ? `${offered} / ${listed}` : offered ? `${offered}` : "";
   const rejectedStatus = status === "keyRejected" ? authStatusOf(endpoint.data?.message) : null;
 
   /** Test: ask the endpoint again and say what it answered. */
@@ -94,36 +80,20 @@ export function ProviderDetail({
         />
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">{t("providers.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="models">
-            {t("providers.tabs.models")}
-            {count ? <span className="text-2xs font-book text-text-subtle">{count}</span> : null}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value={tab} className="mt-5">
-          {tab === "overview" ? (
-            <ProviderOverview
-              provider={provider}
-              use={use}
-              status={status}
-              rejectedStatus={rejectedStatus}
-              listed={endpoint.data ? listed : null}
-              onReplaceKey={() => setOpen("replace")}
-              onChooseModels={() => setTab("models")}
-            />
-          ) : (
-            <ProviderModelsTab
-              provider={provider}
-              use={use}
-              endpoint={endpoint}
-              engineModel={engineModel}
-              transcribeModel={transcribeModel}
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+      <ProviderUsedBy use={use} failing={status === "keyRejected"} />
+      <ProviderEndpoint
+        provider={provider}
+        use={use}
+        rejectedStatus={rejectedStatus}
+        onReplaceKey={() => setOpen("replace")}
+      />
+      <ProviderModels
+        provider={provider}
+        use={use}
+        endpoint={endpoint}
+        engineModel={engineModel}
+        transcribeModel={transcribeModel}
+      />
 
       <EditProviderDialog
         open={open === "edit"}

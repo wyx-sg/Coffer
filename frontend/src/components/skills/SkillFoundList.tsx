@@ -40,14 +40,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function SingleSkill({ skill }: { skill: StagedSkill }) {
+function SingleSkill({ skill, kind }: { skill: StagedSkill; kind: SkillStaging["kind"] }) {
   const { t } = useTranslation();
   const ok = skill.valid && !skill.protected;
   const heading = !skill.valid
     ? t("skillSources.found.invalid")
-    : skill.folder === "."
-      ? t("skillSources.found.top")
-      : t("skillSources.found.inFolder", { folder: skill.folder });
+    : kind === "folder"
+      ? t("skillSources.found.validFolder")
+      : skill.folder === "."
+        ? t("skillSources.found.top")
+        : t("skillSources.found.inFolder", { folder: skill.folder });
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5 overflow-hidden rounded-lg border border-border bg-surface-raised px-3 pb-1 pt-2.5">
@@ -98,6 +100,11 @@ function SingleSkill({ skill }: { skill: StagedSkill }) {
           </div>
         </div>
       ) : null}
+      {skill.valid && skill.taken && !skill.protected && skill.name ? (
+        <p className="text-xs text-text-muted">
+          {t("skillSources.found.takenNote", { name: skill.name })}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -145,13 +152,18 @@ function SkillRow({
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 truncate font-mono text-xs font-medium text-text">{label}</span>
-          {skill.valid && skill.taken && !skill.protected ? (
-            <span className="shrink-0 rounded-sm bg-warning-soft px-1.5 text-2xs font-label text-warning-foreground">
-              {t("skillSources.found.replace")}
-            </span>
-          ) : null}
           <span className="ml-auto">
-            <Meta skill={skill} />
+            {skill.valid && skill.taken && !skill.protected ? (
+              <button
+                type="button"
+                className="text-xs font-label text-accent-text hover:underline"
+                onClick={() => onToggle(skill.name as string)}
+              >
+                {checked ? t("skillSources.found.replacing") : t("skillSources.found.replace")}
+              </button>
+            ) : (
+              <Meta skill={skill} />
+            )}
           </span>
         </div>
         {skill.valid && skill.description ? (
@@ -169,16 +181,13 @@ function SkillRow({
 
 export function SkillFoundList({ stage, selected, onToggle }: Props) {
   const { t } = useTranslation();
-  if (stage.skills.length === 1) return <SingleSkill skill={stage.skills[0]} />;
+  if (stage.skills.length === 1) return <SingleSkill skill={stage.skills[0]} kind={stage.kind} />;
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs text-text-muted">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+      <p className="border-b border-border-subtle bg-surface-sunken px-3 py-2 text-xs font-label text-text">
         {t("skillSources.found.several", { count: stage.skills.length })}
-      </span>
-      <ul
-        aria-label={t("skillSources.found.listLabel")}
-        className="max-h-72 overflow-y-auto rounded-lg border border-border bg-surface-raised"
-      >
+      </p>
+      <ul aria-label={t("skillSources.found.listLabel")} className="max-h-72 overflow-y-auto">
         {stage.skills.map((skill) => (
           <SkillRow
             key={skill.folder}

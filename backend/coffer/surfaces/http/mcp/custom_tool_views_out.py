@@ -90,6 +90,7 @@ def operation_out(op: DraftOperation) -> OpenApiOperationOut:
     return OpenApiOperationOut(
         key=op.key,
         summary=op.summary,
+        tag=op.tag,
         tool=CustomToolIn(
             name=t.name,
             description=t.description,

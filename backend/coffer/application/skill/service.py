@@ -145,7 +145,14 @@ class SkillService:
         Awaited by ResourceService BEFORE the row is removed, so the
         kind-agnostic delete leaves no on-disk orphans. ``store.delete`` is
         idempotent so re-entry (e.g. from a test that pre-cleans) is safe.
+
+        An agent's copy that is no longer Coffer's link stops the whole delete
+        before anything is torn down (spec skill-manager "Refuse deleting a
+        skill whose copy Coffer did not make").
         """
+        from coffer.application.skill.copy_ops import refuse_foreign_copies
+
+        await refuse_foreign_copies(self, skill)
         await self._cleanup_bindings_internal(skill_id=skill.id)
         self._store.delete(skill.name)
 

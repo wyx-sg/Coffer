@@ -103,6 +103,7 @@ The ORM models live in [`infrastructure/persistence/models.py`](https://github.c
 | `secret_approvals` | Changes waiting for a present human in the desktop app, with their status. A pending value waits as ciphertext. |
 | `secret_boundary_settings` | Key/value switches of the secret boundary (`require_approval`) and its one-time adoption marker. |
 | `internal_engine_config` | A single row: the model Coffer's own passes run on, each unattended pass's switch and interval, the curation owner machine, and the per-call timeout. |
+| `attention_ignores` | The informational "needs you" items a person ignored on this machine, by item key (kind, resource, reason), with when. Machine-local: the attention list leaves them out of its items and counts. |
 
 ### Kind-owned
 

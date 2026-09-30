@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
+import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
+import type { DaemonConnection } from "./shell/daemonConnection";
 import { acceptance } from "@/test/acceptance";
 
 // The status/skew queries are stubbed; the restart mutation stays real so the
@@ -24,18 +25,34 @@ const { useDaemonStatus, useDaemonOutOfDate } = await import("@/lib/hooks/useDae
 const useDaemonStatusMock = vi.mocked(useDaemonStatus);
 const useDaemonOutOfDateMock = vi.mocked(useDaemonOutOfDate);
 
+const OFFLINE: DaemonConnection = {
+  phase: "offline",
+  attempt: 5,
+  nextRetryAt: null,
+  lastReplyAt: null,
+  starting: false,
+  driven: true,
+};
+const RECONNECTING: DaemonConnection = {
+  ...OFFLINE,
+  phase: "reconnecting",
+  attempt: 3,
+  nextRetryAt: Date.now() + 4000,
+  lastReplyAt: Date.now() - 5000,
+};
+
+/** The offline state as Layout mounts it once the reconnect grace has run out. */
+function DaemonOfflineBanner({ onRetry = () => {} }: { onRetry?: () => void }) {
+  return <DaemonOfflineState connection={OFFLINE} onRetry={onRetry} />;
+}
+
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
 describe("DaemonOfflineBanner", () => {
-  test("brings its own card and not its own fixed slot", () => {
-    // `FloatingBanners` owns the slot, and it is shared with
-    // SyncAttentionBanner. While both owned an identical `fixed inset-x-0
-    // top-4` wrapper they were drawn at the same coordinates, and a daemon
-    // that is merely OUT OF DATE answers the sync status perfectly well — so
-    // the pair really can be up at once.
+  test("is drawn in line in the workspace, not in a fixed slot over the app", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("ECONNREFUSED"),
@@ -46,6 +63,29 @@ describe("DaemonOfflineBanner", () => {
     expect(screen.getByTestId("daemon-banner")).toBeInTheDocument();
   });
 
+  test("while reconnecting a bar counts the attempts and Retry now probes again", () => {
+    useDaemonStatusMock.mockReturnValue({ isError: true, error: new Error("down") } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
+    const retry = vi.fn();
+    render(wrap(<DaemonStatusBar connection={RECONNECTING} onRetry={retry} />));
+    const bar = screen.getByTestId("daemon-reconnecting");
+    expect(bar).toHaveTextContent("Reconnecting to the daemon…");
+    expect(bar).toHaveTextContent(
+      /Attempt 3 · next try in \ds · changes are paused, nothing is lost/,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry now" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  test("the offline state's Retry probes again", () => {
+    useDaemonStatusMock.mockReturnValue({ isError: true, error: new Error("down") } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
+    const retry = vi.fn();
+    render(wrap(<DaemonOfflineBanner onRetry={retry} />));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
   test("renders nothing when daemon is healthy", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: false,
@@ -53,7 +93,9 @@ describe("DaemonOfflineBanner", () => {
       data: { version: "0.1.1" },
     } as never);
     useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
-    const { container } = render(wrap(<DaemonOfflineBanner />));
+    const { container } = render(
+      wrap(<DaemonStatusBar connection={{ ...OFFLINE, phase: "ok" }} onRetry={() => {}} />),
+    );
     expect(container.firstChild).toBeNull();
   });
 
@@ -64,7 +106,7 @@ describe("DaemonOfflineBanner", () => {
     } as never);
     useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
     render(wrap(<DaemonOfflineBanner />));
-    expect(screen.getByText(/Daemon offline/i)).toBeInTheDocument();
+    expect(screen.getByText("Coffer’s daemon isn’t running")).toBeInTheDocument();
     // The raw transport error is not user copy — only the translated body shows.
     expect(screen.queryByText(/ECONNREFUSED/)).not.toBeInTheDocument();
   });
@@ -78,7 +120,7 @@ describe("DaemonOfflineBanner", () => {
       data: { version: "0.1.0" },
     } as never);
     useDaemonOutOfDateMock.mockReturnValue({ data: true } as never);
-    render(wrap(<DaemonOfflineBanner />));
+    render(wrap(<DaemonStatusBar connection={{ ...OFFLINE, phase: "ok" }} onRetry={() => {}} />));
     expect(screen.getByText(/out of date/i)).toBeInTheDocument();
     expect(screen.getByTestId("daemon-banner")).toHaveAttribute(
       "data-banner-code",
@@ -86,17 +128,17 @@ describe("DaemonOfflineBanner", () => {
     );
   });
 
-  test("in a browser it surfaces the terminal restart command and no button", () => {
+  test("in a browser it surfaces the terminal restart command and no start button", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: true,
       error: new Error("nope"),
     } as never);
     useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
     render(wrap(<DaemonOfflineBanner />));
-    // The browser cannot restart the daemon, so the only affordance is the
-    // command that does; the 30s status poll clears the banner by itself.
+    // The browser cannot start the daemon, so the recovery is the command
+    // that does; Retry only probes again, and the retries clear the state.
     expect(screen.getByText("coffer daemon start")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Retry"]);
   });
 });
 
@@ -127,7 +169,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       useDaemonOutOfDate: () => ({ data: false }),
     }));
 
-    const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
+    const { DaemonOfflineState: Reloaded } = await import("./DaemonOfflineBanner");
+    const ReloadedBanner = () => <Reloaded connection={OFFLINE} onRetry={() => {}} />;
     render(wrap(<ReloadedBanner />));
 
     const restartBtn = screen.getByTestId("daemon-banner-restart");
@@ -149,59 +192,59 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       useDaemonOutOfDate: () => ({ data: false }),
     }));
 
-    const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
+    const { DaemonOfflineState: Reloaded } = await import("./DaemonOfflineBanner");
+    const ReloadedBanner = () => <Reloaded connection={OFFLINE} onRetry={() => {}} />;
     render(wrap(<ReloadedBanner />));
 
     fireEvent.click(screen.getByTestId("daemon-banner-restart"));
     expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
   });
 
-  acceptance(
-    "desktop-app",
-    "a restart hands back the connection it waited for",
-    async () => {
-      vi.resetModules();
-      // The shell waited for the replacement to answer, so what it returns is
-      // a working connection — and installing that, rather than asking for one
-      // again, is what keeps a restart to a single daemon.
-      const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" };
-      const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true, ...connection });
-      const applyMock = vi.fn();
-      const connectMock = vi.fn();
-      vi.doMock("@/lib/tauri", () => ({
-        isTauri: () => true,
-        restartDaemon: restartDaemonMock,
-        applyDaemonConnection: applyMock,
-        connectToShellDaemon: connectMock,
-      }));
-      vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
-        ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
-        useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
-        useDaemonOutOfDate: () => ({ data: false }),
-      }));
+  acceptance("desktop-app", "a restart hands back the connection it waited for", async () => {
+    vi.resetModules();
+    // The shell waited for the replacement to answer, so what it returns is
+    // a working connection — and installing that, rather than asking for one
+    // again, is what keeps a restart to a single daemon.
+    const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" };
+    const restartDaemonMock = vi.fn().mockResolvedValue({ pid: 123, started: true, ...connection });
+    const applyMock = vi.fn();
+    const connectMock = vi.fn();
+    vi.doMock("@/lib/tauri", () => ({
+      isTauri: () => true,
+      restartDaemon: restartDaemonMock,
+      applyDaemonConnection: applyMock,
+      connectToShellDaemon: connectMock,
+    }));
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
+      useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
+      useDaemonOutOfDate: () => ({ data: false }),
+    }));
 
-      const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
-      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-      render(<QueryClientProvider client={qc}>{<ReloadedBanner />}</QueryClientProvider>);
+    const { DaemonOfflineState: Reloaded } = await import("./DaemonOfflineBanner");
+    const ReloadedBanner = () => <Reloaded connection={OFFLINE} onRetry={() => {}} />;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    render(<QueryClientProvider client={qc}>{<ReloadedBanner />}</QueryClientProvider>);
 
-      fireEvent.click(screen.getByTestId("daemon-banner-restart"));
+    fireEvent.click(screen.getByTestId("daemon-banner-restart"));
 
-      await waitFor(() => expect(applyMock).toHaveBeenCalledWith(expect.objectContaining(connection)));
-      // A second handshake here arrived before the new daemon had bound a
-      // port, and the handshake answers "no daemon running" by spawning one —
-      // one click, two daemons.
-      expect(connectMock).not.toHaveBeenCalled();
-      // EVERY cached query carries responses fetched with the revoked token,
-      // not just daemon/status — the whole cache refetches.
-      await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
-      // Order matters: refetching before the new secrets are installed would
-      // 401 the whole cache and leave the app looking broken after a good restart.
-      expect(applyMock.mock.invocationCallOrder[0]).toBeLessThan(
-        invalidateSpy.mock.invocationCallOrder[0],
-      );
-    },
-  );
+    await waitFor(() =>
+      expect(applyMock).toHaveBeenCalledWith(expect.objectContaining(connection)),
+    );
+    // A second handshake here arrived before the new daemon had bound a
+    // port, and the handshake answers "no daemon running" by spawning one —
+    // one click, two daemons.
+    expect(connectMock).not.toHaveBeenCalled();
+    // EVERY cached query carries responses fetched with the revoked token,
+    // not just daemon/status — the whole cache refetches.
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
+    // Order matters: refetching before the new credentials are installed would
+    // 401 the whole cache and leave the app looking broken after a good restart.
+    expect(applyMock.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateSpy.mock.invocationCallOrder[0],
+    );
+  });
 
   test("a replacement that never answers is reported as a failed restart", async () => {
     vi.resetModules();
@@ -225,7 +268,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       useDaemonOutOfDate: () => ({ data: false }),
     }));
 
-    const { DaemonOfflineBanner: ReloadedBanner } = await import("./DaemonOfflineBanner");
+    const { DaemonOfflineState: Reloaded } = await import("./DaemonOfflineBanner");
+    const ReloadedBanner = () => <Reloaded connection={OFFLINE} onRetry={() => {}} />;
     render(wrap(<ReloadedBanner />));
 
     fireEvent.click(screen.getByTestId("daemon-banner-restart"));

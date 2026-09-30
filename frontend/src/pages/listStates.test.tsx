@@ -64,16 +64,16 @@ acceptance("web-ui", "a list surface shows first-class loading and error states"
 });
 
 acceptance("web-ui", "page headers share one typographic scale", () => {
-  /** The page's one h1 and its subtitle, read off a rendered page. */
+  /** The page's one h1 and its subtitle (none: the compact header keeps it in a "?" tip). */
   const header = (page: React.ReactNode) => {
     const view = renderPage(page);
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
-    const subtitle = h1s[0].closest("header")!.querySelector("p")!;
+    const subtitle = h1s[0].closest("header")!.querySelector("p");
     const out = {
       title: h1s[0].textContent,
       titleClass: h1s[0].className,
-      subtitleClass: subtitle.className,
+      subtitleClass: subtitle?.className ?? null,
     };
     view.unmount();
     return out;
@@ -90,5 +90,4 @@ acceptance("web-ui", "page headers share one typographic scale", () => {
   expect([mcp.title, skills.title]).toEqual(["MCP servers", "Skills"]);
   expect(skills.titleClass).toBe(mcp.titleClass);
   expect(skills.subtitleClass).toBe(mcp.subtitleClass);
-  expect(mcp.subtitleClass).not.toBe(mcp.titleClass);
 });

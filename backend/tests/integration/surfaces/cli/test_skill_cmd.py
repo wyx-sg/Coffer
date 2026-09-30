@@ -38,6 +38,7 @@ from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.reconcile import quiet_background_repair
 
 # mix_stderr=False so alembic/INFO logs from the in-process app lifespan
 # don't get mingled with the CLI's stdout — JSON-parsing tests rely on
@@ -362,12 +363,13 @@ def test_skill_verify_no_drift_text(skill_cli_daemon):
     assert "no drift" in r.output
 
 
-def test_skill_verify_drift_exits_2(skill_cli_daemon):
+def test_skill_verify_drift_exits_2(skill_cli_daemon, monkeypatch):
     """Once a link is missing, `verify` exits non-zero and reports the drift."""
     skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="vfy-2")
     _runner.invoke(cli_app, ["skill", "add", str(src)])
+    quiet_background_repair(monkeypatch)
     (skills_dir / "vfy-2").unlink()
     r = _runner.invoke(cli_app, ["skill", "verify"])
     assert r.exit_code == 2, r.output
@@ -503,7 +505,7 @@ def test_scan_names_an_unmanaged_folder_that_is_then_read_on_disk(skill_cli_daem
 # ---------------------------------------------------------------------------
 
 
-def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon):
+def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon, monkeypatch):
     """--fix re-delivers MISSING_LINK and reports remaining drift."""
     skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
@@ -512,6 +514,7 @@ def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon):
 
     link = skills_dir / "fix-1"
     assert link.exists()
+    quiet_background_repair(monkeypatch)
 
     # Introduce MISSING_LINK drift.
     link.unlink()

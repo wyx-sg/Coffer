@@ -83,6 +83,9 @@ class UpdateStage:
     incoming: pathlib.Path
     content_hash: str
     preview: Any = None
+    #: Set when the stage is a change of source (``source_change_ops``): the
+    #: ``GitImportSource`` the skill takes on when the stage is applied.
+    new_source: Any = None
     created: float = field(default_factory=time.monotonic)
 
 

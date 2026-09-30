@@ -2,15 +2,19 @@
 // narrow-viewport icon rail, the collapsed language popover, the resizable
 // sidebar, the palette shortcut and the Settings shortcut.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import indexHtml from "../../index.html?raw";
 import { Layout } from "./Layout";
+import { requestPalette } from "./shell/paletteRequest";
 
-vi.mock("./DaemonOfflineBanner", () => ({ DaemonOfflineBanner: () => null }));
+vi.mock("./DaemonOfflineBanner", () => ({
+  DaemonStatusBar: () => null,
+  DaemonOfflineState: () => null,
+}));
 // Tested where it lives; here it would only put an approvals poll behind every
 // shell assertion.
 vi.mock("./secret/PendingApprovalsSheet", () => ({ PendingApprovalsSheet: () => null }));
@@ -83,7 +87,7 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
   });
 
-  test("collapsing hides labels, keeps the brand mark, and folds language into a popover", () => {
+  test("collapsing hides labels, keeps the brand mark, and moves expand to the rail's footer", () => {
     renderShell();
     expect(screen.getByText("Coffer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
@@ -93,10 +97,16 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Coffer" })).toHaveAttribute("href", "/");
     // Rows keep an accessible name without visible text.
     expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
-    // The language switcher is reachable through the globe popover.
-    expect(screen.queryByRole("group", { name: /language/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^language$/i }));
-    expect(screen.getByRole("group", { name: /language/i })).toBeInTheDocument();
+    // No collapse control is left at the top; expanding is the footer's
+    // button between the gear and the daemon's dot (board 1.2.02).
+    expect(screen.queryByRole("button", { name: /collapse sidebar/i })).not.toBeInTheDocument();
+    const footer = within(screen.getByTestId("sidebar"));
+    const buttons = footer.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+    const expand = buttons.indexOf("Expand sidebar");
+    expect(buttons[expand - 1]).toBe("Settings");
+    expect(buttons[expand + 1]).toMatch(/^Daemon|^Connecting/);
+    // Theme and language live in the version menu, not in the sidebar.
+    expect(screen.queryByRole("button", { name: /^language$/i })).not.toBeInTheDocument();
   });
 
   test("below md the rail is always the icon rail with no expand toggle", () => {
@@ -105,7 +115,6 @@ describe("Layout", () => {
     expect(screen.queryByText("Coffer")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sidebar/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^language$/i })).toBeInTheDocument();
   });
 
   // revise-web-ui-ia: web-ui "the Settings row opens Settings over the current page"
@@ -157,6 +166,12 @@ describe("Layout", () => {
   test("the sidebar search control opens the palette", () => {
     renderShell();
     fireEvent.click(screen.getByTestId("sidebar-search"));
+    expect(screen.getByTestId("palette-open")).toBeInTheDocument();
+  });
+
+  test("a page can ask for the palette (the 404's Search Coffer)", () => {
+    renderShell();
+    act(() => requestPalette());
     expect(screen.getByTestId("palette-open")).toBeInTheDocument();
   });
 

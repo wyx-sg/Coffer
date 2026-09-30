@@ -5,7 +5,10 @@
 // (disabled, with the reason, on a foreign link), Remove duplicate on an own
 // folder that shares its name with a skill Coffer delivers. A name opens the
 // skill's page — the managed skill's own, or the unmanaged folder's read-only
-// preview under this tab. Nothing is truncated: paths wrap.
+// preview under this tab. The agent's own rows add a ⋯ menu — Adopt, Open
+// file, Delete — so a folder that is none of those states can still be deleted.
+// Nothing is truncated: paths wrap.
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { FileText, Import, Trash2 } from "lucide-react";
@@ -13,6 +16,7 @@ import { FileText, Import, Trash2 } from "lucide-react";
 import { DataTable, type Column } from "@/components/DataTable";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
+import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { unmanagedSkillPath } from "@/lib/agents/routes";
 import {
@@ -39,6 +43,8 @@ interface Props {
   onAdopt: (row: OwnSkillRow) => void;
   onRemoveDuplicate: (row: OwnSkillRow) => void;
   onOpenFile: (path: string) => void;
+  /** Delete the agent's own skill folder from disk (asks first). */
+  onDelete: (row: OwnSkillRow) => void;
 }
 
 export function AgentSkillsTable({
@@ -48,8 +54,41 @@ export function AgentSkillsTable({
   onAdopt,
   onRemoveDuplicate,
   onOpenFile,
+  onDelete,
 }: Props) {
   const { t } = useTranslation();
+
+  // The ⋯ menu of the agent's own folder: Adopt · Open file · Delete.
+  const ownMenu = (row: OwnSkillRow): MenuAction[] => [
+    {
+      key: "adopt",
+      label: t("agents.skillsTab.menu.adopt"),
+      disabled:
+        row.item.foreign_link ||
+        row.state === "invalid" ||
+        row.state === "duplicate" ||
+        adoptingKey !== null,
+      onSelect: () => onAdopt(row),
+    },
+    {
+      key: "open",
+      label: t("agents.skillsTab.openFile"),
+      onSelect: () => onOpenFile(skillFilePath(row.item.path)),
+    },
+    {
+      key: "delete",
+      label: t("agents.skillsTab.menu.delete"),
+      destructive: true,
+      separated: true,
+      onSelect: () => (row.state === "duplicate" ? onRemoveDuplicate(row) : onDelete(row)),
+    },
+  ];
+  const withMenu = (row: OwnSkillRow, action: ReactNode) => (
+    <span className="inline-flex items-center justify-end gap-1">
+      {action}
+      <ActionMenu label={t("agents.kindTab.moreFor", { name: row.name })} actions={ownMenu(row)} />
+    </span>
+  );
 
   const columns: Column<SkillRow>[] = [
     {
@@ -129,28 +168,31 @@ export function AgentSkillsTable({
           );
         }
         if (row.state === "invalid") {
-          return (
+          return withMenu(
+            row,
             <TableActionButton
               icon={FileText}
               label={t("agents.skillsTab.openFile")}
               aria-label={`${t("agents.skillsTab.openFile")}: ${row.name}`}
               onClick={() => onOpenFile(skillFilePath(row.item.path))}
-            />
+            />,
           );
         }
         if (row.state === "duplicate") {
-          return (
+          return withMenu(
+            row,
             <TableActionButton
               icon={Trash2}
               destructive
               label={t("agents.skillsTab.removeDuplicate")}
               aria-label={`${t("agents.skillsTab.removeDuplicate")}: ${row.name}`}
               onClick={() => onRemoveDuplicate(row)}
-            />
+            />,
           );
         }
         const foreign = row.item.foreign_link;
-        return (
+        return withMenu(
+          row,
           // The wrapper carries the reason: a disabled button fires no pointer events.
           <span title={foreign ? t("agents.skillsTab.adoptDisabledForeign") : undefined}>
             <TableActionButton
@@ -160,7 +202,7 @@ export function AgentSkillsTable({
               disabled={foreign || adoptingKey !== null}
               onClick={() => onAdopt(row)}
             />
-          </span>
+          </span>,
         );
       },
     },

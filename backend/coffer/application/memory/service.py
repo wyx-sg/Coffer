@@ -149,6 +149,11 @@ class MemoryService:
                 "sources_read": result.sources_read,
                 "sources_skipped": result.sources_skipped,
                 "failures": [f.path for f in result.failures],
+                # Whose read failed and why, for the Memory page's header
+                # ("Report the last read of the agents' memory").
+                "failure_details": [
+                    {"agent": f.agent, "path": f.path, "reason": f.reason} for f in result.failures
+                ],
             },
         )
         return result

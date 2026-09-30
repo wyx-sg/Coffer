@@ -18,7 +18,7 @@ stored that file's value.
   token's signature without decrypting anything — plus `created_at` and
   `last_used_at`. The store stamps `last_used_at` when it decrypts a value for a
   consumer (at most once a minute); a reveal or an import's read-back does not
-  count. Migration 0134 adds the nullable column.
+  count. Migration 0135 adds the nullable column.
 - The Secrets page shows a row with no value here as **Missing on this Mac**
   with **Add value**, and a banner "N secrets have no value on this Mac" with
   **Import master key…** (Settings › Security). Adding the value is an ordinary
@@ -56,7 +56,7 @@ stored that file's value.
 
 - Backend: `EncryptedSecretStore` (`peek`, `last_used`, `unreadable_refs`),
   `SecretBoundary.write` / `approve`, the secrets list and scan/import
-  routes and schemas, `plaintext_scan.move`; migration 0134.
+  routes and schemas, `plaintext_scan.move`; migration 0135.
 - Frontend: `components/secret/*`, `pages/SecretsPage.tsx`, en/zh strings.
 - Wire: `SecretRefOut`, `ApprovalOut.op`, `SecretScanOut`,
   `SecretImportSkippedOut` (regenerated contract and types).

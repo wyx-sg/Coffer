@@ -171,18 +171,7 @@ class KnowledgeService:
         directory = paths.collection_dir(name)
         if directory.exists():
             raise CollectionExists(name)
-        registered = await self._resources.register(
-            kind=KIND_KNOWLEDGE,
-            name=name,
-            config={},
-            actor=actor,
-            # Deliberately not the description (see "Read a collection's description from
-            # its README"): for this kind it lives
-            # in the collection's own README, where the person browsing the
-            # folder can see and change it. A copy in the row would be written
-            # once, read by nothing, and wrong the moment they edited the file.
-            allow_lifecycle_kind=True,
-        )
+        registered = await self.register_row(name, actor=actor)
         meta = ChangeMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
         async with recording(self.history, meta) as tx:
             fs.create_collection_dir(name)
@@ -192,7 +181,17 @@ class KnowledgeService:
             tx.touch(name)
         await self.catalogue_changed()
         return CollectionEntry(
-            uid=registered.uid, name=name, description=catalogue.readme_description(name)
+            uid=registered.uid,
+            name=name,
+            description=catalogue.readme_description(name),
+            folder_path=str(paths.collection_dir(name)),
+        )
+
+    async def register_row(self, name: str, *, actor: str) -> Resource:
+        """The collection's ``resources`` row — without its description, which
+        lives in the README (see "Read a collection's description from its README")."""
+        return await self._resources.register(
+            kind=KIND_KNOWLEDGE, name=name, config={}, actor=actor, allow_lifecycle_kind=True
         )
 
     async def catalogue_changed(self) -> None:
@@ -211,7 +210,7 @@ class KnowledgeService:
         the uid its routes address; a folder nobody registered is left out."""
         row_by_name = {r.name: r for r in await self._rows()}
         return [
-            dataclasses.replace(c, uid=row_by_name[c.name].uid, title=row_by_name[c.name].title)
+            dataclasses.replace(c, uid=row_by_name[c.name].uid)
             for c in catalogue.list_collections()
             if c.name in row_by_name
         ]
@@ -384,7 +383,8 @@ class KnowledgeService:
     async def cleanup_collection(self, name: str) -> None:
         """Remove a collection's directory when its Resource is deleted."""
         async with recording(
-            self.history, ChangeMeta(WRITER_USER, OP_REMOVE, f"Remove collection {name}")
+            self.history,
+            ChangeMeta(WRITER_USER, OP_REMOVE, f"Remove collection {name}", collection=name),
         ) as tx:
             tx.touch(name)
             fs.remove_collection_dir(name)

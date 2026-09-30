@@ -6,18 +6,20 @@ A price is USD per million tokens for each DISJOINT category the proxy records
 cache writes, cache reads, and output (reasoning is a part of output, so it is
 never priced twice). Server-tool web searches are priced per thousand
 requests. Cache multipliers are per model — 0.1x input on most, lower on some —
-so every category is a number of its own, never a ratio applied later.
+so every category is a number of its own, never a ratio applied later. A price
+may be TIERED: past a threshold of the request's total input tokens, every
+token of the request is charged at that tier's rate (the "cliff" providers
+publish).
 
-Cost is an ESTIMATE computed once, at ingest, and stored with the name of the
-snapshot or override that produced it, so a later table never rewrites history.
-A model this snapshot does not know is UNPRICED — :meth:`PriceSnapshot.lookup`
-returns ``None`` and the caller flags the row — never priced at zero.
+Cost is an ESTIMATE computed once, at ingest, and stored with the label of the
+price that produced it, so a later price never rewrites history. Where a price
+comes from is :class:`PriceSource` — the user's own price on the provider, the
+provider API's, the bundled list (:mod:`.bundled_prices`), or a local runtime,
+which costs nothing — and a model none of them knows is UNPRICED: never priced
+at zero.
 
-The bundled snapshot carries Anthropic first-party rates only. No OpenAI prices
-are bundled: there is no verified source for them here, so an OpenAI (Codex)
-model stays unpriced until the user sets a price on the connection it goes
-through (the connection override, which also covers relays and resellers that
-price differently from the vendor).
+:data:`BUNDLED_SNAPSHOT` is Coffer's own supplement to the bundled list: the
+Anthropic first-party rates of models the list has not caught up with yet.
 
 Pure: no I/O.
 """
@@ -26,7 +28,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import date
+from enum import StrEnum
 
 from coffer.domain.usage.records import UsageRecord
 
@@ -50,6 +54,17 @@ class ModelPrice:
     cache_write_1h: float | None = None
     cache_read: float | None = None
     web_search: float | None = None
+    #: ``(start, price)`` pairs, ascending: once a request's total input
+    #: tokens pass ``start``, every token is charged at ``price``.
+    tiers: tuple[tuple[int, ModelPrice], ...] = ()
+
+    def at(self, total_input_tokens: int) -> ModelPrice:
+        """The flat price a request with ``total_input_tokens`` pays."""
+        chosen: ModelPrice = self
+        for start, price in self.tiers:
+            if total_input_tokens > start:
+                chosen = price
+        return replace(chosen, tiers=()) if chosen.tiers else chosen
 
 
 @dataclass(frozen=True)
@@ -74,9 +89,22 @@ class TokenCounts:
             web_search_requests=record.web_search_requests or 0,
         )
 
+    @property
+    def total_input(self) -> int:
+        """Every input token of the request, cached or not — what a tier's
+        threshold is measured against."""
+        return (
+            self.input_tokens
+            + self.cache_write_5m_tokens
+            + self.cache_write_1h_tokens
+            + self.cache_read_tokens
+        )
+
 
 def estimate_cost(tokens: TokenCounts, price: ModelPrice) -> float:
-    """The estimated USD cost of ``tokens`` at ``price``."""
+    """The estimated USD cost of ``tokens`` at ``price`` (its tier for the
+    request's total input)."""
+    price = price.at(tokens.total_input)
     fallback = price.input
     per_mtok = (
         tokens.input_tokens * price.input
@@ -104,7 +132,7 @@ _CONTEXT_SUFFIX = re.compile(r"\[1m\]$", re.IGNORECASE)
 _VERSION_SUFFIX = re.compile(r"(?:-v\d+(?::\d+)?|@\d{8}|-\d{8})$")
 
 
-def _candidates(model: str) -> list[str]:
+def model_candidates(model: str) -> list[str]:
     """``model`` as sent, then with prefix and suffixes stripped one by one."""
     out = [model]
     bare = _PROVIDER_PREFIX.sub("", _CONTEXT_SUFFIX.sub("", model.strip()))
@@ -133,7 +161,7 @@ class PriceSnapshot:
         """
         if not model:
             return None
-        for candidate in _candidates(model):
+        for candidate in model_candidates(model):
             price = self.prices.get(candidate)
             if price is not None:
                 return price
@@ -145,9 +173,49 @@ class PriceSnapshot:
         return f"snapshot:{self.version}"
 
 
+class PriceSource(StrEnum):
+    """Where a model's price came from, in the order they are consulted."""
+
+    #: The price the user set on the provider ("You set").
+    USER = "user"
+    #: The provider's own API reported it when its models were listed.
+    PROVIDER = "provider"
+    #: The price list shipped with this release.
+    BUNDLED = "bundled"
+    #: A model runtime on this machine: it costs nothing.
+    LOCAL = "local"
+
+
+@dataclass(frozen=True)
+class ResolvedPrice:
+    """A model's price, where it came from, and the label a costed row stores."""
+
+    price: ModelPrice
+    source: PriceSource
+    #: ``override:<uid>`` / ``provider:<uid>`` / ``bundled:<version>`` / ``local``.
+    label: str
+    #: The provider that reported it, for ``PROVIDER``; the price list's
+    #: provider (``Anthropic``, ``OpenAI``…) for ``BUNDLED``.
+    source_name: str | None = None
+    #: For ``BUNDLED``: the day the price list in use was taken from
+    #: genai-prices (the bundled snapshot's, or the daily refresh's).
+    source_updated: date | None = None
+
+
+#: Costs nothing: what a local runtime's models are priced at.
+FREE = ModelPrice(input=0.0, output=0.0, cache_write_5m=0.0, cache_write_1h=0.0, cache_read=0.0)
+#: The label of a row priced as a local runtime's.
+LOCAL_LABEL = "local"
+
+
 def override_label(connection_uid: str) -> str:
     """The price version of a row priced by a connection's own override."""
     return f"override:{connection_uid}"
+
+
+def reported_label(connection_uid: str) -> str:
+    """The price version of a row priced by what its provider's API reported."""
+    return f"provider:{connection_uid}"
 
 
 def _anthropic(input_: float, output: float, *, cache_read: float | None = None) -> ModelPrice:
@@ -166,22 +234,15 @@ def _anthropic(input_: float, output: float, *, cache_read: float | None = None)
 
 BUNDLED_SNAPSHOT_VERSION = "2026-09-25"
 
-#: Anthropic first-party rates as of :data:`BUNDLED_SNAPSHOT_VERSION`.
+#: Anthropic first-party rates as of :data:`BUNDLED_SNAPSHOT_VERSION` — the
+#: supplement consulted after the bundled list, for the models it lacks.
 BUNDLED_SNAPSHOT = PriceSnapshot(
     version=BUNDLED_SNAPSHOT_VERSION,
     prices={
         "claude-fable-5-1": _anthropic(10, 50, cache_read=0.25),
-        "claude-fable-5": _anthropic(10, 50),
         "claude-mythos-5-1": _anthropic(10, 50, cache_read=0.25),
         "claude-opus-5-5": _anthropic(4, 20, cache_read=0.20),
-        "claude-opus-5": _anthropic(5, 25),
-        "claude-opus-4-8": _anthropic(5, 25),
-        "claude-opus-4-7": _anthropic(5, 25),
-        "claude-opus-4-6": _anthropic(5, 25),
         "claude-sonnet-5-5": _anthropic(2, 10, cache_read=0.20),
-        "claude-sonnet-5": _anthropic(2, 10),
-        "claude-sonnet-4-6": _anthropic(3, 15),
-        "claude-haiku-4-5": _anthropic(1, 5),
     },
 )
 
@@ -189,9 +250,15 @@ BUNDLED_SNAPSHOT = PriceSnapshot(
 __all__ = [
     "BUNDLED_SNAPSHOT",
     "BUNDLED_SNAPSHOT_VERSION",
+    "FREE",
+    "LOCAL_LABEL",
     "ModelPrice",
     "PriceSnapshot",
+    "PriceSource",
+    "ResolvedPrice",
     "TokenCounts",
     "estimate_cost",
+    "model_candidates",
     "override_label",
+    "reported_label",
 ]

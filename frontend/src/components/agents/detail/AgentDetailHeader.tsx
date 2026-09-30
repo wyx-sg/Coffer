@@ -2,15 +2,24 @@
 //
 // Spec agent-registry "Show the Coffer connection on the agent pages": the
 // header offers the action the state calls for — Connect to Coffer when not
-// connected or when the connection is partial (the connect puts the missing
-// parts back), Enable when switched off, Add when not added — and a
-// connected agent's own next step, a new conversation; Disconnect is in the ⋯
+// connected, Repair (naming the memory hook when only it is off) when the
+// connection is partial, Check again while Codex has not approved Coffer's
+// hook, Enable when switched off, Add when not added — and a connected
+// agent's own next step, a new conversation; Disconnect is in the ⋯
 // menu and previews what it removes. Under the name, one mono line: the fixed
 // name, the version, the config directory and the model. No title or rename:
 // an agent is named by its type.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { MessageSquarePlus, Plug, Plus, Power, Wrench, type LucideIcon } from "lucide-react";
+import {
+  MessageSquarePlus,
+  Plug,
+  Plus,
+  Power,
+  RefreshCw,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 import { AgentBadge, type AgentBadgeState } from "@/components/agent/AgentBadge";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
@@ -19,8 +28,11 @@ import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { hookAwaitsApproval, repairsOnlyHook } from "@/components/agents/overview/connectionCopy";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
+import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
+import { cn } from "@/lib/utils";
 
 type RowActions = ReturnType<typeof useAgentRowActions>;
 
@@ -39,10 +51,15 @@ function badgeState(state: AgentRowState): AgentBadgeState {
   return "not-connected";
 }
 
-/** The header's word for a state; a connected agent says what it is connected to. */
-function stateWordKey(state: AgentRowState): string {
+/**
+ * The header's word for a state; a connected agent says what it is connected
+ * to, or — when Codex has not approved Coffer's hook — that the hook waits for
+ * approval. An agent whose program is gone reads Not installed.
+ */
+function stateWordKey(state: AgentRowState, awaitingApproval: boolean): string {
+  if (awaitingApproval) return "agents.stateHeader.hook_untrusted";
   if (state === "connected") return "agents.stateHeader.connected";
-  if (state === "config_left_behind") return "agents.stateHeader.config_left_behind";
+  if (state === "config_left_behind") return "agents.state.not_installed";
   return agentRowStateKey(state);
 }
 
@@ -51,10 +68,32 @@ interface HeaderAction {
   icon: LucideIcon;
   run?: () => void;
   to?: string;
+  pending?: boolean;
 }
 
-function useHeaderAction(state: AgentRowState, open: RowActions["open"]): HeaderAction | null {
+interface HeaderContext {
+  /** Codex has not approved Coffer's (otherwise current) hook. */
+  awaitingApproval: boolean;
+  /** Only the memory hook is off, so the repair names it. */
+  hookOnly: boolean;
+  checkAgain: () => void;
+  checking: boolean;
+}
+
+function useHeaderAction(
+  state: AgentRowState,
+  open: RowActions["open"],
+  ctx: HeaderContext,
+): HeaderAction | null {
   const { t } = useTranslation();
+  if (ctx.awaitingApproval) {
+    return {
+      label: t("agents.detail.checkAgain"),
+      icon: RefreshCw,
+      run: ctx.checkAgain,
+      pending: ctx.checking,
+    };
+  }
   switch (state) {
     case "connected":
       return {
@@ -64,11 +103,14 @@ function useHeaderAction(state: AgentRowState, open: RowActions["open"]): Header
       };
     case "not_connected":
       return { label: t("agents.detail.connect"), icon: Plug, run: () => open.change("connect") };
-    // Spec "the header offers the action the state calls for": a partial
-    // connection reads Needs repair (the state word) and offers Connect to
-    // Coffer, which puts the missing parts back.
+    // A partial connection reads Needs repair and offers the repair, which puts
+    // the missing parts back; when only the memory hook is off it names it.
     case "needs_repair":
-      return { label: t("agents.detail.connect"), icon: Wrench, run: () => open.change("connect") };
+      return {
+        label: t(ctx.hookOnly ? "agents.detail.repairHook" : "agents.detail.repair"),
+        icon: Wrench,
+        run: () => open.change("connect"),
+      };
     case "disabled":
       return { label: t("agents.detail.enable"), icon: Power, run: open.enable };
     case "not_added":
@@ -83,7 +125,16 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
   const { t } = useTranslation();
   const name = agentTypeLabel(typeRow.type);
   const state = rowActions.state;
-  const action = useHeaderAction(state, rowActions.open);
+  const uid = typeRow.uid ?? "";
+  const hooks = useAgentHooks(uid);
+  const parts = useAgentConnection(uid).data?.parts;
+  const awaitingApproval = hookAwaitsApproval(state, hooks.data?.coffer_hook);
+  const action = useHeaderAction(state, rowActions.open, {
+    awaitingApproval,
+    hookOnly: repairsOnlyHook(parts),
+    checkAgain: () => void hooks.refetch(),
+    checking: hooks.isFetching,
+  });
   const installed = typeRow.state === "installed_active" || typeRow.state === "installed_never_run";
 
   const meta = [
@@ -107,7 +158,11 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
             {name}
           </span>
         }
-        badges={<StatusWord tone={agentRowTone(state)}>{t(stateWordKey(state))}</StatusWord>}
+        badges={
+          <StatusWord tone={awaitingApproval ? "warn" : agentRowTone(state)}>
+            {t(stateWordKey(state, awaitingApproval))}
+          </StatusWord>
+        }
         actions={
           <div className="flex items-center gap-2">
             {action?.to ? (
@@ -118,8 +173,16 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
                 </Link>
               </Button>
             ) : action ? (
-              <Button size="sm" onClick={action.run}>
-                <action.icon aria-hidden className="size-3.5" />
+              <Button
+                size="sm"
+                variant={action.pending === undefined ? "default" : "outline"}
+                onClick={action.run}
+                disabled={action.pending}
+              >
+                <action.icon
+                  aria-hidden
+                  className={cn("size-3.5", action.pending && "animate-spin")}
+                />
                 {action.label}
               </Button>
             ) : null}

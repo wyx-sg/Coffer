@@ -33,6 +33,7 @@ from coffer.surfaces.cli._kind_verbs import (
     verbose_of,
 )
 from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
+from coffer.surfaces.cli.provider_price_cmd import order, price
 
 app = typer.Typer(help="Manage LLM connections and switch agents onto them")
 
@@ -175,9 +176,14 @@ def edit(
     ),
     base_url: str | None = typer.Option(None, "--base-url"),
     secret: str | None = typer.Option(None, "--secret", help="Rotate the stored API key"),
+    fallback: bool | None = typer.Option(
+        None,
+        "--fallback/--no-fallback",
+        help="Whether other providers' requests may fail over to this one",
+    ),
     wait: bool = WAIT_OPTION,
 ) -> None:
-    """Rename a connection, or change its title, description, endpoint, wire or key.
+    """Rename a connection, or change its title, description, endpoint, wire, key or fallback.
 
     A rename changes the label and nothing else: the uid, the stored key and
     any projection into an agent stay where they are.
@@ -209,6 +215,8 @@ def edit(
         patch["secret_value"] = secret
     if description is not None:
         patch["description"] = description
+    if fallback is not None:
+        patch["fallback"] = fallback
     relabel: dict[str, object] = {}
     if new_name is not None:
         relabel["name"] = new_name
@@ -324,3 +332,5 @@ register_kind_verbs(
 app.command("switch")(switch)
 app.command("builtin")(builtin)
 app.command("detect-local")(detect_local)
+app.command("order")(order)
+app.command("price")(price)

@@ -24,6 +24,8 @@ _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
+    # Nothing informational is listed under that key to ignore.
+    "ATTENTION_NOT_IGNORABLE": 409,
     # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
     "CUSTOM_TOOL_NOT_FOUND": 404,
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
@@ -34,8 +36,7 @@ _STATUS: dict[str, int] = {
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "AGENT_TYPE_REGISTERED": 409,
-    # The agent's config dir is absent on this machine — a state of the
-    # machine, not a malformed request.
+    # The agent's config dir is absent here — a machine state, not a bad request.
     "AGENT_CONFIG_DIR_MISSING": 409,
     # The database was migrated by a newer build than this one.
     "DB_SCHEMA_TOO_NEW": 409,
@@ -118,6 +119,11 @@ _STATUS: dict[str, int] = {
     "SKILL_SOURCE_UNREACHABLE": 502,
     "SKILL_UPDATE_CONFLICT": 409,
     "SKILL_NOT_FROM_GIT": 409,
+    # An agent's copy Coffer did not make stops a delete; a copy that is not a
+    # folder in the way has nothing to resolve; an orphan that is not there.
+    "SKILL_COPY_NOT_OURS": 409,
+    "SKILL_COPY_NOT_DIFFERING": 409,
+    "SKILL_ORPHAN_NOT_FOUND": 404,
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,
@@ -134,8 +140,7 @@ _STATUS: dict[str, int] = {
     # ripgrep's two failures. No surface calls it any more — the layer offers
     # no retrieval ("Expose exactly one knowledge tool") — but curation still
     # matches literally to pick its candidates ("Assemble a pass from a bounded
-    # context"), so a missing binary or a bad pattern can still
-    # surface through a pass.
+    # context"), so a missing binary or a bad pattern can surface through a pass.
     "ENGINE_UNAVAILABLE": 503,
     "GREP_PATTERN_INVALID": 400,
     # spec memory
@@ -218,17 +223,20 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_VERSION_NOT_FOUND": 404,
     "KNOWLEDGE_NOT_A_PASS": 400,
     "KNOWLEDGE_UNDO_CONFLICT": 409,
+    # Restoring a delete (spec knowledge "Restore a deleted collection or document
+    # from Recent changes"): nothing deleted is a wrong request, a path taken again a conflict.
+    "KNOWLEDGE_NOT_A_DELETE": 400,
+    "KNOWLEDGE_RESTORE_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").
     "KNOWLEDGE_PATH_UNSAFE": 400,
     # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
-    # failure"): named the limit, refused
-    # before any conversion or write.
+    # failure"): named the limit, refused before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
     # Curation's two refusals (spec knowledge "Refuse file-name references in
-    # documents", "Bound a pass to eight writes"). Both are the
-    # request being wrong rather than Coffer failing, so both are 400-class
+    # documents", "Bound a pass to eight writes"). Both are the request being
+    # wrong rather than Coffer failing, so both are 400-class
     # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
     # is a link that rots, and a pass past its write bound is one source trying
     # to rewrite the corpus. Neither is retryable unchanged.

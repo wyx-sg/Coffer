@@ -24,12 +24,17 @@ function capTypeLabel(t: TFunction, raw: string): string {
 export function describeActivity(t: TFunction, entry: AuditEntry): string {
   const details = (entry.details ?? {}) as Record<string, unknown>;
   const capTypeRaw = typeof details.capability_type === "string" ? details.capability_type : "";
+  const text = (k: string) => (typeof details[k] === "string" ? (details[k] as string) : "");
   return t(`audit.activity.${entry.event_type}`, {
     defaultValue: entry.event_type,
     resource: entry.resource_name ?? "",
-    key: typeof details.key === "string" ? details.key : "",
-    command: typeof details.command === "string" ? details.command : "",
+    key: text("key"),
+    command: text("command"),
     capType: capTypeLabel(t, capTypeRaw),
+    // A failover (provider_failover): the provider left, the one tried next.
+    from: text("from") || entry.resource_name || "",
+    to: text("to") || t("audit.failoverNext"),
+    model: text("model") || t("audit.failoverAnyModel"),
   });
 }
 

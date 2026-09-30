@@ -52,6 +52,7 @@ vi.mock("@/lib/hooks/useProviders", () => ({
         is_active: true,
         internal_default: false,
         transcribe_default: false,
+        fallback: true,
         enabled: true,
         description: null,
         created_at: "",

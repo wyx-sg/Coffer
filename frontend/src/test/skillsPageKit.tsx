@@ -23,6 +23,7 @@ export function makeSkill(over: Partial<SkillOut> = {}): SkillOut {
     enabled: true,
     scope: null,
     version_hash: "deadbeefcafe1234",
+    master_missing: false,
     master_path: "/Users/me/.coffer/skills/hello",
     last_synced_from_source_at: null,
     created_at: "2026-05-26T00:00:00Z",

@@ -25,6 +25,7 @@ from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
 from coffer.infrastructure.logging.files import open_upstream_errlog, write_coffer_line
 from coffer.infrastructure.mcp.dispatch import dispatch_method
+from coffer.infrastructure.mcp.process_group import kill_process_group
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
@@ -48,6 +49,9 @@ class StdioUpstreamConnection:
         request_timeout_seconds: int = 120,
         server_name: str = "upstream",
         server_uid: str = "",
+        *,
+        stderr_sink: TextIO | None = None,
+        kill_group_on_close: bool = False,
     ) -> None:
         self._transport = transport
         self._env_overlay = env_overlay
@@ -63,6 +67,15 @@ class StdioUpstreamConnection:
         # under the empty identity, which still reaps by pid + cmdline.
         self._server_name = server_name
         self._server_uid = server_uid
+        # A one-off test (``probe.py``) hands its own stderr sink, which it
+        # reads back, instead of the server's log file; Coffer writes none of
+        # its own start / stop lines into it. It also asks for the whole
+        # process group to be stopped on close: the SDK signals the group only
+        # when the leader outlives stdin closing, so a leader that exits and
+        # leaves a grandchild behind would otherwise leak it.
+        self._stderr_sink = stderr_sink
+        self._kill_group_on_close = kill_group_on_close
+        self._child_pids: list[int] = []
 
         self._exit_stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
@@ -138,15 +151,17 @@ class StdioUpstreamConnection:
                 # Give this upstream its own stderr file. The SDK's default
                 # is the daemon's stderr, which lands in daemon.log and
                 # drowns Coffer's own lines there (see logging/files.py).
-                errlog = open_upstream_errlog(self._server_name)
+                if self._stderr_sink is not None:
+                    errlog = None
+                else:
+                    errlog = open_upstream_errlog(self._server_name)
                 if errlog is not None:
                     self._exit_stack.callback(errlog.close)
                     # LIFO: this runs after the client's teardown, before close.
                     self._exit_stack.callback(self._note_stop, errlog)
                     write_coffer_line(errlog, f"start {self._command_line()}")
-                client = (
-                    stdio_client(params) if errlog is None else stdio_client(params, errlog=errlog)
-                )
+                sink = errlog if errlog is not None else self._stderr_sink
+                client = stdio_client(params) if sink is None else stdio_client(params, errlog=sink)
                 read, write = await asyncio.wait_for(
                     self._exit_stack.enter_async_context(client),
                     timeout=self._spawn_timeout,
@@ -161,6 +176,9 @@ class StdioUpstreamConnection:
                 # sweep_orphans can still guard against PID recycling.
                 children_after = {c.pid for c in self_proc.children(recursive=False)}
                 new_pids = children_after - children_before
+                # The SDK starts the child in a new session, so its pid is
+                # also its process group's id.
+                self._child_pids = sorted(new_pids)
 
                 self._pid_files = []
                 for new_pid in new_pids:
@@ -312,5 +330,9 @@ class StdioUpstreamConnection:
         for path in self._pid_files:
             reap_pidfile(path)
         self._pid_files = []
+        if self._kill_group_on_close:
+            for pgid in self._child_pids:
+                kill_process_group(pgid)
+        self._child_pids = []
 
         self._session = None

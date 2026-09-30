@@ -2,14 +2,14 @@
 
 ### Requirement: Offer every connection operation on REST, CLI and web
 Create, switch, revert-to-built-in, rename and delete MUST be available via (a) the REST API, (b)
-`coffer provider list|show|add|edit|rm|enable|disable|scope|switch|builtin|detect-local` with `--json` on
+`coffer provider list|show|add|edit|rm|enable|disable|scope|switch|builtin|detect-local|order|price` with `--json` on
 `list` and `show` — the lifecycle verbs being the ones every kind's group offers, and rename being
 `coffer provider edit <name> --name <new>` (see "Rename a connection without moving anything
 else") — and (c) the web surfaces — the Model providers library for create and delete, the Agent
 detail page for the switch, the connection's own page for the rename. Editing a connection MUST be
 available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `models`,
-`secret_value`, `description`), over the CLI
-(`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>]`)
+`secret_value`, `description`, `fallback`), over the CLI
+(`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>] [--fallback|--no-fallback]`)
 and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
 --base-url <url> [--secret <value> | --secret-ref <ref> | --local]` takes no model; `--local`
 creates a local runtime connection (see "Configure a local model connection"). No command or route
@@ -42,9 +42,9 @@ The web surfaces:
   endpoint and protocol, plus Custom, which reveals a manual protocol selector; the CLI takes
   `--protocol`. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) splits into Overview and Models (`/model-providers/<uid>/models`) tabs. Its header carries the shared
+- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) has no tabs: it is one column — Used by, Endpoint, Models — and an old `/model-providers/<uid>/models` link opens it. Its header carries the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
-  changed. Overview carries a read-only **Used by** list: each agent switched to the connection,
+  changed. **Used by** is read-only: each agent switched to the connection,
   with the model it runs, opening that agent's Model tab (`/agents/<type>/model`); and Coffer's engine and Speech to text
   when the connection is flagged for them, each opening `/settings/general`. Used by carries no
   switch, activate or revert control: an agent's connection is switched only on its Model tab.
@@ -55,7 +55,10 @@ The web surfaces:
   the agent is not on its built-in login (see "Suggest a model for each Claude Code tier"); for
   Codex, Effort offers the chosen model's own levels and is hidden when it has none. It carries no
   other model setting — no context-window, output-limit, subagent, fallback, thinking or fast-mode
-  control — because what else a model needs Coffer derives and writes itself. Picking a connection
+  control — because what else a model needs Coffer derives and writes itself. While the agent is on
+  a connection, the tab also shows, read-only, which provider is tried next if that connection
+  fails (see "Order providers, and fail over in that order") and the last four characters of the
+  agent's own proxy token with **Rotate**; the built-in login bypasses the proxy and shows neither. Picking a connection
   or a model there is a DRAFT: it activates nothing and PATCHes nothing. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
   the tier suggestions for it. A custom connection MUST pass
@@ -91,7 +94,7 @@ The web surfaces:
 
 #### Scenario: a provider's used-by list is read-only
 - **GIVEN** a connection that Claude Code is switched to with a chosen model, and that is flagged `internal_default`
-- **WHEN** its detail page's Overview renders
+- **WHEN** its detail page renders
 - **THEN** Used by lists Claude Code with its model, opening Claude Code's Model tab, and Coffer's engine, opening `/settings/general`
 - **AND** Used by carries no switch, activate or revert control (TypeScript acceptance test)
 
@@ -146,7 +149,7 @@ travel through `POST` / `PATCH /api/v1/providers` with the rest of the curated e
 the endpoint where it reports them, and are otherwise entered by the user; an unknown value is left
 out of the stored document rather than guessed.
 
-The connection's Models tab shows and edits them.
+The connection's Models section shows and edits them.
 
 #### Scenario: a curated model keeps its window and levels
 - **GIVEN** a connection whose curated model `gpt-x` records no window

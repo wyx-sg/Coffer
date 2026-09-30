@@ -27,7 +27,11 @@ export default tseslint.config(
     // subtree (.agents/frontend.md §3). An inline `queryKey: ["…", …]` at a call
     // site is the drift this rule stops; tests may still spell keys out.
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/lib/api/queryKeys.ts", "src/**/*.test.{ts,tsx}"],
+    ignores: [
+      "src/lib/api/queryKeys.ts",
+      "src/lib/api/queryKeys.capabilities.ts",
+      "src/**/*.test.{ts,tsx}",
+    ],
     rules: {
       "no-restricted-syntax": [
         "error",

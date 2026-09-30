@@ -27,6 +27,11 @@ const { change, enable, stub } = vi.hoisted(() => ({
   enable: vi.fn(),
   stub: (name: string) => () => <div data-testid="tab-body">{name}</div>,
 }));
+vi.mock("@/lib/hooks/useAgents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useAgents")>()),
+  useAgentHooks: () => ({ data: undefined, refetch: vi.fn(), isFetching: false }),
+  useAgentConnection: () => ({ data: undefined }),
+}));
 vi.mock("@/components/agents/list/useAgentRowActions", () => ({ useAgentRowActions: vi.fn() }));
 
 vi.mock("@/components/agents/AgentOverviewTab", () => ({ AgentOverviewTab: stub("overview") }));
@@ -168,11 +173,11 @@ describe("AgentDetailPage", () => {
     expect(change).toHaveBeenCalledWith("disconnect");
     connected.unmount();
 
-    // Partial: reads Needs repair and offers Connect to Coffer (which puts the rest back).
+    // Partial: reads Needs repair and offers Repair (which puts the rest back).
     mockRoute({ rowState: "needs_repair" });
     renderAt();
     expect(screen.getByText("Needs repair")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Connect to Coffer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repair" })).toBeInTheDocument();
   });
 
   test("a disabled agent offers Enable", () => {

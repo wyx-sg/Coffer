@@ -16,6 +16,8 @@ export interface SummaryLine {
 
 interface Context {
   disabled: boolean;
+  /** The agent has no `coffer` entry yet, so nothing reaches it through the gateway. */
+  notConnected?: boolean;
   /** The file direct MCP entries sit in (`.claude.json`, `config.toml`). */
   mcpFile: string;
   /** Where Coffer links skills (`~/.codex/skills`). */
@@ -35,6 +37,12 @@ export function mcpLine(
 ): SummaryLine | undefined {
   if (!c) return undefined;
   if (ctx.disabled) return { line: t(`${K}.disabledLine`, { count: c.coffer }) };
+  if (ctx.notConnected) {
+    const until = t(`${K}.mcp.untilConnected`, { count: c.coffer });
+    const line =
+      c.own > 0 ? `${until} · ${t(`${K}.mcp.direct`, { own: c.own, file: ctx.mcpFile })}` : until;
+    return { line, toReview: owned(c.own, ctx.disabled) };
+  }
   const line =
     c.own > 0
       ? t(`${K}.mcp.line`, { coffer: c.coffer, own: c.own, file: ctx.mcpFile })
@@ -70,12 +78,21 @@ export function hooksLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  if (c.total === 0) return { line: t(`${K}.hooks.none`) };
+  const cofferNote =
+    c.cofferState === "missing"
+      ? t(`${K}.hooks.cofferMissing`)
+      : c.cofferState === "untrusted"
+        ? t(`${K}.hooks.cofferUntrusted`)
+        : c.coffer > 0
+          ? t(`${K}.hooks.coffer`, { count: c.coffer })
+          : null;
+  if (c.total === 0) {
+    return { line: cofferNote ? `${t(`${K}.hooks.none`)} · ${cofferNote}` : t(`${K}.hooks.none`) };
+  }
   const where = ctx.hookFile
     ? t(`${K}.hooks.inFile`, { count: c.total, file: ctx.hookFile })
     : t(`${K}.hooks.inPlaces`, { count: c.total, places: c.files });
-  const line = c.coffer > 0 ? `${where} · ${t(`${K}.hooks.coffer`, { count: c.coffer })}` : where;
-  return { line };
+  return { line: cofferNote ? `${where} · ${cofferNote}` : where };
 }
 
 export function memoryLine(t: TFunction, stores: number | undefined): SummaryLine | undefined {

@@ -1,7 +1,7 @@
 // src/components/skills/SkillAddDialog.test.tsx
 // The Add skill dialog: three sources and no create; a stage is looked at, chosen from and confirmed, and cancelled on every other way out.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -20,6 +20,10 @@ vi.mock("@/lib/api/skills", () => ({
   },
 }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { browse: vi.fn(), pickFolder: vi.fn() } }));
+vi.mock("@/lib/api/resources", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/resources")>()),
+  resourcesApi: { disable: vi.fn(async () => undefined), enable: vi.fn(async () => undefined) },
+}));
 
 const { skillsApi } = await import("@/lib/api/skills");
 const api = vi.mocked(skillsApi);
@@ -152,7 +156,7 @@ describe("SkillAddDialog", () => {
     } as never);
     const { onOpenChange } = renderDialog();
     uploadArchive();
-    await screen.findByText("3 skills found — choose the ones to add");
+    await screen.findByText("3 skills found — pick which to add");
 
     const add = screen.getByRole("button", { name: "Add skill" });
     expect(add).toBeDisabled();
@@ -257,6 +261,24 @@ describe("SkillAddDialog", () => {
     expect(await screen.findByText(/must be at the top or one folder down/)).toBeInTheDocument();
   });
 
+  test("Available to defaults to every agent and writes nothing extra", async () => {
+    const { resourcesApi } = await import("@/lib/api/resources");
+    api.stageArchive.mockResolvedValue(stage([staged({ folder: ".", name: "changelog" })]));
+    api.confirmStage.mockResolvedValue({
+      items: [{ uid: "sk-new", name: "changelog" }],
+    } as never);
+    renderDialog();
+    uploadArchive();
+    await screen.findByText("Found SKILL.md at the top level");
+    expect(screen.getByText("Available to", { selector: "label" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("skill-add-reach")).getByRole("button")).toHaveTextContent(
+      "Every agent",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+    await waitFor(() => expect(api.confirmStage).toHaveBeenCalled());
+    expect(vi.mocked(resourcesApi.disable)).not.toHaveBeenCalled();
+  });
+
   test("a failed clone shows git's message and offers Try again", async () => {
     api.stageGit
       .mockRejectedValueOnce(
@@ -270,7 +292,7 @@ describe("SkillAddDialog", () => {
     await waitFor(() => expect(api.stageGit).toHaveBeenCalled());
     expect(api.stageGit).toHaveBeenCalledWith({ url: "https://x/y", ref: "main", path: null });
     expect(
-      await screen.findByText("fatal: repository 'https://x/y' not found"),
+      await screen.findByText("Couldn't reach x — check the URL or your network."),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();

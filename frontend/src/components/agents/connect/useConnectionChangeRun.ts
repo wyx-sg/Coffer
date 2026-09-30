@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import type { ChangeStatus } from "@/components/change-preview/changeCounts";
 import { agentsApi, type AgentType, type AgentTypeOut } from "@/lib/api/agents";
+import { clearConnectFailure, recordConnectFailure } from "@/lib/agents/connectFailure";
 import { translateApiError } from "@/lib/api/errors";
 import { agentsKey } from "@/lib/api/queryKeys";
 import { useAgentConnect, useRegisterAgent } from "@/lib/hooks/useAgents";
@@ -61,11 +62,19 @@ export function useConnectionChangeRun(kind: ChangeKind | undefined, connectUid:
     });
     for (const row of rows) {
       mark(row.type, { status: "applying" });
+      const uidOf = () =>
+        (kind === "add" ? (assigned.current[row.type] ?? row.uid) : connectUid) || null;
       try {
         await step(row);
         mark(row.type, { status: "applied" });
+        const uid = uidOf();
+        if (uid) clearConnectFailure(uid);
       } catch (error) {
-        mark(row.type, { status: "failed", error: translateApiError(t, error) });
+        const reason = translateApiError(t, error);
+        mark(row.type, { status: "failed", error: reason });
+        // The Overview keeps saying why a Connect failed after the dialog closes.
+        const uid = uidOf();
+        if (uid && kind !== "disconnect") recordConnectFailure(uid, reason);
       }
     }
     // One prefix covers the types, list and detail reads and every agent's

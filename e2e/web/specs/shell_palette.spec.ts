@@ -20,7 +20,7 @@ const MOD = process.platform === "darwin" ? "Meta" : "Control";
 async function openPalette(page: Page) {
   await page.keyboard.press(`${MOD}+k`);
   const input = page.getByRole("combobox", {
-    name: /search pages and objects/i,
+    name: /search pages/i,
   });
   await expect(input).toBeFocused();
   return input;

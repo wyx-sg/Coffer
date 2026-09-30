@@ -38,31 +38,31 @@ export function DefinitionRow({
     });
   };
   return (
-    <div className="group flex min-h-row items-center gap-3 border-b border-border-subtle px-3 last:border-b-0">
+    <div className="group flex min-h-row items-center gap-3 border-b border-border-subtle last:border-b-0">
       <span className="w-32 shrink-0 text-xs text-text-muted">{label}</span>
       <TooltipProvider delayDuration={400}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className={cn("min-w-0 flex-1 truncate text-sm", mono && "font-mono text-xs")}>
+            <span className={cn("min-w-0 truncate text-sm", mono && "font-mono text-xs")}>
               {children ?? value}
             </span>
           </TooltipTrigger>
           <TooltipContent className="max-w-md break-all font-mono text-xs">{value}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {trailing}
       {copyable ? (
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
           aria-label={t("common.copy")}
-          className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+          className="text-text-muted"
           onClick={copy}
         >
           {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
         </Button>
       ) : null}
+      {trailing}
     </div>
   );
 }

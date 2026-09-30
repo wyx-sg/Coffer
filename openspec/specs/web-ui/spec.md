@@ -382,12 +382,7 @@ Overview, before the per-capability toggles.
 - **AND** the Tools, Resources and Prompts tabs follow it
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying the same
-search box, status filter and per-row enable toggle — and MUST keep that chrome
-even when the upstream exposes none of that kind, rendering the empty state
-inside the table rather than as a bare card. The server list likewise carries a
-search box, a reach filter and a client-side pager so a large vault stays
-navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box, a reach filter and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -660,14 +655,16 @@ in plain language (e.g. "prune" is phrased as clearing expired data).
 - **AND** the About tab shows version / license / source and the update check only — no language picker, no resource-kind list
 
 ### Requirement: Switch language from the sidebar
-The sidebar MUST carry the English / 中文 switcher, so it is reachable from every
-screen. Every sidebar label, page title and form label MUST switch on the very
-next render, with no full page reload, and the choice MUST persist in
-`localStorage` under `coffer.language`.
+The sidebar MUST offer the English / 简体中文 switch from every screen: in the
+version menu its footer opens (see "Show the daemon's state in the shell
+footer"), each locale named in its own language, and in Settings › General.
+Every sidebar label, page title and form label MUST switch on the very next
+render, with no full page reload, and the choice MUST persist in `localStorage`
+under `coffer.language`.
 
 #### Scenario: language switcher round-trips correctly
 - **GIVEN** the UI is in English
-- **WHEN** the user selects 中文 in the sidebar language switcher
+- **WHEN** the user opens the version menu from the sidebar footer and selects 简体中文
 - **THEN** all sidebar labels, page titles, and form labels switch to Chinese without a full page reload, on the very next render
 - **AND** the preference persists across reloads (localStorage `coffer.language`)
 
@@ -893,3 +890,201 @@ the daemon serves cannot replace the application.
 - **WHEN** the user opens `/settings/about`
 - **THEN** the tab shows the version and says updates are installed by the desktop app
 - **AND** it shows no Check for updates or Download and restart control
+
+### Requirement: Test a server in the Add dialog before adding it
+The Add server dialog's one-server form MUST offer Test, which tests the
+config as typed without saving it ([mcp-gateway](../mcp-gateway/spec.md) "Test
+an unsaved server config before adding it"), and MUST show the result in the
+form before Add server: the time it took, how many tools, resources and prompts
+the server listed, the first tool names, a warning for a tool whose name agents
+would see as longer than model APIs accept, and the stderr lines behind Show;
+or, when it failed, why — the exit code of a process that stopped — and the
+last lines it printed on stderr. Values typed into Secret rows are sent for
+the test only and nothing is written to the keychain. An edit to the form
+after a test retires its result. A stored secret picked for a row is not
+released to the test, which says the server is tested once it is added.
+
+#### Scenario: the add form tests the unsaved server before Add server
+- **GIVEN** the Add server form prefilled from a pasted command with a secret environment value
+- **WHEN** the user presses Test
+- **THEN** the app posts the form's config to `/api/v1/resources/mcp_server/test-config` with the typed value in `secret_values`, and shows "Test passed in 1.4 s" with the tools it listed
+- **AND** no resource is registered and no secret is written
+
+### Requirement: Review an import from the agents before it is applied
+Import from your agents MUST open the shared change preview of the daemon's
+import plan ([agent-registry](../agent-registry/spec.md) "Plan an import of
+agents' direct MCP entries") before anything is written: the servers found,
+each ticked, with the agents that hold it and a note when two agents' entries
+merge into one server or an entry duplicates a server Coffer already has;
+what will happen to Coffer and to each agent; and each agent config file the
+import edits, with its diff. A name the daemon cannot register is listed
+unticked. Unticking a server re-plans without it. Import MUST apply the ticked
+entries through the apply route, and the outcome MUST say which entries were
+not imported and why.
+
+#### Scenario: the import review shows each file's diff before it imports
+- **GIVEN** an agent whose config file holds one direct MCP entry
+- **WHEN** the user opens Import from your agents and presses Import 1 server
+- **THEN** the dialog first shows the plan with that agent's file and its diff, and only then posts the ticked entries to `/api/v1/agents/mcp-import/apply`
+- **AND** the entry is not adopted one by one through the agent's adopt route
+
+### Requirement: Show the built-in coffer server read-only
+The MCP servers list MUST end with a Built-in group holding Coffer's own
+`coffer` server, and its detail MUST be read-only: no Test, Edit, Delete, Turn
+off or ⋯ menu, its reach a fixed "All connected agents", a note that it cannot
+be edited or removed because it is how agents reach the other servers, its
+calls in the last 24 hours, and its tools, always on, with the names agents see
+them by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
+"Describe the built-in coffer server") and is not a registered resource.
+
+#### Scenario: the built-in coffer server is listed last and opens read-only
+- **GIVEN** the MCP servers page with one registered server
+- **WHEN** it renders and the user opens the Built-in `coffer` row
+- **THEN** the row sits under Built-in after the registered servers and its detail shows its tools with no Test, Edit or ⋯ menu
+
+### Requirement: Show the Skills page as the final canvas draws it
+The Skills page MUST follow canvas 4.3: a compact header (title, count, help) over the library beside a reading pane. A library row MUST show, in place of its description, the one thing that needs the reader; rows ticked for bulk actions MUST show the selection both as a bar under the filter and in the reading pane (which skills, Set reach…, Delete N skills…). The open skill's Files tab MUST be one card — the folder's files with SKILL.md first beside the open file's header bar and body — whose edit mode refuses a stale save while keeping the text. The Requires tab MUST link each command to the CLIs page, and offer the same hand-off to an agent its CLI page does for a command that needs the user. A folder in the way of an agent's link, a delete Coffer refuses, a master folder that is gone and a Git source to change MUST each be answered where they are shown, with the choice confirmed before anything is written. The Add skill dialog MUST carry the Available to reach control.
+
+#### Scenario: a library row says what needs attention in place of its description
+- **GIVEN** a skill whose declared command is missing and a Git skill with an update waiting
+- **WHEN** the user opens the Skills page
+- **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" where their descriptions would be
+
+#### Scenario: selected skills are set or deleted together from the reading pane
+- **GIVEN** the built-in skill and two of the user's skills
+- **WHEN** the user ticks the two skills
+- **THEN** the reading pane names both, says the built-in skill can't be selected, and Delete 2 skills… deletes both after one confirmation
+
+#### Scenario: a skill file changed on disk refuses the save and keeps the text
+- **GIVEN** a skill file open for editing
+- **WHEN** the save is refused because the file changed on disk
+- **THEN** the header says Not saved, the edited text is still there, Reload, Compare and Copy my text are offered, and Save stays off
+
+#### Scenario: the requires tab links to the CLIs page and hands a command to an agent
+- **GIVEN** a skill whose declared commands are missing or not logged in
+- **WHEN** the user opens its Requires tab
+- **THEN** each command shows its state, Open in CLIs, and Copy prompt / Ask an agent, and the tab offers no install, copy-command or login step of its own
+
+#### Scenario: a folder in the way of a skill's link is resolved by a confirmed choice
+- **GIVEN** a skill whose link in one agent is a real folder Coffer did not make
+- **WHEN** the user opens Review… from the skill's banner and chooses Adopt this folder
+- **THEN** the dialog shows the difference first, and only the confirm button resolves that agent's copy by keeping its version
+
+#### Scenario: a delete refused because a copy is not Coffer's stays open and says why
+- **GIVEN** a skill whose delete the daemon refuses because an agent's copy is not Coffer's link
+- **WHEN** the user confirms the delete
+- **THEN** the dialog stays open, names the folder, says Coffer won't remove it, and offers Try again
+
+#### Scenario: a skill whose master folder is gone offers the ways forward
+- **GIVEN** a skill whose master folder was removed outside Coffer
+- **WHEN** the user opens it
+- **THEN** a banner says the master folder is gone, and the Files tab offers Restore it from History (not available while a skill's versions are not recorded) and Remove the skill, which opens the delete confirmation
+
+#### Scenario: a folder no skill claims is added in place or moved out
+- **GIVEN** a folder in the skills store that no skill claims
+- **WHEN** the user opens it under Not in your library
+- **THEN** it shows its path, whether its SKILL.md is valid and its file count, Delete folder… asks first, and Add to library… adds it and opens the new skill
+
+#### Scenario: changing a skill's source shows the change before anything is replaced
+- **GIVEN** a skill added from Git
+- **WHEN** the user opens Change source…, enters another repository and chooses Check source
+- **THEN** the dialog shows the change against the current version with a button to take it, and cancelling applies nothing and drops the staged source
+
+#### Scenario: a skill is added with the reach chosen in the dialog
+- **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents
+- **WHEN** the user adds the skill
+- **THEN** each added skill is turned off, or scoped to the chosen agents, and with every agent nothing more is written
+
+### Requirement: Offer a found update in a card above the sidebar footer
+In the desktop shell, when the shell's update check has found a newer version,
+a card MUST sit above the sidebar's Settings row naming the version, with
+**Restart** — which asks the shell to download, verify and install it and then
+relaunch, the same install as Settings › About's (spec web-ui "Check for and
+install updates on Settings › About") — and **What's new**, opening Settings ›
+About with the release notes. The card is never a modal. It MUST be dismissible,
+and a dismissed card MUST come back at the next launch. While the install runs
+Restart MUST show that it is busy, and an install the shell refuses MUST leave
+the card up with the reason. The collapsed icon rail shows no card, and a
+browser shows none, because a page the daemon serves cannot replace the
+application.
+
+#### Scenario: a found update shows a dismissible card in the desktop shell only
+- **GIVEN** the shell's update check reporting version 1.1.0 available
+- **WHEN** the sidebar renders in the desktop shell, and then in a browser
+- **THEN** the desktop sidebar shows a card above the Settings row naming v1.1.0 with Restart and What's new, and Restart asks the shell to install it
+- **AND** after the user dismisses it the card is gone, while the browser never shows one
+
+### Requirement: Suggest the closest page for an unknown address
+An address no route matches MUST render a not-found page in the workspace,
+with the shell around it, that names the address, suggests the sidebar page
+closest to its first segment when one is close ("Did you mean /mcp-servers"),
+and offers **Back to Overview** and **Search Coffer**, which opens the command
+palette over the page.
+
+#### Scenario: an unknown address suggests the closest page
+- **GIVEN** the user opens `/mcp/sentri`
+- **WHEN** the route resolves
+- **THEN** the page says nothing lives at `/mcp/sentri`, suggests `/mcp-servers`, and offers Back to Overview and Search Coffer
+- **AND** Search Coffer opens the command palette
+
+### Requirement: Send a memory-hook problem on Overview to the agent's Hooks tab
+When Coffer's memory hook in an agent's own settings no longer matches what Coffer installs —
+its command or events were changed by hand — and a reconciler pass tried to rewrite it and could
+not, Overview's Needs you MUST list it as a row on that agent: the reason in a sentence, since when
+the pass first saw it, and one action, **Repair hook**, opening the agent's Hooks tab, where the
+hook's row carries Repair. A hand-edited hook that no pass has visited yet MUST NOT be listed: the
+next pass rewrites it on its own. The hook's other problems the reconciler reports on the agent —
+missing, not trusted or switched off in the agent, a settings file that does not parse — MUST open
+the same tab.
+
+#### Scenario: a memory hook changed by hand that coffer could not rewrite needs the user
+- **GIVEN** Claude Code connected to Coffer, with the command of Coffer's memory hook changed by hand in its settings
+- **WHEN** no reconciler pass has run yet, and then a pass tries to rewrite the hook and fails
+- **THEN** before the pass the attention list holds no item for it, and after it the list holds one warning on Claude Code whose reason says the hook no longer matches what Coffer installs, with since set and the repair action for that change
+
+#### Scenario: a memory hook changed by hand opens the agent's hooks tab from overview
+- **GIVEN** the attention list holds the hand-edited memory hook of Claude Code
+- **WHEN** the user opens Overview
+- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has no menu
+
+### Requirement: Let the user ignore an unconnected agent on Overview
+An agent that Overview lists only because it is not connected to Coffer — an informational item of
+the attention list — MUST carry a ⋯ menu with **Ignore** beside its Connect action. The daemon MUST
+remember an ignored item on this machine, by the item's stable key (its kind, resource and reason),
+and audit each ignore and each stop: `GET /api/v1/attention` then lists it under `ignored`, out of
+`items` and `counts_by_kind`, so Needs you, the Agents health tile, the sidebar's badges and the
+menu bar's count all leave it out alike. Overview MUST count the ignored items under the list as
+**N ignored · Show**; Show lists them again, muted, each with **Stop ignoring** in its menu.
+Ignoring changes nothing about the agent. Only an informational item can be ignored; asking to
+ignore anything else is refused with `ATTENTION_NOT_IGNORABLE`, because something broken stays
+until it is fixed.
+
+#### Scenario: an ignored agent leaves needs you and is counted under it
+- **GIVEN** Overview listing Codex as not connected and an MCP server that fails
+- **WHEN** the user chooses Ignore in Codex's menu, then Show, then Stop ignoring on Codex
+- **THEN** Codex leaves the list while the server stays and "1 ignored · Show" appears under it; Show lists Codex again under the list; after Stop ignoring Codex is back in Needs you and nothing is counted as ignored
+- **AND** while Codex is ignored the daemon's attention list carries it only under `ignored`, its counts leave it out, both changes are audited, and ignoring the failing server is refused
+
+### Requirement: Hand installing an agent to the person when none is found
+While no supported agent is installed on this machine, `GET /api/v1/agents/types` MUST carry
+`install_handoff`, a prompt the daemon writes (see
+[skill-manager](../skill-manager/spec.md) "Hand a required command to an agent with a prompt"
+for the shape every hand-off takes) asking the person's assistant to install one of the
+supported agents the way its maker recommends for this machine, run it once, and then come back
+to Scan again; it MUST name no installer, package manager or command, and it MUST be `null` once
+any supported agent is installed. Overview's first run with no agent found MUST offer that
+prompt through **Copy prompt** only: there is no agent of Coffer's to ask, and the page MUST
+carry no install link of its own.
+
+#### Scenario: with no agent found the install prompt is built by the daemon
+- **GIVEN** neither supported agent's program is installed on this machine
+- **WHEN** the types are read, and read again after one is installed
+- **THEN** the first answer carries an install prompt naming both agents and their settings
+  folders, no installer, and the standing rules every hand-off ends with
+- **AND** the second carries none
+
+#### Scenario: with no agent found overview offers the install prompt to copy
+- **GIVEN** a first run on a machine where no supported agent is found
+- **WHEN** Overview renders
+- **THEN** beside Scan again it offers Copy prompt with the daemon's install prompt
+- **AND** it offers no Ask an agent and no install link

@@ -192,6 +192,38 @@ SECRETS_REQUIRE_APPROVAL = Setting(
 )
 
 
+# --- prices.refresh ------------------------------------------------------------------
+#
+# The daily refresh of the model price list from genai-prices (spec
+# provider-switching "Refresh the bundled price list in the background").
+
+
+def _price_read(s: Session) -> Reading:
+    doc = s.get("/providers/price-list")
+    updated = doc.get("updated") or "unknown"
+    note = f"prices from the {doc['origin']} list, updated {updated}"
+    if doc.get("pinned_off"):
+        note += "; COFFER_PRICE_REFRESH=off pins the refresh off"
+    return Reading("on" if doc["refresh"] else "off", "on", note=note)
+
+
+def _price_write(s: Session, value: bool) -> list[str]:
+    doc = s.send("PUT", "/providers/price-list", {"refresh": value})
+    return [f"prices.refresh: {'on' if doc['refresh'] else 'off'}"]
+
+
+PRICES_REFRESH = Setting(
+    "prices.refresh",
+    "on|off",
+    "Refresh the model price list from genai-prices once a day (off: use the bundled one)",
+    "PUT /providers/price-list",
+    switch("prices.refresh"),
+    _price_read,
+    _price_write,
+    lambda s: _price_write(s, True),
+)
+
+
 # --- feature.<key> ------------------------------------------------------------------
 
 _SOURCE_LABEL = {
@@ -279,6 +311,7 @@ def static_settings() -> list[Setting]:
         TRANSCRIBE_MODEL,
         SECRETS_STORAGE,
         SECRETS_REQUIRE_APPROVAL,
+        PRICES_REFRESH,
     ]
 
 

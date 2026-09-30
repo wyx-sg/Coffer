@@ -2,15 +2,27 @@
 import type { OpenApiReading } from "@/lib/api/customTools";
 import { DEFAULT_AUTH, type AuthDraft } from "@/lib/customTools/drafts";
 
-/** The two ways in. There is no script type (deferred past 1.0). */
+/** The two ways into a new group. There is no script type (deferred past 1.0). */
 export type AddWay = "import" | "hand";
 
-export type AddStep = "choose" | "importSpec" | "importReview" | "newGroup";
+export type AddStep = "choose" | "importSpec" | "importReview" | "newGroup" | "request";
+
+/** The group select's "make a new one" entry. */
+export const NEW_GROUP = "__new__";
+
+/** Where the flow opens: the first-run cards pick a way into a new group; a
+ *  group's Add request opens the request form on that group. */
+export interface AddStart {
+  target?: string;
+  way?: AddWay;
+  step?: "choose" | "request";
+}
 
 /** The spec an import reads: a URL, or a file's text. */
 export type SpecMode = "url" | "file";
 
-/** The group being made, as the steps fill it in. */
+/** The group being made, as the steps fill it in. Nothing of it is saved
+ *  until the flow's last button. */
 export interface GroupDraft {
   name: string;
   baseUrl: string;

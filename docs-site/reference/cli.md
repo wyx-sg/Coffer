@@ -1826,7 +1826,6 @@ Create a collection. Nothing else creates one.
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Collection name (one path segment) |
 | `--description, -d` | option | text | `""` | Written as the opening paragraph of its README.md |
-| `--title` | option | text |  | Display title (≤80 chars) |
 
 ### knowledge edit
 
@@ -1834,14 +1833,13 @@ Create a collection. Nothing else creates one.
 coffer knowledge edit [OPTIONS] NAME
 ```
 
-Rename a collection (its directory moves with it) or set its title.
+Rename a collection (its directory moves with it) or rewrite its description.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
-| `--name` | option | text |  | New name |
-| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
-| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
+| `--name` | option | text |  | New name (the folder moves) |
+| `--description, -d` | option | text |  | Rewrite the opening paragraph of its README.md |
 
 ### knowledge rm
 
@@ -1849,7 +1847,7 @@ Rename a collection (its directory moves with it) or set its title.
 coffer knowledge rm [OPTIONS] NAME
 ```
 
-Remove a collection and its directory.
+Remove a collection and its directory (`restore --deleted` brings it back).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1919,15 +1917,16 @@ List a document's versions, newest first, with who wrote each.
 ### knowledge restore
 
 ```sh
-coffer knowledge restore [OPTIONS] PATH VERSION
+coffer knowledge restore [OPTIONS] [PATH] [VERSION]
 ```
 
-Put one version of a document back, as a new version.
+Put one version of a document back, as a new version — or, with `--deleted`, bring back a deleted document or collection.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | The document to restore |
-| `VERSION` | argument | text | required | The version to put back (from `history`) |
+| `PATH` | argument | text | `""` | The document to restore |
+| `VERSION` | argument | text | `""` | The version to put back (from `history`) |
+| `--deleted` | option | text | `""` | Bring back what this delete removed, a document or a whole collection (the delete's version, from `changes`) |
 
 ### knowledge changes
 
@@ -2219,7 +2218,7 @@ A --secret-ref key that already goes somewhere else waits for approval in the Co
 coffer provider edit [OPTIONS] NAME
 ```
 
-Rename a connection, or change its title, description, endpoint, wire or key.
+Rename a connection, or change its title, description, endpoint, wire, key or fallback.
 
 A rename changes the label and nothing else: the uid, the stored key and any projection into an agent stay where they are.
 
@@ -2236,6 +2235,7 @@ A new --base-url for a connection whose key is already sent somewhere, or a new 
 | `--protocol` | option | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
 | `--base-url` | option | text |  |  |
 | `--secret` | option | text |  | Rotate the stored API key |
+| `--fallback / --no-fallback` | option | boolean |  | Whether other providers' requests may fail over to this one |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### provider rm
@@ -2328,6 +2328,41 @@ Find local model runtimes (read-only: nothing is pulled or loaded).
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--base-url` | option | text |  | A loopback URL to probe; default: each runtime's default port |
+| `--json` | option | flag |  | Machine-readable output |
+
+### provider order
+
+```sh
+coffer provider order [OPTIONS] NAME...
+```
+
+Put providers in this order; the rest keep theirs, after them.
+
+The order is fallback priority: when an agent's model is offered by more than one enabled provider, the proxy tries the agent's own provider first, then the others in this order, before the first byte of the answer.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME...` | argument | text (variadic) | required | Providers, first to last |
+
+### provider price
+
+```sh
+coffer provider price [OPTIONS] NAME [MODEL]
+```
+
+Show each model's price on a provider and its source, or set one.
+
+Without MODEL: every model the provider offers, with its price per 1M tokens (input · output) and where it came from — You set, From &lt;provider&gt; (its own API reported it), Bundled (the price list shipped with this release) or — when nothing prices it. With MODEL and --input/--output: record your own price, which wins over every other source. --reset removes it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Provider name or uid |
+| `[MODEL]` | argument | text |  | Model to set or reset |
+| `--input` | option | float |  | USD per 1M input tokens |
+| `--output` | option | float |  | USD per 1M output tokens |
+| `--cache-read` | option | float |  | USD per 1M cache reads |
+| `--cache-write` | option | float |  | USD per 1M cache writes (5-minute) |
+| `--reset` | option | flag |  | Remove the price you set on MODEL |
 | `--json` | option | flag |  | Machine-readable output |
 
 ## coffer proxy

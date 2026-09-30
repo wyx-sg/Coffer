@@ -121,6 +121,10 @@ interface GitProps {
   value: GitLocation;
   onChange: (value: GitLocation) => void;
   disabled?: boolean;
+  /** The URL's "Coffer pins the commit…" help; Change source leaves it out. */
+  urlHelp?: boolean;
+  /** A line under the URL in its place (the reason a clone failed). */
+  urlError?: string | null;
 }
 
 function GitInput({
@@ -128,6 +132,7 @@ function GitInput({
   label,
   required,
   help,
+  helpTone = "muted",
   placeholder,
   value,
   disabled,
@@ -137,6 +142,7 @@ function GitInput({
   label: string;
   required?: boolean;
   help?: string;
+  helpTone?: "muted" | "danger";
   placeholder: string;
   value: string;
   disabled?: boolean;
@@ -157,12 +163,22 @@ function GitInput({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
-      {help ? <p className="text-xs text-text-muted">{help}</p> : null}
+      {help ? (
+        <p className={helpTone === "danger" ? "text-xs text-danger" : "text-xs text-text-muted"}>
+          {help}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-export function SkillAddGitFields({ value, onChange, disabled }: GitProps) {
+export function SkillAddGitFields({
+  value,
+  onChange,
+  disabled,
+  urlHelp = true,
+  urlError = null,
+}: GitProps) {
   const { t } = useTranslation();
   return (
     <>
@@ -170,7 +186,8 @@ export function SkillAddGitFields({ value, onChange, disabled }: GitProps) {
         id="skill-add-git-url"
         label={t("skillSources.git.url")}
         required
-        help={t("skillSources.git.urlHelp")}
+        help={urlError ?? (urlHelp ? t("skillSources.git.urlHelp") : undefined)}
+        helpTone={urlError ? "danger" : "muted"}
         placeholder={t("skillSources.git.urlPlaceholder")}
         value={value.url}
         disabled={disabled}
@@ -188,6 +205,7 @@ export function SkillAddGitFields({ value, onChange, disabled }: GitProps) {
         id="skill-add-git-path"
         label={t("skillSources.git.path")}
         placeholder={t("skillSources.git.pathPlaceholder")}
+        help={t("skillSources.git.pathHelp")}
         value={value.path}
         disabled={disabled}
         onChange={(path) => onChange({ ...value, path })}

@@ -15,7 +15,8 @@ from urllib.parse import urlparse
 
 import httpx
 
-from coffer.application.provider.ports import LOCAL_PROTOCOLS
+from coffer.application.provider.ports import LOCAL_PROTOCOLS, ListedModel
+from coffer.domain.usage.pricing import ModelPrice
 from coffer.infrastructure.net.ssrf_guard import check_url
 
 #: Default base URL per WIRE PROTOCOL (None = the SDK's own default, i.e.
@@ -40,6 +41,41 @@ _ANTHROPIC_VERSION = "2023-06-01"
 _TIMEOUT = 30.0
 #: Loopback hostnames → an internal-only (ollama-style) connection.
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
+
+
+_PER_MTOK = 1_000_000
+
+
+def _per_mtok(value: object) -> float | None:
+    """A per-token USD rate (OpenRouter sends strings) as USD per 1M tokens;
+    ``None`` for a missing, malformed or negative ("varies") rate."""
+    try:
+        rate = float(str(value))
+    except (TypeError, ValueError):
+        return None
+    if rate < 0:
+        return None
+    return round(rate * _PER_MTOK, 6)
+
+
+def reported_price(extra: dict[str, object] | None) -> ModelPrice | None:
+    """The price a ``/models`` entry reports, OpenRouter's shape: a
+    ``pricing`` object of per-token rates (``prompt``, ``completion``,
+    ``input_cache_read``, ``input_cache_write``). ``None`` when the entry
+    carries no usable input and output rate."""
+    pricing = (extra or {}).get("pricing")
+    if not isinstance(pricing, dict):
+        return None
+    prompt = _per_mtok(pricing.get("prompt"))
+    completion = _per_mtok(pricing.get("completion"))
+    if prompt is None or completion is None:
+        return None
+    return ModelPrice(
+        input=prompt,
+        output=completion,
+        cache_read=_per_mtok(pricing.get("input_cache_read")),
+        cache_write_5m=_per_mtok(pricing.get("input_cache_write")),
+    )
 
 
 class ProviderIntrospector:
@@ -67,14 +103,14 @@ class ProviderIntrospector:
 
     async def list_models(
         self, *, provider: str, base_url: str | None, api_key: str | None
-    ) -> list[str]:
+    ) -> list[str | ListedModel]:
         url = self._base_url(provider, base_url)
         await self._guard(provider, url)
         if provider == "anthropic":
-            return await self._anthropic_models(url, api_key)
+            return list(await self._anthropic_models(url, api_key))
         client = self._openai_client(url, api_key)
         page = await client.models.list()
-        return [m.id for m in page.data]
+        return [ListedModel(id=m.id, price=reported_price(m.model_extra)) for m in page.data]
 
     async def _anthropic_models(self, base_url: str | None, api_key: str | None) -> list[str]:
         root = (base_url or "https://api.anthropic.com").rstrip("/")

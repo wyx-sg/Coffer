@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Response
 
 from coffer.application.mcp.custom_tool_import import CustomToolImporter
+from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.application.mcp.custom_tools import UNSET, CustomToolService
 from coffer.domain.errors import ConfigValidationError
 from coffer.surfaces.http.auth import require_token
@@ -29,10 +30,12 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolIn,
     CustomToolPatch,
     CustomToolReachIn,
+    CustomToolReimportChangeOut,
     CustomToolReimportIn,
     CustomToolReimportPreviewOut,
     CustomToolTestIn,
     CustomToolTestOut,
+    CustomToolUnsavedTestIn,
     OpenApiReadIn,
     OpenApiReadOut,
 )
@@ -102,6 +105,21 @@ async def read_openapi(
         operations=[operation_out(op) for op in r.operations],
         warnings=r.warnings,
     )
+
+
+@router.post("/test", response_model=CustomToolTestOut)
+async def test_unsaved(
+    body: CustomToolUnsavedTestIn, svc: CustomToolService = _service
+) -> CustomToolTestOut:
+    """Run a request of a group not saved yet: no secret, SSRF-guarded, nothing kept."""
+    o = await svc.test_unsaved(
+        base_url=body.base_url,
+        headers=body.headers,
+        timeout_seconds=body.timeout_seconds,
+        raw_tool=_tool_dict(body.tool),
+        arguments=body.arguments,
+    )
+    return _test_out(o)
 
 
 @router.get("/{name}", response_model=CustomToolGroupOut)
@@ -186,7 +204,10 @@ async def test_tool(
     name: str, body: CustomToolTestIn, svc: CustomToolService = _service
 ) -> CustomToolTestOut:
     """Run a draft tool once; saves nothing and records no invocation."""
-    o = await svc.test_tool(name, _tool_dict(body.tool), body.arguments)
+    return _test_out(await svc.test_tool(name, _tool_dict(body.tool), body.arguments))
+
+
+def _test_out(o: ToolTestOutcome) -> CustomToolTestOut:
     return CustomToolTestOut(
         ok=o.ok,
         duration_ms=o.duration_ms,
@@ -197,6 +218,7 @@ async def test_tool(
         truncated=o.truncated,
         content_type=o.content_type,
         error=o.error,
+        failure=o.failure,  # type: ignore[arg-type]
     )
 
 
@@ -204,13 +226,23 @@ async def test_tool(
 async def preview_reimport(
     name: str, body: CustomToolReimportIn, importer: CustomToolImporter = _importer
 ) -> CustomToolReimportPreviewOut:
-    reading, plan = await importer.preview(name, document=body.document)
+    reading, plan, changes = await importer.preview(name, document=body.document)
     return CustomToolReimportPreviewOut(
         title=reading.title,
         version=reading.version,
         added=[operation_out(op) for op in plan.added],
         removed=plan.removed,
         kept=plan.kept,
+        changed=[
+            CustomToolReimportChangeOut(
+                name=c.name,
+                method=c.method,  # type: ignore[arg-type]
+                path=c.path,
+                new_required=c.new_required,
+                request_changed=c.request_changed,
+            )
+            for c in changes
+        ],
         warnings=reading.warnings,
     )
 

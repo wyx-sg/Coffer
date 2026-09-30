@@ -1,6 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeCollectionSelect.tsx
 // The collection picker the Add a document and Upload dialogs share; its value
-// is the collection's NAME, which is what an item and an upload are sent to.
+// is the collection's NAME, which is what an item and an upload are sent to
+// — and what it shows, since a collection has no title.
 import { useTranslation } from "react-i18next";
 
 import {
@@ -23,13 +24,17 @@ export function KnowledgeCollectionSelect({ id, collections, value, onChange }: 
   const { t } = useTranslation();
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger id={id} aria-label={t("knowledge.add.collection")}>
+      <SelectTrigger
+        id={id}
+        aria-label={t("knowledge.add.collection")}
+        className="font-mono text-xs"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {collections.map((c) => (
-          <SelectItem key={c.uid} value={c.name}>
-            {c.title || c.name}
+          <SelectItem key={c.uid} value={c.name} className="font-mono text-xs">
+            {c.name}
           </SelectItem>
         ))}
       </SelectContent>

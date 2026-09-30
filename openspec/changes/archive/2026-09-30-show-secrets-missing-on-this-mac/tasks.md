@@ -1,6 +1,6 @@
 ## 1. Store and list
 
-- [x] 1.1 Migration 0134: nullable `secrets.last_used_at`.
+- [x] 1.1 Migration 0135: nullable `secrets.last_used_at`.
 - [x] 1.2 `EncryptedSecretStore`: stamp use in `get` (at most once a minute), `peek` for reads that are not uses (reveal, import read-back), `last_used`, `unreadable_refs` by token signature.
 - [x] 1.3 `GET /api/v1/secrets`: `locked`, `created_at`, `last_used_at`.
 

@@ -116,6 +116,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Providers
+         * @description Reorder the Model providers list — the order fallbacks are tried in
+         *     (spec provider-switching "Order providers, and fail over in that order").
+         *     422 unless ``uids`` names every provider exactly once.
+         */
+        put: operations["reorder_providers_api_v1_providers_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/price-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Price List
+         * @description The price list in use and its refresh.
+         */
+        get: operations["get_price_list_api_v1_providers_price_list_get"];
+        /**
+         * Put Price List
+         * @description Turn the daily refresh on or off on this machine. Nothing is fetched now;
+         *     the next tick of the refresh reads the setting.
+         */
+        put: operations["put_price_list_api_v1_providers_price_list_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/use-builtin/{agent_type}": {
         parameters: {
             query?: never;
@@ -209,6 +256,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/{uid}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Prices
+         * @description Each model's price on this provider, with its source: You set, From
+         *     <provider>, Bundled or local — or none (spec provider-switching "Resolve
+         *     each model's price from the provider, its API, or the bundled list").
+         *     Read-only; nothing is fetched from the network.
+         */
+        post: operations["model_prices_api_v1_providers__uid__prices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/{uid}/transcribe-default": {
         parameters: {
             query?: never;
@@ -229,6 +299,26 @@ export interface paths {
          *     the agent the audio file untouched. 404 if the connection is absent.
          */
         post: operations["set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/routes/{agent_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Route
+         * @description The agent's provider and its fallbacks, as the proxy is serving them.
+         */
+        get: operations["proxy_route_api_v1_proxy_routes__agent_uid__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -268,6 +358,26 @@ export interface paths {
          *     this machine does not have, so a stale helper fails closed.
          */
         get: operations["proxy_token_api_v1_proxy_tokens__agent_uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}/hint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Token Hint
+         * @description The last four characters of the agent's token, minted on first ask.
+         */
+        get: operations["proxy_token_hint_api_v1_proxy_tokens__agent_uid__hint_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -440,8 +550,8 @@ export interface components {
          * @description What the user says this connection charges for a model, in USD per
          *     million tokens (web search per thousand requests). Relays and resellers
          *     price differently from the vendor, so a connection's own price wins over
-         *     the bundled snapshot when usage is costed (spec provider-switching "Price
-         *     usage from a bundled snapshot and per-connection prices"). A cache category
+         *     every other source when usage is costed (spec provider-switching "Resolve
+         *     each model's price from the provider, its API, or the bundled list"). A cache category
          *     left out is charged at the input rate, so an estimate errs high.
          */
         CuratedPrice: {
@@ -568,6 +678,90 @@ export interface components {
          */
         Modality: "text" | "embedding" | "image" | "video" | "audio";
         /**
+         * ModelPriceOut
+         * @description One model's price on a provider and where it came from (spec
+         *     provider-switching "Resolve each model's price from the provider, its API,
+         *     or the bundled list"). USD per million tokens; ``source`` ``None`` means no
+         *     price is known and every rate is ``None`` — shown as "—", never as zero.
+         *     ``source_name`` names the provider whose API reported it (``provider``) or
+         *     the price list's provider (``bundled``). ``tiered``: the rates shown are
+         *     the base tier; past a threshold of input tokens the request pays more.
+         */
+        ModelPriceOut: {
+            /** Cache Read */
+            cache_read: number | null;
+            /** Cache Write 1H */
+            cache_write_1h: number | null;
+            /** Cache Write 5M */
+            cache_write_5m: number | null;
+            /** Input */
+            input: number | null;
+            /** Model */
+            model: string;
+            /** Output */
+            output: number | null;
+            source: components["schemas"]["PriceSource"] | null;
+            /** Source Name */
+            source_name: string | null;
+            /** Source Updated */
+            source_updated: string | null;
+            /**
+             * Tiered
+             * @default false
+             */
+            tiered: boolean;
+        };
+        /**
+         * ModelPricesIn
+         * @description The models whose price on this provider to resolve.
+         */
+        ModelPricesIn: {
+            /** Models */
+            models: string[];
+        };
+        /** ModelPricesOut */
+        ModelPricesOut: {
+            /** Bundled Version */
+            bundled_version: string;
+            /** Prices */
+            prices: components["schemas"]["ModelPriceOut"][];
+        };
+        /** PriceListIn */
+        PriceListIn: {
+            /** Refresh */
+            refresh: boolean;
+        };
+        /**
+         * PriceListOut
+         * @description The price list pricing reads now, and its daily refresh (spec
+         *     provider-switching "Refresh the bundled price list in the background").
+         */
+        PriceListOut: {
+            /** Last Attempt At */
+            last_attempt_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "bundled" | "refreshed";
+            /** Pinned Off */
+            pinned_off: boolean;
+            /** Refresh */
+            refresh: boolean;
+            /** Updated */
+            updated: string | null;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PriceSource
+         * @description Where a model's price came from, in the order they are consulted.
+         * @enum {string}
+         */
+        PriceSource: "user" | "provider" | "bundled" | "local";
+        /**
          * Protocol
          * @description Upstream wire protocol a connection speaks (detected, not user-typed).
          *
@@ -607,7 +801,11 @@ export interface components {
             /** Secret Value */
             secret_value?: string | null;
         };
-        /** ProviderListOut */
+        /**
+         * ProviderListOut
+         * @description Every connection in Model providers list order — which is also the
+         *     order the model proxy tries fallbacks in.
+         */
         ProviderListOut: {
             /** Providers */
             providers: components["schemas"]["ProviderOut"][];
@@ -657,6 +855,14 @@ export interface components {
             reachable: boolean;
         };
         /**
+         * ProviderOrderIn
+         * @description The new list order: every connection's uid, exactly once.
+         */
+        ProviderOrderIn: {
+            /** Uids */
+            uids: string[];
+        };
+        /**
          * ProviderOut
          * @description An LLM connection as returned by the API (no secret).
          *
@@ -699,6 +905,11 @@ export interface components {
             description: string | null;
             /** Enabled */
             enabled: boolean;
+            /**
+             * Fallback
+             * @default true
+             */
+            fallback: boolean;
             /** Internal Default */
             internal_default: boolean;
             /** Is Active */
@@ -748,11 +959,40 @@ export interface components {
             base_url?: string | null;
             /** Description */
             description?: string | null;
+            /** Fallback */
+            fallback?: boolean | null;
             /** Models */
             models?: components["schemas"]["ProviderModel"][] | null;
             protocol?: components["schemas"]["Protocol"] | null;
             /** Secret Value */
             secret_value?: string | null;
+        };
+        /** ProxyRouteMemberOut */
+        ProxyRouteMemberOut: {
+            /** Connection Uid */
+            connection_uid: string;
+            /** Local */
+            local: boolean;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ProxyRouteOut
+         * @description Where an agent's requests go (spec provider-switching "Order providers,
+         *     and fail over in that order"): its provider, and the providers tried next,
+         *     in order, when it fails before the first byte. ``primary`` is ``None``
+         *     while the agent runs on its own built-in login, which bypasses the proxy.
+         *     With ``model``, ``fallbacks`` holds only the providers that offer it —
+         *     failover never changes the model.
+         */
+        ProxyRouteOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Fallbacks */
+            fallbacks: components["schemas"]["ProxyRouteMemberOut"][];
+            /** Model */
+            model: string | null;
+            primary: components["schemas"]["ProxyRouteMemberOut"] | null;
         };
         /** ProxyStatusOut */
         ProxyStatusOut: {
@@ -770,6 +1010,17 @@ export interface components {
             running: boolean;
             /** Version */
             version: string | null;
+        };
+        /**
+         * ProxyTokenHintOut
+         * @description What the Model tab shows of an agent's token: its last four characters,
+         *     never the token.
+         */
+        ProxyTokenHintOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Last4 */
+            last4: string;
         };
         /** ProxyTokenOut */
         ProxyTokenOut: {
@@ -1281,6 +1532,135 @@ export interface operations {
             };
         };
     };
+    reorder_providers_api_v1_providers_order_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_price_list_api_v1_providers_price_list_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_price_list_api_v1_providers_price_list_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     use_builtin_provider_api_v1_providers_use_builtin__agent_type__post: {
         parameters: {
             query?: never;
@@ -1540,6 +1920,52 @@ export interface operations {
             };
         };
     };
+    model_prices_api_v1_providers__uid__prices_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPricesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPricesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post: {
         parameters: {
             query?: never;
@@ -1561,6 +1987,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_route_api_v1_proxy_routes__agent_uid__get: {
+        parameters: {
+            query?: {
+                model?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyRouteOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1643,6 +2113,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProxyTokenOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_token_hint_api_v1_proxy_tokens__agent_uid__hint_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTokenHintOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

@@ -54,6 +54,7 @@ function conn(name: string, over: Partial<Provider> = {}): Provider {
     title: null,
     internal_default: false,
     transcribe_default: false,
+    fallback: true,
     models: [],
     enabled: true,
     description: null,
@@ -71,6 +72,7 @@ interface Net {
   listed?: ProviderModel[];
   testOk?: boolean;
   activate?: () => unknown;
+  route?: unknown;
 }
 
 function serve(net: Net) {
@@ -86,6 +88,10 @@ function serve(net: Net) {
     if (method === "PATCH") return CLAUDE;
     if (path.endsWith("/activate")) return net.activate ? net.activate() : {};
     if (path.startsWith("/providers/use-builtin/")) return {};
+    if (path.startsWith("/proxy/routes/")) return net.route ?? { primary: null, fallbacks: [] };
+    if (path.endsWith("/hint")) return { agent_uid: "a", last4: "3f2a" };
+    if (path.endsWith("/rotate")) return { agent_uid: "a", rotated: true };
+    if (path === "/proxy/status") return { port: 8001 };
     throw new Error(`unexpected ${method} ${path}`);
   });
 }
@@ -124,6 +130,49 @@ beforeEach(() => {
 });
 
 describe("AgentModelTab", () => {
+  acceptance("provider-switching", "the Model tab says which provider is tried next", async () => {
+    serve({
+      providers: [conn("official", { is_active: true })],
+      listed: text("claude-opus-4-8"),
+      route: {
+        agent_uid: CLAUDE.uid,
+        model: "claude-opus-4-8",
+        primary: { connection_uid: "u-official", name: "official", local: false },
+        fallbacks: [{ connection_uid: "u-gw", name: "Company gateway", local: false }],
+      },
+    });
+    renderTab({ ...CLAUDE, model: "claude-opus-4-8" });
+    expect(
+      await screen.findByText(
+        "If official fails: Company gateway — it also offers claude-opus-4-8",
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/••••3f2a/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /rotate/i }));
+    await waitFor(() =>
+      expect(calls((p, m) => p.endsWith("/rotate") && m === "POST")).toHaveLength(1),
+    );
+  });
+
+  test("no fallback, and nothing at all on the built-in login", async () => {
+    serve({
+      providers: [conn("official", { is_active: true })],
+      route: {
+        agent_uid: CLAUDE.uid,
+        model: null,
+        primary: { connection_uid: "u-official", name: "official", local: false },
+        fallbacks: [],
+      },
+    });
+    const view = renderTab();
+    expect(await screen.findByText("If official fails: No fallback")).toBeInTheDocument();
+    view.unmount();
+    serve({ providers: [] });
+    renderTab();
+    await screen.findByText("No other compatible provider yet");
+    expect(screen.queryByText(/Proxy token/)).toBeNull();
+  });
+
   acceptance(
     "provider-switching",
     "the agent's model picker offers a fixed list without free-form entry",
@@ -180,8 +229,8 @@ describe("AgentModelTab", () => {
       ],
     });
     renderTab();
-    expect(await screen.findByText("No other compatible connection yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /add connection/i })).toHaveAttribute(
+    expect(await screen.findByText("No other compatible provider yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /add provider/i })).toHaveAttribute(
       "href",
       "/model-providers",
     );

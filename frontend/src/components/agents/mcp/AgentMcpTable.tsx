@@ -12,6 +12,7 @@ import { Import, Settings2, Trash2 } from "lucide-react";
 import { DataTable, type Column } from "@/components/DataTable";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
+import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { agentMcpEntryPath } from "@/lib/agents/routes";
 import { entryCommand, type McpRow, type OwnMcpRow, type OwnMcpState } from "./mcpRows";
 
@@ -30,6 +31,8 @@ interface Props {
   whereLabel: (source: string) => string;
   onAdopt: (row: OwnMcpRow) => void;
   onRemoveDuplicate: (row: OwnMcpRow) => void;
+  /** The ⋯ menu of a direct entry: Adopt · Open file · Copy command · Remove. */
+  rowMenu: (row: OwnMcpRow) => MenuAction[];
 }
 
 export function AgentMcpTable({
@@ -39,6 +42,7 @@ export function AgentMcpTable({
   whereLabel,
   onAdopt,
   onRemoveDuplicate,
+  rowMenu,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -137,23 +141,31 @@ export function AgentMcpTable({
           );
         }
         const readOnly = row.state === "readOnly";
-        return row.entry.matches_resource !== null ? (
-          <TableActionButton
-            icon={Trash2}
-            destructive
-            disabled={readOnly}
-            label={t("agents.mcpTab.removeDuplicate")}
-            aria-label={`${t("agents.mcpTab.removeDuplicate")}: ${row.name}`}
-            onClick={() => onRemoveDuplicate(row)}
-          />
-        ) : (
-          <TableActionButton
-            icon={Import}
-            disabled={readOnly}
-            label={t("agents.mcpTab.adopt")}
-            aria-label={`${t("agents.mcpTab.adopt")}: ${row.name}`}
-            onClick={() => onAdopt(row)}
-          />
+        return (
+          <span className="inline-flex items-center justify-end gap-1">
+            {row.entry.matches_resource !== null ? (
+              <TableActionButton
+                icon={Trash2}
+                destructive
+                disabled={readOnly}
+                label={t("agents.mcpTab.removeDuplicate")}
+                aria-label={`${t("agents.mcpTab.removeDuplicate")}: ${row.name}`}
+                onClick={() => onRemoveDuplicate(row)}
+              />
+            ) : (
+              <TableActionButton
+                icon={Import}
+                disabled={readOnly}
+                label={t("agents.mcpTab.adopt")}
+                aria-label={`${t("agents.mcpTab.adopt")}: ${row.name}`}
+                onClick={() => onAdopt(row)}
+              />
+            )}
+            <ActionMenu
+              label={t("agents.kindTab.moreFor", { name: row.name })}
+              actions={rowMenu(row)}
+            />
+          </span>
         );
       },
     },

@@ -1,79 +1,199 @@
 // frontend/src/components/knowledge/KnowledgeDocumentPane.tsx
 //
-// One open document: where it is (collection › folders › file), and its two
-// tabs — Document (the default, the reader and the body editor) and History
-// (every version, who wrote it, its diff, restore) — spec web-ui "Show a
-// knowledge document's history on its History tab". The tab is in the path
+// One open document (boards 5.1.01–5.1.06, 5.1.21): the bar — where it is
+// (collection › folders › file), its two tabs, Document (the default, the
+// reader and the body editor) and History (every version, who wrote it, its
+// diff, restore; spec web-ui "Show a knowledge document's history on its
+// History tab"), and the tab's actions: Edit and the ⋯ menu while reading,
+// Cancel and Save while editing. The tab is in the path
 // (`/knowledge/<uid>/history?file=`); a History that cannot be read leaves the
 // Document tab working, because each tab reads on its own.
+//
+// The draft lives here rather than in the editor so the bar can carry the
+// editor's Cancel and Save, as the boards draw them.
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { Pencil } from "lucide-react";
 
-import { KnowledgeDocumentView } from "@/components/knowledge/KnowledgeDocumentView";
+import { KnowledgeDeleteDocument } from "@/components/knowledge/KnowledgeDeleteDocument";
+import { KnowledgeDocumentEditor } from "@/components/knowledge/KnowledgeDocumentEditor";
+import { KnowledgeDocumentReader } from "@/components/knowledge/KnowledgeDocumentReader";
 import { KnowledgeHistoryTab } from "@/components/knowledge/KnowledgeHistoryTab";
+import { KnowledgePaneBar, PaneBarTab, type Crumb } from "@/components/knowledge/KnowledgePaneBar";
+import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { CollectionOut } from "@/lib/api/knowledge";
-import { useKnowledgeFile } from "@/lib/hooks/useKnowledge";
-import { pathInCollection } from "@/lib/knowledge/routes";
+import type { CollectionOut, FileOut } from "@/lib/api/knowledge";
+import { useFileActionItems } from "@/lib/fileActionItems";
+import { useFileDraft } from "@/lib/hooks/useFileDraft";
+import { useKnowledgeFile, useSaveKnowledgeFile } from "@/lib/hooks/useKnowledge";
+import { useDocumentHistory } from "@/lib/hooks/useKnowledgeHistory";
+import { collectionPath, pathInCollection } from "@/lib/knowledge/routes";
 
 interface Props {
   collection: CollectionOut;
   /** Knowledge-root-relative path of the open document. */
   path: string;
   tab: "document" | "history";
-  setTab: (tab: string) => void;
 }
 
-export function KnowledgeDocumentPane({ collection, path, tab, setTab }: Props) {
+function crumbsOf(collection: CollectionOut, path: string): Crumb[] {
+  const parts = pathInCollection(path).split("/");
+  return [
+    { label: collection.name, to: collectionPath(collection.uid), mono: true },
+    ...parts.map((p) => ({ label: p, mono: true })),
+  ];
+}
+
+export function KnowledgeDocumentPane({ collection, path, tab }: Props) {
   const { t } = useTranslation();
   const file = useKnowledgeFile(path);
-  const crumbs = pathInCollection(path).split("/");
+  const history = useDocumentHistory(path);
+  const count = history.data?.versions.length;
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <nav
-        aria-label={t("knowledge.document.where")}
-        className="flex flex-wrap items-center gap-1 text-xs text-text-subtle"
+  const tabs = (
+    <nav
+      aria-label={t("knowledge.document.views")}
+      className="ml-[18px] flex gap-[18px] self-stretch"
+    >
+      <PaneBarTab
+        to={collectionPath(collection.uid, "document", path)}
+        current={tab === "document"}
       >
-        <span>{collection.title || collection.name}</span>
-        {crumbs.map((c, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <span aria-hidden>›</span>
-            <span className={i === crumbs.length - 1 ? "text-text" : undefined}>{c}</span>
-          </span>
-        ))}
-      </nav>
+        {t("knowledge.document.tab")}
+      </PaneBarTab>
+      <PaneBarTab to={collectionPath(collection.uid, "history", path)} current={tab === "history"}>
+        {t("knowledge.history.tab")}
+        {count ? <span className="text-2xs text-text-subtle">{count}</span> : null}
+      </PaneBarTab>
+    </nav>
+  );
 
-      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList>
-          <TabsTrigger value="document">{t("knowledge.document.tab")}</TabsTrigger>
-          <TabsTrigger value="history">{t("knowledge.history.tab")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value={tab} className="mt-3 flex min-h-0 flex-1 flex-col">
-          {tab === "history" ? (
-            <KnowledgeHistoryTab path={path} />
-          ) : file.isPending ? (
+  if (!file.data) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <KnowledgePaneBar crumbs={crumbsOf(collection, path)} tabs={tabs} />
+        <div className="px-10 py-6">
+          {file.error ? (
+            <p className="text-sm text-danger" role="alert">
+              {translateApiError(t, file.error)}
+            </p>
+          ) : (
             <div className="space-y-3" aria-busy>
               <Skeleton className="h-5 w-1/3" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
             </div>
-          ) : file.error ? (
-            <p className="text-sm text-danger" role="alert">
-              {translateApiError(t, file.error)}
-            </p>
-          ) : (
-            // Keyed by path: a draft belongs to one document only.
-            <KnowledgeDocumentView
-              key={file.data.path}
-              collection={collection}
-              file={file.data}
-              reload={() => file.refetch()}
-            />
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    // Keyed by path: a draft belongs to one document only.
+    <LoadedDocument
+      key={file.data.path}
+      collection={collection}
+      file={file.data}
+      tab={tab}
+      tabs={tabs}
+      reload={() => file.refetch()}
+    />
+  );
+}
+
+interface LoadedProps {
+  collection: CollectionOut;
+  file: FileOut;
+  tab: "document" | "history";
+  tabs: ReactNode;
+  reload: () => Promise<unknown>;
+}
+
+function LoadedDocument({ collection, file, tab, tabs, reload }: LoadedProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const saveFile = useSaveKnowledgeFile();
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [openItem, revealItem] = useFileActionItems(file.file_path);
+  const draft = useFileDraft({
+    loaded: file.body,
+    fingerprint: file.fingerprint,
+    save: (body, expected) =>
+      saveFile({ path: file.path, body, expected_fingerprint: expected ?? "" }),
+    reload,
+  });
+  const name = file.path.split("/").pop() ?? file.path;
+  const cancel = () => (draft.dirty ? setConfirmDiscard(true) : draft.cancel());
+
+  const actions = draft.editing ? (
+    <>
+      <Button variant="outline" onClick={cancel} disabled={draft.saving}>
+        {t("common.cancel")}
+      </Button>
+      <Button onClick={draft.save} disabled={!draft.dirty || draft.saving || draft.conflict}>
+        {draft.saving ? t("common.saving") : t("common.save")}
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button variant="outline" onClick={draft.startEditing}>
+        <Pencil aria-hidden /> {t("common.edit")}
+      </Button>
+      <ActionMenu
+        label={t("knowledge.document.more", { path: file.path })}
+        actions={[
+          { key: "open", label: openItem.label, onSelect: openItem.onClick },
+          { key: "reveal", label: revealItem.label, onSelect: revealItem.onClick },
+          {
+            key: "delete",
+            label: t("knowledge.deleteDocument.menu"),
+            destructive: true,
+            separated: true,
+            onSelect: () => setDeleting(true),
+          },
+        ]}
+      />
+    </>
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <KnowledgePaneBar crumbs={crumbsOf(collection, file.path)} tabs={tabs} actions={actions} />
+      {tab === "history" ? (
+        <KnowledgeHistoryTab path={file.path} currentBody={file.body} />
+      ) : draft.editing ? (
+        <KnowledgeDocumentEditor
+          file={file}
+          draft={draft}
+          confirmDiscard={confirmDiscard}
+          setConfirmDiscard={setConfirmDiscard}
+          onCancel={cancel}
+        />
+      ) : (
+        <KnowledgeDocumentReader
+          file={file}
+          onOpen={openItem.onClick}
+          onReveal={revealItem.onClick}
+          onDelete={() => setDeleting(true)}
+        />
+      )}
+      <KnowledgeDeleteDocument
+        open={deleting}
+        onOpenChange={setDeleting}
+        path={file.path}
+        filePath={file.file_path}
+        onDeleted={() => {
+          toast.success(t("knowledge.deleteDocument.deletedToast", { name }));
+          navigate(collectionPath(collection.uid), { state: { deleted: file.path } });
+        }}
+      />
     </div>
   );
 }

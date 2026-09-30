@@ -1,13 +1,12 @@
 // src/components/custom-tools/ReimportDialog.tsx — Re-import: read the group's spec again (a file source
-// asks for the file), preview the operations it would add and the tools it would remove, and change
-// nothing until Confirm. Kept tools keep their switch and reach override.
+// asks for the file) and list the changes first — operations to add (reads become tools, on; writes
+// are listed but not ticked), tools the spec changed, tools it dropped. Nothing changes until Apply;
+// unchanged tools keep their switch and reach.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup } from "@/lib/api/customTools";
+import { operationChangesData } from "@/lib/customTools/operations";
 import { useApplyReimport, usePreviewReimport } from "@/lib/hooks/useCustomTools";
+import { ReimportRow } from "./ReimportRow";
 import { MAX_SPEC_BYTES } from "./SpecField";
 
 interface Props {
@@ -32,38 +33,43 @@ export function ReimportDialog({ group, open, onOpenChange }: Props) {
   const preview = usePreviewReimport(group.name);
   const apply = useApplyReimport(group.name);
   const [document, setDocument] = useState<string | undefined>(undefined);
-  const [add, setAdd] = useState<string[]>([]);
   const [tooLarge, setTooLarge] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const fromFile = group.source?.kind === "file";
-
-  const run = (doc?: string) =>
-    preview.mutate(doc, {
-      onSuccess: (p) =>
-        setAdd(p.added.filter((op) => (op.tool.method ?? "GET") === "GET").map((op) => op.key)),
-    });
 
   useEffect(() => {
     if (!open) return;
     preview.reset();
     apply.reset();
     setDocument(undefined);
-    setAdd([]);
     setTooLarge(false);
-    if (!fromFile) run();
+    if (!fromFile) preview.mutate(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on opening
   }, [open]);
 
   const p = preview.data;
   const error = apply.error ?? preview.error;
-  const onConfirm = () => apply.mutate({ add, document }, { onSuccess: () => onOpenChange(false) });
+  const tools = new Map(group.tools.map((tool) => [tool.name, tool]));
+  const reads = p ? p.added.filter((op) => !operationChangesData(op)).map((op) => op.key) : [];
+  const changed = p?.changed ?? [];
+  const count = p ? p.added.length + changed.length + p.removed.length : 0;
+  const unchanged = p ? p.kept.length - changed.length : 0;
+  const versions = [group.source?.title ?? p?.title, group.source?.version, p?.version];
+  const from =
+    versions[1] && versions[2] && versions[1] !== versions[2]
+      ? `${versions[0] ?? ""} ${versions[1]} → ${versions[2]}`.trim()
+      : [p?.title, p?.version].filter(Boolean).join(" ");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[520px] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-[620px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("customTools.reimport.title", { name: group.name })}</DialogTitle>
-          <DialogDescription>{t("customTools.reimport.subtitle")}</DialogDescription>
+          <DialogDescription>
+            {t(fromFile ? "customTools.reimport.subtitleFile" : "customTools.reimport.subtitle", {
+              location: group.source?.location ?? "",
+            })}
+          </DialogDescription>
         </DialogHeader>
         {fromFile ? (
           <div className="flex items-center gap-2">
@@ -81,7 +87,7 @@ export function ReimportDialog({ group, open, onOpenChange }: Props) {
                 setTooLarge(false);
                 void file.text().then((text) => {
                   setDocument(text);
-                  run(text);
+                  preview.mutate(text);
                 });
               }}
             />
@@ -96,42 +102,58 @@ export function ReimportDialog({ group, open, onOpenChange }: Props) {
         ) : null}
         {p ? (
           <div className="flex flex-col gap-2" data-testid="reimport-preview">
-            {p.added.length === 0 && p.removed.length === 0 ? (
+            {count === 0 ? (
               <p className="text-sm text-text-muted">{t("customTools.reimport.noChange")}</p>
-            ) : null}
-            <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle empty:hidden">
-              {p.added.map((op) => (
-                <li key={op.key}>
-                  <label className="flex min-h-row cursor-pointer items-center gap-3 px-3 py-1.5">
-                    <Checkbox
-                      checked={add.includes(op.key)}
-                      aria-label={t("customTools.reimport.addOp", { name: op.tool.name })}
-                      onChange={(e) =>
-                        setAdd(
-                          e.target.checked ? [...add, op.key] : add.filter((k) => k !== op.key),
-                        )
-                      }
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <div className="bg-surface-sunken px-2.5 py-2 text-xs font-semibold">
+                  {[t("customTools.reimport.changes", { count }), from].filter(Boolean).join(" · ")}
+                </div>
+                {p.added.map((op) => (
+                  <ReimportRow
+                    key={op.key}
+                    kind="add"
+                    name={op.tool.name}
+                    request={`${op.tool.method ?? "GET"} ${op.tool.path}`}
+                    note={t(
+                      operationChangesData(op)
+                        ? "customTools.reimport.addWrite"
+                        : "customTools.reimport.addRead",
+                    )}
+                  />
+                ))}
+                {changed.map((c) => (
+                  <ReimportRow
+                    key={c.name}
+                    kind="change"
+                    name={c.name}
+                    request={`${c.method} ${c.path}`}
+                    note={
+                      c.new_required.length > 0
+                        ? t("customTools.reimport.newRequired", {
+                            count: c.new_required.length,
+                            names: c.new_required.join(", "),
+                          })
+                        : t("customTools.reimport.requestChanged")
+                    }
+                  />
+                ))}
+                {p.removed.map((name) => {
+                  const tool = tools.get(name);
+                  return (
+                    <ReimportRow
+                      key={name}
+                      kind="remove"
+                      name={name}
+                      request={tool ? `${tool.method} ${tool.path}` : ""}
+                      note={t("customTools.reimport.gone")}
                     />
-                    <span className="text-success">+</span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{op.key}</span>
-                    {(op.tool.method ?? "GET") !== "GET" ? (
-                      <Badge variant="secondary">{t("customTools.tools.changesData")}</Badge>
-                    ) : null}
-                  </label>
-                </li>
-              ))}
-              {p.removed.map((name) => (
-                <li key={name} className="flex min-h-row items-center gap-3 px-3 py-1.5">
-                  <span className="w-[15px]" />
-                  <span className="text-danger">−</span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                    {t("customTools.reimport.removeTool", { name })}
-                  </span>
-                </li>
-              ))}
-            </ul>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-xs text-text-muted">
-              {t("customTools.reimport.kept", { count: p.kept.length })}
+              {t("customTools.reimport.kept", { count: unchanged })}
             </p>
           </div>
         ) : null}
@@ -142,11 +164,16 @@ export function ReimportDialog({ group, open, onOpenChange }: Props) {
           </div>
         ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={!p || apply.isPending} onClick={onConfirm}>
-            {t("customTools.reimport.confirm")}
+          <Button
+            disabled={!p || count === 0 || apply.isPending}
+            onClick={() =>
+              apply.mutate({ add: reads, document }, { onSuccess: () => onOpenChange(false) })
+            }
+          >
+            {t("customTools.reimport.apply", { count })}
           </Button>
         </DialogFooter>
       </DialogContent>

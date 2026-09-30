@@ -265,7 +265,7 @@ class SecretModel(Base):
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
-    #: When a consumer last had the value decrypted on this machine (0134).
+    #: When a consumer last had the value decrypted on this machine (0135).
     last_used_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
@@ -372,4 +372,8 @@ class InternalEngineConfigModel(Base):
 # this one within the file-size budget; importing it here registers them on
 # ``Base.metadata`` wherever the core models are loaded (``create_all``,
 # Alembic's env.py).
+# The ignored attention items (migration 0134), registered the same way.
+from coffer.infrastructure.persistence import (  # noqa: E402, F401
+    attention_ignore_repo as _attention_ignore_repo,
+)
 from coffer.infrastructure.persistence import usage_models as _usage_models  # noqa: E402, F401

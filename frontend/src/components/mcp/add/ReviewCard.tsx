@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/add/ReviewCard.tsx — one server in the review
-// step (board Mcp-Import-Review): include tick, the name it will keep (editable
-// until added, flagged over 24 characters), where it came from, how it runs,
-// and a Secret toggle per environment / header key.
+// step (board Mcp-Import-Review), as one row: include tick, the name it will
+// keep (editable until added, flagged over 24 characters), how it runs, and
+// what it carries — a Secret toggle per environment / header key.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -53,7 +53,7 @@ export function ReviewCard({
   return (
     <div
       className={cn(
-        "flex gap-3 rounded-xl border border-border p-3",
+        "grid grid-cols-[auto_13rem_8rem_minmax(0,1fr)] items-start gap-x-3 border-t border-border-subtle py-3",
         !include && "opacity-disabled",
       )}
     >
@@ -64,9 +64,9 @@ export function ReviewCard({
         aria-label={t("mcp.add.include", { name: server.name })}
         onChange={(e) => onInclude(e.target.checked)}
       />
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="min-w-0">
         {added ? (
-          <p className="font-mono text-sm font-label">
+          <p className="pt-1.5 font-mono text-sm font-label">
             {server.name}{" "}
             <span className="font-sans text-xs text-success">{t("mcp.add.added")}</span>
           </p>
@@ -76,24 +76,27 @@ export function ReviewCard({
             compact
             value={server.name}
             taken={taken}
-            help={t("mcp.add.nameFixedShort")}
             onChange={(name) => onChange({ ...server, name })}
           />
         )}
+      </div>
+      <p className="pt-1.5 text-xs text-text-muted">{summary(t, server)}</p>
+      <div className="min-w-0 space-y-1.5 pt-1.5 text-xs text-text-muted">
         {server.originalName && server.originalName !== server.name ? (
-          <p className="text-xs text-text-muted">
-            {t("mcp.add.renamedFrom", { name: server.originalName })}
-          </p>
+          <p>{t("mcp.add.renamedFrom", { name: server.originalName })}</p>
         ) : null}
-        <p className="text-xs text-text-muted">
-          <span className="font-mono">{summary(t, server)}</span>
-          {server.env.length === 0 ? ` · ${t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}` : null}
-        </p>
+        {server.env.length === 0 ? <p>{t(http ? "mcp.add.noHeaders" : "mcp.add.noEnv")}</p> : null}
         {server.env.map((e, i) => (
           <div key={e.key} className="space-y-1">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="min-w-0 flex-1 truncate font-mono text-text">{e.key}</span>
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-text-muted">
+            <div className="flex items-start gap-2">
+              <span className="min-w-0 flex-1">
+                {e.isSecret ? (
+                  t("mcp.add.secretLine", { key: e.key })
+                ) : (
+                  <span className="font-mono text-text">{e.key}</span>
+                )}
+              </span>
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
                 <Switch
                   checked={e.isSecret}
                   disabled={added}
@@ -111,13 +114,10 @@ export function ReviewCard({
                 onChange={(ev) => setEnv(i, { value: ev.target.value })}
               />
             ) : null}
-            {e.isSecret ? (
-              <p className="text-xs text-text-muted">{t("mcp.add.secretLine", { key: e.key })}</p>
-            ) : null}
           </div>
         ))}
         {error ? (
-          <p className="text-xs text-danger" role="alert">
+          <p className="text-danger" role="alert">
             {error}
           </p>
         ) : null}

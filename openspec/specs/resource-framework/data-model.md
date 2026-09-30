@@ -53,7 +53,7 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `enabled`     | `bool`           | user-controlled enable/disable flag                                        |
 | `created_at`  | `datetime`       | UTC, set on insert, never updated                                          |
 | `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
-| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server` and `skill` (migration 0109 cleared them); travels in the synced resource document, as a `title` key present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
+| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server`, `skill` (migration 0109 cleared them) and `knowledge` (migration 0133 cleared them; a collection is named by its folder); travels in the synced resource document, as a `title` key present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
 | `rev`         | `int`            | monotonic revision: 1 at creation, grown by one on every write to the row (config, enabled, scope, name, title); every write emits an in-process `Changed(kind, uid, rev)` hint that brings the next reconcile pass forward (spec resource-framework "Carry a monotonic revision on every resource"). Not serialised to the synced document or the API |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
 
@@ -75,7 +75,7 @@ any framework-level adapter.
 | `name_fixed`                | `bool`                                                                     | whether a registered row's name is fixed because it is quoted outside Coffer; `rename` refuses a changed name with `NAME_IMMUTABLE` (409) before any hook or write, and nothing is audited. True for `mcp_server` (its name prefixes every tool name an agent sees), `skill` (its name is the folder an agent loads it from) and `agent` (its name is its type's) |
 | `name_fixed_resets`         | `str`                                                                      | for a `name_fixed` kind, what deleting and registering again resets, quoted in the refusal message      |
 | `name_from_config`          | `Callable[[dict], str] \| None`                                            | the one name a row may carry, derived from its config; `register` refuses any other (422). `agent` derives it from its type (`claude_code` → `claude-code`) |
-| `titled`                    | `bool`                                                                     | whether rows carry the optional `title`; False for `agent`, `mcp_server` and `skill`, where a non-empty title is refused (422) on register and on `set_title` |
+| `titled`                    | `bool`                                                                     | whether rows carry the optional `title`; False for `agent`, `mcp_server`, `skill` and `knowledge`, where a non-empty title is refused (422) on register and on `set_title` |
 | `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
@@ -138,6 +138,8 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | `"resource_renamed"`       | After a rename — identity changed, config did not          |
 | `"resource_scope_updated"` | After `update_scope` persisted a new per-agent scope       |
 | `"retention_updated"`      | When a retention policy is changed                         |
+| `"attention_ignored"`      | When the user ignores an informational attention item on this machine |
+| `"attention_unignored"`    | When the user stops ignoring one                           |
 
 The enum is **shared**, which is the point of one audit log: spec mcp-gateway
 contributes `capability_enabled` / `capability_disabled`, spec secret

@@ -57,6 +57,7 @@ async def update(
     secret_value: str | None = None,
     models: _CuratedModels | None = None,
     description: str | None = None,
+    fallback: bool | None = None,
     actor: str = "api",
 ) -> Resource:
     """Apply a partial update; see the module docstring for what may move."""
@@ -80,6 +81,8 @@ async def update(
         config["base_url"] = base_url
     if models is not None:
         config["models"] = [m.model_dump(mode="json") for m in models]
+    if fallback is not None:
+        config["fallback"] = fallback
     # Re-validate so a bad edit is rejected before the rotation / DB write.
     validated = ProviderConfig.model_validate(config).model_dump(mode="json")
     if secret_value is not None:

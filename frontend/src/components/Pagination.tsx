@@ -42,12 +42,14 @@ export function Pagination({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+    // Meta type (12, text-muted, tabular) and toolbar-sized (26px) controls,
+    // so the pager reads as quieter than the table it pages.
+    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-muted">
       <span>{t("pagination.summary", { page, pageCount, total })}</span>
       <div className="flex items-center gap-2">
         <span>{t("pagination.perPage")}</span>
         <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-          <SelectTrigger aria-label={t("pagination.perPage")} className="h-8 w-[4.5rem]">
+          <SelectTrigger aria-label={t("pagination.perPage")} className="h-control-sm w-[4.5rem] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,23 +62,21 @@ export function Pagination({
         </Select>
         <Button
           variant="outline"
-          size="icon"
-          className="size-8"
+          size="icon-sm"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
           aria-label={t("pagination.prev")}
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft aria-hidden />
         </Button>
         <Button
           variant="outline"
-          size="icon"
-          className="size-8"
+          size="icon-sm"
           disabled={page >= pageCount}
           onClick={() => onPageChange(page + 1)}
           aria-label={t("pagination.next")}
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight aria-hidden />
         </Button>
       </div>
     </div>

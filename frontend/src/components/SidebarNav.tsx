@@ -7,7 +7,7 @@ import { Link, matchPath } from "react-router-dom";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AttentionDot } from "@/components/shell/AttentionDot";
-import { useAttentionSignals } from "@/lib/hooks/useAttentionSignals";
+import { useAttentionSignals, type AttentionSignal } from "@/lib/hooks/useAttentionSignals";
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -16,10 +16,11 @@ interface RowProps {
   entry: NavEntry;
   collapsed: boolean;
   active: boolean;
-  dot: boolean;
+  /** Set while the entry's kind has something that needs the user. */
+  signal: AttentionSignal | undefined;
 }
 
-function NavRow({ entry, collapsed, active, dot }: RowProps) {
+function NavRow({ entry, collapsed, active, signal }: RowProps) {
   const { t } = useTranslation();
   const label = t(entry.labelKey);
   // An experimental feature's entry says so, so nobody takes it for a
@@ -34,7 +35,7 @@ function NavRow({ entry, collapsed, active, dot }: RowProps) {
       aria-label={collapsed ? label : undefined}
       className={cn(
         "relative flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
-        collapsed ? "justify-center px-2" : "gap-[9px] px-2.5",
+        collapsed ? "mx-auto h-[34px] w-9 justify-center" : "gap-[9px] px-2.5",
         active
           ? "bg-surface-selected font-label text-text"
           : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
@@ -54,16 +55,27 @@ function NavRow({ entry, collapsed, active, dot }: RowProps) {
           {t("nav.experimental")}
         </span>
       ) : null}
-      {dot ? <AttentionDot entry={entry.to} collapsed={collapsed} /> : null}
+      {signal ? (
+        <AttentionDot
+          entry={entry.to}
+          collapsed={collapsed}
+          count={signal.count}
+          tone={signal.tone}
+        />
+      ) : null}
     </Link>
   );
   if (!collapsed) return link;
+  // The rail has no room for the count, so the tooltip carries it
+  // ("MCP servers · 1 failing", board 1.2.02).
+  const name = experimental ? t("nav.experimentalLabel", { label }) : label;
+  const tip = signal
+    ? `${name} · ${t(`nav.attentionCount.${signal.tone}`, { count: signal.count })}`
+    : name;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">
-        {experimental ? t("nav.experimentalLabel", { label }) : label}
-      </TooltipContent>
+      <TooltipContent side="right">{tip}</TooltipContent>
     </Tooltip>
   );
 }
@@ -115,7 +127,7 @@ export function SidebarNav({ collapsed, pathname }: Props) {
               entry={entry}
               collapsed={collapsed}
               active={isActive(entry)}
-              dot={signals[entry.to] === true}
+              signal={signals[entry.to]}
             />
           ))}
         </div>

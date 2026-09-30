@@ -87,7 +87,9 @@ export function ProviderChoices({
       <div className="flex min-h-[26px] items-center gap-2">
         <h3 className="text-sm font-semibold text-text">{t("agents.modelTab.provider.title")}</h3>
         <HelpTip label={t("agents.modelTab.provider.helpLabel")}>
-          <p className="text-xs">{t("agents.modelTab.provider.help", { agent })}</p>
+          <p className="text-xs">
+            {t(`agents.modelTab.provider.helpByType.${agentType}`, { agent })}
+          </p>
         </HelpTip>
       </div>
       <div

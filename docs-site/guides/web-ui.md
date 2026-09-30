@@ -69,39 +69,48 @@ In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统,
 
 An entry that belongs to an [experimental feature](/guides/experimental-features) carries an **Experimental** label while the feature is on. While it is switched off the entry is left out of the sidebar, a group whose entries are all switched off loses its heading too, and following a link to its page shows a notice saying the feature is off. No feature is experimental right now, so no entry carries the label.
 
-**Attention dots.** A small dot beside an entry means something there **Needs your attention** — today, a sync round that is held or failed and waiting for you. It is a dot, not a count, and it clears once you visit the page. The dot stays visible on the collapsed rail.
+**Attention badges.** A number beside an entry counts the things there that **Need your attention**: MCP servers, agents, skills and channels that are failing or have drifted from what Coffer wrote (the same items as Overview's **Needs you**), a sync round that is held or failed (cleared once you visit Sync), and required CLIs that are missing, too old or not logged in. The badge is red while any of them is a failure. Informational counts never become badges — documents waiting in a knowledge collection's inbox show only as the **Inbox** count in its tree. On the collapsed rail a badge shrinks to a dot of the same colour, and the icon's tooltip carries the count (**MCP servers · 1 failing**).
 
-**Collapsing and resizing.** Collapse the sidebar to a narrow icon rail with **Collapse sidebar**; the choice is remembered. While expanded, drag the thin line on its right edge to make it wider or narrower (see [Resizing split views](#resizing-split-views)).
+**Collapsing and resizing.** Collapse the sidebar to a 56-pixel icon rail with **Collapse sidebar** beside the Coffer mark; the rail's **Expand sidebar** button sits in its footer, between the gear and the daemon's dot, and the choice is remembered. While expanded, drag the thin line on its right edge to make it wider or narrower (see [Resizing split views](#resizing-split-views)).
 
 
 ## Overview
 
 **Overview** is the page the app opens on. It answers "is everything OK, and what needs me?" in three parts:
 
-- **Needs you** — one row per problem across every area, most severe first and then oldest: the thing it is about (a server, an agent, a channel, the vault's sync), the reason in a sentence, since when, and one button that opens the page where you deal with it. The list is the daemon's attention list (`GET /api/v1/attention`, or `coffer attention` in a terminal). Rows clear themselves: the page follows the daemon's event stream, so a row disappears as soon as its problem is resolved. If one area could not be checked, the page says so above the rows, because anything that area would report is missing. When nothing needs you, a calm card says so.
-- **Health** — a tile per area: Agents, Model providers, MCP servers, Skills, Channels, Knowledge, Memory and Sync. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours) and opens the area's page. A tile that fails to load says so with **Retry**, and the rest of the page keeps working. Areas that have no backend yet, such as Custom tools and CLIs, have no tile.
-- **Recent activity** — the last few changes, with a link to [Activity](/guides/activity).
+- **Needs you**: one row per problem across every area, most severe first and then oldest. Each row names the thing it is about (a server, an agent, a channel, the vault's sync), gives the reason in a sentence and since when, and has one button that opens the page, or the tab, where you deal with it. A memory hook that was changed by hand in an agent's settings and that Coffer could not rewrite opens that agent's **Hooks** tab with **Repair hook**. The list is the daemon's attention list (`GET /api/v1/attention`, or `coffer attention` in a terminal). Rows clear themselves: the page follows the daemon's event stream, so a row disappears as soon as its problem is resolved. If one area could not be checked, the page says so above the rows, because anything that area would report is missing. An agent that is simply not connected also has a **⋯** menu with **Ignore**. Ignored items leave the list and are counted under it (**1 ignored · Show**), and **Show** lists them again with **Stop ignoring**. Ignoring is remembered by Coffer on this Mac (not synced to your other machines) and changes nothing about the agent. An ignored item also leaves the sidebar's badges and the menu bar's count. Only something worth knowing but not broken can be ignored. When nothing needs you, a calm card says so, with when it last checked.
+- **Health**: a tile per area: Agents, MCP servers, Skills, Knowledge, Memory, Model providers, Channels, Sync, Custom tools, CLIs, Secrets and Usage. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours; for Usage, today's tokens, cost and each provider's share) and opens the area's page. A tile that fails to load says so with **Retry** and a link to its page, and the rest of the page keeps working.
+- **Recent activity**: the last few changes, with a link to [Activity](/guides/activity).
 
-Before any agent is registered, Overview opens on connecting one instead: it lists the agents Coffer supports and which it found on this machine, then the first step for each thing they share.
+Before any agent is registered, Overview opens on connecting one instead. It lists the agents Coffer supports, each with its config folder and whether it was found on this machine. The found ones are ticked, and **Review and connect** shows every file change before Coffer writes anything. If none was found, it says so and offers **Scan again**, and **Copy prompt** copies a prompt Coffer writes for your assistant to install one of them on this Mac; Coffer names no installer itself. **Add an agent by hand** opens the Agents page, and below comes the first step for each thing agents share.
 
 ## Search or jump to
 
 The **Search or jump to…** control at the top of the sidebar opens the command palette; so does **⌘K** (**Ctrl+K**) from anywhere. Type a few letters, move with the arrow keys, press **Enter** to go there, **Escape** to close and return to where you were.
 
-The palette is for navigation only — it takes you somewhere and never runs an action. It lists two groups:
+The palette is for navigation only — it takes you to pages and objects and never runs an action; actions stay on their page. It finds:
 
 - **Pages** — every sidebar entry and every Settings tab. Pages are always available, even while the daemon is offline.
-- **Objects** — your agents, MCP servers, skills, model providers, channels, knowledge collections and memory partitions, matched by name (and by title on the kinds that carry one). Each kind loads on its own: while one loads its group says so, and if one fails only that group shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
+- **Objects** — your agents, model providers, conversations, channels, MCP servers, custom tools, skills, CLIs, knowledge collections, memory partitions and secrets, matched by name (and by title on the kinds that carry one), each with a status word where its list has one (**Failing**, **Off**, **Missing**). Each kind loads on its own: while they load the palette says so, and if one fails only that kind shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
+
+With nothing typed it shows **Recent** — the last few things you opened from it, remembered in this browser — above every page. Once you type, the single best hit leads as **Best match** (an exact name first), then the other matching pages, then the matching objects grouped by kind in sidebar order. A query that matches nothing says so.
 
 Pages and objects of a switched-off [experimental feature](/guides/experimental-features) are left out.
 
 ## The sidebar footer
 
-The bottom of the sidebar holds three things, top to bottom.
+The bottom of the sidebar holds, top to bottom:
 
-- **Settings** — a labelled row with a gear. It opens the Settings window (below) and is highlighted while that window is open. On the collapsed rail it is the gear alone, with a tooltip.
-- **The daemon's state, in plain words** — **Connecting to the daemon…**, **Daemon running on port 8000**, **Daemon stopping** or **Daemon offline**, with the running version (for example `v1.0.0`) beside it. It always agrees with the offline banner: while the banner is up, the footer never reads as running. Click it to open **Settings → Daemon**.
-- **The language switcher.**
+- **Update ready** — in the desktop app, when a newer version has been found: a card naming it with **Restart** (downloads it, checks its signature, installs it and reopens Coffer) and **What's new** (Settings › About). Dismiss it and it comes back at the next launch; it is never a popup.
+- **Settings** — a labelled row with a gear. It opens the Settings window (below) and is highlighted while that window is open. On the collapsed rail it is the gear alone, with the tooltip **Settings ⌘,**.
+- **The daemon's state and the app's version** — **Connecting to the daemon…**, **Daemon running**, **Daemon stopping**, **Reconnecting…** or **Daemon offline**, with the version on the right. It always agrees with the connection states below: it never reads as running while the daemon is away. On the collapsed rail it is a coloured dot whose tooltip says the same.
+
+Click the daemon's state to open the **version menu**. Its first line names the version and the address the daemon answers on (`127.0.0.1:8000`) and opens **Settings → Daemon**. Below it:
+
+- **Theme** — **Light**, **Dark** or **System**, applied at once.
+- **Language** — **English** or **简体中文**, each named in its own language, applied at once.
+- **Documentation** — this site.
+- **Check for updates** — opens **Settings › About**; in the desktop app it checks right away.
 
 ## Settings
 
@@ -111,7 +120,7 @@ It has five tabs, in this order:
 
 | Tab | Address | What it holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | **Appearance** — **Language** and **Theme** (Light, Dark or System) — **Tables and files** — **Rows per page** and **Open files with** (the app Coffer opens managed files with) — and **Coffer's model**: a provider and model for **Coffer's engine** and for **Speech to text**, each with **Test** and an inline not set / answering / failing state, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
+| **General** | `/settings/general` | **Appearance** — **Language** and **Theme** (Light, Dark or System) — **Tables and files** — **Rows per page** (how many rows a list shows before **Load N more**) and **Open files with** (the app Coffer opens managed files with) — and **Coffer's model**: a provider and model for **Coffer's engine** and for **Speech to text**, each with **Test** and an inline not set / answering / failing state. The passes Coffer runs by itself are switched from the **Automatic** control on the Knowledge and Memory pages. |
 | **Security** | `/settings/security` | Only what belongs to this Mac. **Encryption**: where the master key lives (a signed release keeps it in its Keychain, with nothing to move) and **Back up the master key** (desktop app only). **Access**: the daemon's access token, hidden until **Show**, with **Copy** and **Rotate…**. **Approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. Stored secrets are on the [Secrets](/guides/secrets) page, not here. |
 | **Data** | `/settings/data` | What Coffer keeps, by kind. **Vault** — the synced git repository of your configuration, skills and knowledge: its size, how many versions it holds, **Open folder** (before Sync is set up, the trees it would carry). **Local content** — chat and channel attachments, which are not synced: back that folder up yourself. **History** — how long **Changes**, **MCP calls** and **Conversations** are kept (**Keep forever** or a number of days; shortening asks first and says how many records the next cleanup deletes), cleaned up every six hours, with **Clear expired data now**. **Rebuildable cache** — the memory tree and the transcript summary cache: **Clear** asks first, and memory is rebuilt from the agents' own memory on the next update. |
 | **Daemon** | `/settings/daemon` | The daemon's status — its state and address, how long it has been up, its pid and how many agents are connected to Coffer — with **Restart** in the desktop app, or the `coffer daemon restart` command to copy in a browser. **Startup**: **Start at login** (macOS) and **Port** (1024–65535, default 8000; a port another program holds, or one outside the range, is refused in place and Save stays off until you change it). A saved port reads **takes effect after Coffer restarts**, with **Restart now** in the app; agents reconnect to it on their own. While the daemon is offline the tab names how to bring it back and the controls are disabled. There is no token here (it is on Security) and no stop control. |
@@ -134,11 +143,11 @@ Wherever the window is split side by side — the sidebar against the page, and 
 
 ## Light and dark
 
-The UI follows your system's light or dark appearance, and switches with it as it changes. To pick one yourself, set **Settings → General → Theme** to **Light** or **Dark**; **System** goes back to following the system. The choice applies at once and is kept in `localStorage` under `coffer.theme`, so each browser and the desktop app keep their own. See [Design system](/architecture/design-system) for how the two themes are built.
+The UI follows your system's light or dark appearance, and switches with it as it changes. To pick one yourself, choose **Light** or **Dark** in the version menu (click the daemon's state at the foot of the sidebar) or in **Settings → General → Theme**; **System** goes back to following the system. The choice applies at once and is kept in `localStorage` under `coffer.theme`, so each browser and the desktop app keep their own. See [Design system](/architecture/design-system) for how the two themes are built.
 
 ## Language
 
-Switch between **English** and **中文** with the language switcher at the bottom of the sidebar. Every label changes immediately, with no reload, and the choice is kept in `localStorage` under `coffer.language`. The switcher is the only language control; the About tab has none.
+Switch between **English** and **简体中文** in the version menu at the foot of the sidebar, or in **Settings → General → Language**. Every label changes immediately, with no reload, and the choice is kept in `localStorage` under `coffer.language`. The About tab has no language control.
 
 ## Conventions every page shares
 
@@ -150,21 +159,21 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 **Empty, loading and error states are explicit.** An empty list shows a welcome card with one next step, such as **Add server**. A loading list keeps its header over skeleton rows. A failed request shows a readable message, never a generic error code.
 
-**Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a page-not-found view with the sidebar intact.
+**Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a not-found page with the sidebar intact: it names the address, suggests the closest page when one is close (**Did you mean /mcp-servers**), and offers **Back to Overview** and **Search Coffer** (the palette).
 
 File trees and previews — on the skill, knowledge and agent pages, and a memory partition's list — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
 ## When the daemon is not reachable
 
-If a request cannot reach the daemon while the UI is open, a banner floats at the top of the window, the sidebar footer reads **Daemon offline**, and the sidebar stays usable:
+The UI checks the daemon every 30 seconds. When it stops answering, the UI retries after 1, 2, 4 and 8 seconds and shows what is happening at the top of the workspace, while the sidebar stays usable:
 
-| Banner | When |
-| --- | --- |
-| **Daemon not running** | The UI has no working connection to a daemon yet — for example the desktop app is still starting one. It usually clears on its own. |
-| **Daemon offline** | A daemon that was answering stopped responding. |
-| **Daemon out of date** | The desktop app attached to a daemon left running by an earlier version. Desktop app only. |
+| State | When | What you see |
+| --- | --- | --- |
+| **Reconnecting to the daemon…** | The first 10 seconds after it stopped answering (**Connecting to the daemon…** if it never answered). | The page stays where it was, dimmed and paused, under a bar that counts the attempts and says nothing is lost, with **Retry now**. The footer reads **Reconnecting…**. |
+| **Coffer's daemon isn't running** | After that. | The page makes way for a screen naming the address the UI talks to, when it checks next and when the daemon last answered, with **Retry**. The footer reads **Daemon offline**. |
+| **Daemon out of date** | The desktop app attached to a daemon left running by an earlier version. Desktop app only. | A bar over the page with **Restart daemon**. |
 
-The recovery the banner offers depends on the host. In a browser it shows the command to run, `coffer daemon start`, because a page cannot start a daemon. In the desktop app it shows **Restart daemon**. Either way the banner clears itself when the daemon answers again, with no reload.
+The recovery the offline screen offers depends on the host. In a browser it shows the command to run, `coffer daemon start`, because a page cannot start a daemon. In the desktop app it shows **Start daemon**. Either way the screen clears itself when the daemon answers again, with no reload: every list is read again and a **Reconnected** notice appears.
 
 ## Related
 

@@ -1,6 +1,7 @@
 // src/components/agents/model/AgentModelTab.tsx — the agent's Model tab, the only place its provider is switched: Provider, Model, Effort, Model per tier, Test connection, and the Review pane.
 //
-// Everything on the left is a draft (useAgentConnectionDraft); the right pane
+// Under the provider, Fallback and Proxy token say how the applied provider is
+// reached (ProxyRows). Everything on the left is a draft (useAgentConnectionDraft); the right pane
 // says what confirming would write and holds Confirm switch (spec
 // provider-switching "Offer every connection operation on REST, CLI and web").
 import { useTranslation } from "react-i18next";
@@ -9,9 +10,10 @@ import { Loader2, PlugZap } from "lucide-react";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { BUILTIN, useAgentConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 import { ModelFields } from "./ModelFields";
 import { ProviderChoices } from "./ProviderChoices";
+import { ProxyRows } from "./ProxyRows";
 import { SwitchReview } from "./SwitchReview";
 import { TierSection } from "./TierSection";
 
@@ -33,6 +35,11 @@ export function AgentModelTab({ agent }: Props) {
           applied={c.appliedConn}
           disabled={c.busy || c.loading}
           onChange={c.pickConnection}
+        />
+        <ProxyRows
+          agent={agent}
+          model={agent.model ?? null}
+          onProvider={c.appliedConn !== BUILTIN}
         />
         <ModelFields agentType={agent.type} draft={c} />
         {c.showTiers ? <TierSection draft={c} /> : null}

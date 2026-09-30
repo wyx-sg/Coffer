@@ -49,7 +49,7 @@ async def wired(sm, tmp_path: Path) -> AsyncIterator[tuple[AsyncClient, UsageWir
     wiring.query._clock = clock
     wiring.quota._clock = clock
     wiring.ingest._tz = wiring.query._tz
-    write_spool(tmp_path / "spool", "a.jsonl", [record(1), record(2, model="gpt-5.5-codex")])
+    write_spool(tmp_path / "spool", "a.jsonl", [record(1), record(2, model="acme-coder-1")])
     await wiring.ingest.ingest_once()
 
     app = FastAPI()

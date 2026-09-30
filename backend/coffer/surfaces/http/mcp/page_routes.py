@@ -28,12 +28,11 @@ from coffer.surfaces.http.mcp.dependencies import (
     require_mcp_server,
 )
 from coffer.surfaces.http.mcp.page_schemas import (
-    AgentCallCountOut,
     InvocationSummaryOut,
     McpServerLogLineOut,
     McpServerLogOut,
-    ToolCallCountOut,
     ToolTieringOut,
+    invocation_summary_out,
 )
 
 router = APIRouter(
@@ -56,24 +55,7 @@ async def invocation_summary(
     resource = await require_mcp_server(uid, resource_service)
     start = since or datetime.now(tz=UTC) - timedelta(hours=24)
     summary = await invocations.summary(resource_uid=resource.uid, since=start)
-    return InvocationSummaryOut(
-        since=summary.since,
-        calls=summary.calls,
-        errors=summary.errors,
-        last_call_at=summary.last_call_at,
-        by_agent=[
-            AgentCallCountOut(
-                agent_uid=c.key, calls=c.calls, errors=c.errors, last_call_at=c.last_call_at
-            )
-            for c in summary.by_agent
-        ],
-        by_tool=[
-            ToolCallCountOut(
-                tool=c.key or "", calls=c.calls, errors=c.errors, last_call_at=c.last_call_at
-            )
-            for c in summary.by_tool
-        ],
-    )
+    return invocation_summary_out(summary)
 
 
 @router.get("/{uid}/log", response_model=McpServerLogOut)

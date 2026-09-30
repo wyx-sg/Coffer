@@ -46,7 +46,7 @@ CLI whose other groups are singular (`coffer mcp`, `coffer skill`, `coffer provi
   - Error codes `CREDENTIAL_MISSING|LOCKED|UNREADABLE|IN_USE` → `SECRET_*`, `PROVIDER_CREDENTIAL_SOURCE_INVALID` →
     `PROVIDER_SECRET_SOURCE_INVALID`, and the CLI exit code `CREDENTIAL_ISSUE` → `SECRET_ISSUE` (still 8).
   - Audit event types `credential_set|read|deleted|migrated|revealed` → `secret_*`.
-  - Stored data, by migration 0134 (which also adds `last_used_at`): the table `credentials` → `secrets`,
+  - Stored data, by migration 0135 (which also adds `last_used_at`): the table `credentials` → `secrets`,
     `sync_remotes.credential_ref|include_credentials` → `secret_ref|include_secrets`, every `audit_log.event_type`
     above, an `mcp_server` config's `transport.credential_refs` → `transport.secret_refs` and a `provider` config's
     `credential_ref` → `secret_ref`. The downgrade reverses each.
@@ -69,7 +69,7 @@ stored name or the word itself.
 ## Impact
 
 - `openspec/specs/secret/` and every spec that cites it, `scripts/gen_contracts.py`, `scripts/check_removed_commands.py`.
-- `backend/coffer/` (packages, routes, errors, audit types, migration 0134), `backend/pyproject.toml`, the PyInstaller
+- `backend/coffer/` (packages, routes, errors, audit types, migration 0135), `backend/pyproject.toml`, the PyInstaller
   specs' inputs, `scripts/stamp_build_identity.py`, tests.
 - `frontend/src/` (components, API layer, hooks, i18n), `desktop/src/`, `e2e/`.
 - `docs-site/`, `README.md`, `.agents/`, the coffer-guide skill; the CLI and REST references are regenerated.

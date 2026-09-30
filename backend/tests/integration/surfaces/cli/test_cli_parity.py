@@ -166,7 +166,16 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.
-    "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "detect-local"},
+    "provider": {
+        *_LIFECYCLE,
+        "add",
+        "scope",
+        "switch",
+        "builtin",
+        "detect-local",
+        "order",
+        "price",
+    },
     # `restore` with no `--at` undoes the last applied round; `status`
     # includes the remote (spec vault-sync).
     "sync": {
@@ -222,7 +231,8 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # The usage summary's range, grouping, filters and output form.
     "usage": {"--range", "--from", "--to", "--by", "--agent", "--provider", "--json", "--csv"},
     # A name and a title are edited on the kinds that carry them (design D1).
-    "knowledge edit": {"--name", "--title"},
+    # A collection is named by its folder: a name and a description, no title.
+    "knowledge edit": {"--name", "--description"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
     # `model` / `effort` / `tier_models` / `wire_api` the projector reads. Its
@@ -278,6 +288,7 @@ _CONFIG_KEYS: dict[str, str] = {
     # Turning it off waits for the Coffer app (spec secret "Turn the
     # protection off only through the desktop app").
     "secrets.require_approval": "PUT /settings/secret-boundary",
+    "prices.refresh": "PUT /providers/price-list",
     "feature.<key>": "PUT /daemon/features/{key}",
     "retention.<table>": "PATCH /retention/policies/{table_name}",
 }

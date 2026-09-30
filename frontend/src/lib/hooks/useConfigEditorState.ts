@@ -40,7 +40,11 @@ export function useConfigEditorState(agentUid: string) {
   // Directories start open (the tree shows their files); a click folds one.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // A selection change held back because the draft is dirty; `null` = none.
-  const [pendingSelection, setPendingSelection] = useState<(() => void) | null>(null);
+  // `target` names what it would open, for the confirmation's sentence.
+  const [pendingSelection, setPendingSelection] = useState<{
+    apply: () => void;
+    target: string;
+  } | null>(null);
 
   const allFiles = files.data ?? [];
   const selectedInfo = allFiles.find((f) => f.key === selectedKey);
@@ -87,17 +91,24 @@ export function useConfigEditorState(agentUid: string) {
   }
 
   // Apply a selection now, or park it while unsaved edits are on screen.
-  function guarded(apply: () => void) {
-    if (draft.dirty) setPendingSelection(() => apply);
+  function guarded(target: string, apply: () => void) {
+    if (draft.dirty) setPendingSelection({ apply, target });
     else apply();
   }
 
+  const nameOf = (key: string) => {
+    const info = allFiles.find((f) => f.key === key);
+    if (!info) return key;
+    const base = info.path.split(/[\\/]/).filter(Boolean).pop() ?? key;
+    return info.kind === "directory" ? `${base}/` : base;
+  };
+
   function selectFile(key: string) {
-    guarded(() => setFileParam(key));
+    guarded(nameOf(key), () => setFileParam(key));
   }
 
   function selectDirectory(key: string) {
-    guarded(() => {
+    guarded(nameOf(key), () => {
       setFileParam(key);
       // Re-clicking the open directory folds it; picking another one opens it.
       setCollapsed((prev) => ({
@@ -108,16 +119,16 @@ export function useConfigEditorState(agentUid: string) {
   }
 
   function selectChild(key: string, relpath: string) {
-    guarded(() => setFileParam(`${key}/${relpath}`));
+    guarded(relpath, () => setFileParam(`${key}/${relpath}`));
   }
 
   /** The user chose to drop the draft: apply the parked selection. */
   function confirmPendingSelection() {
-    const apply = pendingSelection;
+    const pending = pendingSelection;
     setPendingSelection(null);
-    if (!apply) return;
+    if (!pending) return;
     draft.cancel();
-    apply();
+    pending.apply();
   }
 
   return {
@@ -137,6 +148,8 @@ export function useConfigEditorState(agentUid: string) {
     draft,
     /** True while a selection waits on the discard-changes confirmation. */
     hasPendingSelection: pendingSelection !== null,
+    /** What the parked selection would open ("CLAUDE.md", "agents/"), or null. */
+    pendingTarget: pendingSelection?.target ?? null,
     confirmPendingSelection,
     cancelPendingSelection: () => setPendingSelection(null),
   };

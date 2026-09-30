@@ -20,6 +20,7 @@ import type {
   NoteListOut,
   NoteOut,
   PartitionListOut,
+  ReadingOut,
   RetiredListOut,
 } from "./memoryTypes";
 
@@ -75,6 +76,11 @@ export function getDelivered(uid: string): Promise<DeliveredOut> {
 
 /** Per agent, deliveries, memories read and the last delivery over the last
  *  seven days. */
+/** When the agents' memory was last read, and which agents failed. */
+export function getReading(): Promise<ReadingOut> {
+  return call<ReadingOut>("/memory/reading");
+}
+
 export function getDeliveries(): Promise<DeliveryOverviewOut> {
   return call<DeliveryOverviewOut>(`${ROOT}/deliveries`);
 }

@@ -170,12 +170,9 @@ acceptance(
       await expect(toggle).toHaveAttribute("aria-checked", "true");
       await toggle.click();
 
-      // Explicitly select the "all" filter option (don't rely on the
-      // default) so the disabled row is guaranteed to remain in the list,
-      // and assert positively on aria-checked="false" — a stronger signal
-      // than "the toggle disappeared".
-      await page.getByRole("combobox", { name: /status/i }).click();
-      await page.getByRole("option", { name: /^all$/i }).click();
+      // The tab has no status filter, so the disabled row stays listed;
+      // assert positively on aria-checked="false" — a stronger signal than
+      // "the toggle disappeared".
       await expect(
         page.getByRole("switch", { name: /toggle tool write_file/i }),
       ).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
@@ -218,10 +215,7 @@ acceptance(
       // Disable the resource
       await toggle.click();
 
-      // Switch the filter to "all" so the disabled row remains rendered,
-      // then assert aria-checked="false" on the same row (positive signal).
-      await page.getByRole("combobox", { name: /status/i }).click();
-      await page.getByRole("option", { name: /^all$/i }).click();
+      // The disabled row stays listed; assert aria-checked="false" on it.
       await expect(
         page.getByRole("switch", {
           name: /toggle resource urn:test-resource/i,
@@ -265,10 +259,7 @@ acceptance(
       // Disable the prompt
       await toggle.click();
 
-      // Switch the filter to "all" so the disabled row remains rendered,
-      // then assert aria-checked="false" on the same row (positive signal).
-      await page.getByRole("combobox", { name: /status/i }).click();
-      await page.getByRole("option", { name: /^all$/i }).click();
+      // The disabled row stays listed; assert aria-checked="false" on it.
       await expect(
         page.getByRole("switch", { name: /toggle prompt my_prompt/i }),
       ).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
@@ -393,7 +384,7 @@ acceptance(
       });
 
       // Type a prefix that matches only alpha_tool
-      const searchBox = page.getByPlaceholder("Search by name");
+      const searchBox = page.getByPlaceholder("Search tools");
       await searchBox.fill("alpha");
 
       // alpha_tool remains; beta_tool disappears
@@ -480,8 +471,10 @@ test("pasting a command line prefills a stdio server", async ({ page }) => {
     "-y @modelcontextprotocol/server-github",
   );
   await expect(
-    page.getByRole("switch", { name: "GITHUB_TOKEN is a secret" }),
-  ).toBeChecked();
+    page
+      .getByRole("group", { name: "How GITHUB_TOKEN is kept" })
+      .getByRole("button", { name: "Secret" }),
+  ).toHaveAttribute("aria-pressed", "true");
   // Nothing was added: close without saving.
   await page.keyboard.press("Escape");
 });

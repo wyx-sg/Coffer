@@ -47,11 +47,47 @@ export function repoLabel(url: string): string {
     .replace(/\/$/, "");
 }
 
+/** The host a repository URL names, for "Couldn't reach github.com". */
+export function gitHost(url: string): string {
+  const m = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?([^/:]+)/i.exec(url.trim());
+  return m?.[1] ?? url.trim();
+}
+
 export const CHANGE_OP: Record<SkillFileChange["status"], ChangeOp> = {
   added: "add",
   removed: "remove",
   modified: "modify",
 };
+
+const REVERSED_STATUS: Record<SkillFileChange["status"], SkillFileChange["status"]> = {
+  added: "removed",
+  removed: "added",
+  modified: "modified",
+};
+
+/** The same change read the other way round — what happens to the side a
+ *  dialog's other choice would keep: `+` and `-` lines swap, each hunk's two
+ *  ranges swap, an added file becomes a removed one. */
+export function reverseChange(change: SkillFileChange): SkillFileChange {
+  const diff = change.diff
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("+++ ") || line.startsWith("--- ")) return line;
+      const hunk = /^@@ -(\S+) \+(\S+) @@(.*)$/.exec(line);
+      if (hunk) return `@@ -${hunk[2]} +${hunk[1]} @@${hunk[3]}`;
+      if (line.startsWith("+")) return `-${line.slice(1)}`;
+      if (line.startsWith("-")) return `+${line.slice(1)}`;
+      return line;
+    })
+    .join("\n");
+  return {
+    ...change,
+    status: REVERSED_STATUS[change.status],
+    diff,
+    additions: change.deletions,
+    deletions: change.additions,
+  };
+}
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 

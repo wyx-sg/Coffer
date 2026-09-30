@@ -17,6 +17,9 @@ from pydantic import BaseModel, Field
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretStateName = Literal["none", "present", "missing", "pending_approval"]
+#: How a test run failed before the API answered: the request could not be
+#: built, it timed out, it could not connect, or the address was refused.
+TestFailureName = Literal["request", "timeout", "connect", "blocked"]
 
 
 def _empty_schema() -> dict[str, Any]:
@@ -170,6 +173,20 @@ class CustomToolTestIn(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class CustomToolUnsavedTestIn(BaseModel):
+    """A request tested before its group exists: the group's settings inline.
+
+    No secret travels: an unsaved group has no approved binding, so the test
+    is sent without the auth header.
+    """
+
+    base_url: str
+    headers: dict[str, str] = Field(default_factory=dict)
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    tool: CustomToolIn
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
 class CustomToolTestOut(BaseModel):
     ok: bool
     duration_ms: int
@@ -180,6 +197,8 @@ class CustomToolTestOut(BaseModel):
     truncated: bool
     content_type: str | None
     error: str | None
+    #: Set when no answer came back; ``null`` when the API answered.
+    failure: TestFailureName | None = None
 
 
 class OpenApiReadIn(BaseModel):
@@ -193,6 +212,8 @@ class OpenApiReadIn(BaseModel):
 class OpenApiOperationOut(BaseModel):
     key: str
     summary: str | None
+    #: The operation's first tag, for grouping in the import form.
+    tag: str | None = None
     tool: CustomToolIn
 
 
@@ -215,10 +236,24 @@ class CustomToolReimportIn(BaseModel):
     add: list[str] = Field(default_factory=list)
 
 
+class CustomToolReimportChangeOut(BaseModel):
+    """A kept tool whose request the spec changed."""
+
+    name: str
+    method: HttpMethodName
+    path: str
+    #: Arguments the spec now requires that the tool did not.
+    new_required: list[str]
+    #: The method, path or body template moved.
+    request_changed: bool
+
+
 class CustomToolReimportPreviewOut(BaseModel):
     title: str | None
     version: str | None
     added: list[OpenApiOperationOut]
     removed: list[str]
     kept: list[str]
+    #: Kept tools the spec changed (a subset of ``kept``).
+    changed: list[CustomToolReimportChangeOut] = Field(default_factory=list)
     warnings: list[str]

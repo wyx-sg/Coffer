@@ -16,7 +16,7 @@ CREATE TABLE secrets (
     ciphertext  BLOB NOT NULL,                -- produced by EncryptedSecretStore
     created_at  TEXT NOT NULL,                -- ISO-8601, written by the sync store
     updated_at  TEXT NOT NULL,
-    last_used_at TEXT                         -- machine-local; migration 0134
+    last_used_at TEXT                         -- machine-local; migration 0135
 );
 ```
 

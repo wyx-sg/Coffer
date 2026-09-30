@@ -1,110 +1,146 @@
 // frontend/src/components/skills/SkillCopiesPanel.tsx
-// What Check copies found (spec skill-manager "Report skill drift on
-// request"): every agent's copy of every skill compared with the library, each
-// finding listed with the skill, the agent, what differs, the path and the
-// suggested remedy. Checking changes nothing on disk. Repair re-delivers what
-// Coffer can put back on its own ("Repair repairable drift from master"); the
-// findings it will not touch — a folder it did not make, a master that is
-// gone — stay listed for the user.
+// "Check agents' copies" (canvas 4.3.21; spec skill-manager "Report skill
+// drift on request"): every agent's copy of every skill compared with the
+// library, one row per finding — the skill, the agent (or Library), what
+// differs and what it means, whether it needs the reader, and the one action
+// that answers it: Review… a folder in the way (the compare dialog), a missing
+// master (its page) or a folder that is not in the library (its pane); Repair
+// a missing or repointed link. Checking changes nothing on disk; Coffer
+// repairs a missing link on its own and never overwrites a folder it didn't
+// make, so those wait here for the reader.
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, RefreshCw, Wrench, X } from "lucide-react";
+import { CheckCircle2, RefreshCw, X } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { EmptyState } from "@/components/EmptyState";
+import { SkillCopyDialog } from "@/components/skills/SkillCopyDialog";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import type { SkillDriftEntry, SkillDriftReport, SkillRepairReport } from "@/lib/api/skills";
+import type { SkillDriftEntry, SkillRepairReport } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
-import { useRepairSkillCopies } from "@/lib/hooks/useSkills";
+import { useRepairSkillCopies, useSkillCopies, useSkills } from "@/lib/hooks/useSkills";
 
 interface Props {
-  report: SkillDriftReport | undefined;
-  checking: boolean;
-  onCheckAgain: () => void;
   onClose: () => void;
 }
 
-function Finding({ entry, repaired }: { entry: SkillDriftEntry; repaired: boolean }) {
+function Finding({
+  entry,
+  repaired,
+  onAction,
+  busy,
+}: {
+  entry: SkillDriftEntry;
+  repaired: boolean;
+  onAction: (entry: SkillDriftEntry) => void;
+  busy: boolean;
+}) {
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const agent = agents.find((a) => a.name === entry.agent_name);
+  const repairable = entry.kind === "missing_link" || entry.kind === "tampered_link";
+  const status = repaired
+    ? t("skills.copies.repaired")
+    : entry.kind === "replaced_with_regular"
+      ? t("skills.copies.leftAlone")
+      : t("skills.copies.needsYou");
   return (
     <li
       data-testid="skill-copy-finding"
-      className="grid grid-cols-[minmax(0,10rem)_8rem_minmax(0,1fr)] items-start gap-4 px-4 py-3"
+      className="grid grid-cols-[minmax(0,8rem)_8rem_minmax(0,1fr)_8.5rem_6rem] items-center gap-4 py-3"
     >
       <span className="truncate font-mono text-xs font-label text-text">{entry.skill_name}</span>
       <span className="min-w-0">
         {agent ? (
           <AgentBadge type={agent.type} name={agent.display_name} showName size="sm" />
         ) : (
-          <span className="truncate text-xs text-text-muted">
-            {entry.agent_name || t("skills.copies.library")}
-          </span>
+          <span className="text-xs text-text-muted">{t("skills.copies.library")}</span>
         )}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-2">
-          <StatusWord tone={repaired ? "ok" : "warn"}>
-            {t(`skills.driftKind.${entry.kind}`)}
-          </StatusWord>
-          <span className="text-xs text-text-muted">
-            {repaired ? t("skills.copies.repaired") : t("skills.copies.needsYou")}
-          </span>
+        <span className="text-sm text-text">{t(`skills.driftKind.${entry.kind}`)}</span>
+        <span className="text-xs text-text-muted">
+          {t(`skills.copies.about.${entry.kind}`, { path: abbreviateHomePath(entry.target_path) })}
         </span>
-        <span className="truncate font-mono text-xs text-text-muted">
-          {abbreviateHomePath(entry.target_path)}
-        </span>
-        <span className="text-xs text-text-muted">{entry.suggested_remedy}</span>
+      </span>
+      <StatusWord tone={repaired ? "ok" : "warn"}>{status}</StatusWord>
+      <span className="justify-self-end">
+        {repaired ? null : (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => onAction(entry)}>
+            {repairable ? t("skills.copies.repair") : t("skills.review")}
+          </Button>
+        )}
       </span>
     </li>
   );
 }
 
-export function SkillCopiesPanel({ report, checking, onCheckAgain, onClose }: Props) {
+export function SkillCopiesPanel({ onClose }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const copies = useSkillCopies();
+  const { data: skills = [] } = useSkills();
   const repair = useRepairSkillCopies();
   const [repairResult, setRepairResult] = useState<SkillRepairReport | null>(null);
+  const [reviewing, setReviewing] = useState<SkillDriftEntry | null>(null);
+  const checking = copies.isFetching;
 
   // After a repair, its own fresh report is the truth; a new check replaces it.
-  const remaining = repairResult ? repairResult.remaining.entries : (report?.entries ?? []);
+  const remaining = repairResult ? repairResult.remaining.entries : (copies.data?.entries ?? []);
   const remediated = repairResult?.remediated ?? [];
   const total = remaining.length + remediated.length;
+  const reviewSkill = reviewing ? skills.find((s) => s.name === reviewing.skill_name) : undefined;
 
-  const checkAgain = () => {
-    setRepairResult(null);
-    onCheckAgain();
+  const act = (entry: SkillDriftEntry) => {
+    if (entry.kind === "missing_link" || entry.kind === "tampered_link") {
+      repair.mutate(undefined, { onSuccess: setRepairResult });
+    } else if (entry.kind === "replaced_with_regular") {
+      setReviewing(entry);
+    } else if (entry.kind === "orphan_master") {
+      onClose();
+      navigate(`/skills?orphan=${encodeURIComponent(entry.skill_name)}`);
+    } else {
+      onClose();
+      navigate(`/skills/${encodeURIComponent(entry.skill_name)}`);
+    }
   };
 
   return (
     <section aria-label={t("skills.copies.title")} className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-start gap-3">
+      <header className="flex items-start gap-3 border-b border-border-subtle pb-4">
+        <span className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
+          <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h2 className="text-lg font-bold">{t("skills.copies.title")}</h2>
-          <p className="text-sm text-text-muted">{t("skills.copies.body")}</p>
+          <p className="text-sm text-text-muted">
+            {t("skills.copies.body")}{" "}
+            {checking
+              ? t("skills.copies.checking")
+              : copies.data || repairResult
+                ? t("skills.copies.summary", { count: total, fixed: remediated.length })
+                : null}
+          </p>
         </div>
-        <span className="inline-flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={checkAgain} disabled={checking}>
-            <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
-            {t("skills.copies.checkAgain")}
-          </Button>
-          {remaining.length > 0 && !checking ? (
-            <Button
-              size="sm"
-              disabled={repair.isPending}
-              onClick={() => repair.mutate(undefined, { onSuccess: setRepairResult })}
-            >
-              <Wrench aria-hidden />
-              {repair.isPending ? t("skills.copies.repairing") : t("skills.copies.repair")}
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="icon-sm" aria-label={t("common.close")} onClick={onClose}>
-            <X aria-hidden />
-          </Button>
-        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setRepairResult(null);
+            void copies.refetch();
+          }}
+          disabled={checking}
+        >
+          <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
+          {t("skills.copies.checkAgain")}
+        </Button>
+        <Button variant="ghost" size="icon-sm" aria-label={t("common.close")} onClick={onClose}>
+          <X aria-hidden />
+        </Button>
       </header>
 
       {checking ? (
@@ -114,31 +150,44 @@ export function SkillCopiesPanel({ report, checking, onCheckAgain, onClose }: Pr
           ))}
         </div>
       ) : total === 0 ? (
-        report || repairResult ? (
-          <EmptyState
-            icon={CheckCircle2}
-            title={t("skills.copies.allMatchTitle")}
-            description={t("skills.copies.allMatchBody")}
-          />
-        ) : null
+        <EmptyState
+          icon={CheckCircle2}
+          title={t("skills.copies.allMatchTitle")}
+          description={t("skills.copies.allMatchBody")}
+        />
       ) : (
         <>
-          <p className="text-xs text-text-muted">{t("skills.copies.summary", { count: total })}</p>
-          <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle">
+          <ul className="-mt-4 divide-y divide-border-subtle">
             {remaining.map((e) => (
               <Finding
                 key={`r:${e.skill_name}:${e.agent_name}:${e.kind}`}
                 entry={e}
                 repaired={false}
+                onAction={act}
+                busy={repair.isPending}
               />
             ))}
             {remediated.map((e) => (
-              <Finding key={`f:${e.skill_name}:${e.agent_name}:${e.kind}`} entry={e} repaired />
+              <Finding
+                key={`f:${e.skill_name}:${e.agent_name}:${e.kind}`}
+                entry={e}
+                repaired
+                onAction={act}
+                busy={false}
+              />
             ))}
           </ul>
           <p className="text-xs text-text-muted">{t("skills.copies.repairHint")}</p>
         </>
       )}
+
+      {reviewSkill ? (
+        <SkillCopyDialog
+          skill={reviewSkill}
+          entry={reviewing}
+          onOpenChange={(open) => !open && setReviewing(null)}
+        />
+      ) : null}
     </section>
   );
 }

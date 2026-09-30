@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { fetchCallPage } from "@/lib/api/activity";
 import { mcpInvocationsKey } from "@/lib/api/queryKeys";
 
 type InvocationListOut = components["schemas"]["InvocationListOut"];
@@ -15,6 +16,9 @@ interface UseMcpInvocationsArgs {
   status?: InvocationStatusFilter;
   since?: string;
   enabled?: boolean;
+  /** Coffer's own `coffer` server: not a resource, so its calls are read
+   *  from the cross-server list (`GET /mcp/invocations?uid=coffer`). */
+  builtin?: boolean;
 }
 
 export function useMcpInvocations({
@@ -23,10 +27,12 @@ export function useMcpInvocations({
   status,
   since,
   enabled = true,
+  builtin = false,
 }: UseMcpInvocationsArgs) {
   return useQuery({
     queryKey: mcpInvocationsKey(serverUid, { limit, status, since }),
     queryFn: async (): Promise<InvocationListOut> => {
+      if (builtin) return fetchCallPage({ uid: serverUid, status, since }, limit);
       const client = getApiClient();
       const query: Record<string, string | number> = { limit };
       if (status) query.status = status;

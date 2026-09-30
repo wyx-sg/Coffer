@@ -17,7 +17,7 @@ interface Props {
 }
 
 const TONE: Record<DiffRow["kind"], string> = {
-  hunk: "bg-surface-sunken text-text-subtle",
+  hunk: "bg-surface-sunken text-2xs text-text-subtle",
   context: "",
   add: "bg-success-soft",
   del: "bg-danger-soft",
@@ -31,21 +31,42 @@ export function KnowledgeDiff({ rows, className }: Props) {
     return <p className="px-3 py-2 text-xs text-text-subtle">{t("knowledge.diff.none")}</p>;
   }
   return (
-    <div className={cn("overflow-auto rounded-md border border-border-subtle", className)}>
+    <div
+      className={cn("overflow-auto rounded-lg border border-border bg-surface-raised", className)}
+    >
       <table className="w-full border-collapse font-mono text-xs leading-5">
         <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className={TONE[row.kind]}>
-              <td className="w-10 select-none px-2 text-right align-top text-text-subtle">
-                {row.oldLine ?? ""}
-              </td>
-              <td className="w-10 select-none px-2 text-right align-top text-text-subtle">
-                {row.newLine ?? ""}
-              </td>
-              <td className="w-4 select-none align-top text-text-subtle">{SIGN[row.kind]}</td>
-              <td className="whitespace-pre pr-3 align-top">{row.text}</td>
-            </tr>
-          ))}
+          {rows.map((row, i) =>
+            row.kind === "hunk" ? (
+              <tr key={i} className={TONE.hunk}>
+                <td colSpan={4} className="border-b border-border-subtle px-3 py-0.5">
+                  {row.text}
+                </td>
+              </tr>
+            ) : (
+              <tr key={i} className={TONE[row.kind]}>
+                <td className="w-[34px] select-none pr-2 text-right align-top text-2xs text-text-subtle">
+                  {row.oldLine ?? ""}
+                </td>
+                <td className="w-[34px] select-none border-r border-border-subtle pr-2 text-right align-top text-2xs text-text-subtle">
+                  {row.newLine ?? ""}
+                </td>
+                <td
+                  className={cn(
+                    "w-4 select-none text-center align-top",
+                    row.kind === "add"
+                      ? "text-success"
+                      : row.kind === "del"
+                        ? "text-danger"
+                        : "text-text-subtle",
+                  )}
+                >
+                  {SIGN[row.kind]}
+                </td>
+                <td className="whitespace-pre pr-2.5 align-top">{row.text}</td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
     </div>

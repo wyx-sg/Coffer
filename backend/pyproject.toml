@@ -106,7 +106,12 @@ packages = ["coffer"]
 # and the catalogue in the skill body") is a markdown file, not a module, so an
 # installed wheel has to be told to carry it. A frozen build is told
 # separately, in backend/coffer-daemon.spec.
-coffer = ["application/knowledge/skill_assets/**/*.md"]
+coffer = [
+    "application/knowledge/skill_assets/**/*.md",
+    # The bundled model price list and its licence (spec provider-switching
+    # "Resolve each model's price from the provider, its API, or the bundled list").
+    "infrastructure/usage/price_list/*",
+]
 
 [tool.ruff]
 line-length = 100
@@ -295,6 +300,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -375,6 +381,7 @@ source_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -494,6 +501,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -576,6 +584,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -668,6 +677,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -764,6 +774,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -859,6 +870,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -954,6 +966,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -1053,6 +1066,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",
@@ -1180,6 +1194,7 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_config_routes",
     "coffer.surfaces.http.agent_connection_routes",
     "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_mcp_import_routes",
     "coffer.surfaces.http.agent_native_memory_routes",
     "coffer.surfaces.http.agent_transcript_routes",
     "coffer.surfaces.http.agent_hooks_routes",

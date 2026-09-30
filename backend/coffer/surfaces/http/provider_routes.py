@@ -7,16 +7,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from coffer.application.provider.order_ops import ProviderOrderError
+from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.targets import scoped_targets
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, ProviderConfig
 from coffer.domain.resource import Resource
+from coffer.domain.usage.pricing import ResolvedPrice
 from coffer.infrastructure.provider import local_runtime
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
-from coffer.surfaces.http.provider_dependencies import get_provider_service
+from coffer.surfaces.http.provider_dependencies import get_price_resolver, get_provider_service
 from coffer.surfaces.http.provider_schemas import (
     ActivateOut,
     DeactivateOut,
@@ -24,9 +27,13 @@ from coffer.surfaces.http.provider_schemas import (
     DetectLocalOut,
     LocalModelOut,
     LocalRuntimeOut,
+    ModelPriceOut,
+    ModelPricesIn,
+    ModelPricesOut,
     ProviderCreate,
     ProviderListOut,
     ProviderModel,
+    ProviderOrderIn,
     ProviderOut,
     ProviderPatch,
 )
@@ -53,6 +60,25 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
         )
         for m in models
     ]
+
+
+def price_out(model: str, resolved: ResolvedPrice | None) -> ModelPriceOut:
+    """One model's resolved price on the wire (its base tier)."""
+    if resolved is None:
+        return ModelPriceOut(model=model)
+    p = resolved.price
+    return ModelPriceOut(
+        model=model,
+        source=resolved.source,
+        source_name=resolved.source_name,
+        input=p.input,
+        output=p.output,
+        cache_write_5m=p.cache_write_5m,
+        cache_write_1h=p.cache_write_1h,
+        cache_read=p.cache_read,
+        tiered=bool(p.tiers),
+        source_updated=resolved.source_updated,
+    )
 
 
 def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
@@ -99,6 +125,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         ],
         is_active=cfg.is_active,
         local_runtime=cfg.local_runtime,
+        fallback=cfg.fallback,
         internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
@@ -199,9 +226,47 @@ async def update_provider(
         secret_value=body.secret_value,
         models=_curated(body.models),
         description=body.description,
+        fallback=body.fallback,
         actor=actor,
     )
     return _provider_out(resource, await resources.list(kind="agent"))
+
+
+@router.put("/order", response_model=ProviderListOut)
+async def reorder_providers(
+    body: ProviderOrderIn,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderListOut:
+    """Reorder the Model providers list — the order fallbacks are tried in
+    (spec provider-switching "Order providers, and fail over in that order").
+    422 unless ``uids`` names every provider exactly once."""
+    try:
+        rows = await svc.reorder(body.uids, actor=actor)
+    except ProviderOrderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    registry = await resources.list(kind="agent")
+    return ProviderListOut(providers=[_provider_out(r, registry) for r in rows])
+
+
+@router.post("/{uid}/prices", response_model=ModelPricesOut)
+async def model_prices(
+    uid: str,
+    body: ModelPricesIn,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    resolver: ProviderPriceResolver = Depends(get_price_resolver),  # noqa: B008
+) -> ModelPricesOut:
+    """Each model's price on this provider, with its source: You set, From
+    <provider>, Bundled or local — or none (spec provider-switching "Resolve
+    each model's price from the provider, its API, or the bundled list").
+    Read-only; nothing is fetched from the network."""
+    await svc.get(uid)
+    resolved = await resolver.resolve_many(uid, body.models)
+    return ModelPricesOut(
+        prices=[price_out(model, r) for model, r in resolved.items()],
+        bundled_version=resolver.bundled_version,
+    )
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

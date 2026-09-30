@@ -1,8 +1,9 @@
-// src/components/providers/ProviderModelRow.tsx — one model on the Models tab: switch, id, what uses it, its type.
-import type { Modality } from "@/lib/api/providers";
+// src/components/providers/ProviderModelRow.tsx — one model in the Models section: switch, id, what uses it, its price, its type.
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Switch } from "@/components/ui/switch";
+import type { Modality } from "@/lib/api/providers";
 import { ModalitySelect } from "./ModalitySelect";
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   modality: Modality;
   /** What uses this model: "Coffer's engine", "Codex default"… */
   tags: string[];
+  /** The model's price and where it came from (ModelPriceCell). */
+  price?: ReactNode;
   disabled: boolean;
   onToggle: () => void;
   onModality: (m: Modality) => void;
@@ -21,6 +24,7 @@ export function ProviderModelRow({
   on,
   modality,
   tags,
+  price,
   disabled,
   onToggle,
   onModality,
@@ -45,6 +49,7 @@ export function ProviderModelRow({
           </span>
         ))}
       </span>
+      {price ? <span className="shrink-0">{price}</span> : null}
       <ModalitySelect value={modality} onChange={onModality} disabled={disabled} label={id} />
     </div>
   );

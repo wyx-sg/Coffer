@@ -33,6 +33,7 @@ from coffer.infrastructure.daemon import login_service
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.storage_usage import coffer_home
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
 from coffer.surfaces.http.dependencies import (
@@ -77,17 +78,6 @@ def set_daemon_phase(phase: _DaemonPhase) -> None:
 
 
 _STARTED_AT = datetime.now(tz=UTC)
-_PORT = 8000  # set by composition root
-
-
-def set_port(port: int) -> None:
-    global _PORT
-    _PORT = port
-
-
-def get_port() -> int:
-    """The port the daemon is serving on (set by the composition root)."""
-    return _PORT
 
 
 def set_started_at(started_at: datetime) -> None:
@@ -159,7 +149,7 @@ async def get_status(
         # mismatch say which daemon it attached to, not merely that one exists.
         executable=sys.executable,
         started_at=_STARTED_AT,
-        port=_PORT,
+        port=daemon_port.get_port(),
         upstream_summary=upstream_summary,
         channel=features.channel,
         features=features.enabled_map(),

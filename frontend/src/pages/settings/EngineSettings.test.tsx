@@ -36,7 +36,6 @@ vi.mock("@/lib/api/providers", async (orig) => {
 const setBound = vi.fn();
 const setEngineModel = vi.fn();
 const setSttModel = vi.fn();
-const setUpkeep = vi.fn();
 // The Test button's probe. Each test says what the endpoint answers.
 const testMutate = vi.fn();
 // The speech-to-text Test asks the endpoint for its model list instead.
@@ -53,18 +52,10 @@ vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useSetModelTimeout: () => ({ isPending: false, mutate: setBound }),
   // The speech-to-text picker sits in this section too; its own suite covers it.
   useSetTranscribeModel: () => ({ isPending: false, mutate: setSttModel }),
-  // The upkeep rows sit below; their own suite covers their behaviour.
-  useSetUpkeep: () => ({ isPending: false, mutate: setUpkeep }),
-  useSetCurationOwner: () => ({ isPending: false, mutate: vi.fn(), error: null }),
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ isPending: false, mutate: listMutate, data: undefined }),
   useTestConnection: () => ({ isPending: false, mutate: testMutate }),
-}));
-// Curation's row names the machine that owns the pass; one machine, this one.
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: () => ({ data: { machines: [] }, isPending: false }),
-  useThisMachineId: () => ({ machineId: "machine-here", isPending: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
@@ -97,6 +88,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     title: null,
     internal_default: false,
     transcribe_default: false,
+    fallback: true,
     models: [],
     enabled: true,
     description: null,
@@ -156,8 +148,9 @@ describe("EngineSettings", () => {
       // The embedding card went with vector retrieval: there is no index left
       // for an embedding model to feed (ADR knowledge-is-plain-files).
       expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
-      // The passes Coffer runs on its own belong beside the model they run on.
-      expect(screen.getByText("Automatic upkeep")).toBeInTheDocument();
+      // The passes Coffer runs on its own are switched on the pages they
+      // upkeep (Knowledge and Memory), not here.
+      expect(screen.queryByText("Automatic upkeep")).not.toBeInTheDocument();
       // Speech gets its own card: it runs on a second connection flag, and
       // nothing falls back from it to the engine's.
       expect(screen.getByText("Speech to text")).toBeInTheDocument();
@@ -412,17 +405,8 @@ describe("EngineSettings", () => {
   });
 
   // Scenario (revise-web-ui-ia, internal-engine): "the general tab's coffer's model section shows and changes both halves"
-  test("the section shows the chosen pair and the three passes, and each edit saves alone", async () => {
-    engineConfig = {
-      ...engineConfig,
-      model: "a-chat",
-      upkeep: {
-        aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },
-        distil: { enabled: true, interval_s: null, default_interval_s: 21600 },
-        curate: { enabled: true, interval_s: null, default_interval_s: 21600 },
-      },
-      curate_owner_machine_id: "machine-here",
-    };
+  test("the section shows the chosen pair and no upkeep, and each edit saves alone", async () => {
+    engineConfig = { ...engineConfig, model: "a-chat" };
     apiMock.list.mockResolvedValue({
       providers: [
         makeProvider({
@@ -443,21 +427,15 @@ describe("EngineSettings", () => {
       "A",
     );
     expect(within(section).getByRole("combobox", { name: /^model$/i })).toHaveTextContent("a-chat");
-    // One row per pass, the default named rather than blank.
-    expect(screen.getAllByRole("switch")).toHaveLength(3);
-    expect(screen.getByText("Default (Every 1h)")).toBeInTheDocument();
-    expect(screen.getAllByText("Default (Every 6h)")).toHaveLength(2);
+    // No upkeep switch, interval or curation owner: those live on the
+    // Knowledge and Memory pages. The one switch left is the price refresh.
+    expect(screen.queryAllByRole("switch").filter((s) => s.id !== "price-refresh")).toHaveLength(0);
+    expect(screen.queryByText(/curation runs on/i)).toBeNull();
 
     openSelect(/^model$/i);
     fireEvent.click(screen.getByRole("option", { name: "a-big" }));
     await waitFor(() => expect(setEngineModel).toHaveBeenCalledWith("a-big"));
 
-    fireEvent.click(screen.getByRole("switch", { name: "Distil memory" }));
-    expect(setUpkeep).toHaveBeenLastCalledWith({ pass: "distil", enabled: false });
-
-    openSelect(/how often read from agents runs/i);
-    fireEvent.click(screen.getByRole("option", { name: "Every 3h" }));
-    expect(setUpkeep).toHaveBeenLastCalledWith({ pass: "aggregate", interval_s: 10800 });
     // Only the edited values were written — nothing else moved.
     expect(setBound).not.toHaveBeenCalled();
     expect(setSttModel).not.toHaveBeenCalled();

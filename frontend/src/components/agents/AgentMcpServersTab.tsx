@@ -7,8 +7,9 @@
 // files ("List the MCP entries in the agent's own config files"): Adopt moves
 // one into Coffer (AgentAdoptMcpDialog), and Remove duplicate takes out an
 // entry Coffer's gateway already serves, so the tab then lists the server once,
-// as Coffer's. A config file that fails to parse is named above the table and
-// its entries stay read-only.
+// as Coffer's. Each direct entry's ⋯ menu (board 2.1.54) adds opening its file,
+// copying its command and removing it from the file. A config file that fails
+// to parse is named above the table and its entries stay read-only.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Server } from "lucide-react";
@@ -16,9 +17,17 @@ import { Server } from "lucide-react";
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentMcpTable } from "@/components/agents/mcp/AgentMcpTable";
 import { McpParseErrorAlert } from "@/components/agents/mcp/McpParseErrorAlert";
-import { buildMcpRows, singleSource, type OwnMcpRow } from "@/components/agents/mcp/mcpRows";
+import {
+  buildMcpRows,
+  entryCommand,
+  singleSource,
+  type OwnMcpRow,
+} from "@/components/agents/mcp/mcpRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import type { MenuAction } from "@/components/ui/menu";
+import { useToast } from "@/components/ui/toast";
+import { useFsActions } from "@/lib/fsActions";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { countByOwner } from "@/lib/agents/owner";
 import type { AgentOut } from "@/lib/api/agents";
@@ -32,6 +41,8 @@ import { useResources } from "@/lib/hooks/useResources";
 
 export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const fs = useFsActions();
   const servers = useResources("mcp_server");
   const entries = useAgentMcpEntries(agent.uid);
   const connection = useAgentConnection(agent.uid);
@@ -57,12 +68,55 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
     ? connection.data.parts.some((p) => p.key === "mcp" && p.installed)
     : undefined;
 
-  // A direct entry's file, home-relative; the key itself until the listing is read.
+  // A direct entry's file: its absolute path, and home-relative as the Where
+  // column shows it (the key itself until the listing is read).
+  const pathOf = (source: string) =>
+    configFiles.data?.find((f) => f.key === source)?.path ??
+    parseErrors.find((pe) => pe.source === source)?.path;
   const whereLabel = (source: string) => {
-    const path =
-      configFiles.data?.find((f) => f.key === source)?.path ??
-      parseErrors.find((pe) => pe.source === source)?.path;
+    const path = pathOf(source);
     return path ? abbreviateHomePath(path) : source;
+  };
+
+  const rowMenu = (row: OwnMcpRow): MenuAction[] => {
+    const readOnly = row.state === "readOnly";
+    const file = whereLabel(row.entry.source);
+    const path = pathOf(row.entry.source);
+    const command = entryCommand(row.entry);
+    return [
+      {
+        key: "adopt",
+        label: t("agents.mcpTab.menu.adopt"),
+        disabled: readOnly || row.entry.matches_resource !== null,
+        onSelect: () => setAdoptTarget(row),
+      },
+      {
+        key: "open",
+        label: t("agents.mcpTab.menu.open", { file }),
+        disabled: !path,
+        onSelect: () =>
+          path &&
+          void fs.open(path, "").catch(() => toast.error(t("agents.mcpTab.openFileFailed"))),
+      },
+      {
+        key: "copy",
+        label: t("agents.mcpTab.menu.copyCommand"),
+        disabled: !command,
+        onSelect: () =>
+          void navigator.clipboard
+            ?.writeText(command)
+            .then(() => toast.success(t("common.copied")))
+            .catch(() => undefined),
+      },
+      {
+        key: "remove",
+        label: t("agents.mcpTab.menu.remove", { file }),
+        destructive: true,
+        separated: true,
+        disabled: readOnly,
+        onSelect: () => setRemoveTarget(row),
+      },
+    ];
   };
   const oneFile = singleSource(rows);
   const summaryFile = oneFile ? whereLabel(oneFile) : t("agents.mcpTab.ownConfig");
@@ -112,6 +166,7 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
               whereLabel={whereLabel}
               onAdopt={setAdoptTarget}
               onRemoveDuplicate={setRemoveTarget}
+              rowMenu={rowMenu}
             />
           </>
         )}
@@ -140,10 +195,14 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
           name: removeTarget?.name ?? "",
           file: removeTarget ? whereLabel(removeTarget.entry.source) : "",
         })}
-        description={t("agents.mcpTab.removeDuplicateBody", {
-          agent: agentLabel,
-          name: removeTarget?.entry.matches_resource ?? "",
-        })}
+        description={
+          removeTarget?.entry.matches_resource
+            ? t("agents.mcpTab.removeDuplicateBody", {
+                agent: agentLabel,
+                name: removeTarget.entry.matches_resource,
+              })
+            : t("agents.mcpTab.removeBody", { agent: agentLabel })
+        }
         confirmLabel={t("agents.mcpTab.remove")}
         pending={removeEntry.isPending}
         onConfirm={() => {

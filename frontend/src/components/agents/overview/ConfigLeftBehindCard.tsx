@@ -2,27 +2,21 @@
 //
 // Coffer can't connect an agent that isn't installed and leaves the folder as
 // it is, so the tab says what it found (the directory and the files still in
-// it, no program on PATH) and the ways out: install it and check again, restart
-// Coffer when the terminal finds it but Coffer does not, or — uninstalled on
-// purpose — reveal the folder or take the agent off the list.
+// it, no program on PATH) and the one way out: install it and check again.
+// Revealing the folder or taking the agent off the list stay in the ⋯ menu.
 import { Trans, useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
 import {
   abbreviateHomePath,
   agentInstallCommand,
   agentProgramName,
   agentTypeLabel,
 } from "@/lib/agents/display";
-import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConfigFiles } from "@/lib/hooks/useAgents";
-import { useFsActions } from "@/lib/fsActions";
 
 import type { OverviewActions } from "../AgentOverviewTab";
-import { CheckAgainButton, FixWay, InstallCommand, LastKnownRows, ProblemBanner } from "./FixParts";
+import { FixWay, InstallCommand, LastKnownRows, ProblemBanner } from "./FixParts";
 import { useDetectionCheck } from "./useDetectionCheck";
 import { InfoRow, InlineCode, OverviewSection } from "./OverviewSection";
 import { baseName } from "./paths";
@@ -35,19 +29,14 @@ interface Props {
   actions: OverviewActions;
 }
 
-export function ConfigLeftBehindCard({ agent, typeRow, actions }: Props) {
+export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const { reveal } = useFsActions();
   const { checkedAt } = useDetectionCheck();
   const configFiles = useAgentConfigFiles(agent.uid);
   const files = (configFiles.data ?? []).filter((f) => f.exists).map((f) => baseName(f.path));
   const name = agentTypeLabel(agent.type);
   const dir = abbreviateHomePath(agent.config_dir);
   const version = typeRow.version ?? agent.version;
-
-  const revealFolder = () =>
-    void reveal(agent.config_dir).catch((e: unknown) => toast.error(translateApiError(t, e)));
 
   return (
     <div className="flex flex-col gap-10 lg:flex-row">
@@ -68,18 +57,6 @@ export function ConfigLeftBehindCard({ agent, typeRow, actions }: Props) {
           <ul className="flex flex-col">
             <FixWay title={t(`${K}.install.title`, { name })} body={t(`${K}.install.body`)}>
               <InstallCommand command={agentInstallCommand(agent.type)} />
-            </FixWay>
-            <FixWay title={t(`${K}.path.title`)} body={t(`${K}.path.body`)}>
-              <CheckAgainButton />
-            </FixWay>
-            <FixWay title={t(`${K}.onPurpose.title`)} body={t(`${K}.onPurpose.body`, { name })}>
-              <Button variant="outline" size="sm" onClick={revealFolder}>
-                <FolderOpen aria-hidden />
-                {t(`${K}.reveal`)}
-              </Button>
-              <Button variant="danger" size="sm" onClick={actions.onRemove}>
-                {t(`${K}.removeFromList`)}
-              </Button>
             </FixWay>
           </ul>
         </OverviewSection>

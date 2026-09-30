@@ -80,6 +80,9 @@ class ToolTestOutcome:
     truncated: bool = False
     content_type: str | None = None
     error: str | None = None
+    #: How it failed before an answer: ``request``, ``timeout``, ``connect``
+    #: or ``blocked``; ``None`` when the API answered.
+    failure: str | None = None
 
 
 class CustomToolRunnerPort(Protocol):
@@ -90,3 +93,10 @@ class CustomToolRunnerPort(Protocol):
         arguments: dict[str, Any],
         overlay: dict[str, str],
     ) -> ToolTestOutcome: ...
+
+    async def run_unsaved(
+        self, transport: HttpApiTransport, tool: HttpApiTool, arguments: dict[str, Any]
+    ) -> ToolTestOutcome:
+        """A request of a group that is not saved yet: its base URL was typed
+        into a form, so it passes the SSRF guard first, and no secret is sent."""
+        ...

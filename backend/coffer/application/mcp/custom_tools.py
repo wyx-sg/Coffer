@@ -265,6 +265,33 @@ class CustomToolService:
         )
         return await self._runner.run(transport, tool, arguments, overlay)
 
+    async def test_unsaved(
+        self,
+        *,
+        base_url: str,
+        headers: dict[str, str],
+        timeout_seconds: int,
+        raw_tool: dict[str, Any],
+        arguments: dict[str, Any],
+    ) -> ToolTestOutcome:
+        """Run a request of a group that is not saved yet (spec mcp-gateway
+        "Test a custom tool request before its group is saved").
+
+        The group has no approved secret binding, so no secret is sent; its
+        base URL was typed into a form, so the runner checks it against the
+        SSRF guard. Nothing is saved or logged.
+        """
+        transport = _validated(
+            {
+                "base_url": base_url,
+                "headers": headers,
+                "timeout_seconds": timeout_seconds,
+                "tools": [],
+                "secret_refs": {},
+            }
+        )
+        return await self._runner.run_unsaved(transport, validated_tool(raw_tool), arguments)
+
     # --- the one write path ----------------------------------------------------
 
     async def _write(

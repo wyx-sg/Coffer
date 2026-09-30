@@ -53,7 +53,27 @@ describe("counts", () => {
         { coffer: false, path: "/l.json" },
       ],
     } as AgentHooksOut;
-    expect(hookCounts(hooks)).toEqual({ total: 3, coffer: 1, files: 2 });
+    expect(hookCounts(hooks)).toEqual({ total: 3, coffer: 1, files: 2, cofferState: null });
+  });
+
+  test("Coffer's memory hook on four events is one hook", () => {
+    const coffer = (event: string) => ({ coffer: true, path: "/s.json", event });
+    const hooks = {
+      items: [
+        coffer("SessionStart"),
+        coffer("UserPromptSubmit"),
+        coffer("PreToolUse"),
+        coffer("PostToolUse"),
+        { coffer: false, path: "/s.json", event: "Stop" },
+      ],
+      coffer_hook: { health: "current", trust: "untrusted" },
+    } as unknown as AgentHooksOut;
+    expect(hookCounts(hooks)).toEqual({ total: 2, coffer: 1, files: 1, cofferState: "untrusted" });
+    const missing = {
+      items: [{ coffer: false, path: "/h.json", event: "PreToolUse" }],
+      coffer_hook: { health: "missing", trust: "not_required" },
+    } as unknown as AgentHooksOut;
+    expect(hookCounts(missing)?.cofferState).toBe("missing");
   });
 });
 

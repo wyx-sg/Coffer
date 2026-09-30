@@ -24,5 +24,5 @@
 - [x] 4.3 REST: `/api/v1/credentials…` → `/api/v1/secrets…`, `/api/v1/settings/credentials` → `/api/v1/settings/secrets`; the desktop shell, CLI, web UI and e2e callers follow; `make contracts` and `make docs-reference`
 - [x] 4.4 Error codes `CREDENTIAL_*` → `SECRET_*` (with the i18n `errors.*` keys, the backend-keys fixture and the error-codes reference) and the CLI exit code `SECRET_ISSUE`
 - [x] 4.5 Audit event types `credential_*` → `secret_*`, with their Activity labels
-- [x] 4.6 Migration 0134 renames the table, the sync remote's columns, the stored audit event types and the config keys (`transport.secret_refs`, a provider's `secret_ref`), with a downgrade and a migration test
+- [x] 4.6 Migration 0135 renames the table, the sync remote's columns, the stored audit event types and the config keys (`transport.secret_refs`, a provider's `secret_ref`), with a downgrade and a migration test
 - [x] 4.7 Requirement titles, scenario names and their citations and markers say *secret* where they meant a stored secret

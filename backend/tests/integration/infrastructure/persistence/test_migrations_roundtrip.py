@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0134"
+HEAD_REVISION = "0135"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -193,7 +193,8 @@ HEAD_REVISION = "0134"
 # ``memory`` row, whose kinds no longer carry a switch. 0106 adds the nullable
 # ``resources.title`` column and 0107 the ``resources.rev`` revision — no new
 # table. 0110 is DATA-only (an agent's fast model becomes its Haiku tier); 0111
-# adds the three usage-metering tables. 0134 gives the secret store's
+# adds the three usage-metering tables. 0134 adds ``attention_ignores``; 0135
+# gives the secret store's
 # table a nullable ``last_used_at`` (spec secret "List every stored and cited
 # secret with what uses it") and renames it from ``credentials`` to ``secrets``.
 EXPECTED_TABLES = {
@@ -245,6 +246,9 @@ EXPECTED_TABLES = {
     # 0114: what this machine last learned about a Git-imported skill's source
     # (spec skill-manager "Update a Git-imported skill from its source").
     "skill_source_status",
+    # 0134: the attention items ignored on this machine (spec web-ui "Let the
+    # user ignore an unconnected agent on Overview").
+    "attention_ignores",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -281,8 +285,10 @@ PRE_MERGE_TABLES = (
         "skill_source_status",
         # 0115 created this.
         "mcp_tool_reach",
-        # 0134 renamed ``credentials`` to this.
+        # 0135 renamed ``credentials`` to this.
         "secrets",
+        # 0134 created this.
+        "attention_ignores",
     }
 ) | {
     "credentials",
@@ -467,7 +473,7 @@ def test_0055_purges_retired_audit_events(tmp_path, monkeypatch):
     command.upgrade(cfg, "0054")
     retired = ("journal_append", "daemon_started", "keychain_read", "chat_turn_completed")
     live = ("resource_created", "credential_read", "skill_bound")
-    # 0134 renames the secret store's event types.
+    # 0135 renames the secret store's event types.
     renamed = {"resource_created", "secret_read", "skill_bound"}
     with sqlite3.connect(db_path) as conn:
         for event_type in retired + live:
@@ -850,7 +856,7 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
     assert "fast_model" not in after
     assert "wire_api" not in after
     assert after["base_url"] == "https://proxy/v1"
-    assert after["secret_ref"] == "provider/o/key"  # 0134 renamed the key
+    assert after["secret_ref"] == "provider/o/key"  # 0135 renamed the key
 
     # Downgrade restores the pre-slim key set (values are placeholders).
     command.downgrade(cfg, "0039")
@@ -1131,10 +1137,10 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert convergence_tables <= _user_tables(db_path)
     assert "curate_owner_machine_id" in _internal_engine_config_columns()
     assert {"last_started_at", "last_join", "last_run_json"} <= _sync_remotes_columns()
-    # 0134 renamed ``credentials`` to ``secrets`` and the remote's two secret
+    # 0135 renamed ``credentials`` to ``secrets`` and the remote's two secret
     # columns; its downgrade puts the old names back.
     assert {"secret_ref", "include_secrets"} <= _sync_remotes_columns()
-    command.downgrade(cfg, "0116")
+    command.downgrade(cfg, "0134")
     assert "secrets" not in _user_tables(db_path)
     assert "credentials" in _user_tables(db_path)
     assert {"credential_ref", "include_credentials"} <= _sync_remotes_columns()

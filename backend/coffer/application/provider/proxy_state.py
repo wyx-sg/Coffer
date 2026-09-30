@@ -4,9 +4,11 @@
 The proxy holds no database; the daemon pushes it one :class:`ProxyState` —
 every managed agent's token digest, and for each agent on a connection the
 members that may serve it: the active connection first, then every other
-enabled connection that reaches the same agent type and is keyed the same way
-(failover never changes the model, so the proxy uses a fallback member only
-for a model it lists). A local runtime is a single member: there is nothing
+enabled connection that reaches the same agent type, speaks the same protocol
+and is switched on as a fallback, in Model providers list order (spec
+provider-switching "Order providers, and fail over in that order"; failover
+never changes the model, so the proxy uses a fallback member only for a model
+it lists). A local runtime is a single member: there is nothing
 local to fail over to, and a prompt meant for a local model never leaves the
 machine by failing over.
 
@@ -91,7 +93,8 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
         except Exception:
             continue
     digests = await tokens.digests(row.uid for row, _ in enabled)
-    connections = sorted(await service.list(), key=lambda r: r.name)
+    # Already in list order — the order fallbacks are tried in.
+    connections = await service.list()
     reach = {r.uid: set(service._compat(r, agents)) for r in connections}
 
     routes: list[ProxyRoute] = []
@@ -113,7 +116,7 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
         if not active_cfg.is_local:
             for other in connections:
                 other_cfg = service._cfg(other)
-                if other.uid == active.uid or other_cfg.is_local:
+                if other.uid == active.uid or not other_cfg.offers_fallback:
                     continue
                 if cfg.type not in reach[other.uid] or other_cfg.protocol != active_cfg.protocol:
                     continue

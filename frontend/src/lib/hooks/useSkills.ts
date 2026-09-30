@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { skillCompareKey, skillFileKey, skillFilesKey, skillsKey } from "@/lib/api/queryKeys";
+import {
+  skillCompareKey,
+  skillCopiesKey,
+  skillFileKey,
+  skillFilesKey,
+  skillsKey,
+} from "@/lib/api/queryKeys";
 import { skillsApi, type SkillImportRequest } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
 
@@ -33,15 +39,16 @@ export function useImportSkill() {
   });
 }
 
+/** Delete a skill. No toast: the confirmation renders a refusal inline (an
+ *  agent's copy that is no longer Coffer's link) and stays open on it. */
 export function useRemoveSkill() {
   const qc = useQueryClient();
-  const onError = useSkillToastError();
   return useMutation({
     mutationFn: (uid: string) => skillsApi.remove(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: skillsKey });
+    onSuccess: (_d, uid) => {
+      qc.removeQueries({ queryKey: [...skillsKey, uid] });
+      void qc.invalidateQueries({ queryKey: skillsKey });
     },
-    onError,
   });
 }
 
@@ -58,6 +65,15 @@ export function useSkillFileContent(uid: string, path: string | null) {
     queryKey: skillFileKey(uid, path ?? ""),
     queryFn: () => skillsApi.fileContent(uid, path as string),
     enabled: !!uid && !!path,
+  });
+}
+
+/** Read a file as it is on disk right now, without touching the cached read
+ *  an open draft was seeded from — Compare after a refused save. No toast: the
+ *  editor keeps the draft either way. */
+export function useReadSkillFileNow() {
+  return useMutation({
+    mutationFn: (vars: { uid: string; path: string }) => skillsApi.fileContent(vars.uid, vars.path),
   });
 }
 
@@ -165,13 +181,15 @@ export function useSkillUpdateCompare(uid: string, stagingId: string | null, pat
 
 // ----- agents' copies (spec skill-manager "Report skill drift on request") -----
 
-/** Run the read-only drift report (Check copies). A mutation, not a query:
- *  it is asked for, never polled. */
-export function useCheckSkillCopies() {
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: () => skillsApi.verify(),
-    onError,
+/** The read-only drift report (Check copies): read once when the page opens,
+ *  so a row can say "Folder in the way in Codex" without a click, and again on
+ *  Check copies / Check again (`refetch`). Never polled. */
+export function useSkillCopies() {
+  return useQuery({
+    queryKey: skillCopiesKey,
+    queryFn: () => skillsApi.verify(),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 

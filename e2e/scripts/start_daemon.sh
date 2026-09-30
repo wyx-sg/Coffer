@@ -18,6 +18,9 @@ export COFFER_PORT_RANGE_END="$((COFFER_E2E_PORT + 9))"
 # every browser fetch would fail with "Failed to fetch".
 # COFFER_DEV_CORS=1 adds the Vite dev origins localhost/127.0.0.1:5173.
 export COFFER_DEV_CORS=1
+# No outbound price-list refresh from a test daemon: tests price from the
+# snapshot bundled in the tree.
+export COFFER_PRICE_REFRESH=off
 
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"

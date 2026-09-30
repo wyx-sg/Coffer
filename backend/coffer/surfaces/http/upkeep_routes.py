@@ -49,12 +49,16 @@ class UpkeepRunOut(BaseModel):
     """One pass in flight."""
 
     kind: str = Field(description="The kind whose pass this is: `memory` or `knowledge`.")
-    name: str = Field(description="The partition or collection being rewritten.")
+    name: str = Field(
+        description="The uid of the partition or collection being rewritten, or `update` "
+        "for a memory Update memory action as a whole."
+    )
     started_at: datetime = Field(description="When this daemon started the pass.")
     done: int | None = Field(
         default=None,
         description="For a run that works through several items one pass at a time "
-        "(knowledge's Curate now): the passes finished so far. Null for a single pass.",
+        "(knowledge's Curate now, memory's Update memory): the items finished so far. "
+        "Null for a single pass, and for Update memory while it is still reading.",
     )
     total: int | None = Field(
         default=None,
