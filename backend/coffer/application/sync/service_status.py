@@ -237,7 +237,10 @@ class StatusMixin:
     def _file_versions(self, path: str) -> FileVersions | None:
         d = self._engine.d
         stop = d.state.stop()
-        found = next((c for c in (stop.conflicts if stop else ()) if c.path == path), None)
+        # A stopped round's file, or a join's differing file (the same answer
+        # "what does taking the other side change here" serves both).
+        candidates = (*(stop.conflicts if stop else ()), *d.state.join_choices())
+        found = next((c for c in candidates if c.path == path), None)
         if found is None:
             return None
         blobs = d.git.blobs([b for b in (found.ours, found.theirs, found.base) if b])

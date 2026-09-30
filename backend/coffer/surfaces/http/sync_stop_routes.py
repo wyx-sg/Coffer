@@ -110,7 +110,7 @@ async def open_editor(body: FilePathIn) -> EditorCopyOut:
 async def file_versions(path: str = Query(min_length=1)) -> FileVersionsOut:
     found = await get_sync_service().file_versions(path)
     if found is None:
-        raise SyncNothingStopped(f"{path} is not one of the stopped round's files")
+        raise SyncNothingStopped(f"{path} is not a stopped round's or a join's differing file")
     return FileVersionsOut(
         path=found.path,
         ours=found.ours,
