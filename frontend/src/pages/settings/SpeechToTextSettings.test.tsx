@@ -124,7 +124,7 @@ describe("SpeechToTextSettings", () => {
     render(<SpeechToTextSettings />);
 
     expect(screen.getByRole("combobox", { name: /transcription provider/i })).toHaveTextContent(
-      "Select a model provider",
+      "Choose a provider",
     );
   });
 

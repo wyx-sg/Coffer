@@ -871,7 +871,7 @@
     },
     "internalEngine": {
       "connection": "Model provider",
-      "connectionPlaceholder": "Select a model provider",
+      "connectionPlaceholder": "Choose a provider",
       "model": "Model",
       "modelPlaceholder": "Select a model",
       "timeout": "Time limit per call",
@@ -882,7 +882,7 @@
     },
     "transcribe": {
       "connection": "Transcription provider",
-      "connectionPlaceholder": "Select a model provider",
+      "connectionPlaceholder": "Choose a provider",
       "model": "Transcription model",
       "modelPlaceholder": "Select a model",
       "modelOff": "Off — do not transcribe"

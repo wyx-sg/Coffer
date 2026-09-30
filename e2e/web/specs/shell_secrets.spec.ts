@@ -83,6 +83,21 @@ async function registerCitingServer(
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
+/** Refuse what the citing server's first use asked for. A standalone secret
+ *  sent somewhere new waits for approval in the desktop app, and the approvals
+ *  window a browser opens for it would cover this page and every later spec's.
+ *  Rejecting withholds the value; the citation, which is what this spec reads,
+ *  stays. */
+async function rejectApprovalsFor(secret: string): Promise<void> {
+  const r = await api("/credentials/approvals?status=pending");
+  const { approvals } = (await r.json()) as {
+    approvals: { id: string; ref: string | null }[];
+  };
+  for (const a of approvals.filter((x) => x.ref === `secret/${secret}`)) {
+    await api(`/credentials/approvals/${a.id}/reject`, { method: "POST" });
+  }
+}
+
 test("adding a secret lists it as unused, with the reference files cite", async ({
   page,
 }) => {
@@ -119,6 +134,7 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
   try {
     await storeSecret(secret, "e2e-not-a-real-value");
     await registerCitingServer(server, secret);
+    await rejectApprovalsFor(secret);
 
     await page.goto("/secrets");
     const inUse = page.getByRole("region", { name: /In use/ });
@@ -144,6 +160,7 @@ test("a secret an MCP server cites names it, and Delete says so instead of delet
     await page.getByRole("link", { name: server }).click();
     await expect(page).toHaveURL(new RegExp(`/mcp-servers/${server}$`));
   } finally {
+    await rejectApprovalsFor(secret);
     await deregisterMcpServer(server);
     await deleteSecret(secret);
   }

@@ -13,11 +13,36 @@
 // quota windows can be fixed — a browser cannot make the proxy meter a request
 // on cue.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import * as fs from "node:fs";
-import { beforeEachInjectToken } from "./_helpers";
+import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 
 beforeEachInjectToken();
+
+/** Set the MCP-calls window — the one per-request usage detail follows — and
+ *  return what it was. Another spec may have left it at "keep forever", which
+ *  (rightly) hides the note this spec reads. */
+async function setDetailDays(days: number | null): Promise<number | null> {
+  const { token, port } = readDaemonToken();
+  const url = `http://127.0.0.1:${port}/api/v1/retention/policies`;
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Coffer-Token": token,
+  };
+  const list = (await (await fetch(url, { headers })).json()) as {
+    policies: { table_name: string; retention_days: number | null }[];
+  };
+  const prior =
+    list.policies.find((p) => p.table_name === "mcp_invocations")
+      ?.retention_days ?? null;
+  const r = await fetch(`${url}/mcp_invocations`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ retention_days: days }),
+  });
+  if (!r.ok) throw new Error(`retention patch failed: ${r.status}`);
+  return prior;
+}
 
 test("a fresh daemon shows the first-run state, and the range lives in the URL", async ({
   page,
@@ -63,6 +88,15 @@ test("a fresh daemon shows the first-run state, and the range lives in the URL",
 test("the custom range says how far back per-request detail is kept", async ({
   page,
 }) => {
+  const prior = await setDetailDays(30);
+  try {
+    await checkCustomRangeNote(page);
+  } finally {
+    await setDetailDays(prior);
+  }
+});
+
+async function checkCustomRangeNote(page: Page): Promise<void> {
   await page.goto("/usage");
   const usage = page.getByRole("region", { name: "API-key providers" });
   await usage.getByRole("button", { name: "Custom…" }).click();
@@ -74,7 +108,7 @@ test("the custom range says how far back per-request detail is kept", async ({
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(/\/usage$/);
-});
+}
 
 test("Export CSV downloads the summary for the current range", async ({
   page,

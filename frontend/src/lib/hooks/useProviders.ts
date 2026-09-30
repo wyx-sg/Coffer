@@ -4,7 +4,12 @@ import { useTranslation } from "react-i18next";
 
 import type { AgentType } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
-import { providersApi, type ProviderCreate, type ProviderPatch } from "@/lib/api/providers";
+import {
+  providersApi,
+  type Provider,
+  type ProviderCreate,
+  type ProviderPatch,
+} from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 import {
   endpointModelsKey,
@@ -105,10 +110,13 @@ export function useDeleteProvider() {
   return useMutation({
     mutationFn: (uid: string) => providersApi.remove(uid),
     // The detail and its endpoint probe go first, so a stale detail view
-    // cannot refetch a 404; then the list.
+    // cannot refetch a 404; the row leaves the cached list at once, because
+    // the page opens the list's first provider and must not reopen this one
+    // before the refetch lands; then the list is refetched.
     onSuccess: (_data, uid) => {
       qc.removeQueries({ queryKey: providerKey(uid) });
       qc.removeQueries({ queryKey: endpointModelsKey(uid) });
+      qc.setQueryData<Provider[]>(providersKey, (old) => old?.filter((p) => p.uid !== uid));
       void qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,

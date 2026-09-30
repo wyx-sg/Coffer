@@ -871,7 +871,7 @@
     },
     "internalEngine": {
       "connection": "使用的模型提供商",
-      "connectionPlaceholder": "选择模型提供商",
+      "connectionPlaceholder": "选择提供商",
       "model": "模型",
       "modelPlaceholder": "选择模型",
       "timeout": "单次调用的时间上限",
@@ -882,7 +882,7 @@
     },
     "transcribe": {
       "connection": "转写用的模型提供商",
-      "connectionPlaceholder": "选择模型提供商",
+      "connectionPlaceholder": "选择提供商",
       "model": "转写模型",
       "modelPlaceholder": "选择模型",
       "modelOff": "关闭——不做转写"
