@@ -11,7 +11,7 @@
 // A failed or empty probe leaves the stored selection exactly as it was.
 import { useState } from "react";
 
-import type { Modality, Provider, ProviderModel } from "@/lib/api/providers";
+import type { CuratedPrice, Modality, Provider, ProviderModel } from "@/lib/api/providers";
 import { useUpdateProvider } from "@/lib/hooks/useProviders";
 
 export function useModelCuration(provider: Provider, fetched: readonly ProviderModel[]) {
@@ -56,5 +56,27 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     }
   };
 
-  return { rows, isOn, modalityOf, toggle, setModality, pending: update.isPending, unrestricted };
+  /** Record the user's own price on a model ("You set"), or `null` to reset
+   *  it. An unrestricted provider is written out first, as a toggle does, so
+   *  setting a price never narrows what it offers; a row not offered yet is
+   *  switched on with it. */
+  const setPrice = (row: ProviderModel, price: CuratedPrice | null) => {
+    const base = materialised();
+    write(
+      base.some((m) => m.id === row.id)
+        ? base.map((m) => (m.id === row.id ? { ...m, price } : m))
+        : [...base, { id: row.id, modality: modalityOf(row), price }],
+    );
+  };
+
+  return {
+    rows,
+    isOn,
+    modalityOf,
+    toggle,
+    setModality,
+    setPrice,
+    pending: update.isPending,
+    unrestricted,
+  };
 }

@@ -71,8 +71,8 @@ class CuratedPrice(BaseModel):
     """What the user says this connection charges for a model, in USD per
     million tokens (web search per thousand requests). Relays and resellers
     price differently from the vendor, so a connection's own price wins over
-    the bundled snapshot when usage is costed (spec provider-switching "Price
-    usage from a bundled snapshot and per-connection prices"). A cache category
+    every other source when usage is costed (spec provider-switching "Resolve
+    each model's price from the provider, its API, or the bundled list"). A cache category
     left out is charged at the input rate, so an estimate errs high."""
 
     model_config = ConfigDict(extra="forbid")
@@ -113,7 +113,7 @@ class CuratedModel(BaseModel):
     effort_levels: list[str] | None = None
     #: The level used when the agent's binding names none.
     default_effort: str | None = None
-    #: This connection's own price for the model; ``None``: the bundled one.
+    #: This connection's own price for the model; ``None``: resolved elsewhere.
     price: CuratedPrice | None = None
 
     @model_serializer(mode="wrap")

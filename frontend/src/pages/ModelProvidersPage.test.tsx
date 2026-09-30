@@ -216,12 +216,10 @@ describe("ModelProvidersPage", () => {
     // Scenario (revise-web-ui-ia): "the provider library has no tabs"
     serve([makeProvider({ name: "official" })]);
     renderAt();
-    await screen.findByRole("tab", { name: /overview/i });
-    // The one tab strip is the open provider's own Overview | Models — no
-    // "who runs on what" view and no Coffer's model tab on the library.
-    expect(screen.getAllByRole("tablist")).toHaveLength(1);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Models"]);
-    expect(screen.queryByRole("tab", { name: /who runs|coffer's model/i })).toBeNull();
+    // The open provider is one column — Used by, Endpoint, Models — with no
+    // tab strip at all.
+    expect(await screen.findByRole("heading", { name: "Endpoint" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
 
   test("a row says what the provider offers", async () => {

@@ -1,10 +1,9 @@
 // src/components/agents/overview/OverviewConnection.tsx — the Overview's Connection card (boards 2.1.08, 2.1.09, 2.1.11, 2.1.12).
 //
 // One icon + state title + one sentence saying what the connection is and what
-// its one action does, then one row per part the connection lists: the `coffer`
-// MCP entry and — only when the connection lists it — the memory hook, each
-// with where it lives and its health. The action opens the change preview the
-// page owns (connect also repairs); Enable is the agent's switch.
+// its one action does, then one row per part the connection lists (the `coffer`
+// MCP entry and, when listed, the memory hook) with where it lives and its
+// health. The action opens the page's change preview; Enable is the switch.
 import type { ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { AlertTriangle, Link2, Power, RotateCcw, ShieldAlert, Unlink, Wrench } from "lucide-react";
@@ -38,7 +37,6 @@ import { InlineCode, InlinePath, OverviewSection } from "./OverviewSection";
 import { hookConfigPath, mcpConfigPath } from "./paths";
 
 const K = "agents.overviewTab.connection";
-
 const ICON = { connected: Link2, not_connected: Unlink, needs_repair: Wrench, disabled: Power };
 
 interface Props {

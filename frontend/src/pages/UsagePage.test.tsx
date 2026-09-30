@@ -305,11 +305,12 @@ describe("API-key usage", () => {
     const rows = within(table).getAllByRole("row");
     expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
     expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
-    // No bundled price and none set on the connection: a dash, never $0.00,
-    // whose note says why and where a price is set.
+    // Nothing prices it — not set on its provider, reported by the provider,
+    // or in the bundled list: a dash, never $0.00, whose note says where a
+    // price is set.
     expect(
       within(rows[2]).getByLabelText(
-        "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
+        "No price is known for this model: it isn’t set on its provider, reported by the provider, or in the price list bundled with Coffer. Set one in Model providers.",
       ),
     ).toHaveTextContent(/^—$/);
     expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();

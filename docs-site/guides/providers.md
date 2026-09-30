@@ -22,12 +22,11 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 **Model providers** is one list beside one provider.
 
-- **The list** (left) has a **Filter** and one row per provider: its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
+- **The list** (left) has a **Filter** and one row per provider: a drag handle, its mark, its name, its protocol and what it offers ("9 models", "All models", or "Coffer's engine only" for an Ollama-protocol provider), and the marks of the agents running on it. **The order is fallback priority** (see [Failover](#failover-between-providers)): drag a row, or focus its handle and press ↑ / ↓, to move it. A chip marks the provider Coffer's own engine uses (**Coffer · background model**) and the one that transcribes speech (**Coffer · speech to text**); both are changed in **Settings › General**. Opening the page opens the first provider.
 - **The header** of the open provider shows its health, read from listing the endpoint's models when you open it — **Reachable**, **Key rejected** or **Unreachable** — its protocol and base URL, the **Reach** control, **Test**, **Edit**, and a **⋯** menu with **Test connection**, **Refresh models** and **Delete provider**. When the endpoint refuses the stored key, a banner says who fails because of it and offers **Replace key**.
-- **Overview** has three sections. **Used by** lists each agent running on the provider with its model — each row opens that agent's **Model** tab, where its provider is switched — and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, and the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**. **Models** shows how many models are offered, with **Choose models**.
-- **Models** is the curated list (see [below](#curate-the-models-a-provider-offers)).
+- **The detail** is one column, with no tabs. **Used by** lists each agent running on the provider with its model — each row opens that agent's **Model** tab, where its provider is switched — and **Coffer's engine** and **Speech to text** when the provider carries them, which open **Settings › General**. The list is read-only. **Endpoint** shows the protocol (locked while an agent runs on the provider), the runtime for a local one, the base URL, the **Route** (agents reach it through Coffer's proxy, `127.0.0.1:8001`), the API key as the secret it is stored under — never the key itself — with **Replace key** and a link to **Secrets**, and **Fallback**: the switch **Use as fallback for other providers** (a local runtime is never a fallback). **Models** is the curated list with each model's price (see [below](#curate-the-models-a-provider-offers)).
 
-Each tab has its own address — `/model-providers/<uid>` for Overview, `/model-providers/<uid>/models` — so a refresh or a shared link lands on the same view.
+The provider's address is `/model-providers/<uid>`; an old `/model-providers/<uid>/models` link opens the same page.
 
 With no provider yet, the page offers three ways in — **Anthropic or compatible**, **OpenAI or compatible**, **A local runtime on this Mac** — shows what each agent runs on right now (its own login), and says when Coffer's own model is not set.
 
@@ -84,13 +83,15 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 
 ### From the agent page
 
-1. Open **Agents**, choose the agent, and stay on **Overview**.
-2. In the **Model provider** card, pick a **Provider**. Only enabled providers that reach this agent are offered.
+1. Open **Agents**, choose the agent, and open its **Model** tab.
+2. Pick a **Provider**. Only enabled providers that reach this agent are offered.
 3. Pick a **Model** (and, for Claude Code, the model for the **Haiku** tier, which also runs its background tasks). The first model the endpoint returns is pre-selected.
 4. Click **Test connection**. **Confirm switch** stays disabled until the test passes for the current provider and model.
 5. Click **Confirm switch**. Coffer saves the model on the agent and then activates the provider — the only step that writes the agent's config.
 
-Picking **Use built-in (agent's own login)** and confirming puts the agent back on its own login; no test is needed.
+Picking the **Built-in login** and confirming puts the agent back on its own login; no test is needed.
+
+While the agent runs on a provider, the Model tab also shows, read-only, **Fallback** — "If <provider> fails: <the next>" or "No fallback" — and the agent's **Proxy token** for Coffer's proxy by its last four characters, with **Rotate**. The built-in login bypasses the proxy and shows neither.
 
 ### From the command line
 
@@ -195,10 +196,20 @@ coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:1143
 A gateway account often serves dozens of models when you use two or three. The provider's curated list says which ones Coffer offers downstream.
 
 1. Open **Model providers** and choose the provider.
-2. Open **Models** (or **Choose models** on Overview). Coffer lists the endpoint's models when the provider opens, and says when it last did; **Refresh** asks again. If listing fails, the tab says so and offers **Retry**; your current selection is left alone and still offered. An endpoint that lists nothing says so: leave it like that and every model the endpoint accepts stays available.
+2. Scroll to **Models**. Coffer lists the endpoint's models when the provider opens, and says when it last did; **Refresh** asks again. If listing fails, the section says so and offers **Retry**; your current selection is left alone and still offered. An endpoint that lists nothing says so: leave it like that and every model the endpoint accepts stays available.
 3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. Search and the type chips narrow the list; a model Coffer's engine, speech to text or an agent uses carries a tag saying so.
 
 Only switched-on models appear in agent, chat and channel pickers, and chat pickers list text models only.
+
+### Model prices
+
+Each model row shows its price per 1M tokens (input · output) and where the price came from:
+
+- **You set** — a price you recorded on this provider; it wins over everything else. **Set price…** (or click the price) records one; **Reset** removes it. `coffer provider price <name> <model> --input <usd> --output <usd>` does the same, `--reset` removes it, and `coffer provider price <name>` lists every price with its source.
+- **From <provider>** — the provider's own API reported it when its models were listed (OpenRouter does). It is refreshed each time the models are listed or refreshed, never per request.
+- **Bundled** — the price list shipped with each Coffer release (pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models). It knows prices per provider, historical prices and long-context tiers. Coffer never looks prices up over the network.
+- **Local · no cost** — a model runtime on this Mac.
+- **—** — nothing prices it. Usage shows `—` for it until you set one.
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer.
 
@@ -208,6 +219,18 @@ What a model picker offers for an agent is decided in one place and served to ev
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).
 
 Non-text models are never offered as chat models. A provider that curates only non-text models offers no chat model at all. Reading this list never touches the network.
+
+## Failover between providers
+
+When an agent's model is offered by more than one enabled provider, Coffer's proxy moves a request that fails before its first byte (a connection error, a 5xx, 529 or 429, a rejected key, or a first-byte timeout) to the next provider that offers the same model. It is automatic and needs no setup:
+
+- The providers are tried in the **order of the Model providers list**, the agent's own provider first. Drag the rows to change it, or run `coffer provider order <name>…` to put the named providers first.
+- **Use as fallback for other providers** (on by default, in the provider's **Endpoint**) decides whether other providers' requests may fail over to it. `coffer provider edit <name> --no-fallback` switches it off.
+- A local runtime never fails over and is never a fallback.
+- The model never changes, and nothing fails over after the first byte of the answer; the agent's own retry lands on a healthy provider.
+- Each failover is recorded in **Activity**, and **Usage** meters the provider that actually answered.
+
+See [The local model proxy](../architecture/model-proxy.md#failover) for the exact rules.
 
 ## Edit, rename and delete
 

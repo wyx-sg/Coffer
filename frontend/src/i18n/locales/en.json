@@ -685,13 +685,17 @@
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
       "secret_imported": "Imported secrets",
-      "storage_cache_cleared": "Cleared the rebuildable cache"
+      "storage_cache_cleared": "Cleared the rebuildable cache",
+      "provider_failover": "Failed over from {{from}} to {{to}} for {{model}}",
+      "provider_reordered": "Reordered model providers"
     },
     "capType": {
       "tool": "tool",
       "resource": "resource",
       "prompt": "prompt"
-    }
+    },
+    "failoverNext": "the next provider",
+    "failoverAnyModel": "a request"
   },
   "activity": {
     "title": "Activity",
@@ -2113,20 +2117,24 @@
         "keyInVault": "key in Coffer’s vault",
         "modelCount_one": "{{count}} model",
         "modelCount_other": "{{count}} models",
-        "noneTitle": "No other compatible connection yet",
+        "noneTitle": "No other compatible provider yet",
         "noneBody": {
-          "claude_code": "Add an Anthropic-compatible connection to run Claude Code off its own login.",
-          "codex": "Add an OpenAI-compatible connection to run Codex off its own sign-in."
+          "claude_code": "Add an Anthropic-compatible provider to run Claude Code off its own login.",
+          "codex": "Add an OpenAI-compatible provider to run Codex off its own sign-in."
         },
-        "addConnection": "Add connection",
-        "livesOn": "Connections live on the Model providers page.",
-        "manage": "Manage connections"
+        "addConnection": "Add provider",
+        "livesOn": "Providers live on the Model providers page.",
+        "manage": "Manage providers",
+        "helpByType": {
+          "claude_code": "Changes apply to new sessions. /effort in Claude Code overrides Effort. Coffer sets everything else for this provider; edit the file on Config files if you need more.",
+          "codex": "Changes apply to new sessions. A trusted project’s config can override Model and Effort. Coffer sets everything else for this provider; edit the file on Config files if you need more."
+        }
       },
       "model": {
         "title": "Model",
         "label": "Model",
         "placeholder": "Select a model",
-        "hint": "From the connection’s models.",
+        "hint": "From the provider’s models.",
         "builtinDefault": "{{model}} · {{agent}}’s default",
         "builtinHint": "From {{agent}}’s own list. /model in a session still switches it for that session."
       },
@@ -2156,7 +2164,7 @@
           "haiku": "Haiku",
           "fable": "Fable"
         },
-        "hint": "Claude Code asks for a tier (Opus, Sonnet, Haiku) when it picks a model for a task. Coffer suggested these from the connection’s models; a row appears for Fable only when the connection lists one."
+        "hint": "Claude Code asks for a tier (Opus, Sonnet, Haiku) when it picks a model for a task. Coffer suggested these from the provider’s models; a row appears for Fable only when the provider lists one."
       },
       "test": "Test connection",
       "review": {
@@ -2165,26 +2173,36 @@
         "fileCount_other": "{{count}} files",
         "route": "Coffer’s route to {{host}}",
         "keyHelper": "Coffer’s key helper (never the key itself)",
-        "modelList_one": "the connection’s {{count}} model",
-        "modelList_other": "the connection’s {{count}} models",
+        "modelList_one": "the provider’s {{count}} model",
+        "modelList_other": "the provider’s {{count}} models",
         "footnote": {
-          "claude_code": "Only these lines change; the rest of the file stays as it is. The raw API key is never written; Claude Code asks Coffer for it. A .bak is kept.",
+          "claude_code": "Only these lines change; the rest of the file stays as it is. Coffer writes the top-level model and the tier variables — nothing else. No provider key is written: Claude Code reaches the provider through Coffer’s local proxy with its own token. A .bak is kept.",
           "codex": "Only these lines change; the rest of the file stays as it is. The raw API key is never written. A .bak is kept."
         },
         "footnoteBuiltin": "Coffer removes the keys it wrote and nothing else; a model or effort you set yourself with /model or /effort is kept. A .bak is kept.",
         "effortLeftOut": "Effort is left out because this model reports no levels.",
         "nothingTitle": "Nothing to apply",
-        "nothingBuiltin": "On the built-in login there is no Model per tier. Pick another connection to preview exactly what Coffer will write to {{path}} before anything changes.",
+        "nothingBuiltin": "On the built-in login there is no Model per tier. Pick another provider to preview exactly what Coffer will write to {{path}} before anything changes.",
         "nothingConnection": "The choices on the left match what is applied. Change one to preview what Coffer will write to {{path}} before anything changes.",
         "staleTitle": "Switch refused — {{file}} changed on disk",
         "staleBody": "Someone (or the agent itself) saved the file after this preview was made. Nothing was written. Reload to preview again against the current file.",
         "reload": "Reload preview",
-        "testFirst": "Test the connection before confirming.",
+        "testFirst": "Test the provider before confirming.",
         "discard": "Discard",
         "confirm": "Confirm switch"
       },
       "builtinTarget": "its built-in login",
-      "switchedToast": "Switched {{agent}} to {{target}}"
+      "switchedToast": "Switched {{agent}} to {{target}}",
+      "proxy": {
+        "fallbackLabel": "Fallback",
+        "fallback": "If {{provider}} fails: {{fallbacks}} — it also offers {{model}}",
+        "noFallback": "If {{provider}} fails: No fallback",
+        "noFallbackLocal": "If {{provider}} fails: No fallback — local providers never fail over",
+        "tokenLabel": "Proxy token",
+        "token": "{{agent}}’s own token for Coffer’s proxy ({{address}})",
+        "rotate": "Rotate",
+        "rotated": "Token rotated. The agent fetches the new one on its next request."
+      }
     },
     "list": {
       "subtitle": "Claude Code and Codex on this Mac. Coffer finds them on its own; add one and it gets your MCP servers, skills and memory through one entry and one hook.",
@@ -4398,7 +4416,7 @@
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
-      "noPriceTip": "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
+      "noPriceTip": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in the price list bundled with Coffer. Set one in Model providers.",
       "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
@@ -4513,7 +4531,11 @@
       "engineOnly": "Coffer's engine only",
       "allModels": "All models",
       "models_one": "{{count}} model",
-      "models_other": "{{count}} models"
+      "models_other": "{{count}} models",
+      "dragToReorder": "Drag to reorder",
+      "reorderAria": "Move {{name}} (↑ / ↓)",
+      "orderHelpLabel": "About the providers list",
+      "orderHelp": "Order = fallback priority. If an agent’s model is offered by more than one provider, Coffer’s proxy fails over in this order before the first byte. Drag to reorder."
     },
     "detail": {
       "notFound": "Model provider not found",
@@ -4564,7 +4586,12 @@
       "locked": "locked while {{agents}} runs on it",
       "anAgent": "an agent",
       "runtime": "Runtime",
-      "wires": "serves {{wires}}"
+      "wires": "serves {{wires}}",
+      "route": "Route",
+      "routeValue": "Agents reach it through Coffer’s proxy · {{address}}",
+      "fallback": "Fallback",
+      "fallbackSwitch": "Use as fallback for other providers",
+      "fallbackLocal": "Local providers are never used as a fallback"
     },
     "key": {
       "secretPrefix": "secret:",
@@ -4600,7 +4627,7 @@
       "listing": "Listing this endpoint's models…",
       "listedAgo": "Listed {{ago}}",
       "refresh": "Refresh",
-      "hint": "Only switched-on models appear in agent, chat and channel pickers. Chat pickers list text models only.",
+      "hint": "Only switched-on models appear in agent, chat and channel pickers. Prices are per 1M tokens (input · output); Usage shows “—” for a model without one.",
       "failedTitle": "Couldn't list this endpoint's models",
       "failedBody": "{{reason}} Your selection below is unchanged and still offered.",
       "noneTitle": "This endpoint listed no models",
@@ -4608,7 +4635,8 @@
       "noMatch": "No models match.",
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more",
-      "agentDefault": "{{agent}} default"
+      "agentDefault": "{{agent}} default",
+      "offeredCount": "{{n}} of {{count}} offered"
     },
     "test": {
       "running": "Testing the endpoint…",
@@ -4721,6 +4749,32 @@
       },
       "engineUnset": "Coffer's model isn't set, so distil and curation are paused.",
       "engineLink": "Coffer's model"
+    },
+    "prices": {
+      "helpLabel": "About model prices",
+      "help": "A model’s price comes from the first of: the price you set (You set), what the provider’s own API reports when its models are listed (From <provider>), or the price list bundled with each Coffer release (Bundled) — never a network lookup. A model with no known price shows “—”; set one so Usage can show its cost.",
+      "rates": "{{input}} · {{output}} / 1M",
+      "source": {
+        "user": "You set",
+        "provider": "From {{name}}",
+        "bundled": "Bundled"
+      },
+      "tiered": "Base tier: long requests cost more past a threshold of input tokens",
+      "local": "Local · no cost",
+      "set": "Set price…",
+      "reset": "Reset",
+      "noneAria": "No price known for {{id}}",
+      "editAria": "{{id}}: {{rates}}, change the price",
+      "dialogTitle": "Price of {{id}}",
+      "dialogBody": "What this provider charges you. It wins over the provider’s API and the bundled list.",
+      "fields": {
+        "input": "Input",
+        "output": "Output",
+        "cache_read": "Cache read",
+        "cache_write_5m": "Cache write"
+      },
+      "optional": "Optional",
+      "perMillion": "USD per 1M tokens. A cache rate left empty is charged at the input rate."
     }
   },
   "skillSources": {

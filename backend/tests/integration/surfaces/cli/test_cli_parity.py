@@ -166,7 +166,16 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.
-    "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "detect-local"},
+    "provider": {
+        *_LIFECYCLE,
+        "add",
+        "scope",
+        "switch",
+        "builtin",
+        "detect-local",
+        "order",
+        "price",
+    },
     # `restore` with no `--at` undoes the last applied round; `status`
     # includes the remote (spec vault-sync).
     "sync": {

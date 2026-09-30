@@ -9,7 +9,7 @@ import { Check, Copy } from "lucide-react";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { useCopyText } from "@/lib/hooks/useCopyText";
 
-export const HOOKS_COMMAND = "/hooks";
+const HOOKS_COMMAND = "/hooks";
 
 export function CopyHooksButton() {
   const { t } = useTranslation();

@@ -44,7 +44,7 @@ class ProviderModel(BaseModel):
     #: The level used when an agent's binding names none.
     default_effort: str | None = None
     #: This connection's own price for the model (USD per million tokens);
-    #: ``None``: the bundled price list, or unpriced.
+    #: ``None``: the provider API's, the bundled list's, or none.
     price: CuratedPrice | None = None
 
 

@@ -129,6 +129,12 @@ export const providerKey = (uid: string) => ["providers", uid] as const;
  *  it changes with the ENDPOINT, not with every connection mutation. */
 export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as const;
 
+/** Model prices: under `providerKey(uid)` (a PATCH refetches); `listedAt` refetches after a listing. */
+export const providerPricesKey = (uid: string, models: readonly string[], listedAt: number) =>
+  ["providers", uid, "prices", models, listedAt] as const;
+
+// The model proxy's query keys live beside its api, in lib/api/proxy.ts.
+
 /** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
 export const localRuntimesKey = (baseUrl: string | null) => ["localRuntimes", baseUrl] as const;
 // usage — GET /usage/summary per range + grouping, GET /usage/quota

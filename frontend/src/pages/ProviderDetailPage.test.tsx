@@ -208,12 +208,10 @@ describe("ProviderDetailPage", () => {
       "href",
       "/secrets",
     );
-    expect(screen.getByText("2 of 3 offered")).toBeInTheDocument();
-    // The Models tab carries the offered / listed count.
-    expect(screen.getByRole("tab", { name: /Models/ })).toHaveTextContent("2 / 3");
-    fireEvent.mouseDown(screen.getByRole("button", { name: /Choose models/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Choose models/ }));
-    await waitFor(() => expect(where()).toBe(`/model-providers/${UID}/models`));
+    expect(await screen.findByText("2 of 3 offered")).toBeInTheDocument();
+    // One column, no tabs: the Models section sits under Used by and Endpoint.
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
   });
 
   test("a keyless provider says no key is needed", async () => {

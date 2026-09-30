@@ -24,7 +24,7 @@ import { translateApiError } from "@/lib/api/errors";
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
 
 /** The template a new file starts from: a subagent's front matter. */
-export function newFileTemplate(relpath: string): string {
+function newFileTemplate(relpath: string): string {
   const stem = relpath.replace(/\.md$/, "");
   return `---\nname: ${stem}\ndescription: \n---\n\n`;
 }
