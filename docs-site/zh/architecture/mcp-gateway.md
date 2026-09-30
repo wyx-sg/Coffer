@@ -184,10 +184,10 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 
 `BuiltinToolRegistry`（`application/builtin_tools.py`）是一个进程内注册表，由组合根在启动时填充。每个模块用一个不带前缀的名字声明一个 `BuiltinTool(name, description, input_schema, handler, feature)`。网关把它列为 `coffer__<name>`。注册表拒绝重名，也拒绝已经带前缀的名字。
 
-| 工具 | 声明位置 | 实验功能 |
-| --- | --- | --- |
-| `coffer__write` | `application/knowledge/builtin_tools.py` | 无 |
-| `coffer__search_tools` | `application/mcp/gateway_tool_search.py`（网关自有） | 无 |
+| 工具 | 声明位置 |
+| --- | --- |
+| `coffer__write` | `application/knowledge/builtin_tools.py` |
+| `coffer__search_tools` | `application/mcp/gateway_tool_search.py`（网关自有） |
 
 目前没有内置工具属于某个实验功能。对于属于实验功能的工具，注册表每次读取时都会检查该功能：功能关闭时，它的工具不会出现在 `tools/list` 和 `initialize` 文字里。对它的调用会落到上游路由，并像一个未知工具那样失败。见 [实验功能](/zh/guides/experimental-features)。
 

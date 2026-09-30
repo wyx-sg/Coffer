@@ -31,9 +31,9 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── proxy-usage/                  # model proxy usage spool, ingested by the daemon
 ├── bin/                          # deployed builds and the stable symlinks
 ├── logs/                         # daemon, proxy, shim and upstream logs
-├── state/                        # one-off markers
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
+├── secrets/                      # legacy plaintext key files (only if left from an old setup)
 ├── coffer.db.pre-vault, pre-vault/   # only after the one-time upgrade: its backup set
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
@@ -173,6 +173,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `vendor/` | 你放 SeaTalk WebSocket SDK（`seatalk_oapi_sdk`）的地方。Coffer 只读取它。 | 你 | 否 | 不用 SeaTalk 就可以。 |
+| `secrets/` | 遗留目录：`coffer run --secret` 出现之前技能读取的明文密钥文件。Coffer 从不往这里写；`coffer secret scan` 会在这里查找明文密钥，以便移进保险库。 | 你 | 否 | 其中的密钥进了保险库之后可以。 |
 | `eval-capture.jsonl` | 捕获的 `coffer__search_tools` 调用，仅在设置了 `COFFER_EVAL_CAPTURE` 时存在。 | 守护进程 | 否 | 可以。 |
 
 ## ~/.coffer 之外 {#outside-coffer}
@@ -194,7 +195,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | --- | --- | --- |
 | `~/.claude.json`（非默认目录时在配置目录内） | `mcpServers.coffer`：`{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}`，shim 路径为绝对路径。 | 把智能体连接到 Coffer 时。见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)。 |
 | `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`effortLevel`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
-| `settings.json` | 四个 Hook 条目，命令以 `: coffer-memory;` 开头，并以完整路径运行 `coffer` CLI：`coffer memory hook --agent-uid <uid> --cwd "$PWD"`。分别是 `hooks.SessionStart`（matcher `startup\|resume\|clear\|compact`，超时 10 秒）、`hooks.UserPromptSubmit`，以及 `hooks.PreToolUse` 和 `hooks.PostToolUse`（matcher `Bash`），后三者超时各 5 秒。 | 在 `memory` 开启时把智能体连接到 Coffer。见[记忆](/zh/guides/memory#install-the-hook)。 |
+| `settings.json` | 四个 Hook 条目，命令以 `: coffer-memory;` 开头，并以完整路径运行 `coffer` CLI：`coffer memory hook --agent-uid <uid> --cwd "$PWD"`。分别是 `hooks.SessionStart`（matcher `startup\|resume\|clear\|compact`，超时 10 秒）、`hooks.UserPromptSubmit`，以及 `hooks.PreToolUse` 和 `hooks.PostToolUse`（matcher `Bash`），后三者超时各 5 秒。 | 把智能体连接到 Coffer。见[记忆](/zh/guides/memory#install-the-hook)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接（不支持符号链接时为副本）。 | 向智能体投递技能时。见[技能](/zh/guides/skills)。 |
 
 ### Codex {#codex}
@@ -204,7 +205,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `config.toml` | `[mcp_servers.coffer]`，`command` 设为 shim，`args = ["--agent-uid", "<uid>"]`。 | 把智能体连接到 Coffer 时。 |
 | `config.toml` | `model_provider = "coffer"`；一个 `[model_providers.coffer]` 表，其中 `base_url` 设为模型代理的 `http://127.0.0.1:<proxy port>/openai/v1`，`supports_websockets = false`，`requires_openai_auth = false`，以及一条 `auth` 命令（以绝对路径调用 `coffer`，`args = ["proxy", "token", "--agent-uid", "<agent uid>"]`）；还有指向下面模型目录的 `model_catalog_json`。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。 |
 | `coffer-model-catalog.json` | 提供商精选的模型列表，让 Codex 自己的模型选择器能显示它。关闭提供商时删除。 | 把智能体切换到某个模型提供商时。 |
-| `hooks.json` | 与 Claude Code 相同的四个 Hook 条目，事件、matcher 和超时都一样，都运行 `coffer memory hook`。Codex 在 `config.toml` 的 `[hooks.state]` 中记录对每个条目的批准，Coffer 只读不写。 | 在 `memory` 开启时把智能体连接到 Coffer。 |
+| `hooks.json` | 与 Claude Code 相同的四个 Hook 条目，事件、matcher 和超时都一样，都运行 `coffer memory hook`。Codex 在 `config.toml` 的 `[hooks.state]` 中记录对每个条目的批准，Coffer 只读不写。 | 把智能体连接到 Coffer。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接。 | 向智能体投递技能时。 |
 
 Coffer 通过 `coffer` 服务器键、`: coffer-memory` 标记，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、其他工具的 Hook、你的 `env`——保持原样。Coffer 会读取智能体的原生记忆文件，但从不写入。

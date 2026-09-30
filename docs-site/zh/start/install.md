@@ -83,9 +83,9 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 ## 桌面应用 {#desktop-app}
 
-1. 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载 `Coffer-unsigned-aarch64-apple-darwin.dmg`。
+1. 从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载 `.dmg`。经过签名和公证的正式版名为 `Coffer-aarch64-apple-darwin.dmg`；没有代码签名的构建会在名字里注明，即 `Coffer-unsigned-aarch64-apple-darwin.dmg`。
 2. 打开 `.dmg`，把 **Coffer** 拖到**应用程序**。
-3. 这个应用没有代码签名，也没有经过公证，所以对于从浏览器下载的副本，macOS 会拒绝打开并提示 "Coffer is damaged and can't be opened"。应用并没有损坏。清除隔离标记后再打开即可：
+3. 仅限未签名的构建：对于从浏览器下载的副本，macOS 会拒绝打开并提示 "Coffer is damaged and can't be opened"。应用并没有损坏。清除隔离标记后再打开即可：
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/Coffer.app

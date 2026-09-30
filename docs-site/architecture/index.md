@@ -103,7 +103,7 @@ The agent calls a tool on its `coffer` MCP server. The shim forwards the JSON-RP
 
 ### A chat turn
 
-You send a message on the **Chat** page, or a paired owner sends one from Telegram or SeaTalk. Both surfaces call the same turn orchestrator, which starts the turn when the conversation is idle or queues the message behind the running one. The orchestrator asks the agent-provider registry for the conversation's agent, builds an adapter (Claude Agent SDK or Codex app-server), and publishes every event to a per-conversation bus that the web page and the channel renderer both subscribe to. Once a message reaches the orchestrator, nothing downstream knows which surface it came from. Details: [Chat and turns](/architecture/chat).
+You send a message on the **Conversations** page, or a paired owner sends one from Telegram or SeaTalk. Both surfaces call the same turn orchestrator, which starts the turn when the conversation is idle or queues the message behind the running one. The orchestrator asks the agent-provider registry for the conversation's agent, builds an adapter (Claude Agent SDK or Codex app-server), and publishes every event to a per-conversation bus that the web page and the channel renderer both subscribe to. Once a message reaches the orchestrator, nothing downstream knows which surface it came from. Details: [Chat and turns](/architecture/chat).
 
 ### A skill delivery
 

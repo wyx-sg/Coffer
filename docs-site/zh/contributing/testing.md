@@ -193,6 +193,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `scripts/check_docs_locales.py` | 本站的英文树和中文树一一对应：页面、侧边栏条目、标题锚点，以及中文页面链接到中文页面 |
 | `scripts/check_removed_commands.py` | `docs-site/` 下的页面、仓库指南（`README.md`、`AGENTS.md`、`CONTRIBUTING.md`、`.agents/`）、规格、随包发布的技能正文、Web 界面源文件或 e2e spec 中，都没有引用已被移除的 `coffer` 命令、选项或 `coffer__` 工具。每次命中都会写明应改用的命令；有意提到它的行（比如断言它已被移除的场景）列在脚本的 `ALLOWED` 里 |
 | `scripts/check_platform_calls.py` | 基础设施层平台部分以外的代码都不询问自己运行在哪个操作系统上。测试不受此限制。见[平台端口](/zh/architecture/platform) |
+| `scripts/check_coffer_paths.py` | 每个 `~/.coffer` 路径都在 `infrastructure/vault/home.py` 里构造，它是唯一知道目录布局并遵循 `HOME` 的模块；其他模块自己构造路径就会失败。迁移和真实 home 的测试守卫不受此限制 |
 | `scripts/check_agent_type_branches.py` | 智能体描述符及其切面以外的代码都不按智能体类型分支。见[智能体切面](/zh/architecture/agent-facets) |
 | `scripts/check_frontend_colors.py` | 前端在 `src/index.css` 之外没有颜色字面量；每种颜色都是主题 token |
 | `scripts/check_ignored_sources.py` | 没有 `.gitignore` 规则隐藏源码树中的文件，也没有未锚定的模式命中 `lib/` 或 `env/` 这类常见源码文件夹名（那样会在任意深度隐藏该文件夹） |

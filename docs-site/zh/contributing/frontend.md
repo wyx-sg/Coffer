@@ -111,15 +111,15 @@ export function useRemoveSkill() {
 
 ## 设计系统 {#design-system}
 
-用 `src/components/ui/` 中的 shadcn 原语搭建界面：`Button`、`Dialog`、`Select`、`Tabs`、`Tooltip`、`Skeleton`、`ConfirmDialog` 等。不要手搓已有原语覆盖的控件。用 `Tooltip` 而不是原生 `title=`，用 `Skeleton` 而不是自定义的闪烁块。刻意不提供下拉菜单：行操作都是明确的按钮。
+用 `src/components/ui/` 中的 shadcn 原语搭建界面：`Button`、`Dialog`、`Select`、`Tabs`、`Tooltip`、`Skeleton`、`ConfirmDialog` 等。不要手搓已有原语覆盖的控件。用 `Tooltip` 而不是原生 `title=`，用 `Skeleton` 而不是自定义的闪烁块。行操作都是明确的按钮。唯一的菜单是 `Menu`（`src/components/ui/menu.tsx`），即智能体行和智能体页头上的「⋯」：建立在 `Popover` 原语上的一小列命令，支持方向键导航，破坏性的项用 danger 角色显示。
 
 token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/blob/main/frontend/tailwind.config.js)，建立在其上的视觉词汇来自 [`.agents/visual-language.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/visual-language.md)：
 
-- **颜色：只用语义 token。** 使用 `background`、`foreground`、`card`、`muted`、`accent`、`primary`、`secondary`、`destructive`、`border`、`input`、`ring`，以及表示「你正在看的那一项」的 `highlight` / `highlight-active`。健康状态颜色只通过 `src/lib/statusColors.ts` 获得，它把一种色调映射到 `status.ok`、`status.warn` 和 `status.err`。`src` 中不会出现 `green-500` 这类原始调色板 class。
-- **字号：Tailwind 的刻度。** 使用 `text-xs` 到 `text-2xl`，永远不要用 `text-[11px]`。`font-sans` 用于界面，`font-serif` 用于长篇正文，`font-mono` 用于代码和标识符。
+- **颜色：只用语义角色。** 使用 Foundations 角色：`surface`（以及 `sidebar`、`raised`、`sunken`、`selected`、`hover`、`footer`）、`border` / `border-subtle`、`text` / `text-muted` / `text-subtle`、`accent`（以及 `soft`、`text`、`foreground`），还有状态角色 `success`、`warning`、`danger` 和 `neutral`，每个都带一个 `-soft` 填充色。shadcn 的名字（`background`、`card`、`primary`、`destructive` 等）作为指向某个角色的别名保留。健康状态颜色只通过 `src/lib/statusColors.ts` 获得，它把一种色调（`ok`、`warn`、`error`、`muted`）映射到状态角色上。`src` 中不会出现 `green-500` 这类原始调色板 class。
+- **字号：配置里的刻度。** 使用 `text-2xs`（11 px）到 `text-xl`，`display` 只用于品牌，永远不要用 `text-[11px]`。应用以 13 px 为基准，层级靠字重（`font-book`、`font-label`、`font-bold`、`font-heavy`）和颜色体现。`font-sans` 用于界面，`font-mono` 用于代码和标识符。
 - **间距：** Tailwind 默认的 4 px 刻度。`max-w-content`（72 rem）限制工作台页面的宽度，`max-w-prose`（60 ch）限制正文的宽度。
-- **圆角：** 卡片用 `rounded-lg`，控件用 `rounded-md`，标签用 `rounded-sm`。它们都由同一个 `--radius` 变量派生。
-- **只有浅色。** 没有深色 token 集，所以不要加 `dark:` 变体。
+- **圆角：** 随表面增大的固定档位：最小的标记用 `rounded-xs`（4 px），所有控件用 `rounded-md`（7 px），浮在页面上方的东西用 `rounded-2xl`（12 px）。
+- **浅色和深色。** 每个颜色 token 在 `src/index.css` 里都有浅色值和深色值。`src/lib/theme.ts` 把查看者的选择（跟随系统、浅色或深色）解析到 `<html data-theme>` 上，深色集合重新指向这些变量，所以不要加 `dark:` 变体。
 - 条件 class 用 `cn()`，所有时间戳都用 `src/lib/utils` 中的 `formatDateTime`。
 
 缺少某个 token 时，在同一个 pull request 里把它加到 Tailwind 配置中，并在描述里说明。不要内联魔法数字。

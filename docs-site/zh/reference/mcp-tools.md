@@ -93,8 +93,8 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
   "path": "staging-db-read-only-on-fridays.md",
   "title": "Staging DB is read-only on Fridays",
   "description": "When staging writes fail at the end of the week",
-  "file_path": "/Users/you/.coffer/knowledge/global/staging-db-read-only-on-fridays.md",
-  "folder_path": "/Users/you/.coffer/knowledge/global",
+  "file_path": "/Users/you/.coffer/vault/knowledge/global/staging-db-read-only-on-fridays.md",
+  "folder_path": "/Users/you/.coffer/vault/knowledge/global",
   "status": "written",
   "note": "Filed as a document of its own: no internal model is configured to merge it."
 }
@@ -218,14 +218,14 @@ Coffer 内部的其他失败是 JSON-RPC 错误 `-32603`。上游工具失败时
 Coffer 的 `initialize` 结果声明协议版本 `2025-06-18`、服务器名称 `coffer`，以及能力
 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`（resources 不带 `subscribe`）。
 其中的 `instructions` 字段会被客户端放进智能体的系统提示词，最多 800 个字符，只提及本会话列表中
-实际携带的内置工具。内容如下（记忆根目录是保险库自己的，这里是 `/Users/you/.coffer/memory`）：
+实际携带的内置工具。内容如下（记忆根目录是 `~/.coffer/derived/memory`，在保险库之外，这里是 `/Users/you/.coffer/derived/memory`）：
 
 ```text
 Coffer is this machine's local vault: it aggregates the user's MCP servers behind one
 endpoint, holds what this developer wrote down, and adds its own tools: coffer__write
 (file a durable fact), coffer__search_tools (describe an upstream tool you need; results
 are callable by name). Its knowledge is markdown you read with your own file tools. Its
-memory notes are Markdown under /Users/you/.coffer/memory/*/notes/; grep them with your
+memory notes are Markdown under /Users/you/.coffer/derived/memory/*/notes/; grep them with your
 own tools. Its own logs: coffer log audit|mcp|daemon (files: coffer path logs). The
 coffer-guide skill is the manual: load it for the catalogue, with paths, before asking
 the developer something they may have written down.

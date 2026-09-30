@@ -321,7 +321,7 @@ created: '2026-09-30T08:12:03+00:00'
 在提问时、命令前或命令后投递的每条笔记，读起来都是**出处加事实**。它写明笔记的文件，并把标题和描述表述为：`feedback` 笔记是 “the user's standing rule is: …”，其他则是 “a fact they recorded: …”：
 
 ```text
-Coffer memory, a note recorded for this user (/Users/you/.coffer/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
+Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
 ```
 
 这样措辞是有意的。在早先一轮评测里，一条写成祈使句（“删掉分支和 worktree”）、在命令前投递的笔记，被智能体当作提示词注入向用户引述出来。改成表述为用户的长期规则之后，72 次运行中 0 次把笔记标记为注入。投递的文本从来不是给智能体的指令，命令时投递的内容也从不要求执行破坏性操作。

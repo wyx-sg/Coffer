@@ -31,9 +31,9 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── proxy-usage/                  # model proxy usage spool, ingested by the daemon
 ├── bin/                          # deployed builds and the stable symlinks
 ├── logs/                         # daemon, proxy, shim and upstream logs
-├── state/                        # one-off markers
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
 ├── vendor/                       # operator-supplied SeaTalk SDK
+├── secrets/                      # legacy plaintext key files (only if left from an old setup)
 ├── coffer.db.pre-vault, pre-vault/   # only after the one-time upgrade: its backup set
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
@@ -173,6 +173,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `vendor/` | Where you place the SeaTalk WebSocket SDK (`seatalk_oapi_sdk`). Coffer only reads it. | you | No | Yes, if you do not use SeaTalk. |
+| `secrets/` | Legacy: plain key files skills read before `coffer run --secret`. Coffer never writes here; `coffer secret scan` looks in it for plaintext keys to move into the vault. | you | No | Yes, once its keys are in the vault. |
 | `eval-capture.jsonl` | Captured `coffer__search_tools` calls, only when `COFFER_EVAL_CAPTURE` is set. | daemon | No | Yes. |
 
 ## Outside ~/.coffer
@@ -194,7 +195,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | --- | --- | --- |
 | `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Connecting the agent to Coffer. See [Agents](/guides/agents#connect-an-agent-to-coffer). |
 | `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> proxy token --agent-uid <agent uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found), which prints the agent's local proxy token; `env.ANTHROPIC_BASE_URL` set to the model proxy's `http://127.0.0.1:<proxy port>/anthropic`; `127.0.0.1,localhost` appended to `env.NO_PROXY`; and the model keys (`model`, `effortLevel`, `env.ANTHROPIC_DEFAULT_<TIER>_MODEL`, `modelPicker`). No provider key is ever written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
-| `settings.json` | Four hook entries whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path as `coffer memory hook --agent-uid <uid> --cwd "$PWD"`: `hooks.SessionStart` (matcher `startup\|resume\|clear\|compact`, 10-second timeout), `hooks.UserPromptSubmit`, and `hooks.PreToolUse` and `hooks.PostToolUse` (matcher `Bash`), each with a 5-second timeout. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory#install-the-hook). |
+| `settings.json` | Four hook entries whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path as `coffer memory hook --agent-uid <uid> --cwd "$PWD"`: `hooks.SessionStart` (matcher `startup\|resume\|clear\|compact`, 10-second timeout), `hooks.UserPromptSubmit`, and `hooks.PreToolUse` and `hooks.PostToolUse` (matcher `Bash`), each with a 5-second timeout. | Connecting the agent to Coffer. See [Memory](/guides/memory#install-the-hook). |
 | `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex
@@ -204,7 +205,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `config.toml` | `[mcp_servers.coffer]` with `command` set to the shim and `args = ["--agent-uid", "<uid>"]`. | Connecting the agent to Coffer. |
 | `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table with `base_url` set to the model proxy's `http://127.0.0.1:<proxy port>/openai/v1`, `supports_websockets = false`, `requires_openai_auth = false` and an `auth` command (`coffer` by absolute path, `args = ["proxy", "token", "--agent-uid", "<agent uid>"]`), and `model_catalog_json` pointing at the catalogue below. No provider key is ever written. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
-| `hooks.json` | The same four hook entries as for Claude Code, on the same events with the same matchers and timeouts, all running `coffer memory hook`. Coffer reads, and never writes, Codex's approval of each entry in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
+| `hooks.json` | The same four hook entries as for Claude Code, on the same events with the same matchers and timeouts, all running `coffer memory hook`. Coffer reads, and never writes, Codex's approval of each entry in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer. |
 | `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>`. | Delivering a skill to the agent. |
 
 Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.

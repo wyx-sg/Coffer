@@ -122,7 +122,7 @@ Settings → Daemon → Start at login
 | --- | --- |
 | `~/.coffer/daemon.json` | 所有客户端都读的发现文件：`version`（文件的 schema 版本）、`pid`、`port`、`token`、`started_at`、`binary_path`。权限 `0600`，原子写入，守护进程退出时删除。文件缺失或格式错误即视为「没有守护进程」。 |
 | `~/.coffer/daemon.lock` | 保证每个保险库只有一个守护进程的锁。它在两次运行之间一直留在磁盘上；锁在于打开的文件，而不在于文件是否存在。 |
-| `~/.coffer/daemon-config.json` | 在其他任何东西打开之前读取的本机设置：`port`、`features`（本机的实验功能开关）、`machine_id` 和 `machine_name`。权限 `0600`。从不同步。 |
+| `~/.coffer/daemon-config.json` | 在其他任何东西打开之前读取的本机设置：`port`、`proxy_port`（本地模型代理的端口）、`features`（本机的实验功能开关）、`machine_id` 和 `machine_name`。权限 `0600`。从不同步。 |
 | `~/.coffer/vault/`、`local/`、`content/`、`derived/`、`runs.db` | Coffer 的状态，分为五种存储类别；见[持久化](/zh/architecture/persistence)。 |
 | `~/.coffer/logs/` | 日志；见下文。 |
 | `~/.coffer/bin/` | 已部署的二进制（仅冻结构建）；见[升级与回滚](#upgrades-and-rollback)。 |

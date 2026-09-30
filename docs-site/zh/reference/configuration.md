@@ -18,7 +18,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | 浏览器 `localStorage` | Web 界面偏好 | 按浏览器保存，从不发给守护进程 |
 
 ::: warning 环境变量与脱离启动的守护进程
-守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=memory=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
+守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=<key>=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
 :::
 
 ## 环境变量 {#environment-variables}
@@ -36,6 +36,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
+| `COFFER_QUOTA_POLL` | 未设置 | `off` 停止在后台拉取 Codex 的订阅额度（每次拉取会起一个短命的 `codex app-server`）。测试套件会设置它。 | [`surfaces/http/usage_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/usage_wiring.py) |
 
 ### MCP 网关 {#mcp-gateway}
 

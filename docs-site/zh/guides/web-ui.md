@@ -47,7 +47,7 @@ opened http://127.0.0.1:8000/ in your browser
 | 分组 | 入口 | 路由 | 用途 |
 | --- | --- | --- | --- |
 | — | **总览** | `/` | 落地页：需要你处理的事、每个领域的健康状况，以及最近几次改动。见下面的[总览](#overview)。 |
-| 智能体 | **智能体** | `/agents` | 这台机器上装的、由 Coffer 管理的 AI 智能体。每个智能体的页面有**总览**、**技能**、**MCP 服务器**、**插件**、**记忆**、**对话**和**配置文件**标签页。见[智能体](/zh/guides/agents)。 |
+| 智能体 | **智能体** | `/agents` | 这台机器上装的、由 Coffer 管理的 AI 智能体。每个智能体的页面有**总览**、**模型**、**技能**、**MCP 服务器**、**插件**、**Hooks**、**配置文件**、**记忆**和**会话**标签页。见[智能体](/zh/guides/agents)。 |
 | 智能体 | **模型提供商** | `/model-providers` | 厂商的接入地址和它们的 API 密钥，也就是智能体所用的模型。见[模型提供商](/zh/guides/providers)。 |
 | 运行 | **对话** | `/conversations` | Coffer 运行的每个对话（在这里开始的或来自消息渠道的），带来源、按来源和智能体的筛选，以及一个可以继续任何对话的回复框。见[对话](/zh/guides/chat)。 |
 | 运行 | **消息渠道** | `/channels` | 让你在 IM 里和智能体对话的 Telegram 和 SeaTalk 机器人：配置、连接状态和设置；每个都链接到它的对话。见[消息渠道](/zh/guides/channels)。 |
@@ -63,9 +63,6 @@ opened http://127.0.0.1:8000/ in your browser
 | 系统 | **同步** | `/sync` | 让这个保险库和你自己的 git 远端收敛，分为**状态**、**机器**和**远端**标签页，另有**解决冲突**（`/sync/conflicts`）和**审阅暂停的删除**（`/sync/deletions`）视图。见[保险库同步](/zh/guides/vault-sync)。 |
 
 中文界面里的分组名是 智能体 · 运行 · 能力 · 上下文 · 系统，agent 一律叫作智能体。
-
-::: info 仍在建设中的页面
-:::
 
 属于[实验功能](/zh/guides/experimental-features)的入口，在功能打开时带一个**实验**标签。功能关闭时，入口不出现在侧边栏里；一个分组的入口全部关闭时，分组标题也一并去掉；点链接进入它的页面会看到一条说明功能已关闭的提示。目前没有实验功能，所以没有入口带这个标签。
 
@@ -114,7 +111,7 @@ opened http://127.0.0.1:8000/ in your browser
 
 ## 设置 {#settings}
 
-设置以一个大窗口的形式打开在当前页面上方，所以关掉它会让你回到原来的位置。用**设置**这一行打开，或者在没有输入框聚焦时按 **⌘,**（**Ctrl+,**），或者从命令面板打开。每个字段改完即保存，没有保存按钮。
+设置以一个大窗口的形式打开在当前页面上方，所以关掉它会让你回到原来的位置。用**设置**这一行打开，或者在没有输入框聚焦时按 **⌘,**（**Ctrl+,**），或者从命令面板打开。除了守护进程标签页上的**端口**，每个字段改完即保存，没有保存按钮。
 
 它有五个标签页，顺序如下：
 
@@ -149,7 +146,7 @@ opened http://127.0.0.1:8000/ in your browser
 
 ## 所有页面共有的约定 {#conventions-every-page-shares}
 
-**URL 描述你正在看的东西。**刷新、书签或分享的链接会重新打开同一个视图。详情页的标签页是路径的一部分：默认标签页是不带后缀的地址，其他标签页加上自己的名字，比如 `/mcp-servers/github` 和 `/mcp-servers/github/tools`。技能和 MCP 服务器按名称寻址，名称在登记后就固定了（`/skills/release-notes`）；智能体按类型寻址，因为每种类型只有一个（`/agents/claude_code/skills`）。可以改名的类型（模型提供商、消息渠道、知识集、记忆分区）按不可变的 uid 寻址（`/model-providers/<uid>/models`），所以改名不会让链接失效。活动和同步仍然用 `?tab=` 表示标签页（`/activity?tab=mcp`，全部是不带参数的 `/activity`；`/sync?tab=remote`），树里打开的文件是 `?file=`。打开的对话是 `/conversations/<id>`，**新建对话**打开的草稿是 `/conversations/new`；列表的筛选条件是查询参数（`/conversations?source=seatalk&agent=codex`、`?channel=<uid>`）。
+**URL 描述你正在看的东西。**刷新、书签或分享的链接会重新打开同一个视图。详情页的标签页是路径的一部分：默认标签页是不带后缀的地址，其他标签页加上自己的名字，比如 `/mcp-servers/github` 和 `/mcp-servers/github/tools`。技能和 MCP 服务器按名称寻址，名称在登记后就固定了（`/skills/release-notes`）；智能体按类型寻址，因为每种类型只有一个（`/agents/claude_code/skills`）。可以改名的类型（模型提供商、消息渠道、知识集、记忆分区）按不可变的 uid 寻址（`/channels/<uid>/<tab>`），所以改名不会让链接失效。活动和同步仍然用 `?tab=` 表示标签页（`/activity?tab=mcp`，全部是不带参数的 `/activity`；`/sync?tab=remote`），树里打开的文件是 `?file=`。打开的对话是 `/conversations/<id>`，**新建对话**打开的草稿是 `/conversations/new`；列表的筛选条件是查询参数（`/conversations?source=seatalk&agent=codex`、`?channel=<uid>`）。
 
 **列表的外观和行为一致。**每个列表页都用同一种表格，带搜索、筛选、分页和批量选择，点击一行打开它的详情页。每个行操作都有文字标签。
 

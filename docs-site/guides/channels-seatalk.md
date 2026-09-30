@@ -34,16 +34,18 @@ Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket del
 
 ## 2. Supply the WebSocket SDK
 
-1. Download SeaTalk's Python SDK for WebSocket event callbacks from the SeaTalk Open Platform. The package is `seatalk_oapi_sdk`; see SeaTalk's [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) documentation.
-2. Unpack it so that the package directory sits inside Coffer's vendor directory:
+1. Download SeaTalk's Python SDK for WebSocket event callbacks from the SeaTalk Open Platform. The package is `seatalk_oapi_sdk`; see SeaTalk's [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) documentation. The download stays with you, because it sits behind the platform's sign-in.
+2. Hand the rest to your agent. Once the channel is registered (step 3), a channel waiting for the SDK reads **SeaTalk's Python SDK isn't installed**, links SeaTalk's download page and offers **Copy prompt** (and **Ask an agent** while a Coffer-managed agent is available): a prompt that has your agent unpack the archive into Coffer's vendor directory. Press **Retry** once it is in place.
 
-   ```text
-   ~/.coffer/vendor/seatalk_oapi_sdk/
-   ```
+Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart.
 
-   To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **contains** `seatalk_oapi_sdk/`, in the environment the daemon starts from.
+To do it by hand instead, unpack the archive so that the package directory sits inside Coffer's vendor directory:
 
-Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart. In the web UI, a channel waiting for the SDK links SeaTalk's download page and offers the rest of these steps as a prompt for your agent: you download the archive, the agent unpacks it into the directory above.
+```text
+~/.coffer/vendor/seatalk_oapi_sdk/
+```
+
+To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **contains** `seatalk_oapi_sdk/`, in the environment the daemon starts from.
 
 ## 3. Register the channel
 

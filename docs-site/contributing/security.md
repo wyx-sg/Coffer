@@ -84,7 +84,7 @@ Knowledge paths go through one traversal guard, `infrastructure/knowledge/paths.
 ## Checklist for a security-relevant change
 
 - [ ] No new listener, bind address or route that bypasses the token and host checks.
-- [ ] No secret in a table other than `secrets`, in a log, in the audit log or in an API response.
+- [ ] No secret outside the secret store's ciphertext files (`vault/secret/<ref>.enc`): not in a table, in a log, in the audit log or in an API response.
 - [ ] No new `keyring` import outside the secrets module, and no new import-linter waiver.
 - [ ] User-supplied outbound URLs are validated with the SSRF guard.
 - [ ] User- or agent-supplied paths go through a traversal guard.

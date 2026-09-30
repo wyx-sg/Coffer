@@ -61,7 +61,7 @@ flowchart LR
 | 进程 | 生命周期 | 作用 |
 | --- | --- | --- |
 | `coffer-daemon` | 常驻，每个保险库一个 | 在 `127.0.0.1:<port>` 上提供 REST API（`/api/v1/*`）、MCP 端点（`/mcp`）和构建好的 Web 界面。它拥有全部状态，是唯一的 SQLite 写入者。从源码运行时是 `python -m coffer.infrastructure.daemon.entry`。冻结构建运行 `coffer-daemon` 二进制。 |
-| 本地模型代理 | 常驻，比守护进程活得久 | `coffer-daemon proxy`，守护进程唯一的兄弟进程，在 `127.0.0.1:8001` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
+| 本地模型代理 | 常驻，比守护进程活得久 | 正式构建里是 `coffer-daemon proxy`（从源码运行时是 `python -m coffer.infrastructure.model_proxy.entry`），守护进程唯一的兄弟进程，在 `127.0.0.1:8001` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
 | `coffer` 命令行 | 一条命令 | 通过回环 HTTP 调用守护进程，带上 `daemon.json` 里的令牌和 `X-Coffer-Actor: cli` 请求头，所以它的修改会以命令行身份记入审计。 |
 | `coffer-mcp-shim` | 一个 MCP 客户端会话 | 一个 stdio ↔ HTTP/SSE 转发器。智能体把它当作 stdio MCP 服务器启动，它把每行 JSON-RPC 转发给 `/mcp`。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 桌面壳 | 应用运行期间 | 一个 Tauri 2 应用，把同一份前端构建作为本地资源加载，并通过 IPC 把守护进程的 URL 和令牌交给它。它会检测或拉起守护进程，但守护进程比应用活得久：退出应用不会停止守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
@@ -77,7 +77,7 @@ flowchart LR
 
 | 文件 | 方向 | 由谁写 | 内容 | 生命周期 |
 | --- | --- | --- | --- | --- |
-| `daemon-config.json` | 进 | 命令行、功能开关、同步的机器身份 | `port`（可选）、`machine_name`、缓存的 `machine_id`、`features` 开关 | 跨重启保留 |
+| `daemon-config.json` | 进 | 命令行、功能开关、同步的机器身份 | `port`（可选）、`proxy_port`（可选）、`machine_name`、缓存的 `machine_id`、`features` 开关 | 跨重启保留 |
 | `daemon.json` | 出 | 守护进程，在启动时 | `version`（schema 版本，当前为 `1`）、`pid`、`port`、`token`、`started_at`、`binary_path` | 退出时删除 |
 
 `daemon-config.json` 不能放在 SQLite 里，因为端口必须在打开或迁移数据库之前选定。它也不能是环境变量：拉起守护进程的调用方会传下自己的环境，而 shell 配置文件只作用于你的终端。这个文件只用标准库读取。读不了或格式错误的文件会记一条警告并按「没有设置」处理，所以手改出的错别字永远不会让守护进程起不来。写入时合并进已有对象，并保留本构建不认识的键，所以新版 Coffer 写的文件被旧版碰过之后仍然完好。
@@ -146,10 +146,10 @@ sequenceDiagram
 6. **迁移。** lifespan 首先拒绝两种 home：状态仍保存在 `coffer.db` 里的（`VAULT_MIGRATION_REQUIRED`，提示 `coffer migrate`），以及被回滚的升级留在挂起状态的（`VAULT_MIGRATION_ON_HOLD`，提示 `--resume`）。然后它在事件循环之外对 `runs.db` 运行 Alembic（`surfaces/http/migrations_runner.py`）。如果数据库的修订号本构建不认识，启动以 `DB_SCHEMA_TOO_NEW` 失败，而不是抛出一个看不懂的 Alembic 错误。如果需要升级，会先把文件及其 `-wal`/`-shm` 伴随文件复制为 `runs.db.pre-<revision>`，保留最新三份。schema 已是最新时什么都不复制。见[持久化](/zh/architecture/persistence)。
 7. **启动清扫。** `orphan_sweep.startup_sweep()` 杀掉 `~/.coffer/upstream-pids/` 下记录的、仍以相同命令行存活的每棵进程树。冻结构建还会终止其他可证明在为同一个保险库服务的守护进程，即可执行文件名相同、解析后的 `~/.coffer` 也相同。读不出保险库的进程不会被动。
 8. **装配。** lifespan 打开保险库仓库（没有 `git` 的机器会在这里失败，并提示安装步骤），启动处理手动编辑的保险库扫描器，构建密钥存储和主密钥、审计和资源服务、保留策略服务以及内部引擎设置。它创建内置工具注册表，按依赖顺序装配每种资源类型（`kind_wiring.py`），然后是对话、整理和消息渠道。对话还会安排一次性清扫，把崩溃时停在 `streaming` 状态的消息标记为 `failed`。
-9. **启动自愈。** 每一项都是尽力而为：提供商投射清扫、技能偏移修复、Claude MCP home 迁移、按 `memory` 开关匹配记忆投递，以及用本构建重新渲染内置的 `coffer-guide` 技能。
+9. **启动调和。** 调和器对它负责收敛的每个目标跑一轮（`run_boot_pass`）：智能体的 MCP 条目、技能链接、提供商投射和记忆投递 Hook。它修复的东西会进审计，失败的一轮只记日志，从不让启动失败。然后用本构建重新渲染内置的 `coffer-guide` 技能（`run_builtin_guide_refresh`）。
 10. **身份。** lifespan 把令牌、端口和启动时间从 `daemon.json` 读回到鉴权依赖和状态路由里。存在但读不了的 `daemon.json` 会让启动失败。如果吞掉这个错误，所有需要鉴权的路由都会返回 503，而状态路由却说已就绪。
 11. **二进制部署。** 冻结构建把它的兄弟二进制复制到 `~/.coffer/bin`（见[二进制部署](#binary-deployment)）。从源码运行时这一步什么都不做。
-12. **后台任务。** 它启动后台任务、消息渠道运行时调和器和 MCP 会话回收器，然后把阶段设为 `ready`。
+12. **后台任务。** 它启动后台任务、消息渠道运行时、调和器的周期循环、待处理事项监视和 MCP 会话回收器，然后把阶段设为 `ready`。保险库扫描器、模型代理监管者、用量循环和价格刷新已经在第 8 步由各自类型的装配启动了。
 
 只有在 lifespan 返回之后，uvicorn 才在 socket 上调用 `listen()`、报告 `started`，并让 `entry.py` 释放拉起锁。因此竞争的拉起在整个启动过程中都被锁挡着，从不会去探测一个已绑定但还不应答的 socket。锁打开时，那个拉起的探测会找到一个正在服务的守护进程，然后干净地退出。在真实的保险库上启动要好几秒（迁移、密钥存储、上游预热），所以探测超时给得很宽裕。
 
@@ -234,7 +234,7 @@ coffer daemon restart              # a running daemon owns its socket; restart t
 coffer config unset daemon.port    # back to 8000
 ```
 
-`daemon.port` 这个键在没有守护进程运行时也能用，因为你恰恰是在守护进程起不来时才去改端口。因此它是唯一一个存在绑定前设置文件里、而不是在路由后面的 `coffer config` 键，这项设置也没有 REST 路由。
+`daemon.port` 这个键在没有守护进程运行时也能用，因为你恰恰是在守护进程起不来时才去改端口。因此它是唯一一个由 CLI 直接写进绑定前设置文件、而不经过路由的 `coffer config` 键。Web 界面通过运行中的守护进程访问同一个文件：`GET /api/v1/daemon/port` 返回已保存的端口、实际绑定的端口，以及是否有待重启生效的改动；`PUT /api/v1/daemon/port` 保存下次启动的端口，绑不上的端口会被拒绝。
 
 一个扫描空闲端口的守护进程会悄悄搞坏两样东西：你的 Web 界面书签，以及浏览器按那个源保存的一切。拒绝启动并说出占用端口的进程，是更好的失败方式。如果占用者本身就是一个 Coffer 守护进程，消息会说它很可能是你自己还在预热的守护进程，而不是叫你杀掉它。
 
@@ -254,7 +254,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 
 ## 后台工作 {#background-work}
 
-所有在请求之外运行的东西都在一个地方启动：`surfaces/http/background_workers.py`，外加 lifespan 和入口点直接拥有的几个任务。每个后台任务先跑一次补课或等一段启动延迟，然后按间隔循环。失败的一轮会记日志，从不会杀掉它的循环。属于实验功能的后台任务在每一轮开头读取开关，功能关闭时跳过这一轮；目前没有这样的任务。
+不属于某一种类型的周期性后台任务在一个地方启动：`surfaces/http/background_workers.py`。拥有循环的类型在自己的装配代码里启动它，lifespan 和入口点还直接拥有几个任务。每个后台任务先跑一次补课或等一段启动延迟，然后按间隔循环。失败的一轮会记日志，从不会杀掉它的循环。属于实验功能的后台任务在每一轮开头读取开关，功能关闭时跳过这一轮；目前没有这样的任务。
 
 | 后台任务 | 代码 | 节奏 | 做什么 |
 | --- | --- | --- | --- |
@@ -268,6 +268,12 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | MCP 会话回收器 | `surfaces/http/mcp/protocol_routes.py` | 每 60 s | 关闭闲置超过 30 分钟的 `/mcp` 会话，连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
 | 调用记录写入器 | `infrastructure/mcp/invocation_writer.py` | 持续 | 在请求路径之外，把 MCP 调用日志行批量写入 SQLite。 |
 | 被取代检查 | `infrastructure/daemon/entry.py` | 每 30 s | 当另一个存活的守护进程接管了 `daemon.json` 时，让本守护进程退下（见下文）。 |
+| 保险库扫描器 | `infrastructure/vault/scanner.py`，在 `vault_wiring.py` 里启动 | 启动时扫一次，然后在文件事件时以及每 60 s | 把保险库里的手工编辑落成提交。 |
+| 调和器 | `application/reconcile/reconciler.py`，在 `reconcile_wiring.py` 里启动 | 每 60 s，收到提示时提前 | 收敛智能体的 MCP 条目、技能链接、提供商投射和投递 Hook，并记录尚未解决的偏移。 |
+| 待处理事项监视 | `application/events/attention_watch.py`，在 `event_wiring.py` 里启动 | 每 30 s，收到提示时提前 | 重新计算总览的「需要你处理」列表，并在 `GET /api/v1/events` 上发布变化。 |
+| 模型代理监管者 | `infrastructure/model_proxy/supervisor.py`，在 `model_proxy_wiring.py` 里启动 | 每 5 s | 找到或拉起[本地模型代理](/zh/architecture/model-proxy)，把状态推给它，它挂掉时重启它。 |
+| 用量摄取和额度 | `application/usage/`，在 `usage_wiring.py` 里启动 | 摄取每 2 s；Codex 额度每 5 min | 把代理的用量暂存文件写进 `runs.db`，并在 Codex 智能体使用自己的登录时拉取它的订阅额度。 |
+| 价格刷新 | `infrastructure/usage/price_refresh.py`，在 `provider_wiring.py` 里启动 | 60 s 后第一次，然后每天 | 刷新用于估算费用的模型价格表。 |
 
 整理、聚合和提炼的间隔来自内部引擎设置，并在后台任务等待期间重新读取，所以在**设置**里的改动无需重启就生效。
 
@@ -297,13 +303,16 @@ stateDiagram-v2
 
 然后 uvicorn 优雅关闭，对打开的连接设 10 s 上限。没有这个上限，一条永远不会自己结束的 `/mcp` SSE 流会让守护进程永远关不掉。lifespan 的清理（`surfaces/http/app_shutdown.py`）把阶段设为 `draining`，并按一个至关重要的顺序执行：
 
-1. 停止后台任务：保留策略、同步、整理、提炼、聚合、对话记录预热。
-2. 停止消息渠道运行时，先取消调和器再销毁适配器，这样正在执行的一次调和不会把它们复活。消息渠道要早停，因为它们是发起新轮次的源头。
-3. 趁数据库还开着，停止仍在运行的对话轮次，让每个轮次在收尾时写下它已生成的部分回复。
-4. 给保留策略任务 2 s 完成一次清理，然后取消它。
-5. 取消会话回收器，然后排空带缓冲的调用记录写入器。
-6. 销毁每个 MCP 会话监管者，包括管理路由背后那个进程级的监管者，这会终止它们的上游子进程；然后关闭 `/mcp` 会话状态。
-7. 销毁数据库引擎并清除当前令牌。
+1. 先取消调和器的循环，因为一轮调和会写智能体的配置文件，不能在其他部分关闭时开始；然后取消待处理事项监视。
+2. 停止后台任务：保留策略、同步、整理、提炼、聚合、对话记录预热，以及技能更新检查（它还会删除暂存的来源）。
+3. 停止消息渠道运行时，先取消调和器再销毁适配器，这样正在执行的一次调和不会把它们复活。消息渠道要早停，因为它们是发起新轮次的源头。
+4. 趁数据库还开着，停止仍在运行的对话轮次，让每个轮次在收尾时写下它已生成的部分回复。
+5. 给保留策略任务 2 s 完成一次清理，然后取消它。
+6. 取消会话回收器，然后排空带缓冲的调用记录写入器。
+7. 停止监管模型代理（代理本身继续运行，所以智能体正在进行的模型流能熬过重启），然后停止价格刷新和用量循环。
+8. 销毁每个 MCP 会话监管者，包括管理路由背后那个进程级的监管者，这会终止它们的上游子进程；然后关闭 `/mcp` 会话状态。
+9. 销毁数据库引擎并清除当前令牌。
+10. 停止保险库扫描器，然后销毁派生数据库。
 
 每一步都是尽力而为：失败会带着步骤名记日志，不会阻止后面的步骤。最后 `entry.py` 释放 `daemon.json`（仅当它仍写着本 pid 时）并关闭 socket。
 
@@ -344,7 +353,7 @@ stateDiagram-v2
 | --- | --- |
 | [`infrastructure/daemon/entry.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/entry.py) | 进程入口：环境清理、fd 上限、在预先绑定的 fd 上服务、被取代检查 |
 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) | 拉起锁、存活探测、绑定与发布、`release()` |
-| [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`：端口、机器名和 id、功能开关 |
+| [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`：端口、代理端口、机器名和 id、功能开关 |
 | [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py) | 固定端口绑定、占用者查找、冲突消息、仅供测试的扫描 |
 | [`infrastructure/daemon/pid_lock.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/pid_lock.py) | `daemon.json` 读写、`pid_is_coffer_daemon` |
 | [`infrastructure/daemon/spawn.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/spawn.py) | 拉起命令解析与脱离式拉起 |

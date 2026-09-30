@@ -29,7 +29,7 @@ Codex ──► http://127.0.0.1:8001/openai/v1/responses ───────�
            (auth: coffer proxy token …)
 ```
 
-- **A separate process, from the daemon's binary.** The proxy runs as `coffer-daemon proxy`, so there is no fourth binary to build and sign. It is its own process because the daemon restarts on every upgrade and runs migrations at start. A proxy inside the daemon would cut every in-flight model stream at each restart, including sessions in the user's own terminal.
+- **A separate process, from the daemon's binary.** A frozen build runs the proxy as `coffer-daemon proxy`, so there is no fourth binary to build and sign; from source it is `python -m coffer.infrastructure.model_proxy.entry`. It is its own process because the daemon restarts on every upgrade and runs migrations at start. A proxy inside the daemon would cut every in-flight model stream at each restart, including sessions in the user's own terminal.
 - **Supervised by the daemon.** At start the daemon reads `~/.coffer/proxy.json` (`port`, `pid`, `started_at`, `version` and a control token, mode `0600`). If a proxy of the same version answers there, the daemon re-attaches to it. If the proxy is from another build, the daemon asks it to drain and replaces it once it has exited. If none is running, the daemon spawns one. A health check every few seconds restarts a crashed proxy. When the daemon stops, it stops *supervising*; the proxy keeps running. `coffer proxy status` shows what the supervisor sees.
 - **A fixed port.** The proxy binds `127.0.0.1:8001` by default (`proxy_port` in `daemon-config.json`). A fixed port keeps the URL written into the agents' files from moving on its own. There is no option to bind another interface.
 
@@ -72,7 +72,7 @@ The rules come from the agents' own gateway contracts. Claude Code's are the str
 - **Responses come back as received.** Status, headers and body chunks are relayed unbuffered, including pings and SSE comments. Claude Code aborts a stream that is silent for 300 seconds, counting relayed bytes. Error bodies are relayed verbatim, because both agents' recovery logic matches the upstream's wording.
 - **Timeouts.** 10 seconds to connect, no total timeout, and at least 300 seconds of read idleness, matching both agents' own watchdogs.
 
-Everything else the proxy is asked for is 404. The endpoint of a connection is its `base_url` with one trailing `/v1` dropped, so `https://api.anthropic.com`, `https://api.openai.com/v1` and a local `http://127.0.0.1:11434/v1` all resolve the way each wire's clients expect.
+Besides the model routes, the proxy answers `/api/hello` and `/anthropic/api/hello` (Claude Code's warm-up probe, without auth) and the daemon's control routes `/_coffer/health`, `/_coffer/state` and `/_coffer/drain` (behind the control token). Everything else the proxy is asked for is 404. The endpoint of a connection is its `base_url` with one trailing `/v1` dropped, so `https://api.anthropic.com`, `https://api.openai.com/v1` and a local `http://127.0.0.1:11434/v1` all resolve the way each wire's clients expect.
 
 ## Refusals
 

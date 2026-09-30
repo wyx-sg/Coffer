@@ -105,7 +105,7 @@ sequenceDiagram
 - **探测或启动。** shim 读取 `~/.coffer/daemon.json`（端口和令牌，权限 `0600`），检查守护进程是否响应。如果没有，就在后台启动一个，最多等 10 秒。守护进程仍没起来时，shim 向 stderr 写入 `daemon did not come up within 10s; check ~/.coffer/logs/daemon.log`，并以退出码 3 退出。
 - **桥接。** stdin 上的每一行 JSON-RPC 变成一次 `POST /mcp`；回复写回 stdout。请求并发分发，所以一次慢的工具调用不会阻塞 ping 或其他调用。服务器通知通过 `GET /mcp` SSE 流到达并写到 stdout；流断开时会带退避重连。
 - **握手打标。** 在 `initialize` 上，shim 加上 `params._meta["coffer/cwd"]`（它的工作目录），传了 uid 时还会加上 `params._meta["coffer/agent-uid"]`。
-- **守护进程重启。** 如果请求连接失败，shim 会重新读取 `daemon.json`。当那里有一个端口不同或令牌已换的存活守护进程时，它会重新绑定，重放最初的 `initialize` 以打开新会话，并把请求重试一次。客户端不会看到第二次 `initialize` 回复。
+- **守护进程重启。** 如果请求失败，shim 会重新读取 `daemon.json`。当那里有一个端口不同或令牌已换的存活守护进程时，它会重新绑定，重放最初的 `initialize` 以打开新会话，并把请求重试一次。客户端不会看到第二次 `initialize` 回复。`tools/call` 是例外：只有在它根本没到达旧守护进程时（连接本身失败）才会重发。已经发出后才失败的调用可能已经执行过，所以 shim 仍会重新绑定，但对这次调用回一个错误，说明它可能执行过也可能没有。
 - **版本检查。** 当响应的守护进程是另一个 Coffer 版本时，shim 向 stderr 打印一条警告并继续运行：
 
   ```text

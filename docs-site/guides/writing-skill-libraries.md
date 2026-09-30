@@ -282,16 +282,16 @@ Write the flow as numbered functions with explicit gates between them:
 
 ## Authoring workflow
 
-Author outside Coffer's master store. `coffer skill add` copies a folder into `~/.coffer/vault/skills/`; authoring inside the store would mean importing a folder onto itself.
+Author outside `~/.coffer`, in a folder of your own (the examples use `~/src/skills/<domain>`). `coffer skill add` copies a folder into `~/.coffer/vault/skills/`; authoring inside the store would mean importing a folder onto itself.
 
 ```sh
 # 1. Author and test in the authoring root
-cd ~/.coffer/skill-src/<domain>
+cd ~/src/skills/<domain>
 ~/.cache/coffer-skill-venv/bin/pytest -q scripts
 ~/.cache/coffer-skill-venv/bin/python scripts/lint_portable.py .
 
 # 2. Import into the master store; Coffer validates and delivers it
-coffer skill add ~/.coffer/skill-src/<domain>
+coffer skill add ~/src/skills/<domain>
 
 # 3. Confirm delivery
 coffer skill verify
@@ -299,7 +299,7 @@ coffer skill verify
 
 After the first import, keep the authoring root as the source of truth:
 
-- For a real change, edit the authoring root, run the tests and the lint again, then `coffer skill add --force ~/.coffer/skill-src/<domain>`.
+- For a real change, edit the authoring root, run the tests and the lint again, then `coffer skill add --force ~/src/skills/<domain>`.
 - For a quick fix, edit the file in the master folder that `coffer path skill <domain>` prints; agents see the change on their next read. Apply the same change to the authoring root, or the next `coffer skill add --force` overwrites it.
 - `coffer skill verify` reports drift between the master and each agent's delivered link, and `--fix` repairs missing or re-pointed links.
 
