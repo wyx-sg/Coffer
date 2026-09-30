@@ -119,13 +119,13 @@ async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -
     await env.processor.on_message(inbound("tg", "owner", "/thread deploy check"))
     await env.processor.on_message(inbound("tg", "owner", "/status", thread_id="t1"))
     status = _answers_in(adapter, "t1")[-1]
-    assert status.splitlines()[0] == "🧵#1 deploy check"
+    assert status.splitlines()[:2] == ["Status", "🧵#1 deploy check"]
     parallel = await env.active_conversation(resource, "owner", "t1")
     assert parallel is not None and parallel not in status  # names, never ids
 
     # The direct chat's own /status carries no mark.
     await env.processor.on_message(inbound("tg", "owner", "/status"))
-    assert adapter.texts()[-1].startswith("No conversation yet\n")
+    assert adapter.texts()[-1].startswith("Status\nNo conversation yet\n")
 
 
 async def test_thread_in_a_group_opens_nothing(env: ChannelEnv) -> None:
@@ -172,11 +172,9 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
 
     await env.processor.on_message(inbound("tg", "owner", "/status"))
-    assert adapter.texts()[-1].splitlines()[-3:] == [
-        "2 parallel conversations:",
-        "🧵#2 write docs — Codex — idle",
-        "🧵#1 deploy check — Coffer Assistant — running",
-    ]
+    assert adapter.texts()[-1].splitlines()[-1] == (
+        "Parallel threads: 🧵#2 write docs (idle) · 🧵#1 deploy check (running)"
+    )
 
     # A message behind the running turn shows as queued once the turn is gone.
     await env.processor.on_message(inbound("tg", "owner", "next", thread_id="t1"))
@@ -186,7 +184,9 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
         message="the stopped turn never cleared its session",
     )
     await env.processor.on_message(inbound("tg", "owner", "/status"))
-    assert adapter.texts()[-1].splitlines()[-1] == "🧵#1 deploy check — Coffer Assistant — 1 queued"
+    assert adapter.texts()[-1].splitlines()[-1] == (
+        "Parallel threads: 🧵#2 write docs (idle) · 🧵#1 deploy check (1 waiting)"
+    )
     gated.release.set()
 
 
@@ -224,13 +224,13 @@ async def test_commands_and_taps_in_a_casual_thread_act_on_the_direct_chat(
     await env.processor.on_message(inbound("tg", "owner", "/new codex", thread_id="m-root"))
     assert await env.thread_preferred_agent(resource) == "codex"
     assert await env.thread_preferred_agent(resource, "owner", "m-root") is None
-    assert _answers_in(adapter, "m-root")[-1].startswith("🆕 New conversation · Codex")
+    assert _answers_in(adapter, "m-root")[-1].startswith("**🆕 New conversation · Codex")
     first = await env.active_conversation(resource)
 
     await env.processor.on_callback(tap_event("tg", "owner", "cmd:new", thread_id="m-other"))
     assert await env.active_conversation(resource) not in (None, first)
     assert await env.active_conversation(resource, "owner", "m-other") is None
-    assert _answers_in(adapter, "m-other")[-1].startswith("🆕 New conversation · Codex")
+    assert _answers_in(adapter, "m-other")[-1].startswith("**🆕 New conversation · Codex")
 
 
 async def test_stop_from_a_casual_thread_stops_the_direct_chats_turn(env: ChannelEnv) -> None:

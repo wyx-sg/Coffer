@@ -13,13 +13,17 @@ interface Props {
   /** The resource's name, shown as the placeholder: what surfaces fall back to. */
   name: string;
   disabled?: boolean;
+  /** The field's label and hint where a kind calls its title something else
+   *  (a channel's title is its Name). */
+  label?: string;
+  hint?: string;
 }
 
-export function ResourceTitleField({ id, value, onChange, name, disabled }: Props) {
+export function ResourceTitleField({ id, value, onChange, name, disabled, label, hint }: Props) {
   const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{t("resources.titleField.label")}</Label>
+      <Label htmlFor={id}>{label ?? t("resources.titleField.label")}</Label>
       <Input
         id={id}
         value={value}
@@ -30,7 +34,7 @@ export function ResourceTitleField({ id, value, onChange, name, disabled }: Prop
         onChange={(e) => onChange(e.target.value)}
       />
       <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-        {t("resources.titleField.hint")}
+        {hint ?? t("resources.titleField.hint")}
       </p>
     </div>
   );

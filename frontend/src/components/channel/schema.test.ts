@@ -10,7 +10,7 @@
 // daemon ever starts.
 import { describe, expect, test } from "vitest";
 
-import { addChannelFormSchema, planChannel } from "./schema";
+import { addChannelFormSchema, channelSlug, planChannel } from "./schema";
 
 /** This machine's id, as the dialog reads it off `GET /sync/status`. */
 const HERE = "machine-here";
@@ -114,5 +114,17 @@ describe("addChannelFormSchema", () => {
       expect(parsed.success, field).toBe(false);
       expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain(field);
     }
+  });
+});
+
+describe("channelSlug", () => {
+  test("derives a resource name from any display name", () => {
+    expect(channelSlug("Team bot")).toBe("team-bot");
+    expect(channelSlug("  Ops · alerts!  ")).toBe("ops-alerts");
+    expect(channelSlug("团队")).toBe("channel");
+  });
+
+  test("steps past names already taken", () => {
+    expect(channelSlug("Team bot", ["team-bot", "team-bot-2"])).toBe("team-bot-3");
   });
 });

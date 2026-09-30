@@ -25,9 +25,12 @@ import { useFsBrowse } from "@/lib/hooks/useFsBrowse";
 export function FolderPicker({
   value,
   onChange,
+  label,
 }: {
   value: string | null;
   onChange: (path: string) => void;
+  /** The button's text; "Browse…" when not given. */
+  label?: string;
 }) {
   const { t } = useTranslation();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -50,7 +53,7 @@ export function FolderPicker({
   return (
     <>
       <Button type="button" variant="outline" className="shrink-0" onClick={onBrowse}>
-        {t("picker.browse")}
+        {label ?? t("picker.browse")}
       </Button>
       <FolderBrowserDialog
         open={browserOpen}

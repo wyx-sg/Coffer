@@ -111,7 +111,7 @@ Telegram replies are built from the agent's Markdown.
 - **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
 - **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
 - **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help` are shown only to you.
-- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. The card's title is a heading or a bold first line.
+- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. The card's title is a heading or a bold first line.
 
 Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
 

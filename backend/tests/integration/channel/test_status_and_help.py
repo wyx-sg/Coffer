@@ -1,4 +1,4 @@
-"""`/status` and `/help` are cards ending in the five actions (spec channels
+"""`/status` and `/help` are cards ending in their actions (spec channels
 "Report the chat's state as a status card" and "Offer the commands as a help
 card")."""
 
@@ -10,7 +10,8 @@ from coffer.domain.channel.commands import help_text
 
 from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound
 
-ACTIONS = ["cmd:stop", "cmd:new", "cmd:model", "cmd:resume", "cmd:dir"]
+STATUS_IDLE = ["cmd:new", "cmd:model", "cmd:resume", "cmd:dir"]
+HELP = ["cmd:new", "cmd:stop", "cmd:model", "cmd:status", "cmd:resume"]
 
 
 async def _card_channel(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
@@ -37,19 +38,18 @@ async def test_status_shows_names_not_ids_with_action_buttons(env: ChannelEnv, t
 
     await env.processor.on_message(inbound("tg", "owner", "/status"))
 
-    [(_chat, text, buttons)] = adapter.cards
-    assert adapter.card_titles == ["deploy check"]
+    (_chat, text, buttons) = adapter.cards[-1]
+    assert adapter.card_titles[-1] == "Status"
     assert text.splitlines() == [
-        "Agent: Claude_Code",
-        "Model: Opus 4.8",
-        "Effort: high",
-        "Directory: default",
-        "State: idle",
+        "deploy check",
+        "Claude_Code · Opus 4.8 · High · Default directory",
+        "Idle",
     ]
     assert conversation_id not in text
     assert "claude_code" not in text
-    assert [b.value for b in buttons] == ACTIONS
-    assert [b.label for b in buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
+    # Nothing runs, so there is no Stop.
+    assert [b.value for b in buttons] == STATUS_IDLE
+    assert [b.label for b in buttons] == ["New", "Model", "Resume", "Dir"]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/help is a card with the five actions")
@@ -60,7 +60,8 @@ async def test_help_is_a_card_with_the_five_actions(env: ChannelEnv) -> None:
 
     [(_chat, text, buttons)] = adapter.cards
     assert text == help_text()
-    assert [b.value for b in buttons] == ACTIONS
+    assert [b.value for b in buttons] == HELP
+    assert [b.label for b in buttons] == ["New", "Stop", "Model", "Status", "Resume"]
 
 
 async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> None:
@@ -85,4 +86,4 @@ async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
     [(chat, text, buttons)] = adapter.cards
     assert chat == "chat-1"
     assert text == help_text()
-    assert [b.value for b in buttons] == ACTIONS
+    assert [b.value for b in buttons] == HELP

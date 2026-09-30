@@ -164,13 +164,27 @@ describe("Composer attachments", () => {
     expect(onSend).toHaveBeenCalledWith("", [uploaded]);
   });
 
-  test("a file over the limit is refused without uploading", () => {
+  acceptance("chat", "a file past the limits is not attached and the reply box says why", () => {
     const big = new File(["x"], "huge.bin", { type: "image/png" });
     Object.defineProperty(big, "size", { value: 20 * 1024 * 1024 + 1 });
     render(<Composer onSend={vi.fn()} />);
     pick(big);
     expect(uploadMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent("Over the 20 MB limit");
+    expect(screen.queryByRole("list", { name: /attached files/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "huge.bin was not attached: it is over 20 MB. Up to 10 files, 20 MB each.",
+    );
+  });
+
+  test("the refusal line goes once a later file attaches", () => {
+    uploadMock.mockImplementation(async (file: File) => stored(file.name, "text/plain", 1));
+    const big = new File(["x"], "huge.bin");
+    Object.defineProperty(big, "size", { value: 20 * 1024 * 1024 + 1 });
+    render(<Composer onSend={vi.fn()} />);
+    pick(big);
+    expect(screen.getByTestId("composer-refusal")).toBeInTheDocument();
+    pick(new File(["x"], "ok.txt"));
+    expect(screen.queryByTestId("composer-refusal")).not.toBeInTheDocument();
   });
 
   test("an eleventh file is refused without uploading", async () => {
@@ -182,7 +196,10 @@ describe("Composer attachments", () => {
       fireEvent.change(input, { target: { files } });
     });
     expect(uploadMock).toHaveBeenCalledTimes(10);
-    expect(screen.getByRole("alert")).toHaveTextContent("At most 10 files per message");
+    expect(screen.getByRole("list", { name: /attached files/i }).children).toHaveLength(10);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "f10.txt was not attached: this message already has 10 files.",
+    );
   });
 
   test("a chip removed while uploading is not brought back by the upload finishing", async () => {
@@ -230,11 +247,14 @@ describe("Composer attachments", () => {
       });
     });
     expect(uploadMock).toHaveBeenCalledTimes(10);
-    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("huge.bin was not attached");
 
     pick(new File(["x"], "eleventh.txt"));
     expect(uploadMock).toHaveBeenCalledTimes(10);
-    expect(screen.getAllByRole("alert")[1]).toHaveTextContent("At most 10 files per message");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "eleventh.txt was not attached: this message already has 10 files.",
+    );
   });
 
   test("chips survive a refused send and clear after an accepted one", async () => {

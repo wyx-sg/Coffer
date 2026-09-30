@@ -1,10 +1,12 @@
 // components/chat/Composer.tsx
-// Text input + send button pinned at the bottom of the message thread. While a
-// turn streams the Send button becomes a Stop button in the same slot; the
-// input itself stays live, since a message sent mid-turn queues server-side.
-// Files attach through the paperclip, by dropping them on the composer, or by
-// pasting an image; each uploads at once and shows as a chip, and Send waits
-// until every upload is done (spec chat "Attach files from the Chat page composer").
+// The reply box pinned at the bottom of the message thread: attached files'
+// chips, the text, then a toolbar with the paperclip on the left and Send on
+// the right. While a turn streams Send becomes Stop in the same slot; the input
+// itself stays live, since a message sent mid-turn queues server-side. Files
+// attach through the paperclip, by dropping them on the composer, or by pasting
+// an image; each uploads at once and shows as a chip, and Send waits until every
+// upload is done (spec chat "Attach files from the Chat page composer"). A file
+// refused before upload is not a chip: one line under the box says why.
 import {
   forwardRef,
   useImperativeHandle,
@@ -15,7 +17,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Paperclip, Send, Square } from "lucide-react";
+import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment } from "@/lib/api/chat";
@@ -136,58 +138,35 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     // A file dragged over the page restyles only this box — an accent border
     // and "Drop to attach" — never a full-pane overlay; the limits are said
-    // only by a chip the composer rejects.
+    // only by the line under the box when a file is refused.
     <div className="px-8 pb-4 pt-2" {...dropHandlers} data-testid="composer">
-      <div
-        className={cn(
-          "mx-auto w-full max-w-[720px] rounded-xl border bg-surface-raised px-3 py-2 transition-colors duration-fast",
-          dragging ? "border-accent" : "border-border",
-        )}
-        data-dragging={dragging || undefined}
-      >
-        {files.items.length > 0 && (
-          <ul
-            className="mb-2 flex flex-wrap gap-1.5"
-            aria-label={t("conversations.attachments.listLabel")}
-          >
-            {files.items.map((it) => (
-              <li key={it.key}>
-                <AttachmentChip
-                  name={it.name}
-                  detail={formatBytes(it.size)}
-                  mime={it.mime}
-                  state={it.status === "ready" ? undefined : it.status}
-                  error={it.error}
-                  onRemove={() => files.remove(it.key)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            data-testid="composer-file-input"
-            onChange={(e) => {
-              files.add(Array.from(e.target.files ?? []));
-              // Reset so picking the same file again still fires a change.
-              e.target.value = "";
-            }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            aria-label={t("conversations.composer.attach")}
-            className="mb-0.5 shrink-0"
-          >
-            <Paperclip className="size-4" aria-hidden="true" />
-          </Button>
+      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-1.5">
+        <div
+          className={cn(
+            "flex flex-col gap-2.5 rounded-xl border bg-surface-raised pb-2.5 pl-3.5 pr-3 pt-3 transition-colors duration-fast",
+            dragging ? "border-accent" : "border-border",
+          )}
+          data-dragging={dragging || undefined}
+        >
+          {files.items.length > 0 && (
+            <ul
+              className="flex flex-wrap gap-1.5"
+              aria-label={t("conversations.attachments.listLabel")}
+            >
+              {files.items.map((it) => (
+                <li key={it.key}>
+                  <AttachmentChip
+                    name={it.name}
+                    detail={formatBytes(it.size)}
+                    mime={it.mime}
+                    state={it.status === "ready" ? undefined : it.status}
+                    error={it.error}
+                    onRemove={() => files.remove(it.key)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
           <Textarea
             ref={textareaRef}
             value={value}
@@ -206,33 +185,56 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             }
             disabled={disabled}
             rows={1}
-            className="max-h-[200px] min-h-[36px] resize-none border-0 bg-transparent px-1 py-1.5 leading-5 shadow-none focus-visible:ring-0"
+            className="max-h-[200px] min-h-6 resize-none rounded-none border-0 bg-transparent p-0 leading-6 shadow-none focus-visible:ring-0"
             aria-label={t("conversations.composer.ariaLabel")}
           />
-          {showStop ? (
+          <div className="-ml-1.5 flex items-center gap-0.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              data-testid="composer-file-input"
+              onChange={(e) => {
+                files.add(Array.from(e.target.files ?? []));
+                // Reset so picking the same file again still fires a change.
+                e.target.value = "";
+              }}
+            />
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={onStop}
-              className="mb-0.5 shrink-0"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              aria-label={t("conversations.composer.attach")}
             >
-              <Square aria-hidden />
-              {t("conversations.composer.stop")}
+              <Paperclip className="size-3.5" aria-hidden="true" />
             </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSend}
-              disabled={!canSend}
-              aria-label={t("conversations.composer.send")}
-              className="mb-0.5 shrink-0"
-            >
-              <Send className="size-4" />
-            </Button>
-          )}
+            <span className="ml-auto" />
+            {showStop ? (
+              <Button type="button" variant="outline" size="sm" onClick={onStop}>
+                <Square aria-hidden />
+                {t("conversations.composer.stop")}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon-md"
+                onClick={handleSend}
+                disabled={!canSend}
+                aria-label={t("conversations.composer.send")}
+              >
+                <ArrowUp className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         </div>
+        {files.refusal ? (
+          <p role="alert" data-testid="composer-refusal" className="px-1 text-xs text-danger">
+            {files.refusal}
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -85,51 +85,38 @@ export interface ChannelEditValues {
   /** A turn running at least this long (seconds) ends with a completion ping;
    *  0 turns it off. Undefined leaves the stored value alone. */
   notify_after_seconds?: number;
-  /** The folders `/dir` may switch into, normalised (see parseDirectories).
+  /** The folders `/dir` may switch into, normalised (see normaliseDirectory).
    *  Undefined leaves the stored list alone. */
   directories?: string[];
+  /** The folder new conversations start in (`default_agent_config.cwd`);
+   *  `null` clears it. Undefined leaves the stored value alone. */
+  default_directory?: string | null;
 }
 
 /** The most folders a channel may list (the backend's cap). */
 export const DIRECTORIES_MAX = 32;
 
+/** The channel's default working directory — where its new conversations
+ *  start — or `null` when none is set (the agent's own applies). */
+export function storedDefaultDirectory(config: Record<string, unknown>): string | null {
+  const agentConfig = config.default_agent_config;
+  if (agentConfig === null || typeof agentConfig !== "object") return null;
+  const cwd = (agentConfig as Record<string, unknown>).cwd;
+  return typeof cwd === "string" && cwd ? cwd : null;
+}
+
+/** One typed directory, normalised like the backend (trimmed, no trailing
+ *  "/"), or `null` when it is not an absolute path. */
+export function normaliseDirectory(text: string): string | null {
+  const path = text.trim();
+  if (!path.startsWith("/")) return null;
+  return path.replace(/\/+$/, "") || "/";
+}
+
 /** The stored `/dir` allow-list, or empty when absent. */
 export function storedDirectories(config: Record<string, unknown>): string[] {
   const v = config.directories;
   return Array.isArray(v) ? v.filter((d): d is string => typeof d === "string") : [];
-}
-
-/**
- * Parse the directories field — one absolute path per line — the way the
- * backend normalises it (spec channels "Choose the working directory from
- * chat"): lines trimmed, blank lines dropped, a trailing "/" removed, repeats
- * dropped. `invalid` lists the lines that are not absolute paths; `tooMany` is
- * set past the backend's cap. An empty list is valid.
- */
-export function parseDirectories(text: string): {
-  directories: string[];
-  invalid: string[];
-  tooMany: boolean;
-} {
-  const directories: string[] = [];
-  const invalid: string[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (line === "") continue;
-    if (!line.startsWith("/")) {
-      invalid.push(line);
-      continue;
-    }
-    const path = line.replace(/\/+$/, "") || "/";
-    if (!directories.includes(path)) directories.push(path);
-  }
-  return { directories, invalid, tooMany: directories.length > DIRECTORIES_MAX };
-}
-
-/** Whether the directories field, as typed, is a list the backend accepts. */
-export function directoriesDraftValid(text: string): boolean {
-  const { invalid, tooMany } = parseDirectories(text);
-  return invalid.length === 0 && !tooMany;
 }
 
 /**
@@ -209,6 +196,20 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     values.directories.join("\n") !== storedDirectories(config).join("\n")
   ) {
     nextConfig.directories = values.directories;
+  }
+  // The default directory lives in the default agent config, beside anything
+  // else a CLI user put there.
+  if (
+    values.default_directory !== undefined &&
+    values.default_directory !== storedDefaultDirectory(config)
+  ) {
+    const agentConfig =
+      config.default_agent_config && typeof config.default_agent_config === "object"
+        ? { ...(config.default_agent_config as Record<string, unknown>) }
+        : {};
+    if (values.default_directory === null) delete agentConfig.cwd;
+    else agentConfig.cwd = values.default_directory;
+    nextConfig.default_agent_config = Object.keys(agentConfig).length > 0 ? agentConfig : null;
   }
 
   if (config.channel_type === "telegram") {

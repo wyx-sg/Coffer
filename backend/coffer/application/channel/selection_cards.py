@@ -9,8 +9,8 @@ than inline in ``commands.py`` keeps those renderings from drifting apart,
 which is the whole failure the refresh exists to fix: a card that says one
 thing while the system does another.
 
-The ``cmd:`` buttons a `/status` or `/help` card carries are built here too
-(spec channels "Offer the commands as a help card").
+The ``cmd:`` buttons of the `/status`, `/help` and `/new` cards, and the agent
+card, are built in ``command_cards`` on the same primitives.
 
 Pagination lives here too, for every card rather than for models alone. A card
 is a window onto a list, not the list: the model catalogue runs to 29 entries
@@ -56,11 +56,8 @@ PAGE_PREFIX = "page"
 #: and why six buttons are legal where six bare ones would not be. Six is
 #: therefore a choice, not a guess: it fits the three allowed rows even when
 #: long labels force two to a row, and it is enough for Prev/Next plus four
-#: choices. It is also
-#: what Coffer already shipped (the ``MAX_MODEL_PICKS`` bound this pagination
-#: replaces), so pagination adds no new risk of a refused card — it only makes
-#: the rest of the list reachable. Telegram has no comparable ceiling, so the
-#: tighter platform sets the number for both.
+#: choices. Telegram has no comparable ceiling, so the tighter platform sets
+#: the number for both.
 MAX_CARD_BUTTONS = 6
 
 #: Choices per page. Prev and Next consume button slots of their own, so a
@@ -69,20 +66,10 @@ PAGE_SIZE = MAX_CARD_BUTTONS - 2
 
 #: The card kinds that can be paged — closed and explicit, so a page value
 #: naming anything else is dropped rather than re-rendered.
-PAGED_KINDS: frozenset[str] = frozenset({"model", "effort", "collection", "resume", "dir"})
+PAGED_KINDS: frozenset[str] = frozenset({"model", "effort", "collection", "resume", "dir", "agent"})
 
 #: The ``effort:`` value of the effort step's "Keep …" button: no change.
 KEEP_EFFORT = "-"
-
-#: The five actions a `/status` and a `/help` card offer, as ``(label, command)``
-#: (spec channels "Report the chat's state as a status card").
-COMMAND_ACTIONS: tuple[tuple[str, str], ...] = (
-    ("Stop", "stop"),
-    ("New", "new"),
-    ("Model", "model"),
-    ("Resume", "resume"),
-    ("Dir", "dir"),
-)
 
 #: A button label longer than this is cut (a resume card's titles).
 _LABEL_MAX = 32
@@ -134,7 +121,7 @@ class SelectionCard:
     pages: int = 1
 
 
-def _tick(label: str, selected: bool) -> str:
+def tick(label: str, selected: bool) -> str:
     """Mark the option currently in effect. The tick is what makes a refreshed
     card readable at a glance: the same list, one mark moved."""
     return f"{label} ✓" if selected else label
@@ -168,7 +155,7 @@ def _navigation(kind: str, page: int, pages: int) -> list[ChoiceButton]:
     return nav
 
 
-def _paginate(
+def paginate(
     *,
     kind: str,
     title: str,
@@ -232,14 +219,14 @@ def model_card(
     shown = current or "(CLI default)"
     options = [
         ChoiceButton(
-            label=_tick(names.get(name) or name, name == current),
+            label=tick(names.get(name) or name, name == current),
             value=f"model:{name}",
             selected=name == current,
         )
         for name in dict.fromkeys(picks)
         if callback_fits(f"model:{name}")
     ]
-    return _paginate(
+    return paginate(
         kind="model",
         title="Model",
         header=f"Current model: {shown}\nTap a choice (or send /model <name>):",
@@ -273,7 +260,7 @@ def effort_card(
     shown = current or "default"
     options = [
         ChoiceButton(
-            label=_tick(level, level == current),
+            label=tick(level, level == current),
             value=f"effort:{level}",
             selected=level == current,
         )
@@ -282,7 +269,7 @@ def effort_card(
     ]
     options.append(ChoiceButton(label=f"Keep {shown}", value=f"effort:{KEEP_EFFORT}"))
     header = f"Model: {model}\n" if model else ""
-    return _paginate(
+    return paginate(
         kind="effort",
         title="Effort",
         header=f"{header}Current effort: {shown}\nTap a level (or send /model <level>):",
@@ -308,7 +295,7 @@ def collection_card(*, choices: Sequence[str], page: int | None = None) -> Selec
         for name in choices
         if callback_fits(f"collection:{name}")
     ]
-    return _paginate(
+    return paginate(
         kind="collection",
         title="Save to which collection?",
         header="Tap a collection to save the document there:",
@@ -319,41 +306,63 @@ def collection_card(*, choices: Sequence[str], page: int | None = None) -> Selec
     )
 
 
+def path_label(path: str | None) -> str:
+    """A directory as a person reads it — under the home directory as ``~/…`` —
+    or ``Default directory`` when none is set."""
+    if not path:
+        return "Default directory"
+    path = os.path.normpath(path)
+    home = os.path.expanduser("~").rstrip(os.sep)
+    if home and (path == home or path.startswith(home + os.sep)):
+        return "~" + path[len(home) :]
+    return path
+
+
 def dir_card(
-    *, current: str | None, directories: Sequence[str], page: int | None = None
+    *,
+    current: str | None,
+    directories: Sequence[str],
+    default: str | None = None,
+    page: int | None = None,
 ) -> SelectionCard:
     """Pick the working directory from the channel's allow-list (spec channels
     "Choose the working directory from chat"). A button carries the entry's
     index (``dir:<i>``), not its path: a path can outgrow the payload cap and
-    the allow-list is the one place it is resolved against anyway."""
+    the allow-list is the one place it is resolved against anyway.
 
-    def base(path: str) -> str:
-        return os.path.basename(os.path.normpath(path)) or path
-
+    ``current`` is the directory in effect. The channel's ``default`` gets its
+    own ``Default`` button only when it is not one of the listed directories."""
     options = [
         ChoiceButton(
-            label=_tick(base(path), path == current), value=f"dir:{i}", selected=path == current
+            label=tick(path_label(path), path == current),
+            value=f"dir:{i}",
+            selected=path == current,
         )
         for i, path in enumerate(directories)
     ]
-    options.append(
-        ChoiceButton(
-            label=_tick("Default", current is None), value="dir:default", selected=current is None
+    current_value = next(
+        (f"dir:{i}" for i, path in enumerate(directories) if path == current), None
+    )
+    if default not in directories:
+        at_default = current is None or current == default
+        options.append(
+            ChoiceButton(
+                label=tick("Default", at_default), value="dir:default", selected=at_default
+            )
         )
-    )
-    shown = current or "default"
-    current_value = (
-        "dir:default"
-        if current is None
-        else next((f"dir:{i}" for i, path in enumerate(directories) if path == current), None)
-    )
-    return _paginate(
+        if at_default:
+            current_value = "dir:default"
+    return paginate(
         kind="dir",
-        title="Directory",
-        header=f"Current directory: {shown}\nTap one to start a fresh conversation there:",
+        title="Working directory",
+        header=(
+            f"Current: {path_label(current)}\n"
+            "Only directories allowed for this channel are offered. "
+            "A new directory starts a new conversation."
+        ),
         options=options,
         current_value=current_value,
-        current_label=base(shown),
+        current_label=path_label(current),
         page=page,
     )
 
@@ -377,9 +386,9 @@ def resume_card(
         if callback_fits(value):
             selected = conversation_id == active
             options.append(
-                ChoiceButton(label=_tick(label, selected), value=value, selected=selected)
+                ChoiceButton(label=tick(label, selected), value=value, selected=selected)
             )
-    return _paginate(
+    return paginate(
         kind="resume",
         title="Resume",
         header=header,
@@ -388,10 +397,3 @@ def resume_card(
         current_label="the current one",
         page=page,
     )
-
-
-def command_card(*, title: str, text: str) -> SelectionCard:
-    """A `/status` or `/help` card: ``text`` under ``title`` with the five
-    ``cmd:`` actions — a tap runs exactly the command it names."""
-    buttons = [ChoiceButton(label=label, value=f"cmd:{name}") for label, name in COMMAND_ACTIONS]
-    return SelectionCard(title=title, text=text, buttons=buttons)

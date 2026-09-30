@@ -11,6 +11,8 @@ import { ConversationsIndex } from "@/components/chat/ConversationsIndex";
 import { ConversationWorkspace } from "@/components/chat/ConversationWorkspace";
 import { NewConversationDialog } from "@/components/chat/NewConversationDialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { agentTypeLabel } from "@/lib/agents/display";
+import { channelSource } from "@/lib/conversations/filters";
 import { useChannels } from "@/lib/hooks/useChannels";
 import { useChatController } from "@/lib/hooks/useChatController";
 import { displayName } from "@/lib/resourceTitle";
@@ -28,6 +30,8 @@ export function ConversationsPage() {
   const channel = c.filters.channel
     ? channels?.find((r) => r.uid === c.filters.channel)
     : undefined;
+  const deletingKey = c.deletingConversation?.agent_key ?? "";
+  const deletingAgent = agentNames.get(deletingKey) ?? agentTypeLabel(deletingKey);
   const openNew = () => setNewOpen(true);
   const workspace = c.isDraft || !!c.routeId;
 
@@ -45,6 +49,7 @@ export function ConversationsPage() {
           onNew={openNew}
           agentNames={agentNames}
           channelLabel={channel ? displayName(channel) : null}
+          channelSource={channelSource(channel?.config)}
         />
       )}
 
@@ -55,25 +60,18 @@ export function ConversationsPage() {
         onStart={c.startDraft}
       />
 
+      {/* Only Coffer's copy goes: the agent's own files and session stay. */}
       <ConfirmDialog
         open={c.deletingId !== null}
         onOpenChange={(o) => !o && c.requestDelete(null)}
         title={t("conversations.delete.title")}
-        description={t("conversations.delete.body")}
-        confirmLabel={c.deletePending ? t("common.deleting") : t("common.delete")}
+        description={t("conversations.delete.body", {
+          title: c.deletingConversation?.title ?? "",
+          agent: deletingAgent,
+        })}
+        confirmLabel={c.deletePending ? t("common.deleting") : t("conversations.delete.confirm")}
         pending={c.deletePending}
         onConfirm={c.confirmDelete}
-      />
-
-      <ConfirmDialog
-        open={c.archivingId !== null}
-        onOpenChange={(o) => !o && c.requestArchive(null)}
-        title={t("conversations.archive.title")}
-        description={t("conversations.archive.body")}
-        confirmLabel={t("conversations.archive.confirm")}
-        variant="default"
-        pending={c.archivePending}
-        onConfirm={c.confirmArchive}
       />
     </>
   );

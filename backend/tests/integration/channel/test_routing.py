@@ -24,7 +24,7 @@ async def test_new_with_an_agent_name_switches_and_sticks(env: ChannelEnv) -> No
     conv = await env.chat.get_conversation(first)
     assert conv.agent_key == "claude_code"
     assert adapter.texts() == [
-        "🆕 New conversation · Claude_Code · default model · default directory"
+        "🆕 New conversation · Claude_Code · Default model · Default directory"
     ]
 
     # It sticks: a plain /new opens another conversation on the same agent.
@@ -119,7 +119,7 @@ async def test_status_reports_agent(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "/status"))
 
     status = adapter.texts()[-1]
-    assert "Agent: Codex" in status
+    assert "\nCodex · Default model" in status
 
 
 # -- group command replies route back to the group/thread, not a DM (regression) -
@@ -150,7 +150,7 @@ async def test_group_status_command_reply_routes_to_group_and_thread(env: Channe
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "Agent: Coffer Assistant" in text
+    assert "\nCoffer Assistant · Default model" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
 
 
