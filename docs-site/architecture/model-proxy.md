@@ -112,7 +112,7 @@ The proxy opens no database. It appends records to spool files under `~/.coffer/
 
 The proxy's logs and records carry metadata only: the usage record above, and each failover decision. It never records a body, a prompt, a completion or a credential.
 
-The daemon decrypts the keys of the connections the proxy serves and pushes them over the proxy's authenticated loopback control route, on spawn, on re-attach, and after every reconcile pass. The proxy holds them in memory only. It never writes them to disk, argv, the environment or a log, and it never holds the master key.
+The daemon decrypts the keys of the connections the proxy serves and pushes them over the proxy's authenticated loopback control route, on spawn, on re-attach, after every reconcile pass, and as soon as a secret approval is applied in the desktop app. A connection whose key waits for approval — a new key for one in use, or a base URL the key has not gone to before — is left out of the pushed state, so the proxy keeps sending the old key, or sends nothing to the new URL, until you approve; the next request after the approval uses the new key or URL, with no restart of the daemon or the proxy. The proxy holds the keys in memory only. It never writes them to disk, argv, the environment or a log, and it never holds the master key.
 
 ## Local model runtimes
 
