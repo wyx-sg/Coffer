@@ -58,6 +58,8 @@ Use `coffer__write` when you learn something durable: a fact about a service, a
 convention this developer follows, a decision and the reason behind it, a trap
 and how to avoid it. What you write is **new material**: Coffer's model merges
 it into the collection's documents, integrating it with what is already there.
+With no internal model configured, it is filed as a document of its own, and
+the result names that document.
 
 So write the fact plainly. You do not have to work out where it belongs, and
 you do not have to check whether it repeats something already filed.
@@ -99,7 +101,7 @@ it. Read the reason and adjust. Do not retry the identical call hoping
 it clears. A tool call itself never waits on an approval; the one thing in
 Coffer that does is a secret going somewhere new, below.
 
-## Secrets: you use them, you never see them
+## Secrets: you use them; Coffer never prints them
 
 Coffer holds the developer's secrets and never prints one — not through a tool,
 not through the `coffer` CLI, not through its API. `coffer secret get
@@ -108,7 +110,9 @@ value, and nothing to work around. Only the developer sees a value, in the
 Coffer desktop app.
 
 When a command needs a secret, run it through `coffer run`, which sets the value
-only in that command's environment and prints it as `***` in its output:
+only in that command's environment and prints it as `***` in its output. The
+masking guards against a value leaking into a transcript by accident; it is not
+a wall between you and the value, since you are the command's parent:
 
 ```sh
 coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
@@ -118,7 +122,8 @@ coffer run --env-file connection.env -- ./query.sh
 A secret for `coffer run` is a standalone secret, stored as `secret/<name>` and
 cited in files as `coffer://secret/<name>`. Write that reference into skills,
 scripts and env files — never the value. `coffer secret list` shows what
-exists; `coffer secret scan` finds plaintext secrets left in files.
+exists; `coffer secret scan` finds plaintext secrets left in `~/.coffer/secrets/`
+and in skills.
 
 You may configure Coffer freely, but a secret that would go somewhere it has not
 gone before — a new MCP server citing an existing token, a changed command line
