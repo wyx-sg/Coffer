@@ -65,7 +65,7 @@ function nav(lang: Lang): DefaultTheme.NavItem[] {
   const t = navLabels[lang]
   return [
     { text: t.start, link: `${p}/start/`, activeMatch: `^${p}/start/` },
-    { text: t.guides, link: `${p}/guides/agents`, activeMatch: `^${p}/guides/` },
+    { text: t.guides, link: `${p}/guides/`, activeMatch: `^${p}/guides/` },
     { text: t.architecture, link: `${p}/architecture/`, activeMatch: `^${p}/architecture/` },
     { text: t.reference, link: `${p}/reference/cli`, activeMatch: `^${p}/reference/` },
     { text: t.contributing, link: `${p}/contributing/`, activeMatch: `^${p}/contributing/` },
@@ -88,7 +88,7 @@ export default withMermaid(
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,
-    head: [['meta', { name: 'theme-color', content: '#c96442' }]],
+    head: [['meta', { name: 'theme-color', content: '#4353d8' }]],
     markdown: {
       theme: { light: 'github-light', dark: 'github-dark' },
     },

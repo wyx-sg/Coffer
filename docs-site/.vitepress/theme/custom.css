@@ -1,41 +1,42 @@
-/* "Coffer warm" — the palette and type the Coffer web UI itself uses,
-   with a matching dark variant. */
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap");
+/* The palette and type the Coffer app itself uses (frontend/src/index.css):
+   the indigo accent on cool neutral surfaces, Figtree and JetBrains Mono,
+   with the matching dark variant. */
+@import url("https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
-  /* brand = clay accent #C96442 */
-  --vp-c-brand-1: #b9512f;
-  --vp-c-brand-2: #c96442;
-  --vp-c-brand-3: #d4795b;
-  --vp-c-brand-soft: rgba(201, 100, 66, 0.12);
+  /* brand = product accent #4353d8 */
+  --vp-c-brand-1: #3342c4;
+  --vp-c-brand-2: #4353d8;
+  --vp-c-brand-3: #5a66e6;
+  --vp-c-brand-soft: rgba(67, 83, 216, 0.12);
 
-  /* warm paper surfaces */
-  --vp-c-bg: #faf9f5;
-  --vp-c-bg-alt: #f4f1e9;
-  --vp-c-bg-soft: #f0ebe0;
+  /* surfaces */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #fbfbfc;
+  --vp-c-bg-soft: #f6f7f9;
   --vp-c-bg-elv: #ffffff;
 
-  /* ink + warm-grey text */
-  --vp-c-text-1: #1f1b17;
-  --vp-c-text-2: #5f584e;
-  --vp-c-text-3: #8f887e;
+  /* text */
+  --vp-c-text-1: #16181d;
+  --vp-c-text-2: #5b616e;
+  --vp-c-text-3: #6b717d;
 
-  --vp-c-border: #e2ddd1;
-  --vp-c-divider: #e8e4da;
-  --vp-c-gutter: #e8e4da;
+  --vp-c-border: #e6e8ec;
+  --vp-c-divider: #f0f1f4;
+  --vp-c-gutter: #f0f1f4;
 
-  --vp-font-family-base: "Inter", ui-sans-serif, system-ui, -apple-system,
+  --vp-font-family-base: "Figtree", ui-sans-serif, system-ui, -apple-system,
     sans-serif;
-  --vp-font-family-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas,
+  --vp-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
     monospace;
-  --vp-font-family-heading: "Source Serif 4", Georgia, serif;
+  --vp-font-family-heading: var(--vp-font-family-base);
 
-  --vp-button-brand-bg: #c96442;
-  --vp-button-brand-hover-bg: #b9512f;
-  --vp-button-brand-active-bg: #a4462a;
+  --vp-button-brand-bg: #4353d8;
+  --vp-button-brand-hover-bg: #3342c4;
+  --vp-button-brand-active-bg: #2b38a8;
   --vp-button-brand-border: transparent;
-  --vp-button-brand-text: #faf9f5;
-  --vp-button-brand-hover-text: #faf9f5;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
 
   --vp-home-hero-name-color: var(--vp-c-text-1);
   --vp-home-hero-image-background-image: none;
@@ -45,31 +46,31 @@
 }
 
 .dark {
-  --vp-c-brand-1: #e08a6a;
-  --vp-c-brand-2: #d4795b;
-  --vp-c-brand-3: #c96442;
-  --vp-c-brand-soft: rgba(224, 138, 106, 0.16);
+  --vp-c-brand-1: #a3abff;
+  --vp-c-brand-2: #5a66e6;
+  --vp-c-brand-3: #4353d8;
+  --vp-c-brand-soft: rgba(90, 102, 230, 0.16);
 
-  --vp-c-bg: #1a1816;
-  --vp-c-bg-alt: #151311;
-  --vp-c-bg-soft: #22201d;
-  --vp-c-bg-elv: #24211e;
+  --vp-c-bg: #1a1b20;
+  --vp-c-bg-alt: #16171b;
+  --vp-c-bg-soft: #202127;
+  --vp-c-bg-elv: #202127;
 
-  --vp-c-text-1: #ede8df;
-  --vp-c-text-2: #b3ab9f;
-  --vp-c-text-3: #827a6f;
+  --vp-c-text-1: #e4e5ea;
+  --vp-c-text-2: #a3a6b1;
+  --vp-c-text-3: #868a97;
 
-  --vp-c-border: #3a3631;
-  --vp-c-divider: #2e2b27;
-  --vp-c-gutter: #0f0e0d;
+  --vp-c-border: #2c2e36;
+  --vp-c-divider: #24262d;
+  --vp-c-gutter: #16171b;
 
-  --vp-button-brand-bg: #c96442;
-  --vp-button-brand-hover-bg: #d4795b;
-  --vp-button-brand-text: #1a1816;
-  --vp-button-brand-hover-text: #1a1816;
+  --vp-button-brand-bg: #5a66e6;
+  --vp-button-brand-hover-bg: #4353d8;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
 }
 
-/* serif headings, matching the product */
+/* headings in the product face */
 .VPDoc h1,
 .VPDoc h2,
 .VPDoc h3,
@@ -77,7 +78,7 @@
 .VPHero .text,
 .VPHome .vp-doc h2 {
   font-family: var(--vp-font-family-heading);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
 }
 .VPHero .name {
   font-weight: 700;

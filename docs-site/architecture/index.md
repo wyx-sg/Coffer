@@ -7,6 +7,19 @@ description: How Coffer is built — its processes, the parts inside the daemon,
 
 This page is the map of the architecture section: one diagram of every moving part, the processes that run, how the four main data flows cross them, and the technology underneath. It is written for engineers who want to understand how Coffer is built and why, before reading any one subsystem in depth.
 
+::: tip New here?
+Read these six pages in order and you will have the whole design in your head; everything else in this section is depth on one part.
+
+1. This page, for the map.
+2. [Principles](/architecture/principles), for the rules every change keeps.
+3. [Resource framework](/architecture/resource-framework), for the one abstraction every managed thing shares.
+4. [Daemon and processes](/architecture/daemon), for who owns state and how every client reaches it.
+5. [MCP gateway](/architecture/mcp-gateway), for how an agent's tool call travels.
+6. [Persistence](/architecture/persistence), for where each kind of data lives and how it is written.
+
+If you have not used Coffer yet, the [Quickstart](/start/quickstart) and [Core concepts](/start/concepts) come first.
+:::
+
 ## The problem Coffer's architecture solves
 
 A developer who uses more than one AI coding agent accumulates the same assets several times over: MCP server registrations, API keys, skills, notes about their environment, and whatever each agent has learned. Each agent keeps its own copy in its own format, and nothing keeps them level.
@@ -201,7 +214,7 @@ The rest of the section is organised from the foundations outward.
 | Path | Contents |
 | --- | --- |
 | [`backend/coffer/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer) | The daemon, CLI and shim, in four layers. |
-| [`backend/coffer/surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) | The composition root: migrations, wiring, workers. |
+| [`backend/coffer/surfaces/http/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http) | The HTTP surface, including the composition root that runs migrations, wires every kind and starts the workers. |
 | [`frontend/src/`](https://github.com/wyx-sg/Coffer/tree/main/frontend/src) | The web UI. |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | The Tauri shell. |
 | [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs) | The product contract, one spec per capability. |

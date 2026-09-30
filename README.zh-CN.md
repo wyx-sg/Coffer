@@ -3,10 +3,10 @@
 [English](./README.md) · **简体中文**
 
 <p align="center">
-  <a href="https://wyx-sg.github.io/Coffer/zh/"><img alt="文档" src="https://img.shields.io/badge/docs-coffer-C96442"></a>
+  <a href="https://wyx-sg.github.io/Coffer/zh/"><img alt="文档" src="https://img.shields.io/badge/docs-coffer-4353D8"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
-  <img alt="智能体：Claude Code 与 Codex" src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-C96442">
+  <img alt="智能体：Claude Code 与 Codex" src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-4353D8">
   <img alt="平台：macOS" src="https://img.shields.io/badge/platform-macOS-555">
 </p>
 

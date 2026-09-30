@@ -15,6 +15,7 @@
     {
       "text": { "en": "Agents and tools", "zh": "智能体与工具" },
       "items": [
+        { "text": { "en": "Overview", "zh": "总览" }, "link": "/guides/" },
         { "text": { "en": "Agents", "zh": "智能体" }, "link": "/guides/agents" },
         { "text": { "en": "Connect a client", "zh": "连接客户端" }, "link": "/guides/connect-a-client" },
         { "text": { "en": "MCP servers", "zh": "MCP 服务器" }, "link": "/guides/mcp-servers" },
