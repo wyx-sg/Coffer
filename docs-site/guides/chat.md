@@ -36,6 +36,8 @@ If no managed agent is available, the page shows **No managed agent available** 
 3. Choose **Start**. The draft opens at `/conversations/new`, with the agent, its model and effort and the folder in its header.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
 
+A conversation can also start from **Ask an agent** elsewhere in the app — on a command the [CLIs](/guides/clis) page says is missing, for example. The same dialog opens, and the draft's message box already holds the prompt Coffer wrote for that job. Read it, edit it if you like, and press **Enter**; nothing is sent until you do.
+
 The first send creates the conversation. Opening the draft and leaving creates nothing. The conversation is titled after the first thing you wrote; rename it at any time and Coffer does not overwrite your name.
 
 The open conversation is part of the URL, `/conversations/<id>` (old `/chat/<id>` links redirect), so a refresh, a bookmark or a second tab reopens the same thread. A link to a conversation that has been deleted shows **Conversation not found** with a **Start a new conversation** button.

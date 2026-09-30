@@ -668,8 +668,6 @@
       "skill_relinked": "重新链接了技能 {{resource}}",
       "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
       "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
-      "cli_install_started": "开始用 Homebrew 安装命令行工具 {{command}}",
-      "cli_install_finished": "命令行工具 {{command}} 的 Homebrew 安装已结束",
       "skill_updated": "更新了技能 {{resource}}",
       "sync_confirmed": "确认了一轮被暂停的收敛",
       "sync_machine_removed": "从同步注册表中下线了一台机器",
@@ -1267,10 +1265,6 @@
     "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号——请生成配对码并发给机器人",
     "CHANNEL_NOT_RUNNING": "消息渠道适配器未在运行——请启用该消息渠道以启动它",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
-    "CLI_FORMULA_MISMATCH": "该 Homebrew formula 与技能为此命令声明的不一致，未执行任何操作。",
-    "CLI_INSTALL_NOT_FOUND": "自 Coffer 启动以来没有为此命令运行过安装",
-    "CLI_INSTALL_RUNNING": "此命令的安装已在进行中",
-    "CLI_NOT_INSTALLABLE": "没有可安装的内容：未声明 Homebrew formula，或命令已是最新",
     "CLI_NOT_REQUIRED": "没有技能需要此命令",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此智能体",
@@ -1294,7 +1288,6 @@
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
     "GIT_MIRROR_FAILED": "Git 推送失败。改动已在本地提交；请检查远端地址、分支和推送凭据。",
     "GREP_PATTERN_INVALID": "无效的 grep 模式",
-    "HOMEBREW_NOT_FOUND": "智能体的 PATH 上没有 Homebrew（brew），未执行任何操作。",
     "HOST_NOT_ALLOWED": "Coffer 只响应发往它自己回环地址和端口的请求。",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
@@ -2399,10 +2392,11 @@
       "outdatedLine": "找到 {{version}}，要求 ≥ {{min}}。",
       "loggedOutBefore": "已安装，但未登录。在终端运行",
       "loggedOutAfter": "。",
-      "footnote": "技能仍会投递。按它执行的智能体会在需要 {{commands}} 的那一步失败，直到安装为止。",
+      "footnote": "技能仍会投递，但会在需要 {{commands}} 的那一步失败。把它交给你的智能体，然后重新检查。",
       "empty": "这个技能没有声明需要的命令。",
       "emptyHint": "在 SKILL.md 的 requires: 里列出它调用的命令，就会显示在这里。",
-      "loadFailed": "无法检查这个技能需要的命令"
+      "loadFailed": "无法检查这个技能需要的命令",
+      "openInClis": "在命令行工具中打开"
     },
     "history": {
       "title": "尚未记录版本",
@@ -3966,33 +3960,16 @@
   },
   "clis": {
     "title": "命令行工具",
-    "count_one": "{{count}} 个命令",
-    "count_other": "{{count}} 个命令",
-    "subtitle": "技能声明自己需要的命令行工具。",
-    "help": "技能在 SKILL.md 的 requires: 里列出它会调用的命令。Coffer 在智能体的 PATH 上逐个检查：版本是否达到技能要求的最低版本，声明了登录检查的还会检查登录状态。缺少命令不会阻止技能投递；智能体会在调用它的那一步失败。",
+    "help": "这里列出技能在 SKILL.md 的 requires: 里声明的每个命令，有问题的排在前面。Coffer 从不替你安装或登录：它把修复写成提示词交给你的智能体，点「重新检查」即重新查看。",
     "checkAgain": "重新检查",
     "checking": "检查中…",
     "checkedAgo": "检查于 {{when}}",
     "loadFailed": "无法加载命令行工具",
-    "summary": {
-      "missing": "{{count}} 个未找到",
-      "outdated": "{{count}} 个版本过旧",
-      "logged_out": "{{count}} 个未登录",
-      "ready": "{{count}} 个就绪"
-    },
     "status": {
       "missing": "未找到",
       "outdated": "版本过旧",
       "logged_out": "未登录",
       "ready": "就绪"
-    },
-    "cols": {
-      "command": "命令",
-      "version": "版本 · 要求",
-      "login": "登录",
-      "neededBy": "需要它的技能",
-      "status": "状态",
-      "actions": "操作"
     },
     "search": "筛选命令",
     "notOnPath": "不在 PATH 上",
@@ -4006,10 +3983,6 @@
     "skillCount_one": "{{count}} 个技能",
     "skillCount_other": "{{count}} 个技能",
     "actions": {
-      "install": "安装…",
-      "update": "更新…",
-      "copyLogin": "复制登录命令",
-      "copyCommand": "复制命令",
       "copy": "复制",
       "copied": "已复制",
       "open": "打开"
@@ -4020,16 +3993,14 @@
     },
     "empty": {
       "title": "还没有技能需要命令",
-      "description": "技能在 SKILL.md 的 requires: 里列出它会调用的命令行工具。一旦有技能声明，每个命令都会显示在这里，附带版本、登录状态和需要它的技能。",
-      "docs": "如何声明 requires:",
+      "description": "技能在 SKILL.md 的 requires: 里列出命令后，它们会带着版本和登录状态显示在这里。",
+      "docs": "requires: 的用法",
       "docsUrl": "https://wyx-sg.github.io/Coffer/guides/clis#declare-what-a-skill-needs"
     },
     "detail": {
-      "back": "命令行工具",
       "subtitle_one": "{{title}} · {{count}} 个技能需要",
       "subtitle_other": "{{title}} · {{count}} 个技能需要",
       "notFound": "无法打开此命令",
-      "help": "Coffer 在智能体的 PATH 上查找该命令，运行它的 --version 和声明的登录检查（输出直接丢弃）。安装只通过 Homebrew，只安装技能声明的 formula，并且只在你确认之后。",
       "sections": {
         "command": "命令",
         "login": "登录",
@@ -4037,8 +4008,6 @@
       },
       "foundAt": "位置",
       "version": "版本",
-      "installWith": "安装命令",
-      "updateWith": "更新命令",
       "state": "状态",
       "loginWith": "登录命令",
       "loginHint": "在终端中运行，然后点「重新检查」。",
@@ -4047,39 +4016,22 @@
     "banner": {
       "missing_one": "{{command}} 未安装 — 影响 {{count}} 个技能",
       "missing_other": "{{command}} 未安装 — 影响 {{count}} 个技能",
-      "outdated_one": "{{command}} 低于 {{version}} — 影响 {{count}} 个技能",
-      "outdated_other": "{{command}} 低于 {{version}} — 影响 {{count}} 个技能",
+      "outdated_one": "{{command}} {{found}} 低于 {{skills}} 的要求",
+      "outdated_other": "{{command}} {{found}} 低于 {{skills}} 的要求",
       "logged_out_one": "{{command}} 未登录 — 影响 {{count}} 个技能",
       "logged_out_other": "{{command}} 未登录 — 影响 {{count}} 个技能",
       "body": "{{skills}} 会在调用 {{command}} 的那一步失败。",
       "loginBefore": "在终端运行",
-      "loginAfter": "，然后重新检查。"
+      "loginAfter": "，然后重新检查。",
+      "outdatedBody_one": "需要 {{command}} ≥ {{version}}。",
+      "outdatedBody_other": "需要 {{command}} ≥ {{version}}。"
     },
-    "install": {
-      "titleInstall": "安装 {{command}}？",
-      "titleUpdate": "更新 {{command}}？",
-      "intro": "Coffer 将以你的身份在这台 Mac 上运行此命令：",
-      "installer": "安装器",
-      "homebrew": "Homebrew",
-      "why": "原因",
-      "whyWithMin_one": "{{count}} 个技能需要 {{command}} ≥ {{version}}：{{skills}}",
-      "whyWithMin_other": "{{count}} 个技能需要 {{command}} ≥ {{version}}：{{skills}}",
-      "whyPlain_one": "{{count}} 个技能需要 {{command}}：{{skills}}",
-      "whyPlain_other": "{{count}} 个技能需要 {{command}}：{{skills}}",
-      "output": "输出",
-      "outputWhere": "显示在这里，并保留在「活动」中",
-      "never": "Coffer 不会未经询问就安装，也从不使用 sudo。",
-      "run": "运行 {{command}}",
-      "titleRunning": "正在运行 {{command}}…",
-      "titleSucceeded": "{{command}} 已完成",
-      "titleFailed": "{{command}} 失败",
-      "running": "运行中。可以关闭此窗口；安装会继续进行，输出保留在「活动」中。",
-      "succeeded": "完成（退出码 {{code}}）。Coffer 已重新检查该命令。",
-      "failed": "失败，退出码 {{code}}。原因见上方输出。",
-      "failedNoCode": "未完成就停止了。原因见上方输出。",
-      "noOutput": "暂无输出。",
-      "outputLabel": "安装输出",
-      "close": "关闭"
+    "list": {
+      "needsYou": "需要你处理",
+      "ready": "就绪",
+      "noMatch": "没有匹配的命令",
+      "outdatedLine": "{{version}} · 要求 ≥ {{min}}",
+      "loggedInLine": "{{version}} · 已登录"
     }
   },
   "secrets": {
@@ -4841,5 +4793,11 @@
       "missing": "此版本中没有",
       "truncated": "已截断"
     }
+  },
+  "handoff": {
+    "copyPrompt": "复制提示词",
+    "copied": "已复制",
+    "askAgent": "交给智能体",
+    "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。"
   }
 }

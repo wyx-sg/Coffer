@@ -1,4 +1,4 @@
-"""Wire shapes of ``/api/v1/clis`` (spec skill-manager "Cover required
+"""Wire shapes of ``/api/v1/clis`` (spec skill-manager "Serve required
 commands on REST, the command line and the web")."""
 
 from __future__ import annotations
@@ -6,15 +6,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from coffer.application.skill.cli_install import InstallSnapshot
 from coffer.application.skill.cli_requirements import CliListing, CliView, SkillWarning
-from coffer.domain.skill.cli_status import CliStatus
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 CliStatusOut = Literal["missing", "outdated", "logged_out", "ready"]
 CliLoginStateOut = Literal["logged_in", "logged_out", "not_needed"]
-CliInstallStateOut = Literal["running", "succeeded", "failed"]
 
 
 class CliNeededByOut(BaseModel):
@@ -47,13 +45,9 @@ class CliOut(BaseModel):
     #: The highest minimum any skill asks for.
     min_version: str | None
     login: CliLoginOut
-    #: The Homebrew formula the skills declare.
-    brew: str | None
-    #: The Homebrew command an install would run now (``brew install jq``);
-    #: ``None`` when there is nothing to install or no formula.
-    install_command: str | None
-    #: The latest install job's state, when one ran since the daemon started.
-    install_state: CliInstallStateOut | None
+    #: The prompt to hand to an agent: install a missing command, update an
+    #: outdated one, or help the person log in. ``None`` when ready.
+    handoff: HandoffOut | None
     needed_by: list[CliNeededByOut]
     checked_at: datetime
 
@@ -71,34 +65,8 @@ class CliListOut(BaseModel):
     warnings: list[CliWarningOut]
 
 
-class CliInstallIn(BaseModel):
-    """The formula the confirmation showed; it must equal the declared one."""
-
-    formula: str = Field(min_length=1, max_length=128)
-
-
-class CliInstallOut(BaseModel):
-    command: str
-    formula: str
-    action: Literal["install", "upgrade"]
-    #: The exact argv run: the located ``brew``, the action, the formula.
-    argv: list[str]
-    state: CliInstallStateOut
-    exit_code: int | None
-    started_at: datetime
-    finished_at: datetime | None
-    #: The number of ``lines[0]``; ``next_line`` is the ``since`` to poll with.
-    first_line: int
-    lines: list[str]
-    next_line: int
-
-
 def cli_out(view: CliView) -> CliOut:
     row, probe = view.required, view.probe
-    install_command: str | None = None
-    if row.brew is not None and view.status in (CliStatus.MISSING, CliStatus.OUTDATED):
-        verb = "install" if view.status is CliStatus.MISSING else "upgrade"
-        install_command = f"brew {verb} {row.brew}"
     return CliOut(
         command=row.command,
         title=row.title,
@@ -111,9 +79,7 @@ def cli_out(view: CliView) -> CliOut:
             check=list(row.login_check) if row.login_check is not None else None,
             command=row.login,
         ),
-        brew=row.brew,
-        install_command=install_command,
-        install_state=view.install_state,  # type: ignore[arg-type]
+        handoff=handoff_out(view.handoff),
         needed_by=[
             CliNeededByOut(
                 skill_uid=n.skill_uid,
@@ -135,20 +101,4 @@ def cli_list_out(listing: CliListing) -> CliListOut:
     return CliListOut(
         items=[cli_out(v) for v in listing.items],
         warnings=[_warning_out(w) for w in listing.warnings],
-    )
-
-
-def cli_install_out(job: InstallSnapshot) -> CliInstallOut:
-    return CliInstallOut(
-        command=job.command,
-        formula=job.formula,
-        action=job.action,  # type: ignore[arg-type]
-        argv=list(job.argv),
-        state=job.state.value,
-        exit_code=job.exit_code,
-        started_at=job.started_at,
-        finished_at=job.finished_at,
-        first_line=job.first_line,
-        lines=list(job.lines),
-        next_line=job.next_line,
     )

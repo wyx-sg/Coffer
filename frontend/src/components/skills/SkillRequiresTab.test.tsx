@@ -1,6 +1,6 @@
 // src/components/skills/SkillRequiresTab.test.tsx — a skill's Requires tab lists what its SKILL.md declares.
 //
-// Real QueryClientProvider; only the api module is mocked.
+// Real QueryClientProvider; only the api modules are mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,9 +16,13 @@ vi.mock("@/lib/api/clis", () => ({
     list: vi.fn(),
     checkAll: vi.fn(),
     get: vi.fn(),
-    check: vi.fn(),
-    install: vi.fn(),
-    installStatus: vi.fn(),
+  },
+}));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: {
+    list: vi.fn().mockResolvedValue({
+      agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+    }),
   },
 }));
 const { clisApi } = await import("@/lib/api/clis");
@@ -64,13 +68,14 @@ describe("SkillRequiresTab", () => {
 
     const list = await screen.findByRole("list", { name: "Requires" });
     await screen.findByText(/Not on PATH\./);
-    const links = within(list).getAllByRole("link");
-    // Only this skill's commands, each opening its page on the CLIs page.
-    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+    // Only this skill's commands, each (and its Open in CLIs) opening its page on the CLIs page.
+    const opens = within(list).getAllByRole("link", { name: "Open in CLIs" });
+    expect(opens.map((a) => a.getAttribute("href"))).toEqual([
       "/clis/jq",
       "/clis/gcloud",
       "/clis/uv",
     ]);
+    expect(within(list).getByRole("link", { name: "jq" })).toHaveAttribute("href", "/clis/jq");
     expect(screen.queryByText("docker")).toBeNull();
 
     expect(
@@ -79,30 +84,37 @@ describe("SkillRequiresTab", () => {
     expect(screen.getByText("uv 0.4.18 · /opt/homebrew/bin/uv")).toBeInTheDocument();
     expect(within(list).getByText("gcloud auth login")).toBeInTheDocument();
     expect(
-      screen.getByText(/The skill is still delivered\..*needs jq until it is installed\./),
+      screen.getByText(/The skill is still delivered, but fails at the step that needs jq\./),
     ).toBeInTheDocument();
 
     fireEvent.click(within(list).getByRole("link", { name: "gcloud" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gcloud");
   });
 
-  test("Install… opens the same confirmation, and Check again re-probes", async () => {
+  test("a command that needs the user offers the hand-off, and Check again re-probes", async () => {
     api.list.mockResolvedValue({ items: [JQ_MISSING], warnings: [] });
     api.checkAll.mockResolvedValue({
-      items: [{ ...JQ_MISSING, status: "ready", path: "/opt/homebrew/bin/jq", version: "1.7" }],
+      items: [
+        {
+          ...JQ_MISSING,
+          status: "ready",
+          path: "/opt/homebrew/bin/jq",
+          version: "1.7",
+          handoff: null,
+        },
+      ],
       warnings: [],
     });
     renderTab();
-    fireEvent.click(await screen.findByRole("button", { name: "Install…" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByTestId("cli-install-command")).toHaveTextContent("brew install jq");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(api.install).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Ask an agent" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Install|Update/ })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("jq 1.7 · /opt/homebrew/bin/jq")).toBeInTheDocument();
     expect(screen.queryByText(/The skill is still delivered/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy prompt" })).toBeNull();
   });
 
   test("a skill that declares nothing says so", async () => {

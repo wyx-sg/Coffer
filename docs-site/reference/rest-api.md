@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 240 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 238 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -119,7 +119,7 @@ The daemon mounts 240 operations in 26 groups. Groups follow the order the daemo
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 19 |
-| [clis](#clis) | 6 |
+| [clis](#clis) | 4 |
 | [mcp](#mcp) | 13 |
 | [custom-tools](#custom-tools) | 13 |
 | [knowledge](#knowledge) | 15 |
@@ -342,10 +342,8 @@ The daemon mounts 240 operations in 26 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/clis` | Every command a managed skill requires, problems first. |
 | `POST` | `/api/v1/clis/check` | Probe every required command again. |
-| `GET` | `/api/v1/clis/{command}` | One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
+| `GET` | `/api/v1/clis/{command}` | One required command, with the hand-off prompt when it needs the person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
 | `POST` | `/api/v1/clis/{command}/check` | Probe one required command again. |
-| `GET` | `/api/v1/clis/{command}/install` | The latest install job for the command: its state, exit code and output. |
-| `POST` | `/api/v1/clis/{command}/install` | Start ``brew install\|upgrade <formula>``; refused unless the command is missing or outdated, ``formula`` is the declared one and Homebrew is found. |
 
 ### mcp
 

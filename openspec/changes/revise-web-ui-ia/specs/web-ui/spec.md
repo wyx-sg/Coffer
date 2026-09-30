@@ -697,7 +697,7 @@ word a user navigates by:
   entry.
 
 **CLIs** is not a resource kind: it lists the commands skills require, with their
-install, version and login state (see "Show every CLI a skill requires on the
+presence, version and login state (see "Show every CLI a skill requires on the
 CLIs page"), and sits under Capabilities beside Skills.
 
 Agents are stored as resources of kind `agent` but are the consumers of the
@@ -1235,25 +1235,32 @@ transport.
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that
 any skill requires, with the version found beside the minimum the skills ask
 for, the login state where the command has one, and which skills need it,
-problems first — missing, older than the minimum, or not logged in. A CLI's
-detail page MUST offer **Install** only through Homebrew and only after a
-confirmation naming the command it will run, the **login command** to copy, and
-**Check again**, which probes the command afresh. A skill's detail page MUST link
-each requirement it declares to that CLI's page, and Overview MUST show an
-attention item while any required CLI is missing, outdated or not logged in.
-What a skill declares and how a command is probed are specified with the change
-that adds skill requirements; this page shows what they report.
+problems first — missing, older than the minimum, or not logged in, grouped
+under Needs you above Ready — as a split view with the selected CLI's detail
+beside the list (`/clis/<command>`). The app MUST NOT show an install command or
+run an install. For a CLI that needs the
+user, its detail page and the skill's Requires tab MUST offer the daemon's
+hand-off prompt (spec skill-manager "Hand a required command to an agent with a
+prompt") through **Copy prompt** and **Ask an agent** — the latter opens a new
+conversation with a Coffer-managed agent chosen in the New conversation dialog,
+with the prompt in the composer and nothing sent until the user presses Send;
+with no managed agent available only Copy prompt is offered. The detail page
+also offers the **login command** to copy and **Check again**, which probes the
+command afresh. A skill's detail page MUST link each requirement it declares to
+that CLI's page, and Overview MUST show an attention item while any required CLI
+is missing, outdated or not logged in. What a skill declares and how a command
+is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: the CLIs page lists problems first
 - **GIVEN** two skills requiring `gh` (minimum 2.40, found 2.30) and `jq` (found, no minimum), and one requiring `gcloud` (not logged in)
 - **WHEN** the user opens `/clis`
 - **THEN** `gh` and `gcloud` are listed before `jq`, `gh` shows 2.30 against 2.40, `gcloud` shows not logged in, and each row names the skills that need it
 
-#### Scenario: installing a CLI asks first and uses Homebrew only
-- **GIVEN** a required CLI that is missing
-- **WHEN** the user chooses Install on its detail page
-- **THEN** a confirmation names the Homebrew command it will run, and nothing runs until the user confirms
-- **AND** the detail page offers no install method other than Homebrew
+#### Scenario: a CLI that needs the user offers a prompt for an agent
+- **GIVEN** a required CLI that is missing and a Coffer-managed agent
+- **WHEN** the user opens its detail page and chooses Ask an agent, then that agent
+- **THEN** a new conversation opens with the prompt in the composer, and nothing is sent until the user presses Send
+- **AND** the page offers Copy prompt, shows no install command, and with no managed agent available offers only Copy prompt
 
 #### Scenario: check again after logging in
 - **GIVEN** a CLI's detail page showing not logged in and its login command to copy

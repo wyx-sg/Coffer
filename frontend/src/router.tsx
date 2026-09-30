@@ -102,11 +102,8 @@ const pageRoutes: RouteObject[] = gateRoutes([
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  // One required command, by the command itself — one page with no tabs.
-  {
-    path: "clis/:command",
-    element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
-  },
+  // One required command, by the command itself, open beside the list.
+  { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
