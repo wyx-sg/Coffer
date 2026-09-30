@@ -192,10 +192,6 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 
 Or use **Import a master key** on **Settings › Security**, in the app or a browser. Importing needs no presence check — whoever holds the file and its passphrase already holds the key. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. The **Sync** page offers **Import key** as well, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
 
-::: info Vault sync is an experimental feature
-The `coffer sync key` commands and the Sync page need the `vault_sync` feature, which is off by default in stable releases. Turn it on with `coffer config set feature.vault_sync on` (see [Experimental features](/guides/experimental-features)).
-:::
-
 ## What never gets logged
 
 - Secret values never appear in the database outside the ciphertext column, in log files, in the audit log, or in the MCP invocation log.

@@ -25,7 +25,7 @@ _ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "kb", "help
     spec="channels", scenario="the command menu matches the commands that exist"
 )
 def test_the_menu_offers_exactly_the_reserved_words() -> None:
-    assert {c.name for c in menu_entries(group=False, knowledge=True)} == _ALL
+    assert {c.name for c in menu_entries(group=False)} == _ALL
     assert {c.name for c in COMMAND_ROSTER} == _ALL
     # Removed with no pointer: they are ordinary words now.
     for gone in ("agent", "effort", "threads", "save"):
@@ -33,16 +33,13 @@ def test_the_menu_offers_exactly_the_reserved_words() -> None:
 
 
 def test_a_group_menu_offers_the_group_set() -> None:
-    group = {c.name for c in menu_entries(group=True, knowledge=True)}
+    group = {c.name for c in menu_entries(group=True)}
     assert group == {"new", "stop", "model", "status", "resume", "help"}
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/kb is offered only while knowledge is on")
-def test_kb_is_offered_only_while_knowledge_is_on() -> None:
-    assert "/kb" in help_text(knowledge=True)
-    assert "/kb" not in help_text(knowledge=False)
-    assert "kb" not in {c.name for c in menu_entries(group=False, knowledge=False)}
-    # Still reserved, so it answers why it cannot run rather than reaching the agent.
+def test_kb_is_always_offered() -> None:
+    assert "/kb" in help_text()
+    assert "kb" in {c.name for c in menu_entries(group=False)}
     assert command_name("/kb notes") == "kb"
 
 
@@ -50,14 +47,12 @@ def test_help_text_lists_every_command_with_its_arguments() -> None:
     rendered = help_text()
     for command in COMMAND_ROSTER:
         assert f"/{command.name}" in rendered
-        assert command.description in rendered
-    assert "/new [agent] — " in rendered
-    assert "/model [name] [level] — " in rendered
+    assert rendered.startswith("/new [agent] · /stop · /model [name] [level] · ")
+    assert rendered.splitlines()[-1] == "Anything else is a message to the agent."
 
 
 def test_names_returns_typed_forms() -> None:
     assert names() == {f"/{n}" for n in _ALL}
-    assert names(knowledge=False) == {f"/{n}" for n in _ALL - {"kb"}}
 
 
 def test_start_is_a_hidden_alias_of_help() -> None:

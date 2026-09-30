@@ -184,6 +184,7 @@ acceptance("channels", "register a telegram channel", async () => {
       body: {
         kind: "channel",
         name: "tg",
+        title: "tg",
         config: {
           channel_type: "telegram",
           bot_token_ref: writtenRef(api, 0),
@@ -257,17 +258,18 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  test("a malformed name is refused under the name field", async () => {
+  acceptance("channels", "a channel is named by any display name", async () => {
     const api = registeringApi();
     renderDialog();
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "my bot!" } });
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
     fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
     submit();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Letters, digits, dash and underscore only",
-    );
-    expect(api.POST).not.toHaveBeenCalled();
+    // The display name is the title; the resource's name is derived from it.
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    const body = (api.POST.mock.calls[1][1] as { body: Record<string, unknown> }).body;
+    expect(body.title).toBe("Team bot!");
+    expect(body.name).toBe("team-bot");
   });
 
   acceptance(
@@ -291,6 +293,7 @@ describe("AddChannelDialog", () => {
         body: {
           kind: "channel",
           name: "st",
+          title: "st",
           config: {
             channel_type: "seatalk",
             app_id: "app-1",

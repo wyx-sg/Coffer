@@ -100,9 +100,12 @@ async def test_a_failing_source_is_reported_beside_the_others() -> None:
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="a switched-off feature's signals are left out"
 )
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="a switched-off feature's attention source is not asked"
+)
 async def test_a_switched_off_features_source_is_not_asked() -> None:
-    sync = _Source("sync", [_item("sync", Severity.ERROR)], feature="vault_sync")
-    svc = AttentionService([sync], feature_enabled=lambda key: key != "vault_sync")
+    sync = _Source("sync", [_item("sync", Severity.ERROR)], feature="fake_feature")
+    svc = AttentionService([sync], feature_enabled=lambda key: key != "fake_feature")
     report = await svc.report()
     assert report.items == () and sync.asked == 0
     svc_on = AttentionService([sync], feature_enabled=lambda _k: True)

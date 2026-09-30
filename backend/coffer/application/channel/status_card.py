@@ -3,13 +3,14 @@ channels "Report the chat's state as a status card" and "Offer the commands as
 a help card").
 
 `/status` names things, never ids: the conversation's title (or a parallel
-thread's mark), then the agent, model, effort and directory by the names a
-person reads, and whether a turn is running or queued. In a direct chat it also
+thread's mark), then one line with the agent, model, effort and directory by
+the names a person reads, and whether a turn is running or how many wait. In a direct chat it also
 lists the chat's parallel threads (spec channels "Open parallel conversations
 beside a direct chat"). In a SeaTalk group's main chat it reports the group's
 defaults and the group's running threads instead (spec channels "Set a group's
-defaults from its main chat"). Both cards carry Stop, New, Model, Resume and
-Dir as ``cmd:`` buttons; a transport without buttons, or one that refuses the
+defaults from its main chat"). The status card carries Stop (while a turn
+runs), New, Model, Resume and Dir as ``cmd:`` buttons, the help card New, Stop,
+Model, Status and Resume; a transport without buttons, or one that refuses the
 card, gets the same body as text.
 
 Application layer only: no infrastructure import here.
@@ -19,9 +20,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.command_text import agent_display, model_display
+from coffer.application.channel.command_cards import STATUS_ACTIONS, command_card
+from coffer.application.channel.command_text import agent_display, model_display, settings_line
 from coffer.application.channel.parallel_threads import thread_lines
-from coffer.application.channel.selection_cards import command_card
 from coffer.domain.channel.commands import help_text
 
 if TYPE_CHECKING:
@@ -32,14 +33,14 @@ __all__ = ["cmd_help", "cmd_status"]
 
 async def cmd_help(ctx: CommandContext, _text: str = "") -> None:
     """The roster as text, with the five actions where the transport has buttons."""
-    body = help_text(knowledge=ctx.commands._knowledge_enabled())
+    body = help_text()
     await ctx.answer(command_card(title="Coffer", text=body), body)
 
 
 def _state(running: bool, queued: int) -> str:
-    if running:
-        return f"running, {queued} queued" if queued else "running"
-    return f"{queued} queued" if queued else "idle"
+    """``Running · 2 waiting``, ``Running``, ``2 waiting`` or ``Idle``."""
+    parts = (["Running"] if running else []) + ([f"{queued} waiting"] if queued else [])
+    return " · ".join(parts) or "Idle"
 
 
 async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
@@ -60,16 +61,15 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
     # a turn") — the same one the web's pending chips show.
     queued = len(ctx.commands._turns.pending(bound)) if bound is not None else 0
     lines = [
-        f"Agent: {agent_display(ctx.commands._agents, settings.agent)}",
-        f"Model: {await model_display(ctx.commands, settings.agent, settings.model)}",
-        f"Effort: {settings.effort or 'default'}",
-        f"Directory: {settings.cwd or 'default'}",
-        f"State: {_state(running, queued)}",
+        title,
+        await settings_line(ctx.commands, settings),
+        _state(running, queued),
     ]
     if ctx.chat_kind != "group":
         lines += await thread_lines(ctx)
     body = "\n".join(lines)
-    await ctx.answer(command_card(title=title, text=body), f"{title}\n{body}")
+    actions = [a for a in STATUS_ACTIONS if running or a[1] != "stop"]
+    await ctx.answer(command_card(title="Status", text=body, actions=actions), f"Status\n{body}")
 
 
 async def _group_status(ctx: CommandContext) -> str:

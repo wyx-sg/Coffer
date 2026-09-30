@@ -93,10 +93,8 @@ async def test_a_raising_dependency_propagates() -> None:
         await SyncAttentionSource(sync=Broken(REMOTE, None)).items()
 
 
-def test_source_belongs_to_the_vault_sync_feature() -> None:
-    from coffer.domain.features import EXPERIMENTAL_FEATURES
-
+def test_source_belongs_to_no_feature() -> None:
+    """Sync graduated: its marks are always asked for."""
     source = SyncAttentionSource(sync=FakeSync(None, None))
     assert source.name == "sync"
-    assert source.feature in {f.key for f in EXPERIMENTAL_FEATURES}
-    assert source.feature == "vault_sync"
+    assert source.feature is None

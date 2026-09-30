@@ -140,7 +140,7 @@ local/
 .env.*
 !.env.example
 .envrc
-secrets/
+/secrets/
 *.pem
 *.key
 !*.pub.key

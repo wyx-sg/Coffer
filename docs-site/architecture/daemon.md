@@ -250,12 +250,12 @@ The CLI prints it on stderr before every command. The shim writes it to stderr a
 
 ## Background work
 
-Everything that runs outside a request is started in one place, `surfaces/http/background_workers.py`, plus a few tasks the lifespan and entry point own directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. Each experimental feature's worker reads its switch at the top of every round and skips the round while the feature is off.
+Everything that runs outside a request is started in one place, `surfaces/http/background_workers.py`, plus a few tasks the lifespan and entry point own directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off; none does right now.
 
 | Worker | Code | Cadence | What it does |
 | --- | --- | --- | --- |
 | Retention | `application/retention_worker.py` | Immediately, then every 6 h | Prunes each registered log-style table to its policy, and ages out files in `~/.coffer/logs/` (including per-process shim logs). |
-| Vault converge | `application/sync/worker.py` | First round after 30 s, then on the configured remote's interval (default 1 h). With no remote, or a paused one, it re-checks every 15 min | Runs a converge round with your git remote. A no-op until you configure one, and skipped while `vault_sync` is off. See [Vault sync](/architecture/vault-sync#the-worker). |
+| Vault converge | `application/sync/worker.py` | First round after 30 s, then on the configured remote's interval (default 1 h). With no remote, or a paused one, it re-checks every 15 min | Runs a converge round with your git remote. A no-op until you configure one. See [Vault sync](/architecture/vault-sync#the-worker). |
 | Knowledge curation | `application/knowledge/curate_worker.py` | First sweep after 60 s, then every hour by default | Drains each collection's inbox, then documents edited out of band, and re-renders the guide skill. Runs only on the owner machine, and takes the converge round's lock. See [Knowledge](/architecture/knowledge). |
 | Memory aggregation | `application/memory/aggregate_worker.py` | Immediately, then hourly by default | Reads each agent's native memory into the derived memory tree. See [Memory](/architecture/memory). |
 | Memory distil | `application/memory/distil_worker.py` | First pass after 60 s, then every 6 h by default | Runs the internal-model distil pass over aggregated memory. |

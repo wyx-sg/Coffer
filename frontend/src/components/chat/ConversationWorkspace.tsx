@@ -45,7 +45,7 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
             agentLabel={agentLabel}
             archived={c.activeArchived}
             onRename={(title) => c.renameConversation(conv.id, title)}
-            onArchive={() => c.requestArchive(conv.id)}
+            onArchive={() => c.archiveConversation(conv.id)}
             onRestore={() => c.restoreConversation(conv.id)}
             onDelete={() => c.requestDelete(conv.id)}
           />

@@ -38,8 +38,8 @@ class DaemonStatusOut(BaseModel):
     #: This machine's id, as ``daemon-config.json`` caches it once the daemon
     #: has derived it from the host at start; ``null`` only before that. Here
     #: rather than only on the sync surface because machine identity is not
-    #: sync's: a channel is bound to a machine whether or not ``vault_sync``
-    #: is on, and ``/api/v1/sync`` is closed while it is off.
+    #: sync's: a channel is bound to a machine whether or not the vault has a
+    #: sync remote.
     machine_id: str | None
     #: This machine's display label (the hostname unless the user set one).
     machine_name: str

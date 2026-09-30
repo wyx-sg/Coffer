@@ -1026,16 +1026,6 @@
         "setting": "在这台机器上设置",
         "channel": "{{channel}} 渠道的默认值"
       },
-      "names": {
-        "vault_sync": "同步",
-        "knowledge": "知识",
-        "memory": "记忆"
-      },
-      "descriptions": {
-        "vault_sync": "把这个 vault 与你自有的 git 远端双向同步。",
-        "knowledge": "~/.coffer/knowledge/ 下供智能体阅读的文档集合。",
-        "memory": "从各智能体自己的存储聚合来的记忆，以及投递它的 hook。"
-      },
       "offTitle": "{{name}}已关闭",
       "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——在命令行里用 coffer config set feature.{{key}} on 开启即可。"
     },
@@ -2963,10 +2953,11 @@
       "ariaLabel": "对话历史",
       "rename": "重命名",
       "renameAria": "重命名对话",
-      "delete": "删除",
+      "delete": "删除…",
       "restore": "恢复",
       "archive": "归档",
-      "archivedEmpty": "没有已归档的对话"
+      "archivedEmpty": "没有已归档的对话",
+      "archivedHelp": "已归档的对话是只读的。打开它，从 ⋯ 菜单选择「恢复」即可继续。"
     },
     "thread": {
       "empty": "发送消息开始对话。",
@@ -3020,19 +3011,17 @@
       "inheritNoEffort": "智能体默认"
     },
     "draft": {
-      "guide": "发出第一条消息即开始与 {{agent}} 的对话。",
+      "title": "与 {{agent}} 的新对话",
+      "details": "{{details}}——发送一条消息即可开始。",
+      "effort": "{{effort}} 推理强度",
       "noAgentTitle": "没有可用的受管智能体",
       "noAgentBody": "对话需要一个由 Coffer 管理的智能体。请在本机安装 Claude Code 或 Codex，然后在「智能体」页面添加。",
       "workspace": "Coffer 的工作区"
     },
     "delete": {
       "title": "删除此对话？",
-      "body": "此对话及其所有消息将被永久删除。"
-    },
-    "archive": {
-      "title": "归档此对话？",
-      "body": "它将被移入归档，你可以随时恢复。",
-      "confirm": "归档"
+      "body": "「{{title}}」及其消息将从 Coffer 中删除。智能体改过的文件和 {{agent}} 自己的会话文件会保留。此操作无法撤销——如需保留，请改用归档。",
+      "confirm": "删除对话"
     },
     "jumpToLatest": "跳到最新",
     "attachment": "附件",
@@ -3042,8 +3031,9 @@
     "attachments": {
       "uploading": "上传中…",
       "remove": "移除 {{name}}",
-      "tooLarge": "超过 20 MB 上限",
-      "tooMany": "每条消息最多 10 个文件",
+      "notAttached": "{{name}} 未添加：{{reason}}。最多 10 个文件，每个 20 MB。",
+      "tooLarge": "文件超过 20 MB",
+      "tooMany": "这条消息已有 10 个文件",
       "listLabel": "已添加的附件"
     },
     "mirror": {
@@ -3082,7 +3072,8 @@
       },
       "emptyTitle": "还没有对话",
       "emptyBody": "所有对话都会出现在这里——在 Coffer 里发起的，以及通过 SeaTalk 或 Telegram 进来的。",
-      "noMatches": "没有符合这些筛选条件的对话"
+      "noMatches": "没有匹配的对话",
+      "clearFilters": "清除筛选"
     },
     "filters": {
       "source": "来源",
@@ -3090,7 +3081,7 @@
       "agent": "智能体",
       "allAgents": "全部智能体",
       "channel": "消息渠道：{{channel}}",
-      "clearChannel": "显示全部来源",
+      "clearChannel": "清除消息渠道筛选",
       "showArchived": "已归档",
       "showActive": "进行中"
     },
@@ -3105,7 +3096,8 @@
       "start": "开始"
     },
     "header": {
-      "more": "这个对话的更多操作"
+      "more": "这个对话的更多操作",
+      "agentFixed": "这个对话的智能体已固定——要换用其他智能体，请新建对话"
     },
     "files": {
       "title": "改动的文件 · {{count}}"
@@ -3262,7 +3254,13 @@
       "runHereConfirm": "在本机运行…",
       "turnOn": "打开",
       "changeMachine": "更换机器…",
-      "delete": "删除消息渠道"
+      "delete": "删除消息渠道",
+      "menu": {
+        "reconnect": "重新连接",
+        "replaceSecret": "替换 App secret…",
+        "replaceToken": "替换 Bot token…",
+        "delete": "删除渠道…"
+      }
     },
     "overview": {
       "who": {
@@ -3277,10 +3275,9 @@
         "title": "智能体",
         "default": "默认智能体",
         "reach": "可驱动的智能体",
-        "help": "每条消息都会成为「对话」里的一个对话。{{agentCommand}} 在这些智能体之间切换，/model 选择模型，/thread 开启一个并行对话。"
+        "help": "每条消息都会成为「对话」里的一个对话。/new <智能体> 切换智能体，/model 选择模型，/thread 开一个并行对话。"
       },
-      "conversations": "来自这个消息渠道的对话",
-      "conversationsHint": "打开按 {{name}} 筛选的「对话」。"
+      "conversations": "来自 {{name}} 的对话"
     },
     "settings": {
       "saveState": {
@@ -3423,14 +3420,13 @@
     },
     "dialog": {
       "name": "名称",
-      "namePlaceholder": "例如 my-telegram",
+      "namePlaceholder": "例如：团队机器人",
       "botToken": "Bot token",
       "appId": "App ID",
       "appSecret": "App Secret",
       "errors": {
         "name": "请输入名称",
-        "nameFormat": "只能包含字母、数字、短横线和下划线",
-        "nameTooLong": "最多 64 个字符",
+        "nameTooLong": "最多 80 个字符",
         "botToken": "请输入 bot token",
         "appId": "请输入 App ID",
         "appSecret": "请输入 App Secret",
@@ -3445,7 +3441,8 @@
       "seatalkDelivery": {
         "title": "在 SeaTalk 开发者后台把事件投递方式设为 WebSocket",
         "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
-      }
+      },
+      "nameHint": "任意名称。Coffer 用 ID 区分渠道，之后可以改名。"
     },
     "edit": {
       "saved": "消息渠道 {{name}} 已更新",
@@ -3467,20 +3464,24 @@
       },
       "replies": {
         "title": "回复",
-        "showSteps": "工作时显示步骤",
-        "showStepsHelpLabel": "关于步骤列表",
-        "showStepsHelp": "回合进行时，实时状态行会在标题（如「⏳ Working · 2m 14s · 7 steps」）下逐条列出每一步（工具调用）。关闭后只保留标题和智能体最新的一句说明，适合消息多的群。",
-        "notifyAfter": "回合超过多久时提醒",
-        "notifyAfterHint": "设为 0 则不提醒。",
-        "notifyAfterHelpLabel": "关于完成提醒",
-        "notifyAfterHelp": "回合运行达到这个时长时，结束后会在聊天里发一条简短提醒（如「✅ Done · 4m 12s — 回答的第一行」），用于回答本身不会触发通知的情况（SeaTalk 的回答是回合开始时就创建的那条消息）。"
+        "notifyAfter": "长任务完成提醒",
+        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息，群里会 @ 提问人。0 表示关闭。",
+        "showSteps": "显示步骤行",
+        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。关闭后只保留状态行。"
       },
       "directories": {
-        "label": "/dir 可用目录",
-        "help": "聊天里用 /dir 只能把智能体切换到这些目录。每个目录也包括它的子目录。",
-        "placeholder": "每行一个绝对路径，例如 /Users/me/projects",
+        "title": "工作目录",
+        "default": "默认",
+        "defaultHint": "新对话从这里开始。",
+        "defaultPlaceholder": "智能体自己的目录",
+        "allowed": "/dir 可用的目录",
+        "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
+        "defaultTag": "默认",
+        "remove": "移除",
+        "removeAria": "移除 {{path}}",
+        "add": "添加目录…",
         "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
-        "tooMany": "最多列出 {{max}} 个目录。"
+        "tooMany": "最多 {{max}} 个目录。"
       }
     },
     "machine": {

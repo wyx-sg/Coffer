@@ -296,6 +296,12 @@ def lookup(s: Session, key: str) -> Setting | None:
     return None
 
 
+def is_family(prefix: str) -> bool:
+    """Whether ``prefix`` is exactly a family's prefix — one that may have no
+    members at all (``feature.`` while no feature is experimental)."""
+    return any(prefix == family.prefix for family in FAMILIES)
+
+
 def listing(s: Session, prefix: str) -> list[Setting]:
     """Every key under ``prefix``; a family is expanded only when the prefix
     can reach it, so ``config list daemon.`` needs no daemon."""

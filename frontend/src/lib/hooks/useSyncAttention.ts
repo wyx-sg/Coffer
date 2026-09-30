@@ -21,7 +21,6 @@ import { useEffect } from "react";
 
 import type { ConvergeRound, RoundStatus, SyncStatus } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { usePageLocation } from "@/lib/settingsModal";
 
 const SEEN_KEY = "coffer.sync.attentionSeen";
@@ -114,11 +113,7 @@ export function useSyncAttention(): boolean {
   // The page the user is on — the one under the Settings modal while it is
   // open, so opening Settings over Sync does not raise the dot.
   const onSyncPage = usePageLocation().pathname === "/sync";
-  // Switching `vault_sync` off stops every sync attention mark (spec
-  // experimental-features "Withdraw what a switched-off feature put in front
-  // of agents") — and asks nothing, so a switched-off feature is not polled.
-  const syncOn = useFeatureEnabled("vault_sync") === true;
-  const { data, isError } = useSyncStatus(syncOn);
+  const { data, isError } = useSyncStatus();
   const marker = syncStatusMarker(data);
 
   useEffect(() => {
@@ -128,7 +123,7 @@ export function useSyncAttention(): boolean {
   // A daemon that cannot answer is not a sync problem, and the offline banner
   // already says so; stale cached data must not outlive it into a second
   // claim on the same screen.
-  if (!syncOn || isError || !marker) return false;
+  if (isError || !marker) return false;
   // While the page is open the user is looking at it — no dot over their own
   // reading, and no flicker between the render and the effect above.
   if (onSyncPage) return false;

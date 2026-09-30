@@ -38,7 +38,7 @@ port:    8000
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. `channel` is the build's release channel, which decides which [experimental features](/guides/experimental-features) are on by default. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. `channel` is the build's release channel, which decides whether [experimental features](/guides/experimental-features) are on by default (none is experimental right now). Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
@@ -120,7 +120,7 @@ The login service is macOS only. On any other host, `service install` and `servi
 | --- | --- |
 | `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
 | `~/.coffer/daemon.lock` | The lock that keeps it to one daemon per vault. It stays on disk between runs; the lock lives on the open file, not on its existence. |
-| `~/.coffer/daemon-config.json` | Machine-local settings read before the database opens: `port`, `features`, `machine_id`, `machine_name`, and the agents a switched-off `memory` feature withdrew its hook from. Mode `0600`. Never synced. |
+| `~/.coffer/daemon-config.json` | Machine-local settings read before the database opens: `port`, `features` (this machine's experimental-feature switches), `machine_id` and `machine_name`. Mode `0600`. Never synced. |
 | `~/.coffer/coffer.db` | The vault's SQLite database. |
 | `~/.coffer/logs/` | Logs; see below. |
 | `~/.coffer/bin/` | Deployed binaries (frozen builds only); see [Upgrades](#upgrades-and-rollback). |

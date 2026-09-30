@@ -111,7 +111,7 @@ Telegram replies are built from the agent's Markdown.
 - **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
 - **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
 - **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help` are shown only to you.
-- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. The card's title is a heading or a bold first line.
+- **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. The card's title is a heading or a bold first line.
 
 Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
 
@@ -124,7 +124,7 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 | Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb`, `/help` |
 | Groups | `/new`, `/stop`, `/model`, `/status`, `/resume`, `/help` |
 
-Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. `/kb` is listed only while the Knowledge feature is on; switching the feature re-registers the menus. The hidden `/start` is never listed.
+Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
 
 A command tapped from a group's menu arrives as `/status@my_coffer_bot`. Coffer treats it as `/status` addressed to the bot, so it answers even when the group requires a mention. A command naming another bot, such as `/status@some_other_bot`, is not for this one and is ignored.
 

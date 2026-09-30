@@ -7,6 +7,10 @@
 // routes (`/daemon/features` and `/daemon/status`), and a card that moved
 // while the rail waited for its next 30-second poll would say a feature is on
 // that the user cannot find.
+//
+// No real feature is registered (every one so far has graduated), so the
+// daemon here registers test-only ones — `fake_alpha`, `fake_beta`,
+// `fake_gamma` — and the sidebar carries one test-only entry for each.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,6 +23,22 @@ import { ExperimentalFeaturesSettings } from "./ExperimentalFeaturesSettings";
 
 const getMock = vi.fn();
 const putMock = vi.fn();
+vi.mock("@/lib/navigation", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/navigation")>();
+  const { FlaskConical } = await import("lucide-react");
+  const groups = [
+    ...real.NAV_GROUPS,
+    {
+      labelKey: "Fake group",
+      entries: [
+        { to: "/alpha", labelKey: "Alpha", icon: FlaskConical, feature: "fake_alpha" },
+        { to: "/beta", labelKey: "Beta", icon: FlaskConical, feature: "fake_beta" },
+        { to: "/gamma", labelKey: "Gamma", icon: FlaskConical, feature: "fake_gamma" },
+      ],
+    },
+  ];
+  return { ...real, NAV_GROUPS: groups, NAV_ENTRIES: groups.flatMap((g) => g.entries) };
+});
 vi.mock("@/lib/api/client", () => ({
   getApiClient: () => ({ GET: getMock, PUT: putMock }),
   resetApiClient: vi.fn(),
@@ -87,9 +107,9 @@ beforeEach(() => {
 describe("ExperimentalFeaturesSettings", () => {
   acceptance("experimental-features", "the general tab switches a feature", async () => {
     const state = daemon({
-      vault_sync: { enabled: false, source: "channel" },
-      knowledge: { enabled: false, source: "channel" },
-      memory: { enabled: false, source: "channel" },
+      fake_alpha: { enabled: false, source: "channel" },
+      fake_beta: { enabled: false, source: "channel" },
+      fake_gamma: { enabled: false, source: "channel" },
     });
     putMock.mockImplementation(
       (_path: string, init: { params: { path: { key: string } }; body: { enabled: boolean } }) => {
@@ -100,78 +120,92 @@ describe("ExperimentalFeaturesSettings", () => {
     );
     renderPage();
 
-    const toggle = await screen.findByRole("switch", { name: "Knowledge" });
+    const toggle = await screen.findByRole("switch", { name: "fake_beta" });
     expect(toggle).not.toBeChecked();
-    expect(sidebarLink("Knowledge")).toBeNull();
+    expect(sidebarLink("Beta")).toBeNull();
 
     fireEvent.click(toggle);
 
-    await waitFor(() => expect(sidebarLink("Knowledge")).toBeInTheDocument());
+    await waitFor(() => expect(sidebarLink("Beta")).toBeInTheDocument());
     expect(putMock).toHaveBeenCalledTimes(1);
     expect(putMock).toHaveBeenCalledWith("/daemon/features/{key}", {
-      params: { path: { key: "knowledge" } },
+      params: { path: { key: "fake_beta" } },
       body: { enabled: true },
     });
-    await waitFor(() => expect(screen.getByRole("switch", { name: "Knowledge" })).toBeChecked());
+    await waitFor(() => expect(screen.getByRole("switch", { name: "fake_beta" })).toBeChecked());
     expect(
-      within(screen.getByTestId("feature-knowledge")).getByText("Set on this machine"),
+      within(screen.getByTestId("feature-fake_beta")).getByText("Set on this machine"),
     ).toBeInTheDocument();
     // The others were not touched.
-    expect(sidebarLink("Memory")).toBeNull();
-    expect(sidebarLink("Sync")).toBeNull();
+    expect(sidebarLink("Gamma")).toBeNull();
+    expect(sidebarLink("Alpha")).toBeNull();
   });
 
   test("lists every feature with its state and the layer that decided it", async () => {
     daemon({
-      vault_sync: { enabled: true, source: "setting" },
-      knowledge: { enabled: false, source: "pin" },
-      memory: { enabled: false, source: "channel" },
+      fake_alpha: { enabled: true, source: "setting" },
+      fake_beta: { enabled: false, source: "pin" },
+      fake_gamma: { enabled: false, source: "channel" },
     });
     renderPage();
 
-    const sync = await screen.findByTestId("feature-vault_sync");
-    expect(within(sync).getByText("On")).toBeInTheDocument();
-    expect(within(sync).getByText("Set on this machine")).toBeInTheDocument();
+    const alpha = await screen.findByTestId("feature-fake_alpha");
+    expect(within(alpha).getByText("On")).toBeInTheDocument();
+    expect(within(alpha).getByText("Set on this machine")).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("feature-knowledge")).getByText(/Pinned by COFFER_FEATURES/),
+      within(screen.getByTestId("feature-fake_beta")).getByText(/Pinned by COFFER_FEATURES/),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("feature-memory")).getByText("Default for the stable channel"),
+      within(screen.getByTestId("feature-fake_gamma")).getByText("Default for the stable channel"),
     ).toBeInTheDocument();
   });
 
   test("a pinned feature's switch is disabled", async () => {
     daemon({
-      vault_sync: { enabled: true, source: "channel" },
-      knowledge: { enabled: false, source: "pin" },
-      memory: { enabled: true, source: "channel" },
+      fake_alpha: { enabled: true, source: "channel" },
+      fake_beta: { enabled: false, source: "pin" },
+      fake_gamma: { enabled: true, source: "channel" },
     });
     renderPage();
 
-    expect(await screen.findByRole("switch", { name: "Knowledge" })).toBeDisabled();
-    expect(screen.getByRole("switch", { name: "Memory" })).toBeEnabled();
+    expect(await screen.findByRole("switch", { name: "fake_beta" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "fake_gamma" })).toBeEnabled();
   });
 
   test("a failed write puts the switch back and shows the error beside it", async () => {
     daemon({
-      vault_sync: { enabled: true, source: "channel" },
-      knowledge: { enabled: false, source: "channel" },
-      memory: { enabled: true, source: "channel" },
+      fake_alpha: { enabled: true, source: "channel" },
+      fake_beta: { enabled: false, source: "channel" },
+      fake_gamma: { enabled: true, source: "channel" },
     });
     putMock.mockResolvedValue({
       error: {
-        error: { code: "FEATURE_PINNED", message: "pinned", details: { feature: "memory" } },
+        error: { code: "FEATURE_PINNED", message: "pinned", details: { feature: "fake_gamma" } },
       },
     });
     renderPage();
 
-    const toggle = await screen.findByRole("switch", { name: "Memory" });
+    const toggle = await screen.findByRole("switch", { name: "fake_gamma" });
     await waitFor(() => expect(toggle).toBeChecked());
     fireEvent.click(toggle);
 
-    const row = screen.getByTestId("feature-memory");
+    const row = screen.getByTestId("feature-fake_gamma");
     expect(await within(row).findByRole("alert")).toHaveTextContent(/pinned by COFFER_FEATURES/i);
-    expect(screen.getByRole("switch", { name: "Memory" })).toBeChecked();
-    expect(sidebarLink("Memory")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "fake_gamma" })).toBeChecked();
+    expect(sidebarLink("Gamma")).toBeInTheDocument();
   });
+
+  acceptance(
+    "experimental-features",
+    "the general tab shows nothing while no feature is registered",
+    async () => {
+      daemon({});
+      const { container } = renderPage();
+
+      await waitFor(() => expect(getMock).toHaveBeenCalledWith("/daemon/features"));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(screen.queryByText("Experimental features")).not.toBeInTheDocument();
+      expect(container.querySelector("[data-testid^='feature-']")).toBeNull();
+    },
+  );
 });

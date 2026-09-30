@@ -639,9 +639,9 @@ items, and the answer MUST count the items per kind.
 - **THEN** the item is listed and the failing source is reported with its error
 
 #### Scenario: a switched-off feature's signals are left out
-- **GIVEN** a sync stopped on a conflict and the `vault_sync` feature switched off
+- **GIVEN** an attention source tagged with a registered experimental feature that is switched off, holding an item it would report
 - **WHEN** the attention list is read
-- **THEN** no sync item is listed
+- **THEN** that source's item is not listed and the source is not reported as failing
 
 #### Scenario: a required command that needs attention is listed
 - **GIVEN** a skill requiring `gh` with minimum `2.40` and `gh 2.30` installed

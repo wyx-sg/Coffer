@@ -111,15 +111,15 @@ describe("message batching", () => {
 });
 
 describe("replies", () => {
-  test("the step list switch saves at once; the ping threshold after typing stops", async () => {
+  test("the step lines switch saves at once; the ping threshold after typing stops", async () => {
     const api = installApi();
     renderSettings();
 
-    fireEvent.click(screen.getByRole("switch", { name: /show steps while working/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /show step lines/i }));
     await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
     expect(patched(api, 0).show_steps).toBe(false);
 
-    fireEvent.change(screen.getByLabelText(/ping when a turn takes longer than/i), {
+    fireEvent.change(screen.getByLabelText(/long-task ping after/i), {
       target: { value: "300" },
     });
     await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2), SLOW);
@@ -130,7 +130,7 @@ describe("replies", () => {
   test("a blank threshold is refused inline and never sent", async () => {
     const api = installApi();
     renderSettings();
-    fireEvent.change(screen.getByLabelText(/ping when a turn takes longer than/i), {
+    fireEvent.change(screen.getByLabelText(/long-task ping after/i), {
       target: { value: "" },
     });
     expect(screen.getByRole("alert")).toHaveTextContent(/0 to 3600/);
@@ -139,26 +139,41 @@ describe("replies", () => {
   });
 });
 
-describe("directories for /dir", () => {
-  const dirsField = () => screen.getByLabelText(/directories for \/dir/i);
+describe("working directories", () => {
+  const defaultField = () => screen.getByLabelText(/^default$/i);
 
   acceptance(
     "channels",
     "the channel's directories are edited from the Channels page and the CLI",
     async () => {
       const api = installApi();
-      renderSettings();
-      fireEvent.change(dirsField(), { target: { value: "  /Users/me/projects/ \n\n/srv/app\n" } });
+      renderSettings(makeChannel({ config: { directories: ["/srv/app", "/srv/lib"] } }));
+      fireEvent.click(screen.getByRole("button", { name: "Remove /srv/app" }));
 
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
-      expect(patched(api).directories).toEqual(["/Users/me/projects", "/srv/app"]);
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(patched(api).directories).toEqual(["/srv/lib"]);
     },
   );
 
-  test("a relative path shows an inline error and saves nothing", async () => {
+  acceptance(
+    "channels",
+    "the channel's default directory is edited from the Channels page and the CLI",
+    async () => {
+      const api = installApi();
+      renderSettings(makeChannel({ config: { directories: ["/srv/app"] } }));
+      fireEvent.change(defaultField(), { target: { value: "/srv/app/" } });
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
+      expect(patched(api).default_agent_config).toEqual({ cwd: "/srv/app" });
+      // The listed default is marked as such.
+      expect(screen.getByTestId("channel-directories")).toHaveTextContent(/default/);
+    },
+  );
+
+  test("a relative default shows an inline error and saves nothing", async () => {
     const api = installApi();
     renderSettings();
-    fireEvent.change(dirsField(), { target: { value: "/srv/app\nprojects" } });
+    fireEvent.change(defaultField(), { target: { value: "projects" } });
     expect(screen.getByRole("alert")).toHaveTextContent(/"projects" is not an absolute path/);
     await new Promise((r) => setTimeout(r, 900));
     expect(api.PATCH).not.toHaveBeenCalled();

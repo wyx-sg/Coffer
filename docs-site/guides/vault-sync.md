@@ -7,10 +7,6 @@ description: Keep one Coffer vault across several of your machines by converging
 
 Vault sync keeps the Coffer vaults on your machines converged through a git repository you own, so a laptop and a desktop hold the same knowledge, skills, MCP servers, agents and providers. This page is for anyone who runs Coffer on more than one machine and wants to set it up, understand what it does to their files, and recover when a round needs them.
 
-::: tip Experimental feature
-Vault sync is an [experimental feature](/guides/experimental-features) with the key `vault_sync`. It is off by default in a release build and on in a build from source. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.vault_sync on`.
-:::
-
 ## What it is for
 
 Each machine commits what its vault holds into a local git working tree, lets git merge that with what the remote holds, and applies the difference back, deletions included. A background worker repeats this every hour by default. Every exchange is one **converge round**.
@@ -28,7 +24,7 @@ Three rules shape everything below:
   - **HTTPS:** a personal access token with push rights, stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process; it never appears in the URL, the command line, the repository's git config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt, since no askpass program is available to the daemon.
   - **`file://`**: no credential.
-- **The same Coffer on every machine**, with `vault_sync` switched on on each.
+- **The same Coffer on every machine.**
 
 ## Set up the first machine
 
@@ -70,7 +66,7 @@ In the web UI the same steps are on the **Sync** page, **Setup** tab: fill in **
 
 ## Join another machine
 
-1. Install Coffer and switch `vault_sync` on.
+1. Install Coffer.
 2. If the remote needs a token, store it under the same reference, then configure the same remote with `coffer sync remote set`. For a remote that needs no secret and uses the defaults, you can pass the URL straight to `adopt` instead.
 3. Run `coffer sync adopt` and read the report before you answer:
 
@@ -113,7 +109,7 @@ Without the key, sync still works, but secrets that arrived are reported as lock
 | --- | --- |
 | Knowledge files under `~/.coffer/knowledge/` | `coffer.db` itself, logs, `daemon.json`, `daemon-config.json` |
 | The master skill store under `~/.coffer/skills/`, and the memory triggers you wrote or armed (`~/.coffer/vault/memory-triggers/`) | **Reach**: each resource's enabled flag and agent scope |
-| Definitions of MCP servers, agents, skills, knowledge collections, providers and channels (one YAML document each, keyed by uid) | The `coffer-guide` skill, which each machine generates from its own build and feature switches |
+| Definitions of MCP servers, agents, skills, knowledge collections, providers and channels (one YAML document each, keyed by uid) | The `coffer-guide` skill, which each machine generates from its own build and its own knowledge and memory paths |
 | MCP capability preferences, Coffer's model settings, the agent plugin inventory, channel pairings | Memory (`~/.coffer/memory/` and its partitions), which each machine derives from its own agents |
 | Secret ciphertext, with `--with-secrets` | Conversations, the audit log, MCP invocation records |
 | One descriptor per machine under `machines/` | The master key |
@@ -237,13 +233,11 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 
 - **Pause:** switch off **Converge automatically** on **Setup**, or run `coffer sync remote pause`. Every round then reports `disabled`, records nothing, pushes nothing and raises no notice. The remote, its settings, the pointer and the history are kept, and switching it back on (or `coffer sync remote resume`) resumes where the vault left off. `coffer sync remote set` never unpauses a paused remote.
 - **Forget the remote:** `coffer sync remote clear`. The vault is left exactly as it is.
-- **Switch the feature off:** `coffer config set feature.vault_sync off` closes every sync surface on this machine and keeps everything it holds.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `vault_sync is switched off on this machine` | The feature is off. | `coffer config set feature.vault_sync on` |
 | Status `awaiting_join`, nothing applied | This machine has not joined the remote. | `coffer sync adopt` |
 | Push fails with an authentication error | No usable credential: your git config and keychain helper are not consulted. | Store a token and set `--secret-ref`, or use an SSH key that needs no prompt. |
 | `remote set` refused for the working tree | The path is relative, or at, inside or above the vault or `~/.coffer`. | Use the default or an absolute path outside `~/.coffer`. |
@@ -260,7 +254,6 @@ The seven round steps, the joining algorithm, the deletion guard and the reasons
 
 ## Related
 
-- [Experimental features](/guides/experimental-features)
 - [Secret store](/guides/secret-store)
 - [Channels](/guides/channels)
 - [Knowledge](/guides/knowledge)

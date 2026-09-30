@@ -105,7 +105,6 @@ Work through these causes in order:
 | The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp cap list <name>`. | Switch it on there, or with `coffer mcp cap enable <name> tool:<tool>`. |
 | The server cannot start: its launcher is missing. | The server shows `npx is not installed on this machine` (or `uvx`, …). | Install that runtime, then **Refresh capabilities**. Coffer does not install runtimes. |
 | The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or secrets. A server that misses discovery is retried in the background and its tools reappear when it answers. |
-| A Coffer tool belongs to a switched-off feature (`coffer__write` for `knowledge`). | `coffer config list feature.` | `coffer config set feature.<key> on` |
 
 See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-client).
 
@@ -131,9 +130,9 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 ### A page says a feature "is switched off"
 
-**Cause.** Sync, Knowledge and Memory are [experimental features](/guides/experimental-features), off by default in release builds.
+**Cause.** The page belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default in release builds. No feature is experimental right now, so a current build does not show this notice.
 
-**Fix.** **Settings → General → Experimental features**, or `coffer config set feature.<key> on`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
+**Fix.** Switch the feature on under **Settings → General**, or with `coffer config set feature.<key> on`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
 
 ## Secrets and macOS keychain prompts
 

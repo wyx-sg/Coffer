@@ -7,10 +7,6 @@ description: Keep what you and your agents know about your working environment a
 
 Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, traps — that every agent on your machine reads. This page covers creating collections, adding and editing documents, how Coffer's curation folds new items into the documents, how to look back at every change and undo one, and how agents find what is there.
 
-::: warning Experimental feature
-Knowledge is an [experimental feature](/guides/experimental-features) with the key `knowledge`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.knowledge on`. While it is off, the Knowledge page, the `/api/v1/knowledge` routes and the `coffer__write` tool are unavailable, and nothing you stored is deleted.
-:::
-
 ## What knowledge is for
 
 Knowledge holds facts about the world you work in: which team owns a service, how an internal API authenticates, why a migration is ordered the way it is. It arrives because you, or an agent working with you, put it there.
@@ -155,7 +151,7 @@ If you have a [channel](/guides/channels) paired, send a document to it as an at
 /kb payments
 ```
 
-Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save. `/kb` is offered in the channel's help and menus only while the Knowledge feature is on.
+Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save.
 
 ### From the Knowledge page: add a document
 
@@ -325,7 +321,7 @@ The documents are plain files: `coffer path knowledge` prints the knowledge root
 
 ## Every collection reaches every agent
 
-A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted. `coffer knowledge` has no `enable` or `disable`, and the generic enable and disable routes refuse a collection with `RESOURCE_NOT_TOGGLEABLE`. To switch the whole knowledge layer off, use the `knowledge` [experimental feature](/guides/experimental-features).
+A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted. `coffer knowledge` has no `enable` or `disable`, and the generic enable and disable routes refuse a collection with `RESOURCE_NOT_TOGGLEABLE`.
 
 ::: warning Not access control
 The skill hands agents the knowledge root, and an agent can read anything under it with its own tools. Keep nothing in a collection that an agent on this machine should not read.
@@ -425,15 +421,14 @@ A deleted document stays in the [history](#history-and-undo). Find it with `coff
 
 **Curation rewrote a document badly.** Find the pass with `coffer knowledge changes --in <collection>`, read it with `coffer knowledge changes <version>`, and undo it with `coffer knowledge undo <version>`, or restore just that document with `coffer knowledge restore`.
 
-**An agent does not use the knowledge.** Check that the `knowledge` feature is on, that the `coffer-guide` skill is enabled and reaches that agent (`coffer skill scope coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
+**An agent does not use the knowledge.** Check that the `coffer-guide` skill is enabled and reaches that agent (`coffer skill scope coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
 
-**`coffer__write` is missing from the agent's tools.** The `knowledge` feature is switched off on this machine, or the agent is not connected to Coffer (`coffer agent connect <agent>`).
+**`coffer__write` is missing from the agent's tools.** The agent is not connected to Coffer (`coffer agent connect <agent>`).
 
 ## Related
 
 - [Skills](/guides/skills) — the `coffer-guide` skill that carries the catalogue
 - [Memory](/guides/memory)
-- [Experimental features](/guides/experimental-features)
 - [Knowledge architecture](/architecture/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)

@@ -119,7 +119,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
   "proxy_port": 8001,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
-  "features": { "vault_sync": true, "memory": false }
+  "features": {}
 }
 ```
 
@@ -129,19 +129,15 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `proxy_port` | integer 1024–65535, or `null` | `8001` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
-| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. | **Settings → General → Experimental features**, `coffer config set feature.<key> on\|off` |
+| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → General**, `coffer config set feature.<key> on\|off` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
 ## Experimental features
 
-Three capabilities are experimental. Each can be switched off per machine; switching one off hides its pages, commands and routes and deletes nothing it holds.
+An experimental feature is a capability that can be switched off per machine; switching one off hides its pages, commands and routes and deletes nothing it holds. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-| Key | Name in the UI | Routes it owns | Resource kinds it owns |
-| --- | --- | --- | --- |
-| `vault_sync` | Sync | `/api/v1/sync` | — |
-| `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
-| `memory` | Memory | `/api/v1/memory` | `memory` |
+No feature is experimental right now: the registry is empty. Sync, Knowledge and Memory (keys `vault_sync`, `knowledge`, `memory`) graduated at 1.0 and are always on; a migration removed their stored switches. `coffer config set feature.<one of them>` now reports an unknown setting, and `PUT /api/v1/daemon/features/<one of them>` answers `FEATURE_UNKNOWN`.
 
 While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`, and the CLI prints the command that switches it back on. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
@@ -153,23 +149,23 @@ Highest precedence first:
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Channel default** — on for a `dev` build, off for a `stable` build. Release builds are stamped `stable`; every other build (source runs, local frozen builds) is `dev`.
 
-**Settings → General → Experimental features** shows which of the three decided each switch.
+While the registry has an entry, **Settings → General** shows an experimental-features section that says which of the three decided each switch. With the registry empty the section is not shown.
 
 ### COFFER_FEATURES syntax
 
 A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a feature on; `off`, `false` and `0` switch it off. Whitespace around entries is ignored and values are case-insensitive. An unknown key or a malformed entry is logged and skipped; it never stops the daemon.
 
 ```sh
-COFFER_FEATURES="vault_sync=on,memory=off" coffer daemon restart
+COFFER_FEATURES="<key>=on,<other-key>=off" coffer daemon restart
 ```
 
 ### Commands
 
 ```sh
-coffer config list feature.             # every feature, its state, and what decided it
-coffer config set feature.memory on     # switch on, at once
-coffer config set feature.knowledge off
-coffer config unset feature.knowledge   # back to the channel default
+coffer config list feature.             # every feature, its state, and what decided it (nothing right now)
+coffer config set feature.<key> on      # switch on, at once
+coffer config set feature.<key> off
+coffer config unset feature.<key>       # back to the channel default
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.

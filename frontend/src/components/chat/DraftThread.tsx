@@ -16,8 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
+import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { Composer } from "./Composer";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -55,6 +57,19 @@ export function DraftThread({
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
+  const models = useAgentModels(agentKey).data;
+  const modelLabel = modelValue
+    ? models?.find((m) => m.id === modelValue)?.label || modelValue
+    : null;
+  // What the first turn will run with — only the parts that were chosen; an
+  // unset model or effort is the agent's own default, which it never names.
+  const details = [
+    cwd ? abbreviateHomePath(cwd) : t("conversations.draft.workspace"),
+    modelLabel,
+    effortValue ? t("conversations.draft.effort", { effort: effortValue }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (noManagedAgent) {
     return (
@@ -110,10 +125,11 @@ export function DraftThread({
         />
       </div>
 
-      <div className="flex flex-1 items-end justify-center px-8 pb-2">
-        <p className="text-xs text-text-subtle">
-          {t("conversations.draft.guide", { agent: agentName })}
+      <div className="flex flex-1 flex-col items-center justify-center gap-1.5 p-6 text-center">
+        <p className="text-md font-semibold text-text">
+          {t("conversations.draft.title", { agent: agentName })}
         </p>
+        <p className="text-xs text-text-muted">{t("conversations.draft.details", { details })}</p>
       </div>
       <Composer
         onSend={onSend}

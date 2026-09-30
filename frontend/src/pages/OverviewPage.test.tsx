@@ -14,6 +14,15 @@ vi.mock("@/lib/api/call", async (importOriginal) => ({
   call: vi.fn(),
 }));
 vi.mock("@/lib/events/eventStream", () => ({ followDaemonEvents: vi.fn() }));
+// No real area carries an experimental feature, so the gate is tested by
+// flagging the Knowledge tile with a test-only one.
+vi.mock("@/lib/overview/health", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/overview/health")>();
+  return {
+    ...real,
+    AREAS: real.AREAS.map((a) => (a.id === "knowledge" ? { ...a, feature: "fake_feature" } : a)),
+  };
+});
 
 const { getApiClient } = await import("@/lib/api/client");
 const { call } = await import("@/lib/api/call");
@@ -100,7 +109,7 @@ function install(setup: Setup = {}) {
   state = {
     attention: setup.attention ?? EMPTY_ATTENTION,
     agents: setup.agents ?? AGENTS,
-    features: setup.features ?? { knowledge: true, memory: true, vault_sync: true },
+    features: setup.features ?? { fake_feature: true },
     failing: setup.failing ?? [],
   };
   const get = vi
@@ -356,12 +365,12 @@ describe("one area failing to load leaves the rest of overview working", () => {
 
 describe("overview hides an area whose backend or feature is off", () => {
   test("a switched-off feature has no tile; custom tools and CLIs never have one", async () => {
-    install({ features: { knowledge: false, memory: true, vault_sync: false } });
+    install({ features: { fake_feature: false } });
     renderPage();
     const region = health();
     expect(await within(region).findByRole("link", { name: "Memory" })).toBeInTheDocument();
+    expect(within(region).getByRole("link", { name: "Sync" })).toBeInTheDocument();
     expect(within(region).queryByRole("link", { name: "Knowledge" })).toBeNull();
-    expect(within(region).queryByRole("link", { name: "Sync" })).toBeNull();
     expect(within(region).queryByRole("link", { name: "Custom tools" })).toBeNull();
     expect(within(region).queryByRole("link", { name: "CLIs" })).toBeNull();
   });

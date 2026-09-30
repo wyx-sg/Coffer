@@ -54,6 +54,14 @@ describe("AgentModelBar", () => {
     );
   });
 
+  test("the agent's tooltip says it is fixed for the conversation", async () => {
+    render(<AgentModelBar conversationId="c1" agentKey="claude_code" agentLabel="Claude Code" />);
+    fireEvent.focus(screen.getByTestId("conversation-agent"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "The agent is fixed for this conversation — start a new conversation to use another",
+    );
+  });
+
   test("committing a new model calls setAgentModel with the conversation id", () => {
     useAgentConfigMock.mockReturnValue({ data: { cwd: null, model: null, effort: null } });
     render(<AgentModelBar conversationId="c1" agentKey="claude_code" agentLabel="Claude Code" />);

@@ -161,7 +161,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** A second release branch drifts and collides on every rebase. A runtime switch lets the owner keep testing everything while releasing only what is ready — and a switch that destroyed data would make trying a feature a one-way door.
 
-**In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers `vault_sync`, `knowledge` and `memory` with the route prefixes and resource kinds each owns. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
+**In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
 **Rules out.** Wiring-time gates that need a restart; a switch stored in the synced database; deleting a feature's data when it is switched off.
 

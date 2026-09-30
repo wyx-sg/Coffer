@@ -78,8 +78,7 @@ it. See [Model providers](/guides/providers).
 ### Built-in tool
 
 An MCP tool Coffer itself provides, listed with the reserved `coffer__` prefix alongside
-upstream tools: `coffer__search_tools`, and `coffer__write` while the knowledge
-[experimental feature](#experimental-feature) is on. See [MCP tools](/reference/mcp-tools).
+upstream tools: `coffer__search_tools` and `coffer__write`. See [MCP tools](/reference/mcp-tools).
 
 ## C
 
@@ -191,8 +190,9 @@ into [notes](#note) and rewrites its index, `MEMORY.md`. See [Memory](/architect
 
 ### Experimental feature
 
-A capability that ships switched off on stable builds and can be switched on per machine:
-`vault_sync`, `knowledge` and `memory`. While a feature is off its routes answer
+A capability that ships switched off on stable builds and can be switched on per machine.
+None is experimental right now: Sync, Knowledge and Memory graduated at 1.0 and are always
+on. While a feature is off its routes answer
 `404 FEATURE_DISABLED`, its tools leave the MCP tool list, and its UI is hidden; its data is
 kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
@@ -484,8 +484,7 @@ memory partitions. See [Files and directories](/reference/filesystem).
 ### Vault sync
 
 Keeping vaults on several machines converged through one git remote you own, by repeated
-[converge rounds](#converge-round). An [experimental feature](#experimental-feature) keyed
-`vault_sync`. See [Vault sync](/guides/vault-sync).
+[converge rounds](#converge-round). See [Vault sync](/guides/vault-sync).
 
 ## W
 

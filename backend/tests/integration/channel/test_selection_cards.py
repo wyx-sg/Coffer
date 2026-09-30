@@ -67,19 +67,53 @@ async def test_a_command_button_runs_the_command_it_names(env: ChannelEnv) -> No
     await env.processor.on_callback(tap_event("tg", "owner", "cmd:new"))
 
     assert await env.active_conversation(resource) is not None
-    assert adapter.texts()[-1].startswith("🆕 New conversation · ")
+    _chat, text, _buttons = adapter.cards[-1]
+    assert text.startswith("**🆕 New conversation · ")
 
     await env.processor.on_callback(tap_event("tg", "owner", "cmd:status"))
 
     _chat, text, buttons = adapter.cards[-1]
-    assert "Agent: Coffer Assistant" in text
-    assert [b.value for b in buttons] == [
-        "cmd:stop",
-        "cmd:new",
-        "cmd:model",
-        "cmd:resume",
-        "cmd:dir",
+    assert "Coffer Assistant · Default model" in text
+    # Nothing is running, so there is nothing to stop.
+    assert [b.value for b in buttons] == ["cmd:new", "cmd:model", "cmd:resume", "cmd:dir"]
+
+
+@pytest.mark.acceptance(spec="channels", scenario="/new answers with a one-line card")
+async def test_new_answers_with_a_one_line_card_whose_agent_button_switches(
+    env: ChannelEnv,
+) -> None:
+    env.add_agent("codex")
+    resource, adapter = await _card_channel(env)
+
+    await env.processor.on_message(inbound("tg", "owner", "/new"))
+
+    [(_chat, text, buttons)] = adapter.cards
+    assert text == "**🆕 New conversation · Coffer Assistant · Default model · Default directory**"
+    assert [(b.label, b.value) for b in buttons] == [
+        ("Agent", "agent:?"),
+        ("Model", "cmd:model"),
+        ("Dir", "cmd:dir"),
     ]
+    first = await env.active_conversation(resource)
+
+    # Agent offers the agents this channel may drive, the current one ticked.
+    await env.processor.on_callback(tap_event("tg", "owner", "agent:?"))
+    _chat, text, buttons = adapter.cards[-1]
+    assert adapter.card_titles[-1] == "Agent"
+    assert [(b.label, b.value) for b in buttons] == [
+        ("Coffer Assistant ✓", "agent:builtin"),
+        ("Codex", "agent:codex"),
+    ]
+    assert await env.active_conversation(resource) == first
+
+    # A tap does what `/new codex` does: a fresh conversation on that agent.
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "agent:codex", platform_message_id="card-2")
+    )
+    assert await env.thread_preferred_agent(resource) == "codex"
+    assert await env.active_conversation(resource) != first
+    _chat, text, _buttons = adapter.cards[-1]
+    assert text.startswith("**🆕 New conversation · Codex · ")
 
 
 async def test_a_command_button_naming_no_command_does_nothing(env: ChannelEnv) -> None:
@@ -157,7 +191,7 @@ async def test_a_refused_status_card_falls_back_to_the_text_reply(env: ChannelEn
 
     assert adapter.cards == []
     [text] = adapter.texts()
-    assert text.startswith("No conversation yet\nAgent: Coffer Assistant")
+    assert text.startswith("Status\nNo conversation yet\nCoffer Assistant · Default model")
 
 
 async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:
@@ -528,7 +562,7 @@ async def test_a_malformed_navigation_tap_changes_nothing(env: ChannelEnv) -> No
     code path that applies a choice."""
     resource, adapter = await _card_channel(env)
 
-    for value in ("page:ghost:1", "page:agent:1", "page:model:x"):
+    for value in ("page:ghost:1", "page:thread:1", "page:model:x"):
         await env.processor.on_callback(
             tap_event("tg", "owner", value, platform_message_id="card-1")
         )

@@ -24,6 +24,7 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
 import { useThisMachineId } from "@/lib/hooks/useMachines";
+import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
 import {
   AddChannelSecretFields,
@@ -92,9 +93,13 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
           onChange={(e) => setName(e.target.value)}
           placeholder={t("channels.dialog.namePlaceholder")}
           aria-required
+          maxLength={TITLE_MAX_LENGTH}
           aria-invalid={fieldErrors.name ? true : undefined}
-          aria-describedby="channel-name-error"
+          aria-describedby="channel-name-hint channel-name-error"
         />
+        <p id="channel-name-hint" className="text-xs text-text-muted">
+          {t("channels.dialog.nameHint")}
+        </p>
         <FieldError id="channel-name-error" message={fieldErrors.name} />
       </div>
       <div className="space-y-1.5">

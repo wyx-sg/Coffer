@@ -118,6 +118,16 @@ class _CommonChannelFields(BaseModel):
     # surfaces show an unbound channel as unbound and bind it in one click.
     runs_on: str | None = Field(default=None, max_length=64)
 
+    @field_validator("default_agent_config")
+    @classmethod
+    def _absolute_default_directory(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        # ``cwd`` here is the channel's default working directory: where its new
+        # conversations start (spec channels "Choose the working directory from chat").
+        cwd = (v or {}).get("cwd")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd.startswith("/")):
+            raise ValueError(f"the default directory must be an absolute path; got {cwd!r}")
+        return v
+
     @field_validator("directories")
     @classmethod
     def _absolute_directories(cls, v: list[str]) -> list[str]:

@@ -72,10 +72,6 @@ Every surface talks to the same daemon, so a change made in one shows up in all 
 | From source | Python 3.12 or later. The release builds and the login service target macOS. |
 | MCP clients | Any client that can run a stdio MCP server can use `coffer-mcp-shim`. Only Claude Code and Codex get one-step install, skill delivery and provider switching. |
 
-::: info Experimental features
-Three capabilities are experimental and can be switched on or off on each machine: **Sync**, **Knowledge** and **Memory**. A release build (the `stable` channel) starts with them off. A build from source (the `dev` channel) starts with them on. You can switch them under **Settings → General** or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
-:::
-
 ## Next steps
 
 - [Why Coffer](/start/why-coffer): the design decisions behind Coffer and what they mean for you.

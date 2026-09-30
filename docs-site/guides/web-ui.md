@@ -67,7 +67,7 @@ In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统,
 ::: info Pages still being built
 :::
 
-**Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).
+An entry that belongs to an [experimental feature](/guides/experimental-features) carries an **Experimental** label while the feature is on. While it is switched off the entry is left out of the sidebar, a group whose entries are all switched off loses its heading too, and following a link to its page shows a notice saying the feature is off. No feature is experimental right now, so no entry carries the label.
 
 **Attention dots.** A small dot beside an entry means something there **Needs your attention** — today, a sync round that is held or failed and waiting for you. It is a dot, not a count, and it clears once you visit the page. The dot stays visible on the collapsed rail.
 
@@ -79,7 +79,7 @@ In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统,
 **Overview** is the page the app opens on. It answers "is everything OK, and what needs me?" in three parts:
 
 - **Needs you** — one row per problem across every area, most severe first and then oldest: the thing it is about (a server, an agent, a channel, the vault's sync), the reason in a sentence, since when, and one button that opens the page where you deal with it. The list is the daemon's attention list (`GET /api/v1/attention`, or `coffer attention` in a terminal). Rows clear themselves: the page follows the daemon's event stream, so a row disappears as soon as its problem is resolved. If one area could not be checked, the page says so above the rows, because anything that area would report is missing. When nothing needs you, a calm card says so.
-- **Health** — a tile per area: Agents, Model providers, MCP servers, Skills and Channels, plus Knowledge, Memory and Sync when those features are switched on. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours) and opens the area's page. A tile that fails to load says so with **Retry**, and the rest of the page keeps working. Areas that have no backend yet, such as Custom tools and CLIs, have no tile.
+- **Health** — a tile per area: Agents, Model providers, MCP servers, Skills, Channels, Knowledge, Memory and Sync. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours) and opens the area's page. A tile that fails to load says so with **Retry**, and the rest of the page keeps working. Areas that have no backend yet, such as Custom tools and CLIs, have no tile.
 - **Recent activity** — the last few changes, with a link to [Activity](/guides/activity).
 
 Before any agent is registered, Overview opens on connecting one instead: it lists the agents Coffer supports and which it found on this machine, then the first step for each thing they share.
@@ -93,7 +93,7 @@ The palette is for navigation only — it takes you somewhere and never runs an 
 - **Pages** — every sidebar entry and every Settings tab. Pages are always available, even while the daemon is offline.
 - **Objects** — your agents, MCP servers, skills, model providers, channels, knowledge collections and memory partitions, matched by name (and by title on the kinds that carry one). Each kind loads on its own: while one loads its group says so, and if one fails only that group shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
 
-Pages and objects of a switched-off experimental feature are left out.
+Pages and objects of a switched-off [experimental feature](/guides/experimental-features) are left out.
 
 ## The sidebar footer
 
