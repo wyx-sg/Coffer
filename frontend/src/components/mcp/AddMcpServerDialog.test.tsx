@@ -58,12 +58,18 @@ function DetailProbe() {
   return <div data-testid="detail-page">{name}</div>;
 }
 
-function Harness() {
-  const [open, setOpen] = useState(true);
-  return <AddMcpServerDialog open={open} onOpenChange={setOpen} />;
+function Harness({ start = true }: { start?: boolean }) {
+  const [open, setOpen] = useState(start);
+  const [mode, setMode] = useState<"paste" | "importAgents">("paste");
+  return (
+    <>
+      <button onClick={() => (setMode("importAgents"), setOpen(true))}>open on import</button>
+      <AddMcpServerDialog open={open} onOpenChange={setOpen} initialMode={mode} />
+    </>
+  );
 }
 
-function renderDialog() {
+function renderDialog(start = true) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -71,7 +77,7 @@ function renderDialog() {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
-          <Route path="/mcp-servers" element={<Harness />} />
+          <Route path="/mcp-servers" element={<Harness start={start} />} />
           <Route path="/mcp-servers/:name" element={<DetailProbe />} />
         </Routes>
       </MemoryRouter>
@@ -385,4 +391,11 @@ acceptance("web-ui", "the import review shows each server's fixed name", async (
     "github-tools",
     "long-server",
   ]);
+});
+
+test("opened by the page on Import from your agents, it starts on that view", async () => {
+  renderDialog(false);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "open on import" }));
+  expect(await screen.findByText("Review import")).toBeInTheDocument();
 });

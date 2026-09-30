@@ -8,7 +8,7 @@
 // (importMcpServers.ts). One server added → its page, where it is tested once;
 // several → stay, toast, test each in the background. A secret the daemon
 // holds for approval (202) is said before the dialog lets go.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -79,15 +79,17 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
   const { count: agentEntryCount } = useAgentDirectMcpEntries();
   const taken = new Set((servers ?? []).map((s) => s.name));
 
-  const setOpen = (next: boolean) => {
-    if (next) {
-      setStep({ kind: initialMode });
-      setText("");
-      setFailures([]);
-      createdRef.current = new Map();
-    }
-    onOpenChange(next);
-  };
+  // The page opens the dialog by its `open` prop (Radix reports only closes),
+  // so a fresh session starts whenever it becomes open — on the view it was
+  // asked for, the paste box or Import from your agents.
+  useEffect(() => {
+    if (!open) return;
+    setStep({ kind: initialMode });
+    setText("");
+    setFailures([]);
+    createdRef.current = new Map();
+  }, [open, initialMode]);
+  const setOpen = (next: boolean) => onOpenChange(next);
 
   const reachPhrase = (reach: ReachIntent) => {
     if (reach.mode === "everywhere") return t("mcp.add.reachAll");
