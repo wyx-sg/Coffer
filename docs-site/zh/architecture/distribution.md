@@ -36,7 +36,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 | --- | --- | --- | --- |
 | `coffer-daemon` | `coffer/infrastructure/daemon/entry.py` | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec) | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若存在 `frontend/dist/index.html` 则打包进来的 Web 界面。 |
 | `coffer-mcp-shim` | `coffer/surfaces/shim/main.py` | [`backend/coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec) | MCP 客户端启动的 stdio 到 HTTP 的桥。不含 FastAPI、uvicorn、SQLAlchemy、alembic 和 structlog，这样对每个会话都要拉起它的客户端来说启动很快。 |
-| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | Typer 命令行、httpx 和 `keyring` 后端。不含服务端栈和 MCP SDK。 |
+| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | Typer 命令行、httpx 和 `keyring` 后端，外加 SQLAlchemy、aiosqlite 和 alembic 及作为数据文件的迁移脚本，因为 `coffer migrate` 在 CLI 进程里执行一次性的保险库升级。不含 FastAPI、uvicorn 和 MCP SDK。 |
 
 每个 spec 都是一个单文件 `EXE`，`console=True`、`upx=False`，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
 
@@ -51,7 +51,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) 在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
 
-[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) 在隔离的 `HOME` 下启动打包好的守护进程，等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。
+[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) 在隔离的 `HOME` 下启动打包好的守护进程：该目录的 `daemon-config.json` 里固定了一个空闲的守护进程端口和代理端口，并放了它自己的主密钥文件，所以能和本机已在运行的 Coffer 并存，也从不读取登录钥匙串。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 访问这个守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程以及守护进程启动的模型代理。把它指向 `Coffer.app/Contents/MacOS`，测的就是桌面应用携带的那几份副本。
 
 ## 发布流水线 {#the-release-workflow}
 
@@ -266,7 +266,7 @@ sequenceDiagram
 | --- | --- |
 | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec)、[`coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec)、[`coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | PyInstaller spec |
 | [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) | 把三个二进制都冻结到 `dist/` |
-| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | 构建后守护进程和 shim 的往返测试 |
+| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | 构建后守护进程、CLI 和 shim 的往返测试 |
 | [`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) | 检查 spec 路径失效和 `-X utf8` 的 lint 门禁 |
 | [`scripts/stamp_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_channel.py)、[`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) | 发布渠道 |
 | [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) | 在每个带版本号的文件里设置版本 |

@@ -36,7 +36,7 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 | --- | --- | --- | --- |
 | `coffer-daemon` | `coffer/infrastructure/daemon/entry.py` | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec) | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when `frontend/dist/index.html` exists at build time. |
 | `coffer-mcp-shim` | `coffer/surfaces/shim/main.py` | [`backend/coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec) | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
-| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | The Typer CLI, httpx, and the `keyring` backends. Excludes the server stack and the MCP SDK. |
+| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | The Typer CLI, httpx, and the `keyring` backends, plus SQLAlchemy, aiosqlite and alembic with the migration scripts as data files, because `coffer migrate` runs the one-time vault upgrade in the CLI process. Excludes FastAPI, uvicorn and the MCP SDK. |
 
 Each spec is a single-file `EXE` with `console=True` and `upx=False`, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
 
@@ -51,7 +51,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) runs PyInstaller from `backend/` (where the specs' relative paths resolve) with output redirected to the repository's `dist/` and `build/`. It detects the host's target triple (`aarch64-apple-darwin`, `x86_64-apple-darwin`, the Linux and Windows triples) for naming, but builds only for the host.
 
-[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) starts the bundled daemon under an isolated `HOME`, waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds.
+[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) starts the bundled daemon under an isolated `HOME`, with a free daemon port and proxy port pinned in that home's `daemon-config.json` and a master key file of its own, so it runs beside a Coffer already on the machine and never reads the login keychain. It waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, runs the bundled `coffer daemon status` against the daemon, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds. On exit it stops the daemon and the model proxy the daemon started. Pointed at `Coffer.app/Contents/MacOS`, it tests the copies the desktop app carries.
 
 ## The release workflow
 
@@ -266,7 +266,7 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 | --- | --- |
 | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec), [`coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec), [`coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | PyInstaller specs |
 | [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) | freezes all three binaries into `dist/` |
-| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | post-build daemon and shim round-trip |
+| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | post-build daemon, CLI and shim round-trip |
 | [`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) | lint gate for stale spec paths and `-X utf8` |
 | [`scripts/stamp_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_channel.py), [`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) | release channel |
 | [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) | sets the version in every file that carries it |
