@@ -1,194 +1,176 @@
-// frontend/src/components/agents/AgentPluginsTab.tsx
-// "Plugins" tab on the agent detail page. Shows ALL installed plugins for the
-// agent in a single table — the marketplace each plugin came from is a column,
-// not a per-marketplace section — so it reads like the other resource surfaces.
-// Each row has name, marketplace (+ source), an enabled Switch, a cache-status
-// badge, and an uninstall action (codex only — claude_code agents must use the
-// `claude plugin` CLI to uninstall). Rows do not expand: a plugin's name opens
-// its own detail page (pages/AgentPluginPage), which carries the manifest
-// detail and everything the plugin contributes.
-import { useState } from "react";
+// src/components/agents/AgentPluginsTab.tsx — the agent's Plugins tab: every installed plugin in one table.
+//
+// Spec agent-registry "List an agent's installed plugins without writing
+// anything", "Toggle a plugin through the documented location only", "Uninstall
+// a plugin by the type's own strategy" and "Filter an agent's installed kinds by
+// owner". Coffer installs no plugins, so every row is the agent's own. A row
+// carries the plugin's version, marketplace and state, an enabled switch and
+// Uninstall (hidden when the listing says it cannot run now); its name opens the
+// plugin's own page — rows do not expand.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PackageMinus } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PackageMinus, Puzzle } from "lucide-react";
 
-import { AgentPluginsBulkActions } from "@/components/agents/AgentPluginsBulkActions";
+import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
+import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { DataTable, type Column } from "@/components/DataTable";
+import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
-import { translateApiError } from "@/lib/api/errors";
+import { agentTypeLabel } from "@/lib/agents/display";
+import type { Owner } from "@/lib/agents/owner";
+import { agentPluginPath } from "@/lib/agents/routes";
 import type { AgentOut, PluginOut } from "@/lib/api/agents";
 import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
+
+type PluginRow = PluginOut & { owner: Owner };
+
+const searchText = (p: PluginRow) => `${p.name} ${p.id} ${p.marketplace} ${p.description ?? ""}`;
 
 export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const plugins = useAgentPlugins(agent.uid);
   const toggle = useTogglePlugin(agent.uid);
   const uninstall = useUninstallPlugin(agent.uid);
-  const [uninstallTarget, setUninstallTarget] = useState<PluginOut | null>(null);
+  const [target, setTarget] = useState<PluginOut | null>(null);
 
-  const items = plugins.data?.items ?? [];
-  const marketplaces = plugins.data?.marketplaces ?? [];
-  const parseErrors = plugins.data?.parse_errors ?? [];
-  // Show the uninstall button on the agent's reported capability (Codex edits
-  // its config; Claude shells out to `claude plugin uninstall` when present),
-  // not on the agent type. When unavailable, keep the "use the CLI" hint.
+  const rows = useMemo<PluginRow[]>(
+    () => (plugins.data?.items ?? []).map((p) => ({ ...p, owner: "own" })),
+    [plugins.data],
+  );
   const canUninstall = plugins.data?.can_uninstall ?? false;
+  const parseErrors = plugins.data?.parse_errors ?? [];
+  const agentName = agentTypeLabel(agent.type);
+  const codex = agent.type === "codex";
+  const enabled = rows.filter((p) => p.enabled).length;
+  const summary = [
+    t("agents.pluginsTab.summary.plugins", { count: rows.length }),
+    t("agents.pluginsTab.summary.allOwn"),
+    t("agents.pluginsTab.summary.enabled", { count: enabled }),
+  ].join(" · ");
 
-  // marketplace name → source (e.g. "jarrodwatts/claude-hud"), so the
-  // marketplace column can show the origin alongside the name.
-  const pluginsTabPath = `/agents/${encodeURIComponent(agent.uid)}?tab=plugins`;
-  const sourceOf = new Map(marketplaces.map((m) => [m.name, m.source ?? ""]));
-
-  const columns: Column<PluginOut>[] = [
+  const columns: Column<PluginRow>[] = [
     {
-      key: "name",
-      header: t("resources.cols.name"),
-      className: "whitespace-nowrap",
+      key: "plugin",
+      header: t("agents.pluginsTab.cols.plugin"),
       cell: (p) => (
-        <Link
-          to={`/agents/${encodeURIComponent(agent.uid)}/plugins/${encodeURIComponent(p.id)}`}
-          // The detail page returns here — to this agent's Plugins tab — rather
-          // than to its default, which the page would otherwise have to guess.
-          state={{ backTo: pluginsTabPath, backLabel: t("agents.workspace.plugins") }}
-          className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-        >
-          {p.name}
-        </Link>
+        <span className="flex flex-col gap-0.5">
+          <Link
+            to={agentPluginPath(agent.type, p.id)}
+            className="font-medium text-text underline-offset-2 hover:text-accent-text hover:underline"
+          >
+            {p.name}
+          </Link>
+          {p.description ? <span className="text-xs text-text-muted">{p.description}</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: "version",
+      header: t("agents.pluginsTab.cols.version"),
+      cell: (p) => (
+        <span className="font-mono text-xs text-text-muted">
+          {p.version ?? t("common.emptyValue")}
+        </span>
       ),
     },
     {
       key: "marketplace",
-      header: t("agents.workspace.pluginsTab.marketplace"),
-      cell: (p) => {
-        const source = sourceOf.get(p.marketplace);
-        return (
-          <span className="flex items-center gap-2">
-            <span>{p.marketplace}</span>
-            {source ? (
-              <span className="font-mono text-xs text-muted-foreground">({source})</span>
-            ) : null}
-          </span>
-        );
-      },
+      header: t("agents.pluginsTab.cols.marketplace"),
+      cell: (p) => <span className="break-all text-xs text-text-muted">{p.marketplace}</span>,
     },
     {
-      key: "enabled",
-      header: t("agents.workspace.pluginsTab.enabled"),
-      className: "whitespace-nowrap",
-      cell: (p) => (
-        <Switch
-          checked={p.enabled}
-          disabled={toggle.isPending}
-          onClick={(e) => e.stopPropagation()}
-          onCheckedChange={(checked) => toggle.mutate({ id: p.id, enabled: checked })}
-          aria-label={`${t("agents.workspace.pluginsTab.enabled")}: ${p.name}`}
-        />
-      ),
-    },
-    {
-      key: "cache",
-      header: "",
+      key: "state",
+      header: t("agents.pluginsTab.cols.state"),
       cell: (p) =>
         p.cache_present === false ? (
-          <Badge variant="destructive">{t("agents.workspace.pluginsTab.cacheMissing")}</Badge>
-        ) : null,
+          <StatusWord tone="warn">{t("agents.pluginsTab.cacheMissing")}</StatusWord>
+        ) : (
+          <StatusWord tone={p.enabled ? "ok" : "off"}>
+            {p.enabled ? t("common.enabled") : t("common.disabled")}
+          </StatusWord>
+        ),
     },
     {
       key: "actions",
       header: "",
       className: "text-right",
-      cell: (p) =>
-        canUninstall ? (
-          <TableActionButton
-            icon={PackageMinus}
-            label={t("agents.workspace.pluginsTab.uninstall")}
-            destructive
-            onClick={(e) => {
-              e.stopPropagation();
-              setUninstallTarget(p);
-            }}
+      cell: (p) => (
+        <span className="inline-flex items-center justify-end gap-3">
+          <Switch
+            checked={p.enabled}
+            disabled={toggle.isPending}
+            onCheckedChange={(checked) => toggle.mutate({ id: p.id, enabled: checked })}
+            aria-label={t("agents.pluginsTab.enabledAria", { name: p.name })}
           />
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {t("agents.workspace.pluginsTab.claudeUninstallHint")}
-          </span>
-        ),
+          {canUninstall ? (
+            <TableActionButton
+              icon={PackageMinus}
+              label={t("agents.pluginsTab.uninstall")}
+              aria-label={t("agents.pluginsTab.uninstallAria", { name: p.name })}
+              destructive
+              onClick={() => setTarget(p)}
+            />
+          ) : null}
+        </span>
+      ),
     },
   ];
 
+  const footnote = codex
+    ? t("agents.pluginsTab.footnote.codex")
+    : canUninstall || !plugins.data
+      ? t("agents.pluginsTab.footnote.claude")
+      : t("agents.pluginsTab.footnote.claudeNoCli");
+
   return (
-    <div className="space-y-6">
-      {parseErrors.length > 0 && (
+    <div className="flex flex-col gap-3.5">
+      {parseErrors.length > 0 ? (
         <Alert variant="destructive">
           <AlertDescription>
-            <p className="font-medium">{t("agents.workspace.pluginsTab.parseError")}</p>
-            <ul className="mt-1 space-y-0.5">
-              {(parseErrors as { source: string; path: string; error: string }[]).map((pe) => (
-                <li key={`${pe.source}:${pe.path}`} className="font-mono text-xs">
-                  {pe.source}: {pe.error}
+            <ul className="space-y-0.5">
+              {parseErrors.map((pe) => (
+                <li key={`${pe.source}:${pe.path}`} className="break-all">
+                  {t("agents.pluginsTab.parseError", { file: pe.path, error: pe.error })}
                 </li>
               ))}
             </ul>
           </AlertDescription>
         </Alert>
-      )}
-
-      <Card className="space-y-3 p-4">
-        {plugins.isPending ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : plugins.error ? (
-          <p className="text-sm text-destructive">{translateApiError(t, plugins.error)}</p>
-        ) : (
+      ) : null}
+      <AgentKindTab
+        rows={rows}
+        summary={summary}
+        searchPlaceholder={t("agents.pluginsTab.search")}
+        searchText={searchText}
+        isLoading={plugins.isPending}
+        error={plugins.error}
+        onRetry={() => void plugins.refetch()}
+        empty={{
+          icon: Puzzle,
+          title: t("agents.pluginsTab.emptyTitle", { agent: agentName }),
+          description: t("agents.pluginsTab.emptyBody", { agent: agentName }),
+        }}
+        footnote={footnote}
+      >
+        {(visible) => (
           <DataTable
-            rows={items}
+            rows={visible}
             columns={columns}
             rowKey={(p) => p.id}
-            search={{
-              accessor: (p) => `${p.name} ${p.marketplace} ${sourceOf.get(p.marketplace) ?? ""}`,
-              placeholder: t("agents.workspace.pluginsTab.searchPlaceholder"),
-            }}
-            selection={{
-              ariaSelectAll: t("common.bulk.selectAll"),
-              ariaSelectRow: (p) => `${t("common.bulk.selectRow")}: ${p.name}`,
-              bulkLabel: (count) => t("common.bulk.selected", { count }),
-              clearLabel: t("common.clear"),
-              renderBulkActions: ({ selectedRows, clear }) => (
-                <AgentPluginsBulkActions
-                  agentUid={agent.uid}
-                  rows={selectedRows}
-                  clear={clear}
-                  canUninstall={canUninstall}
-                />
-              ),
-            }}
-            emptyMessage={t("agents.workspace.pluginsTab.empty")}
+            isLoading={plugins.isPending}
+            emptyMessage={t("agents.pluginsTab.noMatches")}
           />
         )}
-      </Card>
-
-      <ConfirmDialog
-        open={uninstallTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setUninstallTarget(null);
-        }}
-        title={t("agents.workspace.pluginsTab.uninstallConfirmTitle", {
-          name: uninstallTarget?.name ?? "",
-        })}
-        description={t("agents.workspace.pluginsTab.uninstallConfirm")}
-        confirmLabel={t("agents.workspace.pluginsTab.uninstall")}
+      </AgentKindTab>
+      <PluginUninstallDialog
+        agentType={agent.type}
+        plugin={target}
+        onClose={() => setTarget(null)}
         pending={uninstall.isPending}
-        onConfirm={() => {
-          if (!uninstallTarget) return;
-          uninstall.mutate(
-            { id: uninstallTarget.id },
-            { onSuccess: () => setUninstallTarget(null) },
-          );
-        }}
+        onConfirm={(p) => uninstall.mutate({ id: p.id }, { onSuccess: () => setTarget(null) })}
       />
     </div>
   );

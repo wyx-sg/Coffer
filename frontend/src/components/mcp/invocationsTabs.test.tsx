@@ -1,16 +1,13 @@
 // frontend/src/components/mcp/invocationsTabs.test.tsx
-// A server's Invocations tab and Activity's MCP calls tab are one table, not
-// two kept in step: both surfaces mount InvocationsTable, the server's scoped
-// to its uid and Activity's unscoped. (What the table then does in each scope
-// is pinned in InvocationsTable.test.tsx.)
-import { expect, vi } from "vitest";
+// A server's Invocations tab mounts InvocationsTable scoped to its uid. (What
+// the table then reads, and how Activity's MCP calls tab reads the same log
+// unscoped, is pinned in InvocationsTable.test.tsx.)
+import { expect, test, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-import { acceptance } from "@/test/acceptance";
 import { McpServerDetailTabs } from "./McpServerDetailTabs";
-import { ActivityPage } from "@/pages/activity/ActivityPage";
 
 const mounted = vi.fn();
 vi.mock("./InvocationsTable", () => ({
@@ -31,8 +28,8 @@ function renderAt(path: string, ui: React.ReactNode) {
   );
 }
 
-acceptance("web-ui", "a server's invocations tab is the Activity calls table scoped to it", () => {
-  const detail = renderAt(
+test("a server's Invocations tab mounts the invocation table scoped to its uid", () => {
+  renderAt(
     "/mcp-servers/srv/invocations",
     <Routes>
       <Route
@@ -52,12 +49,4 @@ acceptance("web-ui", "a server's invocations tab is the Activity calls table sco
   );
   expect(mounted).toHaveBeenCalled();
   expect(mounted.mock.lastCall![0]).toEqual({ serverUid: "u-1" });
-  detail.unmount();
-
-  mounted.mockClear();
-  renderAt("/activity?tab=mcp", <ActivityPage />);
-  expect(mounted).toHaveBeenCalled();
-  const activityProps = mounted.mock.lastCall![0];
-  expect(activityProps.serverUid).toBeUndefined();
-  expect(activityProps.enabled).toBe(true);
 });

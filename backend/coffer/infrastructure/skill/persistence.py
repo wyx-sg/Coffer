@@ -195,3 +195,8 @@ class SkillBindingRepo:
                 await session.delete(r)
             await session.commit()
             return len(rows)
+
+
+# The skill kind's other table rides the same metadata, so every place that
+# builds the schema from ``Base.metadata`` (the test graphs) gets it too.
+from coffer.infrastructure.skill import source_status_repo as _source_status  # noqa: E402, F401

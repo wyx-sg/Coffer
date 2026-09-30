@@ -1,119 +1,14 @@
-// frontend/src/pages/ProviderDetailPage.tsx
-// Per-connection detail page (mirrors McpServerDetailPage): the shared
-// PageHeader carrying back link + name + state badges + Edit/Delete/reach, then
-// the body in two tabs (as on the agent detail page) — Overview, the read-only
-// Configuration card the Edit dialog owns every change of, and Models, the
-// table deciding which of the endpoint's models this connection offers at all.
-// The page is addressed by the connection's uid (a provider is renamable) and
-// the open tab lives in the path (`/model-providers/<uid>/models`) so a
-// refresh, a deep link or the back button lands on the same tab
-// (.agents/frontend.md §3); an old `?tab=models` address redirects to it.
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import { ArrowLeft, Boxes } from "lucide-react";
+// src/pages/ProviderDetailPage.tsx — one model provider, at /model-providers/<uid>[/models].
+//
+// Addressed by uid (a provider can be renamed); the open tab is the path
+// segment (useDetailTab). It renders the same split as the list page, with this
+// provider open: header (reach, Test, Edit, ⋯), Overview (Used by, Endpoint,
+// Models) and Models (which of the endpoint's models it offers).
+import { useParams } from "react-router-dom";
 
-import { EmptyState } from "@/components/EmptyState";
-import { PageHeader } from "@/components/PageHeader";
-import { ProviderConfigCard } from "@/components/settings/ProviderConfigCard";
-import { ProviderDetailHeader } from "@/components/settings/ProviderDetailHeader";
-import { ProviderModelsTable } from "@/components/settings/ProviderModelsTable";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { translateApiError } from "@/lib/api/errors";
-import { useDetailTab } from "@/lib/detailTabs";
-import { useDeleteProvider, useProvider } from "@/lib/hooks/useProviders";
-import { displayName } from "@/lib/resourceTitle";
-
-const TABS = ["overview", "models"] as const;
+import { ProvidersSplit } from "@/components/providers/ProvidersSplit";
 
 export function ProviderDetailPage() {
-  const { t } = useTranslation();
   const { uid = "" } = useParams<{ uid: string }>();
-  const navigate = useNavigate();
-  const { data: provider, isPending, error } = useProvider(uid);
-  const del = useDeleteProvider();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const back = { to: "/model-providers", label: t("settings.connections.detail.back") };
-  const [tab, setTab] = useDetailTab(
-    TABS,
-    "overview",
-    `/model-providers/${encodeURIComponent(uid)}`,
-  );
-
-  if (isPending) {
-    return (
-      <div className="space-y-6">
-        <PageHeader back={back} title={<Skeleton className="h-8 w-48" />} />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  }
-  if (error || !provider) {
-    return (
-      <div className="space-y-6">
-        {/* The connection could not be read, so there is no name to head the
-            page with — and a uid is not a name. The heading is the failure. */}
-        <PageHeader back={back} title={t("settings.connections.detail.notFound")} />
-        <EmptyState
-          icon={Boxes}
-          title={t("settings.connections.detail.notFound")}
-          description={error ? translateApiError(t, error) : undefined}
-          action={
-            <Button asChild variant="outline">
-              <Link to="/model-providers">
-                <ArrowLeft className="mr-1.5 size-4" aria-hidden />
-                {t("settings.connections.detail.back")}
-              </Link>
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <ProviderDetailHeader
-        provider={provider}
-        deletePending={del.isPending}
-        onDeleteClick={() => setDeleteOpen(true)}
-      />
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="overview">{t("settings.connections.detail.tabOverview")}</TabsTrigger>
-          <TabsTrigger value="models">{t("settings.connections.detail.models")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="pt-6">
-          <ProviderConfigCard provider={provider} />
-        </TabsContent>
-
-        <TabsContent value="models" className="pt-6">
-          <ProviderModelsTable provider={provider} />
-        </TabsContent>
-      </Tabs>
-
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title={t("settings.connections.deleteTitle")}
-        description={t("settings.connections.deleteConfirm", { name: displayName(provider) })}
-        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
-        pending={del.isPending}
-        onConfirm={() =>
-          del.mutate(provider.uid, {
-            onSuccess: () => {
-              setDeleteOpen(false);
-              navigate("/model-providers");
-            },
-          })
-        }
-      />
-    </div>
-  );
+  return <ProvidersSplit uid={uid} />;
 }

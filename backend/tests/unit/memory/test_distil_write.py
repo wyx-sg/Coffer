@@ -110,7 +110,9 @@ def test_a_usable_answer_becomes_the_three_fields_the_model_may_set() -> None:
     # both ``MEMORY.md`` and the delivered payload depend on.
     assert written.description == "worktrees have no .venv, symlink the main one"
     assert written.body == "The note body.\n"
-    assert set(vars(written)) == {"title", "description", "body"}
+    # The three fields plus an optional proposed guard, absent from this answer.
+    assert set(vars(written)) == {"title", "description", "body", "trigger"}
+    assert written.trigger is None
 
 
 @pytest.mark.parametrize(

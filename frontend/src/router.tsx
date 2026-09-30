@@ -39,6 +39,15 @@ function gated(feature: FeatureKey, page: JSX.Element): JSX.Element {
   return <FeatureGate feature={feature}>{page}</FeatureGate>;
 }
 
+const knowledgePage = gated(
+  "knowledge",
+  lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+);
+const memoryDetailPage = gated(
+  "memory",
+  lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+);
+
 const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "SettingsModal");
 
 // The route table, exported as data: a test that has to prove a URL lands
@@ -96,41 +105,39 @@ const pageRoutes: RouteObject[] = [
     element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
   },
   { path: "agents", element: <AgentsPage /> },
+  // An agent's pages are addressed by its TYPE (one agent per type), the
+  // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
+  // and every page opened from a tab is nested under it. An old uid address,
+  // `?tab=` and the old Conversations tab are redirected by `useAgentRoute`.
   {
-    path: "agents/:uid",
+    path: "agents/:type",
     element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
   },
-  // Detail pages reached by clicking a row on the agent's Memory /
-  // Conversations tabs. Each identifies its subject by a search param (the
-  // store's `dir`, the session's `path`) rather than a path segment,
-  // because both identities are absolute filesystem paths — a path segment
-  // would have to survive encoding its own separators.
   {
-    path: "agents/:uid/conversations",
-    element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
+    path: "agents/:type/:tab",
+    element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
   },
-  // An unmanaged skill folder, reached from the agent's Skills tab. It has
-  // no uid of its own, so the scan's location and the folder name name it.
+  // One native memory store, from the Memory tab. Its identity is its
+  // directory, an absolute path, so it rides in `?dir=` rather than a segment.
   {
-    path: "agents/:uid/skills/unmanaged/:location/:name",
-    element: lazyPage(() => import("./pages/UnmanagedSkillDetailPage"), "UnmanagedSkillDetailPage"),
-  },
-  {
-    path: "agents/:uid/memory",
+    path: "agents/:type/memory/store",
     element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
   },
-  // A direct (unmanaged) MCP server of the agent, from the MCP servers
-  // tab. It has no uid — it is a stanza in the agent's own config file — so
-  // it is addressed as the REST route addresses it: the entry's name, and
-  // `?source=` for the file when two of the agent's files share that name.
+  // An unmanaged skill folder, from the Skills tab. It has no uid of its own,
+  // so the scan's location and the folder name name it.
   {
-    path: "agents/:uid/mcp-servers/:entry",
+    path: "agents/:type/skills/unmanaged/:location/:name",
+    element: lazyPage(() => import("./pages/UnmanagedSkillDetailPage"), "UnmanagedSkillDetailPage"),
+  },
+  // A direct (unmanaged) MCP server of the agent, from the MCP servers tab:
+  // the entry's name, and `?source=` for the file when two share that name.
+  {
+    path: "agents/:type/mcp-servers/:entry",
     element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
   },
-  // A plugin, reached from the agent's Plugins tab. Its id
-  // (`<name>@<marketplace>`) is URL-encoded into one path segment.
+  // A plugin, from the Plugins tab (`<name>@<marketplace>`, one segment).
   {
-    path: "agents/:uid/plugins/:pluginId",
+    path: "agents/:type/plugins/:pluginId",
     element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
   },
   { path: "channels", element: <ChannelsPage /> },
@@ -138,29 +145,22 @@ const pageRoutes: RouteObject[] = [
     path: "channels/:uid",
     element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
   },
+  // The Skills page is the library beside the open skill, so all three
+  // addresses render the same page; it loads the detail pane on first open.
   { path: "skills", element: <SkillsPage /> },
-  {
-    path: "skills/:name",
-    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
-  },
-  {
-    path: "skills/:name/:tab",
-    element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
-  },
-  {
-    path: "knowledge",
-    element: gated(
-      "knowledge",
-      lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
-    ),
-  },
-  {
-    path: "knowledge/:uid",
-    element: gated(
-      "knowledge",
-      lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
-    ),
-  },
+  { path: "skills/:name", element: <SkillsPage /> },
+  { path: "skills/:name/:tab", element: <SkillsPage /> },
+  // Knowledge is ONE page (spec knowledge "Present a collection as one tree in
+  // the web UI"): the collection tree stays on the left whatever the right pane
+  // shows — Recent changes (`/knowledge`), one change (`/knowledge/changes/<version>`),
+  // a collection and its open document (`/knowledge/<uid>?file=`), the
+  // document's History (`/knowledge/<uid>/history?file=`) or the Inbox
+  // (`/knowledge/<uid>/inbox`). Every address reuses the same element, so moving
+  // between them keeps the tree's expanded folders rather than remounting it.
+  { path: "knowledge", element: knowledgePage },
+  { path: "knowledge/changes/:version", element: knowledgePage },
+  { path: "knowledge/:uid", element: knowledgePage },
+  { path: "knowledge/:uid/:tab", element: knowledgePage },
   {
     path: "memory",
     element: gated(
@@ -168,13 +168,9 @@ const pageRoutes: RouteObject[] = [
       lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
     ),
   },
-  {
-    path: "memory/:uid",
-    element: gated(
-      "memory",
-      lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
-    ),
-  },
+  // A partition's two tabs: Memories (the bare path) and Delivered.
+  { path: "memory/:uid", element: memoryDetailPage },
+  { path: "memory/:uid/:tab", element: memoryDetailPage },
   {
     path: "sync",
     element: gated(

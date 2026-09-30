@@ -63,7 +63,7 @@ The timestamp comes from the `LogRecord`, not from the clock at format time. Tha
 
 A stderr handler would therefore write every record twice. The daemon attaches its stderr handler only when stderr is *not* the same file as `daemon.log` (compared by device and inode), which is the foreground case — a terminal or a test — where it is the only way to see output.
 
-The desktop shell writes its own few records (which daemon binary it chose, a failed restart from the tray) into the same `daemon.log`, as one-line JSON in the same shape.
+The desktop shell writes its own few records (which daemon binary it chose, a failed restart from the menu bar, a failed update check or install) into the same `daemon.log`, as one-line JSON in the same shape.
 
 ### Other log files
 
@@ -156,7 +156,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted`, `cli_install_started`, `cli_install_finished` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
-| Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired` |
+| Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_internal_default_set`, `provider_transcribe_default_set`, `provider_projection_refused` |
@@ -186,6 +186,7 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 | `status` | `ok`, `error`, `timeout` or `denied` |
 | `error_message` | a Coffer-authored summary, never the upstream's result text |
 | `session_id` | the `/mcp` session the call came from |
+| `agent_uid` | the agent whose session made the call, as its shim reported it on `initialize`; empty when the session reported none (a hand-configured shim, a bare MCP client) |
 
 What `status` means:
 
@@ -200,7 +201,7 @@ Rows are keyed by uid rather than name, so a server's history belongs to that re
 
 Writes are buffered: an in-memory queue (up to 5,000 rows) is flushed by a writer task every 50 ms or every 50 rows, whichever comes first, so a tool-heavy session does not pay an SQLite commit per call. When the queue is full, callers wait rather than drop rows.
 
-You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`.
+You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
 
 ## Retention
 

@@ -2,7 +2,7 @@
 // The daemon speaks in registry keys (`claude_code`) and absolute paths; the UI
 // shows a product name and a home-relative path. Kept as pure functions so the
 // table, the add form and the detail header all render the same label.
-import type { AgentType, AgentTypeOut, DetectionState } from "@/lib/api/agents";
+import type { AgentType } from "@/lib/api/agents";
 
 const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
@@ -31,18 +31,20 @@ export function abbreviateHomePath(path: string): string {
   return `…/${parts.slice(-2).join("/")}`;
 }
 
-/**
- * Whether an agent's program is on this machine. `config_only` (a config
- * directory with no program) and `missing` read as not installed; an absent
- * state — an older daemon — reads as installed rather than raising a false alarm.
- */
-export function isAgentInstalled(state: DetectionState | undefined): boolean {
-  return state !== "config_only" && state !== "missing";
+// How each supported agent is installed (or reinstalled), for the rows and
+// pages that say "not installed" or "config left behind": the command the user
+// copies into a terminal. Coffer never runs it.
+const INSTALL_COMMANDS: Record<AgentType, string> = {
+  claude_code: "npm install -g @anthropic-ai/claude-code",
+  codex: "npm install -g @openai/codex",
+};
+
+/** The command that installs (or reinstalls) an agent type's program. */
+export function agentInstallCommand(type: AgentType): string {
+  return INSTALL_COMMANDS[type];
 }
 
-/** Whether a discovered candidate can be registered — the daemon says so
- *  (`addable`): the program is on PATH, whether or not it has run yet
- *  (registering an `installed_never_run` type creates its standard directory). */
-export function isAddableCandidate(c: AgentTypeOut): boolean {
-  return c.addable;
+/** The program an agent type runs as, as it appears on PATH. */
+export function agentProgramName(type: AgentType): string {
+  return type === "claude_code" ? "claude" : "codex";
 }

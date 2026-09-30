@@ -21,7 +21,7 @@ from coffer.application.memory.delivery_reconcile import TARGET, DeliveryHookTar
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.memory.delivery import MARKER
+from coffer.domain.memory.delivery import DELIVERY_EVENTS, MARKER
 from coffer.domain.reconcile import Disposition, Op, Outcome, PassReport, Trigger
 from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 from tests.support.facets import TEST_COFFER_CLI, agent_catalog
@@ -126,10 +126,33 @@ async def test_a_stale_command_is_rewritten_at_boot() -> None:
     assert result.change.decision.reason_code == "stale_command"
     assert result.outcome is Outcome.APPLIED
     assert await rig.command(_CC_UID) == (
-        f': {MARKER}; {TEST_COFFER_CLI} memory context --agent-uid {_CC_UID} --cwd "$PWD"'
+        f': {MARKER}; {TEST_COFFER_CLI} memory hook --agent-uid {_CC_UID} --cwd "$PWD"'
     )
     repairs = rig.events(AuditEventType.MEMORY_DELIVERY_INSTALLED)
     assert [e.actor for e in repairs] == ["ui", "system"]
+
+
+async def test_an_older_builds_single_session_start_entry_gains_the_other_events() -> None:
+    """A build before per-prompt delivery installed one ``SessionStart`` entry
+    running ``memory context``; a period pass gives it all four events."""
+    rig = _Rig(connected=[_CC_UID])
+    old = f': {MARKER}; {TEST_COFFER_CLI} memory context --agent-uid {_CC_UID} --cwd "$PWD"'
+    rig.store._files[_CC_SETTINGS_PATH] = json.dumps(
+        {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": old}]}]}}
+    )
+
+    result = _only(await rig.run(Trigger.PERIOD))
+
+    assert result.change.difference.op is Op.MODIFY
+    assert result.change.difference.changed_params == ("command", "event")
+    assert result.change.decision.reason_code == "stale_command"
+    assert result.outcome is Outcome.APPLIED
+    data = json.loads(rig.store._files[_CC_SETTINGS_PATH])
+    assert set(data["hooks"]) == set(DELIVERY_EVENTS)
+    command = await rig.command(_CC_UID)
+    assert " memory hook " in command
+    for event in DELIVERY_EVENTS:
+        assert [g["hooks"][0]["command"] for g in data["hooks"][event]] == [command]
 
 
 @pytest.mark.acceptance(
@@ -303,11 +326,12 @@ def _approve_codex(rig: _Rig) -> None:
     text = rig.store._files[_CODEX_HOOKS_PATH]
     adapter = agent_catalog().delivery_hook(AgentType.CODEX)
     assert adapter is not None
-    hook = adapter.find(text)
-    assert hook is not None
-    key = trust_key(str(_CODEX_HOOKS_PATH), hook)
-    rig.store._files[_CODEX_CONFIG_PATH] = (
-        f'[hooks.state."{key}"]\ntrusted_hash = "{current_hash(hook)}"\n'
+    hooks = adapter.find_all(text)
+    assert len(hooks) == len(DELIVERY_EVENTS)
+    rig.store._files[_CODEX_CONFIG_PATH] = "".join(
+        f'[hooks.state."{trust_key(str(_CODEX_HOOKS_PATH), hook)}"]\n'
+        f'trusted_hash = "{current_hash(hook)}"\n'
+        for hook in hooks
     )
 
 
@@ -332,10 +356,16 @@ async def test_an_older_builds_codex_hook_is_moved_to_session_start_on_a_period(
     assert result.change.decision.reason_code == "stale_command"
     assert result.outcome is Outcome.APPLIED
     data = json.loads(rig.store._files[_CODEX_HOOKS_PATH])
-    assert data["hooks"]["UserPromptSubmit"] == [foreign]
-    (entry,) = data["hooks"]["SessionStart"]
-    assert entry["hooks"][0]["command"] == await rig.command(_CODEX_UID)
-    assert entry["hooks"][0]["command"].startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
+    assert set(data["hooks"]) == set(DELIVERY_EVENTS)
+    ups_foreign, ups_coffer = data["hooks"]["UserPromptSubmit"]
+    assert ups_foreign == foreign
+    assert _LEGACY_CODEX not in rig.store._files[_CODEX_HOOKS_PATH]
+    command = await rig.command(_CODEX_UID)
+    assert command.startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
+    assert ups_coffer["hooks"][0]["command"] == command
+    for event in ("SessionStart", "PreToolUse", "PostToolUse"):
+        (entry,) = data["hooks"][event]
+        assert entry["hooks"][0]["command"] == command
 
 
 @pytest.mark.acceptance(

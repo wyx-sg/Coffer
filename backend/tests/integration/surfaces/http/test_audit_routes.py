@@ -79,7 +79,7 @@ async def test_list_audit_empty(tmp_path):
     async with c:
         r = await c.get("/api/v1/audit")
         assert r.status_code == 200
-        assert r.json() == {"entries": [], "next_cursor": None}
+        assert r.json() == {"entries": [], "next_cursor": None, "total": 0}
     await engine.dispose()
 
 
@@ -170,7 +170,7 @@ async def test_list_audit_since_filter(tmp_path):
         future = (datetime.now(tz=UTC) + timedelta(hours=1)).isoformat()
         r = await c.get(f"/api/v1/audit?since={future}")
         assert r.status_code == 200
-        assert r.json() == {"entries": [], "next_cursor": None}
+        assert r.json() == {"entries": [], "next_cursor": None, "total": 0}
     await engine.dispose()
 
 

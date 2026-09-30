@@ -98,6 +98,7 @@ const architecture = [
   {
     text: 'Subsystems',
     items: [
+      { text: 'Skills', link: '/architecture/skills' },
       { text: 'Knowledge', link: '/architecture/knowledge' },
       { text: 'Memory', link: '/architecture/memory' },
       { text: 'Skill requirements', link: '/architecture/skill-requirements' },

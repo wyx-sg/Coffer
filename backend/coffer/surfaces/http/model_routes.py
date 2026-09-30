@@ -52,6 +52,7 @@ async def list_provider_models(
     return ProviderModelsOut(
         models=[ProviderModel(id=m.id, modality=m.modality) for m in result.models],
         message=result.message,
+        reachable=result.reachable,
     )
 
 

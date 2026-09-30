@@ -1,11 +1,11 @@
 ---
 title: Distribution and releases
-description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, installed into versioned directories under ~/.coffer/bin, stamped with a release channel, and gated by experimental features.
+description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the credentials exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a release channel, and gated by experimental features.
 ---
 
 # Distribution and releases
 
-This page explains how Coffer's Python code reaches a machine with no Python on it: the three frozen binaries, the release workflow that produces them, the two download tiers, how a new build is installed beside the old one, and how the release channel decides which experimental features are on. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
+This page explains how Coffer's Python code reaches a machine with no Python on it: the three frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how the release channel decides which experimental features are on. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
 
 ## The problem
 
@@ -14,7 +14,8 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 - **Three processes have to find each other.** The MCP client launches `coffer-mcp-shim`; the shim has to find and, if needed, start `coffer-daemon`; the `coffer` CLI has to do the same.
 - **Upgrades must not break the running system.** A daemon may be running, and an MCP client may be about to spawn a shim, at the moment a new build lands.
 - **Unfinished features must ship without harming people who did not ask for them.** A single release line serves both the owner's daily testing and everyone else.
-- **Coffer is self-distributed and unsigned.** There is no paid Apple Developer ID behind it, which has consequences for Gatekeeper and for the keychain.
+- **Coffer is self-distributed.** A release is signed only once the owner has an Apple Developer ID, and until then every consequence of being unsigned — Gatekeeper, the keychain, a debugger attaching to the daemon — has to be designed around rather than assumed away.
+- **A desktop user does not watch a releases page.** The app has to find and install its own updates, without trusting anything but a key it was built with.
 
 ## Design decisions
 
@@ -26,7 +27,8 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 | The daemon deploys its siblings into versioned directories under `~/.coffer/bin` and flips symlinks | A deploy never overwrites a binary that may be running, and the previous build stays for a manual rollback. |
 | A release channel (`stable` or `dev`) stamped into the build | Experimental features default off for tagged releases and on for everything else, without a release branch. |
 | Experimental features gated at request time, per machine | Switching a feature takes effect without a restart and never deletes what it holds. |
-| Unsigned builds, with the credential store designed around it | Coffer does not gate its user experience on a paid Apple account. |
+| Sign, notarise and publish the updater feed only when the credentials are present | The same workflow builds a signed release for the owner and an unsigned one everywhere else, and stays green in both. |
+| The desktop app updates from a minisign-signed manifest on GitHub Releases | The update is verified against a key compiled into the app, so neither GitHub nor the network is trusted with what gets installed. |
 
 ## The binaries
 
@@ -59,24 +61,28 @@ bash scripts/smoke_test_bundle.sh dist
 flowchart TD
     T["push tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["build frontend (codegen + vite build)"]
-    F --> S["stamp_channel.py stable"]
-    S --> B["build_binaries.sh (PyInstaller x3)"]
-    B --> K["smoke_test_bundle.sh"]
+    F --> P["release_plan.py: which credentials are present"]
+    P --> S["stamp_channel.py stable (+ access group when signing)"]
+    S --> B["build_binaries.sh (PyInstaller x3, signed when possible)"]
+    B --> K["smoke_test_bundle.sh (+ verify signatures, notarise)"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
-    K --> D["stage binaries → tauri build"]
-    D --> G["Coffer-unsigned-aarch64-apple-darwin.dmg"]
+    K --> D["stage binaries → tauri build (sign, notarise, updater archive)"]
+    D --> G["Coffer[-unsigned]-aarch64-apple-darwin.dmg"]
+    D --> U["Coffer_aarch64-apple-darwin.app.tar.gz + .sig + latest.json"]
     A --> H["SHA256SUMS"]
     G --> H
+    U --> H
     H --> R["GitHub Release"]
 ```
 
 1. Install the backend from `backend/uv.lock` with `uv sync --frozen`, so the tagged build uses exactly the locked dependency set.
 2. Build the frontend (`npm run codegen`, `npm run build`). The daemon spec picks up `frontend/dist` as the served web UI.
-3. On a tag, run `scripts/stamp_channel.py stable` (see [Release channels](#release-channels)).
-4. Freeze the three binaries and run the smoke test against `dist/`.
-5. Package `coffer`, `coffer-daemon` and `coffer-mcp-shim` into `coffer-cli-<triple>.tar.gz`.
-6. Copy the same three files to `desktop/binaries/<name>-<triple>` and run `tauri build`, producing the `.dmg`, published as `Coffer-unsigned-<triple>.dmg`.
-7. Write `SHA256SUMS` over every artifact, then create (or update, with `--clobber`) the GitHub Release for the tag.
+3. Decide which signing steps can run (`scripts/release_plan.py`, see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
+4. On a tag, run `scripts/stamp_channel.py stable` (see [Release channels](#release-channels)).
+5. Freeze the three binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
+6. Package `coffer`, `coffer-daemon` and `coffer-mcp-shim` into `coffer-cli-<triple>.tar.gz`.
+7. Copy the same three files to `desktop/binaries/<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
+8. Write `SHA256SUMS` over every artifact, then create (or update, with `--clobber`) the GitHub Release for the tag.
 
 Only macOS on Apple Silicon is published. The specs and build script are cross-platform, so widening the release matrix is a workflow change rather than a redesign.
 
@@ -200,12 +206,47 @@ The gates are request-time:
 
 Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature leaves the registry once it is ready, and its gates are deleted with it. See [Experimental features](/guides/experimental-features).
 
-## Code signing and the keychain
+## Signing, notarisation and updates
 
-Coffer's builds are not signed or notarised, because both require a paid Apple Developer ID.
+Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the credentials stays green.
 
-- **Gatekeeper.** macOS quarantines a downloaded archive or `.dmg`. Clear it with `xattr -dr com.apple.quarantine <extracted-directory>`, or `xattr -dr com.apple.quarantine /Applications/Coffer.app` after dragging the app across. The one-line installer's download is not quarantined. The release notes and the `.dmg` file name (`Coffer-unsigned-…`) say this up front.
-- **The keychain.** macOS ties a keychain item's access list to the signature of the binary that created it, so every unsigned rebuild would re-prompt for every secret stored there. This is why Coffer keeps secrets as ciphertext in its database under one master key in a `0600` file by default, with the keychain as an opt-in. The reasoning is in [Security model](/architecture/security#the-master-key).
+| Step | Runs when these are set | What it does |
+| --- | --- | --- |
+| Developer ID signing | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` | Imports the certificate into a temporary keychain; stamps `<TEAM_ID>.coffer` into `build_identity.py` and the shell; PyInstaller signs each frozen binary and every library it collects, and Tauri signs the app, under the hardened runtime with the `keychain-access-groups` entitlement and without `get-task-allow`; the signatures are verified before packaging. |
+| Notarisation | the above, plus `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | `notarytool` notarises the CLI binaries (as a zip; a bare binary cannot be stapled), Tauri notarises and staples the app before building the `.dmg` and the updater archive from it, and the workflow notarises and staples the `.dmg`. |
+| Updater feed | `TAURI_SIGNING_PRIVATE_KEY` (and its password, if it has one), and the repository variable `COFFER_UPDATER_PUBKEY` | Tauri signs `Coffer.app.tar.gz` with the updater key; `scripts/make_update_manifest.py` writes `latest.json`; the public key is compiled into the shell. |
+
+### The keychain access group
+
+The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py) rewrites `KEYCHAIN_ACCESS_GROUP` in `backend/coffer/infrastructure/credentials/build_identity.py` before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
+
+### How the desktop app updates
+
+```mermaid
+sequenceDiagram
+    participant App as Coffer.app (shell)
+    participant GH as GitHub Releases
+    participant D as daemon
+    App->>GH: GET releases/latest/download/latest.json (launch + 30 s, then every 6 h)
+    GH-->>App: version, notes, url, signature
+    App->>App: record for Settings › About and the menu bar
+    Note over App: nothing installs until the user chooses Download and restart
+    App->>GH: GET Coffer_<triple>.app.tar.gz
+    App->>App: verify the minisign signature and the signed version against the built-in key
+    App->>App: replace Coffer.app, relaunch
+    App->>D: shutdown (the previous version's daemon)
+    App->>D: spawn the new version's daemon, wait for it to answer
+```
+
+The updater (`tauri-plugin-updater`) runs in the shell's Rust process; the webview has none of its permissions and its content policy stays loopback-only. The shell checks the manifest named in `plugins.updater.endpoints` of [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json) and verifies each archive against the public key it was compiled with. `requireSignedVersion` also rejects an archive signed for a different version than the manifest names, so an altered manifest cannot pair a new version number with an older release. A build compiled without a key never checks. After installing, the shell relaunches with a marker in its environment, and the relaunched shell's first handshake replaces the previous version's daemon through the same restart the menu bar uses. See [Desktop app → Update](/guides/desktop-app#update).
+
+### An unsigned release
+
+Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear it with `xattr -dr com.apple.quarantine <extracted-directory>`, or `xattr -dr com.apple.quarantine /Applications/Coffer.app` after dragging the app across. The one-line installer's download is not quarantined. The release notes and the `.dmg` file name (`Coffer-unsigned-…`) say this up front. An unsigned daemon is also ad-hoc signed without the hardened runtime, so a same-user debugger can attach to it; that, and the master key file, are what a development build gives up.
+
+### What the owner provides
+
+[`RELEASING.md`](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md) is the checklist: an Apple Developer Program membership, a Developer ID Application certificate exported as a `.p12`, the Team ID, an App Store Connect API key for notarisation, and an updater key pair generated with `tauri signer generate` — the private key and its password as repository secrets, the public key as a repository variable.
 
 ## Trade-offs and alternatives
 
@@ -217,7 +258,11 @@ Coffer's builds are not signed or notarised, because both require a paid Apple D
 
 **Overwriting binaries in place.** Simpler, but a deploy could replace a file a running process is about to `exec`, and a bad build would leave nothing to return to. Versioned directories cost one extra copy on disk.
 
-**Per-secret keychain storage with code signing.** A stable signing identity would keep keychain access lists valid across builds, but it needs a paid Apple Team ID. Envelope encryption removes the prompts without any signing dependency.
+**Per-secret keychain storage with code signing.** A stable signing identity would keep keychain access lists valid across builds, but it needs a paid Apple Team ID. Envelope encryption removes the prompts without any signing dependency, and the one Keychain item left — the master key — is read through the access group instead of an access list.
+
+**Downloading updates in the background.** The update would be ready the moment the user asks, but it spends a metered connection on a version the user may never want, and a verified archive would have to be kept somewhere between runs. The app downloads only when the user chooses Download and restart.
+
+**An update feed the app trusts by transport.** Serving the manifest over HTTPS from GitHub would be simpler than signing each archive, but it would make whoever controls the release, the account or the network path able to install code on every Mac running Coffer. The minisign key is held only as a repository secret.
 
 ## Where it lives in the code
 
@@ -230,6 +275,9 @@ Coffer's builds are not signed or notarised, because both require a paid Apple D
 | [`scripts/stamp_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_channel.py), [`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) | release channel |
 | [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) | sets the version in every file that carries it |
 | [`.github/workflows/release.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/release.yml) | release build and publish |
+| [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py), [`scripts/release_signing.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_signing.sh) | which signing steps run; keychain, verification, notarytool, stapler |
+| [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py), [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) | the keychain access group, stamped and granted |
+| [`scripts/make_update_manifest.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/make_update_manifest.py), [`desktop/src/updater.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/updater.rs) | the update manifest, and the shell that reads it |
 | [`.github/workflows/desktop.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/desktop.yml) | desktop crate check, clippy and tests |
 | [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json), [`desktop/src/resolve.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/resolve.rs) | bundle config and daemon resolution order |
 | [`docs-site/public/install.sh`](https://github.com/wyx-sg/Coffer/blob/main/docs-site/public/install.sh) | one-line installer |
@@ -242,5 +290,6 @@ Coffer's builds are not signed or notarised, because both require a paid Apple D
 - Guides: [Install](/start/install), [Desktop app](/guides/desktop-app), [Running the daemon](/guides/daemon), [Experimental features](/guides/experimental-features)
 - Reference: [Files and directories](/reference/filesystem), [Configuration](/reference/configuration)
 - Architecture: [Daemon and processes](/architecture/daemon), [Security model](/architecture/security), [Persistence](/architecture/persistence)
-- Decision records: [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- Checklist: [RELEASING.md](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md)
+- Decision records: [The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md), [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
 - Specs: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

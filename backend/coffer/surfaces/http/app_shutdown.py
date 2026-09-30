@@ -91,6 +91,9 @@ async def shutdown(running: Running) -> None:
     await stop_distil_worker(running.workers.distil_task)
     await stop_aggregate_worker(running.workers.aggregate_task)
     await stop_transcript_warm_worker(running.workers.warm_worker, running.workers.warm_task)
+    # The skill update check fetches over the network; stop it and remove
+    # every staged source (spec skill-manager "Add skills from an archive").
+    await best_effort("skill_sources", running.kinds.agent_skill.skill_sources.stop())
 
     # Channel adapters next, so no new turns start mid-teardown. Cancel the
     # reconciler BEFORE dispose() so an in-flight tick cannot resurrect what

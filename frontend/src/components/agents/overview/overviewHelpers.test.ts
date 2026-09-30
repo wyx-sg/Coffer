@@ -1,0 +1,48 @@
+// src/components/agents/overview/overviewHelpers.test.ts — where each Coffer part lives, and the short ages.
+import { describe, expect, test } from "vitest";
+
+import i18n from "@/i18n";
+
+import { formatAgo, formatLastFired } from "./age";
+import { hookConfigPath, mainConfigPath, mcpConfigPath } from "./paths";
+
+const t = i18n.getFixedT("en");
+const STD = { standard_config_dir: "/Users/me/.claude" };
+
+describe("paths", () => {
+  test("Claude Code's MCP file sits beside the standard directory, inside a custom one", () => {
+    expect(mcpConfigPath({ type: "claude_code", config_dir: "/Users/me/.claude" }, STD)).toBe(
+      "~/.claude.json",
+    );
+    expect(mcpConfigPath({ type: "claude_code", config_dir: "/Users/me/work-claude" }, STD)).toBe(
+      "~/work-claude/.claude.json",
+    );
+  });
+
+  test("Codex keeps both parts in its directory; the daemon's hook path wins when given", () => {
+    const codex = { type: "codex" as const, config_dir: "/Users/me/.codex" };
+    expect(mcpConfigPath(codex, STD)).toBe("~/.codex/config.toml");
+    expect(hookConfigPath(codex)).toBe("~/.codex/hooks.json");
+    expect(hookConfigPath(codex, "/Users/me/.codex/other.json")).toBe("~/.codex/other.json");
+    expect(mainConfigPath(codex)).toBe("~/.codex/config.toml");
+  });
+});
+
+describe("age", () => {
+  const now = Date.parse("2026-09-30T12:00:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  test("one unit, rounded down", () => {
+    expect(formatAgo(t, ago(30_000), now)).toBe("now");
+    expect(formatAgo(t, ago(5 * 60_000), now)).toBe("5m");
+    expect(formatAgo(t, ago(2 * 3600_000), now)).toBe("2h");
+    expect(formatAgo(t, ago(3 * 86400_000), now)).toBe("3d");
+    expect(formatAgo(t, ago(15 * 86400_000), now)).toBe("2w");
+    expect(formatAgo(t, "not a time", now)).toBeNull();
+  });
+
+  test("the hook row says when it last fired, or that it never has", () => {
+    expect(formatLastFired(t, ago(2 * 3600_000), now)).toBe(" · last fired 2h ago");
+    expect(formatLastFired(t, null, now)).toBe(" · never fired");
+  });
+});

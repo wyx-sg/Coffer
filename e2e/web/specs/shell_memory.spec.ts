@@ -1,0 +1,65 @@
+// e2e/web/specs/shell_memory.spec.ts
+//
+// The /memory overview against a live daemon: the "Delivered at session
+// start" block and the partitions area render from the real REST answers.
+//
+// The e2e daemon runs on an isolated HOME, so it normally has no partitions
+// and the area shows the first-run state; a daemon whose background read has
+// already produced one shows the table instead. The walk asserts whichever
+// the daemon's own partition list says, so it holds either way.
+//
+// No acceptance marker: the memory scenarios are pinned by the component
+// tests, which can assert the page's contents far more precisely. What this
+// adds is that the page, the deliveries route and the partitions route agree
+// against a live daemon.
+
+import { expect, test } from "@playwright/test";
+import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
+
+beforeEachInjectToken();
+
+function api() {
+  const { token, port } = readDaemonToken();
+  return {
+    base: `http://127.0.0.1:${port}/api/v1`,
+    headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
+  };
+}
+
+test("the Memory page shows deliveries at session start and the partitions area", async ({
+  page,
+}) => {
+  const { base, headers } = api();
+  const res = await page.request.get(`${base}/memory/partitions`, { headers });
+  expect(res.ok()).toBe(true);
+  const { partitions } = (await res.json()) as { partitions: unknown[] };
+
+  await page.goto("/memory");
+  await expect(
+    page.getByRole("heading", { name: "Memory", level: 1 }),
+  ).toBeVisible();
+
+  const deliveries = page.getByTestId("memory-deliveries");
+  await expect(deliveries).toBeVisible();
+  await expect(
+    deliveries.getByText("Delivered at session start"),
+  ).toBeVisible();
+  await expect(deliveries.getByText("Last 7 days")).toBeVisible();
+  // Hook state lives on the agent's page only.
+  await expect(deliveries.getByRole("button")).toHaveCount(0);
+
+  const area = page.getByTestId("memory-partitions");
+  await expect(area).toBeVisible();
+  if (partitions.length === 0) {
+    await expect(area.getByText("Nothing distilled yet")).toBeVisible();
+    await expect(
+      area.getByRole("button", { name: /update memory/i }),
+    ).toBeVisible();
+    await expect(area.getByRole("table")).toHaveCount(0);
+  } else {
+    await expect(area.getByRole("table")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /update memory/i }),
+    ).toHaveCount(1);
+  }
+});

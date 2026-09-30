@@ -1,93 +1,85 @@
-// pages/ModelProvidersPage.test.tsx
+// src/pages/ModelProvidersPage.test.tsx — the Model providers list: the split, the rows, first-run, and Add.
 //
-// The connection library is now a DataTable like every other list surface:
-// search + filters + selection + pagination, the per-row reach control (one
-// button stating the reach, over a panel of choices), a bulk bar carrying that
-// same control plus delete, and a row click that opens the connection's detail
-// page (where editing and the model curation live — no per-row pencil).
+// The page is one list + detail: `/model-providers` opens its first provider,
+// each row says what the provider offers and who runs on it (agents by their
+// mark, Coffer's own uses by their badge), and Add is a two-step dialog —
+// Endpoint (tested with the unsaved key inline) then Models. The network is
+// mocked at the api modules and the introspection hooks.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import type { AgentOut } from "@/lib/api/agents";
+import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { acceptance } from "@/test/acceptance";
 import { ModelProvidersPage } from "./ModelProvidersPage";
-import type { Provider } from "@/lib/api/providers";
+import { ProviderDetailPage } from "./ProviderDetailPage";
 
-const navigateMock = vi.fn();
-vi.mock("react-router-dom", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react-router-dom")>();
-  return { ...actual, useNavigate: () => navigateMock };
-});
-
-vi.mock("@/lib/api/providers", async (orig) => {
-  const actual = await orig<typeof import("@/lib/api/providers")>();
-  return {
-    ...actual,
-    providersApi: {
-      list: vi.fn(),
-      get: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      remove: vi.fn(),
-      activate: vi.fn(),
-      setInternalDefault: vi.fn(),
-      setTranscribeDefault: vi.fn(),
-    },
-  };
-});
-
-// The row reach control + the bulk bar go through the kind-agnostic resource
-// endpoints and the scope sub-route; stub both so no request leaves the test.
+vi.mock("@/lib/api/providers", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/providers")>()),
+  providersApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    activate: vi.fn(),
+    detectLocal: vi.fn(),
+  },
+}));
 vi.mock("@/lib/api/resources", () => ({
-  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
+  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
-vi.mock("@/lib/api/scope", () => ({
-  scopeApi: { get: vi.fn(), put: vi.fn() },
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "cc" }] })),
+vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
+vi.mock("@/lib/api/credentials", () => ({
+  credentialsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
 }));
 
-// The dialog's introspection (test / fetch models) hits the network; stub the
-// hooks. The wire protocol is picked by hand in the form — there is no
-// detection step any more.
+const { agentsState, engineState, listModels } = vi.hoisted(() => ({
+  agentsState: { data: [] as unknown[] },
+  engineState: { data: { model: null, transcribe_model: null } as Record<string, unknown> },
+  listModels: vi.fn(),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => agentsState }));
+vi.mock("@/lib/hooks/useInternalEngine", () => ({ useInternalEngineConfig: () => engineState }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
-  useTestConnection: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
+  useEndpointModels: () => ({
+    data: { models: [], message: "", reachable: true },
+    error: null,
+    isPending: false,
+    isFetching: false,
+    dataUpdatedAt: 0,
+    refetch: vi.fn(),
+  }),
+  useListProviderModels: () => ({ mutateAsync: listModels, isPending: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
-const { resourcesApi } = await import("@/lib/api/resources");
 const { scopeApi } = await import("@/lib/api/scope");
-const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const scopeMock = scopeApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const { credentialsApi } = await import("@/lib/api/credentials");
+const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-/** One opaque uid per fixture NAME. The tests below reach for a row by the
- *  label on screen, and then have to assert the identity the request carries —
- *  which is a different string, deliberately: a uid that spelled its name would
- *  let a request built from the label pass every assertion here. */
 const UIDS: Record<string, string> = {
-  acme: "cn-31f0",
   official: "cn-7ba2",
   agnes: "cn-c94d",
+  groq: "cn-41aa",
   myconn: "cn-0e58",
   "local-llm": "cn-6a11",
 };
-const uidFor = (name: string) => UIDS[name] ?? "cn-unlisted";
 
-const makeProvider = (overrides?: Partial<Provider>): Provider => {
-  const name = overrides?.name ?? "acme";
+const makeProvider = (over: Partial<Provider> = {}): Provider => {
+  const name = over.name ?? "official";
   return {
-    uid: uidFor(name),
+    uid: UIDS[name] ?? `cn-${name}`,
     name,
+    title: null,
     protocol: "anthropic",
     base_url: "https://gw/anthropic",
-    credential_ref: "provider/acme/key",
+    credential_ref: `provider/${name}/key`,
     local_runtime: null,
     compatible_agents: ["claude_code"],
     is_active: false,
-    title: null,
     internal_default: false,
     transcribe_default: false,
     models: [],
@@ -95,382 +87,335 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     description: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
-    ...overrides,
+    ...over,
   };
 };
 
-function renderPage() {
+const agent = (type: "claude_code" | "codex", model: string | null = null): AgentOut =>
+  ({
+    uid: `a-${type}`,
+    type,
+    name: type,
+    display_name: type === "codex" ? "Codex" : "Claude Code",
+    model,
+    config_dir: type === "codex" ? "/Users/me/.codex" : "/Users/me/.claude",
+  }) as AgentOut;
+
+function Where() {
+  const location = useLocation();
+  return <output data-testid="where">{location.pathname}</output>;
+}
+
+function renderAt(path = "/model-providers") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={qc}>
-        <ModelProvidersPage />
+        <Routes>
+          <Route path="/model-providers" element={<ModelProvidersPage />} />
+          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
+          <Route path="/model-providers/:uid/:tab" element={<ProviderDetailPage />} />
+          <Route path="*" element={null} />
+        </Routes>
+        <Where />
       </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
-/** The <tr> carrying the named connection. */
-const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
+const rowFor = (name: string) =>
+  screen.getAllByTestId("provider-row").find((r) => r.textContent?.includes(name)) as HTMLElement;
+const where = () => screen.getByTestId("where").textContent;
 
-/** Pick an option in one of the toolbar's filter dropdowns. */
-function selectFilter(filterLabel: string, optionName: string) {
-  fireEvent.click(screen.getByRole("combobox", { name: filterLabel }));
-  fireEvent.click(screen.getByRole("option", { name: optionName }));
+function serve(providers: Provider[]) {
+  api.list.mockResolvedValue({ providers });
+  api.get.mockImplementation(async (uid: string) => {
+    const hit = providers.find((p) => p.uid === uid);
+    if (!hit) throw new Error("not found");
+    return hit;
+  });
+}
+
+async function openAdd() {
+  fireEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+  return within(await screen.findByRole("dialog"));
 }
 
 describe("ModelProvidersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resourceMock.enable.mockResolvedValue(undefined);
-    resourceMock.disable.mockResolvedValue(undefined);
-    scopeMock.put.mockResolvedValue(undefined);
-    scopeMock.get.mockResolvedValue({ scope: null, supports_scope: true });
+    agentsState.data = [];
+    engineState.data = { model: null, transcribe_model: null };
+    (scopeApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      scope: null,
+      supports_scope: true,
+    });
+    (credentialsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
+      approvals: [],
+    });
   });
 
   acceptance(
     "provider-switching",
     "the connections page lists profiles and their compatible agents",
     async () => {
-      apiMock.list.mockResolvedValue({
-        providers: [
-          makeProvider({ name: "official", is_active: true, compatible_agents: ["claude_code"] }),
-          makeProvider({ name: "agnes", protocol: "openai", compatible_agents: ["codex"] }),
-        ],
-      });
-
-      renderPage();
-
-      // lists the connections; which agents each one reaches is the reach
-      // column's control (there is no separate compatible-agents column
-      // repeating it in words)…
-      expect(await screen.findByText("official")).toBeInTheDocument();
-      expect(screen.getByText("agnes")).toBeInTheDocument();
-      expect(screen.getByRole("columnheader", { name: "Reach" })).toBeInTheDocument();
-      expect(screen.queryByText("Compatible agents")).not.toBeInTheDocument();
-      expect(screen.queryByText("Claude Code")).not.toBeInTheDocument();
-      // …and their endpoints, in the base_url column.
-      expect(screen.getAllByText("https://gw/anthropic").length).toBeGreaterThan(0);
-      // The Active pill marks the connection Coffer's own engine runs on.
-      expect(within(rowFor("official")).getByText("Active")).toBeInTheDocument();
-      expect(within(rowFor("agnes")).queryByText("Active")).not.toBeInTheDocument();
-
-      // No per-row "Switch" — activation is per-agent, on the Agent Overview tab.
-      expect(screen.queryByRole("button", { name: "Switch" })).not.toBeInTheDocument();
-      expect(apiMock.activate).not.toHaveBeenCalled();
-    },
-  );
-
-  test("create with the Custom provider picks the protocol by hand", async () => {
-    apiMock.list.mockResolvedValue({ providers: [] });
-    apiMock.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
-
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
-    // Scope to the dialog: the table toolbar carries a "Vendor" filter with the
-    // same label as the form's preset picker.
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Name"), { target: { value: "myconn" } });
-    // Pick the "Custom" provider → a protocol picker appears, labelled by
-    // what each wire is rather than its enum value.
-    fireEvent.click(form.getByLabelText("Vendor"));
-    fireEvent.click(screen.getByRole("option", { name: "Custom" }));
-    fireEvent.click(form.getByLabelText("Protocol"));
-    fireEvent.click(screen.getByRole("option", { name: "OpenAI-compatible" }));
-    fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
-    fireEvent.change(form.getByLabelText("API key"), { target: { value: "sk-x" } });
-    // No agent checkboxes here: the dialog does not decide reach.
-    expect(form.queryAllByRole("checkbox")).toHaveLength(0);
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
-    expect(apiMock.create.mock.calls[0][0]).toMatchObject({
-      name: "myconn",
-      protocol: "openai",
-      secret_value: "sk-x",
-    });
-    // The form carries NO compatible-agents field: that key is gone from
-    // ProviderCreate (reach is the resource's per-agent scope, pre-filled from
-    // the wire server-side). Pydantic ignores unknown fields, so sending it
-    // would 200 and silently drop the user's choice — assert on the body.
-    expect(apiMock.create.mock.calls[0][0]).not.toHaveProperty("compatible_agents");
-  });
-
-  acceptance("provider-switching", "create an ollama connection without a credential", async () => {
-    apiMock.list.mockResolvedValue({ providers: [] });
-    apiMock.create.mockResolvedValue(
-      makeProvider({
-        name: "local-llm",
-        protocol: "ollama",
-        credential_ref: null,
-        internal_default: false,
-        transcribe_default: false,
-      }),
-    );
-
-    renderPage();
-    // open the add dialog
-    fireEvent.click(await screen.findByRole("button", { name: /Add model provider/i }));
-
-    // Scope to the dialog — the toolbar's vendor filter shares the "Vendor" label.
-    const form = within(screen.getByRole("dialog"));
-    fireEvent.change(form.getByLabelText("Name"), { target: { value: "local-llm" } });
-    // The Ollama preset fills the protocol + endpoint and is keyless.
-    fireEvent.click(form.getByLabelText("Vendor"));
-    fireEvent.click(screen.getByRole("option", { name: "Ollama" }));
-    expect(form.queryByLabelText("API key")).not.toBeInTheDocument();
-
-    fireEvent.click(form.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMock.create).toHaveBeenCalledTimes(1));
-    const body = apiMock.create.mock.calls[0][0];
-    expect(body).toMatchObject({
-      name: "local-llm",
-      protocol: "ollama",
-      base_url: "http://localhost:11434",
-    });
-    // NEITHER secret_value nor credential_ref is sent for ollama.
-    expect(body.secret_value).toBeUndefined();
-    expect(body.credential_ref).toBeUndefined();
-  });
-
-  test("the header stays up while the list loads, and an empty library shows the welcome panel", async () => {
-    let resolve: (v: { providers: Provider[] }) => void = () => {};
-    apiMock.list.mockReturnValue(new Promise((r) => (resolve = r)));
-    renderPage();
-    // Loading: the page title is already there over skeleton rows, never a
-    // blank page or a bare "Loading…" card.
-    expect(screen.getByRole("heading", { name: "Model providers" })).toBeInTheDocument();
-    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
-
-    resolve({ providers: [] });
-    // Empty: the welcome panel carries the single Add call-to-action, so the
-    // header's own Add button steps aside rather than stating it twice.
-    expect(await screen.findByText("Bring your own model endpoint")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /Add model provider/i })).toHaveLength(1);
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-
-  test("holds only the connection library — no engine or embedding card", async () => {
-    // Coffer's own engine + embedding config moved to Settings → Coffer's model: they
-    // configure Coffer itself, not a resource served to agents.
-    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
-    renderPage();
-    await screen.findByText("acme");
-    expect(screen.queryByText("Internal engine")).not.toBeInTheDocument();
-    expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
-  });
-
-  test("the row carries no edit action — editing lives on the detail page", async () => {
-    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
-    renderPage();
-    await screen.findByText("acme");
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
-  });
-
-  test("search narrows the rows over name, endpoint and description", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({ name: "official" }),
-        makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("official");
-
-    const search = screen.getByRole("textbox");
-    fireEvent.change(search, { target: { value: "apihub" } });
-    expect(screen.getByText("agnes")).toBeInTheDocument();
-    expect(screen.queryByText("official")).not.toBeInTheDocument();
-
-    fireEvent.change(search, { target: { value: "offic" } });
-    expect(screen.getByText("official")).toBeInTheDocument();
-    expect(screen.queryByText("agnes")).not.toBeInTheDocument();
-  });
-
-  test("the vendor and status filters narrow the rows", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [
-        // A private gateway is no vendor's own endpoint → Custom; only the second
-        // row sits on OpenAI's, so filtering by vendor has to split the two.
-        makeProvider({ name: "official", base_url: "https://gw/anthropic", enabled: true }),
+      agentsState.data = [agent("claude_code", "claude-opus-4-1")];
+      serve([
+        makeProvider({ name: "official", is_active: true, compatible_agents: ["claude_code"] }),
         makeProvider({
           name: "agnes",
           protocol: "openai",
-          base_url: "https://api.openai.com/v1",
-          enabled: false,
+          base_url: "https://apihub.agnes-ai.com/v1",
+          compatible_agents: ["codex"],
         }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("official");
+      ]);
+      renderAt();
 
-    selectFilter("Vendor", "OpenAI");
-    expect(screen.getByText("agnes")).toBeInTheDocument();
-    expect(screen.queryByText("official")).not.toBeInTheDocument();
-
-    selectFilter("Vendor", "All vendors");
-    // The reach filter tracks the reach COLUMN: an enabled connection with no
-    // scope reads as "Every agent".
-    selectFilter("Reach", "Every agent");
-    expect(screen.getByText("official")).toBeInTheDocument();
-    expect(screen.queryByText("agnes")).not.toBeInTheDocument();
-  });
-
-  test("the vendor column falls back to Custom for an unrecognised endpoint", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
-        // A trailing slash and upper case are cosmetic — still OpenAI's endpoint.
-        makeProvider({ name: "official", base_url: "https://API.openai.com/v1/" }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("agnes");
-
-    expect(within(rowFor("agnes")).getByText("Custom")).toBeInTheDocument();
-    expect(within(rowFor("official")).getByText("OpenAI")).toBeInTheDocument();
-  });
-
-  test("the status cell is the reach control, and it does not navigate", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({ name: "official", enabled: true }),
-        makeProvider({ name: "agnes", enabled: false }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("official");
-
-    // A Switch could not say "offer this endpoint to exactly these agents".
-    expect(screen.queryByRole("switch")).toBeNull();
-    // One button per row, and its label IS that row's reach.
-    const reachIn = (name: string) =>
-      within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
-    expect(reachIn("official")).toHaveTextContent(/every agent/i);
-    expect(reachIn("agnes")).toHaveTextContent(/^disabled/i);
-
-    fireEvent.click(reachIn("official"));
-    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-    // The kind is gone from the route and the name never was on it: one uid
-    // names exactly one row.
-    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith(uidFor("official")));
-    fireEvent.click(reachIn("agnes"));
-    fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
-    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith(uidFor("agnes")));
-    // The control must not fall through to the row's navigation.
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
-
-  test("clicking a row opens the connection detail page", async () => {
-    apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
-    renderPage();
-    await screen.findByText("acme");
-
-    fireEvent.click(screen.getByText("https://gw/anthropic"));
-    // The detail route is keyed on the uid, so the row links to that and not to
-    // the label in the cell the user clicked.
-    expect(navigateMock).toHaveBeenCalledWith(`/model-providers/${uidFor("acme")}`);
-  });
-
-  test("the bulk reach control fans the chosen state out over the selection", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({ name: "official", enabled: false }),
-        makeProvider({ name: "agnes", enabled: false }),
-      ],
-    });
-    renderPage();
-    await screen.findByText("official");
-
-    // The head checkbox selects the whole page.
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    // A mixed selection has no current reach, so the bar's button names the
-    // action instead of a state.
-    const bar = () => within(screen.getByTestId("bulk-reach-control")).getByRole("button");
-    expect(bar()).toHaveTextContent(/set reach/i);
-    // "Every agent" is enable + an unscoped write, per selected row.
-    fireEvent.click(bar());
-    fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
-    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
-    expect(resourceMock.enable.mock.calls.map((c) => c[0]).sort()).toEqual(
-      [uidFor("agnes"), uidFor("official")].sort(),
-    );
-    await waitFor(() => expect(scopeMock.put).toHaveBeenCalledTimes(2));
-    // `scopeApi.put(uid, scope)` — the kind segment is gone, so the scope is
-    // the SECOND argument.
-    expect(scopeMock.put.mock.calls.every((c) => c[1] === null)).toBe(true);
-
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(bar());
-    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledTimes(2));
-  });
-
-  test("bulk delete confirms first, then removes every selected connection", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [makeProvider({ name: "official" }), makeProvider({ name: "agnes" })],
-    });
-    apiMock.remove.mockResolvedValue(undefined);
-    renderPage();
-    await screen.findByText("official");
-
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    // Styled confirm — nothing is removed until it is confirmed.
-    const dialog = screen.getByRole("dialog");
-    expect(apiMock.remove).not.toHaveBeenCalled();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(2));
-    expect(apiMock.remove.mock.calls.map((c) => c[0]).sort()).toEqual(
-      [uidFor("agnes"), uidFor("official")].sort(),
-    );
-  });
-
-  test("the per-row delete action confirms then removes that one connection", async () => {
-    apiMock.list.mockResolvedValue({
-      providers: [makeProvider({ name: "official" }), makeProvider({ name: "agnes" })],
-    });
-    apiMock.remove.mockResolvedValue(undefined);
-    renderPage();
-    await screen.findByText("official");
-
-    // The action and the confirmation both name the connection; the request
-    // that follows is addressed to its uid.
-    fireEvent.click(screen.getByRole("button", { name: "Delete: agnes" }));
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("agnes");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(1));
-    expect(apiMock.remove).toHaveBeenCalledWith(uidFor("agnes"));
-    expect(navigateMock).not.toHaveBeenCalled();
-  });
+      // Both providers are listed, and the address opens the first one.
+      await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.official}`));
+      await waitFor(() => expect(rowFor("official")).toHaveAttribute("aria-current", "page"));
+      expect(rowFor("agnes")).toBeInTheDocument();
+      // The active one is marked by the agent running on it.
+      expect(within(rowFor("official")).getByRole("img", { name: "Claude Code" })).toBeTruthy();
+      expect(within(rowFor("agnes")).queryByRole("img", { name: "Claude Code" })).toBeNull();
+      // The open provider shows its endpoint, and its reach in the shared control.
+      expect(await screen.findAllByText("https://gw/anthropic")).not.toHaveLength(0);
+      expect(screen.getByTestId("scope-control")).toBeInTheDocument();
+      // No per-row "Switch": activation is per agent, on its Model tab.
+      expect(screen.queryByRole("button", { name: /^switch/i })).toBeNull();
+      expect(api.activate).not.toHaveBeenCalled();
+    },
+  );
 
   acceptance(
     "provider-switching",
     "the library names the connections Coffer itself uses",
     async () => {
-      // Each flag sits on one connection with no fallback, so the library has to
-      // answer "which one does Coffer use?" without a trip to Settings — and say
-      // it is Coffer's own use, not a capability of the provider.
-      apiMock.list.mockResolvedValue({
-        providers: [
-          makeProvider({ name: "official" }),
-          makeProvider({ name: "agnes", internal_default: true }),
-          makeProvider({ name: "groq", transcribe_default: true }),
-        ],
-      });
-      renderPage();
-      await screen.findByText("official");
+      serve([
+        makeProvider({ name: "official" }),
+        makeProvider({ name: "agnes", internal_default: true }),
+        makeProvider({ name: "groq", transcribe_default: true }),
+      ]);
+      renderAt();
+      await screen.findAllByTestId("provider-row");
 
-      expect(within(rowFor("agnes")).getByText("Coffer · background model")).toBeInTheDocument();
-      expect(within(rowFor("agnes")).queryByText("Coffer · speech to text")).toBeNull();
-      expect(within(rowFor("groq")).getByText("Coffer · speech to text")).toBeInTheDocument();
-      expect(within(rowFor("groq")).queryByText("Coffer · background model")).toBeNull();
-      expect(within(rowFor("official")).queryByText(/^Coffer · /)).toBeNull();
+      const badge = (row: string, name: string | RegExp) =>
+        within(rowFor(row)).queryByRole("img", { name });
+      expect(badge("agnes", "Coffer · background model")).toBeTruthy();
+      expect(badge("agnes", "Coffer · speech to text")).toBeNull();
+      expect(badge("groq", "Coffer · speech to text")).toBeTruthy();
+      expect(badge("groq", "Coffer · background model")).toBeNull();
+      expect(badge("official", /^Coffer · /)).toBeNull();
     },
   );
+
+  test("the provider library has no tabs", async () => {
+    // Scenario (revise-web-ui-ia): "the provider library has no tabs"
+    serve([makeProvider({ name: "official" })]);
+    renderAt();
+    await screen.findByRole("tab", { name: /overview/i });
+    // The one tab strip is the open provider's own Overview | Models — no
+    // "who runs on what" view and no Coffer's model tab on the library.
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Models"]);
+    expect(screen.queryByRole("tab", { name: /who runs|coffer's model/i })).toBeNull();
+  });
+
+  test("a row says what the provider offers", async () => {
+    serve([
+      makeProvider({ name: "official", models: [{ id: "a" }, { id: "b" }] as ProviderModel[] }),
+      makeProvider({ name: "agnes", protocol: "openai" }),
+      makeProvider({ name: "local-llm", protocol: "ollama", credential_ref: null }),
+    ]);
+    renderAt();
+    await screen.findAllByTestId("provider-row");
+    expect(rowFor("official")).toHaveTextContent("Anthropic · 2 models");
+    expect(rowFor("agnes")).toHaveTextContent("OpenAI-compatible · All models");
+    expect(rowFor("local-llm")).toHaveTextContent("Ollama · Coffer's engine only");
+  });
+
+  test("the filter narrows the rows over name and endpoint", async () => {
+    serve([
+      makeProvider({ name: "official" }),
+      makeProvider({ name: "agnes", base_url: "https://apihub.agnes-ai.com/v1" }),
+    ]);
+    renderAt();
+    await screen.findAllByTestId("provider-row");
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter" }), {
+      target: { value: "apihub" },
+    });
+    expect(screen.getAllByTestId("provider-row")).toHaveLength(1);
+    expect(rowFor("agnes")).toBeInTheDocument();
+  });
+
+  test("the header stays up while loading, and an empty library is the welcome panel", async () => {
+    let resolve: (v: { providers: Provider[] }) => void = () => {};
+    api.list.mockReturnValue(new Promise((r) => (resolve = r)));
+    agentsState.data = [agent("claude_code"), agent("codex")];
+    renderAt();
+    expect(screen.getByRole("heading", { name: "Model providers" })).toBeInTheDocument();
+
+    resolve({ providers: [] });
+    expect(await screen.findByText("Bring your own model endpoint")).toBeInTheDocument();
+    // What each registered agent runs on now: its own login.
+    expect(screen.getByText("Own login (Anthropic)")).toBeInTheDocument();
+    expect(screen.getByText("Own login (ChatGPT)")).toBeInTheDocument();
+    // No provider carries Coffer's engine, so say what that pauses.
+    expect(
+      screen.getByText("Coffer's model isn't set, so distil and curation are paused."),
+    ).toBeInTheDocument();
+    // An option card opens Add on its preset: the local runtime path is keyless.
+    api.detectLocal.mockResolvedValue({ found: [] });
+    fireEvent.click(screen.getByRole("button", { name: /A local runtime on this Mac/ }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByRole("radio", { name: "Ollama" })).toHaveAttribute("aria-checked", "true");
+    expect(dialog.queryByLabelText("API key")).toBeNull();
+  });
+
+  test("Add with Custom: pick the protocol, test the unsaved key, choose models, add", async () => {
+    serve([]);
+    api.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
+    listModels.mockResolvedValue({
+      models: [
+        { id: "gpt-5", modality: "text" },
+        { id: "text-embedding-3-large", modality: "embedding" },
+      ],
+      message: "",
+      reachable: true,
+    });
+    renderAt();
+    const dialog = await openAdd();
+
+    fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
+    fireEvent.click(dialog.getByRole("radio", { name: /^OpenAI-compatible/ }));
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "myconn" } });
+    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(dialog.getByLabelText("API key"), { target: { value: "sk-x" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Test" }));
+
+    // The test sends the unsaved key inline; nothing is saved yet.
+    await waitFor(() => expect(listModels).toHaveBeenCalledTimes(1));
+    expect(listModels.mock.calls[0][0]).toMatchObject({
+      provider: "openai",
+      base_url: "https://gw/v1",
+      secret_value: "sk-x",
+    });
+    expect(await dialog.findByText(/^Connected in \d+ ms$/)).toBeInTheDocument();
+    expect(api.create).not.toHaveBeenCalled();
+
+    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    expect(
+      await dialog.findByText("0 selected · nothing selected means all 2 are offered"),
+    ).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("checkbox", { name: "gpt-5" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+    const body = api.create.mock.calls[0][0];
+    expect(body).toEqual({
+      name: "myconn",
+      protocol: "openai",
+      base_url: "https://gw/v1",
+      secret_value: "sk-x",
+      models: [{ id: "gpt-5", modality: "text" }],
+    });
+    // Reach is the resource's scope, never a create field.
+    expect(body).not.toHaveProperty("compatible_agents");
+    await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.myconn}`));
+  });
+
+  test("Add validates inline and shows a rejected key", async () => {
+    serve([]);
+    listModels.mockResolvedValue({
+      models: [],
+      message: "Client error '401 Unauthorized' for url 'https://gw/v1/models'",
+      reachable: false,
+    });
+    renderAt();
+    const dialog = await openAdd();
+    fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
+    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "gw.example" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    expect(await dialog.findByText("Enter a name.")).toBeInTheDocument();
+    expect(
+      dialog.getByText("Enter a full URL, e.g. https://api.openai.com/v1"),
+    ).toBeInTheDocument();
+    expect(dialog.getByText("Enter the API key.")).toBeInTheDocument();
+
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "gw" } });
+    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(dialog.getByLabelText("API key"), { target: { value: "bad" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Test" }));
+    expect(await dialog.findByText("The endpoint rejected the key (401)")).toBeInTheDocument();
+    expect(dialog.getByText(/Nothing was saved/)).toBeInTheDocument();
+  });
+
+  acceptance("provider-switching", "create an ollama connection without a credential", async () => {
+    serve([]);
+    api.detectLocal.mockResolvedValue({ found: [] });
+    api.create.mockResolvedValue(
+      makeProvider({ name: "local-llm", protocol: "ollama", credential_ref: null }),
+    );
+    renderAt();
+    const dialog = await openAdd();
+
+    fireEvent.click(dialog.getByRole("radio", { name: "Ollama" }));
+    // The local path is keyless: no API key field at all.
+    expect(dialog.queryByLabelText("API key")).toBeNull();
+    await waitFor(() => expect(api.detectLocal).toHaveBeenCalledWith(null));
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "local-llm" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    fireEvent.click(await dialog.findByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+    const body = api.create.mock.calls[0][0];
+    expect(body).toMatchObject({
+      name: "local-llm",
+      protocol: "ollama",
+      base_url: "http://localhost:11434",
+    });
+    expect(body.secret_value).toBeUndefined();
+    expect(body.credential_ref).toBeUndefined();
+  });
+
+  test("a detected runtime is recorded with its tool-capable models and their windows", async () => {
+    serve([]);
+    api.detectLocal.mockResolvedValue({
+      found: [
+        {
+          base_url: "http://127.0.0.1:11434",
+          runtime: { runtime: "ollama", version: "0.14.2", wires: ["anthropic", "openai"] },
+          models: [
+            { id: "qwen3-coder", context_window: 65536, tools: true },
+            { id: "llava", context_window: 4096, tools: false },
+          ],
+        },
+      ],
+    });
+    api.create.mockResolvedValue(makeProvider({ name: "local-llm", protocol: "anthropic" }));
+    renderAt();
+    const dialog = await openAdd();
+    fireEvent.click(dialog.getByRole("radio", { name: "Ollama" }));
+
+    expect(await dialog.findByText(/Ollama 0\.14\.2/)).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("radio", { name: /^Anthropic-compatible/ }));
+    fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "local-llm" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+
+    // Tool-capable models start selected; one that cannot call tools does not.
+    expect(await dialog.findByRole("checkbox", { name: "qwen3-coder" })).toBeChecked();
+    expect(dialog.getByRole("checkbox", { name: "llava" })).not.toBeChecked();
+    fireEvent.click(dialog.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+    expect(api.create.mock.calls[0][0]).toEqual({
+      name: "local-llm",
+      protocol: "anthropic",
+      base_url: "http://127.0.0.1:11434",
+      local_runtime: { runtime: "ollama", version: "0.14.2", wires: ["anthropic", "openai"] },
+      models: [{ id: "qwen3-coder", modality: "text", context_window: 65536 }],
+    });
+  });
 });

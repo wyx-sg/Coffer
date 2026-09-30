@@ -56,7 +56,7 @@ registered: agent claude-code
 
 (`coffer scan` lists a detected agent with this same command.) There is one agent per type, and its name is its type, `claude-code`. It is registered at `~/.claude`; if your Claude Code config is somewhere else, pass `--config-dir <path>`. Claude Code installed but never run is fine too: registering it creates `~/.claude`.
 
-**In the web UI:** open **Agents**, click **Add agent**, and add Claude Code from the list of detected agents.
+**In the web UI:** open **Agents**. The page always lists Claude Code and Codex; on the Claude Code row choose **Add**, review the lines Coffer will write, and apply them. With both agents installed and neither added, **Add both** does the two at once.
 
 ## 3. Connect Claude Code to Coffer
 
@@ -69,7 +69,7 @@ connected agent claude-code to Coffer
   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 ```
 
-This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, a session-start hook to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
+This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
 
 ```json
 {

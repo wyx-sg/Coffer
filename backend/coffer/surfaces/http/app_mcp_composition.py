@@ -115,7 +115,7 @@ def wire_mcp_kind(
     sync.state_providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
     inv_repo = MCPInvocationRepo(sm)
     health_repo = MCPServerHealthRepo(sm)
-    # Custom tools' machine-local reach overrides (migration 0113).
+    # Custom tools' machine-local reach overrides (migration 0115).
     tool_reach = MCPToolReachRepo(sm)
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)

@@ -293,7 +293,7 @@ The session subscribes lazily to each upstream it touches:
 
 ## Invocation logging
 
-Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`) and from which session. Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
+Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`), from which session, and for which agent when the session reported one (`agent_uid`). Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
 
 The row's columns, the exact meaning of each status, the buffered writer and retention are described once, in [Observability](/architecture/observability#the-mcp-invocation-log). You read the log per server (`coffer log mcp --server <server>`) or across all servers (`coffer log mcp`); see [Activity and audit](/guides/activity).
 
@@ -329,7 +329,7 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api` (`domai
 | Piece | Where | Why there |
 | --- | --- | --- |
 | Definition and tools | `mcp_server.config.transport` | It travels with sync like every server's definition, and the tool switch travels like a capability toggle does. |
-| Reach override | `mcp_tool_reach` (migration 0113) | Reach is machine-local; an override narrows the group's scope for one tool. |
+| Reach override | `mcp_tool_reach` (migration 0115) | Reach is machine-local; an override narrows the group's scope for one tool. |
 | The per-tool gate | `application/mcp/gateway_tool_gate.py` | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
 | Annotations | `DiscoveredTool.annotations` → the listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
 | Management | `application/mcp/custom_tools.py`, `custom_tool_views.py`, `custom_tool_import.py`; `surfaces/http/mcp/custom_tool_routes.py`; `surfaces/cli/tool_cmd.py` | Every write goes through `ResourceService`, so validation, the missing-credential probe, audit and the eviction of live connections come with it. |

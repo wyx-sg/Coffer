@@ -81,13 +81,13 @@ The list shows every ref the store holds and every ref a registered resource cit
 - **Used by** — the resources that cite the ref, the skills whose files cite a standalone secret's `coffer://secret/<name>`, and how many destinations wait for approval. `(unreferenced)` marks a secret nothing uses: a candidate to delete.
 - **Readable by local processes** — whether another program running as you can read the value where Coffer puts it: a stdio MCP server's environment, or a standalone secret handed to a command. See [what stays exposed](/architecture/security#what-stays-exposed).
 
-It decrypts nothing and is not audited. `--json` gives the same data, with the approved and pending destinations of each ref.
+It decrypts nothing and is not audited. `--json` gives the same data, with the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
 
 ```sh
 coffer credentials get github/token          # [redacted] — a presence check, not audited
 ```
 
-`get` only tells you whether a value is stored: it prints `[redacted]`, or exits `4` when the ref is missing. No option prints the value. To see or copy one, open the desktop app, which asks for Touch ID or your login password each time.
+`get` only tells you whether a value is stored: it prints `[redacted]`, or exits `4` when the ref is missing. No option prints the value. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time.
 
 ## Rotate a credential
 
@@ -97,7 +97,7 @@ Store a new value under the same ref:
 printf '%s' "$NEW_TOKEN" | coffer credentials set github/token
 ```
 
-The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. For a provider, `coffer provider edit <name> --secret <value>` does the same through the provider's own ref.
+The row is re-encrypted in place and keeps its creation time. Everything that cites the ref uses the new value the next time it resolves it — for an MCP server, the next time a session starts it. For a provider, `coffer provider edit <name> --secret <value>` does the same through the provider's own ref. On the Secrets page, the row's **Replace value…** does it for any ref.
 
 Replacing a value that something already receives — or any standalone `secret/<name>` — waits for your approval in the desktop app, because swapping a channel's bot token for someone else's, say, would redirect your conversations. Until you approve, the old value stays in use and the new one waits encrypted; `set` prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. A new ref, or one nothing receives, is stored at once.
 
@@ -112,6 +112,8 @@ Deletion is refused while any resource still cites the ref, or while a skill's f
 ```text
 credential 'github/token' is still used by: mcp_server 'github'; detach or delete those resources before deleting the credential
 ```
+
+On the Secrets page, **Delete…** on the row does the same, and for a ref still in use it lists what uses it, each with a link to its page, instead of deleting.
 
 You rarely need this command: deleting a resource releases the refs nothing else cites (standalone `secret/` names are never released this way). Deleting a ref forgets the destinations it was approved for, so a new value stored under the same ref later is treated as a new secret. Deleting a ref that does not exist succeeds and does nothing.
 
@@ -138,7 +140,7 @@ In a development build you can still choose between the file and the OS keychain
 | Prompts | none | macOS may ask to allow access once per daemon start |
 | Protects against | — | someone who copies `~/.coffer/` without your keychain |
 
-**Web UI:** **Settings → Security**, the **Credential encryption** card. Toggle **Store master key in OS keychain**, then **Move key** in the confirmation.
+**Web UI:** **Settings › Security**, the **Encryption** section. Toggle **Store master key in OS keychain**, then **Move key** in the confirmation.
 
 **CLI:**
 
@@ -155,6 +157,12 @@ At startup a development build looks for the key in the file first, then the key
 ::: danger Keep a copy of the master key
 Without the master key, every stored secret is unrecoverable. If ciphertext exists and no usable key is found, the daemon refuses to start with `MASTER_KEY_MISSING`, and it never writes a replacement key over existing ciphertext. Restoring the original key restores every secret. In a signed release the Keychain is the only copy, so a reset login keychain or a new Mac without migration loses every secret unless you made a backup.
 :::
+
+**Back up the master key** is on **Settings › Security** in the [desktop app](/guides/desktop-app#presence-checks-and-approvals): after a Touch ID or password check it asks for a folder and writes the key there as a file only you can read, recorded as `master_key_exported` in Activity. Move that file off the Mac — a password manager or a USB drive — and delete the copy. A browser tab shows **Open in Coffer app** instead, because the key never crosses the daemon's API.
+
+### Settings › Security
+
+Settings › Security holds what belongs to this Mac only: **Encryption** (where the master key lives, and its backup), **Access** (the daemon's access token — hidden until **Show**, with **Copy**, and **Rotate…**, which installs the new token in the page at once and is recorded as `token_rotated`; other tabs and clients using the old token stop until they load the new one) and **Approvals** (whether a secret waits for your approval before it goes somewhere new, with **Review** for what waits). Stored secrets are listed and managed on the [Secrets](/guides/secrets) page, linked from the tab as **Manage in Secrets**.
 
 ## Back up the key
 

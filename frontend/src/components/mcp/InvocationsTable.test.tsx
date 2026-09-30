@@ -2,12 +2,21 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { InvocationsTable } from "./InvocationsTable";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ActivityPage } from "@/pages/activity/ActivityPage";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
 }));
+// Activity's MCP calls tab, mounted by the acceptance test below, follows the
+// daemon's change feed; no stream is opened here.
+vi.mock("@/lib/events/eventStream", () => ({
+  followDaemonEvents: () => new Promise<void>(() => {}),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
@@ -27,6 +36,8 @@ function wrap(ui: React.ReactNode) {
 // that rendered the wrong one could not pass.
 const sampleInvocations = [
   {
+    id: 1,
+    agent_uid: null,
     timestamp: new Date(Date.now() - 30_000).toISOString(), // 30 seconds ago
     resource_uid: "u-filesystem",
     resource_name: "fs",
@@ -38,6 +49,8 @@ const sampleInvocations = [
     session_id: null,
   },
   {
+    id: 2,
+    agent_uid: null,
     timestamp: new Date(Date.now() - 90_000).toISOString(), // 90 seconds ago
     resource_uid: "u-filesystem",
     resource_name: "fs",
@@ -394,12 +407,22 @@ acceptance(
     expect(screen.queryByRole("columnheader", { name: "Server" })).not.toBeInTheDocument();
     scoped.unmount();
 
-    // Unscoped, as Activity mounts it: every server's calls, each row named.
+    // Activity's MCP calls tab reads the same log unscoped: every server's
+    // calls from the cross-server route, each row naming its server.
     get.mockClear();
-    render(wrap(<InvocationsTable />));
-    await waitFor(() => expect(screen.getAllByText("read_file").length).toBeGreaterThan(0));
-    expect(get.mock.calls[0][0]).toBe("/mcp/invocations");
-    expect(screen.getByRole("columnheader", { name: "Server" })).toBeInTheDocument();
-    expect(screen.getAllByText("fs").length).toBeGreaterThan(0);
+    render(
+      wrap(
+        <TooltipProvider>
+          <MemoryRouter initialEntries={["/activity?tab=mcp"]}>
+            <ActivityPage />
+          </MemoryRouter>
+        </TooltipProvider>,
+      ),
+    );
+    await waitFor(() => expect(screen.getAllByText("fs.read_file").length).toBeGreaterThan(0));
+    const logReads = get.mock.calls.filter((c) => String(c[0]).includes("invocations"));
+    expect(logReads.every((c) => c[0] === "/mcp/invocations")).toBe(true);
+    expect(logReads.every((c) => c[1]?.params?.query?.uid === undefined)).toBe(true);
+    expect(screen.getByRole("columnheader", { name: "Server · tool" })).toBeInTheDocument();
   },
 );

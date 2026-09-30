@@ -1,154 +1,164 @@
-// frontend/src/components/agents/AgentHooksTab.tsx — spec agent-registry
-// "List every hook in the agent's native config".
+// src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: every hook it will run, in one table.
 //
-// "Hooks" tab on the agent detail page, read-only: every command hook the
-// agent's own config files and its enabled plugins declare, grouped by event.
-// A row shows the matcher ("all" when there is none), the command (truncated,
-// full text on hover), where it is declared (the user's config or a plugin) and
-// open / reveal for that file — Coffer edits none of these hooks. Coffer's own
-// delivery hook carries a "Coffer" badge, and its health sits in one line above
-// the list (AgentCofferHookStatus). A file that would not parse is a warning,
-// not a failure of the whole tab.
+// Spec agent-registry "List every hook in the agent's native config" and
+// "Filter an agent's installed kinds by owner". Read only apart from the row
+// actions: each hook opens the file that declares it, and Coffer's own hook —
+// marked, with its health, Codex's trust and its last fire — offers Repair when
+// it is out of date or missing (`onRepair`, wired by the detail page to the
+// connection-change dialog). A missing Coffer hook, which no file declares any
+// more, still gets a row. A file that does not parse is a warning above the
+// table, not a failure of the tab.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Webhook } from "lucide-react";
 
-import { AgentCofferHookStatus } from "@/components/agents/AgentCofferHookStatus";
-import { EmptyState } from "@/components/EmptyState";
+import { AgentHookCommandCell } from "@/components/agents/AgentHookCommandCell";
+import { AgentHookRowActions } from "@/components/agents/AgentHookRowActions";
+import { AgentHookStateCell } from "@/components/agents/AgentHookStateCell";
+import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
+import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { AgentOut, NativeHook } from "@/lib/api/agents";
-import { translateApiError } from "@/lib/api/errors";
-import { useFileActionItems } from "@/lib/fileActionItems";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { fileName, hookRows, hookSummaryCounts, type HookRow } from "@/lib/agents/hookRows";
+import type { AgentOut } from "@/lib/api/agents";
 import { useAgentHooks } from "@/lib/hooks/useAgents";
 
-/** Hooks grouped by event, in the order the daemon listed them. */
-function groupByEvent(items: NativeHook[]): [string, NativeHook[]][] {
-  const groups = new Map<string, NativeHook[]>();
-  for (const h of items) {
-    const list = groups.get(h.event);
-    if (list) list.push(h);
-    else groups.set(h.event, [h]);
-  }
-  return [...groups.entries()];
+interface Props {
+  agent: AgentOut;
+  /** Reinstall Coffer's hook (the Coffer connection's repair). Repair shows only when given. */
+  onRepair?: () => void;
 }
 
-/** Open-in-editor / reveal for the file that declares a hook, as icon buttons. */
-function HookFileActions({ path }: { path: string }) {
-  const items = useFileActionItems(path);
-  return (
-    <span className="flex shrink-0 items-center">
-      {items.map((it) => {
-        const Icon = it.icon;
-        return (
-          <Tooltip key={it.key}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={it.label}
-                onClick={it.onClick}
-              >
-                <Icon className="size-3.5" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{it.label}</TooltipContent>
-          </Tooltip>
-        );
-      })}
-    </span>
-  );
-}
+const searchText = (row: HookRow) =>
+  `${row.event} ${row.command ?? ""} ${row.path} ${row.matcher ?? ""} ${row.plugin ?? ""}`;
 
-function HookRow({ hook }: { hook: NativeHook }) {
-  const { t } = useTranslation();
-  return (
-    <li className="flex items-center gap-3 px-4 py-2 text-sm">
-      <span className="w-32 shrink-0 truncate font-mono text-xs text-muted-foreground">
-        {hook.matcher || t("agents.hooksTab.allMatcher")}
-      </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="min-w-0 flex-1 truncate font-mono text-xs">{hook.command}</span>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-lg break-all font-mono">{hook.command}</TooltipContent>
-      </Tooltip>
-      {hook.coffer ? <Badge variant="secondary">{t("agents.hooksTab.cofferBadge")}</Badge> : null}
-      <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
-        {hook.source === "plugin"
-          ? t("agents.hooksTab.sourcePlugin", { id: hook.plugin ?? "" })
-          : t("agents.hooksTab.sourceUser")}
-      </span>
-      <HookFileActions path={hook.path} />
-    </li>
-  );
-}
-
-export function AgentHooksTab({ agent }: { agent: AgentOut }) {
+export function AgentHooksTab({ agent, onRepair }: Props) {
   const { t } = useTranslation();
   const hooks = useAgentHooks(agent.uid);
-  const groups = useMemo(() => groupByEvent(hooks.data?.items ?? []), [hooks.data]);
+  const rows = useMemo(() => hookRows(hooks.data), [hooks.data]);
+  const counts = hookSummaryCounts(hooks.data);
+  const agentName = agentTypeLabel(agent.type);
+  const parseErrors = hooks.data?.parse_errors ?? [];
 
-  if (hooks.isPending) {
-    return (
-      <div className="space-y-3" aria-busy="true" aria-label={t("common.loading")}>
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
-  if (hooks.error) {
-    return <p className="text-sm text-destructive">{translateApiError(t, hooks.error)}</p>;
-  }
+  const summary = [
+    `${t("agents.hooksTab.summary.hooks", { count: counts.hooks })} ${t(
+      "agents.hooksTab.summary.files",
+      { count: counts.files },
+    )}`,
+    counts.cofferMissing
+      ? t("agents.hooksTab.summary.cofferMissing")
+      : counts.coffer > 0
+        ? t("agents.hooksTab.summary.coffer", { count: counts.coffer })
+        : null,
+    t("agents.hooksTab.summary.own", { count: counts.own }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-  const { coffer_hook: cofferHook, parse_errors: parseErrors } = hooks.data;
+  const columns: Column<HookRow>[] = [
+    {
+      key: "event",
+      header: t("agents.hooksTab.cols.event"),
+      className: "w-32 align-top",
+      cell: (row) => <span className="font-mono text-xs text-text">{row.event}</span>,
+    },
+    {
+      key: "command",
+      header: t("agents.hooksTab.cols.command"),
+      className: "align-top",
+      cell: (row) => (
+        <AgentHookCommandCell
+          row={row}
+          agentType={agent.type}
+          onCheckAgain={() => void hooks.refetch()}
+          checking={hooks.isFetching}
+        />
+      ),
+    },
+    {
+      key: "file",
+      header: t("agents.hooksTab.cols.file"),
+      className: "align-top",
+      cell: (row) => (
+        <span className="flex flex-col gap-0.5 text-xs">
+          <span className="break-all text-text">
+            {row.plugin
+              ? `${row.plugin.split("@")[0]} · ${fileName(row.path)}`
+              : abbreviateHomePath(row.path)}
+          </span>
+          <span className="text-text-muted">
+            {t("agents.hooksTab.matcher", {
+              matcher: row.matcher || t("agents.hooksTab.matcherAny"),
+            })}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "state",
+      header: t("agents.hooksTab.cols.state"),
+      className: "w-32 align-top",
+      cell: (row) => <AgentHookStateCell row={row} />,
+    },
+    {
+      key: "owner",
+      header: t("agents.hooksTab.cols.owner"),
+      className: "w-32 align-top",
+      cell: (row) => (
+        <span className="text-xs text-text-muted">{t(`agents.kindTab.owner.${row.owner}`)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right align-top",
+      cell: (row) => <AgentHookRowActions row={row} onRepair={onRepair} />,
+    },
+  ];
 
   return (
-    <TooltipProvider>
-      <div className="space-y-3">
-        {cofferHook ? <AgentCofferHookStatus agentUid={agent.uid} hook={cofferHook} /> : null}
-
-        {parseErrors.length > 0 ? (
-          <Alert variant="warning">
-            <AlertDescription>
-              <p className="font-medium">{t("agents.hooksTab.parseError")}</p>
-              <ul className="mt-1 space-y-0.5">
-                {parseErrors.map((pe) => (
-                  <li key={`${pe.source}:${pe.path}`} className="break-all font-mono text-xs">
-                    {pe.path}: {pe.error}
-                  </li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {groups.length === 0 ? (
-          <EmptyState
-            icon={Webhook}
-            title={t("agents.hooksTab.emptyTitle")}
-            description={t("agents.hooksTab.emptyBody")}
+    <div className="flex flex-col gap-3.5">
+      {parseErrors.length > 0 ? (
+        <Alert variant="warning">
+          <AlertDescription>
+            <ul className="space-y-0.5">
+              {parseErrors.map((pe) => (
+                <li key={`${pe.source}:${pe.path}`} className="break-all">
+                  {t("agents.hooksTab.parseError", {
+                    file: abbreviateHomePath(pe.path),
+                    error: pe.error,
+                  })}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <AgentKindTab
+        rows={rows}
+        summary={summary}
+        searchPlaceholder={t("agents.hooksTab.search")}
+        searchText={searchText}
+        isLoading={hooks.isPending}
+        error={hooks.error}
+        onRetry={() => void hooks.refetch()}
+        empty={{
+          icon: Webhook,
+          title: t("agents.hooksTab.emptyTitle", { agent: agentName }),
+          description: t("agents.hooksTab.emptyBody", { agent: agentName }),
+        }}
+        footnote={t("agents.hooksTab.footnote", { agent: agentName })}
+      >
+        {(visible) => (
+          <DataTable
+            rows={visible}
+            columns={columns}
+            rowKey={(row) => row.key}
+            isLoading={hooks.isPending}
+            emptyMessage={t("agents.hooksTab.noMatches")}
           />
-        ) : (
-          groups.map(([event, rows]) => (
-            <Card key={event} className="overflow-hidden">
-              <h3 className="border-b bg-surface-sunken px-4 py-2 font-mono text-sm font-medium">
-                {event}
-              </h3>
-              <ul className="divide-y" aria-label={event}>
-                {rows.map((h, i) => (
-                  <HookRow key={`${h.path}:${h.matcher ?? ""}:${h.command}:${i}`} hook={h} />
-                ))}
-              </ul>
-            </Card>
-          ))
         )}
-      </div>
-    </TooltipProvider>
+      </AgentKindTab>
+    </div>
   );
 }

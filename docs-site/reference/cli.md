@@ -1619,15 +1619,39 @@ Show one skill, by name or uid.
 ### skill add
 
 ```sh
-coffer skill add [OPTIONS] FOLDER
+coffer skill add [OPTIONS] SOURCE
 ```
 
-Import a skill from a local folder; its name comes from SKILL.md.
+Add a skill from a folder, an archive or a Git repository; its name comes from SKILL.md.
+
+A folder is imported at once. An archive or a repository is staged first: the command prints what it found and asks before adding anything.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `FOLDER` | argument | text | required | Local path to an existing skill folder |
+| `SOURCE` | argument | text | required | A skill folder, a .zip / .skill archive, or a Git URL |
 | `--force, -f` | option | flag |  | Replace an existing skill of the same name |
+| `--ref` | option | text |  | Git: branch, tag or commit |
+| `--path` | option | text |  | Git: folder inside the repository |
+| `--skill` | option | text (repeatable) |  | Which skill to add when there are several (repeatable) |
+| `--all` | option | flag |  | Add every valid skill found |
+| `--yes, -y` | option | flag |  | Add without asking |
+
+### skill update
+
+```sh
+coffer skill update [OPTIONS] NAME
+```
+
+Check a Git-imported skill for updates, preview one and apply it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--check` | option | flag |  | Only check the source for newer commits |
+| `--yes, -y` | option | flag |  | Apply without asking |
+| `--take-theirs` | option | flag |  | Apply over local edits, discarding them |
+| `--keep-mine` | option | flag |  | Keep local edits and stop offering this update |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### skill rm
 
@@ -2021,6 +2045,111 @@ The installed session-start hook runs this; you rarely need to. It prints nothin
 | `--cwd` | option | text | required | The session's working directory |
 | `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
 | `--hook-event` | option | text | `""` | Print the text as this hook event's JSON additionalContext instead of plain |
+
+### memory hook
+
+```sh
+coffer memory hook [OPTIONS]
+```
+
+Answer one fire of Coffer's memory hook; reads the agent's hook JSON on stdin.
+
+Every installed memory hook entry runs this; you rarely need to. It prints nothing, and exits 0, when the daemon is not running.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
+| `--cwd` | option | text | `""` | Fallback working directory |
+
+### memory delivered
+
+```sh
+coffer memory delivered [OPTIONS] [PARTITION]
+```
+
+What memory delivered in the last seven days, per agent — or, for one partition, the exact session-start text each agent is given.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PARTITION` | argument | text |  | A partition: print what each agent is given at session start |
+| `--agent` | option | text | `""` | Only this agent's text |
+| `--json` | option | flag |  | JSON output |
+
+### memory trigger
+
+```sh
+coffer memory trigger [OPTIONS] COMMAND [ARGS]...
+```
+
+List, write, arm, disarm and delete memory triggers
+
+Subcommands: `list`, `add`, `arm`, `disarm`, `delete`.
+
+### memory trigger list
+
+```sh
+coffer memory trigger list [OPTIONS]
+```
+
+List every trigger, armed or proposed.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output |
+
+### memory trigger add
+
+```sh
+coffer memory trigger add [OPTIONS]
+```
+
+Write a trigger; it is armed by you as it is written.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--note` | option | text | required | &lt;partition&gt;/&lt;slug&gt; of the note |
+| `--kind` | option | text | `block` | block or context |
+| `--command` | option | text | `""` | Regex over the executing command |
+| `--unless` | option | text | `""` | Regex that keeps the trigger quiet |
+| `--error` | option | text | `""` | Regex over the command's output |
+| `--body` | option | text | `""` | Reason to show when the note is gone |
+| `--json` | option | flag |  | JSON output |
+
+### memory trigger arm
+
+```sh
+coffer memory trigger arm [OPTIONS] TRIGGER_ID
+```
+
+Arm a trigger — a proposal takes effect only once a person arms it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TRIGGER_ID` | argument | text | required |  |
+
+### memory trigger disarm
+
+```sh
+coffer memory trigger disarm [OPTIONS] TRIGGER_ID
+```
+
+Disarm a trigger; it stays, as a proposal.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TRIGGER_ID` | argument | text | required |  |
+
+### memory trigger delete
+
+```sh
+coffer memory trigger delete [OPTIONS] TRIGGER_ID
+```
+
+Delete a trigger's file.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TRIGGER_ID` | argument | text | required |  |
 
 ## coffer provider
 

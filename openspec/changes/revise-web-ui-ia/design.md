@@ -21,8 +21,8 @@ brings auto-update into the desktop shell.
 - Let the desktop app find and install its own updates.
 - Specify the command palette and attention dots at the level the shell needs.
 
-Overview's own content is specified by a separate change, as are the new experimental switches for providers, chat and channels, the secrets behaviour
-behind the Secrets page (uncited secrets, the migration assistant).
+Overview's own content is specified here too, by web-ui "Show what needs the user and each area's health on Overview" (added with the page, decision 20). The new experimental switches for providers, chat and channels and the secrets behaviour
+behind the Secrets page (uncited secrets, the migration assistant) are specified by separate changes.
 
 ## Decisions
 
@@ -297,6 +297,9 @@ names it is one more thing to get wrong.
 
 ### 10. Auto-update
 
+(Built by `add-desktop-tray-and-updater`, whose design records how; this section is the
+reasoning for bringing it into scope.)
+
 A new version reached a desktop user only if they downloaded a new `.dmg`, and the desktop spec
 listed auto-update as out of scope. It is now in scope for 1.0. The shell checks at launch and
 every six hours through the Tauri updater against a manifest the release workflow publishes on
@@ -551,3 +554,20 @@ records are held behind an "N new" control so the row being read never moves, an
 scrolling back up) inserts them. That is the pause, without a control to forget in the paused
 state. Export of the filtered records (JSON or CSV) is an occasional act, so it sits in the page's
 overflow menu rather than in the header.
+
+### 20. Overview reads the capabilities' own routes
+
+Overview has no route of its own. Needs you is the attention list the resource framework already
+serves; each health tile reads its area's own list, and its warning or error word is that area's
+attention items, so a tile and the list above it can never disagree about the same problem. An
+aggregate "overview summary" endpoint was the alternative: one request instead of eight, but a
+second description of every area that would have to track each one, and one failure would blank
+every tile. With per-area reads a tile that fails says so alone. Areas with no backend yet (Custom
+tools, CLIs) have no tile rather than a fake one. The page follows the event stream: an `attention`
+change refetches the list, so a resolved problem leaves it without a reload.
+
+Activity's MCP calls name the agent whose session made each call. The gateway already knew it (the
+shim reports the agent's uid at the handshake, and reach is enforced by it); the invocation log now
+keeps it, which is what the agent filter and the drawer's Agent line read. The tab counts come from
+`total` on the audit and invocation answers — a `COUNT` with the page's own filters — rather than
+paging every tab to count it.

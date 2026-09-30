@@ -4,7 +4,7 @@
 // the knowledge root holding ONE tree of Markdown documents that people and
 // curation write together (`shopee/account-gateway.md`,
 // `shopee/apis/login.md`). New material waits in a hidden inbox until a
-// curation pass merges it into those documents. The tree lists that inbox as a
+// curation pass curates it into those documents. The tree lists that inbox as a
 // `.inbox` folder at the collection root and every row and read inside it
 // carries `inbox: true` — material a person may read but not edit or delete.
 //
@@ -26,7 +26,7 @@ type Schemas = components["schemas"];
 
 /** One file's frontmatter + body, plus the absolute paths for file actions,
  *  the `fingerprint` a save hands back, and `inbox` for an item still waiting
- *  to be merged (readable, never saved or deleted). */
+ *  to be curated (readable, never saved or deleted). */
 export type FileOut = Schemas["FileOut"];
 
 /** A document's new body from the web UI's editor; the frontmatter stays as
@@ -52,7 +52,39 @@ export type CurationRunOut = Schemas["CurationRunOut"];
 
 /**
  * What one successful `POST /knowledge/upload` produced: either a document
- * (`path`, when there is no internal model to merge it and it was promoted on
+ * (`path`, when there is no internal model to curate it and it was promoted on
  * the spot) or material waiting in the inbox (`pending`, `path` null).
  */
 export type IngestedDocumentOut = Schemas["IngestedDocumentOut"];
+
+/** What `POST /knowledge/material` did with a submission — an item waiting
+ *  in the inbox (`pending`), or a document written as it is (`written`, with
+ *  no model to curate it). */
+export type SubmissionOut = Schemas["SubmissionOut"];
+
+export type MaterialIn = Schemas["MaterialIn"];
+
+/** One change to knowledge: one commit in the vault's history, naming its
+ *  writer (see "Keep every document's history and undo a pass as a whole"). */
+export type ChangeOut = Schemas["ChangeOut"];
+
+/** The recent-changes timeline, newest first, with the items still waiting. */
+export type ChangesOut = Schemas["ChangesOut"];
+
+/** One change in full: every document it touched, each with its diff. */
+export type ChangeDetailOut = Schemas["ChangeDetailOut"];
+
+export type DocumentDiffOut = Schemas["DocumentDiffOut"];
+
+export type WaitingItemOut = Schemas["WaitingItemOut"];
+
+/** A document's versions, newest first. */
+export type DocumentHistoryOut = Schemas["DocumentHistoryOut"];
+
+export type DocumentVersionOut = Schemas["DocumentVersionOut"];
+
+/** What one version did to a document, as a unified diff. */
+export type VersionDiffOut = Schemas["VersionDiffOut"];
+
+/** Who wrote a change: `user`, `agent`, `curation`, `sync` or `disk`. */
+export type ChangeWriter = ChangeOut["writer"];

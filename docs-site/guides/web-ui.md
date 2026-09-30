@@ -46,7 +46,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 
 | Group | Entry | Route | What it is for |
 | --- | --- | --- | --- |
-| — | **Overview** | `/` | The landing page: a summary of the whole vault. |
+| — | **Overview** | `/` | The landing page: what needs you, the health of every area and the last few changes. See [Overview](#overview) below. |
 | Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations** and **Config files** tabs. See [Agents](/guides/agents). |
 | Agents | **Model providers** | `/model-providers` | Vendor endpoints and their keys — the models your agents run on. See [Model providers](/guides/providers). |
 | Run | **Conversations** | `/conversations` | Conversations with Claude Code or Codex, including those started from a channel. See [Chat](/guides/chat). |
@@ -55,17 +55,16 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Capabilities | **Custom tools** | `/custom-tools` | HTTP API requests your agents call as tools — see [Custom tools](/guides/custom-tools). |
 | Capabilities | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
 | Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed — see [CLIs](/guides/clis). |
-| Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
-| Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
-| System | **Secrets** | `/secrets` | The credentials stored in the vault. |
-| System | **Activity** | `/activity` | What changed, what was called and what the daemon logged, as three tabs: **Changes**, **MCP calls** and **Daemon**. See [Activity and audit](/guides/activity). |
-| System | **Usage** | `/usage` | How much your agents use their models. |
+| Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`: one tree beside a reader and editor, each collection's Inbox, every document's History and Recent changes. See [Knowledge](/guides/knowledge). |
+| Context | **Memory** | `/memory` | What your agents learned, read from their own memory and distilled into one memory per subject: deliveries at session start over the last 7 days, and the partitions. A partition's page has **Memories** and **Delivered** tabs. See [Memory](/guides/memory). |
+| System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, find plaintext keys in files and move them into the vault. See [Secrets](/guides/secrets). |
+| System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **MCP calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
+| System | **Usage** | `/usage` | Each subscription's quota as its agent reported it, and the tokens and estimated cost of API-key requests through Coffer's local proxy. See [Usage](/guides/usage). |
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs**, **Setup** and **Machines** tabs. See [Vault sync](/guides/vault-sync). |
 
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 
 ::: info Pages still being built
-**Overview**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today. **Secrets** already carries one live part: while anything waits for [approval](/guides/secrets#approvals), it shows how many, with **Review** to reopen the approvals window.
 :::
 
 **Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).
@@ -73,6 +72,17 @@ In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统,
 **Attention dots.** A small dot beside an entry means something there **Needs your attention** — today, a sync round that is held or failed and waiting for you. It is a dot, not a count, and it clears once you visit the page. The dot stays visible on the collapsed rail.
 
 **Collapsing and resizing.** Collapse the sidebar to a narrow icon rail with **Collapse sidebar**; the choice is remembered. While expanded, drag the thin line on its right edge to make it wider or narrower (see [Resizing split views](#resizing-split-views)).
+
+
+## Overview
+
+**Overview** is the page the app opens on. It answers "is everything OK, and what needs me?" in three parts:
+
+- **Needs you** — one row per problem across every area, most severe first and then oldest: the thing it is about (a server, an agent, a channel, the vault's sync), the reason in a sentence, since when, and one button that opens the page where you deal with it. The list is the daemon's attention list (`GET /api/v1/attention`, or `coffer attention` in a terminal). Rows clear themselves: the page follows the daemon's event stream, so a row disappears as soon as its problem is resolved. If one area could not be checked, the page says so above the rows, because anything that area would report is missing. When nothing needs you, a calm card says so.
+- **Health** — a tile per area: Agents, Model providers, MCP servers, Skills and Channels, plus Knowledge, Memory and Sync when those features are switched on. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours) and opens the area's page. A tile that fails to load says so with **Retry**, and the rest of the page keeps working. Areas that have no backend yet, such as Custom tools and CLIs, have no tile.
+- **Recent activity** — the last few changes, with a link to [Activity](/guides/activity).
+
+Before any agent is registered, Overview opens on connecting one instead: it lists the agents Coffer supports and which it found on this machine, then the first step for each thing they share.
 
 ## Search or jump to
 
@@ -101,17 +111,17 @@ It has five tabs, in this order:
 
 | Tab | Address | What it holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Display preferences — **Theme**, **Default rows per page**, **Preferred editor** (the app Coffer opens managed files with) — and **Coffer's model**: the model Coffer uses for its own passes, **Speech to text** for voice messages, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
-| **Security** | `/settings/security` | **Credential encryption**: whether the master key lives in a file beside the database or in the OS keychain (a signed release keeps it in its Keychain, with nothing to move). **Secret approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. |
+| **General** | `/settings/general` | Display preferences — **Theme**, **Default rows per page**, **Preferred editor** (the app Coffer opens managed files with) — and **Coffer's model**: a provider and model for **Coffer's engine** and for **Speech to text**, each with **Test** and an inline not set / answering / failing state, and **Automatic upkeep**, the passes Coffer runs by itself and how often. |
+| **Security** | `/settings/security` | Only what belongs to this Mac. **Encryption**: where the master key lives (a signed release keeps it in its Keychain, with nothing to move) and **Back up the master key** (desktop app only). **Access**: the daemon's access token, hidden until **Show**, with **Copy** and **Rotate…**. **Approvals**: whether a secret waits for your approval before it goes somewhere new, and **Review** for what waits. Stored secrets are on the [Secrets](/guides/secrets) page, not here. |
 | **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
 | **Daemon** | `/settings/daemon` | The daemon's state, port, version and when it started, and **Start at login** (macOS). |
-| **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. |
+| **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. In the desktop app, **Updates**: when Coffer last checked, **Check for updates**, a newer version with **Download and restart**, and **Check automatically** (see [Desktop app → Update](/guides/desktop-app#update)). In a browser it says updates are installed by the desktop app. |
 
 **Each tab has its own address.** Opening a tab changes the URL to `/settings/<tab>`, so a bookmark or a shared link opens that tab directly. Close the window with **×**, **Escape**, a click outside it or the browser's **Back** button: you return to the page underneath, at its own address. If you load a `/settings/<tab>` address fresh, it opens over **Overview**, and closing it lands on `/`.
 
 **Old addresses still work.** `/settings/engine` and `/settings/embedding` open **General**; `/settings/llm-connections`, `/settings/models` and `/settings/providers` open **Model providers**; `/settings/sync` opens **Sync**.
 
-The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon and rotating its token are CLI-only (`coffer daemon stop`, `coffer daemon rotate-token`): stopping the daemon from the page would take the page down with it. Revealing or copying a secret, backing up the master key and approving a pending [approval](/guides/secrets#approvals) exist only in the [desktop app](/guides/desktop-app#presence-checks-and-approvals), because each needs a Touch ID or password check a browser cannot run; a browser tab shows **Open in Coffer app** in their place.
+The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon is CLI-only (`coffer daemon stop`): stopping it from the page would take the page down with it. Rotating the access token is on **Settings › Security** (or `coffer daemon rotate-token`); the page installs the new token and keeps working, and other open tabs and clients using the old one stop until they load the new one. Revealing or copying a secret, backing up the master key and approving a pending [approval](/guides/secrets#approvals) exist only in the [desktop app](/guides/desktop-app#presence-checks-and-approvals), because each needs a Touch ID or password check a browser cannot run; a browser tab shows **Open in Coffer app** in their place.
 
 ## Resizing split views
 
@@ -132,7 +142,7 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 ## Conventions every page shares
 
-**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Agent pages, Activity and Sync still carry their tab as `?tab=` (`/agents/<uid>?tab=conversations`, `/activity?tab=mcp`, `/sync?tab=setup`) until they are rebuilt, and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>`.
+**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`), and an agent by its type, since there is one per type (`/agents/claude_code/skills`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Activity and Sync still carry their tab as `?tab=` (`/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=setup`) until they are rebuilt, and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>`.
 
 **Lists look and behave alike.** Every list page uses one table with search, filters, pagination and bulk selection, and clicking a row opens its detail page. Every row action is labelled.
 
@@ -142,7 +152,7 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 **Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a page-not-found view with the sidebar intact.
 
-File trees and previews — on the skill, knowledge, memory and agent pages — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
+File trees and previews — on the skill, knowledge and agent pages, and a memory partition's list — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
 ## When the daemon is not reachable
 

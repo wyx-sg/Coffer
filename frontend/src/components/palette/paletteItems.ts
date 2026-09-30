@@ -42,8 +42,9 @@ export interface PaletteItem {
 }
 
 /** The detail route of each kind's objects (spec web-ui "Lay out every detail
- *  page's tabs alike"): by name where the kind's name is fixed — MCP servers
- *  and skills — and by uid where it can be renamed. */
+ *  page's tabs alike"): by type for agents (one agent per type), by name where
+ *  the kind's name is fixed — MCP servers and skills — and by uid where it can
+ *  be renamed. */
 const DETAIL_BASE: Record<ObjectKind, string> = {
   agent: "/agents",
   mcpServer: "/mcp-servers",
@@ -55,16 +56,18 @@ const DETAIL_BASE: Record<ObjectKind, string> = {
   cli: "/clis",
 };
 
-/** Every listed object carries a uid, a name and an optional title. */
+/** Every listed object carries a uid, a name and an optional title; an agent also its type. */
 export interface PaletteObject extends Titled {
   uid: string;
+  type?: string;
 }
 
 // A CLI is addressed by its command, which it carries as its name.
 const ADDRESSED_BY_NAME: ReadonlySet<ObjectKind> = new Set(["mcpServer", "skill", "cli"]);
 
 export function objectPath(kind: ObjectKind, obj: PaletteObject): string {
-  const id = ADDRESSED_BY_NAME.has(kind) ? obj.name : obj.uid;
+  const id =
+    kind === "agent" && obj.type ? obj.type : ADDRESSED_BY_NAME.has(kind) ? obj.name : obj.uid;
   return `${DETAIL_BASE[kind]}/${encodeURIComponent(id)}`;
 }
 

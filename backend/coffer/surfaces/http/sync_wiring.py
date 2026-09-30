@@ -81,6 +81,7 @@ from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
 from coffer.infrastructure.sync.paths import (
     knowledge_root,
+    memory_triggers_root,
     non_converging_tree_paths,
     skills_root,
 )
@@ -222,6 +223,11 @@ def wire_sync(
                     live_root=skills_root(),
                     excluded=non_converging_tree_paths(),
                 ),
+                # Authored memory triggers (spec memory "Keep triggers in the
+                # vault, armed only by a person").
+                TreeApplier(
+                    "memory-triggers/", worktree=worktree, live_root=memory_triggers_root()
+                ),
                 ResourceApplier(
                     resource_svc,
                     worktree=worktree,
@@ -265,7 +271,7 @@ def wire_sync(
         # A working tree may not sit at, inside or above any of these: the
         # round mirrors the first three *into* the tree and ``reset --hard``s
         # it, and the last holds the database and the master key.
-        protected_roots=[knowledge_root(), skills_root(), memory_root()],
+        protected_roots=[knowledge_root(), skills_root(), memory_triggers_root(), memory_root()],
         coffer_dir=coffer_dir(),
     )
     return SyncWiring(service=service, registry=registry, state=state)

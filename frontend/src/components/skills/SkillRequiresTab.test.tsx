@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { GCLOUD_LOGGED_OUT, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
+import type { SkillOut } from "@/lib/api/skills";
+
 import { SkillRequiresTab } from "./SkillRequiresTab";
 
 vi.mock("@/lib/api/clis", () => ({
@@ -26,13 +28,17 @@ function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
 }
 
-function renderTab(skillUid = "sk-gh-triage") {
+function renderTab(skillUid = "sk-gh-triage", requires = ["jq", "gcloud", "uv"]) {
+  const skill = {
+    uid: skillUid,
+    requires: requires.map((command) => ({ command, min_version: null })),
+  } as SkillOut;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={["/skills/gh-triage/requires"]}>
         <Routes>
-          <Route path="/skills/:name/:tab" element={<SkillRequiresTab skillUid={skillUid} />} />
+          <Route path="/skills/:name/:tab" element={<SkillRequiresTab skill={skill} />} />
           <Route path="*" element={null} />
         </Routes>
         <Where />
@@ -57,6 +63,7 @@ describe("SkillRequiresTab", () => {
     renderTab();
 
     const list = await screen.findByRole("list", { name: "Requires" });
+    await screen.findByText(/Not on PATH\./);
     const links = within(list).getAllByRole("link");
     // Only this skill's commands, each opening its page on the CLIs page.
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
@@ -100,9 +107,7 @@ describe("SkillRequiresTab", () => {
 
   test("a skill that declares nothing says so", async () => {
     api.list.mockResolvedValue({ items: [UV_READY], warnings: [] });
-    renderTab("sk-nothing");
-    expect(
-      await screen.findByText("This skill declares no required commands."),
-    ).toBeInTheDocument();
+    renderTab("sk-nothing", []);
+    expect(await screen.findByText("This skill declares no commands")).toBeInTheDocument();
   });
 });

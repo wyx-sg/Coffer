@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/AboutPage.tsx
 //
-// Settings → About: what this Coffer is — version, license and source, and
-// nothing else. The version comes from /daemon/status so it names the build
+// Settings → About: what this Coffer is — version, license and source — and,
+// below it, the desktop shell's update check (`UpdatesSection`). The version comes from /daemon/status so it names the build
 // that is actually running, not a constant baked into the page; the daemon's
 // port and start time stay off it, because a user never needs to know Coffer
 // runs a background daemon. "Copy diagnostics" puts the same rows on the
@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
+
+import { UpdatesSection } from "./UpdatesSection";
 
 const SOURCE_URL = "https://github.com/wyx-sg/Coffer";
 const EMPTY = "—";
@@ -83,6 +85,7 @@ export function AboutPage() {
           ))}
         </CardContent>
       </Card>
+      <UpdatesSection />
     </div>
   );
 }

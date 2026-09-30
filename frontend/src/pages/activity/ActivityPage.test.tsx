@@ -1,30 +1,42 @@
-// frontend/src/pages/activity/ActivityPage.test.tsx
+// src/pages/activity/ActivityPage.test.tsx — the Activity page: four tabs with counts, filters, the drawer, live insertion and holding, export.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useRoutes } from "react-router-dom";
-import { acceptance } from "@/test/acceptance";
-import { ActivityPage } from "./ActivityPage";
-import { routes } from "@/router";
 
-vi.mock("@/lib/api/client", () => ({
-  getApiClient: vi.fn(),
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
+import type { StreamMessage } from "@/lib/events/eventStream";
+
+vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+
+// The change feed: tests drive its listener by hand instead of opening a stream.
+const stream: { listener: ((m: StreamMessage) => void) | null } = { listener: null };
+vi.mock("@/lib/events/eventStream", () => ({
+  followDaemonEvents: (onMessage: (m: StreamMessage) => void, signal: AbortSignal) => {
+    stream.listener = onMessage;
+    return new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
+  },
 }));
 
-const { getApiClient } = await import("@/lib/api/client");
-const getApiClientMock = vi.mocked(getApiClient);
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({
+    data: [{ uid: "a-cc", type: "claude_code", display_name: "Claude Code", name: "claude_code" }],
+  }),
+}));
 
-/** The page reads its tab from the URL, so every render sits under a router. */
-function wrap(ui: React.ReactNode, initialEntries: string[] = ["/activity"]) {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchInterval: false as never } },
-  });
-  return (
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>
-    </QueryClientProvider>
-  );
-}
+const saved: { name: string; type: string; content: string }[] = [];
+vi.mock("@/lib/activity/export", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/activity/export")>();
+  return {
+    ...actual,
+    saveFile: (name: string, type: string, content: string) => saved.push({ name, type, content }),
+  };
+});
+
+const { getApiClient } = await import("@/lib/api/client");
+const { ActivityPage } = await import("./ActivityPage");
+const { routes } = await import("@/router");
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
@@ -38,10 +50,8 @@ const AUDIT_ENTRY = {
   details: { some_key: "some_value" },
 };
 
-// The invocation log is keyed by the server's uid and carries its label
-// resolved at read time — the MCP calls tab shows the LABEL, so the two are
-// different strings here.
 const INVOCATION = {
+  id: 7,
   timestamp: ago(20_000),
   resource_uid: "u-github",
   resource_name: "github",
@@ -50,7 +60,8 @@ const INVOCATION = {
   duration_ms: 42,
   status: "ok",
   error_message: null,
-  session_id: null,
+  session_id: "s-1",
+  agent_uid: "a-cc",
 };
 
 const DAEMON_RECORD = {
@@ -65,82 +76,106 @@ const DAEMON_RECORD = {
   },
 };
 
+interface Data {
+  audit: unknown[];
+  invocations: unknown[];
+  daemon: unknown[];
+  failing?: string;
+}
+
 /**
- * Mock the three records' routes (plus /daemon/status, which the shell's
- * offline banner polls) by path, so a test can see which tabs fetched. A
- * `failing` path answers with an error envelope while the others still work —
- * the older-daemon case, where one route is missing and two are not.
+ * Answer each route from `data` — mutable, so a test can add records and let
+ * the next read find them. Totals are the rows each route holds.
  */
-function mockApi(
-  overrides: {
-    audit?: unknown[];
-    invocations?: unknown[];
-    daemon?: unknown[];
-    failing?: string;
-  } = {},
-) {
+function mockApi(initial: Partial<Data> = {}) {
+  const data: Data = { audit: [], invocations: [], daemon: [], ...initial };
   const fail = {
     data: undefined,
     error: { error: { code: "NOT_FOUND", message: "route not found" } },
   };
-  const get = vi.fn().mockImplementation((path: string) => {
-    if (path === overrides.failing) return Promise.resolve(fail);
-    if (path === "/audit") {
-      return Promise.resolve({ data: { entries: overrides.audit ?? [] }, error: undefined });
-    }
-    if (path === "/mcp/invocations") {
+  const get = vi
+    .fn()
+    .mockImplementation((path: string, init?: { params?: { query?: Record<string, unknown> } }) => {
+      const query = init?.params?.query ?? {};
+      if (path === data.failing) return Promise.resolve(fail);
+      if (path === "/audit") {
+        const limit = Number(query.limit ?? 50);
+        return Promise.resolve({
+          data: {
+            entries: data.audit.slice(0, limit),
+            next_cursor: null,
+            total: data.audit.length,
+          },
+        });
+      }
+      if (path === "/mcp/invocations") {
+        let rows = data.invocations as (typeof INVOCATION)[];
+        if (query.uid) rows = rows.filter((r) => r.resource_uid === query.uid);
+        if (query.status) rows = rows.filter((r) => r.status === query.status);
+        const limit = Number(query.limit ?? 50);
+        return Promise.resolve({
+          data: { invocations: rows.slice(0, limit), next_cursor: null, total: rows.length },
+        });
+      }
+      if (path === "/daemon/logs") return Promise.resolve({ data: { records: data.daemon } });
+      if (path === "/resources") {
+        return Promise.resolve({
+          data: {
+            resources: [
+              { uid: "u-github", name: "github", title: null, kind: "mcp_server" },
+              { uid: "u-linear", name: "linear", title: null, kind: "mcp_server" },
+            ],
+          },
+        });
+      }
       return Promise.resolve({
-        data: { invocations: overrides.invocations ?? [] },
-        error: undefined,
+        data: { status: "ready", version: "0.0.0", started_at: ago(0), port: 1 },
       });
-    }
-    if (path === "/daemon/logs") {
-      return Promise.resolve({ data: { records: overrides.daemon ?? [] }, error: undefined });
-    }
-    return Promise.resolve({
-      data: { status: "ready", version: "0.0.0", started_at: ago(0), port: 1 },
-      error: undefined,
     });
-  });
-  getApiClientMock.mockReturnValue({ GET: get } as unknown as ReturnType<typeof getApiClient>);
-  return get;
+  vi.mocked(getApiClient).mockReturnValue({ GET: get } as unknown as ReturnType<
+    typeof getApiClient
+  >);
+  return { get, data };
 }
 
-/** Every path the page fetched, in call order. */
-const fetchedPaths = (get: ReturnType<typeof mockApi>) =>
-  get.mock.calls.map((call: unknown[]) => call[0] as string);
+let qc: QueryClient;
 
-const fetched = (get: ReturnType<typeof mockApi>, path: string) => fetchedPaths(get).includes(path);
+function wrap(ui: React.ReactNode, initialEntries: string[] = ["/activity"]) {
+  qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchInterval: false as never } },
+  });
+  return (
+    <QueryClientProvider client={qc}>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
 
-/** The tab triggers, named as the page labels them. */
+/** Re-read every log's newest page, as the poll does. */
+async function pollHeads() {
+  await act(async () => {
+    await qc.refetchQueries({
+      predicate: (q) => JSON.stringify(q.queryKey).includes('"view":"head"'),
+    });
+  });
+}
+
 const tab = (name: RegExp) => screen.getByRole("tab", { name });
-
-/**
- * Switch tabs. Radix activates a trigger on mousedown (or focus), not on
- * click — firing only a click leaves the tablist exactly where it was, which
- * looks like "the other tab never queried" rather than "the test never
- * switched".
- */
+// Radix activates a tab on mousedown, not on click.
 const openTab = (name: RegExp) => fireEvent.mouseDown(tab(name));
-
-/**
- * The active table's column headers, in order. DataTable renders a leading
- * headerless cell for the row-expand chevron; drop it, so these assertions
- * are about the record's own columns.
- */
 const headers = () =>
   screen
     .getAllByRole("columnheader")
     .map((h) => h.textContent ?? "")
     .filter((h) => h !== "");
+const list = () => document.querySelector("[data-activity-list]") as HTMLElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Pin "now" so relative-time formatting is deterministic on slow CI.
-  // `shouldAdvanceTime` keeps react-query / waitFor intervals on the real
-  // clock so async assertions still settle.
-  vi.useFakeTimers({ shouldAdvanceTime: true });
-  vi.setSystemTime(new Date("2026-05-28T12:00:00Z"));
+  saved.length = 0;
+  stream.listener = null;
 });
 
 afterEach(() => {
@@ -148,68 +183,39 @@ afterEach(() => {
 });
 
 describe("ActivityPage", () => {
-  test("opens on Changes, with that record's own filters", async () => {
-    mockApi();
+  test("opens on Everything, merging the three records newest first", async () => {
+    mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
     render(wrap(<ActivityPage />));
 
-    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
-    expect(tab(/changes/i)).toHaveAttribute("data-state", "active");
-    // Inline toolbar, matching the other list surfaces: no field labels.
-    expect(screen.getByRole("button", { name: /all time/i })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /actor/i })).toBeInTheDocument();
-    expect(await screen.findByText("No matching activity.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Activity/ })).toBeInTheDocument();
+    expect(tab(/everything/i)).toHaveAttribute("data-state", "active");
+    await screen.findByText("Registered filesystem");
+    const rows = within(list())
+      .getAllByRole("row")
+      .filter((r) => r.hasAttribute("data-record"));
+    expect(rows.map((r) => r.getAttribute("data-record")?.split(":")[0])).toEqual([
+      "daemon",
+      "call",
+      "change",
+    ]);
+    expect(headers()).toEqual(["Time", "Event", "By", "Took"]);
   });
 
-  test("only the tab in front queries", async () => {
-    const get = mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION] });
-    render(wrap(<ActivityPage />));
-
-    await screen.findByText("Registered filesystem");
-    expect(fetched(get, "/mcp/invocations")).toBe(false);
-    expect(fetched(get, "/daemon/logs")).toBe(false);
-
-    openTab(/mcp calls/i);
-
-    await waitFor(() => expect(fetched(get, "/mcp/invocations")).toBe(true));
-    expect(fetched(get, "/daemon/logs")).toBe(false);
-  });
-
-  test("the Changes search narrows that record only", async () => {
-    mockApi({ audit: [AUDIT_ENTRY] });
-    render(wrap(<ActivityPage />));
-
-    await screen.findByText("Registered filesystem");
-    fireEvent.change(screen.getByLabelText(/search/i), { target: { value: "nothing-matches" } });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
+  test("each tab carries its count", async () => {
+    mockApi({
+      audit: [AUDIT_ENTRY],
+      invocations: [INVOCATION, { ...INVOCATION, id: 8 }],
+      daemon: [DAEMON_RECORD],
     });
-  });
-
-  test("the actor filter narrows to what that actor changed", async () => {
-    mockApi({ audit: [AUDIT_ENTRY] });
     render(wrap(<ActivityPage />));
-
-    await screen.findByText("Registered filesystem");
-
-    fireEvent.click(screen.getByRole("combobox", { name: /actor/i }));
-    fireEvent.click(await screen.findByRole("option", { name: /^cli$/i }));
-
-    await waitFor(() => {
-      expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
-    });
+    await waitFor(() => expect(tab(/^Changes/)).toHaveTextContent("Changes1"));
+    expect(tab(/^MCP calls/)).toHaveTextContent("MCP calls2");
+    expect(tab(/^Daemon log/)).toHaveTextContent("Daemon log1");
+    expect(tab(/^Everything/)).toHaveTextContent("Everything4");
   });
 
-  test("no refresh control — the page is a record, not a live console", async () => {
-    mockApi({ audit: [AUDIT_ENTRY] });
-    render(wrap(<ActivityPage />));
-
-    await screen.findByText("Registered filesystem");
-    expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
-  });
-
-  test("the active tab lives in the URL: ?tab= opens it, switching rewrites it", async () => {
-    const get = mockApi({ daemon: [DAEMON_RECORD] });
+  test("the tab lives in the URL; the default needs no parameter", async () => {
+    mockApi({ daemon: [DAEMON_RECORD] });
     let search = "";
     function Probe() {
       search = useLocation().search;
@@ -224,22 +230,76 @@ describe("ActivityPage", () => {
         ["/activity?tab=daemon"],
       ),
     );
-
-    expect(tab(/daemon/i)).toHaveAttribute("data-state", "active");
-    await waitFor(() => expect(fetched(get, "/daemon/logs")).toBe(true));
-
+    expect(tab(/daemon log/i)).toHaveAttribute("data-state", "active");
     openTab(/mcp calls/i);
     await waitFor(() => expect(search).toBe("?tab=mcp"));
-
-    // The default tab needs no parameter, so the URL goes back to clean.
-    openTab(/changes/i);
+    openTab(/everything/i);
     await waitFor(() => expect(search).toBe(""));
   });
 
-  test("an unknown ?tab= falls back to Changes", () => {
+  test("an old ?tab=changes link still opens Changes", () => {
     mockApi();
-    render(wrap(<ActivityPage />, ["/activity?tab=nope"]));
-    expect(tab(/changes/i)).toHaveAttribute("data-state", "active");
+    render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+    expect(tab(/^Changes/)).toHaveAttribute("data-state", "active");
+  });
+
+  test("the free text narrows what is shown", async () => {
+    mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION] });
+    render(wrap(<ActivityPage />));
+    await screen.findByText("Registered filesystem");
+    fireEvent.change(screen.getByLabelText("Filter records"), {
+      target: { value: "search_issues" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("github.search_issues")).toBeInTheDocument();
+  });
+
+  test("the agent filter narrows the calls to that agent's", async () => {
+    const { get } = mockApi({ invocations: [INVOCATION] });
+    render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+    await screen.findByText("github.search_issues");
+    fireEvent.click(screen.getByRole("button", { name: /^Agent:/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /Claude Code/ }));
+    await waitFor(() =>
+      expect(
+        get.mock.calls.some(
+          (c: unknown[]) =>
+            c[0] === "/mcp/invocations" &&
+            (c[1] as { params: { query: Record<string, unknown> } }).params.query.agent_uid ===
+              "a-cc",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  test("nothing yet says what to do next", async () => {
+    mockApi();
+    render(wrap(<ActivityPage />));
+    expect(await screen.findByText("Nothing has happened yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Connect an agent" })).toHaveAttribute(
+      "href",
+      "/agents",
+    );
+  });
+
+  test("a change announced on the event stream re-reads the audit log's newest page", async () => {
+    const { get } = mockApi({ audit: [AUDIT_ENTRY] });
+    render(wrap(<ActivityPage />));
+    await screen.findByText("Registered filesystem");
+    const before = get.mock.calls.filter((c: unknown[]) => c[0] === "/audit").length;
+    act(() =>
+      stream.listener?.({
+        type: "change",
+        change: { seq: 1, kind: "skill", id: "u", rev: 2, op: "upsert" },
+      }),
+    );
+    await waitFor(() =>
+      expect(get.mock.calls.filter((c: unknown[]) => c[0] === "/audit").length).toBeGreaterThan(
+        before,
+      ),
+    );
   });
 });
 
@@ -247,30 +307,23 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
 
-  // Changes: the plain-language line and who did it — no duration, no level.
+  openTab(/^Changes/);
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
   expect(screen.queryByText("resource_created")).not.toBeInTheDocument();
-  expect(headers()).toEqual(["Time", "Activity", "Actor"]);
+  expect(headers()).toEqual(["Time", "Event", "By"]);
 
-  // MCP calls: the columns an invocation actually has, and the server it went
-  // to — the column a per-server Invocations tab has no need of.
   openTab(/mcp calls/i);
-  expect(await screen.findByText("search_issues")).toBeInTheDocument();
-  expect(headers()).toEqual(["Time", "Server", "Type", "Key", "Duration", "Status"]);
-  expect(screen.getByText("github")).toBeInTheDocument();
-  // The reader is shown the server's name; its uid stays in the log's keys.
+  expect(await screen.findByText("github.search_issues")).toBeInTheDocument();
+  expect(headers()).toEqual(["Time", "Agent", "Server · tool", "Took", "Status"]);
   expect(screen.queryByText("u-github")).not.toBeInTheDocument();
   expect(screen.getByText("42 ms")).toBeInTheDocument();
-  // Switching tab switches the record: the change is no longer on screen.
   expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
 
-  // Daemon: a log line's level and logger, which nothing else here has.
-  openTab(/daemon/i);
+  openTab(/daemon log/i);
   expect(await screen.findByText("auto_sync_failed")).toBeInTheDocument();
   expect(headers()).toEqual(["Time", "Level", "Logger", "Message"]);
   expect(screen.getByText("warning")).toBeInTheDocument();
   expect(screen.getByText("coffer.sync")).toBeInTheDocument();
-  expect(screen.queryByText("search_issues")).not.toBeInTheDocument();
 });
 
 acceptance("web-ui", "activity row expands to its raw record", async () => {
@@ -279,59 +332,78 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
 
   const line = await screen.findByText("Registered filesystem");
   fireEvent.click(line.closest("tr")!);
+  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  await waitFor(() =>
+    expect(drawer.querySelector(".cm-content")?.textContent).toContain('"some_key": "some_value"'),
+  );
+  expect(drawer.querySelector(".cm-content")?.textContent).toContain('"id": 42');
 
-  // The raw record renders in a read-only CodeMirror block (tokens split
-  // across spans, so assert on its text).
-  await waitFor(() => {
-    expect(document.querySelector(".cm-content")?.textContent).toContain(
-      '"some_key": "some_value"',
-    );
-  });
-  const raw = document.querySelector(".cm-content");
-  expect(raw?.textContent).toContain('"event_type": "resource_created"');
-  expect(raw?.textContent).toContain('"id": 42');
+  fireEvent.click(within(drawer).getByRole("button", { name: "Close details" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("complementary", { name: "Details" })).not.toBeInTheDocument(),
+  );
 
-  // Clicking the same row again collapses it.
-  fireEvent.click(line.closest("tr")!);
-  await waitFor(() => expect(document.querySelector(".cm-content")).not.toBeInTheDocument());
-
-  // Every tab expands the same way, to the record that tab shows.
-  openTab(/daemon/i);
-  const logLine = await screen.findByText("auto_sync_failed");
-  fireEvent.click(logLine.closest("tr")!);
-  await waitFor(() => {
-    expect(document.querySelector(".cm-content")?.textContent).toContain(
+  openTab(/daemon log/i);
+  fireEvent.click((await screen.findByText("auto_sync_failed")).closest("tr")!);
+  const daemonDrawer = await screen.findByRole("complementary", { name: "Details" });
+  await waitFor(() =>
+    expect(daemonDrawer.querySelector(".cm-content")?.textContent).toContain(
       '"error": "connection refused"',
-    );
+    ),
+  );
+});
+
+test("a failed call opens with its error first", async () => {
+  mockApi({
+    invocations: [{ ...INVOCATION, status: "error", error_message: "Connection refused" }],
   });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  fireEvent.click((await screen.findByText("github.search_issues")).closest("tr")!);
+  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  expect(within(drawer).getByRole("alert")).toHaveTextContent("The call to github failed");
+  expect(within(drawer).getByRole("alert")).toHaveTextContent("Connection refused");
+  expect(within(drawer).getByRole("link", { name: "Open github" })).toHaveAttribute(
+    "href",
+    "/mcp-servers/u-github",
+  );
+});
+
+test("a change's before and after read as a diff", async () => {
+  mockApi({
+    audit: [
+      {
+        ...AUDIT_ENTRY,
+        event_type: "resource_updated",
+        details: { before: { url: "https://old" }, after: { url: "https://new" } },
+      },
+    ],
+  });
+  render(wrap(<ActivityPage />));
+  fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
+  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  expect(drawer.querySelector('[data-line="remove"]')?.textContent).toContain("https://old");
+  expect(drawer.querySelector('[data-line="add"]')?.textContent).toContain("https://new");
 });
 
 acceptance("web-ui", "a failing record shows its error inside its own tab", async () => {
-  // An older daemon serves /audit and /mcp/invocations but not /daemon/logs.
-  mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], failing: "/daemon/logs" });
+  mockApi({ audit: [AUDIT_ENTRY], daemon: [DAEMON_RECORD], failing: "/mcp/invocations" });
   render(wrap(<ActivityPage />));
 
+  // Everything says which record is missing and still shows the other two.
+  expect(await screen.findByText("MCP calls couldn't be loaded")).toBeInTheDocument();
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(screen.getByText("auto_sync_failed")).toBeInTheDocument();
 
-  openTab(/daemon/i);
-  // The envelope's code is translated for the reader; the daemon's own message
-  // is not what a person is shown.
+  openTab(/mcp calls/i);
   expect(await screen.findByText("Not found.")).toBeInTheDocument();
 
-  // The record that works is untouched — the failure did not blank the page.
-  openTab(/mcp calls/i);
-  expect(await screen.findByText("search_issues")).toBeInTheDocument();
-  expect(screen.queryByText("Not found.")).not.toBeInTheDocument();
-
-  openTab(/changes/i);
+  openTab(/^Changes/);
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(screen.queryByText("Not found.")).not.toBeInTheDocument();
 });
 
 acceptance("web-ui", "legacy /audit redirects to activity", async () => {
   mockApi();
-  // The real route table under a memory router (rather than a data router:
-  // react-router's data-router navigation builds a fetch Request, and jsdom's
-  // AbortSignal is not the one undici's Request will accept).
   let path = "";
   function Probe() {
     path = useLocation().pathname;
@@ -349,28 +421,168 @@ acceptance("web-ui", "legacy /audit redirects to activity", async () => {
       ["/audit"],
     ),
   );
-
   await waitFor(() => expect(path).toBe("/activity"));
-  expect(await screen.findByRole("heading", { name: "Activity" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: /Activity/ })).toBeInTheDocument();
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });
 
 acceptance("web-ui", "each activity tab reads its owner's route", async () => {
-  const get = mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
-  // The three routes the page may read — each owned by the capability that
-  // keeps the record. Anything else it asked for would be a route of its own.
-  const OWNERS = ["/audit", "/mcp/invocations", "/daemon/logs"];
-  const requested = () => new Set(fetchedPaths(get));
+  const { get } = mockApi({
+    audit: [AUDIT_ENTRY],
+    invocations: [INVOCATION],
+    daemon: [DAEMON_RECORD],
+  });
+  // The three owners' routes, plus the MCP server list the server filter
+  // offers (the resource framework's). Anything else would be a route of the
+  // Activity page's own.
+  const ALLOWED = new Set(["/audit", "/mcp/invocations", "/daemon/logs", "/resources"]);
+  const requested = () => get.mock.calls.map((c: unknown[]) => c[0] as string);
 
-  render(wrap(<ActivityPage />));
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
-  expect(requested()).toEqual(new Set(["/audit"]));
+  expect(requested()).toContain("/audit");
+  // The tab shows the audit log's rows and nothing else.
+  expect(screen.queryByText("github.search_issues")).not.toBeInTheDocument();
 
   openTab(/mcp calls/i);
-  expect(await screen.findByText("search_issues")).toBeInTheDocument();
-  expect(requested()).toEqual(new Set(["/audit", "/mcp/invocations"]));
+  expect(await screen.findByText("github.search_issues")).toBeInTheDocument();
+  expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
 
-  openTab(/daemon/i);
+  openTab(/daemon log/i);
   expect(await screen.findByText("auto_sync_failed")).toBeInTheDocument();
-  expect(requested()).toEqual(new Set(OWNERS));
+  expect(screen.queryByText("github.search_issues")).not.toBeInTheDocument();
+
+  expect(new Set(requested()).size).toBeGreaterThan(0);
+  expect(requested().every((p) => ALLOWED.has(p))).toBe(true);
+});
+
+// revise-web-ui-ia: web-ui "new records stream in at the top" — the marker is
+// added when the change is archived.
+test("new records stream in at the top", async () => {
+  const { data } = mockApi({ invocations: [INVOCATION] });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  await screen.findByText("github.search_issues");
+
+  data.invocations = [
+    { ...INVOCATION, id: 9, timestamp: ago(1_000), capability_key: "create_issue" },
+    { ...INVOCATION, id: 8, timestamp: ago(2_000), capability_key: "list_issues" },
+    INVOCATION,
+  ];
+  await pollHeads();
+
+  await waitFor(() => expect(screen.getByText("github.create_issue")).toBeInTheDocument());
+  const rows = within(list())
+    .getAllByRole("row")
+    .filter((r) => r.hasAttribute("data-record"));
+  expect(rows[0]).toHaveTextContent("github.create_issue");
+  expect(rows[1]).toHaveTextContent("github.list_issues");
+  expect(screen.queryByRole("button", { name: /pause|resume/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
+});
+
+// revise-web-ui-ia: web-ui "new records are held while the user reads".
+test("new records are held while the user reads", async () => {
+  const { data } = mockApi({ audit: [AUDIT_ENTRY] });
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  await screen.findByText("Registered filesystem");
+
+  // Scrolled down: nothing moves.
+  list().scrollTop = 200;
+  fireEvent.scroll(list());
+  data.audit = [
+    { ...AUDIT_ENTRY, id: 45, timestamp: ago(1_000), resource_name: "three" },
+    { ...AUDIT_ENTRY, id: 44, timestamp: ago(2_000), resource_name: "two" },
+    { ...AUDIT_ENTRY, id: 43, timestamp: ago(3_000), resource_name: "one" },
+    AUDIT_ENTRY,
+  ];
+  await pollHeads();
+
+  const pill = await screen.findByRole("button", { name: "3 new" });
+  expect(screen.queryByText("Registered three")).not.toBeInTheDocument();
+  const rows = () =>
+    within(list())
+      .getAllByRole("row")
+      .filter((r) => r.hasAttribute("data-record"));
+  expect(rows()).toHaveLength(1);
+
+  fireEvent.click(pill);
+  await waitFor(() => expect(rows()).toHaveLength(4));
+  expect(rows()[0]).toHaveTextContent("Registered three");
+  expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
+});
+
+test("an open record holds new ones too", async () => {
+  const { data } = mockApi({ audit: [AUDIT_ENTRY] });
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  fireEvent.click((await screen.findByText("Registered filesystem")).closest("tr")!);
+  await screen.findByRole("complementary", { name: "Details" });
+  data.audit = [
+    { ...AUDIT_ENTRY, id: 50, timestamp: ago(1_000), resource_name: "later" },
+    AUDIT_ENTRY,
+  ];
+  await pollHeads();
+  expect(await screen.findByRole("button", { name: "1 new" })).toBeInTheDocument();
+  expect(screen.queryByText("Registered later")).not.toBeInTheDocument();
+});
+
+test("a new record the filters exclude is neither inserted nor counted", async () => {
+  const { data } = mockApi({ audit: [AUDIT_ENTRY] });
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  await screen.findByText("Registered filesystem");
+  fireEvent.change(screen.getByLabelText("Filter records"), { target: { value: "filesystem" } });
+  list().scrollTop = 200;
+  fireEvent.scroll(list());
+  data.audit = [
+    { ...AUDIT_ENTRY, id: 60, timestamp: ago(1_000), resource_name: "other" },
+    AUDIT_ENTRY,
+  ];
+  await pollHeads();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
+});
+
+// revise-web-ui-ia: web-ui "export from the menu honours the filters".
+test("export from the menu honours the filters", async () => {
+  const { get } = mockApi({
+    invocations: [
+      { ...INVOCATION, id: 1, status: "error", error_message: "boom" },
+      { ...INVOCATION, id: 2, status: "ok" },
+      { ...INVOCATION, id: 3, status: "error", resource_uid: "u-linear", resource_name: "linear" },
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  await waitFor(() => expect(screen.getAllByText("github.search_issues").length).toBe(2));
+
+  fireEvent.click(screen.getByRole("button", { name: /^Server:/ }));
+  fireEvent.click(await screen.findByRole("option", { name: "github" }));
+  // Let the first popover finish closing (it hands focus back to its pill).
+  await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByText("github.search_issues")).toHaveLength(2));
+  fireEvent.click(screen.getByRole("button", { name: /^Status:/ }));
+  fireEvent.click(await screen.findByRole("option", { name: "Error" }));
+  await waitFor(() => expect(screen.getAllByText("github.search_issues")).toHaveLength(1));
+
+  // No export button in the header: it lives in the ⋯ menu.
+  expect(screen.queryByRole("button", { name: /export/i })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Export as CSV" }));
+  await waitFor(() => expect(saved).toHaveLength(1));
+  const lines = saved[0].content.trim().split("\r\n");
+  expect(lines).toHaveLength(2);
+  expect(lines[1]).toContain("github");
+  expect(lines[1]).toContain("error");
+  const exportRead = get.mock.calls.filter(
+    (c: unknown[]) =>
+      c[0] === "/mcp/invocations" &&
+      (c[1] as { params: { query: Record<string, unknown> } }).params.query.limit === 500,
+  );
+  expect(exportRead.at(-1)?.[1]).toMatchObject({
+    params: { query: { uid: "u-github", status: "error" } },
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Export as JSON" }));
+  await waitFor(() => expect(saved).toHaveLength(2));
+  const json = JSON.parse(saved[1].content) as { id: number }[];
+  expect(json.map((r) => r.id)).toEqual([1]);
 });

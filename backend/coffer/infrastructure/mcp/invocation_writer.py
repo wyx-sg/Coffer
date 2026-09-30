@@ -19,9 +19,9 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from sqlalchemy import TIMESTAMP, Index, Integer, String, Text, case, func, select
+from sqlalchemy import TIMESTAMP, Index, Integer, Select, String, Text, case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,17 +47,42 @@ class MCPInvocationModel(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: The calling agent's uid, as its session reported it (migration 0110).
+    #: Not a foreign key, for the same reason ``resource_uid`` is not one: a
+    #: deleted agent's calls stay in the history.
+    agent_uid: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_invocations_resource", "resource_uid", "timestamp"),
         Index("idx_invocations_time", "timestamp"),
         Index("idx_invocations_session", "session_id", "timestamp"),
+        Index("idx_invocations_agent", "agent_uid", "timestamp"),
     )
 
 
 def _tz(dt: datetime) -> datetime:
     """Re-attach UTC if SQLite stripped the tzinfo on read-back."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def _filtered(
+    stmt: Select[Any],
+    *,
+    resource_uid: str | None,
+    status: str | None,
+    since: datetime | None,
+    agent_uid: str | None,
+) -> Select[Any]:
+    """The one WHERE both the page and its count read, so they cannot disagree."""
+    if resource_uid is not None:
+        stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
+    if status is not None:
+        stmt = stmt.where(MCPInvocationModel.status == status)
+    if since is not None:
+        stmt = stmt.where(MCPInvocationModel.timestamp >= since)
+    if agent_uid is not None:
+        stmt = stmt.where(MCPInvocationModel.agent_uid == agent_uid)
+    return stmt
 
 
 def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
@@ -71,6 +96,7 @@ def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
         status=row.status,  # type: ignore[arg-type]
         error_message=row.error_message,
         session_id=row.session_id,
+        agent_uid=row.agent_uid,
     )
 
 
@@ -84,6 +110,7 @@ def _inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
         status=inv.status,
         error_message=inv.error_message,
         session_id=inv.session_id,
+        agent_uid=inv.agent_uid,
     )
 
 
@@ -163,6 +190,7 @@ class MCPInvocationRepo:
         resource_uid: str | None = None,
         status: Literal["ok", "error", "timeout", "denied"] | None = None,
         since: datetime | None = None,
+        agent_uid: str | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
     ) -> list[MCPInvocation]:
@@ -176,15 +204,31 @@ class MCPInvocationRepo:
                 stmt = stmt.where(
                     newest_first_after(MCPInvocationModel.timestamp, MCPInvocationModel.id, after)
                 )
-            if resource_uid is not None:
-                stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
-            if status is not None:
-                stmt = stmt.where(MCPInvocationModel.status == status)
-            if since is not None:
-                stmt = stmt.where(MCPInvocationModel.timestamp >= since)
+            stmt = _filtered(
+                stmt, resource_uid=resource_uid, status=status, since=since, agent_uid=agent_uid
+            )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [_inv_to_domain(r) for r in rows]
+
+    async def count(
+        self,
+        *,
+        resource_uid: str | None = None,
+        status: Literal["ok", "error", "timeout", "denied"] | None = None,
+        since: datetime | None = None,
+        agent_uid: str | None = None,
+    ) -> int:
+        """How many rows match these filters across every page (no cursor)."""
+        async with self._sm() as session:
+            stmt = _filtered(
+                select(func.count()).select_from(MCPInvocationModel),
+                resource_uid=resource_uid,
+                status=status,
+                since=since,
+                agent_uid=agent_uid,
+            )
+            return int((await session.execute(stmt)).scalar_one())
 
     async def usage_counts(
         self,

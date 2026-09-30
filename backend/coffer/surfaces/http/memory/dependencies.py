@@ -8,7 +8,10 @@ half.
 from __future__ import annotations
 
 from coffer.application.memory.delivery import DeliveryService
+from coffer.application.memory.delivery_stats import DeliveryStatsService
+from coffer.application.memory.hook_service import MemoryHookService
 from coffer.application.memory.service import MemoryService
+from coffer.application.memory.triggers import TriggerService
 
 _memory_service: MemoryService | None = None
 
@@ -40,3 +43,44 @@ def get_memory_delivery_service() -> DeliveryService:
     if _memory_delivery_service is None:
         raise RuntimeError("memory delivery service not initialised")
     return _memory_delivery_service
+
+
+_memory_hook_service: MemoryHookService | None = None
+_memory_trigger_service: TriggerService | None = None
+_memory_stats_service: DeliveryStatsService | None = None
+
+
+def set_memory_hook_service(svc: MemoryHookService) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_hook_service
+    _memory_hook_service = svc
+
+
+def set_memory_trigger_service(svc: TriggerService) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_trigger_service
+    _memory_trigger_service = svc
+
+
+def set_memory_stats_service(svc: DeliveryStatsService) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_stats_service
+    _memory_stats_service = svc
+
+
+def get_memory_hook_service() -> MemoryHookService:
+    if _memory_hook_service is None:
+        raise RuntimeError("memory hook service not initialised")
+    return _memory_hook_service
+
+
+def get_memory_trigger_service() -> TriggerService:
+    if _memory_trigger_service is None:
+        raise RuntimeError("memory trigger service not initialised")
+    return _memory_trigger_service
+
+
+def get_memory_stats_service() -> DeliveryStatsService:
+    if _memory_stats_service is None:
+        raise RuntimeError("memory delivery stats service not initialised")
+    return _memory_stats_service

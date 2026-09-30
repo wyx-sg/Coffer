@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Terminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { CliActionButton } from "@/components/clis/CliActionButton";
@@ -18,12 +18,13 @@ import { ClisWarnings } from "@/components/clis/ClisWarnings";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { Cli } from "@/lib/api/clis";
+import type { SkillOut } from "@/lib/api/skills";
 import { translateApiError } from "@/lib/api/errors";
 import { cliTone, oldestCheck, relativeTime } from "@/lib/clis/format";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
 
 interface Props {
-  skillUid: string;
+  skill: SkillOut;
 }
 
 function RequirementLine({ cli, skillUid }: { cli: Cli; skillUid: string }) {
@@ -61,27 +62,34 @@ function RequirementLine({ cli, skillUid }: { cli: Cli; skillUid: string }) {
   }
 }
 
-export function SkillRequiresTab({ skillUid }: Props) {
+export function SkillRequiresTab({ skill }: Props) {
+  const skillUid = skill.uid;
   const { t, i18n } = useTranslation();
-  const { data, isPending, error } = useClis();
+  const { data, error } = useClis();
   const check = useCheckClis();
   const [installFor, setInstallFor] = useState<Cli | null>(null);
 
-  if (isPending) return <p className="text-sm text-text-muted">{t("common.loading")}</p>;
-  if (error) {
+  // What the skill declares, in its order (spec skill-manager "Show the
+  // commands a skill declares it needs"); each one's state on this machine
+  // comes from the CLIs list when it has answered.
+  const byCommand = new Map((data?.items ?? []).map((cli) => [cli.command, cli]));
+  const rows = skill.requires.map((req) => ({ req, cli: byCommand.get(req.command) }));
+  const warnings = (data?.warnings ?? []).filter((w) => w.skill_uid === skillUid);
+  const missing = rows.filter((r) => r.cli?.status === "missing").map((r) => r.req.command);
+  const checked = oldestCheck(rows.flatMap((r) => (r.cli ? [r.cli] : [])));
+
+  if (rows.length === 0) {
     return (
-      <EmptyState
-        tone="error"
-        title={t("skills.requires.loadFailed")}
-        description={translateApiError(t, error)}
-      />
+      <div className="space-y-3">
+        <ClisWarnings warnings={warnings} />
+        <EmptyState
+          icon={Terminal}
+          title={t("skills.requires.emptyTitle")}
+          description={t("skills.requires.emptyBody")}
+        />
+      </div>
     );
   }
-
-  const rows = data.items.filter((cli) => cli.needed_by.some((n) => n.skill_uid === skillUid));
-  const warnings = data.warnings.filter((w) => w.skill_uid === skillUid);
-  const missing = rows.filter((cli) => cli.status === "missing").map((cli) => cli.command);
-  const checked = oldestCheck(rows);
 
   return (
     <div className="space-y-3">
@@ -112,46 +120,55 @@ export function SkillRequiresTab({ skillUid }: Props) {
       </div>
 
       <ClisWarnings warnings={warnings} />
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title={t("skills.requires.empty")}
-          description={t("skills.requires.emptyHint")}
-        />
-      ) : (
-        <ul
-          className="paper-card divide-y divide-border-subtle"
-          aria-label={t("skills.requires.title")}
-        >
-          {rows.map((cli) => (
-            <li key={cli.command} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-              <Link
-                to={`/clis/${encodeURIComponent(cli.command)}`}
-                className="w-28 shrink-0 font-mono text-sm font-label text-accent-text hover:underline"
-              >
-                {cli.command}
-              </Link>
-              <StatusWord tone={cliTone(cli.status)} className="w-28">
-                {t(`clis.status.${cli.status}`)}
-              </StatusWord>
-              <span className="min-w-0 flex-1 text-xs text-text-muted">
-                <RequirementLine cli={cli} skillUid={skillUid} />
-              </span>
-              <CliActionButton
-                cli={cli}
-                onInstall={setInstallFor}
-                copyLabel={t("clis.actions.copyCommand")}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {missing.length > 0 ? (
-        <p className="text-xs text-text-muted">
-          {t("skills.requires.footnote", { commands: missing.join(", ") })}
+      {error ? (
+        <p className="text-xs text-danger">
+          {t("skills.requires.loadFailed")}: {translateApiError(t, error)}
         </p>
       ) : null}
+
+      <ul
+        className="paper-card divide-y divide-border-subtle"
+        aria-label={t("skills.requires.title")}
+      >
+        {rows.map(({ req, cli }) => (
+          <li key={req.command} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+            <Link
+              to={`/clis/${encodeURIComponent(req.command)}`}
+              className="min-w-28 shrink-0 font-mono text-sm font-label text-accent-text hover:underline"
+            >
+              {req.command}
+              {cli ? null : (
+                <span className="ml-2 font-sans text-xs font-normal text-text-muted">
+                  {req.min_version
+                    ? t("skills.requires.minVersion", { version: req.min_version })
+                    : t("skills.requires.anyVersion")}
+                </span>
+              )}
+            </Link>
+            {cli ? (
+              <>
+                <StatusWord tone={cliTone(cli.status)} className="w-28">
+                  {t(`clis.status.${cli.status}`)}
+                </StatusWord>
+                <span className="min-w-0 flex-1 text-xs text-text-muted">
+                  <RequirementLine cli={cli} skillUid={skillUid} />
+                </span>
+                <CliActionButton
+                  cli={cli}
+                  onInstall={setInstallFor}
+                  copyLabel={t("clis.actions.copyCommand")}
+                />
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-xs text-text-muted">
+        {missing.length > 0
+          ? t("skills.requires.footnote", { commands: missing.join(", ") })
+          : t("skills.requires.stillDelivered")}
+      </p>
 
       <CliInstallDialog cli={installFor} onOpenChange={(open) => !open && setInstallFor(null)} />
     </div>

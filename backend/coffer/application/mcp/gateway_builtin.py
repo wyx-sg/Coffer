@@ -36,6 +36,7 @@ async def dispatch_builtin_tool(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    session_agent_uid: str | None = None,
 ) -> dict[str, Any]:
     """Invoke a `coffer__*` built-in tool and record it in mcp_invocations.
 
@@ -62,6 +63,7 @@ async def dispatch_builtin_tool(
             status="ok",
             error_message=None,
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return _to_call_tool_result(result)
     except Exception as exc:
@@ -79,6 +81,7 @@ async def dispatch_builtin_tool(
             status="error",
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         # Per the MCP spec, TOOL-execution failures are in-band ``isError``
         # results the model can read and self-correct from; JSON-RPC errors
@@ -127,6 +130,7 @@ async def _log(
     status: str,
     error_message: str | None,
     session_id: str,
+    agent_uid: str | None,
 ) -> None:
     try:
         await invocations.insert(
@@ -140,6 +144,7 @@ async def _log(
                 status=status,  # type: ignore[arg-type]
                 error_message=error_message,
                 session_id=session_id,
+                agent_uid=agent_uid,
             )
         )
     except Exception:
@@ -263,6 +268,7 @@ async def dispatch_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
+    session_agent_uid: str | None = None,
 ) -> dict[str, Any]:
     """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
     started = clock()
@@ -283,6 +289,7 @@ async def dispatch_tool_search(
             status="ok",
             error_message=None,
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return _to_call_tool_result(result)
     except Exception as exc:
@@ -295,6 +302,7 @@ async def dispatch_tool_search(
             status="error",
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
+            agent_uid=session_agent_uid,
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}
 
@@ -309,6 +317,7 @@ async def run_tool_search(
     session_id: str,
     clock: Callable[[], datetime],
     hidden: frozenset[str] = frozenset(),
+    session_agent_uid: str | None = None,
 ) -> dict[str, Any]:
     """Aggregate the catalogue, then search it.
 
@@ -325,4 +334,5 @@ async def run_tool_search(
         invocations=invocations,
         session_id=session_id,
         clock=clock,
+        session_agent_uid=session_agent_uid,
     )

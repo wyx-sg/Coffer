@@ -178,8 +178,10 @@ give the status each code is actually sent with.
 | `MEMORY_FILE_NOT_FOUND` | 404 | No readable file at that path inside the partition. | Browse the partition's files. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
-| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no session-start hook Coffer can install. | None; that agent reads memory notes from the memory root (`coffer path memory`) with its own file tools. |
+| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root (`coffer path memory`) with its own file tools. |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object Coffer can edit. | Repair the file, then install delivery again. |
+| `MEMORY_TRIGGER_INVALID` | 422 | A trigger cannot be used: an unknown kind, a pattern that does not compile, a `block` trigger without `--command` or a `context` trigger without `--error`, or a note not written as `<partition>/<slug>`. Nothing is written. | Fix the field the message names and add the trigger again. |
+| `MEMORY_TRIGGER_NOT_FOUND` | 404 | No trigger with that id. | List triggers with `coffer memory trigger list`. |
 
 ## Chat and channels
 

@@ -38,6 +38,11 @@ _CURSOR_HELP = (
     "any other value is 400 CURSOR_INVALID."
 )
 
+_AGENT_UID_HELP = (
+    "Only the calls made by this agent's sessions — the uid its shim reported. "
+    "Calls from a session that reported no agent match no value."
+)
+
 
 async def _page(
     repo: MCPInvocationRepo,
@@ -45,33 +50,49 @@ async def _page(
     resource_uid: str | None,
     status: Literal["ok", "error", "timeout", "denied"] | None,
     since: datetime | None,
+    agent_uid: str | None,
     limit: int,
     cursor: str | None,
-) -> Page[MCPInvocation]:
+) -> tuple[Page[MCPInvocation], int]:
     """One newest-first page, continued by ``cursor`` (spec resource-framework
     "Page growing lists by an opaque cursor").
 
     The per-server route and the cross-server one narrowed to that server read
     the same rows in the same order, so they share one list tag: the filters,
     not the path, are what a cursor is bound to.
+
+    Returns the page and ``total`` — every row the filters match, across every
+    page (spec resource-framework "Count a log's matching rows beside each
+    page"). The cursor is decoded first, so a refused one costs no count.
     """
     filters = {
         "resource_uid": resource_uid,
         "status": status,
         "since": since.isoformat() if since else None,
+        "agent_uid": agent_uid,
     }
     tag = "mcp_invocations"
     after = time_and_id(decode_cursor(cursor, list_tag=tag, filters=filters), int)
     rows = await repo.query(
-        resource_uid=resource_uid, status=status, since=since, limit=limit + 1, after=after
+        resource_uid=resource_uid,
+        status=status,
+        since=since,
+        agent_uid=agent_uid,
+        limit=limit + 1,
+        after=after,
     )
-    return paginate(
+    total = await repo.count(
+        resource_uid=resource_uid, status=status, since=since, agent_uid=agent_uid
+    )
+    page = paginate(
         rows, limit, list_tag=tag, filters=filters, key=lambda r: position_of(r.timestamp, r.id)
     )
+    return page, total
 
 
 async def _project(
     page: Page[MCPInvocation],
+    total: int,
     resources: ResourceService,
 ) -> InvocationListOut:
     """Turn log rows into the wire shape, attaching each server's current label.
@@ -100,11 +121,13 @@ async def _project(
     """
     rows: Sequence[MCPInvocation] = page.items
     if not rows:
-        return InvocationListOut(invocations=[], next_cursor=None)
+        return InvocationListOut(invocations=[], next_cursor=None, total=total)
     names_by_uid = {r.uid: r.name for r in await resources.list(kind="mcp_server")}
     return InvocationListOut(
         invocations=[
             InvocationOut(
+                # Every row read back from the table has its id.
+                id=r.id or 0,
                 timestamp=r.timestamp,
                 resource_uid=r.resource_uid,
                 resource_name=names_by_uid.get(r.resource_uid),
@@ -114,10 +137,12 @@ async def _project(
                 status=r.status,
                 error_message=r.error_message,
                 session_id=r.session_id,
+                agent_uid=r.agent_uid,
             )
             for r in rows
         ],
         next_cursor=page.next_cursor,
+        total=total,
     )
 
 
@@ -130,6 +155,7 @@ async def list_invocations(
     status_filter: Literal["ok", "error", "timeout", "denied"] | None = Query(
         default=None, alias="status"
     ),
+    agent_uid: str | None = Query(default=None, description=_AGENT_UID_HELP),
     repo: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> InvocationListOut:
@@ -140,15 +166,16 @@ async def list_invocations(
     different answers, and the resource page needs to tell them apart.
     """
     resource = await require_mcp_server(uid, resource_service)
-    page = await _page(
+    page, total = await _page(
         repo,
         resource_uid=resource.uid,
         status=status_filter,
         since=since,
+        agent_uid=agent_uid,
         limit=limit,
         cursor=cursor,
     )
-    return await _project(page, resource_service)
+    return await _project(page, total, resource_service)
 
 
 @aggregate_router.get("/invocations", response_model=InvocationListOut)
@@ -160,6 +187,7 @@ async def list_all_invocations(
     status_filter: Literal["ok", "error", "timeout", "denied"] | None = Query(
         default=None, alias="status"
     ),
+    agent_uid: str | None = Query(default=None, description=_AGENT_UID_HELP),
     repo: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> InvocationListOut:
@@ -177,7 +205,13 @@ async def list_all_invocations(
     address for a resource, and the rows it can legitimately select include
     those belonging to servers that no longer exist.
     """
-    page = await _page(
-        repo, resource_uid=uid, status=status_filter, since=since, limit=limit, cursor=cursor
+    page, total = await _page(
+        repo,
+        resource_uid=uid,
+        status=status_filter,
+        since=since,
+        agent_uid=agent_uid,
+        limit=limit,
+        cursor=cursor,
     )
-    return await _project(page, resource_service)
+    return await _project(page, total, resource_service)

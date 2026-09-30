@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentPluginSections.tsx — spec agent-registry
+// src/components/agents/AgentPluginSections.tsx — spec agent-registry
 // "Read one installed plugin's detail read-only".
 // The two cards of the plugin detail page (pages/AgentPluginPage): Overview —
 // the manifest metadata, where the plugin came from and where it is installed —
@@ -24,10 +24,10 @@ export function PluginOverviewCard({ detail }: { detail: PluginDetailOut }) {
           <p className="max-w-prose text-sm text-muted-foreground">{p.description}</p>
         ) : null}
         <dl className="grid gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
-          <dt className="text-muted-foreground">{t("agents.workspace.pluginsTab.version")}</dt>
+          <dt className="text-muted-foreground">{t("agents.pluginsTab.cols.version")}</dt>
           <dd className="font-mono text-xs">{p.version ?? "—"}</dd>
 
-          <dt className="text-muted-foreground">{t("agents.workspace.pluginsTab.author")}</dt>
+          <dt className="text-muted-foreground">{t("agents.pluginDetail.author")}</dt>
           <dd>{p.author ?? "—"}</dd>
 
           <dt className="text-muted-foreground">{t("agents.pluginDetail.homepage")}</dt>
@@ -46,7 +46,7 @@ export function PluginOverviewCard({ detail }: { detail: PluginDetailOut }) {
             )}
           </dd>
 
-          <dt className="text-muted-foreground">{t("agents.workspace.pluginsTab.marketplace")}</dt>
+          <dt className="text-muted-foreground">{t("agents.pluginsTab.cols.marketplace")}</dt>
           <dd>
             {p.marketplace}
             {detail.marketplace_source ? (

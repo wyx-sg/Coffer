@@ -650,6 +650,11 @@ export interface components {
             message: string;
             /** Models */
             models: components["schemas"]["ProviderModel"][];
+            /**
+             * Reachable
+             * @default true
+             */
+            reachable: boolean;
         };
         /**
          * ProviderOut

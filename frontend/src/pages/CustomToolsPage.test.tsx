@@ -31,7 +31,7 @@ vi.mock("@/lib/api/customTools", async (orig) => {
 });
 vi.mock("@/lib/api/credentials", () => ({
   credentialsApi: {
-    listRefs: vi.fn(async () => ({
+    list: vi.fn(async () => ({
       refs: [{ ref: "secret/billing-token", present: true }],
     })),
   },

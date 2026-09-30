@@ -60,10 +60,15 @@ from coffer.application.memory.delivery_reconcile import (
     DeliveryHookTarget,
     memory_switch_subscriber,
 )
+from coffer.application.memory.delivery_stats import DeliveryStatsService
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
+from coffer.application.memory.hook_service import MemoryHookService
 from coffer.application.memory.kind import make_memory_kind
+from coffer.application.memory.retrieval import RetrievalService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
+from coffer.application.memory.session_ledger import SessionLedger
+from coffer.application.memory.triggers import TriggerService
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
@@ -75,7 +80,10 @@ from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
+    set_memory_hook_service,
     set_memory_service,
+    set_memory_stats_service,
+    set_memory_trigger_service,
 )
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 
@@ -212,6 +220,26 @@ def wire_memory_kind(
         agent_service=agent_service, audit=audit, store=ConfigFileStore(), catalog=agent_catalog
     )
     set_memory_delivery_service(delivery_service)
+
+    # Prompt-time retrieval, the once-per-session guard and the delivery views.
+    triggers = TriggerService(audit=audit)
+    ledger = SessionLedger()
+    retrieval = RetrievalService(service, ledger)
+    set_memory_hook_service(
+        MemoryHookService(
+            memory=service,
+            delivery=delivery_service,
+            retrieval=retrieval,
+            triggers=triggers,
+            ledger=ledger,
+        )
+    )
+    set_memory_trigger_service(triggers)
+    set_memory_stats_service(
+        DeliveryStatsService(memory=service, delivery=delivery_service, audit=audit)
+    )
+    # Distil proposes triggers unarmed; only a person arms one.
+    service.set_trigger_proposer(triggers.propose)
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(

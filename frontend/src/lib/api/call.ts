@@ -7,8 +7,10 @@
 // headers every web request carries, 204 handling, and the
 // `{error:{code,message,details}}` envelope unwrapped into an `ApiError`.
 //
-// The only other `fetch` in the app is `lib/chat/streamClient.ts`, which reads
-// an SSE body and so cannot share a JSON helper. Do not add a third.
+// The only other `fetch`es in the app are the two SSE readers —
+// `lib/chat/streamClient.ts` and the daemon change feed in
+// `lib/events/eventStream.ts` — which read an event-stream body and so cannot
+// share a JSON helper. Do not add another.
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError, daemonNotReadyError } from "@/lib/api/errors";
 

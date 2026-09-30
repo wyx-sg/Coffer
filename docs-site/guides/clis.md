@@ -41,7 +41,7 @@ requires:
 | `brew` | The Homebrew formula that installs the command. Without it Coffer offers no install. |
 | `why` | One line on what the skill uses the command for. |
 
-A bare name (`- uv`) is a command with no conditions. An entry Coffer cannot use — a path instead of a name, a login check that runs a different program — is skipped with a warning on the CLIs page; it never stops the skill from being imported or delivered.
+A bare name (`- uv`) is a command with no conditions, and `- "node>=20.1"` a command with a minimum; `requires: [jq, "gh>=2.40"]` and `requires: {commands: [...]}` are read the same way. An entry Coffer cannot use — a path instead of a name, a login check that runs a different program — is skipped with a warning on the CLIs page; it never stops the skill from being imported or delivered.
 
 Coffer reads `requires:` from the skill's folder every time it checks, so an edit in your editor is picked up by the next **Check again** without importing the skill again. This top-level `requires:` lists commands; it is unrelated to `metadata.requires`, which a skill library uses for [the skills a domain depends on](/guides/writing-skill-libraries#declared-dependencies).
 

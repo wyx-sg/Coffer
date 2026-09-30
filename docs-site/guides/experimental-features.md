@@ -38,7 +38,7 @@ pid:     41822
 | --- | --- | --- |
 | `vault_sync` | Sync | Converging this vault with a git remote you own: the **Sync** page, `coffer sync`, the `/api/v1/sync` routes and the background converge rounds. See [Vault sync](/guides/vault-sync). |
 | `knowledge` | Knowledge | Knowledge collections under `~/.coffer/knowledge/`: the **Knowledge** page, `coffer knowledge`, the `/api/v1/knowledge` routes, the `coffer__write` tool, the knowledge catalogue in the `coffer-guide` skill, the curation pass, and saving to knowledge from a chat channel. See [Knowledge](/guides/knowledge). |
-| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the session-start hook that delivers memory into agents. See [Memory](/guides/memory). |
+| `memory` | Memory | Memory aggregated from your agents' own stores: the **Memory** page, `coffer memory`, the `/api/v1/memory` routes, the aggregation and distil passes, and the memory hook that delivers memory into agents. See [Memory](/guides/memory). |
 
 Everything else in Coffer is always on.
 
@@ -105,7 +105,7 @@ Some features also withdraw what they placed in front of agents:
 
 - Switching `memory` off removes the memory delivery hook from every agent it was installed in; switching it on installs it into every agent connected to Coffer.
 - Switching `knowledge` off rewrites `coffer-guide` without the knowledge catalogue, and a channel `/kb` replies that knowledge is switched off instead of saving; `/kb` also leaves the channel's help and command menus.
-- Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and removes the tray's Sync item. While it is off, the knowledge curation pass treats the vault as a single-machine one.
+- Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and takes sync problems out of the menu bar's dot. While it is off, the knowledge curation pass treats the vault as a single-machine one.
 
 ::: tip Nothing is deleted
 Switching a feature off never deletes, moves or rewrites what it holds: collections and their files, memory partitions, a configured sync remote, history. Switch it back on and it resumes from exactly that state. Database migrations run whatever the switches say, so switching a feature on never needs a schema change.

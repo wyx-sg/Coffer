@@ -5,7 +5,7 @@ description: How Coffer keeps true what it writes into files it does not own —
 
 # The reconciler
 
-Much of what Coffer promises is a state of files it does not own: its own MCP entry in each agent's config, a link to each skill it delivers, a model provider's keys in an agent's settings, the hook that hands an agent its memory at session start. Those files are rewritten by the agents' own CLIs, by other tools, by backups and by the person at the keyboard — often while Coffer is not running. The database says what should be true; only the file says what is. This page explains how Coffer closes that gap. The decision and the options weighed are in the ADR [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md).
+Much of what Coffer promises is a state of files it does not own: its own MCP entry in each agent's config, a link to each skill it delivers, a model provider's keys in an agent's settings, the hook that hands an agent its memory. Those files are rewritten by the agents' own CLIs, by other tools, by backups and by the person at the keyboard — often while Coffer is not running. The database says what should be true; only the file says what is. This page explains how Coffer closes that gap. The decision and the options weighed are in the ADR [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md).
 
 ## Two lessons it is built on
 

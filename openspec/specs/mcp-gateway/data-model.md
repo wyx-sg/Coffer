@@ -22,6 +22,8 @@ than a number written down here.
 | -------- | ------------------------------------ | ----------------------------------------------- |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
+| `0113`   | `20260930_0113_mcp_invocations_agent_uid.py` | `mcp_invocations.agent_uid` and its index |
+| `0115`   | `20260930_0115_custom_tool_reach.py` | `mcp_tool_reach` |
 
 ## What this kind contributes to the framework
 
@@ -218,11 +220,13 @@ CREATE TABLE mcp_invocations (
     duration_ms      INTEGER   NOT NULL,
     status           TEXT      NOT NULL,                    -- 'ok' | 'error' | 'timeout' | 'denied'
     error_message    TEXT,
-    session_id       TEXT
+    session_id       TEXT,
+    agent_uid        TEXT                                   -- the calling agent's uid as its session reported it; NULL when none (0113)
 );
 CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp DESC);
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
+CREATE INDEX idx_invocations_agent    ON mcp_invocations(agent_uid, timestamp);
 
 -- MCP-specific: persisted upstream health (revision 0003; re-keyed by 0097)
 CREATE TABLE mcp_server_health (
@@ -231,7 +235,7 @@ CREATE TABLE mcp_server_health (
     checked_at     TIMESTAMP NOT NULL
 );
 
--- MCP-specific: custom tools' machine-local reach overrides (revision 0113)
+-- MCP-specific: custom tools' machine-local reach overrides (revision 0115)
 CREATE TABLE mcp_tool_reach (
     resource_uid   TEXT      NOT NULL,                    -- the custom-tool group's uid
     tool           TEXT      NOT NULL,                    -- the tool's name in the group

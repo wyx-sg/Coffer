@@ -310,6 +310,7 @@ So a probe of a non-Ollama endpoint on a private or link-local address is refuse
 - **Coffer's own model calls** and **transcription**, which go to the providers you configured.
 - **Telegram and SeaTalk**, the IM platforms' own hosts, including the media URLs they hand back.
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
+- **A skill's Git repository**, also a `git` subprocess against a URL you typed, run with no prompt, only the `https`, `http`, `ssh`, `git` and `file` transports and no submodules; a company's own Git host usually sits on a private address (see [Skills](/architecture/skills#git-repositories)).
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.
 

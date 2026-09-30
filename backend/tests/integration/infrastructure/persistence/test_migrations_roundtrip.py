@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0113"
+HEAD_REVISION = "0115"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -202,7 +202,7 @@ EXPECTED_TABLES = {
     "mcp_capability_preferences",
     "mcp_invocations",
     "mcp_server_health",
-    # 0113: custom tools' machine-local reach overrides (spec mcp-gateway
+    # 0115: custom tools' machine-local reach overrides (spec mcp-gateway
     # "Switch off or narrow one custom tool").
     "mcp_tool_reach",
     "skill_agent_bindings",
@@ -240,6 +240,9 @@ EXPECTED_TABLES = {
     "usage_requests",
     "usage_daily",
     "quota_snapshots",
+    # 0114: what this machine last learned about a Git-imported skill's source
+    # (spec skill-manager "Update a Git-imported skill from its source").
+    "skill_source_status",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -272,7 +275,9 @@ PRE_MERGE_TABLES = (
         "secret_bindings",
         "secret_approvals",
         "secret_boundary_settings",
-        # 0113 created this.
+        # 0114 created this.
+        "skill_source_status",
+        # 0115 created this.
         "mcp_tool_reach",
     }
 ) | {

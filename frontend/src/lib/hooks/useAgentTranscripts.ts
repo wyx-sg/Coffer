@@ -6,7 +6,7 @@
 // by the full params so each page caches independently. `keepPreviousData` keeps the current page
 // visible while the next one loads — no blank flash on page/search change.
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   listTranscripts,
@@ -15,10 +15,8 @@ import {
 } from "@/lib/api/agentTranscripts";
 import { agentTranscriptSessionKey, agentTranscriptsKey } from "@/lib/api/queryKeys";
 
-/** Default page size for the transcript history list. */
-export const TRANSCRIPTS_PAGE_SIZE = 10;
-
-/** Search/filter/sort inputs (everything but the page window). */
+/** Sessions per page of the Sessions tab's list ("Load more" reads the next). */
+export const TRANSCRIPTS_PAGE_SIZE = 30;
 
 // ---------------------------------------------------------------------------
 // Query: list one page of transcript sessions for an agent
@@ -55,4 +53,15 @@ export function useTranscriptSession(agentUid: string, sourcePath: string, offse
     placeholderData: keepPreviousData,
     enabled: !!agentUid && !!sourcePath,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Refresh: re-read every listing page and open session of an agent
+// ---------------------------------------------------------------------------
+
+/** Drops the agent's cached transcript listing and sessions so they are read
+ *  again — the answer to a session file that moved after the list was read. */
+export function useRefreshTranscripts(agentUid: string) {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: agentTranscriptsKey(agentUid) });
 }

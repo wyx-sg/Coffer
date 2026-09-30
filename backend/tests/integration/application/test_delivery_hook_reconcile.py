@@ -6,12 +6,13 @@ by ``fake_agent_dir`` from their own descriptors, the database sits at the
 home's ``~/.coffer/coffer.db``, and "connected" is the real answer — the agent
 carries Coffer's gateway MCP entry, installed by ``AgentMcpService``.
 
-- PR #413 reproduced: a hook carrying the dropped ``--agent`` option is found
-  as a MODIFY of ``command`` and rewritten, foreign hooks untouched, one audit
-  row from ``system`` (spec memory "Repair stale delivery hooks"). For Codex
-  the stale hook is an older build's on ``UserPromptSubmit``: it moves to
-  ``SessionStart``, and the rewritten hook is then reported as needing the
-  user's approval in Codex until ``config.toml`` records it.
+- PR #413 reproduced: a hook carrying the dropped ``--agent`` option on an
+  older build's single ``SessionStart`` entry is found as a MODIFY of
+  ``command`` and ``event`` and rewritten into this build's four entries,
+  foreign hooks untouched, one audit row from ``system`` (spec memory "Repair
+  stale delivery hooks"). For Codex the stale hook is an older build's on
+  ``UserPromptSubmit``; the rewritten entries are then reported as needing the
+  user's approval in Codex until ``config.toml`` records each of them.
 - An audit that cannot be recorded puts the file back as it was.
 - A dry-run writes nothing anywhere under HOME, nor any row, nor any of the
   reconciler's own bookkeeping.
@@ -39,7 +40,7 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
-from coffer.domain.memory.delivery import MARKER, DeliveryAdapter
+from coffer.domain.memory.delivery import DELIVERY_EVENTS, MARKER, DeliveryAdapter
 from coffer.domain.reconcile import Disposition, Op, Outcome, Trigger
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -126,11 +127,15 @@ async def rig(isolated_home: IsolatedHome) -> AsyncIterator[_Rig]:
 
 
 def _approve_in_codex(hooks: pathlib.Path, config: pathlib.Path, adapter: DeliveryAdapter) -> None:
-    """What the user's approval in Codex's /hooks records in config.toml."""
-    hook = adapter.find(hooks.read_text())
-    assert hook is not None
-    approval = f'\n[hooks.state."{trust_key(str(hooks), hook)}"]\n'
-    config.write_text(config.read_text() + approval + f'trusted_hash = "{current_hash(hook)}"\n')
+    """What the user's approval in Codex's /hooks records in config.toml: one
+    record per entry."""
+    found = adapter.find_all(hooks.read_text())
+    assert len(found) == len(DELIVERY_EVENTS)
+    approvals = "".join(
+        f'\n[hooks.state."{trust_key(str(hooks), hook)}"]\ntrusted_hash = "{current_hash(hook)}"\n'
+        for hook in found
+    )
+    config.write_text(config.read_text() + approvals)
 
 
 async def _connected_agent_with_stale_hook(
@@ -146,7 +151,8 @@ async def _connected_agent_with_stale_hook(
     key = "settings" if agent_type is AgentType.CLAUDE_CODE else "hooks"
     if agent_type is AgentType.CLAUDE_CODE:
         stale = f': {MARKER}; coffer memory context --agent {agent.uid} --cwd "$PWD"'
-        stale_event = adapter.event
+        # What a build before per-prompt delivery wrote: one SessionStart entry.
+        stale_event = "SessionStart"
     else:
         # What a build before SessionStart support wrote: UserPromptSubmit,
         # bare `coffer` (not on the hook's PATH), a `$PPID` guard.
@@ -189,7 +195,9 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     (planned,) = plan.results
     assert planned.change.difference.op is Op.MODIFY
     expected_changes = (
-        ("command",) if agent_type is AgentType.CLAUDE_CODE else ("command", "event", "trust")
+        ("command", "event")
+        if agent_type is AgentType.CLAUDE_CODE
+        else ("command", "event", "trust")
     )
     assert planned.change.difference.changed_params == expected_changes
     assert planned.change.decision.disposition is Disposition.REPAIR
@@ -204,7 +212,7 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     assert data["hooks"]["Stop"] == [_FOREIGN_STOP]
     assert (
         _FOREIGN_SESSION
-        in data["hooks"]["UserPromptSubmit" if agent_type is AgentType.CODEX else adapter.event]
+        in data["hooks"]["UserPromptSubmit" if agent_type is AgentType.CODEX else "SessionStart"]
     )
     coffer_commands = [
         (event, leaf["command"])
@@ -213,7 +221,10 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
         for leaf in g["hooks"]
         if MARKER in leaf["command"]
     ]
-    assert coffer_commands == [(adapter.event, adapter.command_for(agent.uid))]
+    # One entry on each of the four events, every one the current command.
+    assert sorted(coffer_commands) == sorted(
+        (event, adapter.command_for(agent.uid)) for event in DELIVERY_EVENTS
+    )
     # By absolute path: the hook's shell need not have ~/.coffer/bin on PATH.
     assert adapter.command_for(agent.uid).startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
     assert path.with_name(path.name + ".bak").exists()

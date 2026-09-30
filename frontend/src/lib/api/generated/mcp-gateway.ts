@@ -714,9 +714,16 @@ export interface components {
             invocations: components["schemas"]["InvocationOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+            /**
+             * Total
+             * @description How many rows match the filters, across every page; the cursor does not change it.
+             */
+            total: number;
         };
         /** InvocationOut */
         InvocationOut: {
+            /** Agent Uid */
+            agent_uid: string | null;
             /** Capability Key */
             capability_key: string;
             /**
@@ -728,6 +735,8 @@ export interface components {
             duration_ms: number;
             /** Error Message */
             error_message: string | null;
+            /** Id */
+            id: number;
             /** Resource Name */
             resource_name: string | null;
             /** Resource Uid */
@@ -1522,6 +1531,8 @@ export interface operations {
                 /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
                 status?: ("ok" | "error" | "timeout" | "denied") | null;
+                /** @description Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value. */
+                agent_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -1702,6 +1713,8 @@ export interface operations {
                 /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
                 status?: ("ok" | "error" | "timeout" | "denied") | null;
+                /** @description Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value. */
+                agent_uid?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

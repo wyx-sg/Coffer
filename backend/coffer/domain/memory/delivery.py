@@ -1,7 +1,8 @@
-"""Coffer's own session-start hook: the installed command, the ceiling on
-what it prints, the adapter Protocol, and the shape of an install/status view.
-The marker and the JSON text transform live in `domain.memory.hook_entries`
-and are re-exported here.
+"""Coffer's own memory hook: the four entries it installs (session start, each
+prompt, before and after a shell command), the command they run, the ceiling on
+what session start prints, the adapter Protocol, and the shape of an
+install/status view. The marker and the JSON text transform live in
+`domain.memory.hook_entries` and are re-exported here.
 
 Pure — no filesystem access; the application layer reads an agent's own
 settings file through the same allowlisted machinery every other config-file
@@ -9,7 +10,7 @@ edit in this codebase uses (`domain.agent.config_files` + the
 `ConfigFileStorePort`), calls the functions here to produce new text, and
 writes it back atomically. See `application.memory.delivery.DeliveryService`.
 
-**A hook is not memory.** Installing this writes one entry into an agent's
+**A hook is not memory.** Installing this writes Coffer's entries into an agent's
 *settings* file — Claude Code's `settings.json`, Codex's `hooks.json` — the
 same file that already carries a developer's `env`, `permissions`, and every
 other hook a tool like skynet-cli wired up. It is how the developer told
@@ -43,10 +44,13 @@ from coffer.domain.hook_trust import HookTrust
 from coffer.domain.memory.hook_entries import (
     HOOKS_KEY,
     MARKER,
+    EntrySpec,
     InstalledHook,
     MalformedDeliveryConfig,
+    find_all_installed,
     find_command,
     find_installed,
+    install_entries,
     install_entry,
     is_installed,
     is_marked,
@@ -136,6 +140,71 @@ def hook_command(agent_uid: str, *, cli: str = "coffer", hook_event: str | None 
     return f": {MARKER}; {context_invocation(agent_uid, cli=cli, hook_event=hook_event)}"
 
 
+#: The four moments memory reaches a session (ADR
+#: memory-reaches-a-session-at-prompt-time-and-before-a-known-trap): the index at
+#: session start, retrieval per prompt, the guard before a shell command, and
+#: the error context after one. Both supported agents run all four and read the
+#: same JSON from each.
+SESSION_START = "SessionStart"
+USER_PROMPT_SUBMIT = "UserPromptSubmit"
+PRE_TOOL_USE = "PreToolUse"
+POST_TOOL_USE = "PostToolUse"
+DELIVERY_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT, PRE_TOOL_USE, POST_TOOL_USE)
+
+#: Every source that starts a session, in both agents' vocabulary.
+SESSION_MATCHER = "startup|resume|clear|compact"
+#: The shell tool, by the name both agents hand a hook (``tool_name``).
+SHELL_TOOL_MATCHER = "Bash"
+
+#: Generous enough that a slow first call never blocks the session from
+#: starting; short enough that a hung daemon does not hang the terminal.
+SESSION_TIMEOUT_SECONDS = 10
+#: A prompt or a command waits at most this long for Coffer; the CLI itself
+#: gives up sooner and prints nothing (fail open).
+TURN_TIMEOUT_SECONDS = 5
+
+
+def hook_invocation(agent_uid: str, *, cli: str = "coffer") -> str:
+    """The CLI call every one of Coffer's four entries runs.
+
+    One command for every event: it reads the hook's own JSON from stdin, whose
+    ``hook_event_name`` says which moment this is, and prints the JSON that
+    moment answers with. ``--cwd "$PWD"`` is the fallback for an event whose
+    input carries no ``cwd``. The CLI is named by absolute path, as
+    :func:`context_invocation` explains.
+    """
+    return f'{shlex.quote(cli)} memory hook --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
+
+
+def entry_command(agent_uid: str, *, cli: str = "coffer") -> str:
+    """The exact command string Coffer installs on each event, marker first."""
+    return f": {MARKER}; {hook_invocation(agent_uid, cli=cli)}"
+
+
+def delivery_entries(agent_uid: str, *, cli: str = "coffer") -> tuple[EntrySpec, ...]:
+    """The four entries one agent carries: the same command on every event,
+    the shell tool's events matched on the shell tool alone."""
+    command = entry_command(agent_uid, cli=cli)
+    return (
+        EntrySpec(SESSION_START, command, SESSION_MATCHER, SESSION_TIMEOUT_SECONDS),
+        EntrySpec(USER_PROMPT_SUBMIT, command, None, TURN_TIMEOUT_SECONDS),
+        EntrySpec(PRE_TOOL_USE, command, SHELL_TOOL_MATCHER, TURN_TIMEOUT_SECONDS),
+        EntrySpec(POST_TOOL_USE, command, SHELL_TOOL_MATCHER, TURN_TIMEOUT_SECONDS),
+    )
+
+
+def events_label(events: tuple[str, ...] | list[str]) -> str:
+    """The set of events a hook sits on, as one comparable string."""
+    return ",".join(sorted(set(events)))
+
+
+def commands_label(commands: tuple[str, ...] | list[str]) -> str:
+    """The commands Coffer's entries carry, as one comparable string: the
+    command itself when every entry agrees, otherwise every distinct one."""
+    distinct = sorted(set(commands))
+    return distinct[0] if len(distinct) == 1 else " | ".join(distinct)
+
+
 @dataclass(frozen=True)
 class DeliveryStatus:
     """Whether Coffer's hook is installed for one agent.
@@ -160,8 +229,8 @@ class DeliveryStatus:
     #: What is installed, when `installed`; otherwise what `install()` would
     #: write, so a caller can show it before acting.
     command: str
-    #: The hook event this agent's adapter installs on (`"SessionStart"`,
-    #: `"UserPromptSubmit"`, ...).
+    #: The hook events this agent's adapter installs on, comma-joined
+    #: (``PostToolUse,PreToolUse,SessionStart,UserPromptSubmit``).
     event: str
 
 
@@ -191,7 +260,8 @@ class DeliveryAdapter(Protocol):
 
     @property
     def event(self) -> str:
-        """The hook event this adapter installs on."""
+        """The hook events this adapter installs on, as :func:`events_label`
+        spells them."""
         ...
 
     def command_for(self, agent_uid: str) -> str:
@@ -217,6 +287,10 @@ class DeliveryAdapter(Protocol):
         on an event this build no longer installs on — or `None`."""
         ...
 
+    def find_all(self, text: str) -> list[InstalledHook]:
+        """Every Coffer entry in the file, on every event."""
+        ...
+
     def is_coffer_command(self, command: str) -> bool:
         """Whether a hook command found in the agent's config is Coffer's own
         (by the marker, never by the arguments)."""
@@ -237,18 +311,35 @@ class DeliveryAdapter(Protocol):
 
 __all__ = [
     "DELIVERY_CEILING_BYTES",
+    "DELIVERY_EVENTS",
     "HOOKS_KEY",
     "MARKER",
+    "POST_TOOL_USE",
+    "PRE_TOOL_USE",
+    "SESSION_MATCHER",
+    "SESSION_START",
+    "SESSION_TIMEOUT_SECONDS",
+    "SHELL_TOOL_MATCHER",
+    "TURN_TIMEOUT_SECONDS",
+    "USER_PROMPT_SUBMIT",
     "DeliveryAdapter",
     "DeliveryStatus",
     "DeliveryUnsupported",
+    "EntrySpec",
     "HookTrust",
     "InstalledHook",
     "MalformedDeliveryConfig",
+    "commands_label",
     "context_invocation",
+    "delivery_entries",
+    "entry_command",
+    "events_label",
+    "find_all_installed",
     "find_command",
     "find_installed",
     "hook_command",
+    "hook_invocation",
+    "install_entries",
     "install_entry",
     "is_installed",
     "is_marked",

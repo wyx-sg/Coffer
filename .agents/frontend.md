@@ -87,6 +87,12 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
     for every resizable split; widths are per-browser conveniences.
   - `components/PlaceholderPage` — temporary, for sidebar pages not yet built.
+  - `lib/events/eventStream.ts` + `lib/hooks/useDaemonEvents.ts` — the one reader of
+    the daemon's change feed (`GET /api/v1/events`): reconnects with `Last-Event-ID`,
+    backs off while the daemon is down, invalidates the keys each envelope's kind is
+    read through (`attention` → `attentionKey`, `resync` → everything). A page that
+    shows live state mounts `useDaemonEvents()` instead of polling; Overview and
+    Activity do.
 
 ## 3. State Management
 
@@ -104,15 +110,16 @@ The API token is deliberately not in that table: it is read from
 (`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
 The URL rows matter: anything a user would expect to survive a refresh, deep-link,
-or back-button MUST be a route param (`/conversations/:id`, `/agents/:uid`), not local
+or back-button MUST be a route param (`/conversations/:id`, `/agents/:type`), not local
 state. "Which item is selected" is navigation, not UI state. The same holds one
 level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which also redirects old `?tab=` links; skills and MCP
-servers are keyed by their fixed name, renamable kinds by uid. Skills, MCP
-servers and model providers follow it; Agent, Knowledge, Sync and Activity
-still use `?tab=` until their rebuild, and the open file in a tree is always
-`?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
+servers are keyed by their fixed name, agents by their type, renamable kinds
+by uid. Skills, MCP servers, model providers, agents, knowledge
+(`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
+(`/memory/<uid>/delivered`) follow it; Sync and Activity still use `?tab=`
+until their rebuild, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the
 query cache (same query key → same data), not through Context. The only Context
@@ -146,8 +153,9 @@ whole subtree:
 Every request leaves through one of two modules, and both resolve base URL +
 token through `src/lib/auth.ts` (`getCofferBaseUrl`, `getCofferToken`) and send
 `X-Coffer-Token` + `X-Coffer-Actor: "ui"`. **The actor is always `"ui"`** from
-the web surface. Nothing else in `src` calls `fetch` — the only exception is
-the chat SSE stream (below).
+the web surface. Nothing else in `src` calls `fetch` — the only exceptions are
+the two SSE readers: the chat stream (below) and the daemon's change feed
+(`lib/events/eventStream.ts`).
 
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
@@ -226,11 +234,11 @@ return useMutation({
 - **Build from `src/components/ui/` primitives** (shadcn: `Button`, `Dialog`,
   `Select`, `Textarea`, `Tooltip`, `Skeleton`, `ConfirmDialog`, …). Don't
   hand-roll a control a primitive already covers — no native `title=` hints
-  where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does. There is
-  deliberately **no `DropdownMenu`**: row actions are explicit buttons
-  (`RowDeleteButton`, `ScopeControl`), the menu that once held them is gone, and
-  a primitive listed here with no caller is a control a reader would reach for
-  and not find. Add it back from shadcn when a surface actually needs one.
+  where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does. Row actions
+  are explicit buttons (`RowDeleteButton`, `ScopeControl`); the one "⋯" menu is
+  `ActionMenu` (`components/ui/menu.tsx`, over `Popover`), used where the design
+  gives an object a menu of secondary commands (an agent's row and header).
+  There is no `DropdownMenu`.
 - **Shared surfaces above the primitives**, used the same way everywhere:
   - `PageHeader` is the one page header, list and detail alike: `icon` (list
     pages), `back` (detail pages), `badges` beside the title, `actions` on the
@@ -336,6 +344,8 @@ When you work near these, migrate toward the target; don't extend the debt:
    carries) and delete the entry. The daemon-wide change feed
    (`GET /api/v1/events`, fetch-read with the token header like the chat
    stream) is the replacement for per-hook `refetchInterval` polling: a
-   rebuilt page invalidates the query keys an envelope's `kind`/`id` name.
+   rebuilt page mounts `useDaemonEvents()`, which invalidates the query keys an
+   envelope's `kind` names. The audit and MCP call logs are not on it (they are
+   not resources), so Activity re-reads their newest page on a short poll.
 2. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
    modes out of it if a page that needs only one mode becomes a landing page.

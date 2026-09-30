@@ -145,6 +145,72 @@ def install_entry(
     return _dump(data)
 
 
+@dataclass(frozen=True)
+class EntrySpec:
+    """One entry Coffer wants on one event."""
+
+    event: str
+    command: str
+    matcher: str | None
+    timeout: int | None = None
+
+
+def install_entries(text: str, entries: tuple[EntrySpec, ...]) -> str:
+    """Return `text` with Coffer's entries set to exactly `entries`.
+
+    Every prior Coffer entry, on any event, is dropped first; then one entry
+    per spec is appended to its event. Foreign hooks on the same events, every
+    other event and every unrelated key are left untouched. Idempotent.
+    """
+    data = _parse(text)
+    hooks = data.get(HOOKS_KEY)
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data[HOOKS_KEY] = hooks
+    _drop_coffer_entries(hooks)
+    for spec in entries:
+        existing = hooks.get(spec.event)
+        kept = list(existing) if isinstance(existing, list) else []
+        leaf: dict[str, Any] = {"type": "command", "command": spec.command}
+        if spec.timeout is not None:
+            leaf["timeout"] = spec.timeout
+        entry: dict[str, Any] = {"hooks": [leaf]}
+        if spec.matcher is not None:
+            entry = {"matcher": spec.matcher, "hooks": [leaf]}
+        kept.append(entry)
+        hooks[spec.event] = kept
+    return _dump(data)
+
+
+def find_all_installed(text: str) -> list[InstalledHook]:
+    """Every Coffer entry in `text`, on every event, in file order."""
+    data = _parse(text)
+    hooks = data.get(HOOKS_KEY)
+    if not isinstance(hooks, dict):
+        return []
+    found: list[InstalledHook] = []
+    for name, entries in hooks.items():
+        if not isinstance(entries, list):
+            continue
+        for group_index, entry in enumerate(entries):
+            if not _is_coffer_entry(entry):
+                continue
+            for handler_index, leaf in enumerate(entry.get("hooks", [])):
+                if _is_coffer_leaf(leaf):
+                    matcher = entry.get("matcher")
+                    found.append(
+                        InstalledHook(
+                            event=str(name),
+                            command=str(leaf.get("command")),
+                            matcher=matcher if isinstance(matcher, str) else None,
+                            group_index=group_index,
+                            handler_index=handler_index,
+                            handler=dict(leaf),
+                        )
+                    )
+    return found
+
+
 def remove_entry(text: str, *, event: str | None = None) -> str:
     """Return `text` with ONLY Coffer's entries removed — on `event`, or on
     every event when `event` is `None`.
@@ -221,10 +287,13 @@ def is_installed(text: str, *, event: str | None = None) -> bool:
 __all__ = [
     "HOOKS_KEY",
     "MARKER",
+    "EntrySpec",
     "InstalledHook",
     "MalformedDeliveryConfig",
+    "find_all_installed",
     "find_command",
     "find_installed",
+    "install_entries",
     "install_entry",
     "is_installed",
     "is_marked",

@@ -113,6 +113,7 @@ async def record_invocation(
     *,
     session_id: str,
     clock: Callable[[], datetime],
+    agent_uid: str | None = None,
     resource_uid: str,
     capability_type: CapabilityType,
     capability_key: str,
@@ -131,6 +132,7 @@ async def record_invocation(
             status=status,
             error_message=error_message,
             session_id=session_id,
+            agent_uid=agent_uid,
         )
     )
 
@@ -205,6 +207,7 @@ async def _invoke(
             invocations,
             session_id=session_id,
             clock=clock,
+            agent_uid=session_agent_uid,
             resource_uid=resource.uid,
             capability_type=spec.capability_type,
             capability_key=original,

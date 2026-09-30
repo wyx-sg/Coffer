@@ -111,6 +111,15 @@ _STATUS: dict[str, int] = {
     "CLI_NOT_INSTALLABLE": 409,
     "HOMEBREW_NOT_FOUND": 409,
     "CLI_INSTALL_RUNNING": 409,
+    # skill sources (spec skill-manager "Add skills from an archive", "Add
+    # skills from a Git repository", "Update a Git-imported skill from its
+    # source"): an expired stage is a missing thing; git failing to fetch is
+    # the upstream refusing us (502, like the vault remote); an update over a
+    # local edit is a state conflict; updating a folder-added skill is too.
+    "SKILL_STAGING_NOT_FOUND": 404,
+    "SKILL_SOURCE_UNREACHABLE": 502,
+    "SKILL_UPDATE_CONFLICT": 409,
+    "SKILL_NOT_FROM_GIT": 409,
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,
@@ -139,6 +148,8 @@ _STATUS: dict[str, int] = {
     "MEMORY_UNREADABLE": 422,
     "MEMORY_DELIVERY_UNSUPPORTED": 422,
     "MEMORY_DELIVERY_CONFIG_INVALID": 422,
+    "MEMORY_TRIGGER_INVALID": 422,
+    "MEMORY_TRIGGER_NOT_FOUND": 404,
     # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
     "TURN_IN_PROGRESS": 409,

@@ -53,6 +53,10 @@ class DiscoveredModel:
 class ModelList:
     models: list[DiscoveredModel]
     message: str = ""
+    #: Whether the endpoint answered the listing at all. ``False`` only when the
+    #: call failed (unreachable, refused key); an endpoint that answered with an
+    #: empty list is reachable.
+    reachable: bool = True
 
 
 class ProviderIntrospectionPort(Protocol):

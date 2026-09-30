@@ -1,50 +1,59 @@
 // frontend/src/components/knowledge/KnowledgeWelcomePanel.tsx
-// First-run card shown on /knowledge before any scope holds anything. The
-// global and per-project scopes auto-provision, so the panel explains the
-// surface and offers the one deliberate next step: a named collection.
+// First run on /knowledge: nothing is written down yet. Nothing
+// auto-provisions a collection (spec knowledge "Create collections only
+// deliberately"), so the panel says what knowledge is and offers the one
+// deliberate first step — a collection — beside the two ways documents arrive
+// once one exists: an upload, and agents filing what they learn.
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Library, Plus } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 
-export function KnowledgeWelcomePanel({ onAdd }: { onAdd: () => void }) {
+export function KnowledgeWelcomePanel({ onCreate }: { onCreate: () => void }) {
   const { t } = useTranslation();
   return (
-    <Card className="paper-card border-primary/20 bg-accent-soft">
-      <CardContent className="space-y-6 py-10">
-        <div className="space-y-2">
-          <h2 className="text-lg font-bold">{t("knowledge.welcome.title")}</h2>
-          <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
-            {t("knowledge.welcome.body")}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={onAdd}>{t("knowledge.add")}</Button>
-        </div>
-        <ul className="grid gap-3 pt-2 text-sm text-foreground/70 sm:grid-cols-3">
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureEntries.title")}
-            body={t("knowledge.welcome.featureEntries.body")}
-          />
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureDocuments.title")}
-            body={t("knowledge.welcome.featureDocuments.body")}
-          />
-          <WelcomeFeature
-            title={t("knowledge.welcome.featureLocal.title")}
-            body={t("knowledge.welcome.featureLocal.body")}
-          />
-        </ul>
-      </CardContent>
-    </Card>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <EmptyState
+        icon={Library}
+        title={t("knowledge.welcome.title")}
+        description={t("knowledge.welcome.body")}
+      />
+      <ul className="grid gap-3 sm:grid-cols-3">
+        <WelcomeStep
+          title={t("knowledge.welcome.collection.title")}
+          body={t("knowledge.welcome.collection.body")}
+          action={
+            <Button size="sm" onClick={onCreate}>
+              <Plus aria-hidden /> {t("knowledge.create.title")}
+            </Button>
+          }
+        />
+        <WelcomeStep
+          title={t("knowledge.welcome.upload.title")}
+          body={t("knowledge.welcome.upload.body")}
+        />
+        <WelcomeStep
+          title={t("knowledge.welcome.agents.title")}
+          body={t("knowledge.welcome.agents.body")}
+          action={
+            <span className="rounded-sm bg-chip px-1.5 py-0.5 text-2xs text-text-muted">
+              {t("knowledge.welcome.agents.automatic")}
+            </span>
+          }
+        />
+      </ul>
+    </div>
   );
 }
 
-function WelcomeFeature({ title, body }: { title: string; body: string }) {
+function WelcomeStep({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
-    <li className="rounded-lg border border-border-subtle bg-surface-raised p-3 leading-relaxed">
-      <div className="mb-1 font-medium text-foreground">{title}</div>
-      <div className="text-xs text-muted-foreground">{body}</div>
+    <li className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface-raised p-4">
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="flex-1 text-xs leading-relaxed text-text-muted">{body}</p>
+      {action ? <div>{action}</div> : null}
     </li>
   );
 }

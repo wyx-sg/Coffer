@@ -107,4 +107,14 @@ async def list_audit(
         limit=limit,
         cursor=cursor,
     )
-    return AuditListOut(entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor)
+    # The page is validated first so a bad cursor is refused before counting.
+    total = await svc.count(
+        resource=resource,
+        kind=kind,
+        event_type=event_type,
+        event_prefix=event_prefix,
+        since=since_dt,
+    )
+    return AuditListOut(
+        entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor, total=total
+    )

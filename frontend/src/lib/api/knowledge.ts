@@ -9,7 +9,7 @@
 // There is no `search` and no `grep` here because the daemon serves neither
 // (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
 // upload here, an agent's `coffer__write`, the CLI — which waits in the collection's hidden inbox
-// until a curation pass merges it into the documents; with no internal model
+// until a curation pass curates it into the documents; with no internal model
 // configured it becomes a document as it is.
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
@@ -27,13 +27,20 @@
 
 import { call, enc } from "@/lib/api/call";
 import type {
+  ChangeDetailOut,
+  ChangeOut,
+  ChangesOut,
   CollectionListOut,
   CollectionOut,
   CurationRunOut,
+  DocumentHistoryOut,
   FileOut,
   FileSave,
   IngestedDocumentOut,
+  MaterialIn,
+  SubmissionOut,
   TreeOut,
+  VersionDiffOut,
 } from "./knowledgeTypes";
 
 // Re-export the wire types so `import { … } from "./api"` sees one surface.
@@ -128,11 +135,72 @@ export function curateCollection(uid: string, document?: string | null): Promise
   });
 }
 
+// --- material -----------------------------------------------------------------
+
+/**
+ * Submit a new document as an ITEM (see "Submit material through
+ * coffer__write"): it waits in the collection's inbox with the web UI's actor
+ * (`user`) until curation files it into the right document, and with no
+ * model it is written as a document as it is. The caller never picks a path —
+ * curation does.
+ */
+export function submitMaterial(payload: MaterialIn): Promise<SubmissionOut> {
+  return call<SubmissionOut>(`${ROOT}/material`, { method: "POST", body: payload });
+}
+
+// --- history ------------------------------------------------------------------
+
+/**
+ * Recent changes across every collection, or one (`collection` is its NAME),
+ * newest first, with the items still waiting in each inbox (see "Keep every
+ * document's history and undo a pass as a whole").
+ */
+export function listChanges(params: {
+  collection?: string | null;
+  limit?: number;
+}): Promise<ChangesOut> {
+  const query = new URLSearchParams();
+  if (params.collection) query.set("collection", params.collection);
+  if (params.limit) query.set("limit", String(params.limit));
+  const qs = query.toString();
+  return call<ChangesOut>(`${ROOT}/changes${qs ? `?${qs}` : ""}`);
+}
+
+/** One change in full: every document it touched, with its diff. */
+export function getChange(version: string): Promise<ChangeDetailOut> {
+  return call<ChangeDetailOut>(`${ROOT}/changes/${enc(version)}`);
+}
+
+/**
+ * Undo a curation pass as a whole: every document it wrote goes back to how
+ * it was before, as a new change naming the user. Refused with 409
+ * `KNOWLEDGE_UNDO_CONFLICT` (details name the `document`) when a later change
+ * to one of them would be lost; nothing is written then.
+ */
+export function undoPass(version: string): Promise<ChangeOut> {
+  return call<ChangeOut>(`${ROOT}/changes/${enc(version)}/undo`, { method: "POST" });
+}
+
+/** A document's versions, newest first, each with its writer and time. */
+export function getHistory(path: string): Promise<DocumentHistoryOut> {
+  return call<DocumentHistoryOut>(`${ROOT}/history?path=${enc(path)}`);
+}
+
+/** What one version did to the document, against the version before it. */
+export function getVersionDiff(path: string, version: string): Promise<VersionDiffOut> {
+  return call<VersionDiffOut>(`${ROOT}/history/diff?path=${enc(path)}&version=${enc(version)}`);
+}
+
+/** Put one version back, as a NEW version naming the user — the past is never rewritten. */
+export function restoreVersion(payload: { path: string; version: string }): Promise<FileOut> {
+  return call<FileOut>(`${ROOT}/history/restore`, { method: "POST", body: payload });
+}
+
 // --- ingestion ----------------------------------------------------------------
 
 /**
  * Convert an uploaded document into material for a collection. The Markdown
- * extracted from it joins the collection's inbox and is merged into the
+ * extracted from it joins the collection's inbox and is curated into the
  * documents by the next pass (`pending: true`); with no internal model
  * configured it is promoted to a document on the spot and `path` names it.
  * Neither the original nor the extracted Markdown is kept beyond that — the

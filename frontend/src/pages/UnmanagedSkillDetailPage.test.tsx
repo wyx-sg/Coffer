@@ -1,4 +1,4 @@
-// frontend/src/pages/UnmanagedSkillDetailPage.test.tsx
+// src/pages/UnmanagedSkillDetailPage.test.tsx — one unmanaged skill folder, at /agents/:type/skills/unmanaged/:location/:name.
 //
 // One unmanaged skill's detail page (spec skill-manager "Preview an unmanaged
 // skill read-only"): the header (name, unmanaged + location badges, a back link
@@ -8,8 +8,8 @@
 // managed skill), delete (then back to the agent's Skills tab).
 //
 // The hooks run for real against a mocked wire layer (agentsApi); the fs actions
-// are mocked at their hook. The fixture agent's uid (`u-cc`) is deliberately not
-// its name (`cc`), so every URL assertion has to spell the uid.
+// are mocked at their hook. The page is addressed by the agent's TYPE; the REST
+// reads by its uid (`u-cc`), found through the per-type listing.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ import en from "@/i18n/locales/en.json";
 
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
+    types: vi.fn(),
     get: vi.fn(),
     unmanagedSkill: vi.fn(),
     unmanagedSkillFiles: vi.fn(),
@@ -74,7 +75,10 @@ const TREE: SkillFileNode = {
 };
 
 function stub(skill: UnmanagedSkillDetailOut = GOOD) {
-  api.get.mockResolvedValue({ uid: "u-cc", name: "cc" } as Awaited<
+  api.types.mockResolvedValue({
+    types: [{ type: "claude_code", uid: "u-cc" }],
+  } as Awaited<ReturnType<typeof agentsApi.types>>);
+  api.get.mockResolvedValue({ uid: "u-cc", name: "cc", type: "claude_code" } as Awaited<
     ReturnType<typeof agentsApi.get>
   >);
   api.unmanagedSkill.mockResolvedValue(skill);
@@ -106,11 +110,11 @@ function renderAt(search = "", location = "skills", name = "loose") {
     <QueryClientProvider client={qc}>
       <ToastProvider>
         <MemoryRouter
-          initialEntries={[`/agents/u-cc/skills/unmanaged/${location}/${name}${search}`]}
+          initialEntries={[`/agents/claude_code/skills/unmanaged/${location}/${name}${search}`]}
         >
           <Routes>
             <Route
-              path="/agents/:uid/skills/unmanaged/:location/:name"
+              path="/agents/:type/skills/unmanaged/:location/:name"
               element={<UnmanagedSkillDetailPage />}
             />
             <Route path="*" element={<Where />} />
@@ -134,10 +138,10 @@ describe("UnmanagedSkillDetailPage", () => {
     expect(screen.getAllByText(en.agents.skillsTab.locationSkills)).toHaveLength(2);
     expect(api.unmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills");
 
-    const back = await screen.findByRole("link", { name: /Back to cc/ });
-    expect(back).toHaveAttribute("href", "/agents/u-cc?tab=skills");
+    const back = await screen.findByRole("link", { name: /Back to Skills/ });
+    expect(back).toHaveAttribute("href", "/agents/claude_code/skills");
     fireEvent.click(back);
-    expect(await screen.findByTestId("where")).toHaveTextContent("/agents/u-cc?tab=skills");
+    expect(await screen.findByTestId("where")).toHaveTextContent("/agents/claude_code/skills");
   });
 
   test("the overview shows the SKILL.md description and the folder path", async () => {
@@ -225,7 +229,7 @@ describe("UnmanagedSkillDetailPage", () => {
       await waitFor(() =>
         expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills"),
       );
-      expect(await screen.findByTestId("where")).toHaveTextContent("/agents/u-cc?tab=skills");
+      expect(await screen.findByTestId("where")).toHaveTextContent("/agents/claude_code/skills");
     },
   );
 
@@ -238,7 +242,7 @@ describe("UnmanagedSkillDetailPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Back to/ })).toHaveAttribute(
       "href",
-      "/agents/u-cc?tab=skills",
+      "/agents/claude_code/skills",
     );
   });
 });

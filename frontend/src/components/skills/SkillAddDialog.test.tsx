@@ -1,173 +1,278 @@
-// frontend/src/components/skills/SkillAddDialog.test.tsx
-//
-// The "Add skill" dialog: a single local-folder import form with its own
-// mutation. The folder is picked via the FolderPicker or typed/pasted into the
-// path field; submitting calls the mutation and, on resolve, fires onCreated +
-// closes the dialog.
-import { afterEach, describe, expect, test, vi } from "vitest";
+// src/components/skills/SkillAddDialog.test.tsx
+// The Add skill dialog: three sources and no create; a stage is looked at, chosen from and confirmed, and cancelled on every other way out.
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { PropsWithChildren } from "react";
-import { SkillAddDialog } from "./SkillAddDialog";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+
 import { ApiError } from "@/lib/api/errors";
+import type { SkillStaging, StagedSkill } from "@/lib/api/skills";
+import { acceptance } from "@/test/acceptance";
+import { SkillAddDialog } from "./SkillAddDialog";
 
-vi.mock("@/lib/hooks/useSkills", () => ({
-  useImportSkill: vi.fn(),
+vi.mock("@/lib/api/skills", () => ({
+  skillsApi: {
+    stageFolder: vi.fn(),
+    stageArchive: vi.fn(),
+    stageGit: vi.fn(),
+    confirmStage: vi.fn(),
+    cancelStage: vi.fn(),
+  },
 }));
-const { useImportSkill } = await import("@/lib/hooks/useSkills");
-const useImportSkillMock = vi.mocked(useImportSkill);
-
-// The read-only path field is filled by the FolderPicker, which on the web asks
-// the daemon to open the native dialog (fsApi.pickFolder).
 vi.mock("@/lib/api/fs", () => ({ fsApi: { browse: vi.fn(), pickFolder: vi.fn() } }));
-const { fsApi } = await import("@/lib/api/fs");
-const pickFolderMock = vi.mocked(fsApi.pickFolder);
 
-function wrap(ui: React.ReactNode) {
+const { skillsApi } = await import("@/lib/api/skills");
+const api = vi.mocked(skillsApi);
+
+function staged(over: Partial<StagedSkill> = {}): StagedSkill {
+  return {
+    folder: ".",
+    name: "release-notes",
+    description: "Draft release notes.",
+    file_count: 4,
+    size_bytes: 18_000,
+    valid: true,
+    reason: null,
+    message: null,
+    taken: false,
+    protected: false,
+    ...over,
+  };
+}
+
+function stage(skills: StagedSkill[], kind: SkillStaging["kind"] = "archive"): SkillStaging {
+  return {
+    staging_id: "stg-1",
+    kind,
+    label: "skills.zip",
+    ref: null,
+    subpath: "",
+    commit: null,
+    skills,
+  };
+}
+
+function Where() {
+  return <span data-testid="where">{useLocation().pathname}</span>;
+}
+
+function renderDialog(props: Partial<Parameters<typeof SkillAddDialog>[0]> = {}) {
+  const onOpenChange = vi.fn();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return ({ children }: PropsWithChildren) => (
-    <QueryClientProvider client={qc}>{children ?? ui}</QueryClientProvider>
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={["/skills"]}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <>
+                <SkillAddDialog open onOpenChange={onOpenChange} {...props} />
+                <Where />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+  return { onOpenChange };
 }
 
-function stub(opts: {
-  importAsync?: ReturnType<typeof vi.fn>;
-  importError?: unknown;
-  reset?: ReturnType<typeof vi.fn>;
-}) {
-  useImportSkillMock.mockReturnValue({
-    mutateAsync: opts.importAsync ?? vi.fn().mockResolvedValue({}),
-    isPending: false,
-    error: opts.importError ?? null,
-    reset: opts.reset ?? vi.fn(),
-  } as unknown as ReturnType<typeof useImportSkill>);
-}
+const zip = () => new File(["PK"], "skills.zip", { type: "application/zip" });
 
-/** Pick a folder through the (mocked) native dialog and wait for it to land. */
-async function pickFolder(path: string) {
-  pickFolderMock.mockResolvedValue({ available: true, path });
-  fireEvent.click(screen.getByRole("button", { name: /browse/i }));
-  await waitFor(() => expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toHaveValue(path));
+function uploadArchive() {
+  fireEvent.click(screen.getByRole("radio", { name: "From an archive" }));
+  fireEvent.change(screen.getByLabelText("Archive"), { target: { files: [zip()] } });
 }
 
 describe("SkillAddDialog", () => {
-  afterEach(() => vi.clearAllMocks());
+  // Unmounting a dialog with a stage open cancels it asynchronously, so the
+  // previous test's cancel lands after its own teardown: clear before each test.
+  beforeEach(() => vi.clearAllMocks());
 
-  test("shows the local-folder form", () => {
-    stub({});
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
-    expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toBeInTheDocument();
+  acceptance("skill-manager", "the add dialog offers three sources and no create", () => {
+    renderDialog();
+    const sources = screen.getAllByRole("radio").map((r) => r.textContent);
+    expect(sources).toEqual(["From a folder", "From an archive", "From Git"]);
+    expect(screen.queryByText(/create|new skill|from scratch/i)).not.toBeInTheDocument();
   });
 
-  test("offers a folder picker beside the path display", () => {
-    // No skill-manager requirement states the picker any more; what it reuses
-    // is the daemon's own native folder dialog (spec daemon "Open the
-    // host's native folder picker").
-    stub({});
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
-    // The shared FolderPicker's Browse button — native dialog on desktop, daemon
-    // native dialog → in-app browser on web — so the skill folder is picked, not typed.
-    expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
-  });
+  acceptance("skill-manager", "nothing is added until the user confirms", async () => {
+    api.stageArchive.mockResolvedValue(stage([staged()]));
+    api.cancelStage.mockResolvedValue(undefined);
+    const { onOpenChange } = renderDialog();
+    uploadArchive();
+    expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();
+    expect(api.stageArchive).toHaveBeenCalledTimes(1);
 
-  test("imports the picked path and fires onCreated + close", async () => {
-    const importAsync = vi.fn().mockResolvedValue({});
-    const onCreated = vi.fn();
-    const onOpenChange = vi.fn();
-    stub({ importAsync });
-    render(<SkillAddDialog open onOpenChange={onOpenChange} onCreated={onCreated} />, {
-      wrapper: wrap(null),
-    });
-
-    await pickFolder("/tmp/my-skill");
-    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
-
-    await waitFor(() => expect(importAsync).toHaveBeenCalledWith({ path: "/tmp/my-skill" }));
-    expect(onCreated).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(api.cancelStage).toHaveBeenCalledWith("stg-1"));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.confirmStage).not.toHaveBeenCalled();
   });
 
-  test("imports a pasted path, trimmed of whitespace and quotes", async () => {
-    const importAsync = vi.fn().mockResolvedValue({});
-    stub({ importAsync });
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
+  test("opens on the source it is given", () => {
+    renderDialog({ initialSource: "git" });
+    expect(screen.getByRole("radio", { name: "From Git" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByLabelText("Repository URL")).toBeInTheDocument();
+  });
 
-    const field = screen.getByPlaceholderText(/\.claude\/skills/i);
-    expect(field).not.toHaveAttribute("readonly");
-    fireEvent.change(field, { target: { value: '  "/Users/me/skills/my skill"\n' } });
-    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+  test("switching source cancels the open stage", async () => {
+    api.stageArchive.mockResolvedValue(stage([staged()]));
+    renderDialog();
+    uploadArchive();
+    await screen.findByText("Found SKILL.md at the top level");
+    fireEvent.click(screen.getByRole("radio", { name: "From Git" }));
+    await waitFor(() => expect(api.cancelStage).toHaveBeenCalledWith("stg-1"));
+  });
+
+  test("a pasted folder path is trimmed of quotes and staged", async () => {
+    api.stageFolder.mockResolvedValue(stage([staged()], "folder"));
+    renderDialog();
+    fireEvent.change(screen.getByLabelText("Folder"), {
+      target: { value: '  "/Users/me/skills/release-notes"\n' },
+    });
+    await waitFor(() =>
+      expect(api.stageFolder).toHaveBeenCalledWith("/Users/me/skills/release-notes"),
+    );
+    expect(await screen.findByText("release-notes")).toBeInTheDocument();
+  });
+
+  test("several skills: choosing two confirms exactly those, then opens the first", async () => {
+    api.stageArchive.mockResolvedValue(
+      stage([
+        staged({ folder: "release", name: "release" }),
+        staged({ folder: "review", name: "review" }),
+        staged({ folder: "triage", name: "triage" }),
+      ]),
+    );
+    api.confirmStage.mockResolvedValue({
+      items: [{ name: "review" }, { name: "triage" }],
+    } as never);
+    const { onOpenChange } = renderDialog();
+    uploadArchive();
+    await screen.findByText("3 skills found — choose the ones to add");
+
+    const add = screen.getByRole("button", { name: "Add skill" });
+    expect(add).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Add review" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Add triage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add 2 skills" }));
 
     await waitFor(() =>
-      expect(importAsync).toHaveBeenCalledWith({ path: "/Users/me/skills/my skill" }),
+      expect(api.confirmStage).toHaveBeenCalledWith("stg-1", {
+        skills: ["review", "triage"],
+        replace: [],
+      }),
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.cancelStage).not.toHaveBeenCalled();
+    expect(screen.getByTestId("where")).toHaveTextContent("/skills/review");
+  });
+
+  test("a taken name is replaced only when chosen as Replace", async () => {
+    api.stageArchive.mockResolvedValue(
+      stage([
+        staged({ folder: "review", name: "review", taken: true }),
+        staged({ folder: "triage", name: "triage" }),
+      ]),
+    );
+    api.confirmStage.mockResolvedValue({ items: [{ name: "review" }] } as never);
+    renderDialog();
+    uploadArchive();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Replace review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+    await waitFor(() =>
+      expect(api.confirmStage).toHaveBeenCalledWith("stg-1", {
+        skills: ["review"],
+        replace: ["review"],
+      }),
     );
   });
 
-  test("Import stays disabled for a whitespace-only path", () => {
-    stub({});
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
-    fireEvent.change(screen.getByPlaceholderText(/\.claude\/skills/i), {
-      target: { value: "   " },
-    });
-    expect(screen.getByRole("button", { name: /^import$/i })).toBeDisabled();
+  test("a single taken skill asks to replace it by name", async () => {
+    api.stageArchive.mockResolvedValue(stage([staged({ name: "pdf", taken: true })]));
+    api.confirmStage.mockResolvedValue({ items: [{ name: "pdf" }] } as never);
+    renderDialog();
+    uploadArchive();
+    expect(await screen.findByText("You already have a skill named pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Replace pdf" }));
+    await waitFor(() =>
+      expect(api.confirmStage).toHaveBeenCalledWith("stg-1", {
+        skills: ["pdf"],
+        replace: ["pdf"],
+      }),
+    );
   });
 
-  test("Import is disabled until a folder is picked", () => {
-    stub({});
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
-    expect(screen.getByRole("button", { name: /^import$/i })).toBeDisabled();
+  test("an invalid or built-in skill cannot be chosen, and says why", async () => {
+    api.stageArchive.mockResolvedValue(
+      stage([
+        staged({
+          folder: "broken",
+          name: null,
+          valid: false,
+          reason: "skill_md_missing",
+          message: "SKILL.md has no frontmatter",
+        }),
+        staged({ folder: "coffer-guide", name: "coffer-guide", taken: true, protected: true }),
+        staged({ folder: "ok", name: "ok" }),
+      ]),
+    );
+    renderDialog();
+    uploadArchive();
+    expect(await screen.findByText("SKILL.md has no frontmatter")).toBeInTheDocument();
+    expect(screen.getByText(/built-in skill has this name/)).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   });
 
-  test("surfaces the import error inline", () => {
-    stub({ importError: new ApiError("INVALID_SKILL", "missing SKILL.md") });
-    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
-      wrapper: wrap(null),
-    });
-    expect(screen.getByText(/missing SKILL\.md|invalid/i)).toBeInTheDocument();
+  test("an unsafe archive lists the offending entries", async () => {
+    api.stageArchive.mockRejectedValue(
+      new ApiError("SKILL_INVALID", "the archive holds unsafe entries", {
+        reason: "archive_unsafe_entries",
+        offenders: [
+          { entry: "../evil.sh", problem: "parent_segment" },
+          { entry: "link", problem: "symlink" },
+        ],
+      }),
+    );
+    renderDialog();
+    uploadArchive();
+    expect(await screen.findByText("The archive has unsafe entries")).toBeInTheDocument();
+    expect(screen.getByText("../evil.sh")).toBeInTheDocument();
+    expect(screen.getByText("symbolic link")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add skill" })).toBeDisabled();
   });
 
-  test("409 conflict shows replace-confirm; confirming retries with overwrite: true", async () => {
-    const conflictError = new ApiError("RESOURCE_ALREADY_EXISTS", "already exists");
-    // First call rejects with 409; second call succeeds.
-    const importAsync = vi.fn().mockRejectedValueOnce(conflictError).mockResolvedValueOnce({});
-    const reset = vi.fn();
-    const onCreated = vi.fn();
-    const onOpenChange = vi.fn();
-    stub({ importAsync, reset });
+  test("an archive with no SKILL.md says where one must be", async () => {
+    api.stageArchive.mockRejectedValue(
+      new ApiError("SKILL_INVALID", "no SKILL.md", {
+        reason: "skill_md_not_found",
+        looked_in: ["skills.zip/SKILL.md"],
+      }),
+    );
+    renderDialog();
+    uploadArchive();
+    expect(await screen.findByText(/must be at the top or one folder down/)).toBeInTheDocument();
+  });
 
-    render(<SkillAddDialog open onOpenChange={onOpenChange} onCreated={onCreated} />, {
-      wrapper: wrap(null),
-    });
-
-    // Pick a folder and submit.
-    await pickFolder("/tmp/my-skill");
-    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
-
-    // Conflict banner appears with skill name derived from the path.
-    await waitFor(() => expect(screen.getByText(/my-skill.*already exists/i)).toBeInTheDocument());
-
-    // First import call was without overwrite.
-    expect(importAsync).toHaveBeenNthCalledWith(1, { path: "/tmp/my-skill" });
-
-    // Click the Replace button.
-    fireEvent.click(screen.getByRole("button", { name: /replace/i }));
-
-    // Second call includes overwrite: true and dialog closes.
-    await waitFor(() => expect(importAsync).toHaveBeenCalledTimes(2));
-    expect(importAsync).toHaveBeenNthCalledWith(2, {
-      path: "/tmp/my-skill",
-      overwrite: true,
-    });
-    await waitFor(() => expect(onCreated).toHaveBeenCalled());
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+  test("a failed clone shows git's message and offers Try again", async () => {
+    api.stageGit
+      .mockRejectedValueOnce(
+        new ApiError("SKILL_SOURCE_UNREACHABLE", "fatal: repository 'https://x/y' not found"),
+      )
+      .mockResolvedValueOnce(stage([staged()], "git"));
+    renderDialog({ initialSource: "git" });
+    fireEvent.change(screen.getByLabelText("Repository URL"), { target: { value: "https://x/y" } });
+    fireEvent.change(screen.getByLabelText("Branch or tag"), { target: { value: "main" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clone" }));
+    await waitFor(() => expect(api.stageGit).toHaveBeenCalled());
+    expect(api.stageGit).toHaveBeenCalledWith({ url: "https://x/y", ref: "main", path: null });
+    expect(
+      await screen.findByText("fatal: repository 'https://x/y' not found"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();
   });
 });

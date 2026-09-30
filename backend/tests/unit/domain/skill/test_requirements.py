@@ -95,7 +95,7 @@ def test_no_command_and_wrong_shapes_are_skipped() -> None:
 
 
 def test_not_a_list_is_one_warning() -> None:
-    parsed = parse_requires("gh")
+    parsed = parse_requires(7)
     assert parsed.requirements == ()
     assert parsed.warnings == ("requires: expected a list of commands; ignored",)
 

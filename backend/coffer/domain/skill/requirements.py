@@ -10,7 +10,12 @@ requires:
     brew: gh                    # optional; the Homebrew formula
     why: Opens and labels issues.
   - jq                          # shorthand: a command with no conditions
+  - "node>=20.1"                # shorthand: a command and its minimum
 ```
+
+The shorter spellings of spec skill-manager "Show the commands a skill
+declares it needs" are the same list: ``requires: {commands: [...]}``, an entry
+``name>=version`` (also ``==`` / ``~=``), and ``{command|name, version}``.
 
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
@@ -31,7 +36,11 @@ COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 FORMULA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9@._+/-]{0,127}$")
 _MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 _TEXT_MAX = 200
-_KEYS = frozenset({"command", "title", "min_version", "login_check", "login", "brew", "why"})
+_KEYS = frozenset(
+    {"command", "name", "title", "min_version", "version", "login_check", "login", "brew", "why"}
+)
+#: ``gh``, ``gh>=2.40``, ``node == 20.1``, ``python3~=3.12``.
+_SPEC_RE = re.compile(r"^\s*([^\s<>=!~]+)\s*(?:(?:>=|=>|~=|==)\s*([0-9][^\s]*))?\s*$")
 
 
 @dataclass(frozen=True)
@@ -71,6 +80,10 @@ def requirements_from_skill_md(text: str) -> RequirementsParse:
 def parse_requires(value: object) -> RequirementsParse:
     """Every entry of a ``requires:`` value that can be used, and a warning for
     each one that cannot. A command named twice keeps its first entry."""
+    if isinstance(value, dict):
+        value = value.get("commands")
+    if isinstance(value, str):
+        value = [value]
     if value is None:
         return RequirementsParse()
     if not isinstance(value, list):
@@ -95,12 +108,17 @@ def parse_requires(value: object) -> RequirementsParse:
 
 def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
     if isinstance(entry, str):
-        return CommandRequirement(command=_command(entry)), []
+        spec = _SPEC_RE.match(entry)
+        if spec is None:
+            raise _SkipEntryError(f"{entry!r} is not a command name")
+        return CommandRequirement(
+            command=_command(spec.group(1)), min_version=_min_version(spec.group(2))
+        ), []
     if not isinstance(entry, dict):
         raise _SkipEntryError("expected a command name or a mapping")
-    if "command" not in entry:
+    if "command" not in entry and "name" not in entry:
         raise _SkipEntryError("no command")
-    command = _command(entry["command"])
+    command = _command(entry.get("command", entry.get("name")))
     dropped: list[str] = []
     unknown = sorted(str(k) for k in entry if k not in _KEYS)
     if unknown:
@@ -113,7 +131,7 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
         CommandRequirement(
             command=command,
             title=_text(entry.get("title"), "title", dropped),
-            min_version=_min_version(entry.get("min_version")),
+            min_version=_min_version(entry.get("min_version", entry.get("version"))),
             login_check=login_check,
             login=_text(entry.get("login"), "login", dropped),
             brew=brew,
@@ -161,7 +179,7 @@ def _min_version(value: object) -> str | None:
     if isinstance(value, (bool, float)):
         # YAML reads ``2.40`` as the float 2.4, which is a different minimum.
         raise _SkipEntryError(f'min_version {value!r} must be quoted, like "2.40"')
-    text = str(value).strip()
+    text = str(value).strip().lstrip(">=~ ")
     if not _MIN_VERSION_RE.match(text):
         raise _SkipEntryError(f"min_version {text!r} is not dotted numbers")
     return text

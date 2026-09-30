@@ -9,9 +9,10 @@
 // The two file hooks are mocked at the network boundary, as are the fs actions
 // (their own suite covers the transport).
 //
-// The agent half of the route is its `uid` (`/agents/:uid/memory`), so the
-// fixture route mounts a uid that is not the agent's name — the file reads and
-// the back link both have to spell it.
+// The page is addressed by the agent's TYPE (`/agents/:type/memory/store`);
+// `useAgentRoute` turns it into the uid every read is keyed by, and is mocked
+// here with a uid that is not the type — the reads have to spell the uid, the
+// back link the type.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -20,7 +21,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AgentMemoryStorePage } from "./AgentMemoryStorePage";
 import type { NativeMemoryFileContent, NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
 
-vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({
+vi.mock("@/lib/hooks/useAgentNativeMemory", async (importOriginal) => ({
+  countMemoryFiles: (await importOriginal<typeof import("@/lib/hooks/useAgentNativeMemory")>())
+    .countMemoryFiles,
   useNativeMemoryFiles: vi.fn(),
   useNativeMemoryFileContent: vi.fn(),
 }));
@@ -29,6 +32,19 @@ const openMock = vi.fn(() => Promise.resolve());
 const revealMock = vi.fn(() => Promise.resolve());
 vi.mock("@/lib/fsActions", () => ({
   useFsActions: () => ({ open: openMock, reveal: revealMock }),
+}));
+
+vi.mock("@/lib/hooks/useAgentRoute", () => ({
+  useAgentRoute: () => ({
+    type: "claude_code",
+    typeRow: undefined,
+    uid: "agt_01cc",
+    agent: undefined,
+    isPending: false,
+    error: null,
+    notAdded: false,
+    redirecting: false,
+  }),
 }));
 
 const hooks = await import("@/lib/hooks/useAgentNativeMemory");
@@ -86,14 +102,16 @@ function stubContent(content: Partial<NativeMemoryFileContent> = {}) {
   } as unknown as ReturnType<typeof hooks.useNativeMemoryFileContent>);
 }
 
-function renderAt(search = `?dir=${encodeURIComponent(DIR)}&project=%2FUsers%2Fxing%2FCoffer`) {
+function renderAt(
+  search = `?dir=${encodeURIComponent(DIR)}&project=${encodeURIComponent("/Users/xing/Coffer")}`,
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/agents/u-claude/memory${search}`]}>
+      <MemoryRouter initialEntries={[`/agents/claude_code/memory/store${search}`]}>
         <Routes>
-          <Route path="/agents/:uid/memory" element={<AgentMemoryStorePage />} />
-          <Route path="/agents/:uid" element={<div>agent detail</div>} />
+          <Route path="/agents/:type/memory/store" element={<AgentMemoryStorePage />} />
+          <Route path="/agents/:type/memory" element={<div>memory tab</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -107,9 +125,10 @@ describe("AgentMemoryStorePage", () => {
     stubTree();
     stubContent();
     renderAt();
-    expect(vi.mocked(hooks.useNativeMemoryFiles)).toHaveBeenCalledWith("u-claude", DIR);
-    expect(screen.getByRole("heading", { name: "/Users/xing/Coffer" })).toBeInTheDocument();
-    expect(screen.getByText(DIR)).toBeInTheDocument();
+    expect(vi.mocked(hooks.useNativeMemoryFiles)).toHaveBeenCalledWith("agt_01cc", DIR);
+    expect(screen.getByRole("heading", { name: "~/Coffer" })).toBeInTheDocument();
+    expect(screen.getByText("Claude Code native memory store · 2 files")).toBeInTheDocument();
+    expect(screen.getByText("Files · 2")).toBeInTheDocument();
   });
 
   test("shows the store's files and previews the one you select", () => {
@@ -117,13 +136,17 @@ describe("AgentMemoryStorePage", () => {
     stubContent();
     renderAt();
 
-    expect(screen.getByText("MEMORY.md")).toBeInTheDocument();
-    // Nothing is previewed until a file is chosen.
-    expect(screen.getByText(/select a file to view/i)).toBeInTheDocument();
+    // The store's index opens first.
+    expect(vi.mocked(hooks.useNativeMemoryFileContent).mock.calls[0]).toEqual([
+      "agt_01cc",
+      DIR,
+      "MEMORY.md",
+    ]);
+    expect(screen.getByText(/index claude code loads at session start/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("port-drift.md"));
     expect(vi.mocked(hooks.useNativeMemoryFileContent).mock.calls.at(-1)).toEqual([
-      "u-claude",
+      "agt_01cc",
       DIR,
       "port-drift.md",
     ]);
@@ -150,6 +173,8 @@ describe("AgentMemoryStorePage", () => {
     fireEvent.click(screen.getByText("port-drift.md"));
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(screen.getByText(/claude code owns these files and rewrites them/i)).toBeInTheDocument();
   });
 
   test("a truncated file says the preview is only its start", () => {
@@ -164,7 +189,7 @@ describe("AgentMemoryStorePage", () => {
     stubTree();
     stubContent();
     renderAt("");
-    expect(screen.getByRole("alert")).toHaveTextContent(/no memory store was named/i);
+    expect(screen.getByText(/no memory store was named/i)).toBeInTheDocument();
   });
 
   // The back affordance is the shared PageHeader's, so it is a real link with
@@ -173,9 +198,9 @@ describe("AgentMemoryStorePage", () => {
     stubTree();
     stubContent();
     renderAt();
-    const back = screen.getByRole("link", { name: /back to/i });
-    expect(back).toHaveAttribute("href", "/agents/u-claude?tab=memory");
+    const back = screen.getByRole("link", { name: /claude code · memory/i });
+    expect(back).toHaveAttribute("href", "/agents/claude_code/memory");
     fireEvent.click(back);
-    expect(screen.getByText("agent detail")).toBeInTheDocument();
+    expect(screen.getByText("memory tab")).toBeInTheDocument();
   });
 });

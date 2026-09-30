@@ -214,6 +214,9 @@ class ProviderModelsOut(BaseModel):
 
     models: list[ProviderModel]
     message: str = ""
+    #: False only when the listing call failed; an empty answer is reachable,
+    #: so a caller need not read ``message`` to tell the two apart.
+    reachable: bool = True
 
 
 class DetectLocalIn(BaseModel):

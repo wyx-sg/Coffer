@@ -1,10 +1,10 @@
 // frontend/src/components/agents/ConfigEditorPane.test.tsx
 // The right-hand pane reads by default and edits behind an explicit Edit: no
 // textarea until the user asks for one, so a pane opened to LOOK at an agent's
-// real configuration cannot be changed by a stray keystroke. It also shows the
-// path plus an optional one-line description, and renders the FileActions
-// (daemon-backed open/reveal) on the same row as Edit / Save / Cancel so the
-// user can open the file in their own editor instead.
+// real configuration cannot be changed by a stray keystroke. It shows the
+// file's name and state, an optional one-line description, the FileActions
+// (daemon-backed open/reveal) beside Edit / Revert / Save, and a footer with
+// the format and the absolute path.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";
@@ -30,14 +30,14 @@ function draftStub(overrides: Partial<Draft> = {}): Draft {
 
 function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditorPaneProps {
   return {
-    pathLabel: "/home/u/.claude/settings.json",
+    name: "settings.json",
     filePath: "/home/u/.claude/settings.json",
-    formatLabel: "json",
-    editorKey: "settings",
+    format: "json",
     content: "{}",
     loading: false,
     draft: draftStub(),
-    readOnlyMissing: false,
+    missing: false,
+    agentName: "Claude Code",
     ...overrides,
   };
 }
@@ -56,7 +56,7 @@ describe("ConfigEditorPane", () => {
     expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
   });
 
-  test("Edit swaps the preview for a textarea with Save and Cancel", () => {
+  test("Edit swaps the preview for a textarea with Revert and Save", () => {
     const startEditing = vi.fn();
     const { rerender } = render(
       <ConfigEditorPane {...baseProps({ draft: draftStub({ startEditing }) })} />,
@@ -67,7 +67,21 @@ describe("ConfigEditorPane", () => {
     rerender(<ConfigEditorPane {...baseProps({ draft: draftStub({ editing: true }) })} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^revert$/i })).toBeInTheDocument();
+    expect(screen.getByText("Valid JSON")).toBeInTheDocument();
+  });
+
+  test("Revert with a dirty draft asks before dropping it", () => {
+    const cancel = vi.fn();
+    render(
+      <ConfigEditorPane
+        {...baseProps({ draft: draftStub({ editing: true, dirty: true, value: "{ }", cancel }) })}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^revert$/i }));
+    expect(cancel).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /discard/i }));
+    expect(cancel).toHaveBeenCalled();
   });
 
   test("Save stays disabled until the draft actually differs", () => {
@@ -93,7 +107,10 @@ describe("ConfigEditorPane", () => {
         })}
       />,
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(/changed on disk/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /save refused — settings.json changed on disk/i,
+    );
+    expect(screen.getByRole("button", { name: /copy my edits/i })).toBeInTheDocument();
     // The point of the conflict path: what the user typed is still on screen.
     expect(screen.getByRole("textbox")).toHaveValue("my unsaved edit");
     fireEvent.click(screen.getByRole("button", { name: /discard my edits/i }));
@@ -112,10 +129,27 @@ describe("ConfigEditorPane", () => {
     expect(screen.queryByRole("button", { name: /discard my edits/i })).not.toBeInTheDocument();
   });
 
-  test("a not-yet-created file cannot be edited", () => {
-    render(<ConfigEditorPane {...baseProps({ readOnlyMissing: true })} />);
+  test("a not-yet-created file offers Create instead of Edit", () => {
+    const startEditing = vi.fn();
+    const setDraft = vi.fn();
+    render(
+      <ConfigEditorPane
+        {...baseProps({ missing: true, draft: draftStub({ startEditing, setDraft }) })}
+      />,
+    );
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/not created yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Not created")).toBeInTheDocument();
+    expect(screen.getByText(/claude code reads it if it’s there/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /create settings.json/i }));
+    expect(startEditing).toHaveBeenCalled();
+    expect(setDraft).toHaveBeenCalledWith("{}\n");
+  });
+
+  test("the footer names the format and the absolute path", () => {
+    render(<ConfigEditorPane {...baseProps({ format: "markdown", name: "CLAUDE.md" })} />);
+    expect(screen.getByText("Markdown")).toBeInTheDocument();
+    expect(screen.getByText(/saving keeps a \.bak/i)).toBeInTheDocument();
+    expect(screen.getByText("/home/u/.claude/settings.json")).toBeInTheDocument();
   });
 
   test("renders the FileActions bar (daemon-backed open/reveal on the web)", () => {
@@ -146,12 +180,12 @@ describe("ConfigEditorPane", () => {
     expect(labels[2]).toMatch(/^edit$/i);
   });
 
-  test("while editing, the file actions share the row with Cancel and Save", () => {
+  test("while editing, the file actions share the row with Revert and Save", () => {
     render(<ConfigEditorPane {...baseProps({ draft: draftStub({ editing: true }) })} />);
     const row = screen.getByTestId("file-editor-actions");
     expect(within(row).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    expect(within(row).getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^revert$/i })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /^save$/i })).toBeInTheDocument();
   });
 

@@ -1,6 +1,9 @@
 _VENV_PY := .venv/bin/python3
 PY := $(or $(and $(wildcard $(_VENV_PY)),$(_VENV_PY)),python3)
 BACKEND := backend
+# Every Python step imports this checkout's backend, never whichever checkout the
+# shared venv's editable install points at (worktrees share one venv).
+export PYTHONPATH := $(CURDIR)/$(BACKEND)$(if $(PYTHONPATH),:$(PYTHONPATH))
 FRONTEND := frontend
 
 # Backend pytest runs on pytest-xdist workers. PYTEST_WORKERS is xdist's `-n`:

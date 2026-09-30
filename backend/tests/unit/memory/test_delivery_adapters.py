@@ -12,7 +12,14 @@ import json
 import pytest
 
 from coffer.domain.hook_trust import HookTrust
-from coffer.domain.memory.delivery import HOOKS_KEY, MARKER, InstalledHook, context_invocation
+from coffer.domain.memory.delivery import (
+    DELIVERY_EVENTS,
+    HOOKS_KEY,
+    MARKER,
+    InstalledHook,
+    events_label,
+    hook_invocation,
+)
 from coffer.infrastructure.memory.delivery import (
     CLAUDE_CODE_ADAPTER,
     CODEX_ADAPTER,
@@ -22,35 +29,57 @@ from coffer.infrastructure.memory.delivery.claude_code import ADAPTER as _CC
 from coffer.infrastructure.memory.delivery.codex import ADAPTER as _CODEX
 from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 
+_ALL_EVENTS = "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit"
+
 
 def test_claude_code_adapter_uses_session_start_and_settings_key() -> None:
     assert CLAUDE_CODE_ADAPTER is _CC
-    assert _CC.event == "SessionStart"
+    assert _CC.event == _ALL_EVENTS == events_label(DELIVERY_EVENTS)
     assert _CC.config_key == "settings"
 
 
 def test_codex_adapter_uses_session_start_and_hooks_key() -> None:
     assert CODEX_ADAPTER is _CODEX
-    assert _CODEX.event == "SessionStart"
+    assert _CODEX.event == _ALL_EVENTS
     assert _CODEX.config_key == "hooks"
     assert _CODEX.trust_config_key == "config"
 
 
 def test_codex_command_asks_for_session_start_json_and_has_no_ppid_guard() -> None:
-    """SessionStart fires once per session, so no guard; and a `$PPID` guard
-    would be wrong anyway — every session of one `codex app-server` (Desktop,
-    IDE hosts) shares that parent pid."""
+    """One command on every event: it reads the event from stdin, so it
+    carries no `--hook-event`; and no `$PPID` guard — every session of one
+    `codex app-server` (Desktop, IDE hosts) shares that parent pid."""
     cmd = _CODEX.command_for("cx")
-    assert cmd == f": {MARKER}; {context_invocation('cx', hook_event='SessionStart')}"
-    assert cmd.endswith("--hook-event SessionStart")
+    assert cmd == f": {MARKER}; {hook_invocation('cx')}"
+    assert " memory hook " in cmd
+    assert "--hook-event" not in cmd
     assert "$PPID" not in cmd
     assert "[ -e" not in cmd
 
 
 def test_codex_install_matches_every_session_start_source() -> None:
-    entry = json.loads(_CODEX.install("", "cx"))[HOOKS_KEY]["SessionStart"][0]
+    hooks = json.loads(_CODEX.install("", "cx"))[HOOKS_KEY]
+    entry = hooks["SessionStart"][0]
     assert entry["matcher"] == "startup|resume|clear|compact"
     assert entry["hooks"][0]["timeout"] == 10
+    assert "matcher" not in hooks["UserPromptSubmit"][0]
+    assert hooks["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 5
+    for event in ("PreToolUse", "PostToolUse"):
+        assert hooks[event][0]["matcher"] == "Bash"
+        assert hooks[event][0]["hooks"][0]["timeout"] == 5
+
+
+@pytest.mark.parametrize("adapter", [_CC, _CODEX])
+def test_every_adapter_installs_the_same_command_on_all_four_events(adapter: object) -> None:
+    text = adapter.install("", "u1")  # type: ignore[attr-defined]
+    hooks = json.loads(text)[HOOKS_KEY]
+    assert set(hooks) == set(DELIVERY_EVENTS)
+    cmd = adapter.command_for("u1")  # type: ignore[attr-defined]
+    for event in DELIVERY_EVENTS:
+        assert [e["hooks"][0]["command"] for e in hooks[event]] == [cmd]
+    found = adapter.find_all(text)  # type: ignore[attr-defined]
+    assert sorted(h.event for h in found) == sorted(DELIVERY_EVENTS)
+    assert adapter.install(text, "u1") == text  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize("adapter", delivery_adapters("/Users/me/.coffer/bin/coffer"))
@@ -58,18 +87,18 @@ def test_every_adapter_runs_the_cli_by_the_absolute_path_it_was_given(adapter: o
     """A hook runs under a shell that need not have `~/.coffer/bin` on its
     PATH (Codex's `/bin/zsh`, Claude Code started from the Dock)."""
     cmd = adapter.command_for("u1")  # type: ignore[attr-defined]
-    assert cmd.startswith(f": {MARKER}; /Users/me/.coffer/bin/coffer memory context ")
+    assert cmd.startswith(f": {MARKER}; /Users/me/.coffer/bin/coffer memory hook ")
     assert adapter.is_coffer_command(cmd)  # type: ignore[attr-defined]
 
 
 def test_a_cli_path_with_a_space_is_quoted() -> None:
     (cc, _cx) = delivery_adapters("/Users/a b/.coffer/bin/coffer")
-    assert "'/Users/a b/.coffer/bin/coffer' memory context" in cc.command_for("u1")
+    assert "'/Users/a b/.coffer/bin/coffer' memory hook" in cc.command_for("u1")
 
 
 def test_codex_install_moves_an_older_builds_user_prompt_submit_hook() -> None:
     """The migration: an older build's guarded entry on UserPromptSubmit is
-    replaced by one on SessionStart; foreign hooks on both events stay."""
+    replaced by this build's entries; foreign hooks on both events stay first."""
     legacy = f': {MARKER}; f="$TMPDIR/x-$PPID"; [ -e "$f" ] || {{ coffer memory context; }}'
     foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeSubmitPrompt.sh"}]}
     orca = {"hooks": [{"type": "command", "command": "/orca/session.sh"}]}
@@ -85,7 +114,11 @@ def test_codex_install_moves_an_older_builds_user_prompt_submit_hook() -> None:
     assert found is not None and found.event == "UserPromptSubmit"
 
     data = json.loads(_CODEX.install(text, "cx"))
-    assert data[HOOKS_KEY]["UserPromptSubmit"] == [foreign]
+    ups = data[HOOKS_KEY]["UserPromptSubmit"]
+    assert len(ups) == 2
+    assert ups[0] == foreign
+    assert ups[1]["hooks"][0]["command"] == _CODEX.command_for("cx")
+    assert legacy not in json.dumps(data)
     assert data[HOOKS_KEY]["SessionStart"][0] == orca
     assert data[HOOKS_KEY]["SessionStart"][1]["hooks"][0]["command"] == _CODEX.command_for("cx")
 
@@ -116,7 +149,10 @@ def test_codex_install_coexists_with_a_foreign_session_start_entry() -> None:
     entries = data[HOOKS_KEY]["SessionStart"]
     assert len(entries) == 2
     assert entries[0] == skynet_fixture["hooks"]["SessionStart"][0]
-    assert data[HOOKS_KEY]["PreToolUse"] == skynet_fixture["hooks"]["PreToolUse"]
+    pre = data[HOOKS_KEY]["PreToolUse"]
+    assert len(pre) == 2
+    assert pre[0] == skynet_fixture["hooks"]["PreToolUse"][0]
+    assert pre[1]["matcher"] == "Bash"
     assert data[HOOKS_KEY]["Stop"] == skynet_fixture["hooks"]["Stop"]
 
     removed = json.loads(_CODEX.remove(new_text))
@@ -170,18 +206,33 @@ def _approved(key: str, digest: str, *, enabled: bool | None = None) -> str:
 def test_codex_trust_reads_every_state_codex_can_record() -> None:
     path = "/h/.codex/hooks.json"
     text = _CODEX.install("", "cx")
-    hook = _CODEX.find(text)
-    assert hook is not None
-    key = trust_key(path, hook)
-    digest = current_hash(hook)
+    hooks = _CODEX.find_all(text)
+    assert len(hooks) == 4
+    first, rest = hooks[0], hooks[1:]
+    key = trust_key(path, first)
+    digest = current_hash(first)
+    # Every other entry approved as it stands; only the first one varies.
+    others = "".join(
+        f'\n[hooks.state."{trust_key(path, h)}"]\ntrusted_hash = "{current_hash(h)}"\n'
+        for h in rest
+    )
+
+    def with_others(first_state: str) -> str:
+        return first_state + others
 
     assert _CODEX.trust(text, None, path) is HookTrust.UNTRUSTED
     assert _CODEX.trust(text, 'model = "x"\n', path) is HookTrust.UNTRUSTED
-    assert _CODEX.trust(text, _approved(key, digest), path) is HookTrust.TRUSTED
-    assert _CODEX.trust(text, _approved(key, "sha256:old"), path) is HookTrust.MODIFIED
-    assert _CODEX.trust(text, _approved(key, digest, enabled=False), path) is (HookTrust.DISABLED)
+    assert _CODEX.trust(text, with_others(_approved(key, digest)), path) is HookTrust.TRUSTED
+    assert _CODEX.trust(text, with_others(_approved(key, "sha256:old")), path) is (
+        HookTrust.MODIFIED
+    )
+    assert _CODEX.trust(text, with_others(_approved(key, digest, enabled=False)), path) is (
+        HookTrust.DISABLED
+    )
     assert _CODEX.trust(text, "not = [toml", path) is HookTrust.UNKNOWN
     # Trust is per slot: approval recorded for another position does not count.
-    assert _CODEX.trust(text, _approved(key.replace(":0:0", ":1:0"), digest), path) is (
-        HookTrust.UNTRUSTED
-    )
+    assert _CODEX.trust(
+        text, with_others(_approved(key.replace(":0:0", ":1:0"), digest)), path
+    ) is (HookTrust.UNTRUSTED)
+    # Four entries are four approvals: one approved alone is not enough.
+    assert _CODEX.trust(text, _approved(key, digest), path) is HookTrust.UNTRUSTED
