@@ -5,11 +5,29 @@ description: Install Coffer with the one-line installer, the macOS desktop app, 
 
 # Install
 
-This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, run the one-line installer and continue with the [Quickstart](/start/quickstart).
+This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, [let your agent install it](#let-your-agent-install-it) or run the one-line installer, then continue with the [Quickstart](/start/quickstart).
 
 ::: warning No tagged release yet
 The one-line installer, the desktop `.dmg` and the release archive all download from a tagged GitHub release. Until the first `v*` tag is published those downloads return 404. For now, [install from source](#from-source).
 :::
+
+## Let your agent install it
+
+If you already work with a coding agent — Claude Code, Codex, or any agent that can run commands on your machine — paste this prompt into it:
+
+```text
+Install Coffer on this machine by following
+https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
+this machine (a release build if one is published for this OS and architecture,
+otherwise from source). Ask me before running anything with sudo or editing my
+shell profile. When it is installed, check it with `coffer daemon status`.
+Then, for each coding agent installed here (claude-code, codex), run
+`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
+config files connect will change before you run it. Do not handle any
+credentials: if a step needs a login, tell me what to do instead.
+```
+
+The agent reads this page, chooses the path that fits your machine and checks the result, asking before it touches anything outside Coffer's own directory. Coffer never asks an agent to handle a credential, so any login stays with you. The rest of this page is what the agent follows, and what you follow to install by hand.
 
 ## Choose an install path
 
