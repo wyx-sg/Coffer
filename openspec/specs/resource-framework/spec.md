@@ -323,6 +323,12 @@ table to its registered default. The on-demand prune MUST be `coffer log prune [
 <table>]`, which prunes every registered table, or only the one named, and prints how many
 entries each lost.
 
+Before a shorter period is saved, the web UI MUST be able to ask how many entries it would delete:
+`GET /api/v1/retention/policies/{table}/preview?days=<n>` answers the entries the table holds now
+and how many of them are older than `n` days, counts them against the same timestamp column the
+prune uses, and deletes and changes nothing. It is a read that serves a confirmation, so it has no
+command of its own: `coffer config set retention.<table>` saves a period directly.
+
 #### Scenario: configure retention per log
 - **GIVEN** the audit and invocation logs grow over time,
 - **WHEN** the user sets a retention period for a log (in days, or "keep forever"),
@@ -333,6 +339,12 @@ entries each lost.
 - **WHEN** the user runs `coffer config set retention.mcp_invocations 7` and then `coffer log prune --table mcp_invocations`
 - **THEN** `coffer config get retention.mcp_invocations` prints 7, the policy change is audited, and the prune reports how many entries it removed
 - **AND** only entries older than 7 days are gone
+
+#### Scenario: a shorter period is previewed before it is saved
+- **GIVEN** the audit log holds 4 entries, 2 of them older than 7 days
+- **WHEN** the web UI asks `GET /api/v1/retention/policies/audit_log/preview?days=7`
+- **THEN** the answer carries 4 entries now and 2 to delete
+- **AND** asking again answers 4 entries now: nothing was deleted
 
 ### Requirement: Report the passes in flight in one cross-kind read
 The system MUST answer, in one cross-kind read, which long model-driven passes this

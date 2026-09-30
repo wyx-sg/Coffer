@@ -190,7 +190,10 @@ development build MUST say so. Only after the check passes does the shell ask
 the daemon for a challenge, sign it with the grant key derived from the master
 key ([secret](../secret/spec.md) "Release plaintext only to a
 present human in the desktop app") and send the request; a cancelled check
-sends nothing. The shell reads the master key at the moment of signing — from
+sends nothing. The backup command takes the passphrase the page collected,
+refuses one under eight characters before the presence check, and MUST pass it
+only in the daemon's export request — never into a log, a stored file or the
+signed grant. The shell reads the master key at the moment of signing — from
 the signed release's Keychain access group, or in a development build from the
 key file — and MUST NOT store or cache it or the grant key. In a development
 build without LocalAuthentication the check MUST fall back to a modal
