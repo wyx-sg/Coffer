@@ -152,7 +152,7 @@ def test_a_requested_aggregation_and_distil_each_record_one_event_naming_the_use
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="keep partitions in the resources table and files only"
+    spec="memory", scenario="keep partitions as resource files and plain files only"
 )
 @pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
 def test_after_both_passes_no_memory_table_exists_and_each_partition_is_one_row(

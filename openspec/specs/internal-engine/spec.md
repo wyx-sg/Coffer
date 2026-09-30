@@ -6,8 +6,8 @@ Coffer thinks with a model of its own. The internal engine is the settings that
 say which one — the connection it borrows and the model it runs — plus the
 switch and timer of every pass Coffer runs when nobody asked it to, the one
 machine allowed to run curation, the bound on one call to that model, and the
-speech-to-text model. It owns one global
-settings row, the surfaces that show and change it (`/api/v1/internal-engine-config`,
+speech-to-text model. It owns one settings
+document per vault, the surfaces that show and change it (`/api/v1/internal-engine-config`,
 the `engine.*` and `transcribe.*` keys of `coffer config`, the Coffer's model section of
 Settings › General), its convergence between machines, and the
 rule that a pass with nothing configured is a clean no-op rather than an error.
@@ -45,7 +45,7 @@ gate.
 
 ## Requirements
 
-### Requirement: Keep the engine's settings in one global row
+### Requirement: Keep the engine's settings in one vault document
 The system MUST keep Coffer's own operating settings — the engine model, the
 speech-to-text model, the bound on one model call, each unattended pass's
 switch and optional interval, and the curation owner — in one vault document at
@@ -56,7 +56,7 @@ on every edit: it is this machine's own record, `~/.coffer/local/engine.json`.
 An absent key or `null` means "the built-in default" for an interval and for
 the bound, "unchosen" for a model, and "no owner named" for the curation owner.
 
-#### Scenario: a second engine settings row is unrepresentable
+#### Scenario: a second engine settings document is unrepresentable
 - **GIVEN** the internal-engine settings document exists,
 - **WHEN** the settings are written again,
 - **THEN** the vault still holds exactly one settings document, at
@@ -214,7 +214,7 @@ vault that never chose one.
 - **WHEN** the settings are read,
 - **THEN** that pass's interval is reported as unchosen beside the default
   interval its worker runs at,
-- **AND** the stored row holds no interval for it, so no default was copied
+- **AND** the stored document holds no interval for it, so no default was copied
   into the vault.
 
 ### Requirement: Refuse an interval below the floor or an unknown pass
@@ -235,7 +235,7 @@ the switch is read before each pass.
 
 #### Scenario: a running worker picks up a changed switch and interval
 - **GIVEN** a running pass worker reading its switch and interval from the
-  settings row,
+  settings document,
 - **WHEN** the operator switches the pass off, and shortens its interval while
   the worker is already waiting,
 - **THEN** the worker's next pass does not run while switched off,
@@ -252,7 +252,7 @@ cannot ship OFF.
 
 #### Scenario: a fresh vault runs every unattended pass
 - **GIVEN** a fresh vault where nobody has touched the engine settings,
-- **WHEN** the settings are read, and when the row is first written by a model
+- **WHEN** the settings are read, and when the document is first written by a model
   choice alone,
 - **THEN** `aggregate`, `distil` and `curate` are all switched on.
 
@@ -377,7 +377,7 @@ change — made here or converged from another machine — takes effect without 
 daemon restart.
 
 #### Scenario: every internal model call reads the current bound
-- **GIVEN** a chosen bound on the settings row,
+- **GIVEN** a chosen bound on the settings document,
 - **WHEN** knowledge ingestion describes a document, a voice message is
   transcribed, and a chat model is built for an agentic loop,
 - **THEN** the description call and the transcriber run under the chosen bound
@@ -395,7 +395,7 @@ build or a hand-edited synced document, and a pass that could have run is the
 wrong place to discover it.
 
 #### Scenario: a stored bound outside the range is clamped by a pass
-- **GIVEN** a settings row holding a bound below the floor, written without
+- **GIVEN** a settings document holding a bound below the floor, written without
   going through a surface,
 - **WHEN** a background pass reads the bound it should run under,
 - **THEN** it runs under the floor rather than raising, and a stored bound above
@@ -452,7 +452,7 @@ independently.
 default; outside the floor–ceiling range is refused, not clamped) and
 `PUT /api/v1/internal-engine-config/transcribe-model` (`null` or empty clears
 it, which stops transcription) MUST each change one value and leave the rest of
-the row alone, audited like any other write to it (see "Audit every write to
+the document alone, audited like any other write to it (see "Audit every write to
 the engine settings"). A CLI MUST show, set and return-to-default the bound —
 `coffer config get | set <seconds> | unset engine.timeout`, where `get` prints the chosen bound
 beside the default and `unset` returns to the built-in one — and show, set and clear the
@@ -461,7 +461,7 @@ effects, refusals and audit entries as the routes. The Coffer's model section of
 General MUST show and change both.
 
 #### Scenario: the bound and the speech-to-text model change one value at a time
-- **GIVEN** a settings row with a chosen engine model and a pass switched off,
+- **GIVEN** a settings document with a chosen engine model and a pass switched off,
 - **WHEN** the operator sets the bound and the speech-to-text model through the
   routes, and then again through `coffer config set engine.timeout` and
   `coffer config set transcribe.model`,
@@ -471,7 +471,7 @@ General MUST show and change both.
   audit entry.
 
 ### Requirement: Report and change the curation owner from every surface
-The settings row MUST carry the curation owner — the one machine allowed to run
+The settings document MUST carry the curation owner — the one machine allowed to run
 the `curate` pass, or none — and every surface that shows the engine MUST report
 and change it, applying the four-state rule of
 [vault-sync](../vault-sync/spec.md) "Report and change the rewriter's owner":
@@ -481,10 +481,10 @@ and change it, applying the four-state rule of
   The settings read MUST NOT resolve it against the machine registry; a reader
   resolves it against `GET /api/v1/sync/machines`.
 - `PUT /api/v1/internal-engine-config/curation-owner` MUST set the owner from
-  `{"machine_id": …}` and leave the rest of the row alone; `null` or a blank id
+  `{"machine_id": …}` and leave the rest of the document alone; `null` or a blank id
   MUST clear it. The id MUST NOT be validated against the registry, because a
   vault that has never converged has no registry and must still be able to name
-  its own machine. The write MUST be audited like any other write to the row
+  its own machine. The write MUST be audited like any other write to the document
   (see "Audit every write to the engine settings").
 - A CLI MUST show, set and clear the owner through the key `engine.curate_owner` —
   `coffer config get engine.curate_owner [--json]`,
@@ -500,7 +500,7 @@ and change it, applying the four-state rule of
   even while the registry names one machine or none, and read as the fault it is.
 
 #### Scenario: the route names and clears the curation owner
-- **GIVEN** the internal-engine settings row with a chosen engine model and no
+- **GIVEN** the internal-engine settings document with a chosen engine model and no
   curation owner,
 - **WHEN** the operator names a machine through
   `PUT /api/v1/internal-engine-config/curation-owner`, and then sends `null`,

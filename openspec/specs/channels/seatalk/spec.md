@@ -303,7 +303,7 @@ so a long body degrades to a truncated card instead of a refused one.
 - **THEN** that button sits alone in its button group, while short labels still share one
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
-A card rewrite ([channels](../spec.md) "Switch the conversation's agent from chat", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
+A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
 **interactive cards, only within 7 days, only for the sending bot**. Outside that
 window the platform refuses the update, and the card MUST degrade exactly as the
 parent requires: a cosmetic rewrite after a choice is dropped, while a page turn

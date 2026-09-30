@@ -10,7 +10,7 @@
 //! Records land in `~/.coffer/logs/daemon.log`: the file this shell already
 //! redirects a spawned daemon's own stdout to (`spawn.rs`), the file every
 //! "check `~/.coffer/logs/daemon.log`" message in the CLI points at, and the
-//! file both the Activity page's daemon-log tab and `coffer__diagnose` read.
+//! file the Activity page's daemon-log tab reads.
 //! A separate `desktop.log` would be a second place to look that nothing tells
 //! anyone about.
 //!

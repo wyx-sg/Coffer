@@ -38,6 +38,10 @@ import type {
   components as SkillManager,
   paths as SkillManagerPaths,
 } from "./generated/skill-manager";
+import type {
+  components as VaultStorage,
+  paths as VaultStoragePaths,
+} from "./generated/vault-storage";
 import type { components as VaultSync, paths as VaultSyncPaths } from "./generated/vault-sync";
 
 export type components = AgentRegistry &
@@ -52,6 +56,7 @@ export type components = AgentRegistry &
   ProviderSwitching &
   ResourceFramework &
   SkillManager &
+  VaultStorage &
   VaultSync;
 
 type WithoutApiPrefix<P> = {
@@ -71,5 +76,6 @@ export type paths = WithoutApiPrefix<
     ProviderSwitchingPaths &
     ResourceFrameworkPaths &
     SkillManagerPaths &
+    VaultStoragePaths &
     VaultSyncPaths
 >;

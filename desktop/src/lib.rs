@@ -92,7 +92,7 @@ pub fn run() {
     // vault needs a human where the user already is").
     //
     // No binary deployment either. The daemon's own frozen-start path
-    // (spec daemon "Deploy frozen sibling binaries and back up the vault
+    // (spec daemon "Deploy frozen sibling binaries and back up the history database
     // before migrating") deploys `coffer`, `coffer-daemon` and
     // `coffer-mcp-shim` into ~/.coffer/bin — which is
     // also how installing only the .app installs the CLI. Doing it here as

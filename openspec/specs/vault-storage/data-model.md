@@ -43,16 +43,18 @@ with no per-tree override, and `coffer path` prints them).
     reach.json  tool-reach.json  engine.json  retention.json  curation.json
     skill-source-status.json
     secret/<ref>.enc                       machine-local ciphertext (proxy tokens)
-    secret-boundary/{bindings,approvals,settings,times}.json
+    secret-boundary/{bindings,approvals,settings,times,last-used}.json
     sync/{remote,round}.json
     migration.json
   content/
     chat-media/  channel-media/  workspace/
+    backup/skills/                         folders set aside from an agent's link path
   derived/
     derived.db                             mcp_server_health, mcp_capability_seen, skill_agent_bindings
     index/resources.json                   the uid index and revision counters
     resources/memory/<name>.json  resources/skill/coffer-guide.json
     memory/  skills/coffer-guide/  cache/agent/  sync-conflicts/
+    reported-prices.json  genai-prices.json
   runs.db                                  audit_log, mcp_invocations, conversations, chat_messages,
                                            channel_thread_*, channel_outbox, sync_runs, usage_*, quota_snapshots
 ```
@@ -258,7 +260,7 @@ empty, because local state can be set again.
 | `retention.json` | `{table: {retention_days, last_pruned_at, last_pruned_rows, updated_at}}` | resource-framework |
 | `curation.json` | `{documents: {relpath: {blob, at}}}` | knowledge |
 | `skill-source-status.json` | `{skill uid: {checked_at, last_success_at, error, latest_commit, commits_ahead, files_changed, dismissed_commit}}` | skill-manager |
-| `secret-boundary/*.json` | bindings, approvals, settings, first-stored times | credentials |
+| `secret-boundary/*.json` | bindings, approvals, settings, first-stored times, last-used times | secret |
 | `sync/remote.json`, `sync/round.json` | the remote; the round waiting for a person | vault-sync |
 | `migration.json` | the one-time upgrade's record | below |
 

@@ -140,7 +140,7 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 `curate.pending_items` answers it from the disk, in this order (see "Run
 curation on a sweep and on demand"):
 
-1. **Inbox material**, oldest first by modification time (`fs.inbox_items`).
+1. **Inbox material**, oldest first by modification time (`inbox.inbox_items`).
    Material first, because until it is merged it is knowledge no agent can read.
 2. **Edited documents** (`curation_state.edited_documents`): every visible
    Markdown document whose blob at `HEAD` differs from the one
@@ -171,13 +171,13 @@ Two consequences keep this honest:
   out of the next sweep.
 - **An item is settled only after its pass completes** (see "Settle an item only
   after its pass completes"). Material is deleted from the inbox
-  (`fs.discard_material`) and an edited document recorded as settled
+  (`inbox.discard_material`) and an edited document recorded as settled
   (`fs.mark_curated`) after the loop returns; a pass that raises leaves both as they were, so a
   later sweep retries rather than losing what one half-ran over.
 
 With no internal model configured there is nothing to merge with, so material
 does not wait (see "Promote material directly when no model is configured"):
-`KnowledgeService.submit` promotes it on the spot (`fs.promote` — a document of
+`KnowledgeService.submit` promotes it on the spot (`inbox.promote` — a document of
 its own at the collection root, recorded as settled), and a pass run with no model
 promotes whatever is still in the inbox and reports `no_model` with the
 `promoted` paths.
@@ -261,7 +261,9 @@ and `SubmissionOut` (`status` `pending` | `written`, `collection`, `title`, and
 `path` when written); `CurationRequest` (an optional `document`) and
 `CurationOut` (`status`, `collection`, `item`, `model`, `written`, `retired`,
 `refused`, `documents_before`, `documents_after`, `limit`, `promoted`,
-`gave_up`); and
+`gave_up`, `stamped`), one per pass, inside the `CurationRunOut` the curate
+route answers (`collection`, `status` `ok` | `failed` | `no_model` |
+`up_to_date`, `total`, `passes`); and
 `IngestedDocumentOut` (`path` or null, `title`, `description`, `converter`,
 `pending`). The one write-a-document model is `FileSave` (`path`, `body`,
 `expected_fingerprint`): a person's edited body, saved over a document whose
@@ -532,7 +534,7 @@ table or the row still upgrades:
   SQLite cannot rename a column in place, so all three go through one
   `batch_alter_table` rebuild rather than three.
 - The switch flips **on** and the owner is seeded with this machine, read from
-  `daemon-config.json` beside the database (see "Keep auto-curation on for
+  `daemon-config.json` directly under `~/.coffer` (see "Keep auto-curation on for
   migrated vaults"). Without it the upgrade would take the corpus away and give
   nothing back. The owner is only written when it is currently NULL: a user who
   already chose a machine chose it for the same corpus.

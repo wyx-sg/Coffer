@@ -70,6 +70,26 @@ def test_every_management_route_refuses_a_missing_or_wrong_token(
     assert status.status_code == 200
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="the API schema is served only to a token holder")
+def test_the_api_schema_needs_the_token_and_the_doc_pages_are_off(
+    _isolated: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("COFFER_WEBUI_DIR", str(_built_ui(tmp_path)))
+    client = TestClient(create_app(), base_url="http://127.0.0.1")
+
+    assert client.get("/api/v1/openapi.json").status_code == 401
+    wrong = client.get("/api/v1/openapi.json", headers={"X-Coffer-Token": "not-the-token"})
+    assert wrong.status_code == 401
+    schema = client.get("/api/v1/openapi.json", headers={"X-Coffer-Token": _TOKEN})
+    assert schema.status_code == 200
+    assert "/api/v1/daemon/status" in schema.json()["paths"]
+
+    # FastAPI's own schema route and doc pages are off: nothing answers there,
+    # and the web UI does not claim the paths either.
+    for path in ("/openapi.json", "/docs", "/redoc", "/docs/oauth2-redirect"):
+        assert client.get(path).status_code == 404, path
+
+
 def _built_ui(tmp_path: Path) -> Path:
     dist = tmp_path / "dist"
     (dist / "assets").mkdir(parents=True)

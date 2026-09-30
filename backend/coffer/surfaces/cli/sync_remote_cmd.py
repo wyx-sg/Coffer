@@ -174,6 +174,12 @@ def remote_check(
     url: str | None = typer.Argument(None, help="A remote to look at (default: the stored one)"),
     branch: str | None = typer.Option(None, "--branch", help=f"Default {DEFAULT_BRANCH}"),
     secret_ref: str | None = typer.Option(None, "--secret-ref", help="Push token to use"),
+    username: str | None = typer.Option(
+        None,
+        "--username",
+        help=f"User name the token is sent with (default: the stored one, else "
+        f"{DEFAULT_USERNAME}; GitLab: oauth2 or your user name)",
+    ),
 ) -> None:
     """Look at a remote without keeping it: empty, a Coffer vault (and its
     layout), another repository, unreachable, or refusing the token."""
@@ -191,6 +197,7 @@ def remote_check(
             "url": target,
             "branch": branch or current.get("branch") or DEFAULT_BRANCH,
             "secret_ref": secret_ref if secret_ref is not None else current.get("secret_ref"),
+            "username": username or current.get("username") or DEFAULT_USERNAME,
         }
         r = c.post("/sync/remote/check", json=body)
         _cli_client.check(r, verbose=verbose)

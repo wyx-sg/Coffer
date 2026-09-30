@@ -6,7 +6,7 @@
 // its frontmatter, so frontmatter never renders as text; the provenance is
 // reduced to agent names — never a native path or an agent's original text.
 // Open in editor and reveal act on the memory's own file under
-// `~/.coffer/memory/<partition>/notes/`. No edit or delete: the next distil
+// `~/.coffer/derived/memory/<partition>/notes/`. No edit or delete: the next distil
 // pass would rewrite either.
 import { useTranslation } from "react-i18next";
 

@@ -1448,7 +1448,7 @@
       },
       "runningOn": "Running on 127.0.0.1:{{port}}",
       "offlineShell": "Restart it to bring Coffer back; this page reconnects when it answers.",
-      "offlineBrowser": "A page the daemon serves can't start it. Run this in a terminal, then reload:",
+      "offlineBrowser": "A page the daemon serves can't start it. Run this in a terminal:",
       "restart": "Restart",
       "restartNow": "Restart now",
       "restartTimedOut": "The daemon did not come back within 90 seconds. Check Activity › Daemon log once it answers, or start it again.",
@@ -1560,7 +1560,7 @@
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "webRestartHint": "The browser can't restart it — run this in your terminal:"
+      "webRestartHint": "The browser can't start it — run this in your terminal:"
     },
     "reconnect": {
       "title": "Reconnecting to the daemon…",

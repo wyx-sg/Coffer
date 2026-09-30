@@ -163,6 +163,7 @@ from the server's `state/mcp-preferences/` document, the times from
 | `status`          | `Literal["ok", "error", "timeout", "denied"]` |                                 |
 | `error_message`   | `str \| None`                                 | populated when `status != "ok"` |
 | `session_id`      | `str \| None`                                 | per-session correlation         |
+| `agent_uid`       | `str \| None`                                 | the calling agent's uid, when the session names one |
 
 Two reserved values appear in `resource_uid` and are deliberately not uids — a
 real uid is a 32-character `uuid4().hex`, and a name may not contain `:`, so

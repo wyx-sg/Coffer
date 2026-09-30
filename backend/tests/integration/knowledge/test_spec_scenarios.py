@@ -143,7 +143,7 @@ class _Audit:
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a collection is a resources row and a directory, nothing more"
+    spec="knowledge", scenario="a collection is a resource file and a directory, nothing more"
 )
 def test_the_layer_adds_no_table_and_writes_only_under_its_root(home: pathlib.Path) -> None:
     db = home / "c.db"

@@ -221,7 +221,7 @@ class FileContentOut(BaseModel):
 
     No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
     make a later write conditional, and this family has no write. The tree under
-    ``~/.coffer/memory/`` is derived ("Keep the memory tree derived and local") —
+    ``~/.coffer/derived/memory/`` is derived ("Keep the memory tree derived and local") —
     an edit here would be overwritten
     by the next aggregation pass, so the surface does not offer one.
     """

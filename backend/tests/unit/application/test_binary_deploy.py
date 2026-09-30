@@ -1,5 +1,5 @@
 """The frozen daemon's sidecar deployment (spec daemon "Deploy frozen sibling
-binaries and back up the vault before migrating").
+binaries and back up the history database before migrating").
 
 The desktop shell used to place these binaries in ``~/.coffer/bin``; the daemon
 does it now. Each build lands in its own ``<version>/`` directory and the public

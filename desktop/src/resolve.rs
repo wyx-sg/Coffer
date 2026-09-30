@@ -8,9 +8,10 @@
 //!   2. inside the app bundle (`externalBin`, staged by `make desktop`)
 //!   3. `~/.coffer/bin/coffer-daemon` (where the daemon's own frozen-start
 //!      path, spec daemon "Deploy frozen sibling binaries and back up the
-//!      vault before migrating", deploys it)
+//!      history database before migrating", deploys it)
 //!   4. `coffer-daemon` on `$PATH`
-//!   5. otherwise: a message telling the user to install the Coffer CLI
+//!   5. otherwise: a message saying this copy of Coffer is incomplete,
+//!      with the install page and a prompt to hand to an agent
 //!
 //! **The liveness probe has to be first**, and it is the one place the order
 //! is not merely a preference. Steps 2-4 all answer the same question — which
@@ -44,10 +45,15 @@ pub enum DaemonSource {
     Running { port: u16, token: String },
 }
 
-/// Step 5. The whole first-run experience for someone who downloaded only the
-/// app, so it names the fix rather than the failure.
+/// Step 5. The app carries its own daemon (spec desktop-app "Ship the desktop
+/// tier as a macOS arm64 dmg"), so reaching this means the copy is damaged or
+/// incomplete. It names the fix in plain words and, per the principles' AI-Native
+/// rule, gives no install command: it points at the install page and carries a
+/// prompt the person can hand to their coding agent.
 pub const DAEMON_NOT_FOUND: &str = "\
 Coffer can't find its daemon (coffer-daemon), so there is nothing to connect to.
+The app normally carries its own daemon, so this copy of Coffer is probably
+damaged or incomplete.
 
 Looked in:
   1. a running daemon recorded in ~/.coffer/daemon.json
@@ -55,12 +61,15 @@ Looked in:
   3. ~/.coffer/bin/coffer-daemon
   4. coffer-daemon on your PATH
 
-The daemon ships with the Coffer CLI. Install it, then reopen Coffer:
+Download Coffer again from https://wyx-sg.github.io/Coffer/start/install and
+reopen it. Or give this to your coding agent:
 
-  curl -fsSL --proto '=https' --tlsv1.2 \\
-    https://wyx-sg.github.io/Coffer/install.sh | sh
-
-If you already installed the CLI, make sure ~/.coffer/bin is on your PATH.";
+  Coffer's desktop app on this Mac can't find its daemon (coffer-daemon). It
+  looked for a running daemon in ~/.coffer/daemon.json, inside the app bundle,
+  in ~/.coffer/bin and on PATH. Please reinstall Coffer following
+  https://wyx-sg.github.io/Coffer/start/install, confirm that
+  ~/.coffer/bin/coffer-daemon exists, and then tell me to reopen Coffer. Check
+  with me before running anything that needs sudo.";
 
 /// The chain itself, over lazily-evaluated probes so a hit at step 1 never
 /// pays for the filesystem walk behind steps 2-4. Each probe is a closure
@@ -113,7 +122,7 @@ pub fn daemon_exe_name() -> &'static str {
 
 /// Step 3's path, given the user's home dir. Pure so the layout is testable.
 /// Mirrors where the daemon's own frozen-start deploy puts it (spec daemon
-/// "Deploy frozen sibling binaries and back up the vault before migrating").
+/// "Deploy frozen sibling binaries and back up the history database before migrating").
 pub fn user_bin_daemon_path(home: &str) -> PathBuf {
     coffer_home::bin_dir(home).join(daemon_exe_name())
 }
@@ -229,13 +238,16 @@ mod tests {
     }
 
     #[test]
-    fn nothing_found_tells_the_user_to_install_the_cli() {
+    fn nothing_found_points_at_the_install_page_and_an_agent() {
         let err = resolved(None, None, None, None).unwrap_err();
         assert_eq!(err, DAEMON_NOT_FOUND);
-        // The message is a stranger's entire first run — it must carry the
-        // installer, not just the complaint.
-        assert!(err.contains("install.sh"), "{err}");
+        // The message names the fix, not just the complaint: the install page
+        // and a prompt for an agent — never a command to paste into a terminal.
+        assert!(err.contains("/Coffer/start/install"), "{err}");
+        assert!(err.contains("give this to your coding agent"), "{err}");
         assert!(err.contains("~/.coffer/bin"), "{err}");
+        assert!(!err.contains("curl"), "{err}");
+        assert!(!err.contains("| sh"), "{err}");
     }
 
     /// Later probes must not run once an earlier one hits — steps 2-4 walk the

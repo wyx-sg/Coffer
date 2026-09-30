@@ -125,3 +125,29 @@ def test_join_prints_the_preview_and_asks(
     assert "joining as a" in declined.output and declined.exit_code == 1
     joined = runner.invoke(app, ["join", "--yes"])
     assert joined.exit_code == 0, joined.output
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the command line checks a remote with the user name it is given"
+)
+def test_remote_check_sends_the_user_name(
+    monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
+) -> None:
+    mac, _mini = pair
+    client = client_for(mac)
+    sent: list[dict[str, object]] = []
+    post = client.post
+
+    def spy(path: str, **kwargs: object):  # type: ignore[no-untyped-def]
+        if path == "/sync/remote/check":
+            sent.append(kwargs["json"])  # type: ignore[arg-type]
+        return post(path, **kwargs)
+
+    monkeypatch.setattr(client, "post", spy)
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, None))
+
+    given = runner.invoke(app, ["remote", "check", "--username", "oauth2"])
+    assert given.exit_code == 0, given.output
+    default = runner.invoke(app, ["remote", "check"])
+    assert default.exit_code == 0, default.output
+    assert [body["username"] for body in sent] == ["oauth2", "coffer"]

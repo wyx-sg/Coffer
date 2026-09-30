@@ -25,8 +25,7 @@ import uuid
 
 from coffer.domain.sync.machine import derive_machine_id
 from coffer.infrastructure.platform.identity import os_machine_id
-
-_FALLBACK_FILE = "machine-id"
+from coffer.infrastructure.vault.home import MACHINE_ID_FILENAME
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -54,7 +53,7 @@ def _fallback(coffer_dir: pathlib.Path) -> str:
     machine's identity in two, which is the failure the whole module exists to
     avoid.
     """
-    path = coffer_dir / _FALLBACK_FILE
+    path = coffer_dir / MACHINE_ID_FILENAME
     try:
         existing = path.read_text(encoding="utf-8").strip()
         if existing:

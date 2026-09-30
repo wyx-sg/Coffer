@@ -82,6 +82,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
 from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
 from coffer.surfaces.http.memory_wiring import register_delivery_hook_target
 from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.openapi_route import include_openapi_route
 from coffer.surfaces.http.reconcile_wiring import (
     build_reconciler,
     run_boot_pass,
@@ -271,7 +272,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     publish_daemon_identity()
 
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
-    # binaries and back up the vault before migrating", see binary_deploy).
+    # binaries and back up the history database before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
     workers = start_background_workers(
@@ -354,7 +355,11 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     app = FastAPI(
         title="Coffer",
         version="0.1.0",
-        openapi_url="/api/v1/openapi.json",
+        # FastAPI's schema route and its /docs and /redoc pages answer without
+        # the token; the schema is served behind it instead (openapi_route).
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
         lifespan=_lifespan,
     )
     app.state.kinds = kinds or {}
@@ -376,6 +381,7 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     middleware.install(app)
     err_handlers.register(app)
     include_all_routers(app)
+    include_openapi_route(app)
     # LAST: the SPA mount claims "/", so every API route must already be
     # registered or it would swallow them.
     webui.install(app)

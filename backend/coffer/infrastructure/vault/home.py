@@ -35,6 +35,10 @@ PROXY_USAGE_DIRNAME = "proxy-usage"
 #: Where the running model proxy publishes ``{port, pid, started_at, version,
 #: control_token}`` (mode 0600), beside ``daemon.json``.
 PROXY_INFO_FILENAME = "proxy.json"
+#: The fallback machine identifier a host with none of its own gets, written
+#: once (mode 0600) beside ``daemon.json`` (spec vault-sync "Keep machine
+#: identity across reinstalls").
+MACHINE_ID_FILENAME = "machine-id"
 
 
 def coffer_home(home: Path | None = None) -> Path:
@@ -134,6 +138,7 @@ def proxy_usage_dir(home: Path | None = None) -> Path:
 
 
 __all__ = [
+    "MACHINE_ID_FILENAME",
     "PROXY_INFO_FILENAME",
     "PROXY_USAGE_DIRNAME",
     "bin_dir",

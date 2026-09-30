@@ -3,8 +3,8 @@ delivered`` — the three moments memory reaches a session after its start, from
 the terminal (ADR memory-reaches-a-session-at-prompt-time-and-before-a-known-trap).
 
 ``hook`` is what every one of Coffer's four installed entries runs. Its caller
-is an agent's hook runner, not a person, so like ``context`` it must be fast and
-must never fail a session: it reads the agent's hook JSON from stdin, answers
+is an agent's hook runner, not a person, so it must be fast and must never
+fail a session: it reads the agent's hook JSON from stdin, answers
 locally whatever needs no daemon (a trivial prompt, a command no armed trigger
 matches), and otherwise asks the daemon with a short timeout. Any failure at
 all — no daemon, a slow answer, a malformed one — prints nothing and exits 0,

@@ -223,6 +223,9 @@ async def test_restore_of_a_file_states_what_it_read(client: AsyncClient) -> Non
     assert (vault_root() / "knowledge/a.md").read_bytes() == b"one\n"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="recent changes list the vault's commits newest first"
+)
 async def test_content_diff_and_changes(client: AsyncClient) -> None:
     first = _write("knowledge/a.md", b"one\n", Expect.ABSENT)
     _write("skills/x/SKILL.md", b"x\n", Expect.ABSENT)

@@ -2,7 +2,7 @@
 //!
 //! This module used to also COPY the bundled binaries into `~/.coffer/bin/`
 //! on every launch. That job now belongs to the daemon's own frozen-start
-//! path (spec daemon "Deploy frozen sibling binaries and back up the vault
+//! path (spec daemon "Deploy frozen sibling binaries and back up the history database
 //! before migrating",
 //! `backend/coffer/application/binary_deploy.py`), which deploys `coffer`,
 //! `coffer-daemon` and `coffer-mcp-shim` itself. Doing it

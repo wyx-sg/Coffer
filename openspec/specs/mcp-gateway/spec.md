@@ -21,8 +21,9 @@ refs, and what the user is told when its key is unavailable, are [secret](../sec
 Coffer runs as a single-user tool on the user's own machine with a small number of concurrent MCP clients
 (low single digits); it is not a fleet-scale gateway. Upstreams are assumed to follow the public MCP
 specification, and misbehaving ones are handled as faults. Coffer does not bundle its own snapshot of
-`~/.coffer/`: the git convergence of [vault-sync](../vault-sync/spec.md) carries every system of record to a
-remote the user owns, and a byte copy is `cp -r ~/.coffer/` with the daemon stopped.
+`~/.coffer/`: the git convergence of [vault-sync](../vault-sync/spec.md) carries the vault — configuration,
+knowledge and secret ciphertext — to a remote the user owns (media under `content/`, the history in `runs.db`
+and machine-local state do not travel), and a byte copy is `cp -r ~/.coffer/` with the daemon stopped.
 
 ## Requirements
 

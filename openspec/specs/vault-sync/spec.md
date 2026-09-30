@@ -22,10 +22,9 @@ Other specs key on it: a channel's machine binding in spec
 
 Vocabulary. A **vault document** is the serialized form of one piece of vault
 state at one path in the working tree: a knowledge file, a skill file, a
-resource YAML, a state YAML, a secret blob, a machine descriptor. A
-**converge round** is one full cycle of the seven round steps. The **retry set**
-is the paths the working tree holds that this vault has not absorbed, stored
-locally beside the pointer. A **machine** is one installation of Coffer.
+resource JSON file, a state JSON file, a secret blob, a machine descriptor. A
+**converge round** is one full cycle of the round steps. A **machine** is one
+installation of Coffer.
 
 Conversations and the audit log are excluded deliberately: they are records of
 what happened *on a machine*, and a merged history of two machines' activity
@@ -40,7 +39,8 @@ Out of scope:
   `coffer sync join`, an offline medium is a `file://` remote on a USB drive,
   and handing a copy to someone else is `git clone ~/.coffer/vault`.
 - **More than one sync remote.** One rendezvous is what "one vault" means.
-- **A hosted sync endpoint.** Would require a further constitutional amendment.
+- **A hosted sync endpoint.** Would need a further exception to the principles'
+  Local-First rule.
 - **Syncing conversations, the audit log, or MCP invocation records.** They
   describe what happened on a machine; merging them is a different feature.
 - **Merging two unrelated vaults into one.** First contact takes the union of
@@ -56,7 +56,7 @@ Out of scope:
 
 ### Requirement: Keep the remote a rendezvous, not a system of record
 Convergence with a user-owned git remote is a bounded exception to the
-constitution's local-first principle (0.6.0): the remote MUST be a
+principles' Local-First rule: the remote MUST be a
 **rendezvous, not a system of record**. Every machine's vault is a complete git
 repository of its own, so the remote can be deleted and rebuilt from any single
 machine without losing anything.
@@ -196,9 +196,9 @@ answered for itself.
 **Derived output MUST NOT converge, in either half**, and it cannot, because it
 is stored under `derived/`, outside the vault. Coffer's own generated skill
 `coffer-guide` is the case this exists for: its text is rendered locally from
-the running build, the knowledge files and which collections this machine has
-enabled — which is reach, and machine-local — so two machines holding identical
-files render different bytes, each correct where it is. **Both halves** are
+the running build, the knowledge files and this machine's absolute paths, so
+two machines holding identical files render different bytes, each correct where
+it is. **Both halves** are
 derived: its master folder (`derived/skills/coffer-guide/`) and its resource
 file (`derived/resources/skill/coffer-guide.json`). Every other skill is in the
 vault. Memory partitions are derived the same way.
@@ -257,7 +257,7 @@ has absorbed is exactly what its history shares with the remote; nothing about
 it travels as an input to the algorithm except the `last_converged_commit` a
 returning machine reads back from its own descriptor.
 
-#### Scenario: a round diffs from the pointer stored on this machine
+#### Scenario: a round diffs from the shared history
 - **GIVEN** two machines that converged, after which one deleted a document the other never touched
 - **WHEN** the other machine, holding a new document of its own, runs a round
 - **THEN** the merge from the shared history applies the deletion and publishes the new document
@@ -1119,7 +1119,7 @@ merged tree fails validation MUST stop the round whole: nothing is checked out,
 nothing is pushed, this vault's `HEAD` and every file on disk stay as they were,
 and the remote is untouched. Coffer MUST NOT resolve a conflict by itself, by a
 rule or by an agent; the only exception is secret ciphertext (see "Let the
-fresher credential ciphertext win"). Asking again while nobody answered and
+fresher secret ciphertext win"). Asking again while nobody answered and
 neither side moved changes nothing.
 
 #### Scenario: a real conflict stops the round without touching the vault
@@ -1239,14 +1239,21 @@ upgrades and joins it as a new machine.
 A person SHALL be able to ask what a remote holds before saving it — empty, a
 Coffer vault (with its layout), some other repository, unreachable or refused
 sign-in — through `POST /api/v1/sync/remote/check`, `coffer sync remote check`
-and the set-up form's "Check repository". Checking MUST keep nothing: no remote is
-stored and the vault is not touched.
+and the set-up form's "Check repository". Each MUST send the user name the token
+goes with, as saving does: the form's User name field, and on the command line
+`--username`, else the stored remote's, else the default. Checking MUST keep
+nothing: no remote is stored and the vault is not touched.
 
 #### Scenario: a remote is checked before it is saved
 - **GIVEN** an empty remote, the same remote once a vault has been pushed to it, and a URL that does not exist
 - **WHEN** each is checked
 - **THEN** they read as empty, as a vault at the current layout, and as unreachable or refused with git's message
 - **AND** nothing about the stored remote changed
+
+#### Scenario: the command line checks a remote with the user name it is given
+- **GIVEN** a stored remote
+- **WHEN** `coffer sync remote check --username oauth2` runs, and then `coffer sync remote check`
+- **THEN** the first check sends the user name `oauth2` with the token, and the second sends the stored remote's
 
 ### Requirement: Run the reconciler once after a round that applied changes
 What another machine changed is this machine's warrant to bring its own side

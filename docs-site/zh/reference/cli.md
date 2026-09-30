@@ -2715,6 +2715,7 @@ Look at a remote without keeping it: empty, a Coffer vault (and its layout), ano
 | `URL` | 参数 | text |  | A remote to look at (default: the stored one) |
 | `--branch` | 选项 | text |  | Default main |
 | `--secret-ref` | 选项 | text |  | Push token to use |
+| `--username` | 选项 | text |  | User name the token is sent with (default: the stored one, else coffer; GitLab: oauth2 or your user name) |
 
 ### sync machine
 

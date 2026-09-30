@@ -1,8 +1,9 @@
 """``~/.coffer/daemon-config.json`` — the daemon's settings, read before it binds.
 
-This is the one piece of Coffer configuration that cannot live in SQLite. The
-port is chosen in :func:`coffer.infrastructure.daemon.bootstrap.acquire`, which
-runs before the database is opened and before migrations have created any table
+This is the one piece of Coffer configuration that must be readable before the
+vault and the database open. The port is chosen in
+:func:`coffer.infrastructure.daemon.bootstrap.acquire`, which runs before the
+database is opened and before migrations have created any table
 to read; and it cannot be an environment variable either, because the daemon is
 spawned detached by whichever surface first needs one (the CLI, an agent's MCP
 shim) and inherits *that caller's* environment — a shell profile reaches the

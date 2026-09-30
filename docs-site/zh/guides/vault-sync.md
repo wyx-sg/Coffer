@@ -50,15 +50,15 @@ description: 把保险库的 git 仓库拉取和推送到你自己拥有的私�
 ### GitLab {#gitlab}
 
 1. 创建一个私有的空项目，然后在它上面创建一个 **project access token**（**Settings › Access tokens**），授予 **`write_repository`** 范围，以及一个可以推送到该分支的角色（Developer 或更高；分支受保护时需要 Maintainer）。带 `write_repository` 的 personal access token 也可以。
-2. 存储令牌并配置远端。GitLab 的令牌要和用户名 `oauth2`（或账号的用户名）一起发送，所以传入 `--username oauth2`：
+2. 存储令牌，查看仓库，然后配置它。GitLab 的令牌要和用户名 `oauth2`（或账号的用户名）一起发送，所以两条命令都传入 `--username oauth2`：
 
    ```sh
    printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
+   coffer sync remote check https://gitlab.com/<group>/<repo>.git \
+     --secret-ref sync/gitlab-token --username oauth2
    coffer sync remote set https://gitlab.com/<group>/<repo>.git \
      --secret-ref sync/gitlab-token --username oauth2
    ```
-
-   `coffer sync remote check` 总是发送默认用户名 `coffer`，所以没法带着令牌查看 GitLab 仓库。想在保存之前先看一眼，就在**同步**页面的设置表单里填好，再点**检查仓库**，它会发送你填写的**用户名**。
 
    对于自建的 GitLab，把 `gitlab.com` 换成你实例的主机名。
 

@@ -31,7 +31,7 @@ of each update and not the cost of access; the four problems above are what the
 following days without a shell showed. By then two of the old shell's largest
 jobs had moved somewhere better: deploying the frozen binaries into
 `~/.coffer/bin/` had become the daemon's frozen-start job (spec daemon "Deploy
-frozen sibling binaries and back up the vault before migrating"), and folder
+frozen sibling binaries and back up the history database before migrating"), and folder
 picking, open-in-editor and reveal-in-Finder had become daemon HTTP routes
 ([The Daemon Proxies OS File Actions](daemon-proxies-os-file-actions.md)), which
 a webview calls exactly as a browser tab does.

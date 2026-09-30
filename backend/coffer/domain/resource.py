@@ -54,8 +54,7 @@ def validate_resource_name(name: str) -> None:
 
 
 #: The longest title a resource may carry (spec resource-framework "Carry an
-#: optional editable title on the kinds that have one"). Matches
-#: ``resources.title``.
+#: optional editable title on the kinds that have one").
 TITLE_MAX_LEN = 80
 
 

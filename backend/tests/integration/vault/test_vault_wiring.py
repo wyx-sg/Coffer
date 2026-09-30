@@ -147,6 +147,9 @@ async def test_a_failed_audit_write_leaves_the_commit_standing() -> None:
 @pytest.mark.acceptance(
     spec="vault-storage", scenario="an invalid hand edit stays out of HEAD and is flagged"
 )
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="refused hand edits are listed on REST and the command line"
+)
 async def test_an_invalid_resource_hand_edit_stays_out_of_head_and_is_flagged() -> None:
     kinds = {"widget": Kind(name="widget", display_name="Widget", config_schema=WidgetConfig)}
     svc = ResourceService(
@@ -197,9 +200,17 @@ async def test_a_missing_git_is_a_startup_error_saying_so(
         await _start(_Audit())
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a git older than 2.40 stops the daemon with a hand-off"
+)
 async def test_a_git_older_than_2_40_is_a_startup_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from coffer.surfaces.http import vault_composition
 
     monkeypatch.setattr(vault_composition, "git_version", lambda _repo: (2, 30))
-    with pytest.raises(RuntimeError, match=r"git 2\.40 or later"):
+    with pytest.raises(RuntimeError, match=r"git 2\.40 or later and found 2\.30") as caught:
         await vault_composition.build_vault_stores({})
+    message = str(caught.value)
+    # The refusal names no installer; it hands the chore to the person's agent.
+    assert "xcode-select" not in message and "brew" not in message
+    assert "Please update git on this machine to version 2.40 or later." in message
+    assert "run `git --version`" in message
