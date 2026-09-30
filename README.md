@@ -79,6 +79,14 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 Both put `coffer`, `coffer-daemon` and `coffer-mcp-shim` in `~/.coffer/bin`. The [install guide](https://wyx-sg.github.io/Coffer/start/install) covers every path, the unsigned-app step on macOS, upgrading and uninstalling.
 
+> **macOS (unsigned).** Coffer is not yet notarised, so macOS calls a `.dmg` downloaded in a browser "damaged". It is not; clear the quarantine flag and open it again:
+>
+> ```sh
+> xattr -dr com.apple.quarantine /Applications/Coffer.app
+> ```
+>
+> Binaries extracted from a browser-downloaded release archive need the same: `xattr -dr com.apple.quarantine ~/.coffer/bin`. The one-line installer's binaries are not quarantined.
+
 ## Quickstart
 
 ```sh

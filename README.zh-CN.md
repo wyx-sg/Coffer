@@ -77,6 +77,14 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 两种方式都会把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 放进 `~/.coffer/bin`。[安装指南](https://wyx-sg.github.io/Coffer/zh/start/install)介绍了所有安装方式、macOS 上未签名应用需要的那一步、升级和卸载。
 
+> **macOS（未签名）。** Coffer 还没有经过公证，所以 macOS 会说浏览器下载的 `.dmg`“已损坏”。它并没有损坏；清除隔离标记后再打开即可：
+>
+> ```sh
+> xattr -dr com.apple.quarantine /Applications/Coffer.app
+> ```
+>
+> 从浏览器下载的发布包里解压出来的二进制也要这样处理：`xattr -dr com.apple.quarantine ~/.coffer/bin`。一行安装脚本装的二进制不会被隔离。
+
 ## 快速上手
 
 ```sh
