@@ -216,6 +216,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SYNC_REMOTE_FAILED` | 502 | 针对远端的某个 git 操作失败。消息已脱敏。 | 检查网络访问、远端 URL 和令牌的权限。 |
 | `SYNC_NOTHING_STOPPED` | 409 | 你回答了一个冲突、暂停或加入选择，但没有任何同步轮次在等这个回答。 | 无需操作。 |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | 手动合并的副本中仍有冲突标记；消息会给出所在行。 | 删除它们，保存，然后把文件标记为已解决。 |
+| `SYNC_SECRET_NOT_EDITABLE` | 422 | 停下的一轮中的加密密钥被在编辑器中打开，或被答复为“编辑”。 | 保留本机的版本，或采用另一台的。 |
 | `SYNC_ROUND_NOT_FOUND` | 404 | 没有这个 id 的同步轮次。 | 从 `coffer sync history` 中选一个。 |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | 该轮次没有应用任何东西，或者它本身就是一次回滚。 | 无需操作。 |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | 没有这个 id 的机器共享此保险库。 | 用 `coffer sync machine list` 列出机器。 |
@@ -240,7 +241,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `VAULT_MIGRATION_REQUIRED` | 该 home 仍把状态保存在 `coffer.db` 中，来自保险库布局之前的 Coffer。 | 停止守护进程并运行 `coffer migrate`。见[升级现有的 Coffer](/zh/guides/upgrading)。 |
 | `VAULT_MIGRATION_ON_HOLD` | `coffer migrate --rollback` 已把 home 恢复原状，并留下了暂停标记。 | 运行之前的构建，或先运行 `coffer migrate --resume` 再运行 `coffer migrate`。 |
 | `VAULT_MIGRATION_REFUSED` | `coffer migrate` 不会处理当前状态的 home，例如一次中途停下的升级。 | 按消息操作；升级做到一半时，先运行 `coffer migrate --rollback`。 |
-| `GIT_MISSING` | 保险库需要 `git`，但没有找到。 | 安装 git（macOS 上运行 `xcode-select --install`）。 |
+| `GIT_MISSING` | 保险库需要 `git`，但没有找到。 | 按适合这台机器的方式安装 git；错误的 `details.handoff` 是给你的智能体的提示词。 |
 | `MASTER_KEY_MISSING` | 见[密钥存储](#secrets)。 | |
 
 ## 聊天轮次错误 {#chat-turn-errors}

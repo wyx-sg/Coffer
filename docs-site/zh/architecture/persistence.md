@@ -195,7 +195,7 @@ flowchart LR
 
 保险库里的每个文件和文件夹都有可以查看、diff 和恢复的历史：`coffer vault history|diff|show|restore`、`/api/v1/vault/` 下的 REST 路由，以及技能的「历史」标签页。恢复是一次经过同样检查的新提交。见[手工编辑保险库](/zh/guides/vault-files)。
 
-保险库需要 `git`。没有 git 的机器会在启动时失败，并给出一条写明安装步骤的消息（macOS 上是 `xcode-select --install`）。
+保险库需要 `git`。没有 git 的机器会在启动时失败，并给出说明。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词（`domain/git_handoff.py`）；同步状态也会报告问题 `git_missing`，附带同一段提示词。
 
 ## runs.db 的迁移 {#migrations-of-runs-db}
 

@@ -22,7 +22,7 @@ daemon and run `coffer migrate` once to move it into ~/.coffer/vault
 ## 开始之前 {#before-you-start}
 
 - **停止守护进程。** 如果你用桌面应用，先退出它，再运行 `coffer daemon stop`。守护进程运行时 `coffer migrate` 会拒绝执行。
-- **准备好 `git`。** 保险库是一个 git 仓库。在 macOS 上运行 `xcode-select --install`。
+- **准备好 `git`。** 保险库是一个 git 仓库，所以 `PATH` 上必须有 git 2.40 或更高版本。如果没有，Coffer 的 `GIT_MISSING` 错误会提供一段提示词，把安装 git 交给你的智能体。
 - **如果要演练（见下文），确保磁盘能放下一份 `~/.coffer` 的副本。** 升级本身是移动文件树而非复制，只额外增加一份数据库副本。
 
 ## 先演练 {#rehearse-it}

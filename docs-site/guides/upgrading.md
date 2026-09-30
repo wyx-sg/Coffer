@@ -22,7 +22,7 @@ The error code is `VAULT_MIGRATION_REQUIRED`. Nothing has been changed at that p
 ## Before you start
 
 - **Stop the daemon.** Quit the desktop app if you use it, then run `coffer daemon stop`. `coffer migrate` refuses while a daemon runs.
-- **Have `git`.** The vault is a git repository. On macOS, `xcode-select --install`.
+- **Have `git`.** The vault is a git repository, so git 2.40 or later must be on the `PATH`. If it is missing, Coffer's `GIT_MISSING` error offers a prompt that hands installing git to your agent.
 - **Make sure the disk has room for a copy of `~/.coffer`** if you rehearse (below). The upgrade itself moves trees rather than copying them, and adds only a copy of the database.
 
 ## Rehearse it
