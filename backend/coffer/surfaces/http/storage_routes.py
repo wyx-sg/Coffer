@@ -36,7 +36,12 @@ async def storage_summary() -> StorageSummaryOut:
     usage = await asyncio.to_thread(storage_usage.measure)
     return StorageSummaryOut(
         vault=VaultUsageOut(
-            path=usage.vault.path, bytes=usage.vault.bytes, versions=usage.vault.versions
+            path=usage.vault.path,
+            bytes=usage.vault.bytes,
+            versions=usage.vault.versions,
+            latest_time=usage.vault.latest_time,
+            latest_writer=usage.vault.latest_writer,
+            sync_configured=usage.vault.sync_configured,
         ),
         local_content=LocalContentUsageOut(
             folder=usage.local_content.folder,

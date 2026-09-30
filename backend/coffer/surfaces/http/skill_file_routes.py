@@ -19,6 +19,9 @@ from pydantic import BaseModel, Field
 
 from coffer.application.skill import content_ops, file_ops
 from coffer.application.skill.service import SkillService
+from coffer.domain.vault.writers import OP_EDIT
+from coffer.infrastructure.vault.actor_meta import commit_meta
+from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.skill_dependencies import get_skill_service
 from coffer.surfaces.http.skill_routes import _actor
@@ -65,11 +68,11 @@ class SkillFileContentOut(BaseModel):
 class SkillFileWriteRequest(BaseModel):
     path: str = Field(min_length=1)  # POSIX, relative to the master folder root
     content: str  # full new file contents (UTF-8)
-    # The fingerprint from the read that seeded this edit. Supplied → the write
-    # is rejected with 409 SKILL_FILE_STALE if the file changed underneath it
-    # (the user's own editor also writes this folder). Omitted → unconditional,
-    # which is what programmatic clients have always done.
-    expected_fingerprint: str | None = None
+    # The fingerprint from the read that seeded this edit; required, because
+    # every vault write compares (ADR every-vault-write-is-a-validated-commit-
+    # naming-its-writer). The write is refused with 409 SKILL_FILE_STALE when
+    # the file changed underneath it (the user's own editor also writes here).
+    expected_fingerprint: str
 
 
 # ---------- helpers ----------
@@ -169,11 +172,12 @@ async def write_skill_file(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> SkillFileContentOut:
-    """Overwrite one existing text file in the skill's master folder.
+    """Overwrite one existing text file in the skill's master folder, as one
+    vault commit naming the writer.
 
-    A body carrying ``expected_fingerprint`` makes the write conditional:
-    ``SkillFileStale`` propagates to the shared error handler as 409
-    ``SKILL_FILE_STALE`` with the file left untouched.
+    The write is conditional on ``expected_fingerprint``: ``SkillFileStale``
+    propagates to the shared error handler as 409 ``SKILL_FILE_STALE`` with
+    the file left untouched.
     """
     skill = await svc.get_skill(uid)  # 404 before anything is written.
     try:
@@ -183,6 +187,8 @@ async def write_skill_file(
             relpath=body.path,
             content=body.content,
             expected_fingerprint=body.expected_fingerprint,
+            writer=vault_writer(),
+            commit_for=lambda summary: commit_meta(OP_EDIT, summary, actor),
             actor=actor,
         )
     except ValueError as exc:

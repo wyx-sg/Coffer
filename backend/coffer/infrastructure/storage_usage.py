@@ -6,7 +6,11 @@ directories of ADR storage-is-five-classes-by-nature, resolved from ``HOME``
 through ``infrastructure.vault.home`` like every other reader of them:
 
 - **vault** — the vault repository (``vault/``), always a git repository, so
-  its commit count is the number of versions;
+  its commit count is the number of versions, and its newest commit names
+  when and by whom the vault last changed (ADR
+  every-vault-write-is-a-validated-commit-naming-its-writer); its size is
+  the working tree and ``.git`` together; whether a sync remote is set is
+  read from ``local/sync/remote.json``;
 - **local content** — chat uploads and channel media under ``content/``,
   which never sync;
 - **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``
@@ -29,12 +33,17 @@ import pathlib
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 
+from coffer.domain.vault.history import Commit
+from coffer.domain.vault.writers import display_writer
 from coffer.infrastructure.agent.paths import agent_state_root
 from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.chat.media_store import default_chat_media_dir
 from coffer.infrastructure.memory.paths import memory_root
+from coffer.infrastructure.sync.local_state import JsonRemoteStore
 from coffer.infrastructure.vault.home import content_root, runs_db_path, vault_root
+from coffer.infrastructure.vault.repository import VaultRepository
 
 
 def database_path() -> pathlib.Path | None:
@@ -98,6 +107,11 @@ class Measured:
 @dataclass(frozen=True)
 class VaultUsage(Measured):
     versions: int | None
+    #: When the newest commit was made, and its writer (``agent:<type>`` for
+    #: an agent); both None when there is no repository yet.
+    latest_time: datetime | None = None
+    latest_writer: str | None = None
+    sync_configured: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,10 +136,14 @@ def cache_roots() -> list[pathlib.Path]:
 def measure() -> StorageUsage:
     """Measure the four kinds."""
     vault_dir = vault_root()
+    latest = _latest_commit(vault_dir)
     vault = VaultUsage(
         path=str(vault_dir),
         bytes=tree_bytes(vault_dir),
         versions=git_version_count(vault_dir),
+        latest_time=latest.time if latest else None,
+        latest_writer=display_writer(latest.meta) if latest else None,
+        sync_configured=_sync_configured(),
     )
     media = [default_chat_media_dir(), default_media_dir()]
     parents = {str(p.parent) for p in media}
@@ -147,6 +165,24 @@ def measure() -> StorageUsage:
         history=history,
         cache_bytes=sum(tree_bytes(p) for p in cache_roots()),
     )
+
+
+def _latest_commit(repo: pathlib.Path) -> Commit | None:
+    """The newest commit on ``repo``'s HEAD, or None (no repository, git failing)."""
+    if not (repo / ".git").exists():
+        return None
+    try:
+        found = VaultRepository(repo).log(limit=1)
+    except Exception:
+        return None
+    return found[0] if found else None
+
+
+def _sync_configured() -> bool:
+    try:
+        return JsonRemoteStore().get() is not None
+    except Exception:
+        return False
 
 
 def clear_cache() -> int:

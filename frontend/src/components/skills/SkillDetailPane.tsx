@@ -2,18 +2,19 @@
 // The open skill in the Skills page's reading pane (spec skill-manager "Cover
 // skill management on REST, the CLI and the web"): the header, the built-in
 // banner or the Git source panel where they apply, and four tabs in this
-// order — Files (the default), Delivery, Requires, History. The page owns the
+// order — Files (the default), Delivery, Requires, History (the master
+// folder's versions, from the vault's history). The page owns the
 // address (`/skills/<name>/<tab>`); this pane only renders the tab it is
 // given. It is loaded on first open (SkillsPage lazy-loads it), because the
 // Files tab pulls in the editor and the Markdown pipeline.
 import { useTranslation } from "react-i18next";
-import { History, Info } from "lucide-react";
+import { Info } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
 import { SkillDeliveryTab } from "@/components/skills/SkillDeliveryTab";
 import { SkillDetailHeader } from "@/components/skills/SkillDetailHeader";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { SkillGitSourcePanel } from "@/components/skills/SkillGitSource";
+import { SkillHistoryTab } from "@/components/skills/SkillHistoryTab";
 import { SkillRequiresTab } from "@/components/skills/SkillRequiresTab";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -70,11 +71,7 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
           <SkillRequiresTab skill={skill} />
         </TabsContent>
         <TabsContent value="history">
-          <EmptyState
-            icon={History}
-            title={t("skills.history.title")}
-            description={t("skills.history.body")}
-          />
+          <SkillHistoryTab skill={skill} />
         </TabsContent>
       </Tabs>
     </div>

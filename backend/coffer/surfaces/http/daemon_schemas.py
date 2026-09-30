@@ -131,11 +131,19 @@ class DaemonPortIn(BaseModel):
 
 
 class VaultUsageOut(BaseModel):
-    #: The synced git repository, or the coffer home when sync is not set up.
+    #: The vault repository (``~/.coffer/vault``), a git repository whether or
+    #: not it syncs.
     path: str
+    #: The working tree and ``.git`` together.
     bytes: int
-    #: Commits on the repository's HEAD; null when it is no repository.
+    #: Commits on the repository's HEAD; null when it is no repository yet.
     versions: int | None
+    #: When the newest version was written, and by whom (``user``, ``disk``,
+    #: ``agent:<type>``, ``daemon``, ``curation``, ``sync``); null with no repository.
+    latest_time: datetime | None
+    latest_writer: str | None
+    #: Whether a sync remote is configured.
+    sync_configured: bool
 
 
 class LocalContentUsageOut(BaseModel):

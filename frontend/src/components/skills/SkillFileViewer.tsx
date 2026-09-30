@@ -53,7 +53,9 @@ export function SkillFileViewer({
       const saved = await skillsApi.writeFileContent(uid, {
         path,
         content: text,
-        expected_fingerprint: expectedFingerprint,
+        // Every vault write compares; with no fingerprint to state, the empty
+        // one is refused as stale rather than written blind.
+        expected_fingerprint: expectedFingerprint ?? "",
       });
       return saved.fingerprint;
     },

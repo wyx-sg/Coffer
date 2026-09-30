@@ -356,11 +356,10 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
         assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('merged')\n"
 
 
-def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
-    """Programmatic clients that never read first keep working.
-
-    See "Save an existing skill file conditionally".
-    """
+def test_a_write_without_a_fingerprint_is_refused(tmp_path, monkeypatch):
+    """Every vault write compares; there is no unconditional mode (ADR
+    every-vault-write-is-a-validated-commit-naming-its-writer), so a body
+    without ``expected_fingerprint`` is invalid and changes nothing."""
     app = _app(tmp_path, monkeypatch, 59800)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="uncond-skill")
@@ -368,17 +367,12 @@ def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
 
     with _client(app) as c:
         uid = _import(c, src)["uid"]
-
-        # Change the file behind the API — with no expected_fingerprint the
-        # write must still land (last writer wins).
-        (master / "scripts" / "run.py").write_text("print('drift')\n", encoding="utf-8")
-
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
             json={"path": "scripts/run.py", "content": "print('cli')\n"},
         )
-        assert r.status_code == 200, r.text
-        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('cli')\n"
+        assert r.status_code == 422, r.text
+        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('hi')\n"
 
 
 def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
@@ -392,14 +386,14 @@ def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
         # A file that does not exist cannot be written (no create-file).
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/new.py", "content": "x"},
+            json={"path": "scripts/new.py", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 404, r.text
 
         # Path traversal out of the master folder is rejected.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "../../etc/passwd", "content": "x"},
+            json={"path": "../../etc/passwd", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 400, r.text
 
@@ -407,7 +401,7 @@ def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.put(
             f"/api/v1/skills/{'0' * 32}/files/content",
-            json={"path": "SKILL.md", "content": "x"},
+            json={"path": "SKILL.md", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 404, r.text
 
@@ -424,14 +418,18 @@ def test_write_skill_file_rejects_binary_and_oversize(tmp_path, monkeypatch):
         # Refuse to overwrite a binary file with text.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "blob.bin", "content": "text"},
+            json={"path": "blob.bin", "content": "text", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 400, r.text
 
         # Content over the byte cap is rejected.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "SKILL.md", "content": "a" * (MAX_FILE_BYTES + 1)},
+            json={
+                "path": "SKILL.md",
+                "content": "a" * (MAX_FILE_BYTES + 1),
+                "expected_fingerprint": "0" * 64,
+            },
         )
         assert r.status_code == 400, r.text
 
@@ -482,7 +480,7 @@ def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
         assert before.status_code == 200, before.text
 
         for body in (
-            {"path": "SKILL.md", "content": "hijacked\n"},
+            {"path": "SKILL.md", "content": "hijacked\n", "expected_fingerprint": "0" * 64},
             {
                 "path": "SKILL.md",
                 "content": "hijacked\n",
@@ -504,9 +502,14 @@ def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
 
         # An imported skill is the user's own: still writable.
         uid = _import(c, src)["uid"]
+        mine = c.get(f"/api/v1/skills/{uid}/files/content", params={"path": "scripts/run.py"})
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/run.py", "content": "print('mine')\n"},
+            json={
+                "path": "scripts/run.py",
+                "content": "print('mine')\n",
+                "expected_fingerprint": mine.json()["fingerprint"],
+            },
         )
         assert r.status_code == 200, r.text
         assert r.json()["content"] == "print('mine')\n"

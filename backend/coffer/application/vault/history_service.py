@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 from coffer.application.vault.ports import VaultHistoryPort, VaultWriterPort
 from coffer.domain.error_base import CofferError
+from coffer.domain.vault.errors import VaultPathRefused
+from coffer.domain.vault.findings import Finding
 from coffer.domain.vault.history import (
     REMOVED,
     Commit,
@@ -24,6 +26,7 @@ from coffer.domain.vault.history import (
     FileVersion,
     looks_like_a_version,
 )
+from coffer.domain.vault.layout import SECRET
 from coffer.domain.vault.writers import OP_RESTORE, WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import Expect, check_path
 
@@ -95,14 +98,25 @@ class VaultHistoryService:
 
     async def content(self, path: str, version: str) -> bytes:
         """``path``'s bytes as ``version`` left them."""
-        data = await asyncio.to_thread(self._history.read, _version_id(version), check_path(path))
+        path = _readable(path)
+        data = await asyncio.to_thread(self._history.read, _version_id(version), path)
         if data is None:
             raise VaultVersionNotFound(f"{path} did not exist at {version}")
         return data
 
+    async def current(self, path: str) -> bytes | None:
+        """``path``'s bytes on disk now — what a caller reads before stating
+        the fingerprint a restore expects (``None``: no file there)."""
+        path = _readable(path)
+        return await asyncio.to_thread(self._writer.read_disk, path)
+
+    def problems(self) -> list[Finding]:
+        """Every finding that keeps a hand edit out of ``HEAD``, by path."""
+        return [f for _path, found in sorted(self._writer.problems().items()) for f in found]
+
     async def diff(self, path: str, version: str) -> FileDiff:
         """What ``version`` did to ``path``."""
-        path = check_path(path)
+        path = _readable(path)
         commit = await asyncio.to_thread(self._history.commit_of, _version_id(version))
         if commit is None:
             raise VaultVersionNotFound(f"no version {version}")
@@ -120,6 +134,7 @@ class VaultHistoryService:
         expected_fingerprint: str | None,
         actor: str,
         writer: str = WRITER_USER,
+        agent: str | None = None,
     ) -> Restored:
         """Write ``version``'s content of ``path`` back as a new commit.
 
@@ -129,16 +144,23 @@ class VaultHistoryService:
         ``HEAD`` instead, and files the version did not have are removed.
         """
         spec = _spec(path)
+        _readable(spec.rstrip("/"))
         sha = _version_id(version)
         result = await asyncio.to_thread(
-            self._restore_sync, spec, sha, expected_fingerprint, actor, writer
+            self._restore_sync, spec, sha, expected_fingerprint, actor, writer, agent
         )
         if self._on_restored is not None:
             await self._on_restored(result, actor)
         return result
 
     def _restore_sync(
-        self, spec: str, sha: str, expected: str | None, actor: str, writer: str
+        self,
+        spec: str,
+        sha: str,
+        expected: str | None,
+        actor: str,
+        writer: str,
+        agent: str | None,
     ) -> Restored:
         commit = self._history.commit_of(sha)
         if commit is None:
@@ -148,6 +170,7 @@ class VaultHistoryService:
             operation=OP_RESTORE,
             summary=f"Restored {spec} to {commit.version[:7]}",
             actor=actor,
+            agent=agent,
             restored_from=commit.version,
         )
         with self._writer.begin(meta) as txn:
@@ -175,6 +198,17 @@ def _spec(path: str) -> str:
     folder = path.endswith("/")
     clean = check_path(path.rstrip("/"))
     return clean + "/" if folder else clean
+
+
+def _readable(path: str) -> str:
+    """``path`` unless it is secret ciphertext. Rolling a secret back is
+    re-entering it (ADR every-vault-write-is-a-validated-commit-naming-its-writer,
+    "Credentials when not carried"), so its files are neither shown nor
+    restored through history."""
+    clean = check_path(path)
+    if clean == SECRET or clean.startswith(f"{SECRET}/"):
+        raise VaultPathRefused(f"{SECRET}/ is not read or restored through history")
+    return clean
 
 
 def _version_id(version: str) -> str:

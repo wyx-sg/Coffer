@@ -2,7 +2,9 @@
 //
 // Settings → Data (design 6.2.07–6.2.10; spec web-ui "Group the Data tab by
 // what kind of data it is"): what Coffer keeps, where it lives and for how
-// long, in four blocks — Vault (synced: size, versions, Open folder), Local
+// long, in four blocks — Vault (the git repository at ~/.coffer/vault: size
+// with .git, versions, the newest version's time and writer, whether it
+// syncs, Open folder), Local
 // content (not synced, the user backs it up: chat and channel attachments),
 // History (the records, their retention, Clear expired now) and Rebuildable
 // cache (the memory tree and transcript summary cache, one confirmed Clear).
@@ -21,7 +23,8 @@ import { abbreviateHomePath } from "@/lib/agents/display";
 import { fsApi } from "@/lib/api/fs";
 import { translateApiError } from "@/lib/api/errors";
 import { useStorageSummary } from "@/lib/hooks/useStorage";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes, formatDateTime } from "@/lib/utils";
+import { vaultWriterLabel } from "@/lib/vault/writers";
 
 function Location({ path }: { path: string }) {
   return <span className="font-mono text-xs text-text-muted">{abbreviateHomePath(path)}</span>;
@@ -75,9 +78,28 @@ export function DataSettings() {
           testId="settings-data-vault"
         >
           {data ? (
-            <SettingRow label={t("settings.data.location")}>
-              <Location path={data.vault.path} />
-            </SettingRow>
+            <>
+              <SettingRow label={t("settings.data.location")}>
+                <Location path={data.vault.path} />
+              </SettingRow>
+              {data.vault.latest_time && data.vault.latest_writer ? (
+                <SettingRow label={t("settings.data.vault.latest")}>
+                  <span className="text-sm text-text" data-visual-volatile>
+                    {t("settings.data.vault.latestValue", {
+                      when: formatDateTime(data.vault.latest_time),
+                      writer: vaultWriterLabel(t, data.vault.latest_writer),
+                    })}
+                  </span>
+                </SettingRow>
+              ) : null}
+              <SettingRow label={t("settings.data.vault.sync")}>
+                <span className="text-sm text-text">
+                  {data.vault.sync_configured
+                    ? t("settings.data.vault.syncOn")
+                    : t("settings.data.vault.syncOff")}
+                </span>
+              </SettingRow>
+            </>
           ) : null}
         </DataBlock>
 

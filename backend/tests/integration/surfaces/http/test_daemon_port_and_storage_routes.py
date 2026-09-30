@@ -193,6 +193,10 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     assert body["vault"]["path"] == str(vault)
     assert body["vault"]["versions"] == 3
     assert body["vault"]["bytes"] > 150
+    # A commit with no Coffer trailers is a person's own: it reads as a disk edit.
+    assert body["vault"]["latest_writer"] == "disk"
+    assert body["vault"]["latest_time"] is not None
+    assert body["vault"]["sync_configured"] is False
     assert body["local_content"]["bytes"] == 500
     assert body["local_content"]["folder"] == str(coffer / "content")
     assert sorted(body["local_content"]["locations"]) == [
@@ -211,7 +215,30 @@ async def test_a_vault_not_yet_created_reports_no_versions(client, home):
         "path": str(home / ".coffer" / "vault"),
         "bytes": 0,
         "versions": None,
+        "latest_time": None,
+        "latest_writer": None,
+        "sync_configured": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_the_vault_block_names_the_newest_writer_and_the_sync_remote(client, home):
+    from coffer.domain.vault.writers import WRITER_USER, CommitMeta
+    from coffer.domain.vault.writes import Expect
+    from coffer.infrastructure.vault.instance import vault_writer
+
+    meta = CommitMeta(writer=WRITER_USER, operation="edit", summary="Saved", actor="ui")
+    vault_writer().write_file("knowledge/a.md", b"one\n", meta=meta, expected=Expect.ABSENT)
+    remote = home / ".coffer" / "local" / "sync" / "remote.json"
+    remote.parent.mkdir(parents=True)
+    remote.write_text(json.dumps({"url": "https://example.invalid/vault.git"}))
+    async with client:
+        r = await client.get("/api/v1/storage")
+    vault = r.json()["vault"]
+    # The first commit (the daemon's) and the save.
+    assert vault["versions"] == 2
+    assert vault["latest_writer"] == "user"
+    assert vault["sync_configured"] is True
 
 
 # revise-web-ui-ia: web-ui "clearing the cache is confirmed and rebuilt" (the

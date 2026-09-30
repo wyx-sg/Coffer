@@ -75,6 +75,7 @@ from coffer.surfaces.http.storage_routes import router as storage_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 from coffer.surfaces.http.usage_routes import router as usage_router
+from coffer.surfaces.http.vault_routes import router as vault_router
 
 
 def include_all_routers(app: FastAPI) -> None:
@@ -97,6 +98,7 @@ def include_all_routers(app: FastAPI) -> None:
         credential_router,
         settings_router,
         sync_router,  # spec vault-sync
+        vault_router,  # spec vault-storage
         internal_engine_router,  # spec internal-engine
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,

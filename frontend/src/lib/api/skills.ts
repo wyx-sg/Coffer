@@ -27,10 +27,10 @@ export type SkillImportRequest = Schemas["SkillImportRequest"];
 export type SkillFileNode = Schemas["SkillFileNodeOut"];
 export type SkillFileTreeOut = Schemas["SkillFileTreeOut"];
 
-/** Body of a skill-file save. `expected_fingerprint` makes the write
- *  conditional: the daemon refuses it with 409 SKILL_FILE_STALE when the file
- *  changed on disk since the read that produced the fingerprint. The master
- *  folder is also the user's own working copy, so that race is routine. */
+/** Body of a skill-file save. `expected_fingerprint` is required — every
+ *  vault write compares: the daemon refuses it with 409 SKILL_FILE_STALE when
+ *  the file changed on disk since the read that produced the fingerprint. The
+ *  master folder is also the user's own working copy, so that race is routine. */
 export type SkillFileWrite = Schemas["SkillFileWriteRequest"];
 export type SkillFileContentOut = Schemas["SkillFileContentOut"];
 

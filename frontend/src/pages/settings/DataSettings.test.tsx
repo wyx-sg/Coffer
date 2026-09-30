@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastProvider } from "@/components/ui/toast";
+import type { StorageSummary } from "@/lib/hooks/useStorage";
+
 import { DataSettings } from "./DataSettings";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
@@ -57,8 +59,15 @@ const POLICIES = [
   },
 ];
 
-const STORAGE = {
-  vault: { path: "/Users/u/.coffer/sync", bytes: 13_002_342, versions: 1382 },
+const STORAGE: StorageSummary = {
+  vault: {
+    path: "/Users/u/.coffer/vault",
+    bytes: 13_002_342,
+    versions: 1382,
+    latest_time: "2026-09-30T08:00:00Z",
+    latest_writer: "agent:claude_code",
+    sync_configured: true,
+  },
   local_content: {
     folder: "/Users/u/.coffer",
     locations: ["/Users/u/.coffer/chat-media", "/Users/u/.coffer/channel-media"],
@@ -115,7 +124,7 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
     await within(vault).findByText("12.4 MB · 1,382 versions");
-    expect(within(vault).getByText("~/.coffer/sync")).toBeInTheDocument();
+    expect(within(vault).getByText("~/.coffer/vault")).toBeInTheDocument();
     const local = screen.getByTestId("settings-data-local");
     expect(within(local).getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
     expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
@@ -143,22 +152,49 @@ describe("DataSettings", () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
-    await within(vault).findByText("~/.coffer/sync");
+    await within(vault).findByText("~/.coffer/vault");
     fireEvent.click(within(vault).getByRole("button", { name: /open folder/i }));
-    expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/sync");
+    expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/vault");
   });
 
-  test("a vault that is not a repository says how to get versions", async () => {
+  test("the vault block names the newest version's writer and whether it syncs", async () => {
+    mockApi();
+    render(wrap(<DataSettings />));
+    const vault = await screen.findByTestId("settings-data-vault");
+    expect(await within(vault).findByText(/· Claude Code$/)).toBeInTheDocument();
+    expect(within(vault).getByText("Synced to your remote")).toBeInTheDocument();
+  });
+
+  test("a vault that syncs nowhere says it is this machine's only", async () => {
     mockApi({
       storage: {
         ...STORAGE,
-        vault: { path: "/Users/u/.coffer", bytes: 1024, versions: null as unknown as number },
+        vault: { ...STORAGE.vault, latest_writer: "disk", sync_configured: false },
       },
     });
     render(wrap(<DataSettings />));
-    expect(
-      await screen.findByText(/set up sync to keep it as a git repository/i),
-    ).toBeInTheDocument();
+    const vault = await screen.findByTestId("settings-data-vault");
+    expect(await within(vault).findByText(/· Edited on disk$/)).toBeInTheDocument();
+    expect(within(vault).getByText("This machine only")).toBeInTheDocument();
+  });
+
+  test("a vault not created yet says it becomes a repository at first start", async () => {
+    mockApi({
+      storage: {
+        ...STORAGE,
+        vault: {
+          path: "/Users/u/.coffer/vault",
+          bytes: 0,
+          versions: null,
+          latest_time: null,
+          latest_writer: null,
+          sync_configured: false,
+        },
+      },
+    });
+    render(wrap(<DataSettings />));
+    expect(await screen.findByText(/makes it a git repository/i)).toBeInTheDocument();
+    expect(screen.queryByText("Latest version")).toBeNull();
   });
 
   // revise-web-ui-ia: web-ui "clear expired now removes what retention has
