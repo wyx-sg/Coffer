@@ -29,7 +29,8 @@ sync SHALL only add a remote. The repository's own `.git/info/exclude` — never
 a tracked `.gitignore` — SHALL keep out editor and system litter, hidden
 entries inside knowledge collections other than the inbox, and
 `secret/` unless the sync remote carries secrets. A path the exclude
-file ignores MUST never be staged, neither as a change nor as a deletion.
+file ignores MUST never be staged, neither as a change nor as a deletion, and
+neither MUST a symbolic link or anything inside a nested git repository.
 
 #### Scenario: a fresh vault is a repository with a first commit
 - **GIVEN** a home with no vault
@@ -40,7 +41,7 @@ file ignores MUST never be staged, neither as a change nor as a deletion.
 - **GIVEN** a credential file under `vault/secret/` and a remote that does not carry credentials
 - **WHEN** the vault commits
 - **THEN** the ciphertext is in no commit
-- **AND** once the remote carries credentials, the next commit includes it
+- **AND** once the remote carries secrets, the next commit includes it
 
 ### Requirement: Keep every vault document a JSON object that preserves what it does not know
 Every document Coffer parses in the vault — resource files, state documents,
@@ -180,3 +181,85 @@ on REST (`/api/v1/vault/history`, `/api/v1/vault/diff`, `/api/v1/vault/content`,
 - **GIVEN** a skill folder that gained a file after a version
 - **WHEN** a person restores the folder to that version
 - **THEN** the folder holds exactly that version's files
+
+#### Scenario: a symlink and a nested repository are never recorded
+- **GIVEN** a skill folder holding a symbolic link and a nested git repository beside its files
+- **WHEN** the vault settles the folder
+- **THEN** only the regular files are committed, and nothing about the link or the nested repository stays pending
+
+### Requirement: Keep secret ciphertext as one file per reference
+The ciphertext of every stored secret SHALL be one file, `vault/secret/<ref>.enc`,
+holding the Fernet token and a trailing newline, with `/` in a reference as a
+directory separator and every other byte outside `[A-Za-z0-9._-]` encoded
+reversibly; a reference that would leave its directory MUST be refused. A
+machine-local secret (a model-proxy token) SHALL be kept under `local/secret/`
+and MUST NEVER be written into the vault. The files SHALL be `0600` in `0700`
+directories, and no directory Coffer creates for secrets SHALL be named
+`secrets`.
+
+#### Scenario: a secret is only ciphertext in its file
+- **GIVEN** a secret stored through Coffer
+- **WHEN** its file under `vault/secret/` is read
+- **THEN** it holds the Fernet token and a newline, never the value
+
+#### Scenario: a proxy token stays machine-local
+- **GIVEN** a model-proxy token stored for an agent
+- **WHEN** the vault and `local/` are listed
+- **THEN** the token's ciphertext is under `local/secret/` and nowhere under `vault/`
+
+### Requirement: Read a held file from disk and tell the reconciler about every change
+A file sync deliberately leaves different from `HEAD` (a joined machine's file
+waiting for the person's choice) SHALL be in effect as it is on disk and MUST
+NOT be settled. Every commit another writer makes to a resource or state
+document — a settled hand edit, a sync checkout, a restore — SHALL refresh the
+stores and reach the reconciler and the event stream exactly as an API write
+does, once.
+
+#### Scenario: a held file is in effect from disk
+- **GIVEN** a resource file held by a join with this machine's version on disk
+- **WHEN** the resource is read
+- **THEN** it answers the version on disk, and the file is not committed
+
+#### Scenario: a hand edit reaches the reconciler like an API write
+- **GIVEN** a person edits a resource file and the vault settles it
+- **WHEN** the commit lands
+- **THEN** one change for that resource reaches the reconciler and the event stream
+
+### Requirement: Move an existing home into the vault layout once, on request, reversibly
+Moving a home from the single-database layout SHALL be one explicit step,
+`coffer migrate`, run with the daemon stopped; the daemon MUST refuse to start
+on a home that still holds only `coffer.db` and name that command. The step
+SHALL back up `coffer.db` (and its `-wal`/`-shm`) as `coffer.db.pre-vault` and
+keep the old knowledge history, the stamped documents and `daemon-config.json`
+under `~/.coffer/pre-vault/` before changing anything; SHALL write every
+resource, secret, boundary record, state document and machine-local setting
+with the stores' own encoding; SHALL move every tree by rename into its class
+directory; SHALL replay the old knowledge history into the vault under
+`knowledge/`; SHALL commit the vault as one daemon commit with
+`Coffer-Layout: db -> 3`; and SHALL rename the database to `runs.db`. Every step
+SHALL be recorded before it runs, so `coffer migrate --rollback` restores the
+old home byte for byte from a finished or a half-finished upgrade and holds the
+home until `coffer migrate --resume`; `coffer migrate --rehearse` SHALL run the
+whole upgrade on a copy and leave the source untouched. A sync remote in the old
+layout MUST NOT be converted: it is refused until it is rebuilt from an upgraded
+machine.
+
+#### Scenario: the upgrade carries every item
+- **GIVEN** a home at the single-database layout with resources of every kind, secrets, approvals, knowledge with history, skills, memory, triggers and media
+- **WHEN** `coffer migrate` runs
+- **THEN** every item is in its class directory with its uid, reach and bytes, and the knowledge history is readable in the vault
+
+#### Scenario: the daemon refuses a home that was not upgraded
+- **GIVEN** a home that holds only `coffer.db`
+- **WHEN** the daemon starts
+- **THEN** it refuses and names `coffer migrate`
+
+#### Scenario: rollback restores the old home byte for byte
+- **GIVEN** a home upgraded by `coffer migrate`
+- **WHEN** `coffer migrate --rollback` runs
+- **THEN** every file of the old home has its old bytes, the vault is set aside, and the home is held until `coffer migrate --resume`
+
+#### Scenario: a rehearsal leaves the source untouched
+- **GIVEN** a home at the single-database layout
+- **WHEN** `coffer migrate --rehearse` runs
+- **THEN** it reports what the upgrade carries and every byte of the source home is unchanged

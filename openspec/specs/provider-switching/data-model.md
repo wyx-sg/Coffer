@@ -97,7 +97,7 @@ value object.
 | `NoActiveProvider` | `NO_ACTIVE_PROVIDER` | 404 | a key was asked for and nothing is active |
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection that is active (see "Refuse to move the wire of a live connection") |
 | `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | activating an `ollama` connection (see "Keep ollama connections internal-only") |
-| `ProviderInternalDefaultTaken` | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | a resource write that would flag a second internal-engine default (see "Keep at most one internal-engine default") |
+| `ProviderInternalDefaultTaken` | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | a resource write that would flag a second internal-engine default (see "Keep at most one internal default connection") |
 
 ### Projection functions (`domain/provider/projection.py`)
 
@@ -193,7 +193,10 @@ names the Coffer-owned filename.
 it on the target (serialised by the single-process daemon), emits
 `provider_internal_default_set`, and notifies the engine that the connection
 moved. `internal_default` is a field in the provider's config and the kind
-declares it exclusive (`exclusive_flags`), which is why both are here.
+declares it exclusive (`exclusive_flags`), which is why both are here: the
+vault's resource rule refuses any write — a surface's, a hand edit or a sync
+round's merged tree — that would leave two connection files flagged, and names
+the file that already holds it.
 
 What the flagged connection is USED for — the model paired with it, the chat
 model built from the pair, the settings document, and the rule that drops a

@@ -49,7 +49,6 @@ description: Which service owns user sessions, and where the TTL is configured.
 actor: user
 created_at: 2026-09-20T08:14:03.512840+00:00
 updated_at: 2026-09-22T10:02:41.090311+00:00
-coffer_curated_at: 2026-09-22T10:02:41.090311+00:00
 ---
 
 The `account-session` service owns ...
@@ -61,9 +60,8 @@ The `account-session` service owns ...
 | `description` | One sentence on what the document covers. Agents see it in the catalogue. |
 | `actor` | `user` or `agent` — who wrote the item it came from. |
 | `created_at`, `updated_at` | Timestamps. |
-| `coffer_curated_at` | Written by Coffer when curation has seen the document. Curation uses it to tell whether you edited the file since. |
 
-Any other key you add is kept, with its value, whenever Coffer rewrites the file.
+Any other key you add is kept, with its value, whenever Coffer rewrites the file. Coffer writes nothing into a document to remember what curation has seen: that is kept on this machine in `~/.coffer/local/curation.json`, as the content each document had when curation last settled it.
 
 ::: tip Name the subject, not the file
 A document must not refer to another knowledge file by its file name or path, because paths change as curation reorganises a collection. Write "see the gateway rate-limit notes", not "see `gateway/rate-limits.md`". Curation refuses to write a document that breaks this rule.
@@ -158,7 +156,7 @@ Coffer saves the attachment into that collection through the same upload path an
 
 ### Edit a file yourself
 
-Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (by its modification time) and carries it through to the rest of the collection.
+Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (its content differs from what curation last settled, and the change was not curation's own or another machine's) and carries it through to the rest of the collection.
 
 On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its title and description are shown above it, read-only, because curation keeps the frontmatter current. **⌘S** saves and **Esc** cancels. A save that finds the file changed on disk since the page loaded it, by your own editor or by a curation pass, is refused as a conflict (`KNOWLEDGE_FILE_CONFLICT`) and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Reload** (take what is on disk), **Compare** (what is on disk against your text) and **Copy my text** — never a second save over it. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, edit the file under `coffer path knowledge <collection>` with your own editor.
 
@@ -183,7 +181,7 @@ The model is instructed on two rules:
 - **Newer statements win.** When an item contradicts a document, the newer statement is kept and the superseded one stays legible as a dated correction.
 - **Your edits stand.** When the item is a document you edited, the pass never reverts or rewords your text. It carries your change outward — correcting other documents that disagree, moving a section that belongs elsewhere.
 
-When the pass completes, the curated item is deleted from the inbox, and an edited document is stamped with `coffer_curated_at`. A pass that does not complete leaves its item where it was, to be tried again. Each pass is one change in the [history](#history-and-undo), so you can read what it did and undo it.
+When the pass completes, the curated item is deleted from the inbox, and an edited document is recorded as settled at its new content. A pass that does not complete leaves its item where it was, to be tried again. Each pass is one change in the [history](#history-and-undo), so you can read what it did and undo it.
 
 ### Limits
 
@@ -195,7 +193,7 @@ When the pass completes, the curated item is deleted from the inbox, and an edit
 | Passes per collection per sweep | 5 |
 | Passes running per collection at once | 1 |
 
-A pass can only retire a document whose content it has already written elsewhere in the same pass. An item larger than the size limit is never shown to the model: an inbox item is kept as a document as it stands, and an edited document is simply stamped. An item that hits the pass's step limit three times in a row is also kept as it stands and not offered again.
+A pass can only retire a document whose content it has already written elsewhere in the same pass. An item larger than the size limit is never shown to the model: an inbox item is kept as a document as it stands, and an edited document is simply recorded as settled. An item that hits the pass's step limit three times in a row is also kept as it stands and not offered again.
 
 ### When curation runs
 

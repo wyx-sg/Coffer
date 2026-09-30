@@ -120,7 +120,7 @@ These follow from the constraints above and hold unconditionally; they are not c
 
 **Loopback-only.** The daemon's HTTP server binds to `127.0.0.1` and will not accept connections from any other interface.
 
-**Secret plaintext never reaches the database.** The SQLite database holds secret references — opaque identifiers — and ciphertext, never plaintext. No code outside `infrastructure/secret/` may import `keyring`.
+**Secret plaintext never reaches storage.** The vault's files, `local/` and `runs.db` hold secret references — opaque identifiers — and, in `vault/secret/` and `local/secret/`, ciphertext; never plaintext. No code outside `infrastructure/secret/` may import `keyring`.
 
 **Every upstream tool is namespaced.** Tools exposed through the Coffer MCP surface appear as `<server-name>__<tool-name>` (e.g., `filesystem__read_file`). This namespace is stable and deterministic: the same upstream registered under the same name always produces the same tool namespace regardless of which client connects.
 

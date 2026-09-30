@@ -724,8 +724,8 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
 def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
     """The legacy registry had no UNIQUE guard on is_default. If a divergent DB
     holds >1 is_default row, 0036 keeps only the most-recently-updated one as
-    internal_default (spec provider-switching "Keep at most one internal-engine
-    default", normalise-on-import),
+    internal_default (spec provider-switching "Keep at most one internal default
+    connection", normalise-on-import),
     preserving the global
     single-internal-default invariant."""
     db_path = tmp_path / "multi_default.db"

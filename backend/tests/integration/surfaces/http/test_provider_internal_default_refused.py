@@ -1,6 +1,6 @@
 """A second internal-engine default is refused outside the dedicated route.
 
-Spec provider-switching "Keep at most one internal-engine default": the flag is
+Spec provider-switching "Keep at most one internal default connection": the flag is
 moved only by ``POST /providers/{uid}/internal-default``, which clears the old
 holder first. Every other write that would leave two connections flagged — the
 kind-agnostic resource PATCH and POST — answers a clean 409 naming the holder,

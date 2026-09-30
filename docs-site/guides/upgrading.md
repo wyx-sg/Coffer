@@ -98,11 +98,11 @@ A remote written by an earlier Coffer is in the old layout, and the new build re
    coffer sync join
    ```
 
-   Your old remote setting was carried into `local/sync/remote.json`, so only the URL or branch needs changing. Keep `--credential-ref` as it was.
+   Your old remote setting was carried into `local/sync/remote.json`, so only the URL or branch needs changing. Keep `--secret-ref` as it was.
 
 2. **Upgrade each other machine**, point it at the same branch or repository, and join it. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (`coffer sync choose`).
 
-Secret ciphertext is committed to the new remote only if your old remote carried credentials; otherwise pass `--with-secret` when you want it. The old branch or repository is left untouched; delete it when every machine has moved.
+Secret ciphertext is committed to the new remote only if your old remote carried secrets; otherwise pass `--with-secret` when you want it. The old branch or repository is left untouched; delete it when every machine has moved.
 
 ## Related
 

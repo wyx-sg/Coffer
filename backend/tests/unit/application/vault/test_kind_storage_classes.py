@@ -32,6 +32,7 @@ def test_coffers_own_skill_is_derived_and_every_other_skill_is_in_the_vault() ->
     assert kind.storage_row({"source": {"type": "git"}}) is StorageClass.VAULT
 
 
+@pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
 def test_a_memory_partition_is_derived() -> None:
     from coffer.application.memory.kind import make_memory_kind
 

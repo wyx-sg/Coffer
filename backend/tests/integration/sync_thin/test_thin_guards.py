@@ -120,7 +120,7 @@ def _fernet(when: int, payload: bytes = b"x" * 32) -> bytes:
     return base64.urlsafe_b64encode(raw) + b"\n"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="the fresher credential ciphertext wins")
+@pytest.mark.acceptance(spec="vault-sync", scenario="the fresher secret ciphertext wins")
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
 )
@@ -218,3 +218,22 @@ def test_remote_failures_are_classified_by_what_a_person_can_do(
     stderr: str, problem: RemoteProblem
 ) -> None:
     assert classify(stderr) is problem
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a synced channel carries a secret reference, never a secret"
+)
+def test_a_channel_file_travels_with_its_reference_and_never_its_secret(
+    pair: tuple[Machine, Machine],
+) -> None:
+    from .machines import resource
+
+    mac, mini = pair
+    config = {"platform": "telegram", "bot_token_ref": "channel/tg/bot"}
+    mac.put("resources/channel/tg.json", resource("channel", "tg", "c" * 32, config))
+    mac.put("secret/channel/tg/bot.enc", _fernet(1000))
+    mac.round()
+    mini.round()
+    arrived = mini.disk("resources/channel/tg.json") or b""
+    assert b"channel/tg/bot" in arrived and b"gAAAA" not in arrived
+    assert mini.disk("secret/channel/tg/bot.enc") is None

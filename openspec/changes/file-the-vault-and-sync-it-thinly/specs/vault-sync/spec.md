@@ -206,20 +206,6 @@ so it lives in the channel's file and travels with it.
 - **THEN** only the machine it names starts an adapter for it, and the other holds the channel and runs nothing
 
 
-### Requirement: Carry secrets as ciphertext only
-Stored secrets MUST travel as Fernet **ciphertext only** — the files
-`vault/secret/<ref>.enc` — and only when the remote is configured to carry them
-(`include_secret`). Until then `secret/` is in the vault repository's exclude
-file and is in no commit. A resource's config names a secret by reference and
-never holds its value.
-
-#### Scenario: ciphertext travels only when the remote carries it
-- **GIVEN** a stored secret on a machine whose remote does not carry secrets
-- **WHEN** it runs a round and the other machine runs one
-- **THEN** the ciphertext is in no commit and the other machine has no copy
-- **AND** once both remotes carry secrets, the ciphertext reaches the other machine byte for byte
-
-
 ### Requirement: Snapshot before checking out and roll a round back from it
 Bidirectional convergence writes the vault without a human in the loop, so two
 guards are normative. Before a round checks anything out it MUST tag this
@@ -263,6 +249,24 @@ cannot decrypt. A key file that is blank or not a key MUST be refused.
 
 
 ## MODIFIED Requirements
+
+### Requirement: Carry secrets as ciphertext only
+Stored secrets MUST travel as Fernet **ciphertext only** — the files
+`vault/secret/<ref>.enc` — and only when the remote is configured to carry them
+(`include_secret`). Until then `secret/` is in the vault repository's exclude
+file and is in no commit. A resource's config names a secret by reference and
+never holds its value.
+
+#### Scenario: ciphertext travels only when the remote carries it
+- **GIVEN** a stored secret on a machine whose remote does not carry secrets
+- **WHEN** it runs a round and the other machine runs one
+- **THEN** the ciphertext is in no commit and the other machine has no copy
+- **AND** once both remotes carry secrets, the ciphertext reaches the other machine byte for byte
+
+#### Scenario: a synced channel carries a secret reference, never a secret
+- **GIVEN** a `channel` whose configuration cites a secret ref for its bot token or its app secret
+- **WHEN** the channel's resource file is committed and pushed
+- **THEN** the file holds the ref and no secret material, and the secret itself travels only as ciphertext under `secret/` when the remote carries secrets
 
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:
@@ -376,13 +380,13 @@ never applied. An agent whose plugins cannot be read is listed with none.
 - **THEN** its descriptor lists the agent's type and the plugin
 - **AND** no machine applies that list to an agent's configuration
 
-### Requirement: Let the fresher credential ciphertext win
+### Requirement: Let the fresher secret ciphertext win
 Secret ciphertext MUST NOT reach a text merge or a question. A Fernet token
 carries its encryption time in cleartext, so two ciphertexts for one ref can be
 ordered without the key, and the **fresher encryption wins**. This rule applies
 to `secret/**.enc` and to nothing else.
 
-#### Scenario: the fresher credential ciphertext wins
+#### Scenario: the fresher secret ciphertext wins
 - **GIVEN** one secret ref re-encrypted on both machines, the other machine's encryption being the fresher one
 - **WHEN** the two meet in a round
 - **THEN** both machines hold the fresher ciphertext, the round pulls it, and there is nothing to ask
@@ -1007,10 +1011,6 @@ renames this machine or retires one that is gone.
 **Reason**: Restated for the channel's file in the vault, with "Start nothing when a channel arrives" folded in.
 **Migration**: "Carry a channel's file but not its adapter".
 
-### Requirement: Carry credentials as ciphertext only
-**Reason**: Restated for the secret files, `vault/secret/<ref>.enc`, and the remote's `include_secret` flag.
-**Migration**: "Carry secrets as ciphertext only".
-
 ### Requirement: Snapshot before applying and roll back from it
 **Reason**: A round no longer applies a diff path by path and there is no `coffer sync restore`: a round is rolled back by naming it, as a new commit that keeps later edits.
 **Migration**: "Snapshot before checking out and roll a round back from it".
@@ -1075,11 +1075,11 @@ renames this machine or retires one that is gone.
 **Reason**: State documents are checked out like any file; each area's store reads its document from `HEAD`.
 **Migration**: "Apply knowledge, skill and memory-trigger file changes".
 
-### Requirement: Apply credential blobs
+### Requirement: Apply secret blobs
 **Reason**: Ciphertext files are checked out like any file; the secret store reads them where they are.
 **Migration**: "Carry secrets as ciphertext only" and "Let the fresher credential ciphertext win".
 
-### Requirement: Release unreferenced credentials on deletion
+### Requirement: Release unreferenced secrets on deletion
 **Reason**: A round no longer deletes resources through the resource service; a deletion arrives as the file's removal, and the secret files travel as files of their own.
 **Migration**: None.
 

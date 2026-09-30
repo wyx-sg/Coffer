@@ -16,6 +16,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
@@ -77,6 +78,9 @@ async def test_the_stores_own_writes_are_not_hinted_twice() -> None:
     assert hints == []
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a hand edit reaches the reconciler like an API write"
+)
 async def test_a_settled_hand_edit_is_hinted_like_an_api_write() -> None:
     svc, repo, hints = _setup()
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -107,6 +111,7 @@ async def test_a_commit_from_another_thread_reaches_the_loop() -> None:
     assert [(h.uid, h.op) for h in hints] == [(r.uid, "upsert")]
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="a held file is in effect from disk")
 async def test_a_held_path_is_in_effect_from_disk() -> None:
     svc, repo, hints = _setup()
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")

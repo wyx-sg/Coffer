@@ -36,6 +36,7 @@ def _git(root: Path, *args: str) -> str:
     ).stdout
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="the upgrade carries every item")
 def test_the_inventory_of_the_old_home_is_all_there(legacy: LegacyHome) -> None:
     inventory = take_inventory(legacy.home)
     assert len(inventory.resources) == 16 and len(inventory.secrets) == 6

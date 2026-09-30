@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-sync "Keep the working tree outside the vault", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec memory "Keep the memory tree derived and local"
+**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec memory "Keep the memory tree derived and local"
 
 ## Context
 
@@ -234,3 +234,41 @@ Rules a future change must respect:
   filesystem reference pages rewritten; Settings › Data regrouped by class; an
   AST or path gate that `derived/` is never read as the only source of a
   fact.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **`daemon-config.json` stays at `~/.coffer/daemon-config.json`**, not under
+  `local/`. It carries the port the daemon binds and is read before any
+  migration can run, so it cannot sit in a directory the migration creates.
+  It is, with `daemon.json`, a file of the daemon rather than stored state of
+  any class.
+- **Derived tables are one SQLite file, `derived/derived.db`** (server health,
+  capability first-seen times, skill delivery bindings), beside the
+  `derived/index/` JSON indexes. The one-time upgrade copies its rows instead of
+  leaving them to rebuild: an empty first-seen table would show every
+  capability as new, and a lost binding loses the link path a delivered copy is
+  reclaimed by.
+- **Held join choices and the stopped round** are `local/sync/round.json`, and
+  the remote is `local/sync/remote.json`. Secrets named machine-local live under
+  `local/secret/`, and the secret boundary's approvals, times and last-used
+  stamps under `local/secret-boundary/`. The Overview's dismissed attention
+  items (`attention_ignores`) stay in `runs.db`.
+- **The master key in a development build** is a `0600` file,
+  `~/.coffer/master.key`, unless the login keychain is opted in; a signed
+  release keeps it in the Keychain as decided. It is exported only by the
+  desktop app's passphrase-protected backup (**Settings › Security**) and
+  imported with `coffer sync key import`; there is no `coffer sync key export`,
+  because an agent could run it.
+- **The move is not done at daemon start.** The daemon refuses a home that
+  still holds `coffer.db` (`VAULT_MIGRATION_REQUIRED`) and names `coffer
+  migrate`, which the person runs once with the daemon stopped. It backs up
+  `coffer.db.pre-vault` and `~/.coffer/pre-vault/` first, records every move in
+  `local/migration.json`, can be rehearsed on a copy (`--rehearse`) and rolled
+  back byte for byte (`--rollback`, which leaves a hold marker that `--resume`
+  lifts). "The old database kept read-only for one version" is that backup: no
+  code reads the old layout except the upgrade and its rollback.
+- Skill folders that Coffer sets aside (a replaced copy, a deleted orphan) go to
+  `content/backup/skills/`, outside the vault repository, so a backup is not
+  committed.

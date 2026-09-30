@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md) (superseded by this ADR once accepted), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run the seven round steps in order", spec vault-sync "Keep the working tree outside the vault", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before applying and roll back from it", spec vault-sync "Guard both directions", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Let an edit beat a curation deletion", spec vault-sync "Resolve remaining conflicts with an agent only in the working tree", spec vault-sync "Validate an agent's resolution", spec vault-sync "Abort the round on an unresolved conflict", spec vault-sync "Show a conflict as a banner"
+**Related**: [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md) (superseded by this ADR once accepted), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree](sync-machine-identity.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Local-First — the user-owned sync remote exception; "Not a hosted sync service"), research note [multi-machine sync](../research/multi-machine-sync.md), spec vault-sync "Run a round as pull, merge, guard, check out, push", spec vault-sync "Never overwrite a person's unsettled edit", spec vault-sync "Keep the pointer local", spec vault-sync "Snapshot before checking out and roll a round back from it", spec vault-sync "Guard both directions", spec vault-sync "Let the fresher secret ciphertext win", spec vault-sync "Stop the round on any conflict", spec vault-sync "Answer each conflicting file and continue the round", spec vault-sync "Show a conflict as a banner"
 
 ## Context
 
@@ -274,3 +274,37 @@ path-by-path, rename-blind application.
   overwritten; a test that a vault under `.stfolder` or `~/Library/Mobile
   Documents/` is reported; a cross-version sync test with a fixture from the
   previous build.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **Joining is explicit, and a new machine's differing files are held on
+  disk.** `coffer sync join` previews and then applies. A new machine takes the
+  union: files only the remote has come down, files only this machine has go
+  up, and a file both hold with different content is left exactly as it is on
+  disk here and not pushed until the person chooses (`coffer sync choose <path>
+  --mine|--theirs`, or all at once). Nothing is deleted on either side. A
+  returning machine — one whose descriptor is already in the remote — resumes
+  from the descriptor's last converged commit as an ordinary merge.
+- **git 2.40**, not 2.38: the merge passes `--merge-base` to
+  `git merge-tree --write-tree`.
+- **The remote's layout must match this build's exactly**; an older one is
+  rebuilt from an upgraded machine, not converted
+  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md)).
+- **A resource with the same name and a different uid on the two sides** (two
+  machines created it independently) stops the round as a conflict, like a
+  content conflict.
+- **Remote failures are named**: `remote unreachable`, `sign-in refused` and
+  `push failed` (applied here, refused by the remote) are distinct round
+  results, and none of them loses anything.
+- **The answers are commands of their own**: `coffer sync conflicts`,
+  `resolve <path> --mine|--theirs|--edited`, `edit <path>` (the marked-up copy
+  under `derived/sync-conflicts/`) and `continue` for a stopped round;
+  `coffer sync hold --confirm|--restore` for a held one, which also continues
+  it; `coffer sync rollback <round>` for a snapshot, and a rollback cannot
+  itself be rolled back. **Sync now** still runs a round while the timer is
+  paused.
+- The push token is sent with a username, `coffer` by default and settable per
+  remote (`--username`), because Bitbucket and Azure DevOps need a particular
+  one where GitHub and GitLab ignore it.

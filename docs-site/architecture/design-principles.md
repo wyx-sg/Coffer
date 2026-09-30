@@ -65,7 +65,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one `invoke()` for everything — would be a leaky abstraction over things that have nothing in common.
 
-**In the code.** One frozen [`Kind`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) descriptor per kind, one kind-agnostic `ResourceService`, one `resources` table, one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
+**In the code.** One frozen [`Kind`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) descriptor per kind, one kind-agnostic `ResourceService`, one JSON file per resource in the vault (`resources/<kind>/<name>.json`), one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
 
 **Rules out.** A generic `invoke` method; a third-party plugin system (a plugin contract needs several concrete implementations to design against, and Coffer serves one user); per-kind CRUD, audit or scope implementations.
 

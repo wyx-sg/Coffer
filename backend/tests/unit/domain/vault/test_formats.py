@@ -39,6 +39,7 @@ def test_a_current_file_reads_as_current_and_is_writable() -> None:
     assert got.status is FormatStatus.CURRENT and got.status.writable
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="an older file is upgraded in memory only")
 def test_an_older_file_is_upgraded_in_memory_only() -> None:
     raw = {"format_version": 1, "cmd": "x"}
     got = read(raw, SPEC)
@@ -52,6 +53,7 @@ def test_every_step_is_deterministic() -> None:
     assert read(raw, SPEC).doc == read(dict(raw), SPEC).doc
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="a newer file is read-only here")
 def test_a_newer_additive_file_is_readable_but_read_only() -> None:
     got = read({"format_version": 4, "format_compat": 3, "extra": 1}, SPEC)
     assert got.status is FormatStatus.NEWER_READABLE and not got.status.writable

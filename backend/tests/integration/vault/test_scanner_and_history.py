@@ -25,6 +25,7 @@ class _Clock:
         return self.now
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="an edit is committed once it is quiet")
 def test_an_edit_is_settled_only_after_it_has_been_quiet(
     repo: VaultRepository, writer: VaultWriter
 ) -> None:
@@ -58,6 +59,9 @@ def history(repo: VaultRepository, writer: VaultWriter) -> VaultHistoryService:
     return VaultHistoryService(repo, writer)
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a file's history lists its versions with their writers"
+)
 async def test_a_files_history_is_newest_first_with_its_writers(
     history: VaultHistoryService, writer: VaultWriter
 ) -> None:
@@ -88,6 +92,9 @@ async def test_a_version_diff_and_its_content(
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="restore brings back a document deleted last week"
 )
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="restore is a new commit through the same checks"
+)
 async def test_restore_is_a_new_commit_through_the_same_checks(
     history: VaultHistoryService, writer: VaultWriter, repo: VaultRepository
 ) -> None:
@@ -108,6 +115,9 @@ async def test_restore_is_a_new_commit_through_the_same_checks(
     assert len(repo.log()) == 4  # baseline + two saves + the restore: nothing rewritten
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="restoring a folder removes files the version did not have"
+)
 async def test_restoring_a_folder_brings_back_its_files_and_removes_new_ones(
     history: VaultHistoryService, writer: VaultWriter, repo: VaultRepository
 ) -> None:

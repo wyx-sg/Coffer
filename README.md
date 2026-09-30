@@ -269,7 +269,7 @@ ADRs: [docs/decisions/](docs/decisions/).
 - **Conventional Commits** required — see [.agents/workflow.md](.agents/workflow.md)
 - **[OpenSpec](https://github.com/Fission-AI/OpenSpec)** — every behaviour change starts with an OpenSpec change (`/opsx:propose`) that is archived in the same PR — see [.agents/openspec.md](.agents/openspec.md)
 - **Architecture contracts** — 20 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
-- **Secrets** — secrets are stored only as Fernet ciphertext in the `secrets` table via `coffer.infrastructure.secret`; plaintext never reaches the DB, logs, or audit
+- **Secrets** — secrets are stored only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`, via `coffer.infrastructure.secret`; plaintext never reaches the vault, `runs.db`, logs, or audit
 
 ---
 

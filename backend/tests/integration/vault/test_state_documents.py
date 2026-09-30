@@ -120,6 +120,10 @@ async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="each shared state area reaches the working tree"
 )
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
 async def test_engine_settings_are_one_vault_document_and_absent_means_defaults() -> None:
     repo = VaultInternalEngineConfigRepo()
     assert await repo.get() is None

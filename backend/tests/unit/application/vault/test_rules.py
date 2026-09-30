@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.vault.resource_rules import resource_rule
@@ -130,6 +131,10 @@ class _Flagged(BaseModel):
     flag: bool = False
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a file flagging a second internal default is refused by the vault",
+)
 def test_an_exclusive_flag_held_elsewhere_refuses_only_the_newcomer() -> None:
     kinds = {
         "thing": Kind(

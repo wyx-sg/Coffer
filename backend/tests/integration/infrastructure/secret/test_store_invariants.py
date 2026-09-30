@@ -36,9 +36,8 @@ def _mode(path: pathlib.Path) -> int:
     return stat.S_IMODE(os.stat(path).st_mode)
 
 
-@pytest.mark.acceptance(
-    spec="secret", scenario="a stored secret is only ciphertext in the secrets table"
-)
+@pytest.mark.acceptance(spec="secret", scenario="a stored secret is only ciphertext in its file")
+@pytest.mark.acceptance(spec="vault-storage", scenario="a secret is only ciphertext in its file")
 def test_a_stored_secret_is_only_ciphertext_in_its_file(tmp_path: pathlib.Path) -> None:
     key = Fernet.generate_key()
     store = EncryptedSecretStore(key, home=tmp_path)
@@ -135,6 +134,7 @@ def test_files_are_0600_and_their_directories_0700(tmp_path: pathlib.Path) -> No
         assert _mode(directory) == 0o700, directory
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="a proxy token stays machine-local")
 def test_proxy_tokens_live_under_local_and_never_under_the_vault(tmp_path: pathlib.Path) -> None:
     """A proxy token unlocks only this machine's loopback model proxy, so it
     is machine-local state and has no file the vault could ever commit."""

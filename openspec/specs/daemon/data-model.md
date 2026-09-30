@@ -127,7 +127,7 @@ vault-storage) keeps what it started from, never opened for writing again:
 | `~/.coffer/coffer.db.pre-vault` (+`-wal`/`-shm`) | the database before the upgrade touched it |
 | `~/.coffer/pre-vault/knowledge.git` | the knowledge root's own history, after its commits were replayed into the vault |
 | `~/.coffer/pre-vault/knowledge-stamped/` | the knowledge documents as they were before their curation stamps were stripped |
-| `~/.coffer/pre-vault/daemon-config.json` | `daemon-config.json` before revision 0116 rewrote it |
+| `~/.coffer/pre-vault/daemon-config.json` | `daemon-config.json` as it was before the upgrade ran the database's own migrations, which may rewrite it |
 
 `coffer migrate --rollback` restores from this set. The daemon refuses a home
 that holds only `coffer.db` (`VAULT_MIGRATION_REQUIRED`, naming `coffer

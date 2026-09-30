@@ -24,6 +24,9 @@ from coffer.infrastructure.vault.writer import VaultWriter
 USER = CommitMeta(writer=WRITER_USER, operation="save", summary="Saved", actor="user")
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a fresh vault is a repository with a first commit"
+)
 def test_a_fresh_vault_is_a_repository_with_a_first_commit(repo: VaultRepository) -> None:
     assert repo.exists() and repo.head() is not None
     assert (repo.root / "manifest.json").read_text().strip().endswith("}")
@@ -31,6 +34,9 @@ def test_a_fresh_vault_is_a_repository_with_a_first_commit(repo: VaultRepository
     assert first.meta.writer == WRITER_DAEMON and first.meta.operation == "baseline"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a write is one commit naming its writer and machine"
+)
 def test_a_write_is_one_commit_naming_its_writer_and_machine(
     repo: VaultRepository, writer: VaultWriter
 ) -> None:
@@ -65,6 +71,9 @@ def test_a_stale_fingerprint_is_refused_and_nothing_changes(
     assert repo.read("HEAD", "knowledge/a.md") == b"two\n"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a concurrent hand edit is refused rather than lost"
+)
 def test_a_concurrent_hand_edit_is_refused_rather_than_lost(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
@@ -97,6 +106,7 @@ def test_an_invalid_write_is_undone_and_head_stays(
     assert (repo.root / "state/x/a.json").read_bytes() == b"good\n"
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="an operation over many files is one commit")
 def test_an_operation_is_one_commit_however_many_files(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
@@ -186,6 +196,9 @@ def test_listeners_hear_every_commit(writer: VaultWriter) -> None:
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
 )
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="ciphertext is committed only when the remote carries secrets"
+)
 def test_secrets_are_never_committed_unless_carried(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
@@ -214,6 +227,9 @@ def test_writers_in_parallel_threads_each_land_whole(
 
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a symlink in the vault is skipped rather than published"
+)
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a symlink and a nested repository are never recorded"
 )
 def test_symlinks_and_nested_repositories_are_never_recorded(
     writer: VaultWriter, repo: VaultRepository

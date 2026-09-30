@@ -30,6 +30,7 @@ from coffer.infrastructure.persistence.derived_db import open_derived_db
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.infrastructure.vault.git import GitMissing
 from coffer.infrastructure.vault.instance import set_machine, vault_repository, vault_writer
+from coffer.infrastructure.vault.merge import MIN_GIT, git_version
 from coffer.infrastructure.vault.resource_store import FileResourceRepo
 
 _log = logging.getLogger(__name__)
@@ -61,9 +62,18 @@ async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
     the store and the validator read it at every use, never a copy.
     """
     try:
-        vault_repository().ensure()
+        repo = vault_repository()
+        repo.ensure()
     except GitMissing as exc:
         raise RuntimeError(str(exc)) from exc
+    found = git_version(repo)
+    if found < MIN_GIT:
+        # merge-tree --write-tree with --merge-base, which every sync round
+        # runs, needs git 2.40 (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
+        raise RuntimeError(
+            f"Coffer needs git {MIN_GIT[0]}.{MIN_GIT[1]} or later and found "
+            f"{found[0]}.{found[1]}; update git (on macOS: xcode-select --install) and start again"
+        )
     machine = _machine_id()
     set_machine(lambda: machine)
     resources = FileResourceRepo(kinds)

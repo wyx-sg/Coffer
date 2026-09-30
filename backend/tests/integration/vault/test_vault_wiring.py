@@ -144,6 +144,9 @@ async def test_a_failed_audit_write_leaves_the_commit_standing() -> None:
         await scanning.stop()
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="an invalid hand edit stays out of HEAD and is flagged"
+)
 async def test_an_invalid_resource_hand_edit_stays_out_of_head_and_is_flagged() -> None:
     kinds = {"widget": Kind(name="widget", display_name="Widget", config_schema=WidgetConfig)}
     svc = ResourceService(
@@ -192,3 +195,11 @@ async def test_a_missing_git_is_a_startup_error_naming_the_install_step(
     monkeypatch.setenv("HOME", str(vault_root().parent.parent / f"elsewhere-{uuid.uuid4().hex}"))
     with pytest.raises(RuntimeError, match="xcode-select --install"):
         await _start(_Audit())
+
+
+async def test_a_git_older_than_2_40_is_a_startup_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from coffer.surfaces.http import vault_composition
+
+    monkeypatch.setattr(vault_composition, "git_version", lambda _repo: (2, 30))
+    with pytest.raises(RuntimeError, match=r"git 2\.40 or later"):
+        await vault_composition.build_vault_stores({})

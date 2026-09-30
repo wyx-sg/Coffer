@@ -78,6 +78,7 @@ def test_bindings_upsert_on_their_key_and_are_listed_in_order(
     assert [b["ref"] for b in doc["bindings"]] == ["other/ref"]
 
 
+@pytest.mark.acceptance(spec="secret", scenario="the boundary's state is machine-local files")
 def test_state_is_local_and_never_in_the_vault(
     store: FileBoundaryStore, tmp_path: pathlib.Path
 ) -> None:

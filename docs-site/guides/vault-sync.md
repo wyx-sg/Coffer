@@ -25,7 +25,7 @@ Four rules shape everything below:
   - **HTTPS with a token** stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process. It never appears in the URL, the command line, the repository's config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt.
   - **`file://`**: no secret.
-- **`git` on every machine.** On macOS, `xcode-select --install` provides it.
+- **`git` 2.40 or later on every machine.** A round merges with `git merge-tree`, which older versions lack. On macOS, `xcode-select --install` provides it.
 - **The same Coffer version on every machine.** A remote written by another vault layout is refused (see [Troubleshooting](#troubleshooting)).
 - **The vault outside any cloud-synced folder.** A vault inside Dropbox, iCloud Drive, Syncthing or another File Provider folder pauses sync: two tools syncing one git repository corrupt it.
 

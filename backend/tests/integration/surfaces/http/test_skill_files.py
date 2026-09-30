@@ -356,6 +356,7 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
         assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('merged')\n"
 
 
+@pytest.mark.acceptance(spec="skill-manager", scenario="a save without a fingerprint is refused")
 def test_a_write_without_a_fingerprint_is_refused(tmp_path, monkeypatch):
     """Every vault write compares; there is no unconditional mode (ADR
     every-vault-write-is-a-validated-commit-naming-its-writer), so a body

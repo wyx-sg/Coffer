@@ -81,6 +81,10 @@ async def test_the_defaults_publish_nothing_and_a_choice_publishes_one_document(
     spec="internal-engine",
     scenario="deleting the settings document resets this machine to the defaults",
 )
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
 async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> None:
     await machine.service.update(model="brain", actor="api")
     await machine.service.set_upkeep(CURATE, UpkeepSetting(enabled=False, interval_s=600))

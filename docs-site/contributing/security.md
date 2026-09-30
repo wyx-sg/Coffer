@@ -55,7 +55,7 @@ When you contribute:
 
 ### Secrets exist only as ciphertext
 
-Secrets live only as Fernet ciphertext in the `secrets` table. Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
+Secrets live only as Fernet ciphertext, one file per secret (`~/.coffer/vault/secret/<ref>.enc`, or `local/secret/` for a machine-local one). Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
 
 - Store a **secret reference**, never a secret, in any other table, config file, resource spec or API response.
 - Never let plaintext reach the database, a log line, the audit log or any structured event. Watch exception messages and `repr`s that might include a request header or an environment block.

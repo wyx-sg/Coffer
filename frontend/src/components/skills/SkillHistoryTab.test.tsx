@@ -11,6 +11,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { ApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import type { VaultHistoryOut, VaultVersionOut } from "@/lib/api/vault";
+import { acceptance } from "@/test/acceptance";
 import { BUILTIN_SKILL, makeSkill, renderSkillsPage } from "@/test/skillsPageKit";
 
 const h = vi.hoisted(() => ({ skills: [] as SkillOut[] }));
@@ -86,20 +87,24 @@ beforeEach(() => {
 });
 afterEach(() => vi.clearAllMocks());
 
-test("the history tab lists the skill folder's versions newest first with their writers", async () => {
-  renderSkillsPage("/skills/hello/history");
-  const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
-  const rows = within(list).getAllByRole("button");
-  expect(rows).toHaveLength(2);
-  expect(rows[0]).toHaveTextContent("You");
-  expect(rows[0]).toHaveTextContent("Current");
-  expect(rows[1]).toHaveTextContent("Claude Code");
-  expect(rows[1]).toHaveTextContent("2 files changed");
-  expect(vaultApi.history).toHaveBeenCalledWith("skills/hello/");
-  // The current version is chosen, and it cannot be restored onto itself.
-  expect(await screen.findByText("new line of skills/hello/SKILL.md")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /restore this version/i })).toBeNull();
-});
+acceptance(
+  "skill-manager",
+  "the history tab lists the folder's versions with their writers",
+  async () => {
+    renderSkillsPage("/skills/hello/history");
+    const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+    const rows = within(list).getAllByRole("button");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("You");
+    expect(rows[0]).toHaveTextContent("Current");
+    expect(rows[1]).toHaveTextContent("Claude Code");
+    expect(rows[1]).toHaveTextContent("2 files changed");
+    expect(vaultApi.history).toHaveBeenCalledWith("skills/hello/");
+    // The current version is chosen, and it cannot be restored onto itself.
+    expect(await screen.findByText("new line of skills/hello/SKILL.md")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /restore this version/i })).toBeNull();
+  },
+);
 
 test("choosing a version shows the diff of every file it changed", async () => {
   renderSkillsPage("/skills/hello/history");
@@ -110,29 +115,33 @@ test("choosing a version shows the diff of every file it changed", async () => {
   expect(vaultApi.diff).toHaveBeenCalledWith("skills/hello/run.sh", OLDER.version);
 });
 
-test("restore this version asks first, then restores the whole folder", async () => {
-  vi.mocked(vaultApi.restore).mockResolvedValue({
-    path: "skills/hello/",
-    version: "d".repeat(40),
-    restored_from: OLDER.version,
-    paths: ["skills/hello/SKILL.md"],
-  });
-  renderSkillsPage("/skills/hello/history");
-  const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
-  fireEvent.click(within(list).getAllByRole("button")[1]);
-  fireEvent.click(await screen.findByRole("button", { name: /restore this version/i }));
-  const dialog = await screen.findByRole("dialog");
-  expect(dialog).toHaveTextContent(/files added since are removed/i);
-  fireEvent.click(within(dialog).getByRole("button", { name: /restore this version/i }));
-  await waitFor(() =>
-    expect(vaultApi.restore).toHaveBeenCalledWith({
+acceptance(
+  "skill-manager",
+  "restoring a version asks first and restores the whole folder",
+  async () => {
+    vi.mocked(vaultApi.restore).mockResolvedValue({
       path: "skills/hello/",
-      version: OLDER.version,
-      expected_fingerprint: null,
-    }),
-  );
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-});
+      version: "d".repeat(40),
+      restored_from: OLDER.version,
+      paths: ["skills/hello/SKILL.md"],
+    });
+    renderSkillsPage("/skills/hello/history");
+    const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+    fireEvent.click(within(list).getAllByRole("button")[1]);
+    fireEvent.click(await screen.findByRole("button", { name: /restore this version/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/files added since are removed/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: /restore this version/i }));
+    await waitFor(() =>
+      expect(vaultApi.restore).toHaveBeenCalledWith({
+        path: "skills/hello/",
+        version: OLDER.version,
+        expected_fingerprint: null,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  },
+);
 
 test("a refused restore stays in the dialog with the reason", async () => {
   vi.mocked(vaultApi.restore).mockRejectedValue(
@@ -148,13 +157,13 @@ test("a refused restore stays in the dialog with the reason", async () => {
   expect(screen.getByRole("dialog")).toBeInTheDocument();
 });
 
-test("a skill with no versions yet says what will appear", async () => {
+acceptance("skill-manager", "the history tab says versions are not recorded yet", async () => {
   vi.mocked(vaultApi.history).mockResolvedValue({ ...HISTORY, versions: [] });
   renderSkillsPage("/skills/hello/history");
   expect(await screen.findByText("No versions yet", {}, { timeout: 5_000 })).toBeInTheDocument();
 });
 
-test("Coffer's own skill has no history and reads none", async () => {
+acceptance("skill-manager", "Coffer's own skill has no history", async () => {
   h.skills = [BUILTIN_SKILL];
   renderSkillsPage(`/skills/${BUILTIN_SKILL.name}/history`);
   expect(

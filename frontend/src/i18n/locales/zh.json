@@ -2960,11 +2960,12 @@
     "missing": {
       "label": "如何处理丢失的主文件夹",
       "restore": "从历史中恢复",
-      "restoreUnavailable": "暂不可用：技能的版本还没有被记录。",
+      "restoreUnavailable": "vault 历史中没有这个文件夹的早期版本。",
       "remove": "移除这个技能",
       "removeHelp": "从技能库中删除 {{name}} 及其设置。",
       "restoreConfirm": "恢复 {{name}}",
-      "removeConfirm": "移除 {{name}}…"
+      "removeConfirm": "移除 {{name}}…",
+      "restoreHelp": "恢复 {{when}} 的版本，作为一个新版本。"
     },
     "orphan": {
       "section": "不在技能库中",

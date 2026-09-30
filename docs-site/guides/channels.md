@@ -218,7 +218,7 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.
 - `/dir default` returns to the channel's default directory.
-- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in <path> — started a fresh conversation".
+- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in `<path>` — started a fresh conversation".
 - A directory outside the list is refused, naming the allowed ones. A channel with no allowed directory answers how to add one.
 
 ### Resume an earlier conversation

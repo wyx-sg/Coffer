@@ -43,7 +43,7 @@ Derived output is neither exported nor applied
 - **A whole kind** declares `converges=False` on its `Kind` (`domain/resource.py`).
   `memory` is the only one (`application/memory/kind.py`); the exporter skips
   its rows and the applier ignores an arriving document of that kind, so an
-  older build cannot deliver one either (spec vault-sync "Let a kind withhold its own rows").
+  older build cannot deliver one either (the former vault-sync requirement "Let a kind withhold its own rows").
   `~/.coffer/memory/` itself is outside the mirrored trees.
 - **One row of a converging kind** is withheld through `Kind.converges_row`, a
   function of the row's config: `skill` answers False for a `builtin` source
@@ -61,7 +61,7 @@ Derived output is neither exported nor applied
 
 A withheld **row's** paths already in a remote — written by an older build —
 are left **inert**: not published, not applied, not deleted, and never counted
-by the deletion breaker (spec vault-sync "Leave the paths of withheld derived output inert").
+by the deletion breaker (the former vault-sync requirement "Leave the paths of withheld derived output inert").
 A withheld **kind's** documents, by contrast, are cleared as ordinary
 deletions: nothing at the other end stands on them.
 

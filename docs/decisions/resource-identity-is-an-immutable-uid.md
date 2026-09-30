@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec agent-registry "Keep one agent per type, named by it", spec vault-sync "Key resource documents by uid", PR #406, OpenSpec change `one-agent-per-type-and-no-titles`
+**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec agent-registry "Keep one agent per type, named by it", spec vault-storage "Identify a resource by the uid inside its file", PR #406, OpenSpec change `one-agent-per-type-and-no-titles`
 
 ## Context
 

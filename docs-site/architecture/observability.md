@@ -228,10 +228,10 @@ flowchart LR
     R --> T2["archive idle conversations"]
     S --> M["sweep channel media dir"]
     W --> F["prune_log_dir: shim and upstream logs older than 7 days"]
-    S --> P["retention_policies: last_pruned_at, rows"]
+    S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- `RetentionService.initialize_defaults` seeds a `retention_policies` row for each registered table at startup and never overwrites one you changed.
+- `RetentionService.initialize_defaults` seeds a policy for each registered table in `~/.coffer/local/retention.json` at startup and never overwrites one you changed.
 - `RetentionWorker` runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.

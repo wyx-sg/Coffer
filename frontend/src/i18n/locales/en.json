@@ -2960,11 +2960,12 @@
     "missing": {
       "label": "What to do with the missing master",
       "restore": "Restore it from History",
-      "restoreUnavailable": "Not available yet: a skill's versions are not recorded yet.",
+      "restoreUnavailable": "No earlier version of this folder is in the vault's history.",
       "remove": "Remove the skill",
       "removeHelp": "Deletes {{name}} from your library, with its settings.",
       "restoreConfirm": "Restore {{name}}",
-      "removeConfirm": "Remove {{name}}…"
+      "removeConfirm": "Remove {{name}}…",
+      "restoreHelp": "Put back the version from {{when}}, as a new version."
     },
     "orphan": {
       "section": "Not in your library",

@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Resource Identity Is an Immutable `uid`, Not the Name](resource-identity-is-an-immutable-uid.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
+**Related**: [Resource Identity Is an Immutable `uid`, Not the Name](resource-identity-is-an-immutable-uid.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-storage "Identify a resource by the uid inside its file", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
 
 ## Context
 
@@ -192,3 +192,24 @@ roots, and copying a resource into the own vault mints a new uid and records
   rules are written into the resource-framework spec now, as constraints on
   any future root, with no implementation until one exists; a test copies a
   resource file and asserts the copy is flagged and the original unchanged.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **Resource files are JSON, named `<name>.json`**, not `<name>.yaml`:
+  `vault/resources/<kind>/<name>.json`, with agents (machine-local) under
+  `local/resources/agent/`. Every other vault document Coffer parses is JSON
+  already, JSON has one canonical serialisation for a deterministic writer,
+  and a person editing by hand gets a precise parse error. When the name is
+  taken by an unrelated file, the file falls back to `<name>-<uid[:8]>.json`.
+  A rename moves the file in the same commit.
+- **`rev` stays an integer counter**, not the file's blob id. The event stream
+  and the reconciler's `Changed(kind, uid, rev)` hint already carry an integer,
+  so `rev` counts the changes to a resource's file and to its reach on this
+  machine. It lives, with `updated_at`, in the derived index
+  `derived/index/resources.json` and is in no file: two machines stamping it
+  would conflict on every edit. Deleting the index restarts every counter at 1,
+  which costs nothing because only the in-process dedupe of hints reads it.
+- A resource file carries an optional `title` beside the fixed `name`, for the
+  label pages show.

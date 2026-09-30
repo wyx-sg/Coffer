@@ -38,6 +38,9 @@ def _snapshot(legacy: LegacyHome) -> dict[str, str]:
     return {k: v for k, v in hash_tree(legacy.coffer).items() if not is_artifact(k)}
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="rollback restores the old home byte for byte"
+)
 def test_rollback_gives_the_old_home_back_byte_for_byte(legacy: LegacyHome) -> None:
     before = _snapshot(legacy)
     _migrate(legacy.home)
@@ -81,6 +84,9 @@ def test_a_rolled_back_home_is_held_until_resume(legacy: LegacyHome) -> None:
     assert _migrate(legacy.home).outcome == "migrated", "the upgrade can be taken again"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="the daemon refuses a home that was not upgraded"
+)
 def test_the_daemon_refuses_a_home_that_was_not_upgraded(legacy: LegacyHome) -> None:
     with pytest.raises(MigrationRequired, match="coffer migrate"):
         refuse_unmigrated_home(legacy.home)
@@ -137,6 +143,7 @@ def test_a_fresh_install_gets_an_empty_vault_and_runs_db(
     assert _migrate(home).outcome == "already"
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="a rehearsal leaves the source untouched")
 def test_rehearse_leaves_the_source_untouched_and_passes(legacy: LegacyHome) -> None:
     before = hash_tree(legacy.coffer)
     result = rehearse(legacy.home, upgrade_db=UPGRADE, build="test")

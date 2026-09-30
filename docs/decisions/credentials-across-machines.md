@@ -66,7 +66,7 @@ machine publishes its fingerprint in its descriptor
 outright which peers' credentials will not decrypt here. Until the key is
 present, arrived refs are reported **locked**; a key that exists but cannot be
 read right now reports none locked and logs why, and the key is resolved at
-most once per daemon start (spec vault-sync "Report refs without a key as locked").
+most once per daemon start (spec vault-sync "Report the refs a key cannot open as locked").
 
 **The push token.** It is resolved from the store at push time and reaches git
 as a **credential helper** passed with `-c` — a shell snippet that answers

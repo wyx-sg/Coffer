@@ -124,6 +124,9 @@ async def test_crud_round_trip_and_ordering() -> None:
     assert "resources/widget/a.json" not in _head_files()
 
 
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a rename moves the resource's file in one commit"
+)
 async def test_rename_moves_the_file_in_one_commit() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "old", {"colour": "blue"}, actor="user")
@@ -143,6 +146,9 @@ async def test_rename_moves_the_file_in_one_commit() -> None:
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a resource document is identity, description and config"
 )
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="reach is kept on this machine, not in the resource's file"
+)
 async def test_reach_is_local_and_never_committed() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -155,6 +161,9 @@ async def test_reach_is_local_and_never_committed() -> None:
     assert not (vault_root() / "reach.json").exists()
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a field this build does not know survives a write"
+)
 async def test_unknown_fields_survive_a_write_at_the_top_and_inside_config() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -173,6 +182,9 @@ async def test_unknown_fields_survive_a_write_at_the_top_and_inside_config() -> 
     assert list(after) == list(raw)
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a copied resource file is flagged and the original is untouched"
+)
 async def test_a_copied_file_is_flagged_duplicate_and_the_original_is_unchanged() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -189,6 +201,7 @@ async def test_a_copied_file_is_flagged_duplicate_and_the_original_is_unchanged(
     assert _vault_file("resources/widget/w.json").read_bytes() == original
 
 
+@pytest.mark.acceptance(spec="vault-storage", scenario="a hand-made resource file is given a uid")
 async def test_a_hand_made_file_without_a_uid_is_given_one_by_a_daemon_commit() -> None:
     svc, _repo = _service(_kinds())
     vault_repository().ensure()
@@ -236,6 +249,7 @@ async def test_a_config_the_schema_refuses_stays_out_of_head() -> None:
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="machine-local files never reach the working tree"
 )
+@pytest.mark.acceptance(spec="vault-storage", scenario="each class has its own directory")
 async def test_local_and_derived_kinds_are_filed_outside_git() -> None:
     svc, _repo = _service(_kinds())
     g = await svc.register("gadget", "g", {"colour": "blue"}, actor="user")
@@ -277,6 +291,9 @@ async def test_a_name_clash_with_an_unrelated_file_falls_back_to_the_uid() -> No
     assert stray.read_text() == "unrelated\n"
 
 
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="reach is kept on this machine, not in the resource's file"
+)
 async def test_scope_is_reach_and_a_record_less_resource_gets_the_kind_default() -> None:
     kinds = _kinds()
     kinds["widget"] = Kind(

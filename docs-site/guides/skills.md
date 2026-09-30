@@ -63,7 +63,7 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 ## The Skills page
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
 The open skill's header carries its reach button and a **⋯** menu: **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, an update — with the one action that answers it.
 
@@ -444,11 +444,11 @@ The diff shows what happens to the side you are not keeping. Coffer never makes 
 
 ### Folders not in your library
 
-A folder in `~/.coffer/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking.
+A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid and how many files it holds. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking.
 
 ### When the master folder is gone
 
-If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers **Remove the skill** (its record and settings); restoring it from History becomes available once the vault records a skill's versions.
+If a skill's master folder was removed outside Coffer, the skill says **Master missing**. Its Files tab offers **Remove the skill** (its record and settings). The folder's versions are still in the vault's history, so you can bring it back from the terminal: `coffer vault history skills/<name>/` lists them, and `coffer vault restore skills/<name>/ <version>` puts the folder back as it was in the version before it was removed. The **Restore it from History** choice beside **Remove the skill** is shown but cannot be chosen yet.
 
 ## The built-in `coffer-guide` skill
 
