@@ -9,7 +9,14 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Cli } from "@/lib/api/clis";
 import { readHandoffState } from "@/lib/conversations/handoff";
-import { GCLOUD_LOGGED_OUT, GH_OUTDATED, JQ_MISSING, UV_READY } from "@/test/cliFixtures";
+import { acceptance } from "@/test/acceptance";
+import {
+  GCLOUD_LOGGED_OUT,
+  GH_OUTDATED,
+  JQ_MISSING,
+  UV_MISSING_FOR_SERVER,
+  UV_READY,
+} from "@/test/cliFixtures";
 import { ClisPage } from "./ClisPage";
 
 vi.mock("@/lib/api/clis", () => ({
@@ -162,10 +169,13 @@ describe("ClisPage", () => {
 
     const banner = await screen.findByTestId("cli-problem");
     expect(banner).toHaveTextContent("gcloud isn't logged in — 1 skill affected");
-    expect(banner).toHaveTextContent("gcloud auth login");
-    // Coffer never runs the login: the header hands it to an agent.
+    expect(banner).toHaveTextContent("gh-triage will fail at the step that calls gcloud.");
+    // Coffer never runs the login and shows no command for it: the header
+    // hands it to an agent.
+    expect(screen.queryByText("gcloud auth login")).toBeNull();
+    expect(screen.queryByText(/in a terminal/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
     expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
-    expect(screen.getByText("Run it in a terminal, then press Check again.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
@@ -184,12 +194,38 @@ describe("ClisPage", () => {
     expect(screen.queryByTestId("cli-problem")).toBeNull();
   });
 
+  acceptance("web-ui", "a CLI an MCP server starts with lists that server", async () => {
+    api.list.mockResolvedValue(listOf([UV_MISSING_FOR_SERVER, GH_OUTDATED]));
+    renderPage("/clis/uv");
+    const banner = await screen.findByTestId("cli-problem");
+    expect(rowOf("uv")).toHaveTextContent("Not found · duckdb needs it");
+    expect(rowOf("uv")).toHaveTextContent("1 server · 1 skill");
+    expect(screen.getByText("uv · needed by 1 MCP server and 1 skill")).toBeInTheDocument();
+    expect(banner).toHaveTextContent("uv isn't installed — 1 MCP server and 1 skill affected");
+    expect(banner).toHaveTextContent(
+      "duckdb can't start, and data-profiling fails at the step that calls uv.",
+    );
+    expect(screen.getByText("1 MCP server · 1 skill")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "duckdb" })).toHaveAttribute(
+      "href",
+      "/mcp-servers/duckdb",
+    );
+    expect(screen.getByText("starts with uvx")).toBeInTheDocument();
+    expect(screen.getByText("MCP server")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "data-profiling" })).toHaveAttribute(
+      "href",
+      "/skills/data-profiling/requires",
+    );
+    expect(screen.getByText("No login needed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+  });
+
   test("a command no skill requires says so", async () => {
     const { ApiError } = await import("@/lib/api/errors");
     api.get.mockRejectedValue(new ApiError("CLI_NOT_REQUIRED", "nope"));
     renderPage("/clis/nothing");
     expect(await screen.findByText("Couldn't open this command")).toBeInTheDocument();
-    expect(screen.getByText("No skill requires this command")).toBeInTheDocument();
+    expect(screen.getByText("No skill or MCP server requires this command")).toBeInTheDocument();
   });
 
   test("no skill declares requires: shows the empty state with the docs link", async () => {

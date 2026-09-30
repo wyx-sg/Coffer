@@ -1,8 +1,11 @@
-"""The command-line tools managed skills require: read, checked, handed off.
+"""The command-line tools managed skills and MCP servers require: read,
+checked, handed off.
 
 ``CliRequirementService`` reads every managed skill's master SKILL.md at check
-time (so an edit made in the user's editor is picked up by the next read),
-aggregates one row per command (``domain/skill/cli_status.py``), and probes
+time (so an edit made in the user's editor is picked up by the next read) and
+the launcher of every enabled stdio MCP server (``McpLaunchersPort``, supplied
+by the composition root), aggregates one row per command
+(``domain/skill/cli_status.py``), and probes
 each command through a :class:`CommandProbePort` in a worker thread. Results
 are cached per command until the user asks to check again or the daemon
 restarts; a command no result is cached for is probed on the read that first
@@ -28,6 +31,7 @@ from coffer.domain.skill.cli_status import (
     CliStatus,
     ProbeResult,
     RequiredCommand,
+    ServerLauncher,
     SkillRequirements,
     aggregate,
     login_state,
@@ -60,6 +64,12 @@ class SkillDocument:
 
 class SkillDocumentsPort(Protocol):
     async def skill_documents(self) -> Sequence[SkillDocument]: ...
+
+
+class McpLaunchersPort(Protocol):
+    """The enabled stdio MCP servers and the launcher each starts with."""
+
+    async def stdio_launchers(self) -> Sequence[ServerLauncher]: ...
 
 
 @dataclass(frozen=True)
@@ -97,9 +107,11 @@ class CliRequirementService:
         skills: SkillDocumentsPort,
         probe: CommandProbePort,
         machine: Callable[[], str],
+        servers: McpLaunchersPort | None = None,
         clock: Callable[[], datetime] = _now,
     ) -> None:
         self._skills = skills
+        self._servers = servers
         self._probe = probe
         self._machine = machine
         self._clock = clock
@@ -133,7 +145,8 @@ class CliRequirementService:
             result = requirements_from_skill_md(doc.text)
             parsed.append(SkillRequirements(doc.uid, doc.name, result.requirements))
             warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in result.warnings)
-        return aggregate(parsed), warnings
+        servers = await self._servers.stdio_launchers() if self._servers else ()
+        return aggregate(parsed, servers), warnings
 
     async def _listing(self, *, force: bool) -> CliListing:
         required, warnings = await self._required()
@@ -192,6 +205,7 @@ __all__ = [
     "CliRequirementService",
     "CliView",
     "CommandProbePort",
+    "McpLaunchersPort",
     "SkillDocument",
     "SkillDocumentsPort",
     "SkillWarning",

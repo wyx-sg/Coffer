@@ -357,7 +357,7 @@ The daemon mounts 265 operations in 26 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/clis` | Every command a managed skill requires, problems first. |
 | `POST` | `/api/v1/clis/check` | Probe every required command again. |
-| `GET` | `/api/v1/clis/{command}` | One required command, with the hand-off prompt when it needs the person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
+| `GET` | `/api/v1/clis/{command}` | One required command, with the hand-off prompt when it needs the person; 404 ``CLI_NOT_REQUIRED`` when no skill or MCP server requires it. |
 | `POST` | `/api/v1/clis/{command}/check` | Probe one required command again. |
 
 ### mcp

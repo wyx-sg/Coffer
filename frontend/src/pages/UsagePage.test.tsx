@@ -257,7 +257,10 @@ describe("subscription quota", () => {
     );
     expect(within(quota).getByText("91% used")).toHaveClass("text-warning");
     expect(within(quota).getByText("Limit reached")).toHaveClass("text-danger");
-    expect(within(quota).getByText(/^Resets \d\d:\d\d · in 1 h/)).toBeInTheDocument();
+    // A reset past midnight also names its day.
+    expect(
+      within(quota).getByText(/^Resets (\w{3} \d{1,2} \w{3} )?\d\d:\d\d · in 1 h/),
+    ).toBeInTheDocument();
     // The window reset in 130.5 h is at its limit, so it counts down too.
     expect(within(quota).getByText(/· in 5 d 10 h$/)).toBeInTheDocument();
     expect(within(quota).getAllByText(/^as of \d\d:\d\d$/)).toHaveLength(2);

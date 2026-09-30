@@ -51,7 +51,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer agent`](#coffer-agent) | Manage registered AI agents |
 | [`coffer channel`](#coffer-channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](#coffer-skill) | Manage skills (AgentSkills standard) |
-| [`coffer cli`](#coffer-cli) | Check the command-line tools skills require |
+| [`coffer cli`](#coffer-cli) | Check the command-line tools skills and MCP servers require |
 | [`coffer knowledge`](#coffer-knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
@@ -1763,7 +1763,7 @@ Report drift between bindings and on-disk symlinks.
 coffer cli [OPTIONS] COMMAND [ARGS]...
 ```
 
-Check the command-line tools skills require
+Check the command-line tools skills and MCP servers require
 
 ### cli list
 
@@ -1771,7 +1771,7 @@ Check the command-line tools skills require
 coffer cli list [OPTIONS]
 ```
 
-List every command a skill requires, problems first.
+List every command a skill or MCP server requires, problems first.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

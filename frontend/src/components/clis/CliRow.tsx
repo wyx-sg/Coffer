@@ -1,11 +1,13 @@
-// src/components/clis/CliRow.tsx — one command in the CLIs list pane: its name, one status line, how many skills need it.
+// src/components/clis/CliRow.tsx — one command in the CLIs list pane: its name, one status line, how many MCP servers and skills need it.
 //
-// The status line says what is wrong ("Not found", "24.0.2 · needs ≥ 25.0",
+// The status line says what is wrong ("Not found", "Not found · duckdb needs
+// it" for a launcher an MCP server starts with, "24.0.2 · needs ≥ 25.0",
 // "Not logged in") or, when ready, the version found and — where a login is
 // declared — that it is logged in.
 import { useTranslation } from "react-i18next";
 
 import type { Cli } from "@/lib/api/clis";
+import { neededByCount, serverNames } from "@/lib/clis/format";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -19,7 +21,12 @@ function useStatusLine(cli: Cli): string {
   const version = cli.version ?? t("clis.unknownVersion");
   switch (cli.status) {
     case "missing":
-      return t("clis.status.missing");
+      return cli.needed_by_servers.length > 0
+        ? t("clis.list.missingServersLine", {
+            servers: serverNames(cli),
+            count: cli.needed_by_servers.length,
+          })
+        : t("clis.status.missing");
     case "outdated":
       return t("clis.list.outdatedLine", { version, min: cli.min_version ?? "" });
     case "logged_out":
@@ -60,9 +67,7 @@ export function CliRow({ cli, selected, onOpen }: Props) {
             {line}
           </span>
         </span>
-        <span className="shrink-0 text-xs text-text-muted">
-          {t("clis.skillCount", { count: cli.needed_by.length })}
-        </span>
+        <span className="shrink-0 text-xs text-text-muted">{neededByCount(t, cli, "row")}</span>
       </button>
     </li>
   );

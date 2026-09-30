@@ -672,7 +672,7 @@
       "reason": {
         "failing": "Failing",
         "failingSince": "{{error}} · since {{since}}",
-        "launcher": "{{runner}} is not installed",
+        "launcher": "{{runner}} isn't found on this machine",
         "secret": "Secret missing · {{secret}}"
       },
       "replaceSecret": "Replace secret",
@@ -1596,7 +1596,7 @@
     "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet — generate a pairing code and send it to the bot",
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running — enable the channel to start it",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
-    "CLI_NOT_REQUIRED": "No skill requires this command",
+    "CLI_NOT_REQUIRED": "No skill or MCP server requires this command",
     "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "CONFIG_FILE_NOT_ALLOWED": "That config file isn't allowed for this agent",
     "CONFIG_FILE_STALE": "The config file changed on disk since you loaded it. Reload and retry.",
@@ -4848,7 +4848,7 @@
   },
   "clis": {
     "title": "CLIs",
-    "help": "Every command a skill lists under requires: in its SKILL.md, problems first. Coffer never installs or logs in for you: it hands the fix to your agent as a prompt, and Check again looks again.",
+    "help": "Every command your skills and MCP servers need, problems first. Coffer never installs, updates or logs in for you: it hands the fix to your agent as a prompt, and Check again looks again.",
     "checkAgain": "Check again",
     "checking": "Checking…",
     "checkedAgo": "Checked {{when}}",
@@ -4897,30 +4897,41 @@
       "foundAt": "Found at",
       "version": "Version",
       "state": "State",
-      "loginWith": "Log in with",
-      "loginHint": "Run it in a terminal, then press Check again.",
-      "whyNone": "No reason given"
+      "whyNone": "No reason given",
+      "subtitleNeeded": "{{title}} · needed by {{needed}}",
+      "kind": {
+        "server": "MCP server",
+        "skill": "Skill"
+      },
+      "startsWith": "starts with {{launcher}}"
     },
     "banner": {
-      "missing_one": "{{command}} isn't installed — {{count}} skill affected",
-      "missing_other": "{{command}} isn't installed — {{count}} skills affected",
       "outdated_one": "{{command}} {{found}} is older than {{skills}} needs",
       "outdated_other": "{{command}} {{found}} is older than {{skills}} need",
-      "logged_out_one": "{{command}} isn't logged in — {{count}} skill affected",
-      "logged_out_other": "{{command}} isn't logged in — {{count}} skills affected",
       "body": "{{skills}} will fail at the step that calls {{command}}.",
-      "loginBefore": "Run",
-      "loginAfter": "in a terminal, then check again.",
       "outdatedBody_one": "It needs {{command}} ≥ {{version}}.",
-      "outdatedBody_other": "They need {{command}} ≥ {{version}}."
+      "outdatedBody_other": "They need {{command}} ≥ {{version}}.",
+      "missing": "{{command}} isn't installed — {{needed}} affected",
+      "logged_out": "{{command}} isn't logged in — {{needed}} affected",
+      "serversBody": "{{servers}} can't start.",
+      "bothBody_one": "{{servers}} can't start, and {{skills}} fails at the step that calls {{command}}.",
+      "bothBody_other": "{{servers}} can't start, and {{skills}} fail at the step that calls {{command}}."
     },
     "list": {
       "needsYou": "Needs you",
       "ready": "Ready",
       "noMatch": "No command matches",
       "outdatedLine": "{{version}} · needs ≥ {{min}}",
-      "loggedInLine": "{{version}} · logged in"
-    }
+      "loggedInLine": "{{version}} · logged in",
+      "missingServersLine_one": "Not found · {{servers}} needs it",
+      "missingServersLine_other": "Not found · {{servers}} need it"
+    },
+    "serverCount_one": "{{count}} server",
+    "serverCount_other": "{{count}} servers",
+    "mcpServerCount_one": "{{count}} MCP server",
+    "mcpServerCount_other": "{{count}} MCP servers",
+    "countPair": "{{servers}} · {{skills}}",
+    "neededPair": "{{servers}} and {{skills}}"
   },
   "secrets": {
     "title": "Secrets",

@@ -205,7 +205,7 @@ describe("ResourcesPage", () => {
     const attention = await screen.findByRole("region", { name: "Needs attention" });
     await within(attention).findByText(/Connection refused · since/);
     expect(within(attention).getByText("Secret missing · LINEAR_API_KEY")).toBeInTheDocument();
-    expect(within(attention).getByText("uvx is not installed")).toBeInTheDocument();
+    expect(within(attention).getByText("uvx isn't found on this machine")).toBeInTheDocument();
     const healthy = screen.getByRole("region", { name: "Healthy" });
     expect(within(healthy).getByText("github")).toBeInTheDocument();
     await within(healthy).findByText("stdio · 3 tools");

@@ -10,6 +10,7 @@ import pytest
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService, SkillDocument
 from coffer.domain.skill.cli_errors import CliNotRequired
+from coffer.domain.skill.cli_status import ServerLauncher, launcher_cli
 from tests.support.cli_requirements import FAKE_MACHINE, FakeCommand, FakeCommandProbe
 
 
@@ -96,3 +97,62 @@ async def test_attention_items_one_per_problem() -> None:
     assert items[1].action.verb == "check"
     assert items[1].action.path == "/api/v1/clis/gh/check"
     assert items[1].severity.value == "warning"
+
+
+class _Servers:
+    def __init__(self, *launchers: tuple[str, str]) -> None:
+        self.launchers = [ServerLauncher(f"uid-{name}", name, cmd) for name, cmd in launchers]
+
+    async def stdio_launchers(self) -> Sequence[ServerLauncher]:
+        return self.launchers
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a stdio MCP server's launcher is listed under the command that provides it",
+)
+async def test_mcp_launchers_are_required_by_their_servers() -> None:
+    probe = FakeCommandProbe({"node": FakeCommand("22.1.0")})
+    profiling = _md("data-profiling", '  - command: uv\n    min_version: "0.4"\n')
+    svc = CliRequirementService(
+        skills=_Skills({"data-profiling": profiling}),
+        probe=probe,
+        machine=lambda: FAKE_MACHINE,
+        servers=_Servers(("duckdb", "uvx"), ("files", "npx"), ("local", "./run.sh")),
+    )
+    views = {v.required.command: v for v in (await svc.listing()).items}
+    assert sorted(views) == ["node", "uv"]
+    uv = views["uv"]
+    assert [n.skill_name for n in uv.required.needed_by] == ["data-profiling"]
+    assert [(s.server_name, s.launcher) for s in uv.required.needed_by_servers] == [
+        ("duckdb", "uvx")
+    ]
+    assert uv.status.value == "missing" and uv.handoff is not None
+    assert "- Needed by the MCP servers Coffer starts: duckdb (started with `uvx`)." in uv.handoff
+    assert "- Needed by the Coffer skills: data-profiling (version 0.4 or newer)." in uv.handoff
+    node = views["node"]
+    assert node.required.needed_by == () and node.status.value == "ready"
+    assert (await svc.get("node")).required.needed_by_servers[0].server_name == "files"
+
+
+async def test_a_launcher_only_servers_need_raises_no_cli_attention_item() -> None:
+    svc = CliRequirementService(
+        skills=_Skills({}),
+        probe=FakeCommandProbe(),
+        machine=lambda: FAKE_MACHINE,
+        servers=_Servers(("duckdb", "uvx")),
+    )
+    listing = await svc.listing()
+    assert [v.status.value for v in listing.items] == ["missing"]
+    assert await CliAttentionSource(svc).items() == []
+
+
+def test_launcher_cli_maps_provided_launchers_and_skips_paths() -> None:
+    assert [launcher_cli(c) for c in ("uvx", "npx", "bunx", "docker", "./run.sh", "/opt/x")] == [
+        "uv",
+        "node",
+        "bun",
+        "docker",
+        None,
+        None,
+    ]

@@ -297,3 +297,26 @@ def test_login_output_is_discarded(
     for db in tmp_path.glob("c.db*"):
         assert _ACCOUNT.encode() not in db.read_bytes()
     assert json.dumps(_ACCOUNT) not in caplog.text
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a CLI page lists the MCP servers started with the command"
+)
+def test_a_stdio_servers_launcher_is_listed_with_the_server(daemon: CliDaemon) -> None:
+    config = {"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-server-duckdb"]}}
+    made = daemon.client.post(
+        "/resources", json={"kind": "mcp_server", "name": "duckdb", "config": config}
+    )
+    assert made.status_code == 201, made.text
+    daemon.add_skill("data-profiling", '  - command: uv\n    min_version: "0.4"\n')
+    r = daemon.client.get("/clis/uv")
+    assert r.status_code == 200, r.text
+    uv = r.json()
+    assert uv["status"] == "missing"
+    assert [n["skill_name"] for n in uv["needed_by"]] == ["data-profiling"]
+    assert uv["needed_by_servers"] == [
+        {"server_uid": made.json()["uid"], "server_name": "duckdb", "launcher": "uvx"}
+    ]
+    prompt = uv["handoff"]["prompt"]
+    assert "duckdb (started with `uvx`)" in prompt and "data-profiling" in prompt
+    assert f"This machine: {FAKE_MACHINE}." in prompt
