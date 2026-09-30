@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.mcp.capability import MCPInvocation
+from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import ResourceModel
@@ -275,6 +276,10 @@ class MCPInvocationRepo:
             )
             rows = (await session.execute(stmt)).all()
         return {(r.name, r.capability_key): int(r.n) for r in rows}
+
+    async def summary(self, *, resource_uid: str, since: datetime) -> InvocationSummary:
+        """One server's call counts since ``since`` (``invocation_summary``)."""
+        return await summarize(self._sm, MCPInvocationModel, resource_uid=resource_uid, since=since)
 
     # --- internals ------------------------------------------------------- #
 

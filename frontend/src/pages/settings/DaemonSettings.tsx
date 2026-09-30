@@ -1,76 +1,40 @@
 // frontend/src/pages/settings/DaemonSettings.tsx
 //
-// Settings → Daemon: the daemon's state and when it runs. The shell moved the
-// Start at login card here from General (spec web-ui "Set when the daemon runs
-// on the Daemon tab") and reads the state from the one status poll the footer
-// and the offline banner share. The rest of the tab — host-dependent restart
-// and the editable port — lands with its own work item (change
-// revise-web-ui-ia tasks 3.3 / 3.3c).
-import type { ReactNode } from "react";
+// Settings → Daemon (design 6.2.11 / 6.2.12; spec web-ui "Show and manage the
+// daemon on Settings → Daemon"): the background process that serves the
+// agents and this page. The status card (state, version, channel, port, start
+// time, executable) with the host's restart, then Startup — Start at login and
+// the editable port of the next start. It reads the one status poll the
+// sidebar footer and the offline banner share. There is no token row (the
+// token is on Settings › Security), no troubleshooting section (the daemon log
+// is Activity's Daemon log tab, Copy diagnostics is on Settings › About) and no
+// stop control. While the daemon cannot be reached, Start at login and Port
+// are disabled.
 import { useTranslation } from "react-i18next";
 
-import { StatusDot } from "@/components/status/StatusDot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DaemonPortRow } from "@/components/settings/daemon/DaemonPortRow";
+import { DaemonStatusCard } from "@/components/settings/daemon/DaemonStatusCard";
+import { SettingsSection } from "@/components/settings/SettingsLayout";
 import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { formatDateTime } from "@/lib/utils";
+import { isTauri } from "@/lib/tauri";
 import { DaemonResidencySettings } from "./DaemonResidencySettings";
-
-const EMPTY = "—";
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-32 shrink-0 text-text-muted">{label}</span>
-      <span className="min-w-0 break-all">{value}</span>
-    </div>
-  );
-}
 
 export function DaemonSettings() {
   const { t } = useTranslation();
   const state = useDaemonFooterState();
   const { data: status } = useDaemonStatus();
-  const running = state.kind === "running";
-  const word =
-    state.kind === "running"
-      ? t("nav.daemon.running", { port: state.port })
-      : t(`nav.daemon.${state.kind}`);
+  const inShell = isTauri();
+  const unreachable = state.kind === "offline" || state.kind === "connecting";
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.daemonTab.title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm" data-testid="settings-daemon-status">
-          <Row
-            label={t("settings.daemonTab.state")}
-            value={
-              <span className="inline-flex items-center gap-2">
-                <StatusDot
-                  tone={
-                    running
-                      ? "ok"
-                      : state.kind === "offline"
-                        ? "err"
-                        : state.kind === "stopping"
-                          ? "warn"
-                          : "off"
-                  }
-                />
-                {word}
-              </span>
-            }
-          />
-          <Row label={t("settings.daemonTab.port")} value={running ? state.port : EMPTY} />
-          <Row label={t("settings.daemonTab.version")} value={status?.version ?? EMPTY} />
-          <Row
-            label={t("settings.daemonTab.startedAt")}
-            value={status?.started_at ? formatDateTime(status.started_at) : EMPTY}
-          />
-        </CardContent>
-      </Card>
-      <DaemonResidencySettings />
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-text-muted">{t("settings.daemonTab.intro")}</p>
+      <DaemonStatusCard state={state} status={status} inShell={inShell} />
+      <SettingsSection title={t("settings.daemonTab.startup")} testId="settings-daemon-startup">
+        <DaemonResidencySettings disabled={unreachable} />
+        <DaemonPortRow disabled={unreachable} inShell={inShell} />
+      </SettingsSection>
     </div>
   );
 }

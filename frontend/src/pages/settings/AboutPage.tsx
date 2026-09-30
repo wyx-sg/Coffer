@@ -1,91 +1,87 @@
 // frontend/src/pages/settings/AboutPage.tsx
 //
-// Settings → About: what this Coffer is — version, license and source — and,
-// below it, the desktop shell's update check (`UpdatesSection`). The version comes from /daemon/status so it names the build
-// that is actually running, not a constant baked into the page; the daemon's
-// port and start time stay off it, because a user never needs to know Coffer
-// runs a background daemon. "Copy diagnostics" puts the same rows on the
-// clipboard as plain text, for pasting into a bug report.
-import type { ReactNode } from "react";
+// Settings → About (design 6.2.13): what this Coffer is. A head line with the
+// running version and release channel and, beside it, "Copy diagnostics for a
+// bug report" (spec web-ui "Keep daemon shutdown on the command line": version,
+// channel, host, daemon state and port and the enabled features, never a token
+// or a secret); the desktop shell's update check (`UpdatesSection`, its own
+// requirement); and the details — version, license and source. The version
+// comes from /daemon/status so it names the build that is actually running.
 import { useTranslation } from "react-i18next";
-import { Copy } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
+import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { useToast } from "@/components/ui/toast";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-
+import { isTauri } from "@/lib/tauri";
+import { diagnosticsText } from "./aboutDiagnostics";
 import { UpdatesSection } from "./UpdatesSection";
 
 const SOURCE_URL = "https://github.com/wyx-sg/Coffer";
 const EMPTY = "—";
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-32 shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-all">{value}</span>
-    </div>
-  );
-}
-
 export function AboutPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { data: status } = useDaemonStatus();
-
-  // Label + text value per row: the table renders these, and the clipboard
-  // gets the same lines joined — one source, so the two can't drift.
-  const rows: { key: string; label: string; text: string }[] = [
-    { key: "version", label: t("settings.about.fields.version"), text: status?.version ?? EMPTY },
-    { key: "license", label: t("settings.about.fields.license"), text: "MIT" },
-    { key: "source", label: t("settings.about.fields.source"), text: SOURCE_URL },
-  ];
+  const state = useDaemonFooterState();
 
   const copyDiagnostics = async () => {
-    const text = rows.map((r) => `${r.label}: ${r.text}`).join("\n");
+    const text = diagnosticsText({
+      status,
+      state,
+      host: isTauri() ? "desktop app" : "browser",
+      platform: typeof navigator !== "undefined" ? navigator.platform : "",
+    });
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(t("common.copied"));
+      toast.success(t("settings.about.diagnosticsCopied"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
+  const version = status?.version ?? EMPTY;
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <CardTitle>{t("settings.about.title")}</CardTitle>
-          <Button variant="secondary" size="sm" onClick={() => void copyDiagnostics()}>
-            <Copy className="mr-1.5 size-3.5" aria-hidden />
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-1" data-testid="settings-about-head">
+        <h3 className="m-0 text-lg font-bold text-text">Coffer</h3>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
+          <span>
+            {status
+              ? t("settings.about.versionLine", { version, channel: status.channel })
+              : t("settings.about.versionLineLoading")}
+          </span>
+          <button
+            type="button"
+            onClick={() => void copyDiagnostics()}
+            className="text-sm text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          >
             {t("settings.about.copyDiagnostics")}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {rows.map((r) => (
-            <Row
-              key={r.key}
-              label={r.label}
-              value={
-                r.key === "source" ? (
-                  <a
-                    href={SOURCE_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    github.com/wyx-sg/Coffer
-                  </a>
-                ) : (
-                  r.text
-                )
-              }
-            />
-          ))}
-        </CardContent>
-      </Card>
+          </button>
+        </p>
+      </div>
+
       <UpdatesSection />
+
+      <SettingsSection title={t("settings.about.details")}>
+        <SettingRow label={t("settings.about.fields.version")}>
+          <span className="font-mono text-xs">{version}</span>
+        </SettingRow>
+        <SettingRow label={t("settings.about.fields.license")}>
+          <span className="text-sm">MIT</span>
+        </SettingRow>
+        <SettingRow label={t("settings.about.fields.source")}>
+          <a
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-accent hover:underline"
+          >
+            github.com/wyx-sg/Coffer
+          </a>
+        </SettingRow>
+      </SettingsSection>
     </div>
   );
 }

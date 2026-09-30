@@ -21,6 +21,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.mcp.runner_detect import missing_runner_of
+from coffer.application.mcp.server_status import credential_refs_of, failure_run, missing_secret
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
@@ -31,6 +32,7 @@ from coffer.infrastructure.mcp.persistence import (
     MCPServerHealthRepo,
 )
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
@@ -47,11 +49,8 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_preferences_repo,
     require_mcp_server,
 )
-from coffer.surfaces.http.schemas import (
-    CapabilityKeyBody,
-    CapabilityListOut,
-    McpServerStatusOut,
-)
+from coffer.surfaces.http.mcp.page_schemas import McpServerStatusOut
+from coffer.surfaces.http.schemas import CapabilityKeyBody, CapabilityListOut
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -161,14 +160,34 @@ async def get_server_status(
     prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
+    store: Any = Depends(get_credential_store),  # noqa: B008
 ) -> McpServerStatusOut:
     """Per-server status from persisted state — health record (from /test),
-    discovered capabilities, or last invocation. Cheap (DB only + one PATH
-    lookup); never spawns."""
+    discovered capabilities, or last invocation — and what the page says about
+    it (``application.mcp.server_status``). Cheap (DB only + one PATH lookup);
+    never spawns."""
     resource = await require_mcp_server(uid, resource_service)
     # A stdio launcher that does not resolve on THIS machine (synced server,
     # runner not installed here) — surfaced so the cause is visible.
     runner = await asyncio.to_thread(missing_runner_of, resource.config)
+    recent = await invocations.query(resource_uid=resource.uid, limit=_STATUS_LOOKBACK)
+    ok = await invocations.query(resource_uid=resource.uid, status="ok", limit=1)
+    failure = failure_run(recent)
+    secret = (
+        await asyncio.to_thread(missing_secret, resource.config, store.exists)
+        if credential_refs_of(resource.config)
+        else None
+    )
+    detail: dict[str, Any] = {
+        "missing_runner": runner,
+        "last_error": failure.last_error if failure else None,
+        "last_error_at": failure.last_error_at if failure else None,
+        "failing_since": failure.failing_since if failure else None,
+        "last_ok_at": ok[0].timestamp if ok else None,
+        "last_ok_capability": ok[0].capability_key if ok else None,
+        "missing_secret": secret[0] if secret else None,
+        "missing_secret_ref": secret[1] if secret else None,
+    }
 
     # T7: prefer the persisted health state written by POST /test. Both the
     # health record and the invocation log are keyed on the uid, so a renamed
@@ -176,8 +195,10 @@ async def get_server_status(
     # next test.
     health = await health_repo.get(resource.uid)
     if health is not None:
-        health_status, _ = health
-        return McpServerStatusOut(status=health_status, missing_runner=runner)
+        health_status, checked_at = health
+        if health_status == "failing" and failure is None:
+            detail["failing_since"] = checked_at
+        return McpServerStatusOut(status=health_status, last_checked_at=checked_at, **detail)
 
     caps = await prefs.list_for(resource.id)
     # Health is read from the most recent call that says something about the
@@ -187,7 +208,6 @@ async def get_server_status(
     # the tool failing over a healthy connection, which is evidence the server
     # is up (spec mcp-gateway "Route calls to the originating upstream" ties
     # unhealthy to a transport failure or a crash, not to a tool's answer).
-    recent = await invocations.query(resource_uid=resource.uid, limit=_STATUS_LOOKBACK)
     last = next((inv for inv in recent if inv.status != "denied"), None)
     state: Literal["healthy", "failing", "unknown"]
     if last is not None and last.status != "ok" and not is_upstream_answered(last):
@@ -196,7 +216,7 @@ async def get_server_status(
         state = "healthy"
     else:
         state = "unknown"
-    return McpServerStatusOut(status=state, missing_runner=runner)
+    return McpServerStatusOut(status=state, **detail)
 
 
 async def _toggle_capability(

@@ -101,11 +101,11 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 214 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 221 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
-| [daemon](#daemon) | 9 |
+| [daemon](#daemon) | 13 |
 | [resources](#resources) | 9 |
 | [audit](#audit) | 1 |
 | [retention](#retention) | 3 |
@@ -119,7 +119,7 @@ The daemon mounts 214 operations in 24 groups. Groups follow the order the daemo
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 19 |
-| [mcp](#mcp) | 10 |
+| [mcp](#mcp) | 13 |
 | [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 16 |
 | [agent-providers](#agent-providers) | 2 |
@@ -140,6 +140,10 @@ The daemon mounts 214 operations in 24 groups. Groups follow the order the daemo
 | `PUT` | `/api/v1/daemon/residency` | Install or remove the login service, and say what is true afterwards. |
 | `POST` | `/api/v1/daemon/shutdown` | Shutdown Daemon |
 | `GET` | `/api/v1/daemon/logs` | The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon`` reads, for the human looking at the Activity page. |
+| `GET` | `/api/v1/daemon/port` | Get Daemon Port |
+| `PUT` | `/api/v1/daemon/port` | Save the port of the next start; refused in place when it cannot be bound. |
+| `GET` | `/api/v1/storage` | Storage Summary |
+| `POST` | `/api/v1/storage/cache/clear` | Delete the memory tree's files and the transcript summary cache. |
 | `GET` | `/api/v1/daemon/features` | List Features |
 | `PUT` | `/api/v1/daemon/features/{key}` | Switch one feature on this machine, at once and without a restart. |
 | `DELETE` | `/api/v1/daemon/features/{key}` | Remove this machine's setting, so the feature follows the channel default. |
@@ -341,13 +345,16 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `GET` | `/mcp` | Open the SSE stream for downstream-bound server notifications. |
 | `POST` | `/mcp` | Process one JSON-RPC request from a downstream MCP client. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/capabilities` | Return the live (cache-aware) capability list for one MCP server. |
-| `GET` | `/api/v1/resources/mcp_server/{uid}/status` | Per-server status from persisted state — health record (from /test), discovered capabilities, or last invocation. |
+| `GET` | `/api/v1/resources/mcp_server/{uid}/status` | Per-server status from persisted state — health record (from /test), discovered capabilities, or last invocation — and what the page says about it (``application.mcp.server_status``). |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/capabilities/{capability_type}/enable` | Enable a specific capability for the MCP server this uid names. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/capabilities/{capability_type}/disable` | Disable a specific capability for the MCP server this uid names. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/refresh` | Invalidate the discovery cache for this server and re-query upstream. |
 | `POST` | `/api/v1/resources/mcp_server/{uid}/test` | Open a transient upstream session, run MCP initialize, return health info. |
 | `GET` | `/api/v1/resources/mcp_server/{uid}/invocations` | Query invocation records for this server with optional filters. |
 | `GET` | `/api/v1/mcp/invocations` | Every server's invocations on one timeline, newest-first. |
+| `GET` | `/api/v1/resources/mcp_server/{uid}/invocations/summary` | This server's calls since ``since``: totals, per calling agent, per tool. |
+| `GET` | `/api/v1/resources/mcp_server/{uid}/log` | The newest lines of the server's own log file: its stderr, and Coffer's lines about starting and stopping it. |
+| `GET` | `/api/v1/resources/mcp_server/{uid}/tiering` | Which of this server's tools are listed to agents and which only reached through search. |
 
 ### knowledge
 

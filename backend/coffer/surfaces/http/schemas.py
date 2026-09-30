@@ -336,19 +336,6 @@ class CapabilityKeyBody(BaseModel):
     capability_key: str = Field(min_length=1, max_length=2048)
 
 
-# --- MCP server status ---
-
-
-class McpServerStatusOut(BaseModel):
-    """Cheap per-server status, derived from persisted state (no spawn)."""
-
-    status: Literal["healthy", "failing", "unknown"]
-    # A stdio server whose launcher command does not resolve on THIS machine
-    # (a synced server referencing e.g. uvx on a machine without uv). The UI
-    # renders "missing <runner>" so the cause is visible.
-    missing_runner: str | None = None
-
-
 # --- Settings ---
 
 

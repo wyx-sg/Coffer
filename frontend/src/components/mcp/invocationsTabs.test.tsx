@@ -39,9 +39,8 @@ test("a server's Invocations tab mounts the invocation table scoped to its uid",
             serverUid="u-1"
             basePath="/mcp-servers/srv"
             capabilities={undefined}
-            config={{}}
-            isCapsPending={false}
-            onRefresh={vi.fn()}
+            overview={null}
+            tools={null}
           />
         }
       />

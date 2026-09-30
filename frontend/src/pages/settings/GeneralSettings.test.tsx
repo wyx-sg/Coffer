@@ -1,6 +1,7 @@
 // frontend/src/pages/settings/GeneralSettings.test.tsx
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import i18n from "@/i18n";
 import { GeneralSettings } from "./GeneralSettings";
 import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
@@ -30,7 +31,7 @@ afterEach(() => {
 
 const STORE_KEY = "coffer.preferredEditor";
 
-const editorSelect = () => screen.getByRole("combobox", { name: /preferred editor/i });
+const editorSelect = () => screen.getByRole("combobox", { name: /open files with/i });
 // Radix Select opens on keyboard in jsdom (pointer events are stubbed).
 const openEditorPicker = () => fireEvent.keyDown(editorSelect(), { key: "ArrowDown" });
 const pickOption = (name: RegExp | string) => fireEvent.click(screen.getByRole("option", { name }));
@@ -41,17 +42,27 @@ describe("GeneralSettings", () => {
   test("renders the default page-size control reflecting the stored preference", () => {
     localStorage.setItem("coffer.pageSize", "50");
     render(<GeneralSettings />);
-    expect(screen.getByText(/default rows per page/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/rows per page/i)[0]).toBeInTheDocument();
     // The Select trigger shows the persisted value.
-    expect(screen.getByRole("combobox", { name: /default rows per page/i })).toHaveTextContent(
-      "50",
-    );
+    expect(screen.getByRole("combobox", { name: /rows per page/i })).toHaveTextContent("50");
   });
 
-  test("every control is the same Select — no native <select> on the page", () => {
+  test("pickers are the shared Select and choices are segmented — no native <select>", () => {
     render(<GeneralSettings />);
     expect(document.querySelectorAll("select")).toHaveLength(0);
-    expect(screen.getAllByRole("combobox")).toHaveLength(3);
+    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    expect(screen.getByRole("group", { name: /^language$/i })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: /^theme$/i })).toBeInTheDocument();
+  });
+
+  test("the language choice switches the interface language at once", () => {
+    render(<GeneralSettings />);
+    const group = screen.getByRole("group", { name: /^language$/i });
+    const english = within(group).getByRole("button", { name: "English" });
+    expect(english).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(group).getByRole("button", { name: "中文" }));
+    expect(i18n.language).toBe("zh");
+    void i18n.changeLanguage("en");
   });
 });
 
@@ -131,7 +142,7 @@ acceptance("web-ui", "the default page size seeds every list table", () => {
   expect(screen.getByText("row-19")).toBeInTheDocument();
   expect(screen.queryByText("row-20")).not.toBeInTheDocument();
 
-  const pageSize = screen.getByRole("combobox", { name: /default rows per page/i });
+  const pageSize = screen.getByRole("combobox", { name: /rows per page/i });
   fireEvent.keyDown(pageSize, { key: "ArrowDown" });
   fireEvent.click(screen.getByRole("option", { name: "10" }));
 
@@ -144,20 +155,22 @@ acceptance("web-ui", "the General tab offers the theme choice", () => {
   localStorage.setItem("coffer.theme", "light");
   render(<GeneralSettings />);
 
-  // One choice, with the current preference chosen.
-  const themeSelect = screen.getByRole("combobox", { name: /^theme$/i });
-  expect(themeSelect).toHaveTextContent("Light");
-  fireEvent.keyDown(themeSelect, { key: "ArrowDown" });
-  expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
-    "System",
-    "Light",
-    "Dark",
-  ]);
+  // One choice of three, with the current preference chosen.
+  const group = screen.getByRole("group", { name: /^theme$/i });
+  const buttons = within(group).getAllByRole("button");
+  expect(buttons.map((b) => b.textContent).sort()).toEqual(["Dark", "Light", "System"]);
+  expect(within(group).getByRole("button", { name: "Light" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 
   // Picking one applies it at once — there is no Save button.
-  fireEvent.click(screen.getByRole("option", { name: "Dark" }));
+  fireEvent.click(within(group).getByRole("button", { name: "Dark" }));
   expect(document.documentElement.dataset.theme).toBe("dark");
   expect(localStorage.getItem("coffer.theme")).toBe("dark");
-  expect(themeSelect).toHaveTextContent("Dark");
+  expect(within(group).getByRole("button", { name: "Dark" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
 });

@@ -125,6 +125,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/mcp_server/{uid}/invocations/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Invocation Summary
+         * @description This server's calls since ``since``: totals, per calling agent, per tool.
+         */
+        get: operations["invocation_summary_api_v1_resources_mcp_server__uid__invocations_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/mcp_server/{uid}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server Log
+         * @description The newest lines of the server's own log file: its stderr, and Coffer's
+         *     lines about starting and stopping it. A server Coffer does not start (HTTP)
+         *     has none.
+         */
+        get: operations["server_log_api_v1_resources_mcp_server__uid__log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resources/mcp_server/{uid}/refresh": {
         parameters: {
             query?: never;
@@ -157,8 +199,9 @@ export interface paths {
         /**
          * Get Server Status
          * @description Per-server status from persisted state — health record (from /test),
-         *     discovered capabilities, or last invocation. Cheap (DB only + one PATH
-         *     lookup); never spawns.
+         *     discovered capabilities, or last invocation — and what the page says about
+         *     it (``application.mcp.server_status``). Cheap (DB only + one PATH lookup);
+         *     never spawns.
          */
         get: operations["get_server_status_api_v1_resources_mcp_server__uid__status_get"];
         put?: never;
@@ -190,10 +233,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/mcp_server/{uid}/tiering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tool Tiering
+         * @description Which of this server's tools are listed to agents and which only reached through search.
+         */
+        get: operations["tool_tiering_api_v1_resources_mcp_server__uid__tiering_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentCallCountOut */
+        AgentCallCountOut: {
+            /** Agent Uid */
+            agent_uid: string | null;
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Last Call At */
+            last_call_at: string | null;
+        };
         /**
          * CapabilityKeyBody
          * @description Request body for capability enable/disable routes.
@@ -297,6 +371,27 @@ export interface components {
              */
             timestamp: string;
         };
+        /**
+         * InvocationSummaryOut
+         * @description One server's calls since ``since``: totals, per agent, per tool.
+         */
+        InvocationSummaryOut: {
+            /** By Agent */
+            by_agent: components["schemas"]["AgentCallCountOut"][];
+            /** By Tool */
+            by_tool: components["schemas"]["ToolCallCountOut"][];
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Last Call At */
+            last_call_at: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+        };
         /** MCPPromptView */
         MCPPromptView: {
             /** Arguments */
@@ -350,13 +445,62 @@ export interface components {
              */
             prefixed_name: string;
         };
+        /** McpServerLogLineOut */
+        McpServerLogLineOut: {
+            /** At */
+            at: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "coffer" | "stderr";
+            /** Text */
+            text: string;
+        };
+        /**
+         * McpServerLogOut
+         * @description The newest lines of the server's own log file, newest first.
+         */
+        McpServerLogOut: {
+            /** Lines */
+            lines: components["schemas"]["McpServerLogLineOut"][];
+            /** Path */
+            path: string | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /**
          * McpServerStatusOut
          * @description Cheap per-server status, derived from persisted state (no spawn).
+         *
+         *     Beside the state word, what the page says about it (spec mcp-gateway
+         *     "Explain a server's state on its page"): the last transport failure and
+         *     since when the server has been failing, the last successful call, and the
+         *     first cited secret with no value on this machine. Each is null when
+         *     nothing persisted says it.
          */
         McpServerStatusOut: {
+            /** Failing Since */
+            failing_since: string | null;
+            /** Last Checked At */
+            last_checked_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Error At */
+            last_error_at: string | null;
+            /** Last Ok At */
+            last_ok_at: string | null;
+            /** Last Ok Capability */
+            last_ok_capability: string | null;
             /** Missing Runner */
             missing_runner: string | null;
+            /** Missing Secret */
+            missing_secret: string | null;
+            /** Missing Secret Ref */
+            missing_secret_ref: string | null;
             /**
              * Status
              * @enum {string}
@@ -377,6 +521,40 @@ export interface components {
             server_capabilities: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** ToolCallCountOut */
+        ToolCallCountOut: {
+            /** Calls */
+            calls: number;
+            /** Errors */
+            errors: number;
+            /** Last Call At */
+            last_call_at: string | null;
+            /** Tool */
+            tool: string;
+        };
+        /**
+         * ToolTieringOut
+         * @description Which of this server's tools agents see listed and which only through search.
+         *
+         *     Machine-wide: computed over every enabled server's saved tool list, not
+         *     per agent reach (spec mcp-gateway "Forward tools, resources and prompts").
+         */
+        ToolTieringOut: {
+            /** Behind Search */
+            behind_search: string[];
+            /** Budget */
+            budget: number;
+            /** Catalogue Size */
+            catalogue_size: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Listed */
+            listed: string[];
+            /** Listed Count */
+            listed_count: number;
+            /** Tool Count */
+            tool_count: number;
         };
         /** _MCPPromptArgument */
         _MCPPromptArgument: {
@@ -632,6 +810,95 @@ export interface operations {
             };
         };
     };
+    invocation_summary_api_v1_resources_mcp_server__uid__invocations_summary_get: {
+        parameters: {
+            query?: {
+                /** @description Count calls at or after this moment; default 24 hours ago. */
+                since?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvocationSummaryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    server_log_api_v1_resources_mcp_server__uid__log_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerLogOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     refresh_capabilities_api_v1_resources_mcp_server__uid__refresh_post: {
         parameters: {
             query?: never;
@@ -736,6 +1003,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["McpTestResultOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    tool_tiering_api_v1_resources_mcp_server__uid__tiering_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTieringOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

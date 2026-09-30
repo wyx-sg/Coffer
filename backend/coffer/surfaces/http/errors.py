@@ -35,6 +35,9 @@ _STATUS: dict[str, int] = {
     # A changed name on a kind whose name is fixed (ADR
     # names-visible-to-agents-are-fixed): a conflict with what quotes the name.
     "NAME_IMMUTABLE": 409,
+    # The daemon's settable port (spec daemon "Bind a fixed, settable port").
+    "PORT_OUT_OF_RANGE": 422,
+    "PORT_IN_USE": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
