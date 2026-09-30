@@ -230,7 +230,7 @@ CI shards the integration tier as well — see [CI Jobs](#ci-jobs).
 ## Make Targets
 
 ```bash
-make verify              # fast path: lint + unit + integration + contract + acceptance audit
+make verify              # fast path: lint + unit + integration + contract + acceptance audit (timed per stage)
 make verify-all          # verify + e2e (full suite)
 
 make verify-unit         # unit-purity guardrail + unit tier (xdist, PYTEST_WORKERS=auto)
@@ -241,6 +241,7 @@ make verify-benchmark    # the benchmark-marked tests (excluded from verify)
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
+make verify-secrets      # gitleaks over the full history (skips without a gitleaks binary)
 make visual-update       # re-record this platform's screenshot baseline
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
@@ -250,27 +251,28 @@ make format              # ruff format + ruff --fix (backend, evals); prettier i
 **`make lint` is the whole static gate, not a formatter pass.** In order
 (`Makefile`): `scripts/check_file_sizes.py`, `scripts/gen_contracts.py --check`
 (contract freshness), `scripts/check_response_models.py`,
-`scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
+`scripts/check_adr_index.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
 `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
+`scripts/check_ignored_sources.py`,
 `ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
 (configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`
 (the layering + cross-kind fence), and — when
 `frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
+Each script gate has a one-line description in
+[`harness.md` "Gates"](./harness.md#gates).
 
 Two consequences worth internalising:
 
-- **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
-  numbered ADR/spec token and a dead link under `docs/decisions/`;
+- **A docs-only edit can fail `make lint`.** `check_adr_index.py` rejects a
+  dead link under `docs/decisions/` and an ADR the index does not list;
   `check_spec_citations.py` rejects a requirement citation —
   `spec <capability> "<Title>"` or a link to a capability's `spec.md` followed
-  by a quoted title — whose capability or title does not exist, and a retired
-  id form (an amendment letter after a capability, a numbered `CODE-` error id,
-  an uppercase `SPEC-` id), so renaming a requirement fails until every
-  citation of the old title follows;
+  by a quoted title — whose capability or title does not exist, so renaming a
+  requirement fails until every citation of the old title follows;
   `check_architecture_doc.py` holds the code-layout tree in
   `docs-site/architecture/layering.md` and the builtin-tool roster in
   `docs-site/architecture/` to the code; `check_removed_commands.py` rejects any
@@ -289,7 +291,7 @@ Two consequences worth internalising:
 
 | Target                    | What it runs                                                                                                                                                                                | When to use                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
+| `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`, printing each stage's wall time at the end (kept in `.coffer-verify.timings`). The "pre-PR" gate. | Before every push and PR. CI runs the same tiers in parallel.               |
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
 | `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/unit` (`PYTEST_WORKERS` defaults to `auto`), then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
 | `make verify-integration` | `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/integration`.                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
@@ -312,7 +314,7 @@ up here as an image diff.
 - `make verify-visual` compares; `make visual-update` re-records.
 - Baselines are per platform — `e2e/visual/specs/__screenshots__/{darwin,linux}/`
   — because font rasterising differs between them. Locally a missing baseline
-  fails. In CI (`test-e2e`) a missing one is written instead and uploaded as the
+  fails. In CI (`test-visual`) a missing one is written instead and uploaded as the
   `visual-baseline-linux` artifact; commit its `linux/` folder to start
   comparing there.
 - Update only for a deliberate visual change, and commit the new images in the
@@ -327,7 +329,7 @@ up here as an image diff.
 
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main` or `feature/rearch`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`):
+`.github/workflows/verify.yml` runs on every push to `main` and every pull request into `main` or `feature/rearch`, with its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`). Every job but `changes` runs exactly one Makefile target, so a red check names the command that reproduces it locally:
 
 | Job                               | What                                                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -338,9 +340,10 @@ up here as an image diff.
 | `test-integration`                | The required check: succeeds only when all four shards succeeded, or when they were skipped because the change is `code=false`. |
 | `test-benchmark`                  | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
 | `audit-acceptance`                | `make verify-acceptance`: `openspec validate --all --strict` (needs the root `npm ci`), then `scripts/audit_acceptance.py`. Always runs. |
-| `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean. Always runs. |
+| `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) through gitleaks-action — the scan `make verify-secrets` runs locally. A committed secret fails the PR even if the final tree is clean. Always runs. |
 | `test-contract`                   | `make verify-contract`                                                                                                     |
-| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects), then `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact |
+| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                   |
+| `test-visual`                     | `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact                      |
 
 The test jobs are skipped only on an explicit `code=false`: if `changes` itself fails they run anyway. A job skipped by its condition reports success, which is how a docs-only PR still shows every required check green.
 
