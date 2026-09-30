@@ -22,10 +22,7 @@ the shape :func:`_structured` tries first.
 below are the ones that have actually been observed in the file: uvicorn's
 ``ERROR:    …`` (it configures its own three loggers and keeps them off the
 root), and an upstream MCP server's rich panels and ``LEVEL - logger - message``
-lines. ``_BRACKETED`` is the one parser
-kept for lines nothing writes any more: it reads the alembic-formatter shape
-the daemon used to produce, and a log file written before that was fixed holds
-them by the thousand inside the tail this module reads.
+lines.
 
 Everything is normalised onto the same four keys, and a line that matches none
 of them is kept verbatim as ``raw`` — a reader that only understood Coffer's
@@ -58,17 +55,14 @@ _ANSI = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))
 #: Every level token any of the writers below spells, onto the lowercase
 #: vocabulary Coffer's own lines use — so one badge vocabulary serves the whole
 #: file.
-#: The 5-character truncations come from ``%(levelname)-5.5s``.
 _LEVELS = {
     "TRACE": "debug",
     "DEBUG": "debug",
     "INFO": "info",
     "WARN": "warning",
-    "WARNI": "warning",
     "WARNING": "warning",
     "ERROR": "error",
     "EXCEPTION": "error",
-    "CRITI": "critical",
     "CRITICAL": "critical",
     "FATAL": "critical",
 }
@@ -113,14 +107,7 @@ def at_least(record: dict[str, Any], floor: str) -> bool:
     return _LEVEL_ORDER.index(level) >= _LEVEL_ORDER.index(wanted)
 
 
-# The daemon's own records, back when alembic's fileConfig had re-pointed the
-# root handler at `%(levelname)-5.5s [%(name)s] %(message)s`:
-# `WARNI [coffer.chat.codex] …`. Nothing writes this shape any more — the
-# formatter is the daemon's own now, and env.py no longer calls fileConfig —
-# but a log file written before that fix still holds these, so reading one
-# must not regress into three empty columns per line.
-_BRACKETED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+\[(?P<logger>[^\]\s]+)\]\s+(?P<event>.*)$")
-# another common stdlib formatter: `WARNING - mcp_atlassian.utils.toolsets - …`
+# a common stdlib formatter: `WARNING - mcp_atlassian.utils.toolsets - …`
 _DASHED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+-\s+(?P<logger>[\w.\-]+)\s+-\s+(?P<event>.*)$")
 # uvicorn's default: `ERROR:    ASGI callable returned without completing…`
 _PREFIXED = re.compile(r"^(?P<level>[A-Z]{4,9}):\s+(?P<event>.*)$")
@@ -184,7 +171,7 @@ def _structured(line: str) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return parsed
 
-    for pattern in (_RICH, _BRACKETED, _DASHED, _PREFIXED):
+    for pattern in (_RICH, _DASHED, _PREFIXED):
         match = pattern.match(line)
         if match is None:
             continue

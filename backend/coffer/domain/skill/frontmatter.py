@@ -1,7 +1,7 @@
 """Pydantic model for the SKILL.md frontmatter (agentskills.io).
 
 The agentskills.io standard requires `name` and `description`: `name` is capped
-at 64 chars (lowercase alphanumerics, hyphen, underscore) and `description` at
+at 64 chars (lowercase alphanumerics and hyphen) and `description` at
 1024 chars. The optional fields `license` and the experimental `allowed-tools`
 are recognized and retained; every other extra field is tolerated
 (`extra="allow"`) so non-Coffer-authored skills validate cleanly. Coffer does
@@ -22,10 +22,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # (``master_store._NAME_MAX_LEN``). A longer name would pass schema validation
 # here but then trip a bare ``ValueError`` inside ``copy_in`` → 500; aligning
 # the cap turns it into a clean ``SkillValidationError`` (422) at validate time.
-# Coffer accepts a documented superset of the agentskills.io name charset: the
-# standard allows lowercase letters, digits, and hyphens, and Coffer also
-# tolerates underscores for backward-compatibility with skills already on disk.
-_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+# The charset is the agentskills.io standard's: lowercase letters, digits, and
+# hyphens.
+_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 #: A top-level ``name`` key in the frontmatter block — column 0, so a nested
 #: mapping's own ``name`` is never mistaken for the skill's.
@@ -60,7 +59,7 @@ def validate_frontmatter_name(name: str) -> None:
     if not _NAME_RE.match(name):
         raise FrontmatterNameError(
             f"invalid skill name {name!r}: must match {_NAME_RE.pattern} "
-            "(lowercase letters, digits, hyphen, underscore)"
+            "(lowercase letters, digits, hyphen)"
         )
 
 

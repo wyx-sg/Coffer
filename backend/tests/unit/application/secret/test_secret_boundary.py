@@ -95,17 +95,6 @@ def test_an_approval_is_decided_once() -> None:
         gate.approve(waiting.id, actor="desktop")
 
 
-def test_adoption_approves_what_is_in_use_once() -> None:
-    gate, store, values = _gate()
-    values.put("gh/token", "v", created=_OLD)
-    current = [(_dest("a", "stdio a"), {"TOKEN": "gh/token"}, "user")]
-
-    assert gate.adopt(current) == 1
-    assert gate.adopt([(_dest("b", "stdio b"), {"TOKEN": "gh/token"}, "user")]) == 0
-    gate.require(_dest("a", "stdio a"), {"TOKEN": "gh/token"})
-    assert len(store.bindings()) == 1
-
-
 def test_refresh_supersedes_an_approval_nothing_asks_for() -> None:
     gate, _store, values = _gate()
     values.put("gh/token", "v", created=_OLD)

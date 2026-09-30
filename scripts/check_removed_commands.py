@@ -143,6 +143,13 @@ REMOVED: tuple[tuple[str, str], ...] = (
     # Removed by the OpenSpec change hand-cli-installs-to-an-agent: Coffer runs
     # no installer; the person's agent installs the command from a prompt.
     ("coffer cli install", "coffer cli prompt <command>, then give the prompt to your agent"),
+    # Removed for 1.0 with its `--hook-event` and `--ceiling-tokens` options:
+    # only hooks older builds installed ran it; every installed hook entry now
+    # runs `coffer memory hook`.
+    (
+        "coffer memory context",
+        "coffer memory delivered <partition> (the session-start text each agent is given)",
+    ),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )
@@ -163,7 +170,11 @@ REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("coffer mcp edit", "--clear-credentials", "coffer mcp edit … --clear-secrets"),
     ("coffer provider add", "--credential-ref", "coffer provider add … --secret-ref <ref>"),
     ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secrets"),
-    ("coffer sync remote set", "--without-credentials", "coffer sync remote set … --without-secrets"),
+    (
+        "coffer sync remote set",
+        "--without-credentials",
+        "coffer sync remote set … --without-secrets",
+    ),
     ("coffer sync remote set", "--credential-ref", "coffer sync remote set … --secret-ref <ref>"),
 )
 

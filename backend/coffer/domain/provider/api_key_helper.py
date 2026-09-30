@@ -16,21 +16,12 @@ import shlex
 #: api-key-providers-are-reached-through-a-separate-local-model-proxy). The CLI
 #: is written as an absolute path
 #: (``/Users/me/.coffer/bin/coffer proxy token --agent-uid <uid>``).
-#:
-#: Earlier builds wrote ``provider key`` lines instead: by connection uid
-#: (``--connection-uid <uid>``), before that by name (``--connection <name>``)
-#: and by wire (``--wire anthropic``), bare or by path. Nothing runs that
-#: command any more, but files on disk still hold those lines, so
-#: :func:`is_managed_api_key_helper` recognises them too: de-projection never
-#: clobbers a user-owned helper but always reverts ours, including one this
-#: machine wrote before the proxy existed (spec provider-switching "Project into
-#: Claude Code settings without clobbering them"). Recognising them on the way
-#: OUT is not a compatibility shim: a file Coffer wrote is a file Coffer has to
-#: be able to clean up.
+#: :func:`is_managed_api_key_helper` recognises exactly that form, so
+#: de-projection reverts ours and never clobbers a user-owned helper (spec
+#: provider-switching "Project into Claude Code settings without clobbering
+#: them").
 _CLI_NAME = "coffer"
 _TOKEN_COMMAND = ["proxy", "token"]
-#: The command earlier builds wrote; recognised, never written.
-_LEGACY_KEY_COMMAND = ["provider", "key"]
 
 
 def proxy_token_args(agent_uid: str) -> tuple[str, ...]:
@@ -53,8 +44,7 @@ def proxy_token_helper(agent_uid: str, *, coffer_cli: str) -> str:
 def is_managed_api_key_helper(helper: object) -> bool:
     """Whether ``helper`` is an ``apiKeyHelper`` Coffer wrote: a command whose
     program is the ``coffer`` CLI (bare, or by any path, quoted or not) and
-    whose first two arguments are ``proxy token`` — or ``provider key``, the
-    form earlier builds wrote, which de-projection still has to recognise."""
+    whose first two arguments are ``proxy token``."""
     if not isinstance(helper, str):
         return False
     try:
@@ -64,5 +54,5 @@ def is_managed_api_key_helper(helper: object) -> bool:
     return (
         len(argv) >= 3
         and pathlib.PurePath(argv[0]).name == _CLI_NAME
-        and argv[1:3] in (_TOKEN_COMMAND, _LEGACY_KEY_COMMAND)
+        and argv[1:3] == _TOKEN_COMMAND
     )

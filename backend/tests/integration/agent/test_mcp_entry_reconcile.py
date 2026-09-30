@@ -144,7 +144,7 @@ async def test_a_stale_or_missing_agent_uid_is_drift_and_is_repaired(
     path = codex.write(
         "config",
         'model = "o4"\n\n[mcp_servers.coffer]\n'
-        'command = "/bin/shim"\nargs = ["--agent", "codex"]\n',
+        'command = "/bin/shim"\nargs = ["--agent-uid", "u-stale"]\n',
     )
     rec, audit, _ = _setup([agent], "/bin/shim")
     (item,) = (await rec.plan()).results
@@ -172,46 +172,25 @@ async def test_an_agent_without_an_entry_is_never_given_one(isolated_home: Isola
     assert audit.rows == []
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry/claude-code",
-    scenario="an entry installed before the config dir was honoured moves to the agent's own file",
-)
-async def test_a_misplaced_entry_moves_to_the_agents_own_file(
+async def test_an_entry_in_a_file_the_agent_does_not_read_is_left_alone(
     isolated_home: IsolatedHome, tmp_path: pathlib.Path
 ) -> None:
-    """An older Coffer wrote a custom-dir Claude agent's entry into the
-    standard ``~/.claude.json``; the pass installs it into ``<dir>/.claude.json``
-    first and removes it from the home file second. An entry for an agent this
-    machine does not have, and every foreign entry, stay."""
+    """A custom-dir Claude agent reads only ``<dir>/.claude.json``: an entry
+    carrying its uid in ``~/.claude.json`` is not its entry, so the pass
+    neither moves it nor installs one into the agent's own file."""
     custom = tmp_path / "work-claude"
     fake_agent_dir(isolated_home, AgentType.CLAUDE_CODE, config_dir=custom)
     agent = _agent("u-work", AgentType.CLAUDE_CODE, custom)
     home_json = isolated_home.root / ".claude.json"
-    home_json.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "coffer": {"command": "/bin/shim", "args": ["--agent-uid", agent.uid]},
-                    "theirs": {"command": "x"},
-                }
-            }
-        ),
-        encoding="utf-8",
+    text = json.dumps(
+        {"mcpServers": {"coffer": {"command": "/bin/shim", "args": ["--agent-uid", agent.uid]}}}
     )
+    home_json.write_text(text, encoding="utf-8")
     rec, audit, _ = _setup([agent], "/bin/shim")
-    plan = await rec.plan()
-    assert [(r.change.difference.op, r.change.decision.reason_code) for r in plan.results] == [
-        (Op.ADD, "misplaced_entry"),
-        (Op.REMOVE, "misplaced_entry"),
-    ]
-
-    await rec.run(trigger=Trigger.BOOT)
-    assert _claude_json(custom / ".claude.json") == {
-        "mcpServers": {"coffer": {"command": "/bin/shim", "args": ["--agent-uid", agent.uid]}}
-    }
-    assert _claude_json(home_json) == {"mcpServers": {"theirs": {"command": "x"}}}
-    assert [r.event_type for r in audit.rows] == ["agent_mcp_installed", "agent_mcp_uninstalled"]
-    assert audit.rows[1].details["moved_to"] == str(custom / ".claude.json")
+    assert (await rec.run(trigger=Trigger.BOOT)).results == ()
+    assert home_json.read_text(encoding="utf-8") == text
+    assert not (custom / ".claude.json").exists()
+    assert audit.rows == []
 
 
 async def test_an_entry_for_an_unknown_agent_is_left_alone(isolated_home: IsolatedHome) -> None:
@@ -231,17 +210,16 @@ async def test_a_missing_launcher_blocks_the_repair_and_writes_nothing(
     custom = tmp_path / "work-claude"
     fake_agent_dir(isolated_home, AgentType.CLAUDE_CODE, config_dir=custom)
     agent = _agent("u-work", AgentType.CLAUDE_CODE, custom)
-    home_json = isolated_home.root / ".claude.json"
+    own_json = custom / ".claude.json"
     text = json.dumps(
         {"mcpServers": {"coffer": {"command": "/gone", "args": ["--agent-uid", agent.uid]}}}
     )
-    home_json.write_text(text, encoding="utf-8")
+    own_json.write_text(text, encoding="utf-8")
     rec, audit, _ = _setup([agent], None)
     report = await rec.run(trigger=Trigger.PERIOD)
     assert {r.change.decision.disposition for r in report.results} == {Disposition.BLOCKED}
     assert {r.change.decision.reason_code for r in report.results} == {"missing_launcher"}
-    assert home_json.read_text(encoding="utf-8") == text
-    assert not (custom / ".claude.json").exists()
+    assert own_json.read_text(encoding="utf-8") == text
     assert audit.rows == []
 
 
@@ -296,21 +274,3 @@ async def test_the_default_agents_own_entry_in_the_home_file_is_left_alone(
     assert (await rec.run(trigger=Trigger.PERIOD)).results == ()
     assert home_json.read_text(encoding="utf-8") == text
     assert not (custom_dir / ".claude.json").exists()
-
-
-async def test_an_entry_already_in_the_agents_file_only_leaves_the_home_file(
-    isolated_home: IsolatedHome, tmp_path: pathlib.Path
-) -> None:
-    custom = tmp_path / "work-claude"
-    fake_agent_dir(isolated_home, AgentType.CLAUDE_CODE, config_dir=custom)
-    agent = _agent("u-work", AgentType.CLAUDE_CODE, custom)
-    entry = {"command": "/bin/shim", "args": ["--agent-uid", agent.uid]}
-    (custom / ".claude.json").write_text(json.dumps({"mcpServers": {"coffer": entry}}), "utf-8")
-    home_json = isolated_home.root / ".claude.json"
-    home_json.write_text(json.dumps({"mcpServers": {"coffer": entry}}), encoding="utf-8")
-    rec, audit, _ = _setup([agent], "/bin/shim")
-    (only,) = (await rec.run(trigger=Trigger.BOOT)).results
-    assert only.change.difference.op is Op.REMOVE and only.outcome is Outcome.APPLIED
-    assert _claude_json(home_json) == {"mcpServers": {}}
-    assert _claude_json(custom / ".claude.json") == {"mcpServers": {"coffer": entry}}
-    assert [r.event_type for r in audit.rows] == ["agent_mcp_uninstalled"]

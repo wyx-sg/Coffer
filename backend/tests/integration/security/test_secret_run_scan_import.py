@@ -1,5 +1,5 @@
-"""`coffer run`, the plaintext scan and move, and the adoption at upgrade, against
-a real in-process daemon over a throwaway HOME (spec secret)."""
+"""`coffer run` and the plaintext scan and move, against a real in-process
+daemon over a throwaway HOME (spec secret)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import os
 import pathlib
 import sys
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
 
 import pytest
 from typer.testing import CliRunner
@@ -239,36 +238,3 @@ def test_importing_moves_a_value_and_leaves_a_reference(cli: BoundaryDaemon) -> 
     assert names == ["db.DB_HOST", "db.DB_PASSWORD", "deploy.api_token"], names
     again = json.loads(_runner.invoke(cli_app, ["secret", "scan", "--json"]).output)
     assert again["findings"] == []
-
-
-# --- adoption at upgrade --------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(spec="secret", scenario="bindings in use at upgrade keep working")
-def test_bindings_in_use_at_upgrade_keep_working(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    db = prepare_home(tmp_path, monkeypatch)
-    with running_daemon(tmp_path, db) as d:
-        d.store("gh/token", "ghp_from_before")
-        first = d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
-        second = d.register_stdio("second", "server-two", {"TOKEN": "gh/token"})
-    # Rewind to a vault from before the boundary: no bindings, no marker, and
-    # a secret stored long ago.
-    old = (datetime.now(tz=UTC) - timedelta(days=90)).isoformat()
-    d.sql("DELETE FROM secret_bindings")
-    d.sql("DELETE FROM secret_approvals")
-    d.sql("DELETE FROM secret_boundary_settings")
-    d.sql("UPDATE secrets SET created_at = ?", old)
-
-    with running_daemon(tmp_path, db) as upgraded:
-        assert upgraded.resolve_for(first) == {"TOKEN": "ghp_from_before"}
-        assert upgraded.resolve_for(second) == {"TOKEN": "ghp_from_before"}
-        assert upgraded.pending() == []
-        adopted = upgraded.sql("SELECT COUNT(*) FROM secret_bindings")[0][0]
-    assert adopted == 2
-
-    with running_daemon(tmp_path, db) as again:
-        assert again.sql("SELECT COUNT(*) FROM secret_bindings")[0][0] == 2
-        third = again.register_stdio("third", "server-three", {"TOKEN": "gh/token"})
-        assert again.pending(destination_uid=third["uid"]) != []

@@ -62,7 +62,6 @@ _STATUS: dict[str, int] = {
     # somewhere-new): a destination nobody approved yet is a state that waits
     # for a person, not a bad request; a grant that does not verify is refused.
     "SECRET_BINDING_PENDING": 409,
-    "MASTER_KEY_CONFLICT": 503,
     "APPROVAL_PENDING": 202,
     "PRESENCE_GRANT_INVALID": 403,
     "APPROVAL_NOT_FOUND": 404,

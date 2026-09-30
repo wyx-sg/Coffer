@@ -6,8 +6,7 @@ with ``sqlite3.OperationalError: database is locked`` inside
 write ran on the event loop itself, so a concurrent coroutine holding an
 open write transaction (aiosqlite commits only run when the loop advances)
 could never commit — the busy_timeout then expired no matter how long it
-was. The same interleaving hit ``migrate_legacy_keychain`` during real
-daemon startup (secret_migration.failed in the dev log).
+was.
 
 These tests reproduce that interleaving deterministically: an in-flight
 async writer holds the WAL write lock and commits only after a short
@@ -27,7 +26,6 @@ from cryptography.fernet import Fernet
 
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.audit_service import AuditService
-from coffer.application.secret_migration import migrate_legacy_keychain
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
@@ -174,49 +172,3 @@ async def test_adopt_secret_write_survives_inflight_async_writer(
 
     assert resource.name == "jira"
     assert creds.get("mcp/jira/JIRA_API_TOKEN") == "tok-123"
-
-
-async def test_legacy_keychain_migration_survives_inflight_async_writer(
-    tmp_path: pathlib.Path,
-) -> None:
-    db_path = _make_db(tmp_path)
-    creds = EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key())
-
-    class _LegacyKeyring:
-        def __init__(self) -> None:
-            self.data = {"mcp/jira/JIRA_API_TOKEN": "tok-456"}
-
-        def get(self, ref: str) -> str | None:
-            return self.data.get(ref)
-
-        def set(self, ref: str, value: str) -> None:
-            self.data[ref] = value
-
-        def delete(self, ref: str) -> None:
-            self.data.pop(ref, None)
-
-    class _EmptyRepo:
-        async def list(self) -> list:
-            return []
-
-    class _Audit:
-        async def record(self, *args, **kwargs) -> None:
-            pass
-
-    lock_held = asyncio.Event()
-
-    async def migrate() -> int:
-        await lock_held.wait()
-        return await migrate_legacy_keychain(
-            kinds={},
-            repo=_EmptyRepo(),
-            legacy=_LegacyKeyring(),
-            store=creds,
-            audit=_Audit(),
-            extra_refs=["mcp/jira/JIRA_API_TOKEN"],
-        )
-
-    _, moved = await asyncio.gather(_inflight_writer(db_path, lock_held), migrate())
-
-    assert moved == 1
-    assert creds.get("mcp/jira/JIRA_API_TOKEN") == "tok-456"

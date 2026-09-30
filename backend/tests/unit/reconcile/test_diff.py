@@ -22,8 +22,8 @@ def test_a_changed_parameter_is_a_modification_not_presence() -> None:
     longer writes, is drift."""
     (d,) = diff(
         "t",
-        [_item("a", command="coffer memory context --agent-uid u1")],
-        [_item("a", command="coffer memory context --agent u1")],
+        [_item("a", command="/new/coffer memory hook --agent-uid u1")],
+        [_item("a", command="/old/coffer memory hook --agent-uid u1")],
     )
     assert d.op is Op.MODIFY
     assert d.changed_params == ("command",)

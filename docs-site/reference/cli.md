@@ -2066,23 +2066,6 @@ Every partition left holding undistilled entries is distilled in the same call; 
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  |  |
 
-### memory context
-
-```sh
-coffer memory context [OPTIONS]
-```
-
-Print the composed session-start context to stdout.
-
-This is the text the installed hook (``coffer memory hook``) delivers at session start, printed for you to read. It prints nothing, and exits 0, when the daemon is not running.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
-| `--cwd` | option | text | required | The session's working directory |
-| `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
-| `--hook-event` | option | text | `""` | Print the text as this hook event's JSON additionalContext instead of plain |
-
 ### memory hook
 
 ```sh

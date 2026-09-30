@@ -92,11 +92,10 @@ def _is_coffer_entry(entry: Any) -> bool:
 def _drop_coffer_entries(hooks: dict[str, Any], *, keep_event: str | None = None) -> None:
     """Remove every Coffer-marked entry from every event in `hooks`, in place.
 
-    Every event, not only the one this build installs on: an older build put
-    Codex's hook on `UserPromptSubmit`, and a reinstall that looked only at
-    `SessionStart` would leave that entry behind to fire (or fail) beside the
-    new one. An event array left empty is dropped — except `keep_event`, which
-    the caller is about to append to.
+    Every event, not only the ones this build installs on, so a marked entry
+    on any other event is never left behind to fire (or fail) beside the new
+    ones. An event array left empty is dropped — except `keep_event`, which the
+    caller is about to append to.
     """
     for event in list(hooks):
         entries = hooks[event]
@@ -121,8 +120,8 @@ def install_entry(
 ) -> str:
     """Return `text` with Coffer's hook entry for `event` inserted/replaced.
 
-    Idempotent: every prior Coffer entry — on `event` or on any other event an
-    older build used — is dropped and one fresh entry carrying `command` is
+    Idempotent: every prior Coffer entry — on `event` or on any other event —
+    is dropped and one fresh entry carrying `command` is
     appended to `event`; every other entry — another event entirely, or a
     foreign hook on this SAME event — is left untouched.
     """

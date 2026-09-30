@@ -23,8 +23,7 @@ async def enabled_mcp_servers(
     agents whose **uid** it names — a scope is a reference to another resource,
     so it holds the identity, not the label (ADR
     resource-identity-is-an-immutable-uid). A session that reported no identity
-    (``session_agent_uid is None`` — a hand-configured shim, or one installed by
-    a Coffer old enough to have written ``--agent <name>``) sees only unscoped
+    (``session_agent_uid is None`` — e.g. a hand-configured shim) sees only unscoped
     servers, i.e. strictly less, never more.
 
     Names come back rather than uids because the caller's next move is to build

@@ -7,9 +7,7 @@ Codex gets top-level ``model`` + ``model_provider = "coffer"`` and a
 its ``auth`` command (``auth.command`` / ``auth.args``), which prints the
 agent's local model-proxy token, with ``supports_websockets = false`` and
 ``requires_openai_auth = false`` — so a Codex the user starts in their own
-terminal needs nothing exported, and no key rides its environment. The
-``COFFER_PROVIDER_KEY`` shell exclusion earlier builds added is dropped on every
-write and every de-projection.
+terminal needs nothing exported, and no key rides its environment.
 
 When the connection curates a model set, ``model_catalog_json`` points at a
 Coffer-owned catalogue whose entries carry each model's context window, a 90%
@@ -27,7 +25,6 @@ from dataclasses import dataclass
 
 import tomlkit
 
-from coffer.domain.provider.codex_shell_env import drop_legacy_shell_env_exclude
 from coffer.domain.provider.model_binding import ProjectedModel
 
 #: The ``model_providers`` table key Coffer manages, and the ``model_provider``
@@ -168,7 +165,6 @@ def apply_codex_provider(
     auth_table["command"] = auth.command
     auth_table["args"] = list(auth.args)
     block["auth"] = auth_table
-    drop_legacy_shell_env_exclude(doc)
     doc["model_providers"][provider_id] = block
     return tomlkit.dumps(doc)
 
@@ -181,13 +177,11 @@ def remove_codex_provider(
     ``model_provider``, ``model`` and a ``model_reasoning_effort`` equal to
     ``managed_effort`` go only while ``model_provider`` points at Coffer (a
     user-selected provider is left untouched); a Coffer-owned catalogue pointer
-    and the ``COFFER_PROVIDER_KEY`` shell exclusion an earlier build added go
-    too."""
+    goes too."""
     if not text.strip():
         return ""
     doc = tomlkit.parse(text)
     _pop_managed_catalog(doc)
-    drop_legacy_shell_env_exclude(doc)
     providers = doc.get("model_providers")
     if isinstance(providers, MutableMapping):
         providers.pop(provider_id, None)

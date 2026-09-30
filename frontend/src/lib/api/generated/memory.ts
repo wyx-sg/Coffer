@@ -4,34 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/memory/context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Context
-         * @description Compose the session-start payload for one directory.
-         *
-         *     The one route a real agent's own session reaches. ``body.agent_uid`` names
-         *     who fired and nothing more: it does not reach ``compose_context``, which has
-         *     no caller identity to narrow by, and exists here for ``record_fired`` — the
-         *     audited "this agent's hook fired" event. ``record_fired`` is what the
-         *     installed hook sets; a management surface previewing the payload leaves it
-         *     false so it never records a fire that did not happen ("Audit every
-         *     delivery fire").
-         */
-        post: operations["context_api_v1_memory_context_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/memory/deliveries": {
         parameters: {
             query?: never;
@@ -392,50 +364,6 @@ export interface components {
             sources_read: number;
             /** Sources Skipped */
             sources_skipped: number;
-        };
-        /**
-         * ComposedContextOut
-         * @description The session-start payload, and enough accounting to audit the ceiling.
-         *
-         *     There is no ``layers`` field any more. Delivery is not a two-tier digest: it
-         *     is the whole index of the current repository's partition plus what is known
-         *     about the developer, so naming a layer would name a structure the payload no
-         *     longer has ("Deliver the index and the notes path at session start").
-         */
-        ComposedContextOut: {
-            /** Notes Included */
-            notes_included: number;
-            /** Notes Omitted */
-            notes_omitted: number;
-            /** Partition */
-            partition: string;
-            /** Text */
-            text: string;
-        };
-        /**
-         * ContextQuery
-         * @description Body for composing a session-start context ("Deliver the index and the
-         *     notes path at session start").
-         *
-         *     A ``POST`` despite being a read, because the query is structured rather than
-         *     a couple of scalar filters (knowledge's ``search`` is a ``POST`` for the same
-         *     reason) — nothing here has a side effect on the memory tree itself.
-         */
-        ContextQuery: {
-            /** Agent Uid */
-            agent_uid?: string | null;
-            /** Ceiling Tokens */
-            ceiling_tokens?: number | null;
-            /**
-             * Cwd
-             * @default
-             */
-            cwd?: string;
-            /**
-             * Record Fired
-             * @default false
-             */
-            record_fired?: boolean;
         };
         /** DeliveredOut */
         DeliveredOut: {
@@ -880,50 +808,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    context_api_v1_memory_context_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContextQuery"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ComposedContextOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     deliveries_api_v1_memory_deliveries_get: {
         parameters: {
             query?: never;

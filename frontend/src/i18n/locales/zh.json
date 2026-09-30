@@ -1707,7 +1707,6 @@
     "APPROVAL_NOT_PENDING": "该审批已被处理。",
     "SECRET_NAME_INVALID": "密钥名称无效。",
     "SECRET_NOT_FOUND": "没有以该名称存储的密钥。",
-    "MASTER_KEY_CONFLICT": "发现了两把不同的主密钥（一把在钥匙串中，另一把在别处）。Coffer 不会替你选择：请保留加密密钥时所用的那把，删除另一把。",
     "CUSTOM_TOOL_NOT_FOUND": "没有这个名称的自定义工具或分组",
     "NOT_A_CUSTOM_TOOL_GROUP": "这个 MCP 服务器不是自定义工具分组",
     "CUSTOM_TOOL_EXISTS": "这个分组中已有同名工具",

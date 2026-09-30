@@ -40,7 +40,7 @@ config key, which CLI path, and, for Codex, where the user's trust in the hook
 is recorded. `trust()` reads that record and never writes it. An agent whose
 projection has no delivery hook raises `DeliveryUnsupported`. `record_fired` is the other
 half of "Audit every delivery fire": it is called by whatever actually serves the context (the
-`coffer memory context` CLI), never by this service itself, so each audited
+memory hook service behind `coffer memory hook`), never by this service itself, so each audited
 fire is a real one.
 """
 
@@ -268,8 +268,7 @@ class DeliveryService:
 
     def installed_hook(self, site: HookSite) -> InstalledHook | None:
         """Coffer's marker-scoped entry in `site`'s file — on whichever event
-        it sits, which for an older build's may not be the one this build
-        installs on — or `None`. Raises like :meth:`installed_command`."""
+        it sits — or `None`. Raises like :meth:`installed_command`."""
         text = self._store.read_text(site.path) or ""
         try:
             return site.adapter.find(text)

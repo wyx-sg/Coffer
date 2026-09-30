@@ -34,7 +34,7 @@ function use(d: FakeDaemon) {
 const claude = typeRow({ type: "claude_code", uid: "agt_a" });
 const both = [
   { key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" },
-  { key: "memory_hook", installed: true, detail: "coffer memory context --agent-uid agt_a" },
+  { key: "memory_hook", installed: true, detail: "coffer memory hook --agent-uid agt_a" },
 ];
 
 afterEach(() => vi.clearAllMocks());

@@ -209,17 +209,10 @@ class Kind:
     # Optional kind-specific name validator, called BEFORE persistence by every
     # path that sets a name — registration AND rename. Raises to reject the
     # name. Used by `mcp_server` to reserve the `__` tool/prompt namespace
-    # separator (spec mcp-gateway "Namespace every upstream capability").
+    # separator (spec mcp-gateway "Namespace every upstream capability") and to
+    # cap its names at 24 characters (spec mcp-gateway "Manage MCP servers as
+    # resources").
     validate_name: Callable[[str], None] | None = None
-    # Optional validator for the name of a resource being CREATED here — run by
-    # ``ResourceService.register`` only when it mints the uid, after
-    # ``validate_name``. A rule that should hold for every name from now on
-    # without refusing the rows already registered goes here: a row that
-    # arrives from another machine carries its uid, so an older, longer name
-    # still converges, and nothing re-validates a row that is loaded. Used by
-    # `mcp_server` for its 24-character cap (spec mcp-gateway "Manage MCP
-    # servers as resources").
-    validate_new_name: Callable[[str], None] | None = None
     # Optional semantic config validation beyond ``config_schema`` shape,
     # applied at REGISTRATION only (already shape-validated). Given the validated
     # config dict; raises ``ValueError`` to reject the write (e.g. a channel's

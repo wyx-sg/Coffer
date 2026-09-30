@@ -44,9 +44,6 @@ def pending_for(
         r = c.get("/secrets/approvals", params={"status": "pending", "destination_uid": uid})
     else:
         r = c.get("/secrets/approvals", params={"status": "pending"})
-    if r.status_code == 404:
-        # A daemon from before the secret boundary has no approvals to wait on.
-        return []
     _cli_client.check(r, verbose=verbose)
     rows = list(r.json().get("approvals", []))
     if not refs:

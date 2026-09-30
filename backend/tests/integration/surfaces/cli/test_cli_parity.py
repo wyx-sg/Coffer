@@ -161,11 +161,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # gained entries (spec memory "Update memory in one action"). `hook` is
     # what every installed memory hook entry runs and must not move (spec
     # memory "Cover memory management on REST and the CLI"); installing those
-    # entries is part of `agent connect`. `context` is what an older build's
-    # hook runs until the reconciler rewrites it. `trigger` manages the authored guards in
+    # entries is part of `agent connect`. `trigger` manages the authored guards in
     # vault/memory-triggers/; `delivered` prints the delivery views. No switch
     # either (spec memory "Serve every partition to every agent").
-    "memory": {*_LIFECYCLE - _SWITCH, "sync", "context", "hook", "delivered", "trigger"},
+    "memory": {*_LIFECYCLE - _SWITCH, "sync", "hook", "delivered", "trigger"},
     "memory trigger": {"list", "add", "arm", "disarm", "delete"},
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and

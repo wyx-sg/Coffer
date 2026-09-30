@@ -2,43 +2,31 @@
 
 Owns the ``_secret_store`` / ``_master_key_manager`` provider pairs,
 ``init_secret_store`` (resolves the Fernet master key, builds the
-encrypted store, publishes both DI singletons) and
-``run_legacy_keychain_migration`` (best-effort one-time move of pre-0.2
-OS-keychain secrets into the store).  Kept separate from ``dependencies.py``
-and ``app.py`` to keep all three under the 400-line guideline.
+encrypted store, publishes both DI singletons).  Kept separate from
+``dependencies.py`` and ``app.py`` to keep all three under the 400-line
+guideline.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import text as _sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from coffer.application.audit_service import AuditService
-from coffer.application.resource_service import ResourceService
-from coffer.application.secret_migration import (
-    migrate_legacy_keychain,
-)
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SecretMissing
-from coffer.domain.resource import Kind
 from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
-from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
-from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.secret_boundary_wiring import (
-    adopt_existing_bindings,
-    init_secret_boundary,
-    make_master_key_manager,
+    boundary_resolver as boundary_resolver,
 )
 from coffer.surfaces.http.secret_boundary_wiring import (
-    boundary_resolver as boundary_resolver,
+    init_secret_boundary,
+    make_master_key_manager,
 )
 
 _secret_store: EncryptedSecretStore | None = None
@@ -100,13 +88,12 @@ async def init_secret_store(engine: AsyncEngine, db_path: pathlib.Path) -> Secre
     """Resolve the master key, build the encrypted store, publish DI singletons.
 
     Envelope encryption: resolve the Fernet master key (file first, then
-    keychain), build the encrypted store, and replace every KeyringAdapter
-    injection point.  Creating a brand-new key is only legal while the
+    keychain), build the encrypted store.  Creating a brand-new key is only legal while the
     secrets table is empty — otherwise existing ciphertext would be
     silently undecryptable, so we fail loudly instead.
     """
     # The key's home is chosen by how this build was made (a signed release's
-    # Keychain access group, or the development file / legacy keychain pair).
+    # Keychain access group, or the development file / login-keychain pair).
     master_key_manager = make_master_key_manager(db_path)
     async with engine.connect() as conn:
         ciphertext_rows = (
@@ -140,66 +127,3 @@ async def init_secret_store(engine: AsyncEngine, db_path: pathlib.Path) -> Secre
     # secret is built (every one gets ``boundary_resolver``).
     init_secret_boundary(db_path, secret_store, master_key_manager)
     return SecretWiring(store=secret_store, master_key=master_key_manager)
-
-
-_logger = logging.getLogger(__name__)
-
-
-async def run_secret_startup(
-    kinds: dict[str, Kind],
-    sm: async_sessionmaker[AsyncSession],
-    secret_store: EncryptedSecretStore,
-    audit: AuditService,
-    resources: ResourceService,
-) -> None:
-    """The secret steps that need every kind registered, once per start.
-
-    The legacy keychain move below, the audit of a master key the signed build
-    moved into its Keychain access group, and the one-time adoption of every
-    secret binding in use before the secret boundary existed — so upgrading
-    stops nothing that already worked (spec secret "Hold a secret for a
-    new destination until a person approves it").
-    """
-    await run_legacy_keychain_migration(kinds, sm, secret_store, audit)
-    manager = get_master_key_manager()
-    if manager.migrated_from is not None:
-        await audit.record(
-            AuditEventType.MASTER_KEY_RELOCATED.value,
-            actor="system",
-            details={"from": manager.migrated_from, "to": "keychain_access_group"},
-        )
-    try:
-        adopted = await adopt_existing_bindings(resources, audit)
-        if adopted:
-            _logger.info("secret_boundary.adopted", extra={"bindings": adopted})
-    except Exception:
-        # Not adopting leaves the marker unset, so the next start tries again;
-        # meanwhile a binding with no approval waits, which is the safe side.
-        _logger.exception("secret_boundary.adoption_failed")
-
-
-async def run_legacy_keychain_migration(
-    kinds: dict[str, Kind],
-    sm: async_sessionmaker[AsyncSession],
-    secret_store: EncryptedSecretStore,
-    audit: AuditService,
-) -> None:
-    """One-time move of legacy OS-keychain secrets into the encrypted store.
-
-    No-op once migrated.  Best-effort: failures must not block startup.
-    Every citer is a resource now — the global embedding config was the last
-    non-resource owner of a ref, and it went with the rest of the embedding
-    layer (spec knowledge "Carry no vector or embedding dependency").
-    """
-    try:
-        moved = await migrate_legacy_keychain(
-            kinds,
-            SqlAlchemyResourceRepo(sm),
-            KeyringAdapter(),
-            secret_store,
-            audit,
-        )
-        if moved:
-            _logger.info("secret_migration.completed", extra={"moved": moved})
-    except Exception:
-        _logger.exception("secret_migration.failed")

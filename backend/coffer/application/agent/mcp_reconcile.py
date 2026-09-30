@@ -10,22 +10,14 @@ same failure PR #413 found in the delivery hook.
 **What is wanted.** Whether an agent is connected is the user's act
 (connect / disconnect, spec agent-registry "Connect an agent to Coffer in one
 action"), and the entry itself is the record of it. So an agent is wanted
-connected exactly when an entry for it exists somewhere Coffer looks — its own
-file, or another agent's file that still holds an entry carrying its uid — and
-the target never adds an entry to an agent that holds none.
+connected exactly when its own MCP file (for Claude Code with a custom config
+directory, ``<dir>/.claude.json``) holds a ``coffer`` entry, and the target
+never adds an entry to an agent that holds none. Every entry that is not
+Coffer's is never touched.
 
-**Where an entry belongs.** Each agent's own MCP file, which for Claude Code
-with a custom config directory is ``<dir>/.claude.json``. An entry an older
-Coffer wrote into the standard ``~/.claude.json`` for a custom-directory agent
-(it carries that agent's uid) is *misplaced*: the pass installs it into the
-agent's own file first and removes it from the other file second, so a
-failure between the two leaves the entry in both places rather than neither.
-Entries naming no registered agent, and every entry that is not Coffer's, are
-never touched.
-
-**Direction policy.** A stale entry is repaired; a misplaced one is moved.
-When the shim cannot be found there is nothing correct to write: the item is
-*blocked* (``missing_launcher``) and reported until the launcher is back.
+**Direction policy.** A stale entry is repaired. When the shim cannot be found
+there is nothing correct to write: the item is *blocked* (``missing_launcher``)
+and reported until the launcher is back.
 """
 
 from __future__ import annotations
@@ -35,17 +27,15 @@ import logging
 import pathlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from itertools import pairwise
 from typing import Protocol
 
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileFormat, spec_for
-from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS, descriptor_for
+from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_injection import McpInjectionSpec
 from coffer.domain.agent.mcp_install import (
     apply_install,
-    apply_uninstall,
     desired_entry,
     installed_entry,
 )
@@ -57,7 +47,6 @@ from coffer.domain.reconcile import (
     Difference,
     Disposition,
     Item,
-    Op,
     PlannedChange,
     Subject,
     Trigger,
@@ -90,15 +79,6 @@ class _Home:
     path: pathlib.Path
     fmt: ConfigFileFormat
     injection: McpInjectionSpec
-
-
-@dataclass(frozen=True)
-class _Found:
-    """A coffer entry found in one file."""
-
-    path: pathlib.Path
-    owner: str | None  # the --agent-uid it carries
-    params: dict[str, object]
 
 
 def _title(r: Resource) -> str:
@@ -136,47 +116,26 @@ class McpEntryTarget:
             homes[row.uid] = _Home(row, spec.path, spec.format, injection)
         return homes
 
-    def _candidate_files(
-        self, homes: dict[str, _Home]
-    ) -> dict[pathlib.Path, tuple[ConfigFileFormat, McpInjectionSpec]]:
-        """Every file an entry may sit in: each agent's own, plus each type's
-        standard file (where older builds wrote every agent's entry)."""
-        files = {h.path: (h.fmt, h.injection) for h in homes.values()}
-        for d in AGENT_DESCRIPTORS.values():
-            if d.mcp is None:
+    def _scan(self, homes: dict[str, _Home]) -> dict[str, dict[str, object]]:
+        """The installed coffer entry of each agent whose own file holds one,
+        by agent uid. A file two agents share is judged under the first."""
+        found: dict[str, dict[str, object]] = {}
+        seen: set[pathlib.Path] = set()
+        for uid, home in homes.items():
+            if home.path in seen:
                 continue
-            spec = spec_for(d.type, d.mcp.config_key, d.default_config_dir())
-            files.setdefault(spec.path, (spec.format, d.mcp))
-        return files
-
-    def _scan(self, homes: dict[str, _Home]) -> list[_Found]:
-        found: list[_Found] = []
-        for path, (fmt, inj) in self._candidate_files(homes).items():
-            text = self._store.read_text(path)
+            seen.add(home.path)
+            text = self._store.read_text(home.path)
             if not text:
                 continue
             try:
-                params = installed_entry(fmt, text, container_key=inj.container_key)
+                params = installed_entry(home.fmt, text, container_key=home.injection.container_key)
             except ConfigFileFormatInvalid:
-                _log.warning("mcp_entry: %s does not parse; left alone", path)
+                _log.warning("mcp_entry: %s does not parse; left alone", home.path)
                 continue
-            if params is None:
-                continue
-            args = list(params.get("args") or [])
-            owner = next((v for f, v in pairwise(args) if f == "--agent-uid"), None)
-            found.append(_Found(path, owner, params))
+            if params is not None:
+                found[uid] = params
         return found
-
-    @staticmethod
-    def _key(found: _Found, homes: dict[str, _Home]) -> str | None:
-        """The key an entry is judged under: the agent whose own file holds
-        it, unless it carries another registered agent's uid and that agent's
-        own file is elsewhere (misplaced). ``None``: nobody's to judge."""
-        home_of_file = next((u for u, h in homes.items() if h.path == found.path), None)
-        owner = found.owner
-        if owner is not None and owner in homes and homes[owner].path != found.path:
-            return f"{owner}@{found.path}"
-        return home_of_file
 
     def _shim(self) -> str | None:
         try:
@@ -188,12 +147,7 @@ class McpEntryTarget:
 
     async def desired(self) -> Sequence[Item]:
         homes = await self._homes()
-        wanted: set[str] = set()
-        for found in self._scan(homes):
-            key = self._key(found, homes)
-            if key is None:
-                continue
-            wanted.add(key.split("@", 1)[0])
+        wanted = self._scan(homes)
         shim = self._shim()
         items: list[Item] = []
         for uid, home in homes.items():
@@ -214,56 +168,29 @@ class McpEntryTarget:
     async def observe(self) -> Sequence[Item]:
         homes = await self._homes()
         items: list[Item] = []
-        for found in self._scan(homes):
-            key = self._key(found, homes)
-            if key is None:
-                continue
-            uid = key.split("@", 1)[0]
+        for uid, params in self._scan(homes).items():
+            home = homes[uid]
             items.append(
                 Item(
-                    key=key,
-                    subject=Subject("agent", uid, _title(homes[uid].agent)),
-                    params=found.params,
-                    file=str(found.path),
-                    text=_text(found.params),
+                    key=uid,
+                    subject=Subject("agent", uid, _title(home.agent)),
+                    params=params,
+                    file=str(home.path),
+                    text=_text(params),
                 )
             )
         return items
 
     def decide(self, differences: Sequence[Difference], trigger: Trigger) -> Sequence[Decision]:
-        blocked_adds = {
-            d.key
-            for d in differences
-            if d.op is not Op.REMOVE and d.desired is not None and not d.desired.params["command"]
-        }
         out: list[Decision] = []
         for d in differences:
-            uid = d.key.split("@", 1)[0]
-            if d.key in blocked_adds or (d.op is Op.REMOVE and uid in blocked_adds):
+            if d.desired is not None and not d.desired.params["command"]:
                 out.append(
                     Decision(
                         Disposition.BLOCKED,
                         "missing_launcher",
                         "The coffer-mcp-shim launcher cannot be found, so there is no "
                         "correct entry to write.",
-                    )
-                )
-            elif d.op is Op.REMOVE:
-                out.append(
-                    Decision(
-                        Disposition.REPAIR,
-                        "misplaced_entry",
-                        f"The entry for this agent sits in {d.file}, which the agent "
-                        "does not read; it is moved to the agent's own file.",
-                    )
-                )
-            elif d.op is Op.ADD:
-                out.append(
-                    Decision(
-                        Disposition.REPAIR,
-                        "misplaced_entry",
-                        "The agent's entry is in a file the agent does not read; it is "
-                        "installed into the agent's own file.",
                     )
                 )
             else:
@@ -280,36 +207,10 @@ class McpEntryTarget:
     async def apply(self, change: PlannedChange) -> Applied:
         d = change.difference
         homes = await self._homes()
-        uid = d.key.split("@", 1)[0]
+        uid = d.key
         home = homes.get(uid)
         if home is None:
             raise LookupError(f"agent {uid} is no longer registered")
-        if d.op is Op.REMOVE:
-            assert d.observed is not None and d.observed.file is not None
-            path = pathlib.Path(d.observed.file)
-            # Install first, remove second: the entry leaves the wrong file only
-            # once the agent's own file carries the current one.
-            own = self._store.read_text(home.path) or ""
-            inj = home.injection
-            if installed_entry(home.fmt, own, container_key=inj.container_key) != desired_entry(
-                self._shim(), uid
-            ):
-                raise RuntimeError(f"{home.path} does not hold the agent's entry yet; not moved")
-            before = self._store.read_text(path)
-            if before is None:
-                raise FileNotFoundError(str(path))
-            new = apply_uninstall(home.fmt, before, container_key=home.injection.container_key)
-            self._store.write_text_atomic(
-                path, new, expected_fingerprint=self._store.fingerprint(before)
-            )
-            return Applied(
-                AuditEvent(
-                    AuditEventType.AGENT_MCP_UNINSTALLED.value,
-                    home.agent,
-                    {"path": str(path), "moved_to": str(home.path)},
-                ),
-                undo=self._restore(path, before),
-            )
         shim = self._resolve_shim()  # ShimNotFound fails the item before any write
         before = self._store.read_text(home.path)
         new = apply_install(

@@ -133,13 +133,6 @@ def effective_port() -> int:
     return DEFAULT_PORT if fixed is None else fixed
 
 
-#: Keys an earlier build wrote that no current setting reads. Every read
-#: ignores them and every write removes them (spec daemon "Change residency from
-#: the settings page or the command line"): ``idle_shutdown_hours`` configured
-#: an idle stand-down the daemon no longer has.
-_RETIRED_KEYS = frozenset({"idle_shutdown_hours"})
-
-
 def _merge(**fields: Any) -> None:
     """Write ``fields`` into the config file, keeping everything else.
 
@@ -149,11 +142,8 @@ def _merge(**fields: Any) -> None:
     preservation is the whole forward-compatibility story — earlier builds also
     stamped a ``version``, which nothing ever read or branched on; files that
     carry it keep it, as an unknown key like any other.
-
-    The one exception is :data:`_RETIRED_KEYS`: a setting that no longer
-    decides anything is dropped on every write, so the file stops stating it.
     """
-    payload = {k: v for k, v in (_read_raw() or {}).items() if k not in _RETIRED_KEYS}
+    payload = dict(_read_raw() or {})
     payload.update(fields)
     write_json_0600(config_path(), payload)
 
