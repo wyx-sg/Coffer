@@ -15,6 +15,7 @@ lying about the signature to win an argument with a linter.
 from __future__ import annotations
 
 import pathlib
+import time
 from typing import Any
 
 import httpx
@@ -184,3 +185,29 @@ async def test_a_quoted_message_that_cannot_be_read_degrades_to_empty(tmp_path):
 
     assert await _fetch_quoted(_Failing(), tmp_path) == ([], ())
     assert await _fetch_quoted(_RecordingGet({"code": 4010}), tmp_path) == ([], ())
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a thread older than the platform's 7-day reach says what it cannot show",
+)
+async def test_thread_older_than_seven_days_carries_a_note(tmp_path):
+    now = time.time()
+    root = {**_text_message("a@x.com", "/dod"), "message_sent_time": now - 14 * 86400}
+    reply = {**_text_message("b@x.com", "hi"), "message_sent_time": now - 60}
+    get = _RecordingGet({"code": 0, "next_cursor": "", "thread_messages": [root, reply]})
+
+    items, _ = await _fetch(get, tmp_path)
+
+    assert [i.sender for i in items] == ["a@x.com", "b@x.com", "note"]
+    assert "7 days" in items[-1].text
+
+
+async def test_recent_thread_carries_no_note(tmp_path):
+    now = time.time()
+    root = {**_text_message("a@x.com", "start"), "message_sent_time": now - 3600}
+    get = _RecordingGet({"code": 0, "next_cursor": "", "thread_messages": [root]})
+
+    items, _ = await _fetch(get, tmp_path)
+
+    assert [i.sender for i in items] == ["a@x.com"]

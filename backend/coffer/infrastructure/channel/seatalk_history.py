@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -43,6 +44,31 @@ THREAD_PAGE_MAX = 100
 #: runaway thread cannot stall the turn, and at 20 pages it is far past any
 #: thread a person reads through.
 _THREAD_PAGE_CAP = 20
+
+#: How far back the thread endpoints reach: replies older than this are never
+#: returned, whatever the app shows. A root message is exempt, so an old thread
+#: comes back as its root plus the recent replies and looks nearly empty.
+THREAD_WINDOW_SECONDS = 7 * 24 * 60 * 60
+
+_WINDOW_NOTE = ForwardedItem(
+    sender="note",
+    text=(
+        "SeaTalk returns only the last 7 days of a thread's replies; this thread began "
+        "earlier, so older messages in it are not shown here and cannot be read."
+    ),
+)
+
+
+def _older_than_window(messages: list[Any], now: float) -> bool:
+    """Whether any returned message predates the thread endpoints' reach — only the
+    root can, so this says the thread's earlier replies were cut off."""
+    return any(
+        isinstance(m, dict)
+        and isinstance(m.get("message_sent_time"), int | float)
+        and now - m["message_sent_time"] > THREAD_WINDOW_SECONDS
+        for m in messages
+    )
+
 
 _QUOTED_ENDPOINT = "/messaging/v2/get_message_by_message_id"
 
@@ -107,10 +133,10 @@ async def fetch_thread_context(
             return [], ()
     # Recurse: a forwarded record in the thread flattens to its leaves for text,
     # and its images/files download alongside the direct ones.
-    return (
-        collect_forwarded_items(messages),
-        await thread_media_attachments(client, media_dir, ensure_token, messages),
-    )
+    items = collect_forwarded_items(messages)
+    if _older_than_window(messages, time.time()):
+        items.append(_WINDOW_NOTE)
+    return items, await thread_media_attachments(client, media_dir, ensure_token, messages)
 
 
 async def fetch_quoted_context(

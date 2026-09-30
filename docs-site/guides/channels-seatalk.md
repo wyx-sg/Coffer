@@ -131,6 +131,8 @@ No state is shown before the first attempt. Events that SeaTalk sends while the 
 - **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
 - **Details** — a `## Details` section goes behind a card titled with the answer's first line; **Details** posts it as a reply in the card's thread, **As file** sends it as a `.md`.
 - **Receipt** — SeaTalk has no reactions, so a typing indicator is kept alive every 3 seconds while the turn runs, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
+- **Tool progress** — under the status line, the message shows the newest tool calls, one line each. In a **group** the line names only the tool (`⏳ Bash`), because everyone in the group reads it and a tool's input can carry a command, a query or a path. In a **direct chat** it adds the agent's own one-line description or the file name (`⏳ Bash · list the desktop`), never a raw command.
+- **Replies cannot be deleted or edited.** SeaTalk's Open Platform has no API to withdraw a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them, so Coffer offers no delete button on a streamed reply. Check the answer's basis before relying on it; a wrong reply stays in the chat.
 
 The keep-alive gives up after about 10 minutes with no new content, so a turn that stays silent that long lets its stream lapse. If a stream is ended by SeaTalk — an error or a gap past 30 seconds — Coffer does not reuse it. The partial message stays in the chat and the full reply is sent as ordinary messages.
 
@@ -145,6 +147,8 @@ Where the answer goes:
 - **@mention in the group's main chat** — the bot starts a thread rooted at your message and answers there. It reads no history: the thread holds only your message.
 - **@mention inside a thread** — the bot reads the whole thread, every page of it, oldest first, downloads the images and files earlier messages carry, and answers in that thread.
 - **A thread in a direct chat** — read and answered in the same way. A reply-in-thread under any message in your direct chat stays in the direct chat's conversation, with its context; only a thread opened with `/thread` is a separate conversation. `/thread` posts a message marked `🧵#N title`, and you reply under it.
+
+**What the bot can read of a thread is bounded by SeaTalk, not by Coffer.** SeaTalk returns only replies sent in the **last 7 days**; an older thread comes back as its root message plus whatever is recent, however long it looks in the app. Whisper messages and deleted messages are never returned. Replies sent before the bot joined a group are limited by the group's "Chat history for new members" setting at the time it joined. When a thread is older than that window, Coffer says so in the turn's context so the agent tells you what it could not see instead of guessing. Forward or quote the missing messages to bring them in.
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
@@ -199,6 +203,8 @@ On the channel's page choose **Replace secret** (in the **⋯** menu, or under *
 | Card rewrite window | 7 days, interactive cards only |
 | Card content | 6 buttons in up to 3 rows; title 120 characters, description 1,000 |
 | Thread pages | 100 messages per page, bounded page count |
+| Thread history | Replies from the last 7 days only; no whispers or deleted messages |
+| Withdrawing a bot message | Not available |
 | Connections per app | 1 |
 
 ## Troubleshooting
@@ -214,6 +220,9 @@ The channel is not connected yet. Wait until `coffer channel show` shows `connec
 
 **`connected`, but the bot never answers.**
 Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.
+
+**The bot says it can only see a few messages of a thread.**
+SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. A thread you started today reads in full. Forward or quote the older messages to give the agent that context.
 
 **The streamed reply stops midway and the answer arrives again below it.**
 SeaTalk ended the stream. The full answer is the one sent below.
