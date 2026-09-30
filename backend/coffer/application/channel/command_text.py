@@ -17,13 +17,13 @@ Application layer only: no infrastructure import here.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.channel.agent_routing import effective_agent, routable_choices
 from coffer.application.channel.conversation_ops import inherited_setting
+from coffer.application.channel.selection_cards import path_label
 from coffer.domain.chat.errors import ConversationNotFound
 
 if TYPE_CHECKING:
@@ -37,6 +37,7 @@ __all__ = [
     "Settings",
     "age",
     "agent_display",
+    "default_cwd",
     "dir_display",
     "model_display",
     "resolve_agent",
@@ -99,10 +100,8 @@ def unknown_agent(binding: ChannelBinding, agents: AgentCatalogPort, typed: str)
 
 
 def dir_display(path: str | None) -> str:
-    """A directory as a one-word name (its basename), or ``default directory``."""
-    if not path:
-        return "default directory"
-    return os.path.basename(os.path.normpath(path)) or path
+    """A directory as a person reads it (``~/src/app``), or ``Default directory``."""
+    return path_label(path)
 
 
 def age(when: datetime, *, now: datetime | None = None) -> str:
@@ -155,7 +154,7 @@ async def settings_in_effect(
             conv = None
         if conv is not None:
             cfg = await commands._conversations.get_agent_config(row.active_conversation_id)
-            cwd = cfg.cwd or _default_cwd(binding)
+            cwd = cfg.cwd or default_cwd(binding)
             return Settings(conv.agent_key, cfg.model, cfg.effort, cwd, conv)
     group = None
     if conversation_thread_id and chat_kind == "group":
@@ -173,11 +172,12 @@ async def settings_in_effect(
         agent,
         model or defaults.get("model"),
         effort or defaults.get("effort"),
-        pick("preferred_cwd") or _default_cwd(binding),
+        pick("preferred_cwd") or default_cwd(binding),
     )
 
 
-def _default_cwd(binding: ChannelBinding) -> str | None:
+def default_cwd(binding: ChannelBinding) -> str | None:
+    """The channel's default working directory: where its new conversations start."""
     cwd = (binding.default_agent_config or {}).get("cwd")
     return str(cwd) if cwd else None
 
@@ -194,9 +194,16 @@ async def model_display(commands: ChannelCommands, agent: str, model: str | None
 
 
 async def settings_line(commands: ChannelCommands, settings: Settings) -> str:
-    """``Claude Code · Opus 4.8 high · app`` — one line naming what a turn runs on."""
-    model = await model_display(commands, settings.agent, settings.model)
+    """``Claude Code · Opus 4.8 · High · ~/src/app`` — one line naming what a
+    turn runs on: the agent, the model, the effort (when one is set) and the
+    working directory. The `/new` card and `/status` both read it."""
+    model = (
+        await model_display(commands, settings.agent, settings.model)
+        if settings.model
+        else "Default model"
+    )
+    parts = [agent_display(commands._agents, settings.agent), model]
     if settings.effort:
-        model = f"{model} {settings.effort}"
-    agent = agent_display(commands._agents, settings.agent)
-    return f"{agent} · {model} · {dir_display(settings.cwd)}"
+        parts.append(settings.effort[:1].upper() + settings.effort[1:])
+    parts.append(dir_display(settings.cwd))
+    return " · ".join(parts)

@@ -48,7 +48,7 @@ Channels → Add channel
 
 :::
 
-In the web UI, **Add channel** walks three steps. **Platform** shows what each platform supports and what it needs to connect. **Connect** writes the secret to the credential store and registers the channel in one step; for SeaTalk it reminds you to set event delivery to WebSocket in the SeaTalk Developer Portal *after* connecting, since the portal checks that a connection exists. **Pair** issues a code straight away and waits for your message to the bot (see [Pair your account](#pair-your-account)); **Pair later** closes the dialog and leaves the channel unpaired. A name is letters, digits, dash and underscore, at most 64 characters.
+In the web UI, **Add channel** walks three steps. **Platform** shows what each platform supports and what it needs to connect. **Connect** writes the secret to the credential store and registers the channel in one step; for SeaTalk it reminds you to set event delivery to WebSocket in the SeaTalk Developer Portal *after* connecting, since the portal checks that a connection exists. **Pair** issues a code straight away and waits for your message to the bot (see [Pair your account](#pair-your-account)); **Pair later** closes the dialog and leaves the channel unpaired. The name is any display name, up to 80 characters — spaces and capitals included. Coffer tells channels apart by their ID, so you can rename it later on the channel's **Settings** tab. The command line addresses the channel by a short name Coffer derives from it (`Team bot` becomes `team-bot`, with `-2` added if that is taken); `coffer channel show` prints both.
 
 A registration whose credential reference does not resolve is rejected and nothing is saved. So is one naming a default agent that is not registered in this vault.
 
@@ -115,7 +115,7 @@ When the agent needs a yes or a choice before it goes on — a change it is abou
 
 A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`, `❓ Needs you · …`. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
 
-Two per-channel settings shape this, on the channel's **Settings** tab under **Replies** (**Show steps while working**, **Ping when a turn takes longer than**), or from the CLI:
+Two per-channel settings shape this, on the channel's **Settings** tab under **Replies** (**Long-task ping after**, default 90 seconds, and **Show step lines**), or from the CLI:
 
 - `coffer channel edit <name> --hide-steps` (or `--show-steps`) — keep only the status header and the 💬 line, without the step list. Useful in a busy group.
 - `coffer channel edit <name> --notify-after <seconds>` — the long-turn threshold, 0 to 3600; 0 turns the done line off.
@@ -124,11 +124,11 @@ Messages sent in quick succession are one question. The channel waits for a shor
 
 Both pauses are per-channel settings: on the channel's **Settings** tab under **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
-Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
+Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. Each message that waits is answered "⏳ Queued (n)", n being how many now wait. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
 
 ### Parallel conversations
 
-A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat tells you how many parallel conversations the chat has and whether each one is running, has messages waiting, or is idle.
+A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat lists the parallel threads on one line, each with whether it is running, has messages waiting, or is idle.
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
@@ -148,7 +148,7 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/kb [collection]` | Save the document you just sent into a [knowledge](/guides/knowledge) collection. |
-| `/help` | List the commands, with the same quick actions as `/status`. |
+| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons. |
 
 `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
@@ -205,9 +205,10 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 A conversation normally runs in the Coffer-managed workspace `~/.coffer/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
-Set the allowed directories on the channel's **Settings** tab, in **Directories for /dir** (one absolute path per line). Or from the CLI:
+Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the agent's own); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off. Or from the CLI:
 
 ```sh
+coffer channel edit my-telegram --default-dir ~/src/coffer              # where new conversations start
 coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replaces the list
 coffer channel edit my-telegram --no-dirs                              # allows none
 ```
@@ -217,7 +218,7 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.
 - `/dir default` returns to the channel's default directory.
-- Bare `/dir` shows the directory in effect and offers the allowed ones as a card.
+- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in <path> — started a fresh conversation".
 - A directory outside the list is refused, naming the allowed ones. A channel with no allowed directory answers how to add one.
 
 ### Resume an earlier conversation
@@ -228,11 +229,13 @@ Only conversations this chat opened are offered — never one from the web page 
 
 ### Status and help cards
 
-`/status` answers in words, not ids: the conversation's title (or its `🧵#N` mark), the agent, the model, the effort, the directory, and whether a turn is running or how many messages wait. In a direct chat it also lists the parallel threads, each with its agent and whether it is running, waiting or idle.
+`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model, the effort and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
-`/help` lists the commands and says that anything else goes to the agent.
+`/help` lists the commands on one line and says that anything else is a message to the agent.
 
-On a platform with buttons both answers are cards with **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. The help also arrives once, right after you pair, which is how a platform with no command menu (SeaTalk) shows you what the bot accepts.
+`/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
+
+On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. The help also arrives once, right after you pair, which is how a platform with no command menu (SeaTalk) shows you what the bot accepts.
 
 ### Group defaults on SeaTalk
 

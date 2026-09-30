@@ -229,11 +229,10 @@ describe("useCreateChannel", () => {
     );
   });
 
-  test("a name another channel already holds fails BEFORE any secret is written", async () => {
-    // Writing first would overwrite the live channel's secret and then roll it
-    // back — deleting it — leaving the existing channel dead on its next
-    // restart. The label is checked against the list the scan returns; the uid
-    // of whatever holds it is beside the point.
+  test("a name another channel already holds is stepped past, never refused", async () => {
+    // The person typed a display name; the resource name is Coffer's to pick,
+    // so a clash with another channel's name moves to the next free one rather
+    // than failing the add.
     const api = registeringApi();
     api.GET.mockResolvedValue({
       data: { resources: [{ uid: "u-someone-else", kind: "channel", name: TG.name }] },
@@ -243,11 +242,13 @@ describe("useCreateChannel", () => {
     const { result } = renderHook(() => useCreateChannel(), { wrapper: makeWrapper() });
 
     await act(async () => {
-      await result.current.mutateAsync(plan).catch(() => undefined);
+      await result.current.mutateAsync(plan);
     });
 
-    expect(api.POST).not.toHaveBeenCalled();
-    await waitFor(() => expect(errorToast).toHaveBeenCalled());
+    const register = api.POST.mock.calls.find((c) => c[0] === "/resources");
+    const body = (register?.[1] as { body: Record<string, unknown> }).body;
+    expect(body.name).toBe(`${TG.name}-2`);
+    expect(body.title).toBe(plan.name);
   });
 
   test("toasts when registration fails", async () => {

@@ -60,15 +60,16 @@ async def test_an_out_of_scope_agent_is_unknown_and_not_listed(env: ChannelEnv) 
     assert await env.active_conversation(resource) is None
 
 
-async def test_a_stale_agent_tap_is_ignored(env: ChannelEnv) -> None:
-    """The agent card is gone; a tap from one rendered before this version
-    switches nothing — the namespace no longer exists."""
+async def test_an_agent_tap_outside_the_scope_switches_nothing(env: ChannelEnv) -> None:
+    """An agent card rendered before the scope narrowed still carries the old
+    agent; its tap is refused and nothing sticks."""
     resource, adapter = await _scoped(env, Scope(agents=["builtin"]), buttons=True)
 
     await env.processor.on_callback(tap_event("tg", "owner", "agent:codex"))
 
-    assert adapter.texts() == []
+    assert adapter.texts() == ["That agent is no longer one this channel may drive — send /new."]
     assert await env.thread_preferred_agent(resource) is None
+    assert await env.active_conversation(resource) is None
 
 
 async def test_switch_inside_the_scope_still_works(env: ChannelEnv) -> None:

@@ -54,7 +54,6 @@ export function useChatController() {
   const routeId = isDraft ? undefined : routeParam;
   const { filters, setFilters, search } = useConversationFilters();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [archivingId, setArchivingId] = useState<string | null>(null);
   // The draft's choices, null until New conversation (or a selector) sets them —
   // the defaults are derived below. They are carried into the create call rather
   // than set after the fact because the FIRST turn is the one a user most wants
@@ -169,12 +168,10 @@ export function useChatController() {
     });
   };
 
-  const confirmArchive = () => {
-    if (!archivingId) return;
-    const id = archivingId;
+  // Archive asks nothing first: it loses nothing, and Restore brings it back.
+  const archiveConversation = (id: string) => {
     archiveConv.mutate(id, {
       onSuccess: () => {
-        setArchivingId(null);
         if (routeId === id) navigate(listPath);
       },
     });
@@ -220,13 +217,16 @@ export function useChatController() {
     resetCreateError: () => createConv.reset(),
     renameConversation: (id: string, title: string) => renameConv.mutate({ id, title }),
     deletingId,
+    /** The conversation the delete confirmation names, when it is loaded. */
+    deletingConversation: deletingId
+      ? ([...conversations, ...archivedConversations, activeConv].find(
+          (c) => c?.id === deletingId,
+        ) ?? null)
+      : null,
     requestDelete: setDeletingId,
     confirmDelete,
     deletePending: deleteConv.isPending,
-    archivingId,
-    requestArchive: setArchivingId,
-    confirmArchive,
-    archivePending: archiveConv.isPending,
+    archiveConversation,
     restoreConversation: (id: string) => unarchiveConv.mutate(id),
     restorePending: unarchiveConv.isPending,
   };

@@ -1,8 +1,8 @@
 // src/components/chat/ConversationsFilterBar.tsx — the Conversations list's
 // filters, all in the URL (lib/conversations/filters): source (every source,
-// Coffer, SeaTalk, Telegram — or the one channel a channel's link narrowed it
-// to, shown as a chip that clears back to every source), agent, and the
-// archived view.
+// Coffer, SeaTalk, Telegram), agent, the one channel a channel's link narrowed
+// it to (a chip beside the agent filter that clears back to every source), and
+// the archived view.
 import { useTranslation } from "react-i18next";
 import { Archive, X } from "lucide-react";
 
@@ -26,9 +26,17 @@ interface Props {
   agents: AgentProviderInfo[];
   /** The narrowed-to channel's label, when `filters.channel` is set. */
   channelLabel: string | null;
+  /** The platform of the channel in `filters.channel`, for the source switch. */
+  channelSource?: SourceFilter | null;
 }
 
-export function ConversationsFilterBar({ filters, onChange, agents, channelLabel }: Props) {
+export function ConversationsFilterBar({
+  filters,
+  onChange,
+  agents,
+  channelLabel,
+  channelSource = null,
+}: Props) {
   const { t } = useTranslation();
   const sources: { value: SourceFilter; label: string }[] = [
     { value: "all", label: t("conversations.filters.allSources") },
@@ -39,26 +47,14 @@ export function ConversationsFilterBar({ filters, onChange, agents, channelLabel
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {filters.channel ? (
-        <span className="inline-flex h-control-sm items-center gap-1 rounded-md border border-border bg-surface-raised pl-2 text-xs">
-          {t("conversations.filters.channel", { channel: channelLabel ?? filters.channel })}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("conversations.filters.clearChannel")}
-            onClick={() => onChange({ ...filters, channel: null, source: "all" })}
-          >
-            <X aria-hidden />
-          </Button>
-        </span>
-      ) : (
-        <SkillSegmented
-          label={t("conversations.filters.source")}
-          value={filters.source}
-          options={sources}
-          onChange={(source) => onChange({ ...filters, source })}
-        />
-      )}
+      {/* A channel's link narrows further than its platform: the switch keeps
+          showing that platform, and picking any source drops the channel. */}
+      <SkillSegmented
+        label={t("conversations.filters.source")}
+        value={filters.channel ? (channelSource ?? "all") : filters.source}
+        options={sources}
+        onChange={(source) => onChange({ ...filters, source, channel: null })}
+      />
       <Select
         value={filters.agent ?? ALL_AGENTS}
         onValueChange={(v) => onChange({ ...filters, agent: v === ALL_AGENTS ? null : v })}
@@ -78,6 +74,20 @@ export function ConversationsFilterBar({ filters, onChange, agents, channelLabel
           ))}
         </SelectContent>
       </Select>
+      {filters.channel ? (
+        <span className="inline-flex h-control-sm items-center gap-1 rounded-md bg-accent-soft pl-2 text-xs font-label text-accent-text">
+          {t("conversations.filters.channel", { channel: channelLabel ?? filters.channel })}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-accent-text hover:bg-transparent"
+            aria-label={t("conversations.filters.clearChannel")}
+            onClick={() => onChange({ ...filters, channel: null, source: "all" })}
+          >
+            <X aria-hidden />
+          </Button>
+        </span>
+      ) : null}
       <Button
         variant="ghost"
         size="sm"

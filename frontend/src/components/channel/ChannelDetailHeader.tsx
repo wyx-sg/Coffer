@@ -2,7 +2,8 @@
 // The top of the open channel: its platform mark, "SeaTalk · Team bot", the
 // status pill, one meta line (app id, transport, where it runs), the one
 // primary action the state calls for, and the ⋯ menu with the rest — Send
-// test message, Reconnect, Change machine…, Replace secret, Delete channel.
+// test message, Reconnect, Change machine…, Replace app secret… / bot token…,
+// Delete channel….
 import { useTranslation } from "react-i18next";
 import { KeyRound, Play, Power, RefreshCw, Send } from "lucide-react";
 
@@ -56,7 +57,7 @@ export function ChannelDetailHeader({ channel, view, hasPeer, busy, onCommand }:
     },
     {
       key: "reconnect",
-      label: t("channels.actions.reconnect"),
+      label: t("channels.actions.menu.reconnect"),
       disabled: !view.runsHere || busy,
       onSelect: () => onCommand("reconnect"),
     },
@@ -67,12 +68,12 @@ export function ChannelDetailHeader({ channel, view, hasPeer, busy, onCommand }:
     },
     {
       key: "replaceSecret",
-      label: t(`channels.actions.${secretKey}`),
+      label: t(`channels.actions.menu.${secretKey}`),
       onSelect: () => onCommand("replaceSecret"),
     },
     {
       key: "delete",
-      label: t("channels.actions.delete"),
+      label: t("channels.actions.menu.delete"),
       destructive: true,
       separated: true,
       onSelect: () => onCommand("delete"),

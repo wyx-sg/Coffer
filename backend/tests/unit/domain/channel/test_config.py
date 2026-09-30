@@ -296,3 +296,13 @@ def test_directories_are_absolute_trimmed_and_deduplicated() -> None:
         parse_channel_config(
             {"channel_type": "telegram", "bot_token_ref": "tg/token", "directories": ["rel/path"]}
         )
+
+
+def test_the_default_directory_must_be_absolute() -> None:
+    from coffer.domain.channel.config import parse_channel_config
+
+    base = {"channel_type": "telegram", "bot_token_ref": "tg/token"}
+    parsed = parse_channel_config({**base, "default_agent_config": {"cwd": "/src/app"}})
+    assert parsed.default_agent_config == {"cwd": "/src/app"}
+    with pytest.raises(ValidationError, match="absolute"):
+        parse_channel_config({**base, "default_agent_config": {"cwd": "src/app"}})

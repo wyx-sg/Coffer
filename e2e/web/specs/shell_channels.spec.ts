@@ -112,22 +112,25 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     // Settings save as they change.
     await page.getByRole("tab", { name: "Settings" }).click();
     await expect(page).toHaveURL(new RegExp(`/channels/${uid}/settings$`));
-    await page.getByLabel("Ping when a turn takes longer than").fill("300");
-    await page.getByLabel("Directories for /dir").fill(dir);
+    await page.getByLabel("Long-task ping after").fill("300");
+    await page.getByLabel("Default", { exact: true }).fill(dir);
+    await page.getByLabel("Default", { exact: true }).blur();
     await expect(page.getByTestId("channel-save-state")).toHaveText("Saved");
     await expect
       .poll(async () => {
         const r = await fetch(`${base}/resources/${uid}`, { headers });
         const body = (await r.json()) as { config: Record<string, unknown> };
-        return [body.config.notify_after_seconds, body.config.directories];
+        const agentConfig = body.config.default_agent_config as
+          | Record<string, unknown>
+          | null
+          | undefined;
+        return [body.config.notify_after_seconds, agentConfig?.cwd];
       })
-      .toEqual([300, [dir]]);
+      .toEqual([300, dir]);
 
     await page.reload();
-    await expect(
-      page.getByLabel("Ping when a turn takes longer than"),
-    ).toHaveValue("300");
-    await expect(page.getByLabel("Directories for /dir")).toHaveValue(dir);
+    await expect(page.getByLabel("Long-task ping after")).toHaveValue("300");
+    await expect(page.getByLabel("Default", { exact: true })).toHaveValue(dir);
 
     // Delete, from the danger zone.
     await page.getByRole("button", { name: "Delete…" }).click();

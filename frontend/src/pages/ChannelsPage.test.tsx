@@ -328,7 +328,7 @@ test("re-pair asks first, then shows the new code", async () => {
 test("delete confirms, keeps conversations, and leaves the channel's address", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);
   fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete channel" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete channel…" }));
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent("Conversations stay in Conversations");
   h.channels = h.channels.filter((c) => (c as ResourceOut).uid !== TEAM.uid);

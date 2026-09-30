@@ -211,9 +211,8 @@ def menu_entries(*, group: bool) -> tuple[ChannelCommand, ...]:
 
 
 def help_text() -> str:
-    """The ``/help`` body, rendered from the roster."""
-    lines = ["Coffer channel commands — anything else you type goes to the agent:"]
-    for command in COMMAND_ROSTER:
-        head = f"/{command.name} {command.args}".rstrip()
-        lines.append(f"{head} — {command.description}")
-    return "\n".join(lines)
+    """The ``/help`` body, rendered from the roster: every command with its
+    arguments on one line, then what anything else is. The one-line
+    descriptions live in the platform's own command menu (Telegram)."""
+    heads = [f"/{c.name} {c.args}".rstrip() for c in COMMAND_ROSTER]
+    return " · ".join(heads) + "\nAnything else is a message to the agent."
