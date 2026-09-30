@@ -48,6 +48,8 @@ const memoryDetailPage = gated(
   lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
 );
 
+const conversationsPage = lazyPage(() => import("./pages/ConversationsPage"), "ConversationsPage");
+
 const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "SettingsModal");
 
 // The route table, exported as data: a test that has to prove a URL lands
@@ -67,14 +69,11 @@ const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "
 // each page redirects an old `?tab=` or old uid address to the new one.
 const pageRoutes: RouteObject[] = [
   { index: true, element: <OverviewPage /> },
-  {
-    path: "conversations",
-    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
-  },
-  {
-    path: "conversations/:id",
-    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
-  },
+  // One element for both addresses, so opening a conversation from the list —
+  // or the draft's first send landing on the conversation it created — keeps
+  // the page mounted and its state (the draft's pending first message) alive.
+  { path: "conversations", element: conversationsPage },
+  { path: "conversations/:id", element: conversationsPage },
   // Legacy routes — Conversations was Chat.
   { path: "chat", element: <ChatRedirect /> },
   { path: "chat/:id", element: <ChatRedirect /> },
@@ -127,11 +126,11 @@ const pageRoutes: RouteObject[] = [
     path: "agents/:type/plugins/:pluginId",
     element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
   },
+  // The Channels page is the list beside the open channel, so all three
+  // addresses render the same page (the tab is the optional last segment).
   { path: "channels", element: <ChannelsPage /> },
-  {
-    path: "channels/:uid",
-    element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
-  },
+  { path: "channels/:uid", element: <ChannelsPage /> },
+  { path: "channels/:uid/:tab", element: <ChannelsPage /> },
   // The Skills page is the library beside the open skill, so all three
   // addresses render the same page; it loads the detail pane on first open.
   { path: "skills", element: <SkillsPage /> },

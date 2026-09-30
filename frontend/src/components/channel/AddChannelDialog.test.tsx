@@ -1,5 +1,9 @@
 // frontend/src/components/channel/AddChannelDialog.test.tsx
 //
+// Add channel is three steps — 1 Platform · 2 Connect · 3 Pair. Most of this
+// suite is step 2, where the registration contract lives; the last block
+// walks step 1 into step 3 and waits there for the pairing to land.
+//
 // The registration flow's ordering contract (mirrors AddMcpServerDialog's
 // test): secrets are written to the credential store BEFORE the resource is
 // registered (registration probes the refs), and a failed registration rolls
@@ -34,6 +38,17 @@ vi.mock("@/lib/hooks/useMachines", () => ({ useThisMachineId: vi.fn() }));
 // same reason: `agentsApi.list` goes out through `call`, not the api client
 // mocked above, and what this suite is about is what the form SENDS.
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
+// Step 3 issues a pairing code and polls the new channel's status.
+const pairing = vi.hoisted(() => ({ peer: null as unknown }));
+vi.mock("@/lib/api/channels", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/channels")>()),
+  issuePairingCode: vi.fn(async () => ({
+    code: "R9WD6HNC",
+    expires_at: new Date(Date.now() + 59 * 60_000).toISOString(),
+    pair_url: "https://t.me/example_bot?start=R9WD6HNC",
+  })),
+  getChannelStatus: vi.fn(async () => ({ peer: pairing.peer })),
+}));
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async (orig) => ({
   ...(await orig<typeof import("react-router-dom")>()),
@@ -96,14 +111,16 @@ function registeringApi(overrides: Partial<ApiClientMock> = {}) {
   );
 }
 
-function renderDialog() {
+/** Open the dialog at step 2 for `platform`, as a first-run card does — or
+ *  at step 1 when `platform` is null. */
+function renderDialog(platform: "telegram" | "seatalk" | null = "telegram") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <AddChannelDialog open onOpenChange={() => {}} />
+        <AddChannelDialog open onOpenChange={() => {}} initialPlatform={platform} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -115,7 +132,11 @@ function fillTelegram() {
 }
 
 function submit() {
-  fireEvent.click(screen.getByRole("button", { name: /^add channel$/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+}
+
+function renderSeatalk() {
+  return renderDialog("seatalk");
 }
 
 /**
@@ -137,6 +158,7 @@ const refFor = (secret: string) =>
   expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
 
 beforeEach(() => {
+  pairing.peer = null;
   stubMachineId(HERE);
   stubAgents([CLAUDE, CODEX]);
 });
@@ -172,8 +194,9 @@ acceptance("channels", "register a telegram channel", async () => {
     },
   ]);
   expect(api.DELETE).not.toHaveBeenCalled();
-  // The name is the user's word for the channel; the uid is the daemon's, and
-  // it is the one the link is built from.
+  // Step 3 follows; leaving it opens the new channel. The name is the user's
+  // word for the channel; the uid is the daemon's, and the link is built from it.
+  fireEvent.click(await screen.findByRole("button", { name: /pair later/i }));
   expect(navigateMock).toHaveBeenCalledWith(`/channels/${NEW_UID}`);
 });
 
@@ -220,9 +243,7 @@ describe("the agent the channel drives", () => {
 describe("AddChannelDialog", () => {
   test("seatalk requires the app id and app secret before anything is written", async () => {
     const api = registeringApi();
-    renderDialog();
-
-    fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
+    renderSeatalk();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
     // app_id + app_secret intentionally left blank.
     submit();
@@ -254,9 +275,7 @@ describe("AddChannelDialog", () => {
     "a surface lifts a pasted secret into the store before registering",
     async () => {
       const api = registeringApi();
-      renderDialog();
-
-      fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
+      renderSeatalk();
       fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
       fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
       fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
@@ -284,10 +303,9 @@ describe("AddChannelDialog", () => {
     },
   );
 
-  test("seatalk asks for its app credentials only, with one line saying where they come from", () => {
+  test("seatalk asks for its app credentials only, and says where delivery is set", () => {
     installApi(mockApiClient());
-    renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
+    renderSeatalk();
 
     expect(screen.getByLabelText(/app id/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/app secret/i)).toBeInTheDocument();
@@ -298,12 +316,10 @@ describe("AddChannelDialog", () => {
     expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
-    // Where the credentials come from, and nothing else: installing the SDK
-    // and the portal's delivery setting are setup steps the SeaTalk guide
-    // walks through, not copy to read on every registration.
     expect(screen.getByText(/SeaTalk Open Platform app/)).toBeInTheDocument();
+    // The one portal step that must follow the connection, as a note.
+    expect(screen.getByText(/set event delivery to WebSocket/)).toBeInTheDocument();
     expect(screen.queryByText(/~\/\.coffer\/vendor/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Developer Portal/)).not.toBeInTheDocument();
   });
 
   test("writes nothing at all while this machine's id is unknown", async () => {
@@ -338,5 +354,52 @@ describe("AddChannelDialog", () => {
     });
     // The translated error surfaces in the dialog.
     expect(await screen.findByRole("alert")).toHaveTextContent(/configuration is invalid/i);
+  });
+});
+
+describe("the three steps", () => {
+  test("platform → connect → pair, waiting for the owner's message until it lands", async () => {
+    registeringApi();
+    renderDialog(null);
+
+    // Step 1: nothing to go on with until a platform is chosen.
+    expect(screen.getByRole("button", { name: /^next$/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /telegram/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
+
+    // Step 2.
+    expect(screen.getByRole("heading", { name: "Add Telegram channel" })).toBeInTheDocument();
+    fillTelegram();
+    submit();
+
+    // Step 3: a code is issued at once, with the one-tap link and the wait.
+    expect(await screen.findByText("R9WD 6HNC")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open in telegram/i })).toHaveAttribute(
+      "href",
+      "https://t.me/example_bot?start=R9WD6HNC",
+    );
+    expect(screen.getByText("Waiting for your message…")).toBeInTheDocument();
+
+    // The owner sends it; the next status poll reports the pairing.
+    pairing.peer = {
+      display_name: "Alex Chen",
+      chat_id: "c-1",
+      paired_at: new Date().toISOString(),
+      active_conversation_id: null,
+    };
+    expect(await screen.findByText("Paired with Alex Chen", {}, { timeout: 7000 })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(navigateMock).toHaveBeenCalledWith(`/channels/${NEW_UID}`);
+  }, 10_000);
+
+  test("Back returns from Connect to the platform cards", () => {
+    installApi(mockApiClient());
+    renderDialog("seatalk");
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+    expect(screen.getByRole("button", { name: /^next$/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /seatalk/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });

@@ -134,6 +134,14 @@ def evict_if_idle(conversation_id: str) -> bool:
     return True
 
 
+def is_running(conversation_id: str) -> bool:
+    """Whether a turn is in flight for the conversation right now — the
+    in-process truth, which a ``streaming`` message row only mirrors (the
+    Conversations list's Running mark)."""
+    state = _STATES.get(conversation_id)
+    return state is not None and state.active is not None
+
+
 def active_turns() -> dict[str, ActiveTurn]:
     """The in-flight turns by conversation (for testing/monitoring only)."""
     return {cid: st.active for cid, st in _STATES.items() if st.active is not None}

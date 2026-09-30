@@ -1,5 +1,5 @@
 // frontend/src/components/channel/EditChannelGroupFields.tsx
-// The group half of the edit-channel form — spec channels "Configure when the
+// The group half of a channel's Settings tab — spec channels "Configure when the
 // bot answers in a group": require-mention and ignore-messages-that-@-someone-
 // else, two plain config bools. Only the switches a platform honours are
 // shown: SeaTalk delivers a group message to the bot only when it @mentions

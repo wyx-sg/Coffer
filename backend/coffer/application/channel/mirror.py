@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.channel.mirror_target import (
@@ -36,7 +36,12 @@ from coffer.application.channel.store_ports import (
 )
 from coffer.application.channel.turn_driver import QueuedInbound
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnError
-from coffer.domain.chat.mirror import MirrorResult, MirrorView, UndeliveredReply
+from coffer.domain.chat.mirror import (
+    ChannelPlaceView,
+    MirrorResult,
+    MirrorView,
+    UndeliveredReply,
+)
 
 if TYPE_CHECKING:
     from coffer.application.channel.inbound import InboundProcessor
@@ -92,6 +97,20 @@ class ChannelMirror:
                 UndeliveredReply(kind=e.kind, text=e.text, created_at=e.created_at) for e in owed
             ),
         )
+
+    async def places(self, conversation_ids: Sequence[str]) -> Mapping[str, ChannelPlaceView]:
+        """One read for the whole page (``locate_many``). ``chat_name`` stays
+        ``None``: Coffer keeps no group title — a group's peer row names the
+        owner who paired it, not the group."""
+        located = await self._threads.locate_many(conversation_ids)
+        return {
+            conversation_id: ChannelPlaceView(
+                chat_kind=loc.chat_kind if loc.chat_kind in ("direct", "group") else None,
+                thread=loc.thread_id != "",
+                parallel_mark=row.parallel_mark if row is not None else None,
+            )
+            for conversation_id, (loc, row) in located.items()
+        }
 
     async def mirror(self, conversation_id: str, channel_uid: str, text: str) -> MirrorResult:
         target = await self._target(conversation_id, channel_uid)

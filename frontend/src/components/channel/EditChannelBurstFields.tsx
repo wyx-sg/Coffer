@@ -1,12 +1,12 @@
 // frontend/src/components/channel/EditChannelBurstFields.tsx
-// The message-batching half of the edit-channel form — spec channels "Take a
+// The message-batching half of a channel's Settings tab — spec channels "Take a
 // burst of messages as one turn": how long the channel waits for the chat to go
 // quiet before running the held messages as one turn. Two seconds fields, one
 // after a text message and a longer one after a forwarded record or text-less
 // files. They apply to every channel type, direct chats and groups alike.
 //
 // The draft holds the raw text so a blank or out-of-range entry can be shown
-// as an error (and block Save) instead of being silently coerced.
+// as an error and never saved, instead of being silently coerced.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 

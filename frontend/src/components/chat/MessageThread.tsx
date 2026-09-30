@@ -4,7 +4,7 @@
 // restarts at the bottom per conversation, and on a failed turn swaps the live
 // bubble for the error banner with a Retry of the failed message. Rows are
 // chosen by useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
@@ -13,16 +13,16 @@ import { useChannelMirror } from "@/lib/hooks/useConversations";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTargetFor } from "@/lib/chat/threadView";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
-import { type EchoAttachment, echoAsMessage } from "@/lib/chat/echoes";
+import type { EchoAttachment } from "@/lib/chat/echoes";
 import type { Conversation } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
-import { AgentModelBar } from "./AgentModelBar";
 import { ChannelMirrorHint } from "./ChannelMirrorHint";
 import { ChatErrorBanner } from "./ChatErrorBanner";
-import { MessageBubble } from "./MessageBubble";
+import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
 import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { PendingQueue } from "./PendingQueue";
+import { ArchivedNotice, StreamLostBanner } from "./ThreadNotices";
 import { FindWidget } from "@/components/preview/FindWidget";
 import { useDomFind } from "@/components/preview/useDomFind";
 import { translateApiError } from "@/lib/api/errors";
@@ -30,42 +30,35 @@ import { translateApiError } from "@/lib/api/errors";
 interface Props {
   conversation: Conversation;
   liveMessage: LiveMessage | null;
-  /**
-   * Prompts sent from this client whose persisted rows have not landed yet.
-   * Rendered as user bubbles after the fetched messages; the turn hook owns
-   * when each one retires, so the thread never dedupes them itself.
-   */
+  /** Prompts sent from here whose rows have not landed yet (the turn hook retires them). */
   pendingEchoes?: PendingEcho[];
   isStreaming: boolean;
-  /** Error from the latest chat turn (network, credential, agent error, etc.) */
+  /** Error from the latest turn (network, credential, agent error, …), and its dismiss. */
   turnError?: Error | null;
-  /** Called when the user dismisses the turn error banner. */
   onClearTurnError?: () => void;
   /** False when turnError is a refused send (it stays in the composer): no Retry. */
   retryable?: boolean;
   /** Send a persisted user message again, attachments included (Retry). */
   onResend?: (messageId: string) => void | Promise<boolean>;
-  /** Called when the user stops the in-flight turn. */
   onStop?: () => void;
-  /**
-   * Send a message; `attachments` are uploads the composer finished. Resolves
-   * whether the send was accepted (the composer keeps its chips until it is).
-   */
+  /** Send a message with the finished uploads; resolves whether it was accepted. */
   onSend: (text: string, attachments?: EchoAttachment[]) => void | Promise<boolean>;
   /** A refused message handed back to the composer (see Composer `restore`). */
   restore?: ComposerRestore | null;
   onRestored?: () => void;
-  /** Messages queued behind the in-flight turn. */
+  /** Messages queued behind the in-flight turn, and its replacement (edit / remove). */
   pending?: string[];
-  /** Replace the pending queue (used to remove a queued message). */
   onSetPending?: (texts: string[]) => void;
-  /** Display name of the conversation's agent (from the agents API). */
+  /** The conversation's header (title, source, agent / model / effort, menu). */
+  header?: ReactNode;
+  /** Display name of the conversation's agent — the composer's placeholder. */
   agentLabel?: string;
-  /** Render read-only (archived conversation): restore CTA instead of composer. */
+  /** The live stream was lost mid-turn after every reconnect: say so, offer Reload. */
+  streamLost?: boolean;
+  onReload?: () => void;
+  /** Archived: read-only, a Restore in place of the composer. */
   readOnly?: boolean;
-  /** Called when the user restores the archived conversation. */
   onRestore?: () => void;
-  /** True while the restore request is in flight. */
   restorePending?: boolean;
 }
 
@@ -86,7 +79,10 @@ export function MessageThread({
   onRestored,
   pending = [],
   onSetPending,
+  header,
   agentLabel,
+  streamLost = false,
+  onReload,
   readOnly,
   onRestore,
   restorePending,
@@ -130,12 +126,7 @@ export function MessageThread({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <AgentModelBar
-        conversationId={conversation.id}
-        agentKey={conversation.agent_key}
-        agentLabel={agentLabel}
-        disabled={readOnly}
-      />
+      {header}
 
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div
@@ -143,7 +134,7 @@ export function MessageThread({
           tabIndex={0}
           onScroll={scroll.onScroll}
           onKeyDown={onKeyDown}
-          className="flex-1 overflow-y-auto px-4 py-4 outline-none"
+          className="flex-1 overflow-y-auto px-8 py-6 outline-none"
         >
           {isPending && (
             <p className="py-8 text-center text-sm text-muted-foreground">{t("common.loading")}</p>
@@ -155,19 +146,19 @@ export function MessageThread({
           )}
           {!isPending && !error && isEmpty && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {t("chat.thread.empty")}
+              {t("conversations.thread.empty")}
             </p>
           )}
 
-          <div className="space-y-3">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} undeliveredTo={notDeliveredTo(msg.id)} />
-            ))}
-            {pendingEchoes.map((echo) => (
-              <MessageBubble key={echo.id} message={echoAsMessage(echo, conversation.id)} />
-            ))}
-            {liveForRender && <MessageBubble live={liveForRender} />}
-          </div>
+          <ThreadMessages
+            conversationId={conversation.id}
+            agentKey={conversation.agent_key}
+            agentName={agentLabel}
+            messages={messages}
+            pendingEchoes={pendingEchoes}
+            live={liveForRender}
+            notDeliveredTo={notDeliveredTo}
+          />
 
           <div ref={bottomRef} />
         </div>
@@ -180,7 +171,7 @@ export function MessageThread({
             onClick={scroll.jumpToLatest}
           >
             <ArrowDown className="mr-1 size-3.5" aria-hidden />
-            {t("chat.jumpToLatest")}
+            {t("conversations.jumpToLatest")}
           </Button>
         )}
         {find.open ? (
@@ -198,6 +189,8 @@ export function MessageThread({
           />
         ) : null}
       </div>
+
+      {streamLost && !turnError && <StreamLostBanner onReload={onReload} />}
 
       {turnError && (
         <ChatErrorBanner
@@ -218,13 +211,7 @@ export function MessageThread({
       )}
 
       {readOnly ? (
-        // Archived conversations are read-only — restoring re-enables chat.
-        <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3">
-          <span className="text-sm text-muted-foreground">{t("chat.archivedThread.notice")}</span>
-          <Button size="sm" onClick={onRestore} disabled={restorePending || !onRestore}>
-            {restorePending ? t("chat.archivedThread.restoring") : t("chat.archivedThread.restore")}
-          </Button>
-        </div>
+        <ArchivedNotice onRestore={onRestore} pending={restorePending} />
       ) : (
         <>
           <PendingQueue
@@ -237,6 +224,14 @@ export function MessageThread({
               turn queues server-side. */}
           <Composer
             ref={composerRef}
+            placeholder={t(
+              isStreaming
+                ? "conversations.composer.queuePlaceholder"
+                : mirror
+                  ? "conversations.composer.replyPlaceholder"
+                  : "conversations.composer.placeholder",
+              { agent: agentLabel ?? "" },
+            )}
             onSend={onSend}
             streaming={isStreaming}
             onStop={onStop}

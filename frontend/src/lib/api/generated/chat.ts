@@ -403,6 +403,9 @@ export interface components {
             /** Chat Id */
             chat_id: string;
             mirror: components["schemas"]["ChannelMirrorOut"] | null;
+            place: components["schemas"]["ChannelPlaceOut"] | null;
+            /** Platform */
+            platform: string | null;
         };
         /**
          * ChannelMirrorOut
@@ -425,6 +428,24 @@ export interface components {
             target: string;
             /** Undelivered */
             undelivered: components["schemas"]["UndeliveredReplyOut"][];
+        };
+        /**
+         * ChannelPlaceOut
+         * @description Where in its channel a conversation lives — what the Conversations list's
+         *     source badge names ("SeaTalk · DM · 🧵#2", "SeaTalk · <group> > thread").
+         */
+        ChannelPlaceOut: {
+            /** Chat Kind */
+            chat_kind: ("direct" | "group") | null;
+            /** Chat Name */
+            chat_name: string | null;
+            /** Parallel Mark */
+            parallel_mark: string | null;
+            /**
+             * Thread
+             * @default false
+             */
+            thread: boolean;
         };
         /**
          * ChatAttachmentOut
@@ -521,6 +542,13 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /** Preview */
+            preview: string | null;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
             /** Title */
             title: string;
             /**

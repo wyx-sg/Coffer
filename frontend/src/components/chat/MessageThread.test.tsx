@@ -34,6 +34,8 @@ const BASE_CONV: Conversation = {
   channel_binding: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
+  preview: null,
+  running: false,
 };
 
 const makeMsg = (overrides: Partial<Message>): Message => ({
@@ -70,19 +72,6 @@ function renderThread(props?: Partial<React.ComponentProps<typeof MessageThread>
 describe("MessageThread", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  test("renders the thread with a per-conversation agent model picker", async () => {
-    // Chat talks only to managed agents (Claude Code, Codex). The per-conversation
-    // model is the agent's own model (agent_config.model, the
-    // coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs), so
-    // the thread bar carries a model picker — but never the built-in agent's
-    // "No model configured" empty state.
-    chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });
-    renderThread();
-    await waitFor(() => expect(chatApiMock.listMessages).toHaveBeenCalled());
-    expect(screen.getByLabelText(/agent model/i)).toBeInTheDocument();
-    expect(screen.queryByText("No model configured")).not.toBeInTheDocument();
   });
 
   test("renders user messages right-aligned", async () => {
@@ -325,19 +314,22 @@ describe("MessageThread", () => {
     expect(onRestore).toHaveBeenCalled();
   });
 
-  test("shows the agent's display name from props, not a hardcoded one", async () => {
+  test("the composer invites a message to the conversation's agent, by its name", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({ agentLabel: "Research Bot" });
-    await waitFor(() => expect(screen.getByText("Research Bot")).toBeInTheDocument());
+    expect(await screen.findByRole("textbox", { name: /message input/i })).toHaveAttribute(
+      "placeholder",
+      "Message Research Bot…",
+    );
   });
 
-  test("does not render a per-conversation model selector", async () => {
-    // Managed agents carry no Coffer-registered model, so the thread bar shows
-    // only the agent label — there is no model selector.
+  test("a stream lost mid-turn says so and offers Reload", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderThread({ agentLabel: "Other Agent" });
-    await waitFor(() => expect(screen.getByText("Other Agent")).toBeInTheDocument());
-    expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
+    const onReload = vi.fn();
+    renderThread({ streamLost: true, onReload });
+    expect(await screen.findByText("Lost the live stream from the daemon")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /reload conversation/i }));
+    expect(onReload).toHaveBeenCalledOnce();
   });
 
   test("a failed turn shows the error banner and never a 'Thinking…' bubble beside it", async () => {

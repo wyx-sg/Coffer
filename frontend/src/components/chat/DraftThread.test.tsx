@@ -84,9 +84,9 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
 }
 
 describe("DraftThread", () => {
-  test("shows the start guide and a composer right away (no working directory needed)", () => {
+  test("shows the draft's composer right away, with no welcome page", () => {
     renderDraft();
-    expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByText(/your first message starts the conversation/i)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
 
@@ -122,7 +122,7 @@ describe("DraftThread", () => {
     // to its built-in login").
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
-    expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();
+    expect(screen.getByText(/your first message starts the conversation/i)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /message input/i })).toBeInTheDocument();
     expect(screen.queryByText("No connection configured")).not.toBeInTheDocument();
   });
@@ -151,11 +151,10 @@ describe("DraftThread", () => {
     expect(screen.getByRole("combobox", { name: /agent model/i })).toBeInTheDocument();
   });
 
-  test("no longer renders a working-directory input or folder picker", () => {
-    // The per-turn working-directory UI was removed; turns default to the
-    // Coffer-managed workspace on the backend.
+  test("names the folder the turn will run in — Coffer's workspace when none was chosen", () => {
+    // The folder is chosen in New conversation; the draft only shows it.
     renderDraft();
+    expect(screen.getByText("Coffer’s workspace")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /browse/i })).not.toBeInTheDocument();
   });
 });

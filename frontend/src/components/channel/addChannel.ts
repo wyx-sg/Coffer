@@ -14,6 +14,10 @@ import { addChannelFormSchema, type AddChannelFormValues } from "./schema";
 import type { ChannelFieldErrors, ChannelSecretDraft } from "./AddChannelSecretFields";
 import type { ChannelType } from "@/lib/api/channels";
 
+/** The add dialog's steps, in order: 1 Platform · 2 Connect · 3 Pair. */
+export const ADD_STEPS = ["platform", "connect", "pair"] as const;
+export type AddStep = (typeof ADD_STEPS)[number];
+
 /** Schema path (wire field name) → the input it is rendered under. */
 const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
   name: "name",

@@ -1,11 +1,13 @@
 // components/chat/ConversationList.tsx
-// Collapsible history column listing all conversations, with title search.
-// Search filters the already-loaded list client-side — fine for a local-first
-// single-user vault; server-side search is the scale path if lists grow large.
+// The list beside an open conversation: the same conversations, in the same
+// order and under the same URL filters as the full list, compact enough to sit
+// in a split pane, with a title search over what is loaded (a local-first,
+// single-user list; server-side search is the scale path) and New conversation.
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrowLeft, Plus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/SearchInput";
 import type { Conversation } from "@/lib/api/chat";
@@ -15,34 +17,24 @@ interface Props {
   conversations: Conversation[];
   activeId: string | null;
   loading: boolean;
-  /** Which list is shown: the active threads or the archived ones. */
-  view: "active" | "archived";
-  onToggleView: () => void;
-  onSelect: (id: string) => void;
+  /** The full list, with the filters this pane shows. */
+  listPath: string;
+  hrefFor: (id: string) => string;
+  agentNames: ReadonlyMap<string, string>;
   onCreate: () => void;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
-  onArchive: (id: string) => void;
-  onRestore: (id: string) => void;
 }
 
 export function ConversationList({
   conversations,
   activeId,
   loading,
-  view,
-  onToggleView,
-  onSelect,
+  listPath,
+  hrefFor,
+  agentNames,
   onCreate,
-  onRename,
-  onDelete,
-  onArchive,
-  onRestore,
 }: Props) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const archivedView = view === "archived";
-
   const trimmed = query.trim().toLowerCase();
   const filtered = trimmed
     ? conversations.filter((c) => c.title.toLowerCase().includes(trimmed))
@@ -50,59 +42,30 @@ export function ConversationList({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* One toolbar: view tabs + new-chat, then search — a single bordered
-          band instead of two stacked thin rows. */}
-      <div className="space-y-2 border-b border-border px-2 py-2">
+      <div className="space-y-2 border-b border-border-subtle px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div
-            className="inline-flex rounded-md bg-muted p-0.5"
-            role="tablist"
-            aria-label={t("chat.history.filterLabel")}
+          <Link
+            to={listPath}
+            className="inline-flex items-center gap-1 text-xs text-text-subtle transition-colors duration-fast hover:text-text"
           >
-            {(["active", "archived"] as const).map((v) => {
-              const selected = view === v;
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => {
-                    if (!selected) onToggleView();
-                  }}
-                  className={cn(
-                    "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
-                    selected
-                      ? "bg-surface-raised text-text shadow-lifted"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {v === "active"
-                    ? t("chat.history.filterActive")
-                    : t("chat.history.filterArchived")}
-                </button>
-              );
-            })}
-          </div>
-          {!archivedView && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-7 p-0"
-              onClick={onCreate}
-              aria-label={t("chat.history.new")}
-            >
-              <Plus className="size-4" />
-            </Button>
-          )}
+            <ArrowLeft className="size-3.5" aria-hidden />
+            {t("conversations.title")}
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onCreate}
+            aria-label={t("conversations.new.action")}
+          >
+            <Plus aria-hidden />
+          </Button>
         </div>
-
         {conversations.length > 0 && (
           <SearchInput
             value={query}
             onChange={setQuery}
-            ariaLabel={t("chat.history.search")}
-            placeholder={t("chat.history.search")}
+            ariaLabel={t("conversations.history.search")}
+            placeholder={t("conversations.history.search")}
             className="[&_input]:h-8 [&_input]:text-xs"
           />
         )}
@@ -110,32 +73,27 @@ export function ConversationList({
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {loading && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t("common.loading")}
-          </p>
+          <p className="px-2 py-4 text-center text-xs text-text-muted">{t("common.loading")}</p>
         )}
         {!loading && conversations.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {archivedView ? t("chat.history.archivedEmpty") : t("chat.history.empty")}
+          <p className="px-2 py-4 text-center text-xs text-text-muted">
+            {t("conversations.list.emptyTitle")}
           </p>
         )}
         {!loading && conversations.length > 0 && filtered.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t("chat.history.noMatches")}
+          <p className="px-2 py-4 text-center text-xs text-text-muted">
+            {t("conversations.history.noMatches")}
           </p>
         )}
         {filtered.length > 0 && (
-          <ul className="space-y-0.5" aria-label={t("chat.history.ariaLabel")}>
+          <ul className="space-y-0.5" aria-label={t("conversations.history.ariaLabel")}>
             {filtered.map((conv) => (
               <ConversationListItem
                 key={conv.id}
                 conversation={conv}
                 isActive={conv.id === activeId}
-                onSelect={() => onSelect(conv.id)}
-                onRename={(title) => onRename(conv.id, title)}
-                onDelete={() => onDelete(conv.id)}
-                onArchive={archivedView ? undefined : () => onArchive(conv.id)}
-                onRestore={archivedView ? () => onRestore(conv.id) : undefined}
+                href={hrefFor(conv.id)}
+                agentName={agentNames.get(conv.agent_key)}
               />
             ))}
           </ul>

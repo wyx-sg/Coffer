@@ -1,8 +1,8 @@
 // frontend/src/components/channel/EditChannelDirectoriesField.tsx
-// The /dir allow-list of the edit-channel form — spec channels "Choose the
+// The /dir allow-list of a channel's Settings tab — spec channels "Choose the
 // working directory from chat": the only folders a chat may switch its agent
 // into, one absolute path per line. The draft is the raw text, so a relative
-// line is shown as an error (and blocks Save) instead of being dropped.
+// line is shown as an error and never saved, instead of being dropped.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
