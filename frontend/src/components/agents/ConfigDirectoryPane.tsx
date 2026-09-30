@@ -3,10 +3,11 @@
 // agents/) is selected: its name, how many files it holds and what it is for,
 // and those files as a list — picking one opens it, as the tree does.
 import { useTranslation } from "react-i18next";
-import { FileText } from "lucide-react";
+import { FilePlus, FileText, Trash2 } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
 import { FILE_PANE_BODY, FILE_PANE_SCROLL } from "@/components/filePane";
+import { Button } from "@/components/ui/button";
 import { baseName } from "@/lib/agents/configFiles";
 import type { ConfigFileInfo } from "@/lib/api/agents";
 import { cn, formatBytes, formatDateTime } from "@/lib/utils";
@@ -15,10 +16,16 @@ export function ConfigDirectoryPane({
   entry,
   description,
   onSelectChild,
+  onNewFile,
+  onDeleteChild,
 }: {
   entry: ConfigFileInfo;
   description?: string | null;
   onSelectChild: (relpath: string) => void;
+  /** Opens the New file dialog (board 2.1.58). */
+  onNewFile?: () => void;
+  /** Asks before deleting one of its files (board 2.1.57). */
+  onDeleteChild?: (relpath: string) => void;
 }) {
   const { t } = useTranslation();
   const children = entry.files ?? [];
@@ -36,7 +43,14 @@ export function ConfigDirectoryPane({
           </p>
           {description ? <p className="mt-0.5 text-xs text-text-muted">{description}</p> : null}
         </div>
-        {entry.exists ? <FileActions filePath={entry.path} /> : null}
+        <div className="flex items-center gap-1.5">
+          {onNewFile ? (
+            <Button variant="outline" size="sm" onClick={onNewFile}>
+              <FilePlus aria-hidden /> {t("agents.configTab.newFile")}
+            </Button>
+          ) : null}
+          {entry.exists ? <FileActions filePath={entry.path} /> : null}
+        </div>
       </div>
 
       {children.length === 0 ? (
@@ -46,11 +60,11 @@ export function ConfigDirectoryPane({
       ) : (
         <ul className={cn("divide-y divide-border-subtle rounded-md border", FILE_PANE_SCROLL)}>
           {children.map((c) => (
-            <li key={c.relpath}>
+            <li key={c.relpath} className="flex items-center">
               <button
                 type="button"
                 onClick={() => onSelectChild(c.relpath)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
+                className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
               >
                 <FileText className="size-3.5 shrink-0 text-text-muted" aria-hidden />
                 <span className="min-w-0 flex-1 break-all font-mono text-xs text-text">
@@ -60,6 +74,17 @@ export function ConfigDirectoryPane({
                   {`${formatBytes(c.size)} · ${formatDateTime(c.modified_at).slice(0, 10)}`}
                 </span>
               </button>
+              {onDeleteChild ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mr-1 size-7 text-text-muted hover:text-danger"
+                  aria-label={t("agents.configTab.deleteFile", { name: c.relpath })}
+                  onClick={() => onDeleteChild(c.relpath)}
+                >
+                  <Trash2 aria-hidden className="size-3.5" />
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -1,27 +1,32 @@
-// src/components/providers/ProviderModelsTab.tsx — the Models tab: which of the endpoint's models the provider offers.
+// src/components/providers/ProviderModels.tsx — the Models section: which of the endpoint's models the provider offers, and what each costs.
 //
 // The endpoint is introspected when the provider opens — no fetch button (spec
 // provider-switching "Introspect the endpoint when the Models tab opens"). One
-// row per model: its switch, id, what uses it, and its type (correctable in
-// place). Search and a type filter narrow the rows. A probe that fails says so
-// with a Retry and leaves the selection alone; an endpoint that lists nothing
-// says what that means.
-import { useState } from "react";
+// row per model: its switch, id, what uses it, its price with where the price
+// came from, and its type (correctable in place). Search and a type filter
+// narrow the rows. A probe that fails says so with a Retry and leaves the
+// selection alone; an endpoint that lists nothing says what that means.
+// Prices are refetched after every listing: that is when a provider's own API
+// reports them (spec provider-switching "Resolve each model's price from the
+// provider, its API, or the bundled list").
+import { useMemo, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
 
-import { formatRelativeTime } from "@/components/agents/list/relativeTime";
-import { SearchInput } from "@/components/SearchInput";
+import { HelpTip } from "@/components/HelpTip";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
+import { useModelPrices } from "@/lib/hooks/useProviderFallback";
 import { probeFailed } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
-import { cn } from "@/lib/utils";
+import { ModelPriceCell } from "./ModelPriceCell";
 import { ModelsNotice } from "./ModelsNotice";
+import { ModelsToolbar } from "./ModelsToolbar";
 import { ProviderModelRow } from "./ProviderModelRow";
+import { Section } from "./Section";
+import { SetPriceDialog } from "./SetPriceDialog";
 import { useModelCuration } from "./useModelCuration";
 
 const PAGE = 50;
@@ -34,19 +39,19 @@ interface Props {
   transcribeModel: string | null;
 }
 
-export function ProviderModelsTab({
-  provider,
-  use,
-  endpoint,
-  engineModel,
-  transcribeModel,
-}: Props) {
-  const { t, i18n } = useTranslation();
+export function ProviderModels({ provider, use, endpoint, engineModel, transcribeModel }: Props) {
+  const { t } = useTranslation();
   const fetched = endpoint.data?.models ?? [];
   const cur = useModelCuration(provider, fetched);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<Modality | "all">("all");
   const [shown, setShown] = useState(PAGE);
+  const [pricing, setPricing] = useState<string | null>(null);
+  const local = provider.local_runtime != null;
+
+  const ids = useMemo(() => cur.rows.map((m) => m.id), [cur.rows]);
+  const prices = useModelPrices(provider.uid, ids, endpoint.dataUpdatedAt);
+  const priceOf = (id: string) => prices.data?.find((p) => p.model === id);
 
   const failed = probeFailed(endpoint.data, endpoint.error);
   const reason = endpoint.error ? translateApiError(t, endpoint.error) : endpoint.data?.message;
@@ -60,6 +65,7 @@ export function ProviderModelsTab({
   const types = MODALITIES.filter(
     (m) => m !== "video" || cur.rows.some((r) => cur.modalityOf(r) === m),
   );
+  const offered = cur.unrestricted ? cur.rows.length : provider.models.length;
 
   const tagsFor = (id: string): string[] => [
     ...use.agents
@@ -68,59 +74,30 @@ export function ProviderModelsTab({
     ...(use.engine && engineModel === id ? [t("providers.usedBy.engine")] : []),
     ...(use.transcribe && transcribeModel === id ? [t("providers.usedBy.transcribe")] : []),
   ];
+  const rowOf = (id: string) => cur.rows.find((m) => m.id === id);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder={t("providers.models.search")}
-          ariaLabel={t("providers.models.search")}
-          className="w-56"
-        />
-        <div role="group" aria-label={t("providers.models.typeFilter")} className="flex gap-1">
-          {(["all", ...types] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={type === m}
-              onClick={() => setType(m)}
-              className={cn(
-                "h-7 rounded-md px-2.5 text-xs font-label outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                type === m
-                  ? "bg-surface-selected text-text"
-                  : "text-text-muted hover:bg-surface-hover",
-              )}
-            >
-              {m === "all" ? t("providers.models.allTypes") : t(`providers.modalities.${m}`)}
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto flex items-center gap-2 text-xs text-text-muted">
-          {endpoint.isFetching ? (
-            <span role="status" className="inline-flex items-center gap-1.5">
-              <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              {t("providers.models.listing")}
+    <Section
+      title={t("providers.overview.models")}
+      aside={
+        <>
+          <HelpTip label={t("providers.prices.helpLabel")}>{t("providers.prices.help")}</HelpTip>
+          {cur.rows.length > 0 ? (
+            <span className="text-xs text-text-muted">
+              {t("providers.models.offeredCount", { n: offered, count: cur.rows.length })}
             </span>
-          ) : endpoint.dataUpdatedAt ? (
-            t("providers.models.listedAgo", {
-              ago: formatRelativeTime(
-                new Date(endpoint.dataUpdatedAt).toISOString(),
-                i18n.language,
-              ),
-            })
           ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void endpoint.refetch()}
-            disabled={endpoint.isFetching}
-          >
-            <RefreshCw aria-hidden /> {t("providers.models.refresh")}
-          </Button>
-        </span>
-      </div>
+        </>
+      }
+    >
+      <ModelsToolbar
+        query={query}
+        onQuery={setQuery}
+        types={types}
+        type={type}
+        onType={setType}
+        endpoint={endpoint}
+      />
       <p className="text-xs text-text-muted">{t("providers.models.hint")}</p>
 
       {failed ? (
@@ -158,6 +135,15 @@ export function ProviderModelsTab({
                   disabled={cur.pending}
                   onToggle={() => cur.toggle(m)}
                   onModality={(v) => cur.setModality(m, v)}
+                  price={
+                    <ModelPriceCell
+                      id={m.id}
+                      price={priceOf(m.id)}
+                      disabled={cur.pending}
+                      onEdit={local ? undefined : () => setPricing(m.id)}
+                      onReset={() => cur.setPrice(m, null)}
+                    />
+                  }
                 />
               ))
           )}
@@ -168,6 +154,16 @@ export function ProviderModelsTab({
           ) : null}
         </div>
       ) : null}
-    </div>
+
+      <SetPriceDialog
+        model={pricing}
+        current={pricing ? priceOf(pricing) : undefined}
+        onClose={() => setPricing(null)}
+        onSave={(price) => {
+          const row = pricing ? rowOf(pricing) : undefined;
+          if (row) cur.setPrice(row, price);
+        }}
+      />
+    </Section>
   );
 }

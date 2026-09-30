@@ -3,7 +3,13 @@
 // The numbers behind the detail page's tab counts, the Overview summary rows
 // and the Agents list's Skills / MCP / Plugins columns. Pure: the hook in
 // lib/hooks/useAgentCounts.ts feeds it the lists it already reads.
-import type { AgentHooksOut, McpEntryOut, PluginOut, UnmanagedSkillOut } from "@/lib/api/agents";
+import type {
+  AgentHooksOut,
+  CofferHook,
+  McpEntryOut,
+  PluginOut,
+  UnmanagedSkillOut,
+} from "@/lib/api/agents";
 import type { Scope } from "@/lib/hooks/useScope";
 
 export interface OwnerSplit {
@@ -20,7 +26,14 @@ export interface AgentCounts {
     duplicates: number;
   };
   plugins?: { total: number; enabled: number; marketplaces: number };
-  hooks?: { total: number; coffer: number; files: number };
+  hooks?: {
+    total: number;
+    coffer: number;
+    files: number;
+    /** What is off with Coffer's own hook, when something is: no file declares it any
+     * more, or the agent will not run it until the user approves it (Codex). */
+    cofferState: "missing" | "untrusted" | null;
+  };
   /** Transcript sessions on disk. */
   sessions?: number;
   /** Native memory stores. */
@@ -66,11 +79,25 @@ export function pluginCounts(plugins: readonly PluginOut[] | undefined): AgentCo
   };
 }
 
+function cofferHookSummaryState(
+  hook: CofferHook | null | undefined,
+): NonNullable<AgentCounts["hooks"]>["cofferState"] {
+  if (!hook) return null;
+  if (hook.health === "missing") return "missing";
+  if (hook.health === "current" && hook.trust === "untrusted") return "untrusted";
+  return null;
+}
+
 export function hookCounts(hooks: AgentHooksOut | undefined): AgentCounts["hooks"] {
   if (hooks === undefined) return undefined;
+  // Coffer's memory hook sits on several events with one command: it is one
+  // hook per file that declares it, however many events it covers.
+  const coffer = new Set(hooks.items.filter((h) => h.coffer).map((h) => h.path)).size;
+  const own = hooks.items.filter((h) => !h.coffer).length;
   return {
-    total: hooks.items.length,
-    coffer: hooks.items.filter((h) => h.coffer).length,
+    total: own + coffer,
+    coffer,
     files: new Set(hooks.items.map((h) => h.path)).size,
+    cofferState: cofferHookSummaryState(hooks.coffer_hook),
   };
 }

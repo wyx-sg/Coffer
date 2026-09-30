@@ -65,7 +65,12 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
           failed={connection.isError}
           actions={actions}
         />
-        <OverviewSummary agent={agent} typeRow={typeRow} disabled={!enabled} />
+        <OverviewSummary
+          agent={agent}
+          typeRow={typeRow}
+          disabled={!enabled}
+          notConnected={state === "not_connected"}
+        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
         <OverviewModel agent={agent} />

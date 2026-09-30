@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProviders } from "@/lib/hooks/useProviders";
 
 import { InternalEngineSettings } from "./InternalEngineSettings";
+import { PriceRefreshSetting } from "./PriceRefreshSetting";
 import { SpeechToTextSettings } from "./SpeechToTextSettings";
 import { UpkeepSettings } from "./UpkeepSettings";
 
@@ -46,6 +47,7 @@ export function EngineSettings() {
           <>
             <InternalEngineSettings />
             <SpeechToTextSettings />
+            <PriceRefreshSetting />
           </>
         )}
       </SettingsSection>

@@ -46,9 +46,11 @@ interface Props {
   agent: AgentOut;
   typeRow: AgentTypeOut;
   disabled: boolean;
+  /** No `coffer` entry yet: the MCP row says nothing reaches it until connected. */
+  notConnected?: boolean;
 }
 
-export function OverviewSummary({ agent, typeRow, disabled }: Props) {
+export function OverviewSummary({ agent, typeRow, disabled, notConnected = false }: Props) {
   const { t } = useTranslation();
   const counts = useAgentCounts(agent.uid);
   const hooks = useAgentHooks(agent.uid);
@@ -57,6 +59,7 @@ export function OverviewSummary({ agent, typeRow, disabled }: Props) {
   const hookPaths = new Set((hooks.data?.items ?? []).map((h) => h.path));
   const ctx = {
     disabled,
+    notConnected,
     mcpFile: baseName(mcpConfigPath(agent, typeRow)),
     skillDir: abbreviateHomePath(typeRow.default_skill_dir),
     hookFile: hookPaths.size === 1 ? baseName([...hookPaths][0]) : undefined,

@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
 
 from coffer.application.usage.ingest import UsageIngestService
+from coffer.application.usage.ports import FailoverEvent
 from coffer.domain.usage.pricing import ModelPrice
 from coffer.infrastructure.persistence.usage_models import UsageDailyModel, UsageRequestModel
 from coffer.infrastructure.persistence.usage_repo import SqlAlchemyUsageRepo
+from coffer.infrastructure.usage.bundled_prices import load_bundled_prices
 from coffer.infrastructure.usage.spool_reader import FileSpoolReader, default_spool_dir
 
-from .conftest import FakePrices, record, write_spool
+from .conftest import NOW, FakePrices, record, write_spool
 
 
 def _service(sm, spool: Path, prices: FakePrices | None = None) -> UsageIngestService:  # type: ignore[no-untyped-def]
@@ -105,18 +107,19 @@ async def test_cost_is_stored_with_its_price_version(sm, tmp_path: Path) -> None
         "a.jsonl",
         [
             record(1),
-            record(2, model="gpt-5.5-codex", wire="openai", connection_uid="conn-openai"),
-            record(3, model="gpt-5.5-codex", wire="openai", connection_uid="conn-relay"),
+            record(2, model="acme-coder-1", wire="openai", connection_uid="conn-openai"),
+            record(3, model="acme-coder-1", wire="openai", connection_uid="conn-relay"),
             record(4, usage_known=False, input_tokens=None, output_tokens=None),
         ],
     )
-    prices = FakePrices({("conn-relay", "gpt-5.5-codex"): ModelPrice(input=1.0, output=2.0)})
+    prices = FakePrices({("conn-relay", "acme-coder-1"): ModelPrice(input=1.0, output=2.0)})
     await _service(sm, spool, prices).ingest_once()
     async with sm() as s:
         rows = {
             r.dedupe_key: r for r in (await s.execute(select(UsageRequestModel))).scalars().all()
         }
-    assert rows["req_1"].price_version == "snapshot:2026-09-25"
+    assert rows["req_1"].price_version == load_bundled_prices().label
+    assert rows["req_1"].price_version.startswith("bundled:genai-prices@")
     assert rows["req_1"].cost_usd == pytest.approx(0.0111)  # 3*1000 + 0.3*2000 + 15*500
     # An unknown model is flagged unpriced, never priced at zero.
     assert (rows["req_2"].unpriced, rows["req_2"].cost_usd) == (True, None)
@@ -144,3 +147,72 @@ def test_spool_dir_honours_the_env_override(
     monkeypatch.setenv("COFFER_PROXY_SPOOL_DIR", str(tmp_path / "s"))
     assert default_spool_dir() == tmp_path / "s"
     assert FileSpoolReader(tmp_path / "missing").completed() == []
+
+
+class _Failovers:
+    def __init__(self) -> None:
+        self.events: list[FailoverEvent] = []
+
+    async def failed_over(self, event: FailoverEvent) -> None:
+        self.events.append(event)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a failover is logged with where the request went",
+)
+async def test_a_failover_names_the_provider_that_answered(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    spool = tmp_path / "spool"
+    later = NOW + timedelta(milliseconds=40)
+    write_spool(
+        spool,
+        "a.jsonl",
+        [
+            record(
+                1,
+                relay_id="rel-1",
+                connection_uid="conn-a",
+                member="Primary",
+                status=503,
+                outcome="upstream_error",
+                failed_over=True,
+                usage_known=False,
+                input_tokens=None,
+                output_tokens=None,
+            ),
+            record(2, relay_id="rel-1", connection_uid="conn-b", member="Spare", started_at=later),
+            record(3, relay_id="rel-2"),
+        ],
+    )
+    log = _Failovers()
+    svc = UsageIngestService(
+        repo=SqlAlchemyUsageRepo(sm),
+        spool=FileSpoolReader(spool),
+        prices=FakePrices(),
+        failovers=log,
+        tz=UTC,
+    )
+    await svc.ingest_once()
+    assert len(log.events) == 1
+    event = log.events[0]
+    assert (event.from_uid, event.from_name, event.to_uid, event.to_name) == (
+        "conn-a",
+        "Primary",
+        "conn-b",
+        "Spare",
+    )
+    assert (event.reason, event.model, event.agent_type) == (
+        "status 503",
+        "claude-sonnet-4-6",
+        "claude_code",
+    )
+    # Usage is metered on the provider that actually answered.
+    async with sm() as s:
+        rows = {r.dedupe_key: r for r in (await s.execute(select(UsageRequestModel))).scalars()}
+    assert rows["req_2"].connection_uid == "conn-b" and rows["req_2"].cost_usd is not None
+    assert rows["req_1"].cost_usd is None
+
+    # A replayed file logs nothing twice.
+    write_spool(spool, "a.jsonl", [record(1, relay_id="rel-1", failed_over=True)])
+    await svc.ingest_once()
+    assert len(log.events) == 1

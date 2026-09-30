@@ -14,6 +14,7 @@ import { Sparkles } from "lucide-react";
 
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { AgentSkillsTable } from "@/components/agents/skills/AgentSkillsTable";
+import { DeleteOwnSkillDialog } from "@/components/agents/skills/DeleteOwnSkillDialog";
 import {
   buildSkillRows,
   ownSkillKey,
@@ -46,6 +47,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
   const [failure, setFailure] = useState<AdoptFailure | null>(null);
   const [adoptingKey, setAdoptingKey] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<OwnSkillRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OwnSkillRow | null>(null);
   const agentLabel = agentTypeLabel(agent.type);
 
   const rows = useMemo(
@@ -118,6 +120,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
             onAdopt={onAdopt}
             onRemoveDuplicate={setRemoveTarget}
             onOpenFile={onOpenFile}
+            onDelete={setDeleteTarget}
           />
         )}
       </AgentKindTab>
@@ -140,6 +143,21 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <DeleteOwnSkillDialog
+        agentUid={agent.uid}
+        target={deleteTarget}
+        pending={remove.isPending}
+        onOpenChange={(next) => {
+          if (!next) setDeleteTarget(null);
+        }}
+        onConfirm={(row) =>
+          remove.mutate(
+            { skill: row.name, location: row.item.location },
+            { onSuccess: () => setDeleteTarget(null) },
+          )
+        }
+      />
 
       <ConfirmDialog
         open={removeTarget !== null}

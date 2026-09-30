@@ -791,13 +791,17 @@
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
       "secret_imported": "导入了密钥",
-      "storage_cache_cleared": "清除了可重建的缓存"
+      "storage_cache_cleared": "清除了可重建的缓存",
+      "provider_failover": "{{model}} 从 {{from}} 切换到了 {{to}}",
+      "provider_reordered": "调整了模型提供商的顺序"
     },
     "capType": {
       "tool": "工具",
       "resource": "资源",
       "prompt": "提示词"
-    }
+    },
+    "failoverNext": "下一个提供商",
+    "failoverAnyModel": "一次请求"
   },
   "activity": {
     "title": "活动",
@@ -1340,6 +1344,17 @@
         "clearing": "正在清除…",
         "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
       }
+    },
+    "prices": {
+      "label": "刷新模型价格",
+      "description": "每天从 genai-prices 获取一次最新的价格表。关闭时使用这个版本附带的价格表。",
+      "origin": {
+        "bundled": "正在使用 Coffer 附带的价格表，更新于 {{date}}",
+        "refreshed": "正在使用 {{date}} 刷新的价格表"
+      },
+      "unknownDate": "日期未知",
+      "pinnedOff": "已被 COFFER_PRICE_REFRESH 关闭",
+      "lastFailed": "上次刷新失败；保留当前使用的价格表"
     }
   },
   "daemon": {
@@ -1534,7 +1549,10 @@
       "leftBehind": {
         "title": "{{name}} 的配置残留",
         "body": "{{dir}} 还在，但 PATH 上没有这个程序。用 {{command}} 重新安装后它会自动回来。"
-      }
+      },
+      "checkAgain": "再检查一次",
+      "repair": "修复",
+      "repairHook": "修复 Coffer 的记忆 hook"
     },
     "workspace": {
       "overview": "概览",
@@ -1675,7 +1693,15 @@
       "adoptFailedOpen": "打开它",
       "emptyTitle": "{{agent}} 没有技能",
       "emptyDescription": "{{agent}} 安装的技能会显示在这里，只读。",
-      "noMatch": "没有匹配的技能。"
+      "noMatch": "没有匹配的技能。",
+      "menu": {
+        "adopt": "收编进 Coffer…",
+        "delete": "删除…"
+      },
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody_one": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
+      "deleteBody_other": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
+      "deleteBodyNoCount": "这会从磁盘删除 {{path}}。它不在 Coffer 里，没有副本可以恢复。"
     },
     "mcpTab": {
       "summary_one": "{{count}} 个服务器 · {{coffer}} 个经 Coffer 网关 · {{own}} 个直接写在 {{file}}",
@@ -1738,7 +1764,14 @@
         "pending": "正在纳入托管…",
         "success": "已纳入托管 {{name}}——Coffer 现在通过网关提供它"
       },
-      "noMatch": "没有匹配的服务器。"
+      "noMatch": "没有匹配的服务器。",
+      "menu": {
+        "adopt": "收编进 Coffer…",
+        "open": "打开 {{file}}",
+        "copyCommand": "复制命令",
+        "remove": "从 {{file}} 移除…"
+      },
+      "openFileFailed": "无法打开文件。"
     },
     "detection": {
       "notInstalled": "未安装"
@@ -1775,7 +1808,7 @@
         "stale": "已过期",
         "missing": "缺失",
         "neverFired": "从未触发",
-        "untrusted": "未信任",
+        "untrusted": "未批准",
         "modified": "信任后已变更",
         "disabled": "已在 Codex 中关闭"
       },
@@ -1796,13 +1829,18 @@
         "checkAgain": "再次检查",
         "openActivity": "打开活动"
       },
-      "repair": "修复",
+      "repair": "修复 Coffer 的记忆 hook",
       "repairAria": "修复 Coffer 的记忆钩子",
       "openFile": "打开文件",
       "openFileAria": "打开 {{path}}",
       "search": "搜索钩子",
       "footnote": "{{agent}} 自己配置中的所有钩子，只读。要改就去它所在的文件改；这里只照看 Coffer 自己的钩子。",
-      "noMatches": "没有匹配的钩子"
+      "noMatches": "没有匹配的钩子",
+      "untrustedSub": "未在 Codex 中批准",
+      "untrusted": {
+        "title": "{{agent}} 还没有批准这个 hook",
+        "body": "{{agent}} 只运行你批准过的 hook。在你批准 Coffer 的 hook 之前，{{agent}} 会跳过它，每个会话都不带记忆启动。在 {{agent}} 中运行 /hooks 并批准 coffer memory index，然后再检查一次。"
+      }
     },
     "removeConfirmTitle": "移除 {{name}}？",
     "memoryStore": {
@@ -1845,7 +1883,8 @@
         "own": "智能体自己的"
       },
       "loadFailed": "无法读取此列表",
-      "moreActions": "更多操作"
+      "moreActions": "更多操作",
+      "moreFor": "{{name}} 的更多操作"
     },
     "state": {
       "not_installed": "未安装",
@@ -1861,7 +1900,8 @@
     },
     "stateHeader": {
       "connected": "已连接到 Coffer",
-      "config_left_behind": "找不到程序"
+      "config_left_behind": "找不到程序",
+      "hook_untrusted": "Hook 未获批准"
     },
     "tabs": {
       "overview": "总览",
@@ -2114,7 +2154,25 @@
       "create": "创建 {{name}}",
       "directoryCount_one": "目录 · {{count}} 个文件",
       "directoryCount_other": "目录 · {{count}} 个文件",
-      "directoryHint": "选择一个文件以打开。"
+      "directoryHint": "选择一个文件以打开。",
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody": "这会从磁盘删除 {{path}}，{{agent}} 将失去它。没有副本可以恢复。",
+      "deleteFile": "删除 {{name}}",
+      "newFile": "新建文件",
+      "newFileTitle": "在 {{dir}} 中新建文件",
+      "newFileBody": "每个子智能体一个 Markdown 文件。Coffer 会用一个简短的模板创建它，你可以再编辑。",
+      "newFileName": "文件名",
+      "newFileSavedAs": "保存为 {{path}}",
+      "newFileInvalid": "请使用以 .md 结尾、不含斜杠的文件名。",
+      "newFileExists": "已经有同名文件。",
+      "newFileCreate": "创建",
+      "unsaved": {
+        "title": "放弃对 {{file}} 的修改？",
+        "body": "你有未保存的修改。打开 {{target}} 会放弃它；磁盘上的文件保持原样。",
+        "leaveBody": "你有未保存的修改。离开会放弃它；磁盘上的文件保持原样。",
+        "keep": "继续编辑",
+        "discard": "放弃修改"
+      }
     },
     "sessionsTab": {
       "searchPlaceholder": "搜索标题或项目",
@@ -2174,20 +2232,24 @@
         "keyInVault": "密钥在 Coffer 保管库中",
         "modelCount_one": "{{count}} 个模型",
         "modelCount_other": "{{count}} 个模型",
-        "noneTitle": "还没有其他可用的连接",
+        "noneTitle": "还没有其他兼容的提供商",
         "noneBody": {
-          "claude_code": "添加一个 Anthropic 兼容的连接，让 Claude Code 不走它自己的登录。",
-          "codex": "添加一个 OpenAI 兼容的连接，让 Codex 不走它自己的登录。"
+          "claude_code": "添加一个兼容 Anthropic 的提供商，让 Claude Code 不走它自己的登录。",
+          "codex": "添加一个兼容 OpenAI 的提供商，让 Codex 不走它自己的登录。"
         },
-        "addConnection": "添加连接",
-        "livesOn": "连接在「模型提供商」页面管理。",
-        "manage": "管理连接"
+        "addConnection": "添加提供商",
+        "livesOn": "提供商在“模型提供商”页面管理。",
+        "manage": "管理提供商",
+        "helpByType": {
+          "claude_code": "更改对新会话生效。Claude Code 中的 /effort 会覆盖思考强度。这个提供商的其余设置都由 Coffer 写入；需要更多设置时在配置文件页编辑文件。",
+          "codex": "更改对新会话生效。受信任项目的配置可以覆盖模型和思考强度。这个提供商的其余设置都由 Coffer 写入；需要更多设置时在配置文件页编辑文件。"
+        }
       },
       "model": {
         "title": "模型",
         "label": "模型",
         "placeholder": "选择模型",
-        "hint": "来自这个连接的模型。",
+        "hint": "来自提供商的模型。",
         "builtinDefault": "{{model}} · {{agent}} 的默认模型",
         "builtinHint": "来自 {{agent}} 自己的模型列表。会话里的 /model 仍可为该会话切换模型。"
       },
@@ -2217,7 +2279,7 @@
           "haiku": "Haiku",
           "fable": "Fable"
         },
-        "hint": "Claude Code 为任务挑选模型时会按档位（Opus、Sonnet、Haiku）要模型。这些是 Coffer 根据连接的模型给出的建议；只有连接里有 Fable 模型时才会出现 Fable 一行。"
+        "hint": "Claude Code 为任务挑选模型时会按档位（Opus、Sonnet、Haiku）请求。Coffer 根据提供商的模型给出了建议；只有提供商列出 Fable 时才会出现 Fable 一行。"
       },
       "test": "测试连接",
       "review": {
@@ -2226,26 +2288,36 @@
         "fileCount_other": "{{count}} 个文件",
         "route": "Coffer 到 {{host}} 的路由",
         "keyHelper": "Coffer 的密钥助手（从不写入密钥本身）",
-        "modelList_one": "这个连接的 {{count}} 个模型",
-        "modelList_other": "这个连接的 {{count}} 个模型",
+        "modelList_one": "提供商的 {{count}} 个模型",
+        "modelList_other": "提供商的 {{count}} 个模型",
         "footnote": {
-          "claude_code": "只改这几行，文件其余部分保持不变。原始 API 密钥从不写入；Claude Code 会向 Coffer 索取。会保留一份 .bak。",
+          "claude_code": "只改这些行；文件的其余部分保持不变。Coffer 只写顶层模型和档位变量。不会写入提供商密钥：Claude Code 用自己的令牌通过 Coffer 的本地中转访问提供商。会保留一个 .bak。",
           "codex": "只改这几行，文件其余部分保持不变。原始 API 密钥从不写入。会保留一份 .bak。"
         },
         "footnoteBuiltin": "Coffer 只删除它写入的键；你自己用 /model 或 /effort 设置的模型和推理强度会保留。会保留一份 .bak。",
         "effortLeftOut": "这个模型没有可选级别，所以不写推理强度。",
         "nothingTitle": "没有要应用的改动",
-        "nothingBuiltin": "内置登录没有按档位选模型。选另一个连接，即可在任何改动发生前预览 Coffer 将写入 {{path}} 的内容。",
+        "nothingBuiltin": "使用内置登录时没有按档位的模型。选择另一个提供商，在任何改动之前预览 Coffer 将写入 {{path}} 的内容。",
         "nothingConnection": "左侧的选择与当前生效的一致。改动其中一项，即可在任何改动发生前预览 Coffer 将写入 {{path}} 的内容。",
         "staleTitle": "切换被拒绝 —— {{file}} 在磁盘上已被修改",
         "staleBody": "生成这份预览后，有人（或智能体自己）保存了这个文件。没有写入任何内容。重新加载，按当前文件再预览一次。",
         "reload": "重新加载预览",
-        "testFirst": "确认前请先测试连接。",
+        "testFirst": "确认前先测试提供商。",
         "discard": "放弃",
         "confirm": "确认切换"
       },
       "builtinTarget": "它的内置登录",
-      "switchedToast": "已将 {{agent}} 切换到 {{target}}"
+      "switchedToast": "已将 {{agent}} 切换到 {{target}}",
+      "proxy": {
+        "fallbackLabel": "故障切换",
+        "fallback": "{{provider}} 失败时：{{fallbacks}}——它也提供 {{model}}",
+        "noFallback": "{{provider}} 失败时：没有备用",
+        "noFallbackLocal": "{{provider}} 失败时：没有备用——本地提供商从不切换",
+        "tokenLabel": "中转令牌",
+        "token": "{{agent}} 访问 Coffer 中转（{{address}}）的专属令牌",
+        "rotate": "轮换",
+        "rotated": "令牌已轮换。智能体会在下次请求时取用新令牌。"
+      }
     },
     "list": {
       "subtitle": "这台 Mac 上的 Claude Code 和 Codex。Coffer 会自动找到它们；添加后，它们通过一个 MCP 条目和一个钩子获得你的 MCP 服务器、技能和记忆。",
@@ -2384,6 +2456,9 @@
       "title": "从 Coffer 移除 {{name}}？",
       "body": "Coffer 会把它的条目和钩子从 {{dir}} 中取出，并停止为它服务。{{name}} 仍然安装着，其余配置、会话和它自己的记忆都保留。它会以“已检测到，未添加”留在列表中；点击添加即可恢复。",
       "confirm": "移除"
+    },
+    "hookApproval": {
+      "copy": "复制 /hooks"
     }
   },
   "skills": {
@@ -4683,12 +4758,13 @@
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
-      "noPriceTip": "此模型没有价格：Coffer 只内置 Anthropic 的价格。可在模型提供商中为它的连接设置价格。",
+      "noPriceTip": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表里也没有。在“模型提供商”中设置一个价格。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "total": "合计 · {{range}}",
       "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
-      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。"
+      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
+      "noPriceTipOn": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表（更新于 {{date}}）里也没有。在“模型提供商”中设置一个价格。"
     },
     "empty": {
       "firstTitle": "还没有 API 密钥用量",
@@ -4798,7 +4874,11 @@
       "engineOnly": "仅供 Coffer 引擎",
       "allModels": "全部模型",
       "models_one": "{{count}} 个模型",
-      "models_other": "{{count}} 个模型"
+      "models_other": "{{count}} 个模型",
+      "dragToReorder": "拖动以调整顺序",
+      "reorderAria": "移动 {{name}}（↑ / ↓）",
+      "orderHelpLabel": "关于提供商列表",
+      "orderHelp": "顺序 = 故障切换优先级。如果一个智能体的模型由多个提供商提供，Coffer 的中转会在首字节前按这个顺序切换。拖动以调整顺序。"
     },
     "detail": {
       "notFound": "未找到该模型提供商",
@@ -4849,7 +4929,12 @@
       "locked": "{{agents}} 正在使用，已锁定",
       "anAgent": "有智能体",
       "runtime": "运行时",
-      "wires": "提供 {{wires}}"
+      "wires": "提供 {{wires}}",
+      "route": "路由",
+      "routeValue": "智能体通过 Coffer 的中转访问它 · {{address}}",
+      "fallback": "故障切换",
+      "fallbackSwitch": "作为其他提供商的备用",
+      "fallbackLocal": "本地提供商从不作为备用"
     },
     "key": {
       "secretPrefix": "密钥：",
@@ -4885,7 +4970,7 @@
       "listing": "正在列出该接入地址的模型…",
       "listedAgo": "{{ago}}列出",
       "refresh": "刷新",
-      "hint": "只有开启的模型才会出现在智能体、对话和消息渠道的选择器里。对话选择器只列文本模型。",
+      "hint": "只有打开的模型会出现在智能体、对话和渠道的选择器里。价格按每 100 万 token 计（输入 · 输出）；没有价格的模型在用量里显示“—”。",
       "failedTitle": "无法列出该接入地址的模型",
       "failedBody": "{{reason}} 下面的选择保持不变，仍然提供。",
       "noneTitle": "该接入地址没有列出任何模型",
@@ -4893,7 +4978,8 @@
       "noMatch": "没有匹配的模型。",
       "showMore_one": "再显示 {{count}} 个",
       "showMore_other": "再显示 {{count}} 个",
-      "agentDefault": "{{agent}} 默认"
+      "agentDefault": "{{agent}} 默认",
+      "offeredCount": "提供 {{n}} / {{count}}"
     },
     "test": {
       "running": "正在测试接入地址…",
@@ -5006,6 +5092,33 @@
       },
       "engineUnset": "Coffer 自用模型尚未设置，提炼和整理已暂停。",
       "engineLink": "Coffer 自用模型"
+    },
+    "prices": {
+      "helpLabel": "关于模型价格",
+      "help": "模型的价格取以下第一个有的来源：你设置的价格（你设置）、列出模型时提供商自己的 API 报告的价格（来自 <提供商>）、Coffer 的价格表（内置）——随每个版本附带，并且每天从 genai-prices 刷新一次，除非在“设置 › 通用”中关闭。没有已知价格的模型显示“—”；设置一个价格，用量页才能显示费用。",
+      "rates": "{{input}} · {{output}} / 100 万",
+      "source": {
+        "user": "你设置",
+        "provider": "来自 {{name}}",
+        "bundled": "内置",
+        "bundledOn": "内置 · 更新于 {{date}}"
+      },
+      "tiered": "基础档：输入 token 超过阈值后，长请求更贵",
+      "local": "本地 · 不计费",
+      "set": "设置价格…",
+      "reset": "重置",
+      "noneAria": "{{id}} 没有已知价格",
+      "editAria": "{{id}}：{{rates}}，修改价格",
+      "dialogTitle": "{{id}} 的价格",
+      "dialogBody": "这个提供商向你收取的价格。它优先于提供商 API 和内置价格表。",
+      "fields": {
+        "input": "输入",
+        "output": "输出",
+        "cache_read": "缓存读取",
+        "cache_write_5m": "缓存写入"
+      },
+      "optional": "可选",
+      "perMillion": "每 100 万 token 的美元价格。留空的缓存价格按输入价格计。"
     }
   },
   "skillSources": {

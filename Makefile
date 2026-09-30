@@ -25,7 +25,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	contracts frontend-codegen docs-reference docs-build \
+	contracts frontend-codegen docs-reference docs-build refresh-prices \
 	lint format dev clean
 
 help:
@@ -68,6 +68,7 @@ help:
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
 	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; not in verify)"
+	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
@@ -367,6 +368,13 @@ frontend-codegen:
 docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
 	$(PY) docs-site/scripts/gen_rest_reference.py
+
+# The bundled model price list shipped in each build is refreshed once per
+# release; the daemon keeps a daily cached copy on top of it (spec
+# provider-switching "Refresh the bundled price list in the background").
+# Needs the network; not in verify.
+refresh-prices:
+	$(PY) scripts/refresh_model_prices.py
 
 # The published site, built the way .github/workflows/pages.yml builds it.
 # VitePress fails the build on a dead internal link, so this is the local way

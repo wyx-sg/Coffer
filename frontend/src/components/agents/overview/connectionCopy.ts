@@ -32,6 +32,7 @@ export function connectionBodyKey(
 ): string {
   const hasHook = parts.some((p) => p.key === "memory_hook");
   if (state === "disabled") return `${K}.body.disabled`;
+  if (hookAwaitsApproval(state, hook)) return `${K}.body.hookUntrusted`;
   if (state === "connected") return `${K}.body.${hasHook ? "connected" : "connectedMcpOnly"}`;
   if (state === "not_connected")
     return `${K}.body.${hasHook ? "notConnected" : "notConnectedMcpOnly"}`;
@@ -40,13 +41,44 @@ export function connectionBodyKey(
   return `${K}.body.${hook?.health === "stale" ? "hookStale" : "hookMissing"}`;
 }
 
-type PartHealth = "current" | "stale" | "missing" | "idle";
+/**
+ * Everything Coffer wrote is in place and current, but the agent will not run
+ * Coffer's hook until the user approves it (Codex's `/hooks`). Coffer never
+ * approves it for the user, so the card says how and offers the command.
+ */
+export function hookAwaitsApproval(
+  state: AgentRowState,
+  hook: CofferHook | null | undefined,
+): boolean {
+  return state === "connected" && hook?.health === "current" && hook.trust === "untrusted";
+}
+
+/** Only the memory hook is off (the `coffer` MCP entry is in place): Repair fixes just the hook. */
+export function repairsOnlyHook(parts: CofferConnection["parts"] | undefined): boolean {
+  if (!parts) return false;
+  const mcp = parts.find((p) => p.key === "mcp");
+  const hook = parts.find((p) => p.key === "memory_hook");
+  return (!mcp || mcp.installed) && !!hook && !hook.installed;
+}
+
+/** The events Coffer's hook sits on — the listing names them comma-joined. */
+export function hookEventCount(hook: CofferHook): number {
+  return new Set(
+    hook.event
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean),
+  ).size;
+}
+
+type PartHealth = "current" | "stale" | "missing" | "idle" | "untrusted";
 
 const HEALTH_TONE: Record<PartHealth, StatusTone> = {
   current: "ok",
   stale: "warn",
   missing: "warn",
   idle: "off",
+  untrusted: "warn",
 };
 
 export function partHealthTone(health: PartHealth): StatusTone {
@@ -61,6 +93,8 @@ export function partHealth(
 ): PartHealth {
   if (disabled) return "idle";
   if (!part.installed) return "missing";
-  if (part.key === "memory_hook" && hook) return hook.health;
+  if (part.key === "memory_hook" && hook) {
+    return hook.health === "current" && hook.trust === "untrusted" ? "untrusted" : hook.health;
+  }
   return "current";
 }

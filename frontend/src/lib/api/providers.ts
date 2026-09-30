@@ -89,6 +89,18 @@ export type LocalRuntimeFound = Schemas["LocalRuntimeOut"];
 
 export type DetectLocalOut = Schemas["DetectLocalOut"];
 
+/** One model's price on a provider (USD per 1M tokens) and where it came
+ *  from: `user` (You set), `provider` (its own API), `bundled` (the price list
+ *  shipped with the release), `local` (costs nothing) — or `null`: unknown. */
+export type ModelPrice = Schemas["ModelPriceOut"];
+export type ModelPricesOut = Schemas["ModelPricesOut"];
+/** The price list pricing reads now, and whether its daily refresh is on. */
+export type PriceList = Schemas["PriceListOut"];
+/** Its query key (kept here: queryKeys.ts is at its size limit). */
+export const priceListKey = ["providers", "price-list"] as const;
+/** A price the user sets on a curated model. */
+export type CuratedPrice = NonNullable<ProviderModel["price"]>;
+
 // ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
@@ -112,6 +124,21 @@ export const providersApi = {
   // kind uses.
 
   remove: (uid: string) => call<void>(`/providers/${enc(uid)}`, { method: "DELETE" }),
+
+  /** Put the providers in this order — fallback priority. Every uid once. */
+  reorder: (uids: string[]) =>
+    call<ProviderListOut>("/providers/order", { method: "PUT", body: { uids } }),
+
+  /** The price list in use (bundled or refreshed) and its daily refresh. */
+  priceList: () => call<PriceList>("/providers/price-list"),
+
+  /** Turn the daily price-list refresh on or off on this machine. */
+  setPriceRefresh: (refresh: boolean) =>
+    call<PriceList>("/providers/price-list", { method: "PUT", body: { refresh } }),
+
+  /** Each model's price on this provider, with its source. Read-only. */
+  prices: (uid: string, models: string[]) =>
+    call<ModelPricesOut>(`/providers/${enc(uid)}/prices`, { method: "POST", body: { models } }),
 
   /** Which local model runtime answers at a loopback URL — or, with `null`, at
    *  each runtime's default port. Read-only: nothing is pulled or loaded; a

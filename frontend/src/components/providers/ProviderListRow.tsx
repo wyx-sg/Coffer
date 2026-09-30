@@ -5,6 +5,7 @@
 // for an Ollama-protocol provider, which reaches no agent. The marks at the
 // end are the agents running on it (the Used-by rule) and the Coffer badges.
 // The row links to the provider by uid; the open one is highlighted.
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -24,6 +25,8 @@ interface Props {
   selected: boolean;
   /** Set on the open row when its probe found the key rejected ("401"/"403", or ""). */
   rejected?: string | null;
+  /** The drag handle, before the link (list order is fallback priority). */
+  handle?: ReactNode;
 }
 
 function useOfferLabel(provider: Provider): string {
@@ -33,14 +36,14 @@ function useOfferLabel(provider: Provider): string {
   return n === 0 ? t("providers.list.allModels") : t("providers.list.models", { count: n });
 }
 
-export function ProviderListRow({ provider, use, selected, rejected }: Props) {
+export function ProviderListRow({ provider, use, selected, rejected, handle }: Props) {
   const { t } = useTranslation();
   const offer = useOfferLabel(provider);
   const sub =
     rejected != null
       ? [t("providers.status.keyRejected"), rejected].filter(Boolean).join(" · ")
       : `${t(PROTOCOL_LABEL_KEY[provider.protocol])} · ${offer}`;
-  return (
+  const link = (
     <Link
       to={`/model-providers/${encodeURIComponent(provider.uid)}`}
       aria-current={selected ? "page" : undefined}
@@ -71,5 +74,12 @@ export function ProviderListRow({ provider, use, selected, rejected }: Props) {
         {use.transcribe ? <CofferUseBadge use="transcribe" /> : null}
       </span>
     </Link>
+  );
+  if (!handle) return link;
+  return (
+    <div className="flex items-center gap-0.5">
+      {handle}
+      <div className="min-w-0 flex-1">{link}</div>
+    </div>
   );
 }

@@ -254,6 +254,34 @@ describe("AgentConfigFilesTab", () => {
     expect(document.querySelector(".cm-content")?.textContent).toContain("# reviewer");
   });
 
+  test("a directory entry creates a file from a template and deletes one after asking", async () => {
+    stub();
+    const write = vi.spyOn(agentsApi, "writeConfigChild").mockResolvedValue(FILES[1]);
+    const del = vi.spyOn(agentsApi, "deleteConfigChild").mockResolvedValue(undefined);
+    renderTab("?file=subagents");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete test-runner.md" }));
+    const confirm = await screen.findByRole("dialog");
+    expect(confirm).toHaveTextContent("Delete test-runner.md?");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith("agt_cc", "subagents", "test-runner.md"));
+    fireEvent.click(screen.getByRole("button", { name: "New file" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("New file in agents/");
+    const create = within(dialog).getByRole("button", { name: "Create" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "bad/name" } });
+    expect(create).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox"), {
+      target: { value: "release-checker.md" },
+    });
+    fireEvent.click(create);
+    await waitFor(() =>
+      expect(write).toHaveBeenCalledWith("agt_cc", "subagents", "release-checker.md", {
+        content: "---\nname: release-checker\ndescription: \n---\n\n",
+      }),
+    );
+  });
+
   test("switching files with a dirty draft asks first; cancel keeps the edit", () => {
     stub();
     const onDirtyChange = vi.fn();
@@ -264,9 +292,10 @@ describe("AgentConfigFilesTab", () => {
 
     fireEvent.click(screen.getByText("CLAUDE.md"));
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent(/discard unsaved changes/i);
+    expect(dialog).toHaveTextContent(/discard your changes to settings\.json/i);
+    expect(dialog).toHaveTextContent(/opening CLAUDE\.md discards it/i);
     expect(fileParam()).toBe("settings");
-    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /keep editing/i }));
     expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
   });
 

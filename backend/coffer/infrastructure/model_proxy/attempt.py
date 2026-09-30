@@ -50,6 +50,7 @@ class RelayRequest:
     route: ProxyRoute
     metered: bool
     primary_only: bool = False
+    relay_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 @dataclass
@@ -100,6 +101,7 @@ def usage_record(a: Attempt) -> UsageRecord:
     return UsageRecord(
         dedupe_key=a.request_id or f"attempt:{a.attempt_id}",
         attempt_id=a.attempt_id,
+        relay_id=req.relay_id,
         started_at=a.started_at,
         agent_uid=req.agent.agent_uid,
         agent_type=req.agent.agent_type,

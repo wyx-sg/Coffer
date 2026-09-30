@@ -22,7 +22,7 @@ import { useProviderLabel } from "./useProviderLabel";
 
 const K = "agents.overviewTab.problem";
 
-export function CheckAgainButton({ variant = "outline" }: { variant?: "outline" | "default" }) {
+function CheckAgainButton({ variant = "outline" }: { variant?: "outline" | "default" }) {
   const { t } = useTranslation();
   const { checking, check } = useDetectionCheck();
   return (
