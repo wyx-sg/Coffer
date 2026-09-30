@@ -1380,6 +1380,8 @@
       },
       "matcher": "matcher {{matcher}}",
       "matcherAny": "Any",
+      "memoryHook_one": "Memory hook · {{count}} event",
+      "memoryHook_other": "Memory hook · {{count}} events",
       "state": {
         "active": "Active",
         "current": "Current",
@@ -1408,7 +1410,7 @@
         "openActivity": "Open Activity"
       },
       "repair": "Repair",
-      "repairAria": "Repair Coffer’s {{event}} hook",
+      "repairAria": "Repair Coffer’s memory hook",
       "openFile": "Open file",
       "openFileAria": "Open {{path}}",
       "search": "Search hooks",

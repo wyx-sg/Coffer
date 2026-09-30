@@ -1380,6 +1380,8 @@
       },
       "matcher": "匹配器 {{matcher}}",
       "matcherAny": "任意",
+      "memoryHook_one": "记忆钩子 · {{count}} 个事件",
+      "memoryHook_other": "记忆钩子 · {{count}} 个事件",
       "state": {
         "active": "生效中",
         "current": "最新",
@@ -1408,7 +1410,7 @@
         "openActivity": "打开活动"
       },
       "repair": "修复",
-      "repairAria": "修复 Coffer 的 {{event}} 钩子",
+      "repairAria": "修复 Coffer 的记忆钩子",
       "openFile": "打开文件",
       "openFileAria": "打开 {{path}}",
       "search": "搜索钩子",
