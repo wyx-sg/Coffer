@@ -1,6 +1,6 @@
 """Acceptance scenarios for notes, the distil pass, the index and the read paths.
 
-Every test drives the real store under the suite-pinned ``COFFER_MEMORY_ROOT``
+Every test drives the real store under the per-test ``HOME``
 and the real distil pass; the internal connection is always a fake that either
 answers from a script or records what it was asked.
 """

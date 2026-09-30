@@ -1,6 +1,6 @@
 """A real in-process daemon for the secret boundary's tests (spec secret).
 
-The whole app over a throwaway ``HOME`` and database, the keyring swapped for
+The whole app over a throwaway ``HOME``, the keyring swapped for
 the shared in-memory backend, and helpers that stand in for the desktop app:
 ``grant`` signs a presence challenge the way the shell does, with the key
 derived from this daemon's own master key. Nothing touches the developer's
@@ -9,6 +9,7 @@ derived from this daemon's own master key. Nothing touches the developer's
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sqlite3
 from collections.abc import Iterator
@@ -22,6 +23,7 @@ import coffer.surfaces.cli._client as _cli_client
 from coffer.application.secret.presence import derive_grant_key, sign_grant
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.infrastructure.vault.home import local_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver, get_secret_boundary
@@ -97,6 +99,12 @@ class BoundaryDaemon:
         r = self.client.get("/api/v1/audit", params={"event_type": event_type, "limit": 500})
         assert r.status_code == 200, r.text
         return list(r.json()["entries"])
+
+    def local_secrets(self, name: str) -> dict[str, Any]:
+        """One of the boundary's machine-local files (``bindings``,
+        ``approvals``, ``settings``) as it is on disk."""
+        path = local_root(self.home) / "secret-boundary" / f"{name}.json"
+        return dict(json.loads(path.read_text())) if path.is_file() else {}
 
     def sql(self, statement: str, *args: Any) -> list[tuple[Any, ...]]:
         with sqlite3.connect(self.db) as conn:

@@ -122,8 +122,8 @@ The login service is macOS only. On any other host, `service install` and `servi
 | --- | --- |
 | `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
 | `~/.coffer/daemon.lock` | The lock that keeps it to one daemon per vault. It stays on disk between runs; the lock lives on the open file, not on its existence. |
-| `~/.coffer/daemon-config.json` | Machine-local settings read before the database opens: `port`, `features` (this machine's experimental-feature switches), `machine_id` and `machine_name`. Mode `0600`. Never synced. |
-| `~/.coffer/coffer.db` | The vault's SQLite database. |
+| `~/.coffer/daemon-config.json` | Machine-local settings read before anything else opens: `port`, `features` (this machine's experimental-feature switches), `machine_id` and `machine_name`. Mode `0600`. Never synced. |
+| `~/.coffer/vault/`, `local/`, `content/`, `derived/`, `runs.db` | Coffer's state, in five storage classes; see [Persistence](/architecture/persistence). |
 | `~/.coffer/logs/` | Logs; see below. |
 | `~/.coffer/bin/` | Deployed binaries (frozen builds only); see [Upgrades](#upgrades-and-rollback). |
 
@@ -186,20 +186,20 @@ To roll back to the previous build:
    cd ~/.coffer/bin
    for b in coffer coffer-daemon coffer-mcp-shim; do ln -sfn 0.1.1/$b $b; done
    ```
-3. If the newer build migrated the database, restore the copy it took first (next section). Otherwise the older build refuses to open it.
+3. If the newer build migrated the history database, restore the copy it took first (next section). Otherwise the older build refuses to open it. Rolling back across the one-time vault upgrade is different: see [Upgrading an existing Coffer](/guides/upgrading#roll-it-back).
 4. Start again: `coffer daemon start`.
 
 ## Database migrations and automatic backups
 
-Schema migrations run when the daemon starts. Before a migration changes an on-disk `coffer.db`, the daemon copies it (with its `-wal` and `-shm` companions) beside the original as `coffer.db.pre-<revision>`, where `<revision>` is the schema revision the file was at. The three newest copies are kept. Nothing is copied when the schema is already current, which is every start except the first one after an upgrade.
+Schema migrations of the history database, `runs.db`, run when the daemon starts. Before a migration changes it, the daemon copies it (with its `-wal` and `-shm` companions) beside the original as `runs.db.pre-<revision>`, where `<revision>` is the schema revision the file was at. The three newest copies are kept. Nothing is copied when the schema is already current, which is every start except the first one after an upgrade.
 
 To go back to a pre-migration copy:
 
 ```sh
 coffer daemon stop
 cd ~/.coffer
-mv coffer.db coffer.db.broken
-cp coffer.db.pre-0103 coffer.db          # and the -wal / -shm files, if present
+mv runs.db runs.db.broken
+cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
 ```
 
 Then start the build that matches that schema.
@@ -209,10 +209,12 @@ Then start the build that matches that schema.
 If the database was migrated by a newer build, or by a development branch whose migrations this build does not ship, the daemon stops at startup with:
 
 ```text
-database schema revision '0105' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove ~/.coffer/coffer.db to start fresh.
+database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
-Install the newer build again, or restore the `coffer.db.pre-*` copy taken before that build migrated it.
+Install the newer build again, or restore the `runs.db.pre-*` copy taken before that build migrated it.
+
+A home that still keeps its state in `coffer.db`, from a Coffer before the vault layout, is not migrated by the daemon: it refuses to start and names `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Back up a vault
 
@@ -220,12 +222,13 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 
 | Path | Why it matters |
 | --- | --- |
-| `coffer.db` (+ `-wal`, `-shm`) | Every resource, setting, conversation and log table. |
+| `vault/` | Every resource definition, shared setting, knowledge collection, skill folder, memory trigger and encrypted secret, with their full history in `vault/.git`. |
+| `local/` | This machine's agents, reach, retention, sync remote and secret approvals. |
+| `content/` | Attachments and the chat workspace. |
+| `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |
 | `master.key` | The key that decrypts every stored secret. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
-| `knowledge/` | Your knowledge collections. |
-| `skills/` | The master skill store. |
 
-`memory/` is derived from your agents' own memory files and can be regenerated. To take a consistent copy, stop the daemon first:
+`derived/`, including the memory tree derived from your agents' own memory files, can be regenerated. To take a consistent copy, stop the daemon first:
 
 ```sh
 coffer daemon stop
@@ -237,7 +240,7 @@ coffer daemon start
 A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
 :::
 
-If you run Coffer on several machines, [vault sync](/guides/vault-sync) keeps a history of the vault's documents in a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.
+If you run Coffer on several machines, [vault sync](/guides/vault-sync) pushes the vault repository, history included, to a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.
 
 ## Agent home variables are not inherited
 

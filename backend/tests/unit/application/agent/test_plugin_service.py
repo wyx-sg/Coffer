@@ -72,7 +72,6 @@ _CX_UID = "9f8e7d6c5b4a39281706f5e4d3c2b1a0"
 
 def _agent_resource(uid: str, name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind="agent",
         name=name,
@@ -147,7 +146,7 @@ class FakeAuditRepo:
         *,
         kind=None,
         name=None,
-        resource_id=None,
+        resource_uid=None,
         event_type=None,
         event_prefix=None,
         since=None,

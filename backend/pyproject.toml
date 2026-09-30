@@ -249,6 +249,10 @@ name = "CLI does not access the keychain directly"
 type = "forbidden"
 source_modules = ["coffer.surfaces.cli"]
 forbidden_modules = ["coffer.infrastructure.secret"]
+ignore_imports = [
+    # The one-time upgrade copies ciphertext files; it never reads the key.
+    "coffer.surfaces.cli.migrate_cmd -> coffer.infrastructure.vault.migration.**",
+]
 
 # Contract 5: cross-kind imports forbidden. Each kind's modules may not import
 # any other kind's modules; the kind-agnostic core (Resource/Audit/etc.),
@@ -360,13 +364,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 
 # Managed coding agents and their on-disk config.
@@ -452,13 +461,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 
 # Skills: the master store and per-agent delivery.
@@ -544,13 +558,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 
 # Knowledge: ``domain.knowledge`` and ``infrastructure.knowledge`` are the
@@ -640,13 +659,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 
 # IM channels: adapters, pairing, the inbound processor, the runtime.
@@ -732,13 +756,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 ignore_imports = [
     "coffer.application.channel.* -> coffer.domain.chat.*",
@@ -830,13 +859,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 
 # LLM connections and their projection into each agent's config.
@@ -922,13 +956,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 ignore_imports = [
     "coffer.domain.provider.* -> coffer.domain.agent.*",
@@ -1020,13 +1059,18 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 ignore_imports = [
     "coffer.application.memory.* -> coffer.domain.agent.*",
@@ -1041,13 +1085,18 @@ source_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -1141,6 +1190,10 @@ name = "Kind-agnostic core does not import kind-specific code"
 type = "forbidden"
 source_modules = [
     "coffer.application.resource_service",
+    # The vault's files, repository and one write path serve every kind.
+    "coffer.domain.vault",
+    "coffer.application.vault",
+    "coffer.infrastructure.vault",
     "coffer.application.resource_scope_ops",
     "coffer.application.resource_enable_ops",
     "coffer.application.resource_delete_ops",
@@ -1157,7 +1210,6 @@ source_modules = [
     "coffer.application.engine",
     "coffer.application.engine_ports",
     "coffer.application.internal_engine_config_service",
-    "coffer.application.engine_settings_sync",
     "coffer.application.upkeep_schedule",
     "coffer.surfaces.http.internal_engine_routes",
     "coffer.domain.resource",
@@ -1254,15 +1306,22 @@ forbidden_modules = [
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
-    "coffer.infrastructure.persistence.sync_remote_repo",
-    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.infrastructure.persistence.sync_runs_repo",
     "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_stop_routes",
     "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.http.sync_stop_schemas",
+    "coffer.surfaces.http.sync_projections",
+    "coffer.surfaces.http.sync_dependencies",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
     "coffer.surfaces.cli.sync_remote_cmd",
+    "coffer.surfaces.cli.sync_stop_cmd",
+    "coffer.surfaces.cli.sync_print",
 ]
 ignore_imports = [
+    # The one-time upgrade reads every kind's old tables once.
+    "coffer.infrastructure.vault.migration.** -> coffer.**",
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.channel.persistence",
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.mcp.persistence",
 ]

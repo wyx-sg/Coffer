@@ -1,29 +1,19 @@
 // frontend/src/pages/sync/SyncPage.tsx — the top-level Sync surface
 // (spec vault-sync "Present a Sync page with Runs, Setup and Machines tabs").
 //
-// Sync is cross-cutting rather than a resource kind, and convergence is
-// something a person opens deliberately rather than a setting they tweak once,
-// so it is a page under System, not a Settings tab. `/settings/sync` redirects
-// here.
+// Sync is cross-cutting rather than a resource kind, and syncing is something
+// a person opens deliberately rather than a setting they tweak once, so it is a
+// page under System, not a Settings tab.
 //
-// Three tabs: **Runs** (every round this machine has run, and anything one of
-// them is waiting on), **Setup** (the remote and the master key) and
-// **Machines** (the registry). Runs is the landing tab, because what a person
-// opens Sync to find out is whether it is working.
+// Three tabs: **Runs** (whether sync is working, anything it is waiting on a
+// person for, what is waiting to push, and every round), **Setup** (the remote
+// and the master key) and **Machines** (the registry). Runs is the landing
+// tab, because what a person opens Sync to find out is whether it is working —
+// and a stopped round, a held deletion or a join is answered there, above the
+// history it belongs to, not on a tab of its own.
 //
-// There were three. **Status** is gone, and its two banners with it: a conflict
-// and a held round are not states beside the history, they are the newest row
-// OF it — a held round is a round. Keeping them apart put one situation in two
-// places and made it actionable in only one, so the answers now sit on the row
-// that is waiting (`SyncHeldRoundActions`), gated on the vault actually
-// waiting rather than on a row that merely ended held.
-//
-// **Machines** is a tab of its own: the registry is something you come back to
-// — rename this machine, retire one that is gone — long after the remote and
-// the key were set once, so it is not buried under them.
-//
-// Only the tab in front queries: Radix unmounts the other, and Runs is handed
-// `enabled` besides, so nothing is fetched and thrown away.
+// Only the tab in front queries its history: Radix unmounts the others, and
+// Runs is handed `enabled` besides.
 //
 // The active tab lives in the URL (`?tab=`), so a link can land on Setup and a
 // reload comes back where it was.

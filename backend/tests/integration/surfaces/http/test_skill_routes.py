@@ -416,7 +416,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
 
         # And a master folder no resource row claims — ORPHAN_MASTER, the one
         # drift kind with no identity on either side.
-        (tmp_path / ".coffer" / "skills" / "adopted-by-nobody").mkdir(parents=True)
+        (tmp_path / ".coffer" / "vault" / "skills" / "adopted-by-nobody").mkdir(parents=True)
 
         # Verify first: the report a client reads before deciding to repair.
         r = c.post("/api/v1/skills/verify")
@@ -436,7 +436,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         foreign = next(e for e in entries if e["skill_name"] == "foreign")
         prompt = foreign["handoff"]["prompt"]
         assert str(foreign_link) in prompt
-        assert str(tmp_path / ".coffer" / "skills" / "foreign") in prompt
+        assert str(tmp_path / ".coffer" / "vault" / "skills" / "foreign") in prompt
         assert "Adopt this folder" in prompt and "Replace it with Coffer's link" in prompt
         assert "Do not move, delete or edit any folder yourself" in prompt
         # What it prints is a LABEL, not an address: the name does not resolve

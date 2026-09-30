@@ -48,7 +48,6 @@ def _resource(
     scope: Scope | None = None,
 ) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind=kind,
         name=name,

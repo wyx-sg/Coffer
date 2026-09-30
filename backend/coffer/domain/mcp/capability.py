@@ -61,10 +61,10 @@ class MCPPrompt(BaseModel):
 
 @dataclass
 class MCPCapabilityPreference:
-    """One row in mcp_capability_preferences. ID is None until persisted."""
+    """One capability's switch, with when this machine saw it. The switch is
+    the person's (a vault document per server); the times are derived."""
 
-    id: int | None
-    resource_id: int
+    resource_uid: str
     capability_type: CapabilityType
     capability_key: str
     enabled: bool

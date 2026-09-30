@@ -58,7 +58,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     adapter = env.created_adapters[0]
     await env.pair(resource, chat_id="owner")
     env.pairing.issue("tg")
-    assert (await env.peers.owner_peer(resource.id)) is not None
+    assert (await env.peers.owner_peer(resource.uid)) is not None
 
     await env.resources.delete(resource.uid, actor="cli")
 
@@ -70,7 +70,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     # The resource row is gone and the peer row went with it (FK cascade).
     with pytest.raises(ResourceNotFound):
         await env.resources.get(resource.uid)
-    assert await env.peers.owner_peer(resource.id) is None
+    assert await env.peers.owner_peer(resource.uid) is None
 
 
 async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> None:
@@ -96,31 +96,6 @@ async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv)
 
     await env.resources.set_enabled(resource.uid, True, actor="cli")
     await env.runtime.reconcile_once()
-    assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
-
-
-async def test_a_document_still_carrying_webhook_keys_connects_the_same_way(
-    env: ChannelEnv,
-) -> None:
-    """A channel document from a machine on an older build may still carry the
-    webhook-era keys; they are ignored and the channel holds its websocket."""
-    env.keyring.set("channel/st/app", "app-secret-value")
-    resource = await env.resources.register(
-        kind="channel",
-        name="st",
-        config=await env.bound(
-            {
-                **_SEATALK_CONFIG,
-                "delivery": "webhook",
-                "signing_secret_ref": "channel/st/sign",
-                "tunnel_token_ref": "channel/st/tunnel",
-            }
-        ),
-        actor="cli",
-    )
-
-    await env.runtime.reconcile_once()
-
     assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
 
 

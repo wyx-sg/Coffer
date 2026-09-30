@@ -123,8 +123,8 @@ class CommandContext:
     card_message_id: str = ""
 
     @property
-    def resource_id(self) -> int:
-        return self.binding.resource.id
+    def resource_uid(self) -> str:
+        return self.binding.resource.uid
 
     @property
     def chat_id(self) -> str:

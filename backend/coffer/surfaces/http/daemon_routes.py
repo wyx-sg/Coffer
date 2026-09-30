@@ -32,7 +32,7 @@ from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import login_service
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
-from coffer.infrastructure.storage_usage import coffer_home
+from coffer.infrastructure.vault.home import coffer_home
 from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token

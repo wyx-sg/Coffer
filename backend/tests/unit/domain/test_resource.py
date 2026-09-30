@@ -9,7 +9,6 @@ def _now() -> datetime:
 
 def _resource(**overrides) -> Resource:
     fields = {
-        "id": 1,
         "uid": "9f2c1a7b4e8d4c1fa0b3d5e6f7081920",
         "kind": "mcp_server",
         "name": "filesystem",
@@ -38,22 +37,12 @@ def test_identity_is_the_uid_and_the_name_is_a_separate_label():
     assert not hasattr(r, "ref")
 
 
-def test_the_surrogate_key_is_not_the_identity():
-    """``id`` is a row number — per-machine, internal — and ``uid`` is the
-    identity, which is why two resources may share neither but are told apart
-    by the uid alone."""
-    a = _resource(id=1, uid="aaa", name="filesystem")
-    b = _resource(id=1, uid="bbb", name="filesystem")
-    assert a.id == b.id
-    assert a.uid != b.uid
-
-
-def test_resource_is_mutable_dataclass():
-    """Resource is a regular dataclass — repos may mutate id/updated_at."""
-    r = _resource(id=0, name="x")
-    r.id = 42
+def test_there_is_no_surrogate_key():
+    """The uid is the only identity: there is no integer row number beside it
+    (ADR identity-is-the-uid-inside-the-file)."""
+    r = _resource(uid="aaa", name="filesystem")
+    assert not hasattr(r, "id")
     r.enabled = False
-    assert r.id == 42
     assert r.enabled is False
 
 

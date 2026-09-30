@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
@@ -276,7 +277,7 @@ def test_deleting_a_group_keeps_its_secret_and_drops_its_overrides(
     daemon.client.put("/api/v1/custom-tools/billing/tools/a/reach", json={"agents": ["e" * 32]})
     assert daemon.client.delete("/api/v1/custom-tools/billing").status_code == 204
     assert daemon.value(f"secret/{SECRET_NAME}") == SECRET_VALUE
-    assert daemon.sql("SELECT count(*) FROM mcp_tool_reach") == [(0,)]
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
 
 
 def test_an_http_mcp_server_is_not_a_custom_tool_group(daemon: BoundaryDaemon):

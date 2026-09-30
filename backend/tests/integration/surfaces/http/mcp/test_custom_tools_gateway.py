@@ -14,6 +14,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 from tests.support.custom_tools import (
     SECRET_VALUE,
@@ -209,7 +210,9 @@ def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, 
     # The override is machine-local: nothing of it is in the config the vault syncs.
     row = daemon.client.get(f"/api/v1/resources/{group['uid']}").json()
     assert CLAUDE not in json.dumps(row["config"])
-    assert daemon.sql("SELECT tool FROM mcp_tool_reach") == [("refund",)]
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {
+        group["uid"]: {"refund": [CLAUDE]}
+    }
 
 
 @pytest.mark.acceptance(

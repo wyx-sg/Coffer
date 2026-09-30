@@ -120,7 +120,10 @@ def _machine_facts(s: Session) -> tuple[str, list[str]]:
     this_machine = _cli_client.status_machine_id(s.get("/daemon/status")) or ""
     r = s.client().get("/sync/machines")
     _cli_client.check(r, verbose=s.verbose)
-    return this_machine, [str(m["machine_id"]) for m in (r.json().get("machines") or [])]
+    ids = [str(m["machine_id"]) for m in (r.json().get("machines") or [])]
+    # The list names this machine even before it ever converged; a registry of
+    # this machine alone is no registry, and an owner id is then not a fault.
+    return this_machine, [] if ids == [this_machine] else ids
 
 
 def _owner_lines(owner: str | None, s: Session) -> tuple[CurationOwner, str, list[str]]:

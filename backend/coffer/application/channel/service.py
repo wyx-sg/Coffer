@@ -214,12 +214,12 @@ class ChannelService:
     async def status(self, channel_uid: str) -> ChannelStatus:
         resource = await self._channel(channel_uid)
         name = resource.name
-        peer = await self._peers.owner_peer(resource.id)
+        peer = await self._peers.owner_peer(resource.uid)
         # The DM's own thread row (``thread_id=""``) is where the conversation
         # pointer actually lives. ``channel_peers`` carried a column of the
         # same name that nothing ever wrote, so this line used to report None
         # for every channel that had been talking for weeks.
-        dm = await self._threads.get(resource.id, peer.chat_id, "") if peer else None
+        dm = await self._threads.get(resource.uid, peer.chat_id, "") if peer else None
         channel_type = str(resource.config.get("channel_type", ""))
         inbound: InboundInfo | None = None
         if channel_type == "seatalk":
@@ -295,9 +295,9 @@ class ChannelService:
         # are read by a person, and a uid in an error message is a dead end.
         name = resource.name
         if chat_id is None:
-            peer = await self._peers.owner_peer(resource.id)
+            peer = await self._peers.owner_peer(resource.uid)
         else:
-            peer = await self._peers.get_by_chat(resource.id, chat_id)
+            peer = await self._peers.get_by_chat(resource.uid, chat_id)
         if peer is None:
             raise ChannelNotPaired(name)
         adapter = self._runtime.adapter(name)

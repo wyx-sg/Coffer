@@ -3,7 +3,7 @@
 Two things happen when the internal engine's connection changes, and the second
 is why this is its own module rather than three lines inside the service.
 
-The flag ("Keep at most one internal-engine default" and "Set the internal-engine
+The flag ("Keep at most one internal default connection" and "Set the internal-engine
 default", this kind's own): at most one connection globally
 carries ``internal_default``, so the target is set only after the flag is
 cleared everywhere else — sequential clear-then-set, serialised by the

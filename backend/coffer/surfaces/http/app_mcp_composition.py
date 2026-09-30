@@ -33,7 +33,6 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
-from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_registry import (
     PrunableRegistry,
@@ -55,10 +54,10 @@ from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
 from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
-    MCPToolReachRepo,
+    MCPToolReachStore,
 )
 from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
@@ -75,7 +74,7 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     register_resource_destination,
 )
 from coffer.surfaces.http.secret_composition import boundary_resolver
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.vault_composition import VaultStores
 
 _log = logging.getLogger(__name__)
 
@@ -105,18 +104,22 @@ def wire_mcp_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     secret_store: EncryptedSecretStore,
     builtin_tools: BuiltinToolRegistry,
-    sync: SyncContributions,
 ) -> McpWiring:
     """Build and wire all MCP-specific plumbing into the app."""
-    # 1. Build the MCP-side repos
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)
-    sync.state_providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
-    inv_repo = MCPInvocationRepo(sm)
-    health_repo = MCPServerHealthRepo(sm)
-    # Custom tools' machine-local reach overrides (migration 0115).
-    tool_reach = MCPToolReachRepo(sm)
+    # 1. Build the MCP-side stores: capability switches are a vault document
+    # per server that goes with it, health and seen-times are derived, the
+    # invocation log is history.
+    names = vault.resources.name_of
+    prefs_repo = MCPCapabilityPreferenceStore(vault.derived_sm, name_of=names)
+    vault.resources.add_follower(prefs_repo.documents.follow)
+    prefs_repo.documents.add_owner_listener(vault.resources.announce)
+    inv_repo = MCPInvocationRepo(sm, name_of=names)
+    health_repo = MCPServerHealthRepo(vault.derived_sm)
+    # Custom tools' reach overrides: machine-local, beside reach.json.
+    tool_reach = MCPToolReachStore()
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
@@ -208,7 +211,7 @@ def wire_custom_tools(
     resource_svc: ResourceService,
     audit: AuditService,
     secret_store: EncryptedSecretStore,
-    tool_reach: MCPToolReachRepo,
+    tool_reach: MCPToolReachStore,
     inv_repo: MCPInvocationRepo,
 ) -> CustomToolService:
     """Custom-tool groups (design add-http-custom-tools §9): the service behind
@@ -329,8 +332,10 @@ def build_retention_service(
     chat media on the retention cadence") — at composition root, so the
     application layer never imports the infrastructure prune. The caller runs
     ``initialize_defaults`` and drives the worker cadence."""
-    from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
-    from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+    from coffer.infrastructure.persistence.retention_repo import (
+        FileRetentionRepo,
+        allowlist_from_registry,
+    )
 
     registry = build_prunable_registry()
     # The SQL allowlist is derived from these very registrations, so the two
@@ -338,7 +343,7 @@ def build_retention_service(
     # nothing else is.
     return RetentionService(
         registry=registry,
-        repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
+        repo=FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=audit,
         media_sweeps={
             CHANNEL_MEDIA_RESULT_KEY: _channel_media_sweep,

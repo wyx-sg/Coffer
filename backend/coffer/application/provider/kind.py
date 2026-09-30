@@ -6,8 +6,8 @@ surfaced to ResourceService so a missing key fails before the DB write and so
 deleting a still-cited secret is refused.
 
 Handed the rows it guards, the kind also refuses a direct write that would flag
-a second internal-engine default (spec provider-switching "Keep at most one
-internal-engine default"; ``internal_default_guard``).
+a second internal default (spec provider-switching "Keep at most one internal
+default connection"; ``internal_default_guard``).
 """
 
 from __future__ import annotations
@@ -70,6 +70,9 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         display_name="Provider",
         config_schema=ProviderConfig,
         secret_ref_extractor=_provider_secret_ref_extractor,
+        # spec provider-switching "Keep at most one internal default connection":
+        # the vault refuses a file that would make a second one.
+        exclusive_flags=("internal_default",),
         # Per-agent scope: a connection's scope names the agents it projects
         # into — the reach this kind used to carry itself, as
         # ``compatible_agents`` inside its config, before the framework grew

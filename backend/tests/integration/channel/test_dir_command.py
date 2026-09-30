@@ -33,7 +33,7 @@ def _dirs(tmp_path: Path) -> tuple[str, str]:
 
 
 async def _sticky_cwd(env: ChannelEnv, resource: Resource) -> str | None:
-    row = await env.threads.get(resource.id, "owner", "")
+    row = await env.threads.get(resource.uid, "owner", "")
     return row.preferred_cwd if row is not None else None
 
 

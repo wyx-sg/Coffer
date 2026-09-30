@@ -14,6 +14,8 @@ from typing import Any
 
 import pytest
 
+from coffer.infrastructure.knowledge.paths import knowledge_root
+
 from .conftest import _create_collection, _hold_material, _submit
 
 
@@ -54,7 +56,7 @@ def test_a_deleted_collection_comes_back_with_its_documents_readme_and_items(  #
 
     deleted = client.delete(f"/api/v1/resources/{old_uid}")
     assert deleted.status_code in (200, 204), deleted.text
-    assert not (tmp_path / "knowledge" / "shopee").exists()
+    assert not (knowledge_root() / "shopee").exists()
 
     # Recent changes lists the delete, with every document it removed.
     removal = _change(client, "remove")
@@ -129,7 +131,7 @@ def test_describing_a_collection_rewrites_only_the_readme_opening_paragraph(  # 
     client, tmp_path
 ) -> None:
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "Old."})
-    readme = tmp_path / "knowledge" / "shopee" / "README.md"
+    readme = knowledge_root() / "shopee" / "README.md"
     readme.write_text("# shopee\n\nOld.\n\n## Conventions\n\nKeep this.\n", encoding="utf-8")
 
     r = client.put(

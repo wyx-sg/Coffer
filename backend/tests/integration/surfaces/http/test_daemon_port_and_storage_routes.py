@@ -39,14 +39,7 @@ def home(tmp_path, monkeypatch) -> Path:
     h = tmp_path / "home"
     (h / ".coffer").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(h))
-    for var in (
-        "COFFER_MEMORY_ROOT",
-        "COFFER_AGENT_STATE_ROOT",
-        "COFFER_KNOWLEDGE_ROOT",
-        "COFFER_SKILLS_ROOT",
-    ):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{h / '.coffer' / 'coffer.db'}")
+    monkeypatch.delenv("COFFER_DB_URL", raising=False)
     return h
 
 
@@ -172,34 +165,7 @@ def _write(path: Path, size: int) -> None:
 @pytest.mark.asyncio
 async def test_the_storage_summary_reports_the_four_kinds(client, home):
     coffer = home / ".coffer"
-    _write(coffer / "knowledge" / "a.md", 100)
-    _write(coffer / "skills" / "s" / "SKILL.md", 50)
-    _write(coffer / "chat-media" / "m1", 300)
-    _write(coffer / "channel-media" / "m2", 200)
-    _write(coffer / "coffer.db", 1000)
-    _write(coffer / "coffer.db-wal", 24)
-    _write(coffer / "memory" / "p1" / "MEMORY.md", 70)
-    _write(coffer / "cache" / "agent" / "summaries.json", 30)
-    async with client:
-        r = await client.get("/api/v1/storage")
-    assert r.status_code == 200
-    body = r.json()
-    # No sync tree: the vault is what it would carry, with no version count.
-    assert body["vault"] == {"path": str(coffer), "bytes": 150, "versions": None}
-    assert body["local_content"]["bytes"] == 500
-    assert body["local_content"]["folder"] == str(coffer)
-    assert sorted(body["local_content"]["locations"]) == [
-        str(coffer / "channel-media"),
-        str(coffer / "chat-media"),
-    ]
-    assert body["history"] == {"path": str(coffer / "coffer.db"), "bytes": 1024}
-    assert body["cache"] == {"bytes": 100}
-
-
-@pytest.mark.asyncio
-async def test_a_synced_vault_reports_its_git_versions(client, home):
-    tree = home / ".coffer" / "sync"
-    tree.mkdir(parents=True)
+    vault = coffer / "vault"
     env = {
         **os.environ,
         "GIT_AUTHOR_NAME": "t",
@@ -207,17 +173,72 @@ async def test_a_synced_vault_reports_its_git_versions(client, home):
         "GIT_COMMITTER_NAME": "t",
         "GIT_COMMITTER_EMAIL": "t@t",
     }
-    subprocess.run(["git", "init", "-q", str(tree)], check=True, env=env)
-    for i in range(3):
-        (tree / f"f{i}").write_text(str(i))
-        subprocess.run(["git", "-C", str(tree), "add", "."], check=True, env=env)
-        subprocess.run(["git", "-C", str(tree), "commit", "-qm", f"c{i}"], check=True, env=env)
+    subprocess.run(["git", "init", "-q", str(vault)], check=True, env=env)
+    _write(vault / "knowledge" / "a.md", 100)
+    _write(vault / "skills" / "s" / "SKILL.md", 50)
+    for i, path in enumerate(("knowledge/a.md", "skills/s/SKILL.md", "knowledge/a.md")):
+        (vault / path).write_text("x" * (100 + i))
+        subprocess.run(["git", "-C", str(vault), "add", "."], check=True, env=env)
+        subprocess.run(["git", "-C", str(vault), "commit", "-qm", f"c{i}"], check=True, env=env)
+    _write(coffer / "content" / "chat-media" / "m1", 300)
+    _write(coffer / "content" / "channel-media" / "m2", 200)
+    _write(coffer / "runs.db", 1000)
+    _write(coffer / "runs.db-wal", 24)
+    _write(coffer / "derived" / "memory" / "p1" / "MEMORY.md", 70)
+    _write(coffer / "derived" / "cache" / "agent" / "summaries.json", 30)
+    async with client:
+        r = await client.get("/api/v1/storage")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["vault"]["path"] == str(vault)
+    assert body["vault"]["versions"] == 3
+    assert body["vault"]["bytes"] > 150
+    # A commit with no Coffer trailers is a person's own: it reads as a disk edit.
+    assert body["vault"]["latest_writer"] == "disk"
+    assert body["vault"]["latest_time"] is not None
+    assert body["vault"]["sync_configured"] is False
+    assert body["local_content"]["bytes"] == 500
+    assert body["local_content"]["folder"] == str(coffer / "content")
+    assert sorted(body["local_content"]["locations"]) == [
+        str(coffer / "content" / "channel-media"),
+        str(coffer / "content" / "chat-media"),
+    ]
+    assert body["history"] == {"path": str(coffer / "runs.db"), "bytes": 1024}
+    assert body["cache"] == {"bytes": 100}
+
+
+@pytest.mark.asyncio
+async def test_a_vault_not_yet_created_reports_no_versions(client, home):
+    async with client:
+        r = await client.get("/api/v1/storage")
+    assert r.json()["vault"] == {
+        "path": str(home / ".coffer" / "vault"),
+        "bytes": 0,
+        "versions": None,
+        "latest_time": None,
+        "latest_writer": None,
+        "sync_configured": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_the_vault_block_names_the_newest_writer_and_the_sync_remote(client, home):
+    from coffer.domain.vault.writers import WRITER_USER, CommitMeta
+    from coffer.domain.vault.writes import Expect
+    from coffer.infrastructure.vault.instance import vault_writer
+
+    meta = CommitMeta(writer=WRITER_USER, operation="edit", summary="Saved", actor="ui")
+    vault_writer().write_file("knowledge/a.md", b"one\n", meta=meta, expected=Expect.ABSENT)
+    remote = home / ".coffer" / "local" / "sync" / "remote.json"
+    remote.parent.mkdir(parents=True)
+    remote.write_text(json.dumps({"url": "https://example.invalid/vault.git"}))
     async with client:
         r = await client.get("/api/v1/storage")
     vault = r.json()["vault"]
-    assert vault["path"] == str(tree)
-    assert vault["versions"] == 3
-    assert vault["bytes"] > 0
+    # The first commit (the daemon's) and the save.
+    assert vault["versions"] == 2
+    assert vault["latest_writer"] == "user"
+    assert vault["sync_configured"] is True
 
 
 # revise-web-ui-ia: web-ui "clearing the cache is confirmed and rebuilt" (the
@@ -226,21 +247,29 @@ async def test_a_synced_vault_reports_its_git_versions(client, home):
 @pytest.mark.asyncio
 async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
     coffer = home / ".coffer"
-    _write(coffer / "memory" / "p1" / "MEMORY.md", 70)
-    _write(coffer / "memory" / "p1" / "notes" / "n.md", 30)
-    _write(coffer / "memory" / ".source_state.json", 10)
-    _write(coffer / "cache" / "agent" / "summaries.json", 40)
-    _write(coffer / "knowledge" / "a.md", 5)
-    _write(coffer / "chat-media" / "m1", 5)
+    memory = coffer / "derived" / "memory"
+    _write(memory / "p1" / "MEMORY.md", 70)
+    _write(memory / "p1" / "notes" / "n.md", 30)
+    _write(memory / ".source_state.json", 10)
+    _write(coffer / "derived" / "cache" / "agent" / "summaries.json", 40)
+    _write(coffer / "vault" / "knowledge" / "a.md", 5)
+    _write(coffer / "content" / "chat-media" / "m1", 5)
     _write(coffer / "vault" / "memory-triggers" / "t.md", 5)
-    _write(coffer / "coffer.db", 5)
+    _write(coffer / "derived" / "sync-conflicts" / "a.md", 5)
+    _write(coffer / "runs.db", 5)
     async with client:
         r = await client.post("/api/v1/storage/cache/clear")
     assert r.status_code == 200
     assert r.json() == {"cleared_bytes": 150}
-    assert (coffer / "memory").is_dir() and list((coffer / "memory").iterdir()) == []
-    assert list((coffer / "cache" / "agent").iterdir()) == []
-    for kept in ("knowledge/a.md", "chat-media/m1", "vault/memory-triggers/t.md", "coffer.db"):
+    assert memory.is_dir() and list(memory.iterdir()) == []
+    assert list((coffer / "derived" / "cache" / "agent").iterdir()) == []
+    for kept in (
+        "vault/knowledge/a.md",
+        "content/chat-media/m1",
+        "vault/memory-triggers/t.md",
+        "derived/sync-conflicts/a.md",
+        "runs.db",
+    ):
         assert (coffer / kept).exists(), kept
     assert audit.events == [("storage_cache_cleared", {"cleared_bytes": 150})]
 
@@ -249,7 +278,7 @@ async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
 async def test_clearing_is_refused_while_a_memory_pass_runs(client, home):
     from coffer.application.upkeep_runs import UPKEEP_RUNS
 
-    _write(home / ".coffer" / "memory" / "p1" / "MEMORY.md", 70)
+    _write(home / ".coffer" / "derived" / "memory" / "p1" / "MEMORY.md", 70)
     assert UPKEEP_RUNS.claim("memory", "p1")
     try:
         async with client:
@@ -258,4 +287,4 @@ async def test_clearing_is_refused_while_a_memory_pass_runs(client, home):
         UPKEEP_RUNS.release("memory", "p1")
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
-    assert (home / ".coffer" / "memory" / "p1" / "MEMORY.md").exists()
+    assert (home / ".coffer" / "derived" / "memory" / "p1" / "MEMORY.md").exists()

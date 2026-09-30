@@ -28,7 +28,7 @@ from coffer.domain.errors import ToolDisabled
 from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -36,12 +36,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 
@@ -70,7 +68,7 @@ async def _services(tmp_path: Path, supervisor_for: dict[str, object]):  # type:
     sm = session_maker(engine)
     rsvc = ResourceService(
         kinds={"mcp_server": make_mcp_kind(supervisor_for)},  # type: ignore[arg-type]
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     return rsvc, engine
@@ -83,7 +81,6 @@ def _resource(name: str) -> Resource:
     carries is the uid."""
     now = datetime.now(tz=UTC)
     return Resource(
-        id=1,
         uid="aa11bb22cc33dd44ee55ff6677889900",
         kind="mcp_server",
         name=name,
@@ -122,7 +119,7 @@ async def test_delete_evicts_active_supervisor_sessions(tmp_path: Path) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
-    repo = SqlAlchemyResourceRepo(sm)
+    repo = make_resource_repo()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
 
     # Wire a real Kind whose on_delete is the production hook.
@@ -274,7 +271,7 @@ async def _session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ig
         secret_resolver=SecretResolver(KeyringAdapter()),
     )
     supervisor_for["session-1"] = sup
-    prefs, inv = MCPCapabilityPreferenceRepo(sm), MCPInvocationRepo(sm)
+    prefs, inv = MCPCapabilityPreferenceStore(derived_sm()), MCPInvocationRepo(sm)
     session = MCPGatewaySession(
         session_id="session-1",
         resource_service=rsvc,

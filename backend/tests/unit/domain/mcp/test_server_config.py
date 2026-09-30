@@ -68,7 +68,7 @@ def test_mcp_server_config_defaults():
 
 def test_mcp_server_config_rejects_an_undeclared_key():
     """The retired ``idle_timeout_seconds`` is stripped from stored configs by
-    migration 0199, so the model refuses it — and any other key it does not
+    the one-time vault upgrade, so the model refuses it — and any other key it does not
     declare — rather than silently dropping it."""
     with pytest.raises(ValidationError, match="idle_timeout_seconds"):
         MCPServerConfig.model_validate(

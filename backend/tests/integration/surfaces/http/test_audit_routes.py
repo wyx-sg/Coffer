@@ -14,14 +14,12 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
+from tests.support.vault_stores import make_resource_repo
 
 
 class _FakeConfig(BaseModel):
@@ -49,7 +47,7 @@ async def _client(tmp_path):
                 config_schema=_FakeConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
 

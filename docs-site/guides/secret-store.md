@@ -11,15 +11,15 @@ No command, route or MCP tool prints a stored value. You see a value only in the
 
 ## How secrets are stored
 
-- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in the `secrets` table of `~/.coffer/coffer.db`. A row holds the ref, the ciphertext and two timestamps — nothing else.
-- One **master key** decrypts them all. It lives in exactly one place. A signed release keeps it in a Keychain item only Coffer's signed binaries can read. A development build — every build from source, and every build until signed releases exist — keeps it in a file beside the database (`~/.coffer/master.key`, mode `0600`, the default) or your OS keychain (opt-in). See [Where the master key lives](#where-the-master-key-lives).
+- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in its own file, `~/.coffer/vault/secret/<ref>.enc` (mode `0600`), holding the Fernet token and nothing else. The token carries its own encryption time; when this machine first stored the ref is kept in `~/.coffer/local/secret-boundary/times.json`. The vault's git repository leaves `secret/` out of its commits until a sync remote carries secrets.
+- One **master key** decrypts them all. It lives in exactly one place. A signed release keeps it in a Keychain item only Coffer's signed binaries can read. A development build — every build from source, and every build until signed releases exist — keeps it in a file (`~/.coffer/master.key`, mode `0600`, the default) or your OS keychain (opt-in). See [Where the master key lives](#where-the-master-key-lives).
 - Resource configuration — MCP servers, providers, channels, the sync remote — holds only **refs**. A ref is resolved to plaintext at the moment of use: when an MCP server is started or an HTTP header is sent, when a provider key is fetched.
 - The daemon is the only process that opens the store. The CLI and web UI write and list secrets through the daemon's `/api/v1/secrets` routes; neither touches the key, and no route hands a value back.
 
 ```mermaid
 flowchart LR
     CFG["resource config: secret_refs"] -->|ref| D["daemon"]
-    D -->|decrypt with master key| DB[("secrets table: ciphertext")]
+    D -->|decrypt with master key| DB[("vault/secret/*.enc: ciphertext")]
     D -->|plaintext, in memory only| UP["upstream process env / HTTP header"]
     MK["master key: Keychain access group (signed) or master.key (development)"] --> D
 ```
@@ -176,7 +176,7 @@ In a development build the key is also simply the file `~/.coffer/master.key` (o
 
 ## Carry the key to another machine
 
-[Vault sync](/guides/vault-sync) can carry secrets to your other machines, but only as ciphertext, and only when you turn it on (`coffer sync remote set <url> --with-secrets`, or **Include secrets** on the Sync page). The master key is never pushed under any setting. A machine that receives ciphertext without the key reports those refs as locked rather than failing quietly.
+[Vault sync](/guides/vault-sync) can carry secrets to your other machines, but only as ciphertext, and only when you turn it on (`coffer sync remote set <url> --with-secret`, or **Include encrypted secrets** on the Sync page). The master key is never pushed under any setting. A machine that receives ciphertext without the key reports those refs as locked rather than failing quietly.
 
 To let a second machine decrypt them, move the key yourself, over a channel you trust:
 
@@ -194,7 +194,7 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 
 ## What never gets logged
 
-- Secret values never appear in the database outside the ciphertext column, in log files, in the audit log, or in the MCP invocation log.
+- Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
 - Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".

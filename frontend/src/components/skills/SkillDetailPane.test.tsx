@@ -3,7 +3,7 @@
 // skill management on REST, the CLI and the web", "Show the commands a skill
 // declares it needs"): its four tabs at their own paths, the Files tab opening
 // on SKILL.md, each agent's copy on Delivery, the declared commands on
-// Requires, the History placeholder, and the built-in skill's refusals. The
+// Requires (History has its own file), and the built-in skill's refusals. The
 // page is mounted the way the router mounts it; only the api modules are
 // mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -194,12 +194,6 @@ acceptance("skill-manager", "the delivery tab shows each agent's copy", async ()
   const second = screen.getByTestId("skill-delivery-codex");
   expect(second).toHaveTextContent("Not delivered");
   expect(second).toHaveTextContent("Not ticked.");
-});
-
-acceptance("skill-manager", "the history tab says versions are not recorded yet", async () => {
-  renderSkillsPage("/skills/hello/history");
-  expect(await screen.findByText("Versions are not recorded yet")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /restore/i })).not.toBeInTheDocument();
 });
 
 acceptance("skill-manager", "a skill's requires tab links each command", async () => {

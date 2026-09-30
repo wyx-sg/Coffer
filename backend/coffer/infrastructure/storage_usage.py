@@ -1,22 +1,27 @@
 """What Coffer keeps on this machine, measured, and the one part that is safe to clear.
 
 Settings > Data (spec daemon "Report what Coffer stores and clear the
-rebuildable cache") shows four kinds of data. The storage ADR
-(docs/decisions/storage-is-five-classes-by-nature.md) gives each kind one
-directory; until its migration lands, the kinds are measured where they live
-today, and every path comes from the helper its owner already resolves it with
-(so an override a test or a user set is honoured here too):
+rebuildable cache") shows four kinds of data, each one of the class
+directories of ADR storage-is-five-classes-by-nature, resolved from ``HOME``
+through ``infrastructure.vault.home`` like every other reader of them:
 
-- **vault** — the sync working tree when it is a git repository (its commit
-  count is the number of versions), else the knowledge and skill trees it
-  would carry, with no version count;
-- **local content** — chat uploads and channel media, which never sync;
-- **history** — the SQLite database the records live in (with its WAL);
+- **vault** — the vault repository (``vault/``), always a git repository, so
+  its commit count is the number of versions, and its newest commit names
+  when and by whom the vault last changed (ADR
+  every-vault-write-is-a-validated-commit-naming-its-writer); its size is
+  the working tree and ``.git`` together; whether a sync remote is set is
+  read from ``local/sync/remote.json``;
+- **local content** — chat uploads and channel media under ``content/``,
+  which never sync;
+- **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``
+  names;
 - **rebuildable cache** — the memory tree (fully derived from the agents' own
   memory; spec memory "Keep the memory tree derived and local") and the
-  transcript summary cache. Clearing it deletes the files and leaves every
-  partition's row, so the next memory update refills the folders. Authored
-  memory triggers live under ``vault/memory-triggers/``, outside the tree.
+  transcript summary cache, both under ``derived/``. Clearing it deletes the
+  files and leaves every partition's record, so the next memory update refills
+  the folders. Authored memory triggers live under ``vault/memory-triggers/``,
+  outside the tree; the rest of ``derived/`` (the uid index, ``derived.db``, a
+  stopped sync round's hand-merge copies) is not the cache this clears.
 
 Everything here blocks on the filesystem; callers run it in a thread.
 """
@@ -28,16 +33,17 @@ import pathlib
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 
+from coffer.domain.vault.history import Commit
+from coffer.domain.vault.writers import display_writer
 from coffer.infrastructure.agent.paths import agent_state_root
-from coffer.infrastructure.channel.telegram_media import default_media_dir
+from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.chat.media_store import default_chat_media_dir
 from coffer.infrastructure.memory.paths import memory_root
-from coffer.infrastructure.sync.paths import knowledge_root, skills_root
-
-
-def coffer_home() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("HOME") or "~").expanduser() / ".coffer"
+from coffer.infrastructure.sync.local_state import JsonRemoteStore
+from coffer.infrastructure.vault.home import content_root, runs_db_path, vault_root
+from coffer.infrastructure.vault.repository import VaultRepository
 
 
 def database_path() -> pathlib.Path | None:
@@ -45,7 +51,7 @@ def database_path() -> pathlib.Path | None:
     url = os.environ.get("COFFER_DB_URL")
     if not url:
         # The same default the composition root opens (surfaces/http/app.py).
-        return pathlib.Path.home() / ".coffer" / "coffer.db"
+        return runs_db_path()
     prefix = url.split(":///", 1)
     if len(prefix) == 2 and prefix[0].startswith("sqlite"):
         return pathlib.Path(prefix[1])
@@ -101,6 +107,11 @@ class Measured:
 @dataclass(frozen=True)
 class VaultUsage(Measured):
     versions: int | None
+    #: When the newest commit was made, and its writer (``agent:<type>`` for
+    #: an agent); both None when there is no repository yet.
+    latest_time: datetime | None = None
+    latest_writer: str | None = None
+    sync_configured: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,25 +133,22 @@ def cache_roots() -> list[pathlib.Path]:
     return [memory_root(), agent_state_root()]
 
 
-def measure(sync_worktree: pathlib.Path | None) -> StorageUsage:
-    """Measure the four kinds; ``sync_worktree`` is the configured sync tree, if any."""
-    home = coffer_home()
-    if sync_worktree is not None and (sync_worktree / ".git").exists():
-        vault = VaultUsage(
-            path=str(sync_worktree),
-            bytes=tree_bytes(sync_worktree),
-            versions=git_version_count(sync_worktree),
-        )
-    else:
-        vault = VaultUsage(
-            path=str(home),
-            bytes=tree_bytes(knowledge_root()) + tree_bytes(skills_root()),
-            versions=None,
-        )
+def measure() -> StorageUsage:
+    """Measure the four kinds."""
+    vault_dir = vault_root()
+    latest = _latest_commit(vault_dir)
+    vault = VaultUsage(
+        path=str(vault_dir),
+        bytes=tree_bytes(vault_dir),
+        versions=git_version_count(vault_dir),
+        latest_time=latest.time if latest else None,
+        latest_writer=display_writer(latest.meta) if latest else None,
+        sync_configured=_sync_configured(),
+    )
     media = [default_chat_media_dir(), default_media_dir()]
     parents = {str(p.parent) for p in media}
     local = LocalContentUsage(
-        folder=parents.pop() if len(parents) == 1 else str(home),
+        folder=parents.pop() if len(parents) == 1 else str(content_root()),
         locations=[str(p) for p in media],
         bytes=sum(tree_bytes(p) for p in media),
     )
@@ -157,6 +165,24 @@ def measure(sync_worktree: pathlib.Path | None) -> StorageUsage:
         history=history,
         cache_bytes=sum(tree_bytes(p) for p in cache_roots()),
     )
+
+
+def _latest_commit(repo: pathlib.Path) -> Commit | None:
+    """The newest commit on ``repo``'s HEAD, or None (no repository, git failing)."""
+    if not (repo / ".git").exists():
+        return None
+    try:
+        found = VaultRepository(repo).log(limit=1)
+    except Exception:
+        return None
+    return found[0] if found else None
+
+
+def _sync_configured() -> bool:
+    try:
+        return JsonRemoteStore().get() is not None
+    except Exception:
+        return False
 
 
 def clear_cache() -> int:

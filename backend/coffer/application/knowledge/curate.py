@@ -7,11 +7,11 @@ A collection is one tree of documents a person and Coffer write together (spec k
 grows by integration rather than by accumulating a file per arrival (see "Curate through
 a fenced four-tool pass").
 
-The same pass also comes back for a **document someone edited** outside it: the sweep
-finds every document whose file changed since curation last stamped it (see "Run
-curation on a sweep and on demand"), and hands it here so the edit is carried into the
-rest of the collection — a correction made in one document reaching the others that say
-the same thing, a new section that belongs in a document of its own moved there.
+The same pass also comes back for a **document someone edited** outside it: the sweep finds
+every document whose content changed since curation last settled it (see "Run curation on
+a sweep and on demand"), and hands it here so the edit is carried into the rest of the
+collection — a correction made in one document reaching the others that say the same
+thing, a new section that belongs in a document of its own moved there.
 
 Four things shape this module:
 
@@ -22,11 +22,11 @@ Four things shape this module:
 * **The catalogue is always in the prompt.** Candidate selection is literal and
   therefore crude; the catalogue is what lets a model conclude that none of the
   five is the right home and open a new document instead.
-* **The item is settled last.** Material leaves the inbox, and an edited document
-  is stamped, only after the loop completes. A pass that raises, or that the recursion
-  limit cut off, leaves both as they were, so a later sweep retries rather than losing
-  what one half-ran over (see "Settle an item only after its pass completes") — until
-  the same item has been cut off three times running, when ``curate_settle`` gives up.
+* **The item is settled last.** Material leaves the inbox, and an edited document is
+  settled, only after the loop completes. A pass that raises, or that the recursion limit
+  cut off, leaves both as they were, so a later sweep retries rather than losing what one
+  half-ran over (see "Settle an item only after its pass completes") — until the same item
+  has been cut off three times running, when ``curate_settle`` gives up.
 * **langgraph stays out.** The loop is reached only through the injected
   :class:`AgenticCurationPort` (import contract 9a), so this module — and the
   whole ``application.knowledge`` package — never imports langchain.
@@ -65,8 +65,9 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
-from coffer.domain.knowledge.history import OP_PASS, WRITER_CURATION, ChangeMeta
+from coffer.domain.knowledge.history import OP_PASS, WRITER_CURATION
 from coffer.domain.resource import Resource
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.history import Transaction
 from coffer.infrastructure.knowledge.inbox import inbox_path
@@ -132,11 +133,10 @@ async def run_curation(
     # turns into a 404.
     row = await service.collection(collection_uid)
     collection = row.name
-    # One commit for the whole pass, naming Coffer's curation and the item (see
-    # "Keep every document's history and undo a pass as a whole"). Opening it
-    # first commits any edit made on disk, so the pass's commit holds only the
-    # pass — which is what lets it be undone as a whole.
-    meta = ChangeMeta(
+    # One vault commit for the whole pass, naming Coffer's curation and the item
+    # (see "Keep every document's history and undo a pass as a whole"). Opening
+    # it commits any edit on disk first, so the pass's commit holds only the pass.
+    meta = CommitMeta(
         WRITER_CURATION, OP_PASS, f"Curate {collection}", actor=actor, collection=collection
     )
     async with recording(service.history, meta) as tx:
@@ -194,7 +194,7 @@ async def _pass(
     edited = item.document is not None
     if item.document is not None:
         # A caller-named document must be THIS collection's: the tools are
-        # fenced to it, and the final stamp must land where the pass could reach.
+        # fenced to it, and the final settle must land where the pass could reach.
         paths.require_document(item.document)
         if paths.collection_of(item.document) != collection:
             raise UnsafeKnowledgePath(item.document, f"not a document of {collection!r}")

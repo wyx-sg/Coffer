@@ -3,8 +3,8 @@
 // where it is, whether its SKILL.md is valid and how many files it holds, why
 // no agent gets it, and the three things to do — Add to library… (registers
 // the folder in place, reach as for a fresh import), Reveal in Finder, and
-// Delete folder… (moved to ~/.coffer/backup/, confirmed first) — with the
-// drift finding's hand-off, which asks an agent to look at the folder and
+// Delete folder… (moved to ~/.coffer/content/backup/, confirmed first) — with
+// the drift finding's hand-off, which asks an agent to look at the folder and
 // say which of the two to press.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";

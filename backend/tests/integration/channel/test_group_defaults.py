@@ -62,7 +62,7 @@ async def test_a_main_chat_setting_becomes_the_default_for_new_threads(
     await env.processor.on_message(_main("/model gpt-5 high", "m-2"))
     await env.processor.on_message(_main(f"/dir {tmp_path}", "m-3"))
 
-    row = await env.threads.get(resource.id, GROUP, "")
+    row = await env.threads.get(resource.uid, GROUP, "")
     assert row is not None
     assert (row.preferred_agent, row.preferred_model, row.preferred_effort, row.preferred_cwd) == (
         "codex",
@@ -108,9 +108,9 @@ async def test_a_group_thread_inherits_the_groups_defaults(env: ChannelEnv) -> N
     assert codex.last_agent_config == {"model": "gpt-5", "effort": "high"}
     # A thread's own setting wins over the group's.
     await env.processor.on_message(_in_thread("/model low", "th-2"))
-    row = await env.threads.get(resource.id, GROUP, "th-2")
+    row = await env.threads.get(resource.uid, GROUP, "th-2")
     assert row is not None and row.preferred_effort == "low"
-    group = await env.threads.get(resource.id, GROUP, "")
+    group = await env.threads.get(resource.uid, GROUP, "")
     assert group is not None and group.preferred_effort == "high"
 
 

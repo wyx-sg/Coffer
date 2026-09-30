@@ -6,9 +6,10 @@ Drives a representative session with a unique sentinel value written into the
 Fernet-encrypted secret store (the same store the composition root wires),
 then greps every persistable surface for the sentinel. Zero plaintext
 occurrences are required — any hit fails the test with a precise pointer to the
-surface where the leak was found. Because the secret now lives encrypted in the
-``secrets`` table, the SQLite-bytes grep is REAL coverage: it proves the
-ciphertext column never exposes plaintext while the value still round-trips.
+surface where the leak was found. Because the secret lives encrypted in its
+own file under ``~/.coffer/vault/secrets/``, the grep over every file
+under ``~/.coffer`` is REAL coverage: it proves the ciphertext file never
+exposes plaintext while the value still round-trips.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from coffer.domain.resource import Kind
 from coffer.infrastructure.logging.setup import _attach_file_handler
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
 )
 from coffer.infrastructure.persistence.base import Base
@@ -44,11 +45,9 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[2] / "fixtures" / "fake_mcp_server.py"
 
@@ -100,10 +99,10 @@ async def test_secret_value_never_in_db_or_logs(
     sm = session_maker(engine)
 
     # Write the sentinel through the Fernet-encrypted store — exactly the path
-    # the composition root uses. The plaintext is encrypted into the
-    # `secrets` table; only the in-memory decrypt below ever sees it as
-    # cleartext, so the DB-bytes grep further down is real coverage.
-    secret_store = EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key())
+    # the composition root uses. The plaintext is encrypted into its file
+    # under ~/.coffer/vault/secrets/; only the in-memory decrypt below ever
+    # sees it as cleartext, so the file grep further down is real coverage.
+    secret_store = EncryptedSecretStore(Fernet.generate_key())
     secret_store.set("leak-test-ref", sentinel)
     assert secret_store.get("leak-test-ref") == sentinel  # round-trips
 
@@ -116,7 +115,7 @@ async def test_secret_value_never_in_db_or_logs(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
 
@@ -167,7 +166,7 @@ async def test_secret_value_never_in_db_or_logs(
         secret_resolver=SecretResolver(secret_store),
         retry_delays=(),
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
@@ -243,6 +242,13 @@ async def test_secret_value_never_in_db_or_logs(
         _check("sqlite DB", "\n".join(db_parts))
     finally:
         sync_conn.close()
+
+    # 1b. Every file under ~/.coffer — the ciphertext file, local state, the
+    #     vault repository's objects.
+    coffer_files = [f for f in (tmp_path / ".coffer").rglob("*") if f.is_file()]
+    assert any(f.suffix == ".enc" for f in coffer_files), "no ciphertext file was written"
+    for found in coffer_files:
+        _check(f"file '{found.relative_to(tmp_path)}'", found.read_bytes().decode("latin-1"))
 
     # 2. Audit query response — serialise all fields.
     _check(

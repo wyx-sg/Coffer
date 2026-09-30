@@ -53,7 +53,6 @@ def keyring_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     (tmp_path / ".codex").mkdir()
     (tmp_path / ".codex" / "config.toml").write_text(CODEX_CONFIG, encoding="utf-8")
     (tmp_path / ".claude").mkdir()

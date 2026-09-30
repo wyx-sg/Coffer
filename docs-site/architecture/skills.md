@@ -9,18 +9,24 @@ A skill is a folder an agent loads when a task calls for it: a `SKILL.md` with i
 
 ## Principles
 
-- **One copy, many readers.** Each skill lives once, in `~/.coffer/skills/<name>/`. Agents receive a link to that folder, never a copy of their own, so an edit reaches every agent at once and nothing can drift apart silently.
+- **One copy, many readers.** Each skill lives once, in `~/.coffer/vault/skills/<name>/`. Agents receive a link to that folder, never a copy of their own, so an edit reaches every agent at once and nothing can drift apart silently.
 - **Nothing is trusted before it is looked at.** A folder, an archive or a repository is read into a staging area first. Coffer says what it found and writes nothing until you confirm.
 - **A source is a pin, not a subscription.** A skill taken from a Git repository stays exactly as it was at the commit it came from. A newer commit is an offer you review, never an automatic change.
 - **The skill decides who gets it.** Whether an agent holds a skill depends on the skill's own switch and its reach, and on nothing stored on the agent.
 
 ## The master folder and delivery
 
-Every managed skill is a `skill` resource in Coffer's registry and one folder under `~/.coffer/skills/`. The folder's name is the skill's name, taken from its `SKILL.md`, and it is fixed once the skill is registered: it is the directory an agent loads the skill from and the name an agent invokes it by.
+Every managed skill is a `skill` resource, filed as `~/.coffer/vault/resources/skill/<name>.json`, and one folder under `~/.coffer/vault/skills/`. Both are in the vault repository, so every change to either is a commit with a history. The folder's name is the skill's name, taken from its `SKILL.md`, and it is fixed once the skill is registered: it is the directory an agent loads the skill from and the name an agent invokes it by.
 
 Delivery is one rule: a skill reaches an agent if and only if the skill is enabled and the agent is inside its reach. The [reconciler](/architecture/reconciler) keeps every agent's skills directory equal to that rule. For each skill an agent should hold, it places a link at `<config_dir>/skills/<name>` pointing at the master folder — a symlink, a junction on Windows, or a copy on a filesystem that supports neither — and it removes links the rule no longer grants. It never overwrites a folder someone else put where a link belongs; that is reported instead.
 
 Because the delivered path is a link, a person editing a skill from inside an agent's folder is editing the master. Nothing needs to be re-delivered after an edit.
+
+## History
+
+The master folders are inside the vault repository, so a skill has a history: every save through Coffer is a commit written by `user`, and an edit made in an editor or by an agent's own file tools is committed as `disk` once the file has been quiet. A save from the web UI states the fingerprint of what it read, so an edit made on disk in the meantime is refused rather than overwritten. The skill's **History** tab lists the versions with who wrote each, shows each version's changes file by file, and restores a version as a new commit after asking; `coffer vault history skills/<name>/` and `coffer vault restore` do the same from the terminal. See [Editing the vault by hand](/guides/vault-files).
+
+Coffer's own `coffer-guide` is the exception: it is rendered from the running build, so it lives under `~/.coffer/derived/skills/coffer-guide/`, outside the vault, and has no history.
 
 ## Where a skill comes from
 
@@ -32,7 +38,7 @@ flowchart LR
   A["Archive (.zip / .skill)"] --> S
   G["Git repository"] --> S
   S --> L{"What was found"}
-  L -->|"confirm"| M["Master folder + resource row"]
+  L -->|"confirm"| M["Master folder + resource file"]
   L -->|"cancel, or an hour passes"| X["Staging removed"]
   M --> D["Reconciler links it into each agent in reach"]
 ```
@@ -63,7 +69,7 @@ The pin travels with the skill to your other machines through vault sync; the sk
 
 ## Checking for updates
 
-Coffer checks each Git-imported skill for newer commits when you ask, and on its own every six hours. A check clones into staging again, resolves the ref, and counts the commits since the pin that change the skill's folder. A ref that moved without touching the folder is up to date. The result — when it ran, whether git reached the repository and git's message if not, what the ref points at, how many commits and files that is — is kept in its own table on this machine only. It is an observation, not part of the vault, so sync never carries it. The six-hourly check skips a skill checked within the last six hours, so a daemon that restarts often does not fetch every repository on every start.
+Coffer checks each Git-imported skill for newer commits when you ask, and on its own every six hours. A check clones into staging again, resolves the ref, and counts the commits since the pin that change the skill's folder. A ref that moved without touching the folder is up to date. The result — when it ran, whether git reached the repository and git's message if not, what the ref points at, how many commits and files that is — is kept in `~/.coffer/local/skill-source-status.json`, on this machine only. It is an observation, not part of the vault, so sync never carries it. The six-hourly check skips a skill checked within the last six hours, so a daemon that restarts often does not fetch every repository on every start.
 
 An unreachable repository changes nothing: the skill keeps working from its pinned copy, and its page shows git's message and when the last check succeeded.
 
@@ -79,9 +85,9 @@ If the master folder was edited since the pin, the update is a **conflict**. You
 
 Automatic repair only puts back a missing or repointed link; it never overwrites a folder Coffer did not make and never picks between two versions. Those cases wait for a person, and each has a confirmed answer:
 
-- **A folder in the way.** The drift report lists a real folder at an agent's link path, whether the delivery was made before or is only wanted now. Comparing it diffs the folder against the master; keeping master moves the folder under `~/.coffer/backup/skills/<agent>/` and links master again, and keeping the agent's version swaps its files into the master first. Only that one agent's copy changes.
+- **A folder in the way.** The drift report lists a real folder at an agent's link path, whether the delivery was made before or is only wanted now. Comparing it diffs the folder against the master; keeping master moves the folder under `~/.coffer/content/backup/skills/<agent>/` and links master again, and keeping the agent's version swaps its files into the master first. Only that one agent's copy changes.
 - **A delete over a foreign copy.** Deleting a skill is refused, with nothing changed, while any agent's path holds a folder Coffer did not make — deleting would either leave it behind or remove someone else's files.
-- **A folder no skill claims.** A folder in the skills store with no record can be registered in place or moved to `~/.coffer/backup/skills/orphans/`; it is never hard-deleted.
+- **A folder no skill claims.** A folder in the skills store with no record can be registered in place or moved to `~/.coffer/content/backup/skills/orphans/`; it is never hard-deleted.
 - **A missing master.** Every read of a skill says whether its master folder is on disk, so a skill that is off still shows that its folder is gone.
 
 A Git skill's source can also be changed: the new repository, ref and folder are staged like an update, measured against the current folder, and recorded only when the preview is applied.

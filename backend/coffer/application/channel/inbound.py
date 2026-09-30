@@ -185,7 +185,7 @@ class InboundProcessor:
             if peer is None:
                 return
         else:
-            peer = await self._peers.get_by_chat(binding.resource.id, msg.chat_id)
+            peer = await self._peers.get_by_chat(binding.resource.uid, msg.chat_id)
             if peer is None:
                 await self._maybe_pair(binding, msg)
                 return

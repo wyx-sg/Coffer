@@ -1,94 +1,91 @@
-"""``mcp_tool_reach``: custom tools' machine-local reach overrides (migration 0115).
+"""Custom tools' reach overrides, on this machine only: ``local/tool-reach.json``.
 
-Implements ``application.mcp.custom_tool_ports.ToolReachRepoPort``. Keyed by
-the group's **uid** and the tool's name, so a group keeps its overrides as its
-config changes; not part of any synced document (spec vault-sync "Keep reach
-machine-local").
+Implements ``application.mcp.custom_tool_ports.ToolReachRepoPort``. A custom
+tool may narrow its group's reach to some agents (spec mcp-gateway "Switch off
+or narrow one custom tool"); like every reach it is a fact about this machine
+(ADR reach-is-a-machine-local-predicate-over-a-context), so it is local state
+beside ``local/reach.json`` and never in the group's vault file::
+
+    {"<group uid>": {"<tool name>": ["<agent uid>", ...]}}
+
+Keyed by the group's uid and the tool's name, so a group keeps its overrides
+as its config changes. A tool with no entry reaches wherever its group does.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import Sequence
-from datetime import UTC, datetime
+from collections.abc import Callable, Sequence
+from pathlib import Path
+from typing import Any
 
-from sqlalchemy import TIMESTAMP, String, Text, delete, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
-
-from coffer.infrastructure.persistence.base import Base
+from coffer.infrastructure.vault.home import local_root
+from coffer.infrastructure.vault.json_store import JsonStore
 
 
-class MCPToolReachModel(Base):
-    __tablename__ = "mcp_tool_reach"
-
-    resource_uid: Mapped[str] = mapped_column(String, primary_key=True)
-    tool: Mapped[str] = mapped_column(String, primary_key=True)
-    agents_json: Mapped[str] = mapped_column(Text, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+def tool_reach_path(home: Path | None = None) -> Path:
+    return local_root(home) / "tool-reach.json"
 
 
-class MCPToolReachRepo:
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
+class MCPToolReachStore:
+    """``ToolReachRepoPort`` over ``local/tool-reach.json``."""
+
+    def __init__(self, path: Path | Callable[[], Path] = tool_reach_path) -> None:
+        self._store = JsonStore(path)
 
     async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, list[str]]]:
-        if not resource_uids:
+        wanted = set(resource_uids)
+        if not wanted:
             return {}
-        async with self._sm() as session:
-            stmt = select(MCPToolReachModel).where(
-                MCPToolReachModel.resource_uid.in_(list(resource_uids))
-            )
-            rows = (await session.execute(stmt)).scalars().all()
         out: dict[str, dict[str, list[str]]] = {}
-        for row in rows:
-            agents = json.loads(row.agents_json)
-            out.setdefault(row.resource_uid, {})[row.tool] = [str(a) for a in agents]
+        for uid, tools in self._store.read().items():
+            if uid not in wanted or not isinstance(tools, dict):
+                continue
+            kept = {
+                str(tool): [str(a) for a in agents]
+                for tool, agents in tools.items()
+                if isinstance(agents, list)
+            }
+            if kept:
+                out[uid] = kept
         return out
 
     async def set_override(self, resource_uid: str, tool: str, agents: list[str] | None) -> None:
-        async with self._sm() as session:
+        def change(doc: dict[str, Any]) -> None:
+            tools = doc.get(resource_uid)
+            tools = dict(tools) if isinstance(tools, dict) else {}
             if agents is None:
-                await session.execute(
-                    delete(MCPToolReachModel).where(
-                        MCPToolReachModel.resource_uid == resource_uid,
-                        MCPToolReachModel.tool == tool,
-                    )
-                )
+                tools.pop(tool, None)
             else:
-                payload = json.dumps(list(agents))
-                now = datetime.now(tz=UTC)
-                await session.execute(
-                    sqlite_insert(MCPToolReachModel)
-                    .values(
-                        resource_uid=resource_uid, tool=tool, agents_json=payload, updated_at=now
-                    )
-                    .on_conflict_do_update(
-                        index_elements=["resource_uid", "tool"],
-                        set_={"agents_json": payload, "updated_at": now},
-                    )
-                )
-            await session.commit()
+                tools[tool] = list(agents)
+            if tools:
+                doc[resource_uid] = tools
+            else:
+                doc.pop(resource_uid, None)
+
+        self._store.update(change)
 
     async def delete_tools(self, resource_uid: str, tools: Sequence[str]) -> None:
         if not tools:
             return
-        async with self._sm() as session:
-            await session.execute(
-                delete(MCPToolReachModel).where(
-                    MCPToolReachModel.resource_uid == resource_uid,
-                    MCPToolReachModel.tool.in_(list(tools)),
-                )
-            )
-            await session.commit()
+        gone = set(tools)
+
+        def change(doc: dict[str, Any]) -> None:
+            current = doc.get(resource_uid)
+            if not isinstance(current, dict):
+                return
+            kept = {t: a for t, a in current.items() if t not in gone}
+            if kept:
+                doc[resource_uid] = kept
+            else:
+                doc.pop(resource_uid, None)
+
+        self._store.update(change)
 
     async def delete_group(self, resource_uid: str) -> None:
-        async with self._sm() as session:
-            await session.execute(
-                delete(MCPToolReachModel).where(MCPToolReachModel.resource_uid == resource_uid)
-            )
-            await session.commit()
+        def change(doc: dict[str, Any]) -> None:
+            doc.pop(resource_uid, None)
+
+        self._store.update(change)
 
 
-__all__ = ["MCPToolReachModel", "MCPToolReachRepo"]
+__all__ = ["MCPToolReachStore", "tool_reach_path"]

@@ -59,7 +59,11 @@ rolled back, with the old data kept read-only for one version.
   they were. An unknown key is reported on the resource as a warning ("field
   `enabeld` is not known to this build"), never refused: to an older build a
   newer build's field and a typo look the same, and refusing the first to catch
-  the second is the `title` failure above.
+  the second is the `title` failure above. This covers a document's top-level
+  fields. A resource's `config` is its kind's own, and every kind's config
+  model refuses a key it does not declare; the vault's resource rule refuses
+  such a file the same way (amended 2026-09-30, when 1.0 dropped the tolerance
+  of retired config keys).
 - **An older file is read, not rewritten.** A build reads a file below its
   current version through the upgrade chain, in memory. It never writes that
   file back at a new version on an ordinary write, and an edit to such a file
@@ -221,3 +225,26 @@ which restores the copy and moves the new vault aside, never a downgrade.
   preserves the uid set; the V4 rehearsal gate — an isolated `HOME`, a copy of a
   real vault, and two machines on different builds upgrading in both orders —
   and a rollback test that restores the pre-migration state byte for byte.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **Per-file versions are in place, the layout commit is not yet.** Every
+  document carries `format_version` (and may carry `format_compat`), and the
+  validator reads each by the rules above: current, older (read, edits
+  refused), newer and readable (kept read-only), newer and unreadable (the last
+  valid version kept, the file flagged). Every kind is at version 1, so no
+  upgrade step exists and no owner machine has anything to commit; the layout
+  commit and its no-loss check are built with the first kind that needs a
+  second version.
+- **The remote's layout must match exactly.** `manifest.json`'s
+  `schema_version` (3) is the layout number. A remote at a newer layout is
+  refused (`remote too new`); a remote at an older one is refused too
+  (`remote too old`) and is rebuilt from a machine that has been upgraded — it
+  is not converted in place, because other machines may still be pushing the
+  old layout into it, and Coffer keeps no reader for an old layout.
+- **The one-time move out of `coffer.db`** is `coffer migrate`, run by the
+  person, with `--rehearse` on a copy and `--rollback` byte for byte, rather
+  than an Alembic step at daemon start. The history database that remains,
+  `runs.db`, still migrates forward through the one Alembic lineage.

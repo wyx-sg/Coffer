@@ -97,7 +97,7 @@ def test_the_plan_lists_drift_and_writes_nothing(
     path = _plant_stale_entry(home, uid)
     audit_before = len(client.get("/audit", params={"limit": 500}).json()["entries"])
     rev_before = client.get(f"/agents/{uid}").json()
-    tree_before = _tree(home, tmp_path / "skills")
+    tree_before = _tree(home, home.coffer_dir / "vault" / "skills")
 
     r = client.get("/reconcile/plan")
     assert r.status_code == 200, r.text
@@ -124,7 +124,7 @@ def test_the_plan_lists_drift_and_writes_nothing(
     assert _mcp_item(extract_json(out.output), uid)["op"] == "modify"
 
     # Nothing was written by either read.
-    assert _tree(home, tmp_path / "skills") == tree_before
+    assert _tree(home, home.coffer_dir / "vault" / "skills") == tree_before
     assert len(client.get("/audit", params={"limit": 500}).json()["entries"]) == audit_before
     assert client.get(f"/agents/{uid}").json() == rev_before
 

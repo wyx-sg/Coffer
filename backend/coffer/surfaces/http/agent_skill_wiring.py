@@ -26,9 +26,7 @@ from coffer.application.agent.mcp_reconcile import McpEntryTarget
 from coffer.application.agent.mcp_service import AgentMcpService, default_shim_resolver
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
-from coffer.application.agent.plugin_sync_state import AgentPluginSyncState
 from coffer.application.agent.service import AgentService
-from coffer.application.agent.sync_reconcile import AgentImportGate
 from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -68,7 +66,7 @@ from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
 from coffer.surfaces.http.skill_dependencies import set_skill_service
 from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.vault_composition import VaultStores
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_hooks_service,
     set_agent_mcp_entry_service,
@@ -79,7 +77,6 @@ from coffer.surfaces.http.workspace_dependencies import (
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 _log = logging.getLogger(__name__)
 
@@ -127,10 +124,9 @@ def wire_agent_and_skill_kinds(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
     secret_store: EncryptedSecretStore,
-    sync: SyncContributions,
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -141,7 +137,7 @@ def wire_agent_and_skill_kinds(
     the cross-kind on_delete hook (deleting an agent cascades into skill
     binding cleanup) can reference both services.
     """
-    binding_repo = SkillBindingRepo(sm)
+    binding_repo = SkillBindingRepo(vault.derived_sm)
     master_store = MasterStore()
     master_store.ensure_root()
     sync_engine = SyncEngine()
@@ -290,13 +286,6 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc,
     )
 
-    # The plugin inventory travels in an export bundle. Codex on a new machine
-    # cannot know which plugins the old one had — that list exists only where
-    # they are installed — so carrying it is a thing no single agent can do for
-    # itself. Import stores the list and writes no agent config (see
-    # ``plugin_sync_state``).
-    sync.state_providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
-
     async def _agent_on_delete(agent: Resource) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,
         # so binding-row lookups inside ``cleanup_bindings_for_agent`` still
@@ -310,19 +299,22 @@ def wire_agent_and_skill_kinds(
         # back whatever the skills' own ``enabled`` + ``scope`` grant.
         on_enabled_changed=_skill_delivery_changed,
     )
+    skill_sources = wire_skill_sources(skill_svc)
+
+    async def _skill_on_delete(skill: Resource) -> None:
+        await skill_svc.cleanup_bindings_for_skill(skill)
+        # The update-check record names the skill by uid in local state;
+        # nothing cascades from a file, so it goes with the skill here.
+        await skill_sources.service.status_repo.delete(skill.uid)
+
     skill_kind = make_skill_kind(
-        skill_svc.cleanup_bindings_for_skill,
+        _skill_on_delete,
         on_scope_changed=_skill_delivery_changed,
         on_enabled_changed=_skill_delivery_changed,
     )
 
     app.state.kinds["agent"] = agent_kind
     app.state.kinds["skill"] = skill_kind
-
-    # Import reconciliation (spec vault-sync): an agent doc only imports where the
-    # agent is installed (gate → quarantine otherwise). Skill delivery after an
-    # import is the reconciler's import pass (``reconcile_wiring``).
-    sync.import_gates.append(AgentImportGate(platform))
 
     set_agent_service(agent_svc)
     set_auto_detect_service(auto_detect_svc)
@@ -336,7 +328,7 @@ def wire_agent_and_skill_kinds(
     wire_cli_requirements(skill_svc, servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)))
 
     return AgentSkillWiring(
-        skill_sources=wire_skill_sources(skill_svc, sm),
+        skill_sources=skill_sources,
         agent_service=agent_svc,
         skill_service=skill_svc,
         builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),

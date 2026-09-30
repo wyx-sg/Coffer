@@ -149,7 +149,7 @@ def config_summary(config: Mapping[str, Any]) -> tuple[str, ...]:
             lines.append(f"Headers it sends (values not shown): {', '.join(headers)}.")
     else:
         lines.append(f"Transport: {kind}.")
-    secrets = _names(transport.get("credential_refs"))
+    secrets = _names(transport.get("secret_refs"))
     if secrets:
         lines.append(
             "Secrets Coffer stores and passes it at start (values not shown): "

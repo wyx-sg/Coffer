@@ -45,8 +45,8 @@ from coffer.domain.secret_errors import (
 from coffer.domain.secrets import is_valid_secret_name, secret_ref, secret_uri
 from coffer.domain.sync.errors import MasterKeyPassphraseTooShort
 from coffer.infrastructure.secret import key_backup, plaintext_scan
+from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.infrastructure.sync.identity import coffer_dir
-from coffer.infrastructure.sync.paths import skills_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.handoff_schemas import handoff_out

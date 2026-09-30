@@ -31,7 +31,6 @@ class _Catalog:
 def _channel_row() -> Resource:
     now = datetime(2026, 9, 13, tzinfo=UTC)
     return Resource(
-        id=1,
         uid="uid-of-the-channel",
         kind="channel",
         name="tg",

@@ -1,6 +1,6 @@
 """The knowledge layer's one service.
 
-Every operation resolves to a filesystem operation over ``~/.coffer/knowledge/``. A
+Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``. A
 collection is one tree of documents that a person and Coffer's curation pass write
 together (spec knowledge "Store each collection as one tree of Markdown files"). What
 this layer adds on top of the directory is the one rule about *how new knowledge
@@ -50,10 +50,10 @@ from coffer.domain.knowledge.history import (
     OP_SAVE,
     OP_SUBMIT,
     WRITER_USER,
-    ChangeMeta,
 )
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.domain.vault.writers import CommitMeta
+from coffer.infrastructure.knowledge import catalogue, curation_state, fs, inbox, paths
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -172,7 +172,7 @@ class KnowledgeService:
         if directory.exists():
             raise CollectionExists(name)
         registered = await self.register_row(name, actor=actor)
-        meta = ChangeMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
+        meta = CommitMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
         async with recording(self.history, meta) as tx:
             fs.create_collection_dir(name)
             if description:
@@ -253,10 +253,10 @@ class KnowledgeService:
         hidden — is refused before the file is looked at.
         """
         collection = await self.require_collection(relpath)
-        meta = ChangeMeta(WRITER_USER, OP_SAVE, f"Edit {relpath}", actor=actor)
+        meta = CommitMeta(WRITER_USER, OP_SAVE, f"Edit {relpath}", actor=actor)
         async with recording(self.history, meta) as tx:
-            saved = fs.save_body(relpath, body, expected_fingerprint=expected_fingerprint)
-            tx.touch(relpath)
+            # Compared again under the vault's write lock (``fs.save_body``).
+            saved = fs.save_body(relpath, body, expected_fingerprint=expected_fingerprint, tx=tx)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_EDITED.value,
             resource=collection,
@@ -304,7 +304,7 @@ class KnowledgeService:
         """
         row = await self.require_collection(collection)
         can_merge = await self._can_merge()
-        meta = ChangeMeta(
+        meta = CommitMeta(
             writer_of(actor_kind),
             OP_SUBMIT if can_merge else OP_PROMOTE,
             f"{'Submit' if can_merge else 'Add'} {title}",
@@ -352,7 +352,7 @@ class KnowledgeService:
         """Remove a document. A person's action — no agent-facing tool deletes."""
         collection = await self.require_collection(relpath)
         async with recording(
-            self.history, ChangeMeta(WRITER_USER, OP_DELETE, f"Delete {relpath}", actor=actor)
+            self.history, CommitMeta(WRITER_USER, OP_DELETE, f"Delete {relpath}", actor=actor)
         ) as tx:
             tx.touch(relpath)
             fs.delete_file(relpath)
@@ -384,7 +384,7 @@ class KnowledgeService:
         """Remove a collection's directory when its Resource is deleted."""
         async with recording(
             self.history,
-            ChangeMeta(WRITER_USER, OP_REMOVE, f"Remove collection {name}", collection=name),
+            CommitMeta(WRITER_USER, OP_REMOVE, f"Remove collection {name}", collection=name),
         ) as tx:
             tx.touch(name)
             fs.remove_collection_dir(name)
@@ -392,8 +392,9 @@ class KnowledgeService:
     async def move_collection(self, old_name: str, new_name: str) -> None:
         """Move a collection's directory when its Resource is renamed; raises
         ``FileExistsError`` when the new name is taken on disk (see ``kind.py``)."""
-        meta = ChangeMeta(WRITER_USER, OP_RENAME, f"Rename collection {old_name} to {new_name}")
+        meta = CommitMeta(WRITER_USER, OP_RENAME, f"Rename collection {old_name} to {new_name}")
         async with recording(self.history, meta) as tx:
             tx.touch(old_name)
-            tx.touch(new_name)
             fs.rename_collection_dir(old_name, new_name)
+            tx.touch(new_name)
+        curation_state.move(old_name, new_name)  # the documents moved unchanged

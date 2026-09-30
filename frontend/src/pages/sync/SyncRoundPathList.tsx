@@ -1,12 +1,11 @@
 // frontend/src/pages/sync/SyncRoundPathList.tsx
 //
-// One titled list of paths from a converge round — agent-merged paths, paths
-// that could not be applied here, secret references this machine cannot
-// decrypt. Three lists with the same shape and three different meanings, so
-// the tone is a prop rather than three near-identical blocks in the card.
+// One titled list of lines from a round — commits pulled, files changed here,
+// files pushed, files a rollback reverses. Several lists with one shape and
+// different meanings, so the tone is a prop rather than near-identical blocks.
 //
-// Renders nothing at all when the list is empty: a round with no failures
-// should not leave an empty "Could not be applied here" heading behind.
+// Renders nothing at all when the list is empty: a round that pushed nothing
+// should not leave an empty "Pushed" heading behind.
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";

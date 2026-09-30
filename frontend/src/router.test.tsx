@@ -115,7 +115,6 @@ test("the Settings addresses land on a live tab", async () => {
   for (const [from, to] of [
     ["/settings", "/settings/general"],
     ["/settings/nope", "/settings/general"],
-    ["/settings/sync", "/sync"],
   ] as const) {
     const location = renderAt(from);
     // The Settings modal is code-split; its first load can take a while.

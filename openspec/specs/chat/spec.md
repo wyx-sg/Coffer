@@ -184,8 +184,10 @@ name a model.
   note says the agent's own default is in use and names no model.
 
 ### Requirement: Persist conversations and messages in SQLite
-System MUST persist conversations and their messages in SQLite as the system of
-record; they are not Resources of the kind-agnostic Resource framework. A
+System MUST persist conversations and their messages in SQLite — the history
+database, `~/.coffer/runs.db` — as the system of record; they are history of this
+machine, never written into the vault, and are not Resources of the kind-agnostic
+Resource framework. A
 message MUST store its role and an ordered list of content blocks of types
 `text`, `tool_use`, `tool_result`, and `attachment` (see "Re-materialise
 attachments from persisted history"); assistant messages MUST also store token
@@ -928,7 +930,7 @@ list with no conversations at all shows its empty state and offers no search.
 ### Requirement: Upload a file for a web message
 The web Chat page MUST be able to hand the daemon a file before sending the
 message that carries it. `POST /api/v1/chat/attachments` takes one file per
-call, stores its bytes under `~/.coffer/chat-media` — never in the chat
+call, stores its bytes under `~/.coffer/content/chat-media` — never in the chat
 database — and answers with an opaque id, the file's display name (its last
 path segment), the type it is stored under and its size. The local path MUST
 NOT appear in the response. The upload is not tied to a conversation, so a
@@ -949,7 +951,7 @@ See [Chat Attachment Uploads](../../../docs/decisions/chat-attachment-uploads.md
 - **GIVEN** a running daemon
 - **WHEN** a PNG is uploaded to `POST /api/v1/chat/attachments`
 - **THEN** the response is 201 with an id, the file's name, `image/png` and its size
-- **AND** the bytes are stored under `~/.coffer/chat-media`, and no local path appears in the response
+- **AND** the bytes are stored under `~/.coffer/content/chat-media`, and no local path appears in the response
 
 #### Scenario: an oversized upload is refused naming the limit
 - **GIVEN** a file larger than 20 MB
@@ -1029,7 +1031,7 @@ never fails the turn. A channel's images take the same path.
 
 ### Requirement: Prune uploaded chat media on the retention cadence
 The web composer's uploads MUST NOT accumulate without bound. On the retention
-cadence, `~/.coffer/chat-media` MUST be swept by the same rule as the channel
+cadence, `~/.coffer/content/chat-media` MUST be swept by the same rule as the channel
 media directory: a file whose mtime is more than 30 days old is deleted, with
 no size cap and no reference check. A full prune reports the count under
 `chat_media`, beside `channel_media`. A reference whose file is gone degrades
@@ -1037,7 +1039,7 @@ to a note that the file could not be read, and sending its id again is refused
 as unknown.
 
 #### Scenario: the chat-media prune deletes stale uploads and keeps fresh ones
-- **GIVEN** `~/.coffer/chat-media` holding one upload older than 30 days and one recent one
+- **GIVEN** `~/.coffer/content/chat-media` holding one upload older than 30 days and one recent one
 - **WHEN** a full retention prune runs
 - **THEN** the stale upload is deleted and the recent one is kept
 - **AND** the prune result reports one deleted file under `chat_media`
@@ -1103,7 +1105,7 @@ same chips. The path is never shown.
 System MUST ship subprocess-backed agent providers for Claude Code and Codex.
 Each runs in a working directory (its `agent_config.cwd`); when a turn supplies
 none, the provider MUST default to the Coffer-managed workspace
-`~/.coffer/workspace` (created on first use) rather than reject the turn — so a
+`~/.coffer/content/workspace` (created on first use) rather than reject the turn — so a
 client with no configured workspace works out of the box. An
 explicitly-supplied cwd MUST be an existing directory or the configuration is
 rejected. Availability MUST reflect whether the agent's binary is resolvable on

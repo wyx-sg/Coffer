@@ -76,7 +76,7 @@ async def resolve_conversation_thread_id(
         return thread_id
     if not binding.adapter.capabilities.direct_threads_are_replies:
         return thread_id
-    row = await threads.get(binding.resource.id, chat_id, thread_id)
+    row = await threads.get(binding.resource.uid, chat_id, thread_id)
     return thread_id if row is not None and row.parallel_ordinal is not None else ""
 
 
@@ -103,7 +103,7 @@ async def _open_thread(ctx: CommandContext, title: str) -> str:
     thread itself is the answer (its root message or topic is in the chat)."""
     binding, peer = ctx.binding, ctx.peer
     threads = ctx.commands._threads
-    ordinal = await threads.next_parallel_ordinal(binding.resource.id, peer.chat_id)
+    ordinal = await threads.next_parallel_ordinal(binding.resource.uid, peer.chat_id)
     mark = parallel_mark(ordinal, title)
     try:
         new_thread = await binding.adapter.open_thread(peer.chat_id, mark, THREAD_BODY)
@@ -114,7 +114,7 @@ async def _open_thread(ctx: CommandContext, title: str) -> str:
             "channel.thread.open_failed", extra={"channel": binding.resource.name}, exc_info=True
         )
         return "⚠️ Could not open a thread — try /thread again."
-    await threads.open_parallel(binding.resource.id, peer.chat_id, new_thread, ordinal, title)
+    await threads.open_parallel(binding.resource.uid, peer.chat_id, new_thread, ordinal, title)
     try:
         # Titled with the mark by ``open_conversation`` itself, since the row now
         # carries the ordinal.
@@ -130,7 +130,7 @@ async def thread_lines(ctx: CommandContext) -> list[str]:
     """The `/status` line for a direct chat's parallel threads:
     ``Parallel threads: 🧵#2 title (idle) · 🧵#3 title (running)`` — at most 20
     named, with the rest counted. Empty when the chat has none."""
-    rows = await ctx.commands._threads.list_parallel(ctx.resource_id, ctx.chat_id)
+    rows = await ctx.commands._threads.list_parallel(ctx.resource_uid, ctx.chat_id)
     if not rows:
         return []
     named = [await _thread_entry(ctx, row) for row in rows[:_LIST_MAX]]

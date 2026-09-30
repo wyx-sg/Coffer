@@ -11,6 +11,9 @@ from datetime import UTC, datetime
 import pytest
 from cryptography.fernet import Fernet
 
+from coffer.domain.vault.layout import SECRET
+from coffer.infrastructure.secret.ref_paths import ref_to_relpath
+from coffer.infrastructure.vault.home import vault_root
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 
 
@@ -28,16 +31,12 @@ def _listed(d: BoundaryDaemon) -> dict[str, dict[str, object]]:
 
 
 def _plant_foreign_ciphertext(d: BoundaryDaemon, ref: str) -> None:
-    """A row that came with the vault from a Mac holding another master key."""
-    now = datetime.now(tz=UTC).isoformat()
+    """A ciphertext file that came with the vault from a Mac holding another
+    master key (ADR storage-is-five-classes-by-nature: ``vault/secret/<ref>.enc``)."""
     blob = Fernet(Fernet.generate_key()).encrypt(b"from-the-other-mac")
-    d.sql(
-        "INSERT INTO secrets (ref, ciphertext, created_at, updated_at) VALUES (?, ?, ?, ?)",
-        ref,
-        blob,
-        now,
-        now,
-    )
+    path = vault_root(d.home) / SECRET / ref_to_relpath(ref)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(blob + b"\n")
 
 
 @pytest.mark.acceptance(

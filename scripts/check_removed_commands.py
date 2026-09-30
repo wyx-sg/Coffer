@@ -130,7 +130,14 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer agent connection", "coffer agent show <name> (field coffer_connection)"),
     ("coffer knowledge save", "edit the file under coffer path knowledge <collection>"),
     ("coffer memory distil", "coffer memory sync"),
-    ("coffer sync rollback", "coffer sync restore"),
+    # Removed by the OpenSpec change file-the-vault-and-sync-it-thinly: a round
+    # stops on any conflict and the person answers it; there is no working tree
+    # to rebuild and no remote history to restore a date from.
+    ("coffer sync adopt", "coffer sync join"),
+    ("coffer sync confirm", "coffer sync hold --confirm"),
+    ("coffer sync reject", "coffer sync hold --restore"),
+    ("coffer sync rebuild", "coffer sync remote clear, then coffer sync join"),
+    ("coffer sync restore", "coffer sync rollback <round>"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
     # Removed by the OpenSpec change add-secret-boundary: no command hands out
@@ -169,13 +176,14 @@ REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("coffer mcp edit", "--credential", "coffer mcp edit … --secret ENV_OR_HEADER=<ref>"),
     ("coffer mcp edit", "--clear-credentials", "coffer mcp edit … --clear-secrets"),
     ("coffer provider add", "--credential-ref", "coffer provider add … --secret-ref <ref>"),
-    ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secrets"),
-    (
-        "coffer sync remote set",
-        "--without-credentials",
-        "coffer sync remote set … --without-secrets",
-    ),
     ("coffer sync remote set", "--credential-ref", "coffer sync remote set … --secret-ref <ref>"),
+    # Sync has no working tree of its own, and its flag names the one kind of
+    # thing it may carry (change file-the-vault-and-sync-it-thinly).
+    ("coffer sync remote set", "--worktree", "coffer sync remote set <url> (no working tree)"),
+    ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secret"),
+    ("coffer sync remote set", "--without-credentials", "coffer sync remote set … --without-secret"),
+    ("coffer sync remote set", "--with-secrets", "coffer sync remote set … --with-secret"),
+    ("coffer sync remote set", "--without-secrets", "coffer sync remote set … --without-secret"),
 )
 
 #: (file, phrase, why this line may name it). The phrase is the removed phrase
@@ -192,13 +200,6 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
     ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
-    # The vault-sync data model is being rewritten on its own branch; delete
-    # this entry when that lands (the gate fails once it matches nothing).
-    (
-        "openspec/specs/vault-sync/data-model.md",
-        "coffer sync key export",
-        "pending vault-sync rewrite",
-    ),
 )
 
 

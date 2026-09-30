@@ -36,7 +36,7 @@ async def _config(env: ChannelEnv, resource: Resource) -> tuple[str | None, str 
 
 
 async def _sticky(env: ChannelEnv, resource: Resource) -> tuple[str | None, str | None]:
-    row = await env.threads.get(resource.id, "owner", "")
+    row = await env.threads.get(resource.uid, "owner", "")
     assert row is not None
     return row.preferred_model, row.preferred_effort
 

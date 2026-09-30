@@ -1,79 +1,137 @@
-"""What about vault convergence needs a person (the Overview list).
+"""What about sync needs a person, for the Overview's list (spec vault-sync
+"Say a vault needs a human where the user already is").
 
-Read off the last recorded round, and only while a remote is configured:
+One item per situation, each with the action that answers it:
 
-- ``sync_conflict`` — git could not merge and nothing resolved it. The action
-  is another round, once the person has resolved it in their own git;
-- ``sync_deletions_held`` — the deletion guard held a round. The action opens
-  the sync status, not the confirm: confirming deletions is an answer about a
-  specific diff, and the Overview does not show it.
+- ``sync_conflicts`` — a round stopped on files both machines changed; the
+  action opens the stopped round;
+- ``sync_deletions_held`` — the deletion breaker held a round;
+- ``sync_join_choices`` — a join left differing files for the person;
+- ``sync_auth_failed`` — the remote refused the push token;
+- ``sync_paused`` — the vault is inside a folder another tool synchronises;
+- ``sync_layout`` — the remote is at another layout than this build's.
 
-Every other status either succeeded, will be retried by the next round on its
-own, or is the person's own choice (a disabled remote, a join not yet made).
+Read off the round state and the last recorded round, only while a remote is
+configured.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
-from coffer.domain.sync.backup import BackupRemote
-from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus
+from coffer.domain.sync.remote import SyncRemote
+from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+from coffer.domain.sync.stops import ConflictFile, Stop, StopKind
 
 KIND = "sync"
 _TITLE = "Sync"
 
 
-class SyncRunsPort(Protocol):
-    async def get_remote(self) -> BackupRemote | None: ...
+class SyncStatePort(Protocol):
+    async def get_remote(self) -> SyncRemote | None: ...
+    async def stop(self) -> Stop | None: ...
+    async def join_choices(self) -> tuple[ConflictFile, ...]: ...
+    async def last_round(self) -> RoundRecord | None: ...
 
-    async def last_run(self) -> ConvergeRun | None: ...
+
+def _item(
+    code: str, reason: str, severity: Severity, path: str, since: str | None, verb: str = "review"
+) -> AttentionItem:
+    return AttentionItem(
+        kind=KIND,
+        uid=None,
+        title=_TITLE,
+        reason_code=code,
+        reason=reason,
+        severity=severity,
+        action=AttentionAction(verb=verb, method="GET", path=path),
+        since=datetime.fromisoformat(since) if since else None,
+    )
+
+
+def _files(n: int) -> str:
+    return "1 file" if n == 1 else f"{n} files"
 
 
 class SyncAttentionSource:
     name = "sync"
     feature: str | None = None
 
-    def __init__(self, *, sync: SyncRunsPort) -> None:
+    def __init__(self, *, sync: SyncStatePort) -> None:
         self._sync = sync
 
     async def items(self) -> Sequence[AttentionItem]:
         if await self._sync.get_remote() is None:
             return []
-        run = await self._sync.last_run()
-        if run is None:
-            return []
-        if run.status is ConvergeStatus.CONFLICT:
-            count = len(run.conflicts)
-            files = "a file" if count == 1 else f"{count} files" if count else "files"
-            return [
-                AttentionItem(
-                    kind=KIND,
-                    uid=None,
-                    title=_TITLE,
-                    reason_code="sync_conflict",
-                    reason=f"The last round could not merge {files}; resolve it in git.",
-                    severity=Severity.ERROR,
-                    action=AttentionAction(verb="run", method="POST", path="/api/v1/sync/run"),
-                    since=run.started_at,
+        out: list[AttentionItem] = []
+        stop = await self._sync.stop()
+        if stop is not None and stop.kind is StopKind.CONFLICTS:
+            out.append(
+                _item(
+                    "sync_conflicts",
+                    f"Sync stopped on {_files(len(stop.conflicts))} both machines changed; "
+                    "choose which version to keep.",
+                    Severity.ERROR,
+                    "/api/v1/sync/stop",
+                    stop.raised_at,
                 )
-            ]
-        if run.status is ConvergeStatus.AWAITING_CONFIRMATION:
-            pending = run.pending
-            return [
-                AttentionItem(
-                    kind=KIND,
-                    uid=None,
-                    title=_TITLE,
-                    reason_code="sync_deletions_held",
-                    reason="A round is held because it would delete more than the guard allows.",
-                    severity=Severity.WARNING,
-                    action=AttentionAction(verb="review", method="GET", path="/api/v1/sync/status"),
-                    since=pending.raised_at if pending is not None else run.started_at,
+            )
+        elif stop is not None and stop.hold is not None:
+            out.append(
+                _item(
+                    "sync_deletions_held",
+                    f"A round would delete {_files(len(stop.hold.paths))}; review before "
+                    "they are deleted or restored.",
+                    Severity.WARNING,
+                    "/api/v1/sync/stop",
+                    stop.raised_at,
                 )
-            ]
-        return []
+            )
+        choices = await self._sync.join_choices()
+        if choices:
+            out.append(
+                _item(
+                    "sync_join_choices",
+                    f"{_files(len(choices))} differ between this machine and the remote; "
+                    "choose which version to keep.",
+                    Severity.WARNING,
+                    "/api/v1/sync/join-choices",
+                    None,
+                )
+            )
+        last = await self._sync.last_round()
+        if last is not None:
+            found = _problem_item(last)
+            if found is not None:
+                out.append(found)
+        return out
 
 
-__all__ = ["SyncAttentionSource", "SyncRunsPort"]
+def _problem_item(last: RoundRecord) -> AttentionItem | None:
+    detail = last.detail or ""
+    if last.status is RoundStatus.AUTH_FAILED:
+        return _item(
+            "sync_auth_failed",
+            f"The sync remote refused this machine's credential. {detail}".strip(),
+            Severity.ERROR,
+            "/api/v1/sync/remote",
+            last.finished_at,
+        )
+    if last.status is RoundStatus.PAUSED_CLOUD_FOLDER:
+        return _item(
+            "sync_paused",
+            f"Sync is paused: the vault is inside a folder {detail} synchronises. "
+            "Move the vault out of it.",
+            Severity.ERROR,
+            "/api/v1/sync/status",
+            last.finished_at,
+        )
+    if last.status in (RoundStatus.REMOTE_TOO_NEW, RoundStatus.REMOTE_TOO_OLD):
+        return _item("sync_layout", detail, Severity.ERROR, "/api/v1/sync/status", last.finished_at)
+    return None
+
+
+__all__ = ["KIND", "SyncAttentionSource", "SyncStatePort"]

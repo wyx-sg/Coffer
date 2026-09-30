@@ -83,8 +83,8 @@ async def _record(
     mode: LinkMode | None,
 ) -> None:
     await service._bindings.upsert(
-        skill_id=skill.id,
-        agent_id=agent.id,
+        skill_uid=skill.uid,
+        agent_uid=agent.uid,
         enabled=True,
         last_linked_at=datetime.now(tz=UTC),
         last_link_path=str(link),
@@ -108,7 +108,7 @@ async def deliver(
     an occupied path raises ``FileExistsError`` and nothing is written.
     """
     master = service._store.paths_for(skill.name).folder
-    prior = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
+    prior = await service._bindings.find(skill_uid=skill.uid, agent_uid=agent.uid)
     if _is_correct_link(service, link, master):
         mode = (prior.link_mode if prior else None) or service._sync.infer_link_mode(link)
         await _record(service, skill, agent, link, mode)
@@ -160,7 +160,7 @@ async def relink(
 async def reclaim(service: SkillService, *, skill: Resource, agent: Resource) -> LinkWrite:
     """Remove the delivered link (never foreign content: see
     ``SyncEngine.remove_directory_link``) and mark the binding row spent."""
-    prior = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
+    prior = await service._bindings.find(skill_uid=skill.uid, agent_uid=agent.uid)
     removed: pathlib.Path | None = None
     if prior is not None and prior.last_link_path:
         path = pathlib.Path(prior.last_link_path)
@@ -171,8 +171,8 @@ async def reclaim(service: SkillService, *, skill: Resource, agent: Resource) ->
         if was_correct and not path.exists():
             removed = path
     await service._bindings.upsert(
-        skill_id=skill.id,
-        agent_id=agent.id,
+        skill_uid=skill.uid,
+        agent_uid=agent.uid,
         enabled=False,
         last_link_path=None,
         link_mode=None,
@@ -194,11 +194,11 @@ async def undo(service: SkillService, write: LinkWrite) -> None:
             service._sync.make_directory_link(target=master, link=write.removed)
     prior = write.prior
     if prior is None:
-        await service._bindings.delete(write.skill.id, write.agent.id)
+        await service._bindings.delete(write.skill.uid, write.agent.uid)
         return
     await service._bindings.upsert(
-        skill_id=write.skill.id,
-        agent_id=write.agent.id,
+        skill_uid=write.skill.uid,
+        agent_uid=write.agent.uid,
         enabled=prior.enabled,
         last_linked_at=prior.last_linked_at,
         last_link_path=prior.last_link_path,

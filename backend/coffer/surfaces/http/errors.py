@@ -19,10 +19,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from coffer.domain import errors
 from coffer.infrastructure.logging.setup import get_trace_id
 from coffer.surfaces.http import openapi_document
+from coffer.surfaces.http.error_status_vault import VAULT_AND_SYNC_STATUS
 
 _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
+    **VAULT_AND_SYNC_STATUS,
     "RESOURCE_NOT_FOUND": 404,
     # Nothing informational is listed under that key to ignore.
     "ATTENTION_NOT_IGNORABLE": 409,
@@ -173,27 +175,6 @@ _STATUS: dict[str, int] = {
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
-    # vault export/import (spec vault-sync, ADR: vault-sync)
-    "SYNC_BUNDLE_TOO_NEW": 409,
-    "SYNC_BUNDLE_INVALID": 422,
-    "SYNC_SERIALIZATION_INVALID": 422,
-    "MASTER_KEY_FILE_INVALID": 422,
-    "MASTER_KEY_PASSPHRASE_WRONG": 422,
-    "MASTER_KEY_PASSPHRASE_TOO_SHORT": 422,
-    # vault backup (spec vault-sync "Allow at most one user-owned sync remote").
-    # A bad remote is the caller's configuration (422); a git invocation that
-    # failed is the remote or the network refusing us, which is an upstream
-    # failure (502).
-    "BACKUP_REMOTE_INVALID": 422,
-    "GIT_MIRROR_FAILED": 502,
-    # A round the user has to answer before anything else can happen. Each is
-    # an ordinary state of the feature, not a fault: without an entry here they
-    # fall through to 500, which tells a browser (and the CLI's exit-code
-    # mapping) that Coffer broke when in fact it is waiting for an answer.
-    "SYNC_NOTHING_PENDING": 409,
-    "SYNC_NOTHING_TO_ROLL_BACK": 409,
-    "SYNC_JOIN_AMBIGUOUS": 409,
-    "SYNC_CANNOT_RETIRE_SELF": 422,
     # provider switching (spec provider-switching)
     "PROVIDER_SECRET_SOURCE_INVALID": 422,
     # Not 422: the patch is well-formed, and the same patch succeeds once the

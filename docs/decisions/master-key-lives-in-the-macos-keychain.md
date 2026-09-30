@@ -64,7 +64,7 @@ Measured on 2026-09-30 (macOS 15.7.7):
 
 Two things constrain where the key and the secrets go. The vault converges
 through a user-owned git remote and carries ciphertext as files under
-`vault/credentials/` when the user opts in
+`vault/secret/` when the user opts in
 ([Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md),
 [Credentials Cross Machines Only as Ciphertext](credentials-across-machines.md)).
 And platform differences live behind one port, with only macOS shipping
@@ -100,7 +100,7 @@ signed app's access control.
   machine). A backup becomes one entry per secret instead of one key, and the
   store's enumeration, audit and reference counting would be rebuilt on
   keychain queries. With one key in an access group no other binary can read
-  (Option C), a copied `vault/credentials/` is already useless.
+  (Option C), a copied `vault/secret/` is already useless.
 - **Why it loses.** It gives up vault sync and the portable store for no gain
   against the threat.
 
@@ -152,7 +152,7 @@ signed app's access control.
   backup or another machine exists, so the product offers the export once after
   migration and on the Security page.
 - **Secrets are unchanged.** Every secret stays Fernet ciphertext in the
-  store — as files in `vault/credentials/` once the storage migration lands —
+  store — as files in `vault/secret/` once the storage migration lands —
   so sync of ciphertext, the fresher-encryption rule and the reference model
   are untouched.
 - **Behind the platform port.** The key's store is a port operation, not a

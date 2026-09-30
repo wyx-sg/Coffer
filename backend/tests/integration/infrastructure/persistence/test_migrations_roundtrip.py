@@ -19,7 +19,10 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0199"
+HEAD_REVISION = "0136"
+#: The last revision whose tables still hold the pre-vault state: a data test
+#: of an older revision reads them here, before 0136 drops them.
+PRE_LAYOUT_REVISION = "0135"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -197,9 +200,7 @@ HEAD_REVISION = "0199"
 # gives the secret store's
 # table a nullable ``last_used_at`` (spec secret "List every stored and cited
 # secret with what uses it") and renames it from ``credentials`` to ``secrets``.
-# 0199 is DATA-only: it strips the retired ``idle_timeout_seconds`` from every
-# ``mcp_server`` config.
-EXPECTED_TABLES = {
+PRE_LAYOUT_TABLES = {
     "resources",
     "audit_log",
     "retention_policies",
@@ -260,8 +261,32 @@ EXPECTED_TABLES = {
 # ``sync_convergence_state`` / ``sync_held_paths`` (0073) and ``sync_runs``
 # (0075). ``memory_overrides`` needs no subtracting: 0070 created it and 0078
 # dropped it again, so head does not carry it either.
+#: 0136: the database becomes ``runs.db`` — every table whose state moved
+#: into files is dropped (ADR storage-is-five-classes-by-nature).
+MOVED_OUT_TABLES = {
+    "resources",
+    "retention_policies",
+    "internal_engine_config",
+    "mcp_capability_preferences",
+    "mcp_server_health",
+    "skill_agent_bindings",
+    "secrets",
+    "channel_peers",
+    "secret_bindings",
+    "secret_approvals",
+    "secret_boundary_settings",
+    "skill_source_status",
+    "mcp_tool_reach",
+    # The sync remote moved to ``local/sync/remote.json``; the pointer and the
+    # retry set are retired (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
+    "sync_remotes",
+    "sync_convergence_state",
+    "sync_held_paths",
+}
+EXPECTED_TABLES = PRE_LAYOUT_TABLES - MOVED_OUT_TABLES
+
 PRE_MERGE_TABLES = (
-    EXPECTED_TABLES
+    PRE_LAYOUT_TABLES
     - {
         "sync_remotes",
         "sync_convergence_state",
@@ -486,8 +511,8 @@ def test_0055_purges_retired_audit_events(tmp_path, monkeypatch):
             )
         conn.commit()
 
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
+    assert _alembic_version(db_path) == PRE_LAYOUT_REVISION
 
     with sqlite3.connect(db_path) as conn:
         survivors = {row[0] for row in conn.execute("SELECT event_type FROM audit_log")}
@@ -523,8 +548,8 @@ def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
         conn.commit()
 
     # Apply 0031.
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
+    assert _alembic_version(db_path) == PRE_LAYOUT_REVISION
 
     with sqlite3.connect(db_path) as conn:
         names = {r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")}
@@ -574,8 +599,8 @@ def test_0032_strips_skill_content_scan_fields(tmp_path, monkeypatch):
         conn.commit()
 
     # Apply 0032.
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
+    assert _alembic_version(db_path) == PRE_LAYOUT_REVISION
 
     with sqlite3.connect(db_path) as conn:
         (raw,) = conn.execute(
@@ -699,8 +724,8 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
 def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
     """The legacy registry had no UNIQUE guard on is_default. If a divergent DB
     holds >1 is_default row, 0036 keeps only the most-recently-updated one as
-    internal_default (spec provider-switching "Keep at most one internal-engine
-    default", normalise-on-import),
+    internal_default (spec provider-switching "Keep at most one internal default
+    connection", normalise-on-import),
     preserving the global
     single-internal-default invariant."""
     db_path = tmp_path / "multi_default.db"
@@ -722,7 +747,7 @@ def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
             )
         conn.commit()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     with sqlite3.connect(db_path) as conn:
         defaults = {
@@ -849,8 +874,8 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
             ).fetchone()
         return json.loads(raw)
 
-    command.upgrade(cfg, "head")
-    assert _alembic_version(db_path) == HEAD_REVISION
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
+    assert _alembic_version(db_path) == PRE_LAYOUT_REVISION
     after = _cfg()
     assert after["protocol"] == "openai"  # wire_format renamed
     assert "wire_format" not in after
@@ -1097,6 +1122,9 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
+    # 0136's downgrade recreates the moved-out tables empty.
+    command.downgrade(cfg, PRE_LAYOUT_REVISION)
+    assert _user_tables(db_path) == PRE_LAYOUT_TABLES
     # 0041 adds channel_thread_conversations (spec channels "Key conversation
     # identity by channel, chat and thread"); present at head,
     # dropped by its downgrade just below head.
@@ -1444,7 +1472,7 @@ def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
     finally:
         conn.close()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     tables = _user_tables(db_path)
     # The repair itself (0010) still ran; 0066 then dropped what it repaired,
@@ -1452,10 +1480,10 @@ def test_db_stamped_by_pre_redesign_branch_is_repaired(tmp_path, monkeypatch):
     assert not ({"documents", "chunks", "documents_fts"} & tables)
     assert "kb_documents" not in tables
     assert "memory_records" not in tables
-    assert _alembic_version(db_path) == HEAD_REVISION
+    assert _alembic_version(db_path) == PRE_LAYOUT_REVISION
 
     # And the repair is idempotent for fresh DBs: a second upgrade is a no-op.
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
     assert not ({"documents", "chunks", "documents_fts"} & _user_tables(db_path))
 
 
@@ -1518,7 +1546,7 @@ def test_migration_0020_resets_legacy_single_stage_conversation_retention(tmp_pa
     finally:
         conn.close()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     conv = _retention_row(db_path, "conversations")
     archive = _retention_row(db_path, "conversations_archive")
@@ -1547,7 +1575,7 @@ def test_migration_0020_keeps_disabled_conversation_retention_disabled(tmp_path,
     command.upgrade(cfg, "0019")
     _seed_retention(db_path, "conversations", None)  # disabled
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     conv = _retention_row(db_path, "conversations")
     archive = _retention_row(db_path, "conversations_archive")
@@ -1567,7 +1595,7 @@ def test_migration_0020_is_noop_when_already_two_stage(tmp_path, monkeypatch):
     _seed_retention(db_path, "conversations", 45)  # custom new-semantics value
     _seed_retention(db_path, "conversations_archive", 10)
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     assert _retention_row(db_path, "conversations")[0] == 45, "custom delete value preserved"
     assert _retention_row(db_path, "conversations_archive")[0] == 10, "custom archive value kept"
@@ -1581,7 +1609,7 @@ def test_migration_0020_is_noop_on_fresh_db_with_no_retention_rows(tmp_path, mon
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, PRE_LAYOUT_REVISION)
 
     conn = sqlite3.connect(str(db_path))
     try:

@@ -22,8 +22,7 @@ Knowledge is not [memory](/guides/memory). Memory is what agents learn while wor
 A **collection** is a top-level folder under the knowledge root:
 
 ```text
-~/.coffer/knowledge/
-├── .git/                         ← hidden: the history of every change
+~/.coffer/vault/knowledge/
 └── payments/                     ← one collection
     ├── README.md               ← what this collection is about
     ├── session-ownership.md    ← a document
@@ -35,9 +34,9 @@ A **collection** is a top-level folder under the knowledge root:
 - **Documents** are the Markdown files in the collection. A document's path is its identity; there is no separate id. File names are slugs of the title, with a suffix such as `-2` on a collision.
 - **Folders** inside a collection are optional and carry no meaning. You, or curation, can create, move and remove them.
 - **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document, counted or curated.
-- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. At the knowledge root it keeps `.git/`, the [history](#history-and-undo) of every change. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
+- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
 
-To move the knowledge root, set `COFFER_KNOWLEDGE_ROOT` in the daemon's environment.
+The knowledge root is inside the vault repository, `~/.coffer/vault`, and `coffer path knowledge` prints it. It cannot be moved elsewhere: a tree outside the vault would be a tree its history cannot see.
 
 ### Frontmatter
 
@@ -50,7 +49,6 @@ description: Which service owns user sessions, and where the TTL is configured.
 actor: user
 created_at: 2026-09-20T08:14:03.512840+00:00
 updated_at: 2026-09-22T10:02:41.090311+00:00
-coffer_curated_at: 2026-09-22T10:02:41.090311+00:00
 ---
 
 The `account-session` service owns ...
@@ -62,9 +60,8 @@ The `account-session` service owns ...
 | `description` | One sentence on what the document covers. Agents see it in the catalogue. |
 | `actor` | `user` or `agent` — who wrote the item it came from. |
 | `created_at`, `updated_at` | Timestamps. |
-| `coffer_curated_at` | Written by Coffer when curation has seen the document. Curation uses it to tell whether you edited the file since. |
 
-Any other key you add is kept, with its value, whenever Coffer rewrites the file.
+Any other key you add is kept, with its value, whenever Coffer rewrites the file. Coffer writes nothing into a document to remember what curation has seen: that is kept on this machine in `~/.coffer/local/curation.json`, as the content each document had when curation last settled it.
 
 ::: tip Name the subject, not the file
 A document must not refer to another knowledge file by its file name or path, because paths change as curation reorganises a collection. Write "see the gateway rate-limit notes", not "see `gateway/rate-limits.md`". Curation refuses to write a document that breaks this rule.
@@ -86,7 +83,7 @@ Knowledge → New collection → Name, What belongs in here → Create collectio
 
 :::
 
-This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. On the Knowledge page, **New collection** asks for both the name and what belongs in the collection. A collection has no title: every page and listing shows it by its folder name. Its description is the opening paragraph of the README: change it with **Edit description** on the collection's page, with `coffer knowledge edit payments --description "…"`, or in the file itself. Either way only that paragraph changes, and anything written under it stays. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it.
+This creates `~/.coffer/vault/knowledge/payments/` and, when you give a description, a `README.md` holding it. On the Knowledge page, **New collection** asks for both the name and what belongs in the collection. A collection has no title: every page and listing shows it by its folder name. Its description is the opening paragraph of the README: change it with **Edit description** on the collection's page, with `coffer knowledge edit payments --description "…"`, or in the file itself. Either way only that paragraph changes, and anything written under it stays. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it.
 
 List what you have:
 
@@ -159,7 +156,7 @@ Coffer saves the attachment into that collection through the same upload path an
 
 ### Edit a file yourself
 
-Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (by its modification time) and carries it through to the rest of the collection.
+Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (its content differs from what curation last settled, and the change was not curation's own or another machine's) and carries it through to the rest of the collection.
 
 On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its title and description are shown above it, read-only, because curation keeps the frontmatter current. **⌘S** saves and **Esc** cancels. A save that finds the file changed on disk since the page loaded it, by your own editor or by a curation pass, is refused as a conflict (`KNOWLEDGE_FILE_CONFLICT`) and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Reload** (take what is on disk), **Compare** (what is on disk against your text) and **Copy my text** — never a second save over it. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, edit the file under `coffer path knowledge <collection>` with your own editor.
 
@@ -184,7 +181,7 @@ The model is instructed on two rules:
 - **Newer statements win.** When an item contradicts a document, the newer statement is kept and the superseded one stays legible as a dated correction.
 - **Your edits stand.** When the item is a document you edited, the pass never reverts or rewords your text. It carries your change outward — correcting other documents that disagree, moving a section that belongs elsewhere.
 
-When the pass completes, the curated item is deleted from the inbox, and an edited document is stamped with `coffer_curated_at`. A pass that does not complete leaves its item where it was, to be tried again. Each pass is one change in the [history](#history-and-undo), so you can read what it did and undo it.
+When the pass completes, the curated item is deleted from the inbox, and an edited document is recorded as settled at its new content. A pass that does not complete leaves its item where it was, to be tried again. Each pass is one change in the [history](#history-and-undo), so you can read what it did and undo it.
 
 ### Limits
 
@@ -196,7 +193,7 @@ When the pass completes, the curated item is deleted from the inbox, and an edit
 | Passes per collection per sweep | 5 |
 | Passes running per collection at once | 1 |
 
-A pass can only retire a document whose content it has already written elsewhere in the same pass. An item larger than the size limit is never shown to the model: an inbox item is kept as a document as it stands, and an edited document is simply stamped. An item that hits the pass's step limit three times in a row is also kept as it stands and not offered again.
+A pass can only retire a document whose content it has already written elsewhere in the same pass. An item larger than the size limit is never shown to the model: an inbox item is kept as a document as it stands, and an edited document is simply recorded as settled. An item that hits the pass's step limit three times in a row is also kept as it stands and not offered again.
 
 ### When curation runs
 
@@ -331,7 +328,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 Every change to a collection is kept as a version: your saves and deletes, each curation pass, a submission that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `curation` (with the item it curated and who submitted it), `sync` or `disk` — so you can always tell who changed what.
 
-The history is a git repository of the knowledge root's own, `~/.coffer/knowledge/.git`, created the first time Coffer records a change. It stays on this machine: vault sync does not carry it. If git is not installed, everything else works as before and history is simply not recorded; the history commands then answer `KNOWLEDGE_HISTORY_UNAVAILABLE`. That refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab and **Recent changes** offer it (**Copy prompt**, or **Ask an agent**), and the history commands print it.
+The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `coffer vault history knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the daemon does not start and names the install step. If git goes missing while the daemon runs, every write keeps working and the history commands answer `KNOWLEDGE_HISTORY_UNAVAILABLE`. That refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`: the History tab and **Recent changes** offer it (**Copy prompt**, or **Ask an agent**), and the history commands print it.
 
 ### Look at a document's history
 
@@ -372,7 +369,7 @@ Every document the pass wrote or retired goes back exactly as it was before the 
 
 On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first, listing each document and what the undo does to it. A refused undo closes the question and the pass's page reads **Not undone**, naming the document that changed since; an undone pass reads **Undone**, with who undid it and when.
 
-- If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead — or undo the pass by hand while keeping the later edits: the refusal carries a prompt for your agent, offered on the pass's page and printed by `coffer knowledge undo`, that names the pass, each document it touched, the ones edited since, and `git -C ~/.coffer/knowledge show <version>` for reading what the pass did. The agent edits only the files; Coffer records what it writes as an edit on disk.
+- If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead — or undo the pass by hand while keeping the later edits: the refusal carries a prompt for your agent, offered on the pass's page and printed by `coffer knowledge undo`, that names the pass, each document it touched, the ones edited since, and `git -C ~/.coffer/vault show <version> -- knowledge` for reading what the pass did. The agent edits only the files; Coffer records what it writes as an edit on disk.
 - Only a curation pass can be undone this way (`KNOWLEDGE_NOT_A_PASS` otherwise). For any other change, restore the document's earlier version.
 
 ## Delete documents and collections

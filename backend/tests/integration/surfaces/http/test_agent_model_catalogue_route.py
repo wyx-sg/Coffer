@@ -40,7 +40,6 @@ class _Agents:
 
 def _codex(config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid="9a1b2c3d4e5f60718293a4b5c6d7e8f9",
         kind="agent",
         name="codex",

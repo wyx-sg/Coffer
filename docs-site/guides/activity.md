@@ -11,7 +11,7 @@ Coffer keeps three records of itself: an audit log of what changed in the vault,
 
 | Record | Answers | Stored in | Where to read it |
 | --- | --- | --- | --- |
-| Audit log | What changed, and who changed it? | `audit_log` table in `coffer.db` | **Activity → Changes**, `coffer log audit` |
+| Audit log | What changed, and who changed it? | `audit_log` table in `runs.db` | **Activity → Changes**, `coffer log audit` |
 | MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → MCP calls**, `coffer log mcp` |
 | Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon log**, `coffer log daemon`, `coffer path logs` |
 
@@ -53,7 +53,7 @@ Each entry holds:
 | `timestamp` | When it happened, in UTC. |
 | `event_type` | What happened, for example `resource_created`, `resource_scope_updated`, `secret_revealed`, `skill_bound`, `provider_switched`, `sync_run`, `token_rotated`. |
 | `resource_kind`, `resource_name` | The resource it happened to, as it was named at that moment. |
-| `resource_id` | The resource's stable row id, so its history survives a rename. |
+| `resource_uid` | The resource's uid, so its history survives a rename. |
 | `actor` | Who did it (below). |
 | `details` | A structured payload, redacted per kind before it is stored. A `secret_set` records that a secret was written, never the secret. |
 
@@ -66,11 +66,12 @@ The **actor** is one of:
 | `cli` | CLI | The CLI sends `X-Coffer-Actor: cli`. |
 | `api` | API | A REST caller that sent no `X-Coffer-Actor` header. |
 | `system` | Coffer | The daemon acting on its own, such as a background pass. |
-| `sync` | Sync | A converge round applying what another machine changed. |
+| `sync` | Sync | A sync round applying what another machine changed. |
 | `channel` | Channel | An action taken from a chat channel. |
+| `human` | human | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
 | an agent's name | the name | An agent's own action, such as its memory hook delivering a note (`memory_delivery_fired`, whose details name the moment, the session and the notes). |
 
-Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup), or that current state cannot reveal later (a retention window). Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
+Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup, restoring an earlier version of a vault file as `vault_file_restored`), or that current state cannot reveal later (a retention window). Every change to the vault is also a commit that names its writer, so `coffer vault history <path>` answers who changed a file even for what the audit log leaves out. Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
 
 ## Query the audit log from the CLI
 
@@ -153,7 +154,7 @@ A background worker prunes on daemon start and every six hours after. Each recor
 | --- | --- | --- |
 | `audit_log` | 365 days | Deletes older audit entries. |
 | `mcp_invocations` | 30 days | Deletes older invocation rows. |
-| `sync_runs` | 90 days | Deletes older converge-round history. |
+| `sync_runs` | 90 days | Deletes older sync-round history. |
 | `conversations_archive` | 7 days | Archives chats with no new message for this long. |
 | `conversations` | 30 days | Deletes archived chats (with their messages) this long after archival. |
 

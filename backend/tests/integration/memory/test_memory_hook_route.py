@@ -78,7 +78,7 @@ def _files(app: HookApp) -> list[str]:
 def test_the_route_answers_every_moment_and_audits_what_it_delivered(app: HookApp) -> None:
     uid = register(app.client, "claude_code")
     repo, name = distilled(app)
-    note_file = str(app.home / "memory" / name / "notes" / f"{_NOTE}.md")
+    note_file = str(app.home / ".coffer" / "derived" / "memory" / name / "notes" / f"{_NOTE}.md")
     r = app.client.post(
         "/memory/triggers",
         json={"note": f"{name}/{_NOTE}", "command": r"^make\s+verify\b", "unless": "v20"},
@@ -334,5 +334,7 @@ def test_distils_proposal_lands_unarmed_and_holds_only_once_a_person_arms_it(
     assert held is not None
     out = held["hookSpecificOutput"]
     assert out["permissionDecision"] == "deny"
-    note_path = app.home / "memory" / trigger["note"].replace("/", "/notes/", 1)
+    note_path = (
+        app.home / ".coffer" / "derived" / "memory" / trigger["note"].replace("/", "/notes/", 1)
+    )
     assert str(note_path) + ".md" in out["permissionDecisionReason"]

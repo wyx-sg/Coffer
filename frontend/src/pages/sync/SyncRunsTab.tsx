@@ -1,79 +1,46 @@
 // frontend/src/pages/sync/SyncRunsTab.tsx — Sync → Runs.
 //
-// Every converge round this machine has run, newest first (spec vault-sync
-// "Run the seven round steps in order"), and the whole of what Sync has to say
-// about itself.
+// What a person opens Sync to find out, top to bottom: whether it is working
+// (`SyncStatusSection` — the status, anything wrong, anything a stopped round
+// or a join is waiting on, and what is waiting to push), then every round this
+// machine has run, newest first.
 //
-// There used to be a Status tab beside this one, carrying two banners: a
-// conflict, and a round the deletion guard held. Both are gone, because
-// neither was a state BESIDE the history — each is the newest row OF it. A
-// held round is a round; splitting "what is waiting" from "what has happened"
-// made one situation readable in two places and actionable in only one.
-//
-// The shared DataTable, so search, the status filter and paging come for free
-// and this does not become a bespoke table. The whole window arrives in one
-// request and is filtered in the browser, exactly as the Activity page's tabs
-// do, because 500 rounds is a small payload and a server round-trip per
-// keystroke is not worth it.
-//
-// Rounds that changed nothing are FOLDED rather than listed or dropped — see
-// `syncRunRows.ts` for why both alternatives are worse. They were the majority
-// (14 of 27 here), and one row each buried everything that mattered; but they
-// are also the only evidence that a vault which stopped converging on Tuesday
-// is not simply a vault with nothing to do, so a fold that states its span
-// keeps what a filter would have thrown away.
+// The shared DataTable, so search, the status filter and paging come for free.
+// The whole window arrives in one request and is filtered in the browser,
+// because 500 rounds is a small payload and a round-trip per keystroke is not
+// worth it. Rounds that repeated one outcome are FOLDED rather than listed or
+// dropped — see `syncRunRows.ts` for why both alternatives are worse.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type FilterDef } from "@/components/DataTable";
 import { translateApiError } from "@/lib/api/errors";
-import { useSyncRuns, useSyncStatus } from "@/lib/hooks/useSync";
-import { heldRoundId, rollbackTargetId } from "./syncRowActions";
-import type { RunRecord } from "@/lib/api/sync";
+import type { SyncRound } from "@/lib/api/sync";
+import { useSyncRuns } from "@/lib/hooks/useSync";
 import { formatDateTime } from "@/lib/utils";
-import { SyncConflictBanner } from "./SyncConflictBanner";
 import { SyncRunDetail } from "./SyncRunDetail";
-import { rowStatus, statusLabel, syncRunColumns } from "./syncRunColumns";
+import { SyncStatusSection } from "./SyncStatusSection";
+import { rowStatus, syncRunColumns } from "./syncRunColumns";
+import { ROUND_STATUSES, statusLabel } from "./syncRoundStatus";
 import { rowSearchHaystack } from "./syncRunSearch";
-import {
-  collapseRepeats,
-  groupSpan,
-  type SyncRunRow,
-} from "./syncRunRows";
-
-/** The statuses a round can end in — the filter's options, in severity order. */
-const STATUSES = [
-  "ok",
-  "no_change",
-  "conflict",
-  "awaiting_confirmation",
-  "push_failed",
-  "failed",
-  "disabled",
-  "awaiting_join",
-] as const;
+import { collapseRepeats, groupSpan, type SyncRunRow } from "./syncRunRows";
 
 interface Props {
   /** False while another tab is in front: no request, no discarded response. */
   enabled: boolean;
 }
 
-
-/** A folded row opened up: which rounds it stands in for, and what they said.
- *
- * A stretch of quiet rounds has nothing per round worth a line — the times
- * are the whole content. A stretch of failures does: the message. It is the
- * same message on every member (that is what let them fold), so it is stated
- * once above the times rather than repeated down the list. */
-function GroupDetail({ runs }: { runs: RunRecord[] }) {
+/** A folded row opened up: the rounds it stands in for. A stretch of failures
+ *  shares one message — that is what let them fold — so it is stated once. */
+function GroupDetail({ runs }: { runs: SyncRound[] }) {
   const { t } = useTranslation();
   const span = groupSpan(runs);
-  const shared = runs[0]?.error ?? null;
+  const shared = runs[0]?.detail ?? null;
   return (
     <div className="space-y-2 px-4 py-3">
       <p className="text-sm text-muted-foreground">
-        {t("sync.runs.quietDetail", {
+        {t("sync.runs.foldedDetail", {
           count: span.count,
           from: formatDateTime(span.from),
           to: formatDateTime(span.to),
@@ -82,45 +49,26 @@ function GroupDetail({ runs }: { runs: RunRecord[] }) {
       {shared ? <p className="font-mono text-xs text-destructive">{shared}</p> : null}
       <ul className="space-y-0.5 font-mono text-xs text-muted-foreground">
         {runs.map((run) => (
-          <li key={run.id}>{formatDateTime(run.finished_at)}</li>
+          <li key={`${run.id}-${run.finished_at}`}>{formatDateTime(run.finished_at)}</li>
         ))}
       </ul>
     </div>
   );
 }
 
-export function SyncRunsTab({ enabled }: Props) {
+function RunsTable({ enabled }: Props) {
   const { t } = useTranslation();
-  // isLoading, not isPending: a disabled query stays "pending" forever, which
-  // would leave a tab that has never been opened stuck on the loading card the
-  // moment it is.
+  // isLoading, not isPending: a disabled query stays "pending" forever.
   const { data, isLoading, error } = useSyncRuns(enabled);
-  // The vault's CURRENT pending state, which the history cannot answer on its
-  // own: several rows keep `awaiting_confirmation` as their outcome after the
-  // situation was answered, because answering raises a further round rather
-  // than rewriting the ones that were held.
-  const status = useSyncStatus();
-  const runs = useMemo(() => data?.runs ?? [], [data]);
-  const rows = useMemo(() => collapseRepeats(runs), [runs]);
-  // Which row may offer "Undo this round": `POST /sync/rollback` names no
-  // round, it reverses the newest pre-apply snapshot, so exactly one row can
-  // honestly carry the action. Computed over the WHOLE history rather than the
-  // visible page — a filter that hides the newest round must not promote the
-  // one under it into a target it is not.
-  const rollbackTarget = useMemo(() => rollbackTargetId(runs), [runs]);
-  const heldTarget = useMemo(
-    () => heldRoundId(runs, Boolean(status.data?.last_run?.pending)),
-    [runs, status.data],
-  );
-  const conflicts = status.data?.last_run?.conflicts ?? [];
+  const rows = useMemo(() => collapseRepeats(data?.rounds ?? []), [data]);
 
   const filters: FilterDef<SyncRunRow>[] = [
     {
       key: "status",
-      label: t("sync.history.filter.outcome"),
+      label: t("sync.runs.filter"),
       allLabel: t("resources.status.all"),
       accessor: rowStatus,
-      options: STATUSES.map((s) => ({ value: s, label: statusLabel(t, s) })),
+      options: ROUND_STATUSES.map((s) => ({ value: s, label: statusLabel(t, s) })),
     },
   ];
 
@@ -133,9 +81,7 @@ export function SyncRunsTab({ enabled }: Props) {
       </Card>
     );
   }
-
-  // An error renders inside this tab — a daemon too old to serve /sync/runs
-  // 404s, and that must not blank the two tabs it does still serve.
+  // Rendered inside this tab, so a failing history never blanks the others.
   if (error) {
     return (
       <Card className="paper-card border-destructive/40">
@@ -143,36 +89,29 @@ export function SyncRunsTab({ enabled }: Props) {
       </Card>
     );
   }
-
   return (
-    <div className="space-y-4">
-      {/* The one thing that is genuinely not a row: a conflict names paths the
-          user has to go and resolve with their own git, in a working tree the
-          table has no column for. It stays a banner, above the round it
-          belongs to. */}
-      {conflicts.length > 0 ? (
-        <SyncConflictBanner
-          paths={conflicts}
-          worktree={status.data?.remote?.worktree_path ?? null}
-        />
-      ) : null}
-      <p className="text-sm text-muted-foreground">{t("sync.history.description")}</p>
-      {/* No re-sort: the daemon returns the rounds newest-first, the fold
-          preserves that order, and DataTable preserves the order it is handed. */}
-      <DataTable
-        rows={rows}
-        columns={syncRunColumns(t, { rollbackTarget, heldTarget })}
-        rowKey={(row) => row.id}
-        search={{
-          accessor: (row) => rowSearchHaystack(t, row),
-          placeholder: t("sync.history.searchPlaceholder"),
-        }}
-        filters={filters}
-        getRowDetail={(row) =>
-          row.kind === "run" ? <SyncRunDetail run={row.run} /> : <GroupDetail runs={row.runs} />
-        }
-        emptyMessage={t("sync.history.empty")}
-      />
+    <DataTable
+      rows={rows}
+      columns={syncRunColumns(t)}
+      rowKey={(row) => row.id}
+      search={{
+        accessor: (row) => rowSearchHaystack(t, row),
+        placeholder: t("sync.runs.searchPlaceholder"),
+      }}
+      filters={filters}
+      getRowDetail={(row) =>
+        row.kind === "run" ? <SyncRunDetail run={row.run} /> : <GroupDetail runs={row.runs} />
+      }
+      emptyMessage={t("sync.runs.empty")}
+    />
+  );
+}
+
+export function SyncRunsTab({ enabled }: Props) {
+  return (
+    <div className="space-y-6">
+      <SyncStatusSection />
+      <RunsTable enabled={enabled} />
     </div>
   );
 }

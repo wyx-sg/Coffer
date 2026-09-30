@@ -68,7 +68,7 @@ converge round's own lock, and it is skipped while a round is held for
 confirmation or stopped on a conflict
 (spec vault-sync "Never overlap a curation pass and a round"). When the owner's
 deletion does meet an edit made elsewhere, the edit wins
-(spec vault-sync "Let an edit beat a curation deletion").
+(the former vault-sync requirement "Let an edit beat a curation deletion").
 
 Pros: removes the duplicate at its source; costs one field on a row that was
 already installation-wide and already synced; no coordination protocol.

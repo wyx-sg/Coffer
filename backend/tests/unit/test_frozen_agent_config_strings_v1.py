@@ -58,7 +58,6 @@ _HOOK_COMMAND = f': coffer-memory; {_CLI} memory hook --agent-uid {_AGENT_UID} -
 
 def _resource(kind: str, name: str, config: dict[str, Any], uid: str) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind=kind,
         name=name,

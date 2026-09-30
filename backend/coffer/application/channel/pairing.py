@@ -143,14 +143,14 @@ async def claim_pairing(
         _logger.debug("channel.inbound.ignored", extra={"channel": binding.resource.name})
         return None
     peer = ChannelPeer(
-        resource_id=binding.resource.id,
+        resource_uid=binding.resource.uid,
         chat_id=chat_id,
         display_name=sender_display,
         paired_at=datetime.now(tz=UTC),
         sender_id=sender_id or None,
     )
     await peers.upsert_replacing(
-        peer, await _previous_owner_chats(peers, binding.resource.id, chat_id, peer.sender_id)
+        peer, await _previous_owner_chats(peers, binding.resource.uid, chat_id, peer.sender_id)
     )
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
@@ -166,7 +166,7 @@ async def claim_pairing(
 
 
 async def _previous_owner_chats(
-    peers: ChannelPeerRepoPort, resource_id: int, chat_id: str, sender_id: str | None
+    peers: ChannelPeerRepoPort, resource_uid: str, chat_id: str, sender_id: str | None
 ) -> list[str]:
     """The chats to un-pair: every one that belongs to anyone but the claimer.
 
@@ -188,7 +188,7 @@ async def _previous_owner_chats(
     ``upsert_replacing``, so a failure cannot leave the channel ownerless.
     """
     drop: list[str] = []
-    for existing in await peers.list_by_resource(resource_id):
+    for existing in await peers.list_by_resource(resource_uid):
         if existing.chat_id == chat_id:
             continue  # the upsert rebinds this row in place
         if sender_id is not None and existing.sender_id == sender_id:

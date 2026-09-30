@@ -38,7 +38,6 @@ class _FakeAgents:
             raise ResourceNotFound(uid)
         now = datetime(2026, 6, 21, tzinfo=UTC)
         return Resource(
-            id=1,
             uid=self.uid,
             kind="agent",
             name=self._name,

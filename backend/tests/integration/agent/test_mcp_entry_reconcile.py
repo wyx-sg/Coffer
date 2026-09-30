@@ -53,7 +53,6 @@ def _agent(uid: str, agent_type: AgentType, config_dir: pathlib.Path | None = No
     if config_dir is not None:
         config["config_dir"] = str(config_dir)
     return Resource(
-        id=abs(hash(uid)) % 10_000,
         uid=uid,
         kind="agent",
         name=f"{agent_type.value}-{uid}",

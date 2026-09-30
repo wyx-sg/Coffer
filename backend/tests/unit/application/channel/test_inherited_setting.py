@@ -13,7 +13,7 @@ from coffer.application.channel.store_ports import ChannelThreadConversation
 
 def _row(thread: str, **fields: str | None) -> ChannelThreadConversation:
     return ChannelThreadConversation(
-        resource_id=1,
+        resource_uid=1,
         chat_id="g",
         thread_id=thread,
         active_conversation_id=None,

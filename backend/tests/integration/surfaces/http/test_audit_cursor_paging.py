@@ -46,7 +46,7 @@ class _Env:
                 id=None,
                 timestamp=at,
                 event_type=event_type,
-                resource_id=None,
+                resource_uid=None,
                 resource_kind=kind,
                 resource_name="probe",
                 actor="api",

@@ -1,238 +1,210 @@
-"""The secret boundary's tables: approved bindings, pending approvals, switches.
+"""The secret boundary's machine-local state: bindings, approvals, switches.
 
-Same shape as :mod:`encrypted_store`: stdlib ``sqlite3`` with a short-lived
-connection per call, because the gate is consulted from the synchronous
-``SecretResolver.materialize`` path that runs in worker threads. Async
-callers go through ``asyncio.to_thread``; nothing here is called on the loop.
+Which destinations a ref has been approved for, the approvals waiting on a
+person, and the boundary's own switches are true of this machine only — the
+approval happened here, in front of this machine's app (ADR
+only-a-present-human-sees-a-secret-or-sends-it-somewhere-new) — so they are
+``local/`` state (ADR storage-is-five-classes-by-nature), never in the vault
+and never synced. Three JSON files under ``local/secret-boundary/``, each read whole
+and changed under its file's lock (``JsonStore``):
 
-No plaintext is ever written here. A pending value replacement arrives already
-encrypted by the secret store's Fernet key.
+- ``bindings.json`` — ``{"bindings": [binding, ...]}``, unique on
+  ``(ref, destination_kind, destination_uid, slot)``;
+- ``approvals.json`` — ``{"approvals": [approval, ...]}``; a pending value
+  replacement carries its ciphertext base64-encoded in ``pending_ciphertext``,
+  already encrypted with the secret store's key, and loses it once decided;
+- ``settings.json`` — ``{key: value}``.
+
+The gate is consulted from the synchronous ``SecretResolver.materialize``
+path in worker threads; async callers go through ``asyncio.to_thread``. No
+plaintext is ever written here.
 """
 
 from __future__ import annotations
 
-import pathlib
-import sqlite3
-from contextlib import closing
+import base64
+import dataclasses
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from coffer.domain.secrets import SecretApproval, SecretBinding
+from coffer.infrastructure.vault.home import local_root
+from coffer.infrastructure.vault.json_store import JsonStore
 
-_APPROVAL_COLUMNS = (
-    "id, op, status, created_at, requested_by, ref, destination_kind, destination_uid, "
-    "destination_label, slot, target, target_fingerprint, decided_at, decided_by"
-)
-
-
-def _approval(row: tuple[Any, ...]) -> SecretApproval:
-    return SecretApproval(
-        id=row[0],
-        op=row[1],
-        status=row[2],
-        created_at=row[3],
-        requested_by=row[4],
-        ref=row[5],
-        destination_kind=row[6],
-        destination_uid=row[7],
-        destination_label=row[8],
-        slot=row[9],
-        target=row[10],
-        target_fingerprint=row[11],
-        decided_at=row[12],
-        decided_by=row[13],
-    )
+_BINDINGS = "bindings"
+_APPROVALS = "approvals"
+_PENDING = "pending_ciphertext"
+_BINDING_FIELDS = tuple(f.name for f in dataclasses.fields(SecretBinding))
+_APPROVAL_FIELDS = tuple(f.name for f in dataclasses.fields(SecretApproval))
 
 
-def _binding(row: tuple[Any, ...]) -> SecretBinding:
-    return SecretBinding(
-        ref=row[0],
-        destination_kind=row[1],
-        destination_uid=row[2],
-        slot=row[3],
-        target_fingerprint=row[4],
-        approved_at=row[5],
-        approval_id=row[6],
-    )
+def _binding(row: dict[str, Any]) -> SecretBinding:
+    fields: dict[str, Any] = {k: row.get(k) for k in _BINDING_FIELDS}
+    return SecretBinding(**fields)
 
 
-_BINDING_COLUMNS = (
-    "ref, destination_kind, destination_uid, slot, target_fingerprint, approved_at, approval_id"
-)
+def _approval(row: dict[str, Any]) -> SecretApproval:
+    fields: dict[str, Any] = {k: row.get(k) for k in _APPROVAL_FIELDS}
+    return SecretApproval(**fields)
 
 
-class SqliteBoundaryStore:
-    """Bindings, approvals and switches in the coffer DB."""
+def _binding_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (row["ref"], row["destination_kind"], row["destination_uid"], row["slot"])
 
-    def __init__(self, db_path: pathlib.Path) -> None:
-        self._db_path = db_path
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.execute("PRAGMA busy_timeout = 5000")
-        return conn
+def _newest_first(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(rows, key=lambda r: (r.get("created_at") or "", r.get("id") or ""), reverse=True)
+
+
+class FileBoundaryStore:
+    """Bindings, approvals and switches as JSON files under ``local/secret-boundary/``.
+
+    ``home`` is the user's home; left out, every call resolves it from
+    ``HOME``.
+    """
+
+    def __init__(self, home: Path | None = None) -> None:
+        def at(name: str) -> Callable[[], Path]:
+            return lambda: local_root(home) / "secret-boundary" / name
+
+        self._bindings = JsonStore(at("bindings.json"))
+        self._approvals = JsonStore(at("approvals.json"))
+        self._settings = JsonStore(at("settings.json"))
+
+    def _binding_rows(self) -> list[dict[str, Any]]:
+        return list(self._bindings.read().get(_BINDINGS, []))
+
+    def _approval_rows(self) -> list[dict[str, Any]]:
+        return list(self._approvals.read().get(_APPROVALS, []))
 
     # --- bindings -----------------------------------------------------------
 
     def get_binding(self, ref: str, kind: str, uid: str, slot: str) -> SecretBinding | None:
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                f"SELECT {_BINDING_COLUMNS} FROM secret_bindings WHERE ref = ? "
-                "AND destination_kind = ? AND destination_uid = ? AND slot = ?",
-                (ref, kind, uid, slot),
-            ).fetchone()
-        return _binding(row) if row else None
+        wanted = (ref, kind, uid, slot)
+        for row in self._binding_rows():
+            if _binding_key(row) == wanted:
+                return _binding(row)
+        return None
 
     def bindings(self, ref: str | None = None) -> list[SecretBinding]:
-        sql = f"SELECT {_BINDING_COLUMNS} FROM secret_bindings"
-        args: tuple[Any, ...] = ()
-        if ref is not None:
-            sql += " WHERE ref = ?"
-            args = (ref,)
-        with closing(self._connect()) as conn:
-            return [_binding(r) for r in conn.execute(sql + " ORDER BY ref, slot", args)]
+        rows = [r for r in self._binding_rows() if ref is None or r["ref"] == ref]
+        return [_binding(r) for r in sorted(rows, key=lambda r: (r["ref"], r["slot"]))]
 
     def has_any_binding(self, ref: str) -> bool:
-        with closing(self._connect()) as conn:
-            row = conn.execute("SELECT 1 FROM secret_bindings WHERE ref = ?", (ref,)).fetchone()
-        return row is not None
+        return any(r["ref"] == ref for r in self._binding_rows())
 
     def put_binding(self, binding: SecretBinding) -> None:
-        with closing(self._connect()) as conn, conn:
-            conn.execute(
-                "INSERT INTO secret_bindings "
-                f"({_BINDING_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(ref, destination_kind, destination_uid, slot) DO UPDATE SET "
-                "target_fingerprint = excluded.target_fingerprint, "
-                "approved_at = excluded.approved_at, approval_id = excluded.approval_id",
-                (
-                    binding.ref,
-                    binding.destination_kind,
-                    binding.destination_uid,
-                    binding.slot,
-                    binding.target_fingerprint,
-                    binding.approved_at,
-                    binding.approval_id,
-                ),
-            )
+        row = dataclasses.asdict(binding)
+
+        def upsert(doc: dict[str, Any]) -> None:
+            rows = [r for r in doc.get(_BINDINGS, []) if _binding_key(r) != _binding_key(row)]
+            doc[_BINDINGS] = [*rows, row]
+
+        self._bindings.update(upsert)
 
     def delete_bindings(self, ref: str) -> None:
         """Forget every binding of a ref — only when the ref itself is deleted."""
-        with closing(self._connect()) as conn, conn:
-            conn.execute("DELETE FROM secret_bindings WHERE ref = ?", (ref,))
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc[_BINDINGS] = [r for r in doc.get(_BINDINGS, []) if r["ref"] != ref]
+
+        self._bindings.update(drop)
 
     # --- approvals ----------------------------------------------------------
 
     def create_approval(self, approval: SecretApproval, ciphertext: bytes | None = None) -> None:
-        with closing(self._connect()) as conn, conn:
-            conn.execute(
-                f"INSERT INTO secret_approvals ({_APPROVAL_COLUMNS}, pending_ciphertext) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    approval.id,
-                    approval.op,
-                    approval.status,
-                    approval.created_at,
-                    approval.requested_by,
-                    approval.ref,
-                    approval.destination_kind,
-                    approval.destination_uid,
-                    approval.destination_label,
-                    approval.slot,
-                    approval.target,
-                    approval.target_fingerprint,
-                    approval.decided_at,
-                    approval.decided_by,
-                    ciphertext,
-                ),
-            )
+        row = dataclasses.asdict(approval)
+        row[_PENDING] = base64.b64encode(ciphertext).decode("ascii") if ciphertext else None
+
+        def insert(doc: dict[str, Any]) -> None:
+            rows = doc.get(_APPROVALS, [])
+            if any(r["id"] == approval.id for r in rows):
+                raise ValueError(f"approval {approval.id!r} already exists")
+            doc[_APPROVALS] = [*rows, row]
+
+        self._approvals.update(insert)
 
     def get_approval(self, approval_id: str) -> SecretApproval | None:
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                f"SELECT {_APPROVAL_COLUMNS} FROM secret_approvals WHERE id = ?",
-                (approval_id,),
-            ).fetchone()
-        return _approval(row) if row else None
+        for row in self._approval_rows():
+            if row["id"] == approval_id:
+                return _approval(row)
+        return None
 
     def pending_ciphertext(self, approval_id: str) -> bytes | None:
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT pending_ciphertext FROM secret_approvals WHERE id = ?", (approval_id,)
-            ).fetchone()
-        return bytes(row[0]) if row and row[0] is not None else None
+        for row in self._approval_rows():
+            if row["id"] == approval_id:
+                sealed = row.get(_PENDING)
+                return base64.b64decode(sealed) if sealed else None
+        return None
 
     def find_open_bind(
         self, ref: str, kind: str, uid: str, slot: str, target_fingerprint: str
     ) -> SecretApproval | None:
         """The pending — or refused — approval for exactly this binding and target."""
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                f"SELECT {_APPROVAL_COLUMNS} FROM secret_approvals "
-                "WHERE status IN ('pending', 'rejected') AND op = 'bind' AND ref = ? "
-                "AND destination_kind = ? AND destination_uid = ? AND slot = ? "
-                "AND target_fingerprint = ? ORDER BY created_at DESC LIMIT 1",
-                (ref, kind, uid, slot, target_fingerprint),
-            ).fetchone()
-        return _approval(row) if row else None
+        for row in _newest_first(self._approval_rows()):
+            if (
+                row["status"] in ("pending", "rejected")
+                and row["op"] == "bind"
+                and row.get("ref") == ref
+                and row.get("destination_kind") == kind
+                and row.get("destination_uid") == uid
+                and row.get("slot") == slot
+                and row.get("target_fingerprint") == target_fingerprint
+            ):
+                return _approval(row)
+        return None
 
     def pending_of_op(self, op: str, ref: str | None = None) -> list[SecretApproval]:
-        sql = (
-            f"SELECT {_APPROVAL_COLUMNS} FROM secret_approvals WHERE status = 'pending' AND op = ?"
-        )
-        args: tuple[Any, ...] = (op,)
-        if ref is not None:
-            sql += " AND ref = ?"
-            args = (op, ref)
-        with closing(self._connect()) as conn:
-            return [_approval(r) for r in conn.execute(sql, args)]
+        return [
+            _approval(r)
+            for r in self._approval_rows()
+            if r["status"] == "pending" and r["op"] == op and (ref is None or r.get("ref") == ref)
+        ]
 
     def list_approvals(
         self, *, status: str | None = None, destination_uid: str | None = None, limit: int = 200
     ) -> list[SecretApproval]:
-        clauses: list[str] = []
-        args: list[Any] = []
-        if status is not None:
-            clauses.append("status = ?")
-            args.append(status)
-        if destination_uid is not None:
-            clauses.append("destination_uid = ?")
-            args.append(destination_uid)
-        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        with closing(self._connect()) as conn:
-            rows = conn.execute(
-                f"SELECT {_APPROVAL_COLUMNS} FROM secret_approvals{where} "
-                "ORDER BY created_at DESC, id DESC LIMIT ?",
-                (*args, limit),
-            ).fetchall()
-        return [_approval(r) for r in rows]
+        rows = [
+            r
+            for r in _newest_first(self._approval_rows())
+            if (status is None or r["status"] == status)
+            and (destination_uid is None or r.get("destination_uid") == destination_uid)
+        ]
+        return [_approval(r) for r in rows[:limit]]
 
     def decide(self, approval_id: str, status: str, *, by: str, at: str) -> bool:
         """Move a PENDING approval to ``status``; False when it was not pending.
 
-        Compare-and-set on the status, so two answers to one approval cannot
-        both take effect. A decided approval drops any value it held.
+        Compare-and-set on the status under the file's lock, so two answers to
+        one approval cannot both take effect. A decided approval drops any
+        value it held.
         """
-        with closing(self._connect()) as conn, conn:
-            cur = conn.execute(
-                "UPDATE secret_approvals SET status = ?, decided_at = ?, decided_by = ?, "
-                "pending_ciphertext = NULL WHERE id = ? AND status = 'pending'",
-                (status, at, by, approval_id),
-            )
-            return cur.rowcount > 0
+        moved = False
+
+        def settle(doc: dict[str, Any]) -> None:
+            nonlocal moved
+            for row in doc.get(_APPROVALS, []):
+                if row["id"] == approval_id and row["status"] == "pending":
+                    row.update(status=status, decided_at=at, decided_by=by)
+                    row[_PENDING] = None
+                    moved = True
+                    return
+
+        self._approvals.update(settle)
+        return moved
 
     # --- switches -----------------------------------------------------------
 
     def get_setting(self, key: str) -> str | None:
-        with closing(self._connect()) as conn:
-            row = conn.execute(
-                "SELECT value FROM secret_boundary_settings WHERE key = ?", (key,)
-            ).fetchone()
-        return str(row[0]) if row else None
+        value = self._settings.read().get(key)
+        return str(value) if value is not None else None
 
     def set_setting(self, key: str, value: str) -> None:
-        with closing(self._connect()) as conn, conn:
-            conn.execute(
-                "INSERT INTO secret_boundary_settings (key, value) VALUES (?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (key, value),
-            )
+        def put(doc: dict[str, Any]) -> None:
+            doc[key] = value
+
+        self._settings.update(put)
+
+
+__all__ = ["FileBoundaryStore"]

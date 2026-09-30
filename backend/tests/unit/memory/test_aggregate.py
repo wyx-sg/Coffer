@@ -9,8 +9,8 @@ directory").
 
 The readers are faked here, per the tier's own rule: a unit test never touches
 a developer's real ``~/.claude`` or ``~/.codex``. The store is real, under the
-``tmp_path`` the suite-wide ``_isolated_memory_root`` fixture pins
-``COFFER_MEMORY_ROOT`` to, because "what is on disk after a pass" is the whole
+fresh ``HOME`` the suite-wide ``_real_home_guard`` fixture gives every test,
+because "what is on disk after a pass" is the whole
 of what these tests assert. Resolving a **real** repository — a ``git init``, a
 real ``git worktree add``, a second clone with a differently-spelled remote —
 is the integration tier's, in

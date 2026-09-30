@@ -95,6 +95,11 @@ export const agentProviderModelsKey = (agentKey: string) =>
 export * from "./queryKeys.capabilities";
 import { customToolsKey, mcpStatusesKey, skillsKey } from "./queryKeys.capabilities";
 
+// vault history: any vault file or folder, e.g. a skill's `skills/<name>/`
+export const vaultKey = ["vault"] as const;
+export const vaultHistoryKey = (path: string) => ["vault", "history", path] as const;
+export const vaultDiffKey = (path: string, v: string) => ["vault", "diff", path, v] as const;
+
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
 /** GET /attention. A `change` event of kind `attention` invalidates it. */

@@ -28,16 +28,16 @@ Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person o
 Coffer reads native memory and never creates, modifies, moves, deletes or reformats a file in it. It also never disables or reconfigures an agent's native memory. There are two reasons for this:
 
 - **No agent's own loop is disturbed.** Each agent keeps managing its memory exactly as its vendor designed. Coffer never holds a second copy that could drift from the first, so nothing has to be reconciled.
-- **The whole store becomes disposable.** Everything under `~/.coffer/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources, possibly in different words. That is what makes it safe for the distil pass to rewrite notes aggressively.
+- **The whole store becomes disposable.** Everything under `~/.coffer/derived/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources, possibly in different words. That is what makes it safe for the distil pass to rewrite notes aggressively.
 
 The one file Coffer does write into an agent's configuration is its hook entries in the agent's *settings*. That file is not memory, and Coffer writes the entries only when you connect the agent to Coffer (see [Delivery](#delivery)).
 
 ### Four directories with one writer each
 
-A partition is a top-level directory under `~/.coffer/memory/`:
+A partition is a top-level directory under `~/.coffer/derived/memory/`:
 
 ```
-~/.coffer/memory/
+~/.coffer/derived/memory/
 ├── .source_state.json        ← last-seen digest per native source file
 ├── global/
 │   ├── MEMORY.md             ← the index: what a session is given
@@ -57,7 +57,7 @@ A partition is a top-level directory under `~/.coffer/memory/`:
 
 Because each directory has exactly one writer, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code. `infrastructure/memory/raw_store.py` holds the only write path into `.raw/`, and the distil pass does not import it for writing.
 
-`$COFFER_MEMORY_ROOT` overrides the root. The test suite sets it so that a test can never rewrite a developer's real memory tree.
+The memory root is always `~/.coffer/derived/memory/`, in the derived storage class (see [Persistence](/architecture/persistence)); there is no override. The test suite gives every test its own `HOME`, so a test can never rewrite a developer's real memory tree.
 
 ### A partition is a repository
 
@@ -66,7 +66,7 @@ A partition is identified by a **repository**, not by a path. The main checkout,
 - When the repository has a remote, the key is the normalised remote URL. The normaliser drops the scheme, the user, the port, a trailing `.git` and a trailing slash, and lowercases the host. It keeps the case of the path, because `owner/Repo` and `owner/repo` are different repositories on most forges. So `git@host:owner/repo.git` and `https://host/owner/repo` produce the same key.
 - A repository with no remote falls back to its own root path. A prefix on the key keeps a path from ever colliding with a URL.
 
-A partition gets a readable slug, never an opaque id. The slug comes from the repository's name. If two repositories share a name, Coffer prefixes parent path segments until the slug is unique, so two checkouts named `api` become `work-api` and `personal-api`. The partition's `resources` row records `repository_key` and `repository_path` in its config, and `MEMORY.md` restates the repository path in its header so that anyone browsing the folder knows which project it belongs to.
+A partition gets a readable slug, never an opaque id. The slug comes from the repository's name. If two repositories share a name, Coffer prefixes parent path segments until the slug is unique, so two checkouts named `api` become `work-api` and `personal-api`. The partition's resource file (`~/.coffer/derived/resources/memory/<slug>.json`) records `repository_key` and `repository_path` in its config, and `MEMORY.md` restates the repository path in its header so that anyone browsing the folder knows which project it belongs to.
 
 Three routes lead to `global`:
 
@@ -74,7 +74,7 @@ Three routes lead to `global`:
 - An entry with no working directory, or whose working directory is your home directory, goes to `global`.
 - An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then judges the entry on its merits and either keeps it in `global` or keeps nothing.
 
-Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new row through the lifecycle opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
+Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new partition through the lifecycle opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
 
 ### No per-agent reach and no switch
 
@@ -82,13 +82,13 @@ Most resource kinds carry a per-agent **reach** (see [Resource framework](/archi
 
 This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so no switch on a partition could decide more than what Coffer *serves*; a disabled partition was still a file any agent could read.
 
-### Nothing converges
+### Nothing syncs
 
-The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind is the only kind that sets `converges=False`. The exporter withholds its rows, and the applier refuses a memory document that arrives. Neither the files nor the resource row leave the machine. Each machine aggregates its own agents.
+The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind declares the derived storage class (`Kind.storage`): its resource files and the whole tree live under `~/.coffer/derived/`, outside the vault repository, so there is nothing for sync to carry. Each machine aggregates its own agents. Only the triggers a person wrote or armed live in the vault (`vault/memory-triggers/`), because they are authored, not derived.
 
 ### No table of its own
 
-Notes, raw entries, the index, the retirement record and the per-source digests are all files. Partition metadata lives in the kind-agnostic `resources` table. The layer adds no table.
+Notes, raw entries, the index, the retirement record and the per-source digests are all files. Partition metadata lives in the partition's derived resource file. The layer adds no table.
 
 ## Reading native memory
 
@@ -117,7 +117,7 @@ A reader that cannot parse a file raises `UnreadableMemory` with the file's path
 
 ## The aggregation pass
 
-`application/memory/aggregate.py` holds the pass as a pure function over plain values and the derived tree. `MemoryService.aggregate` wraps it with the database parts: it lists the enabled agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
+`application/memory/aggregate.py` holds the pass as a pure function over plain values and the derived tree. `MemoryService.aggregate` wraps it with the resource parts: it lists the enabled agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
 
 ```mermaid
 flowchart TD
@@ -284,7 +284,7 @@ The floor was calibrated on the eval set against a real-size store, where a note
 
 ### Before a known trap: the guard
 
-A **trigger** is a person's mark that one note is a known trap tied to a command. Triggers are authored content, not derived memory, so they live in the vault, one Markdown file each, beside the derived tree rather than inside it. Deleting and rebuilding `~/.coffer/memory/` keeps every trigger.
+A **trigger** is a person's mark that one note is a known trap tied to a command. Triggers are authored content, not derived memory, so they live in the vault, one Markdown file each, beside the derived tree rather than inside it. Deleting and rebuilding `~/.coffer/derived/memory/` keeps every trigger.
 
 ```md
 ---
@@ -436,7 +436,7 @@ A rule about **every** reply, such as the language to answer in or a tone, is no
 
 ## Finding a note in another partition
 
-The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
+The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/derived/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
 
 A search over the files never sees a raw entry or a retired note as a note: raw entries live under `.raw/`, and retired notes leave `notes/` for `RETIRED.md`. There is no `remember` tool either. An agent records something the way it always does, and Coffer reads it on the next pass.
 
@@ -479,7 +479,7 @@ Both are on by default. They read the agents' files and write only the derived t
 | Index rendering | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
 | Context composition | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
 | Delivery service and the delivery-hook reconcile target | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py), [`delivery_reconcile.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_reconcile.py) |
-| Kind (`converges=False`, no scope) and service | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py), [`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
+| Kind (derived storage class, no scope) and service | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py), [`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
 | Native-memory readers | [`infrastructure/memory/readers/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/readers) |
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
 | Paths, raw store, note store, digest cache, trigger files, notes-read count | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |

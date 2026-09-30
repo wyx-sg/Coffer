@@ -27,14 +27,19 @@ _DID = {ADDED: "created by the pass", MODIFIED: "changed", REMOVED: "deleted by 
 def undo_pass_handoff(
     *,
     root: pathlib.Path,
+    repo: pathlib.Path,
+    prefix: str,
     change: Change,
     documents: Sequence[str],
     changed_since: Mapping[str, str],
 ) -> str:
     """The hand-off for undoing ``change`` by hand. ``documents`` are the
-    document paths the pass touched, relative to ``root``; ``changed_since``
-    maps each one edited since to the newest version that edited it."""
-    git = f"git -C {shlex.quote(str(root))}"
+    document paths the pass touched, relative to the knowledge folder
+    ``root``; ``changed_since`` maps each one edited since to the newest
+    version that edited it. The history is the vault repository ``repo``'s,
+    in which the knowledge folder is ``prefix/`` (ADR
+    every-vault-write-is-a-validated-commit-naming-its-writer)."""
+    git = f"git -C {shlex.quote(str(repo))}"
     version = change.version
     status = {d.path: d.status for d in change.documents}
     touched = "; ".join(
@@ -53,9 +58,10 @@ def undo_pass_handoff(
                 f"Documents the pass changed: {touched}.",
                 f"Edited since the pass: {since}. That is why Coffer refused to undo it, "
                 "and why those edits must stay.",
-                f"The folder is a git repository Coffer keeps as its history. What the pass "
-                f"did: `{git} show {version}`. What came after, per document: "
-                f"`{git} log -p {version}..HEAD -- <document>`.",
+                f"Coffer keeps its history in the vault's git repository {repo}, where the "
+                f"knowledge folder is `{prefix}/`. What the pass did: "
+                f"`{git} show {version} -- {prefix}`. What came after, per document: "
+                f"`{git} log -p {version}..HEAD -- {prefix}/<document>`.",
             ),
             steps=(
                 "For each document, remove what the pass added and put back what it "

@@ -1276,11 +1276,12 @@ paths:
       - skills
     put:
       description: |-
-        Overwrite one existing text file in the skill's master folder.
+        Overwrite one existing text file in the skill's master folder, as one
+        vault commit naming the writer.
 
-        A body carrying ``expected_fingerprint`` makes the write conditional:
-        ``SkillFileStale`` propagates to the shared error handler as 409
-        ``SKILL_FILE_STALE`` with the file left untouched.
+        The write is conditional on ``expected_fingerprint``: ``SkillFileStale``
+        propagates to the shared error handler as 409 ``SKILL_FILE_STALE`` with
+        the file left untouched.
       operationId: write_skill_file_api_v1_skills__uid__files_content_put
       parameters:
       - in: path
@@ -2340,10 +2341,8 @@ components:
           title: Content
           type: string
         expected_fingerprint:
-          anyOf:
-          - type: string
-          - type: 'null'
           title: Expected Fingerprint
+          type: string
         path:
           minLength: 1
           title: Path
@@ -2351,6 +2350,7 @@ components:
       required:
       - path
       - content
+      - expected_fingerprint
       title: SkillFileWriteRequest
       type: object
     SkillImportRequest:

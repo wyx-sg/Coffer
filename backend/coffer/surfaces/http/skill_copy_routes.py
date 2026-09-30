@@ -21,7 +21,7 @@ from coffer.surfaces.http.skill_dependencies import (
     get_optional_skill_source_service,
     get_skill_service,
 )
-from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_id, _to_skill_out
+from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_uid, _to_skill_out
 from coffer.surfaces.http.skill_source_schemas import SkillFileChangeOut, change_out
 
 router = APIRouter(
@@ -93,7 +93,7 @@ async def adopt_orphan(
     actor: str = Depends(_actor),
 ) -> SkillOut:
     skill = await orphan_ops.adopt_orphan(svc, name=name, actor=actor)
-    return await _to_skill_out(svc, skill, await _agents_by_id(svc), sources=sources)
+    return await _to_skill_out(svc, skill, await _agents_by_uid(svc), sources=sources)
 
 
 @router.delete("/orphans/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -136,4 +136,4 @@ async def resolve_copy(
     skill = await copy_ops.resolve(
         svc, skill_uid=uid, agent_uid=agent_uid, keep=body.keep, actor=actor
     )
-    return await _to_skill_out(svc, skill, await _agents_by_id(svc), sources=sources)
+    return await _to_skill_out(svc, skill, await _agents_by_uid(svc), sources=sources)

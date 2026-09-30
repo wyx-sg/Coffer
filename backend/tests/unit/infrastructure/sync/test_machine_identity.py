@@ -33,6 +33,9 @@ def _linux_host(monkeypatch: pytest.MonkeyPatch, *sources: pathlib.Path) -> None
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync", scenario="a machine identity survives reinstalling Coffer"
+)
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="a machine id is derived from the host and cached"
 )
 def test_the_id_comes_from_the_host_and_survives_losing_its_cache(

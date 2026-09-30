@@ -9,10 +9,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from coffer.application.channel.pairing import claim_pairing
 from coffer.domain.resource import Resource
+from coffer.infrastructure.vault.writer import Transaction
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
@@ -25,7 +25,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
 
     await env.processor.on_message(inbound("tg", "chat-1", code, sender_display="Alice"))
 
-    peer = await env.peers.owner_peer(resource.id)
+    peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Alice"
@@ -44,7 +44,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
 
     # The code was consumed: the same code from another chat does not re-pair.
     await env.processor.on_message(inbound("tg", "chat-2", code))
-    peer = await env.peers.owner_peer(resource.id)
+    peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert len(adapter.sent) == 2  # no confirmation for the second chat
@@ -59,7 +59,7 @@ async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    peer = await env.peers.owner_peer(resource.id)
+    peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "owner"
 
@@ -74,11 +74,11 @@ async def test_wrong_guesses_get_no_reply_and_exhaust_the_code(env: ChannelEnv) 
     for _ in range(10):
         await env.processor.on_message(inbound("tg", "chat-1", "WRONGGUESS"))
     assert adapter.sent == []
-    assert await env.peers.owner_peer(resource.id) is None
+    assert await env.peers.owner_peer(resource.uid) is None
 
     # Attempt exhaustion invalidated the code — even the right one fails now.
     await env.processor.on_message(inbound("tg", "chat-1", code))
-    assert await env.peers.owner_peer(resource.id) is None
+    assert await env.peers.owner_peer(resource.uid) is None
     assert adapter.sent == []
     assert env.pairing.pending("tg") is False
 
@@ -104,7 +104,7 @@ async def _pair_owner_with_a_group(env: ChannelEnv) -> tuple[Resource, FakeChann
         )
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
-    assert await env.peers.get_by_chat(resource.id, "grp-1") is not None
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is not None
     return resource, adapter
 
 
@@ -118,9 +118,9 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
     code, _ = env.pairing.issue("tg")
     await env.processor.on_message(inbound("tg", "new-dm", code, sender_id="new-1"))
 
-    peers = await env.peers.list_by_resource(resource.id)
+    peers = await env.peers.list_by_resource(resource.uid)
     assert [(p.chat_id, p.sender_id) for p in peers] == [("new-dm", "new-1")]
-    assert await env.peers.owner_sender_id(resource.id) == "new-1"
+    assert await env.peers.owner_sender_id(resource.uid) == "new-1"
 
     # (1) The old owner's DM no longer passes the owner gate: no reply, no turn.
     conversations_before = len(await env.chat.list_conversations())
@@ -153,7 +153,7 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
             r[0] == "grp-1" and r[2] == "t3" and r[1] == "Hello world" for r in adapter.sent_routed
         )
     )
-    group = await env.peers.get_by_chat(resource.id, "grp-1")
+    group = await env.peers.get_by_chat(resource.uid, "grp-1")
     assert group is not None
     assert group.sender_id == "new-1"
 
@@ -168,13 +168,13 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
 
     assert adapter.sent[-2][0] == "old-dm-2"
     assert adapter.sent[-2][1].startswith("✅ Paired.")
-    peers = await env.peers.list_by_resource(resource.id)
+    peers = await env.peers.list_by_resource(resource.uid)
     assert sorted((p.chat_id, p.sender_id) for p in peers) == [
         ("grp-1", "old-1"),
         ("old-dm", "old-1"),
         ("old-dm-2", "old-1"),
     ]
-    assert await env.peers.owner_sender_id(resource.id) == "old-1"
+    assert await env.peers.owner_sender_id(resource.uid) == "old-1"
     assert len(await env.audit_entries("channel_paired", resource)) == 2
 
 
@@ -193,7 +193,7 @@ async def test_re_pairing_keeps_the_same_persons_legacy_dm(env: ChannelEnv) -> N
     await env.processor.on_message(inbound("tg", "new-chat", code, sender_id="old-1"))
 
     assert adapter.sent[-1][0] == "new-chat"
-    peers = await env.peers.list_by_resource(resource.id)
+    peers = await env.peers.list_by_resource(resource.uid)
     assert sorted((p.chat_id, p.sender_id) for p in peers) == [
         ("new-chat", "old-1"),
         ("old-1", None),
@@ -207,13 +207,17 @@ async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
     previous owner's rows are not already gone — a channel is never left with
     no owner at all."""
     resource, _ = await _pair_owner_with_a_group(env)
-    before = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.id))
+    before = sorted(
+        (p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid)
+    )
     code, _ = env.pairing.issue("tg")
 
-    def _refuse_insert(self: AsyncSession, instance: object, _warn: bool = True) -> None:
+    def _refuse_write(self: Transaction, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(AsyncSession, "add", _refuse_insert)
+    # The pairings are one vault document: the write that replaces the owner
+    # is refused before it reaches the file.
+    monkeypatch.setattr(Transaction, "write", _refuse_write)
     with pytest.raises(RuntimeError, match="disk full"):
         await claim_pairing(
             SimpleNamespace(resource=resource),  # type: ignore[arg-type]
@@ -227,6 +231,6 @@ async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
         )
     monkeypatch.undo()
 
-    after = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.id))
+    after = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid))
     assert after == before == [("grp-1", "old-1"), ("old-dm", "old-1")]
-    assert await env.peers.owner_sender_id(resource.id) == "old-1"
+    assert await env.peers.owner_sender_id(resource.uid) == "old-1"

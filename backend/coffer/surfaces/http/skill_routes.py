@@ -206,7 +206,7 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
 
 # There is no surface-level name guard here any more. It existed because a
 # skill's NAME was the URL path segment and also its folder name under
-# ``~/.coffer/skills/<name>/``, so a traversal attempt (``..``, ``/``, ``\``)
+# ``~/.coffer/vault/skills/<name>/``, so a traversal attempt (``..``, ``/``, ``\``)
 # arriving in the path had to be refused before it reached the filesystem. The
 # path segment is now a uid the daemon minted, and a name only ever enters
 # through ``ResourceService``, which validates it once for every kind
@@ -215,13 +215,9 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
 # gone.
 
 
-async def _agents_by_id(svc: SkillService) -> dict[int, Resource]:
-    """Build an agent-row-id -> agent map once per request (avoids an N+1).
-
-    Keyed on the integer row id because that is what a binding stores as its
-    foreign key; the uid and the name both come off the row it finds.
-    """
-    return {a.id: a for a in await svc.list_agents()}
+async def _agents_by_uid(svc: SkillService) -> dict[str, Resource]:
+    """Build an agent-uid -> agent map once per request (avoids an N+1)."""
+    return {a.uid: a for a in await svc.list_agents()}
 
 
 def _drift_out(e: DriftEntry) -> DriftEntryOut:
@@ -246,17 +242,17 @@ def _requires(svc: SkillService, name: str) -> list[SkillRequirementOut]:
 async def _to_skill_out(
     svc: SkillService,
     r: Resource,
-    agents_by_id: dict[int, Resource],
+    agents_by_uid: dict[str, Resource],
     *,
-    bindings_by_skill: dict[int, list[BindingState]] | None = None,
+    bindings_by_skill: dict[str, list[BindingState]] | None = None,
     sources: SkillSourceService | None = None,
-    statuses: dict[int, SourceStatus] | None = None,
+    statuses: dict[str, SourceStatus] | None = None,
 ) -> SkillOut:
     cfg = SkillConfig.model_validate(r.config)
     source_status: SkillSourceStatusOut | None = None
     if isinstance(cfg.source, GitImportSource):
         if statuses is not None:
-            status = statuses.get(r.id)
+            status = statuses.get(r.uid)
         else:
             status = await sources.status(r) if sources is not None else None
         source_status = status_out(status, cfg.source.commit)
@@ -264,7 +260,7 @@ async def _to_skill_out(
     # list handlers prebuild the map once via
     # ``svc.bindings_grouped_by_skill()`` to collapse N queries into 1.
     if bindings_by_skill is not None:
-        bindings = bindings_by_skill.get(r.id, [])
+        bindings = bindings_by_skill.get(r.uid, [])
     else:
         bindings = await svc.bindings_for(r.uid)
     return SkillOut(
@@ -283,23 +279,22 @@ async def _to_skill_out(
         updated_at=r.updated_at,
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
-        bindings=[_binding_out(b, agents_by_id) for b in bindings if b.enabled],
+        bindings=[_binding_out(b, agents_by_uid) for b in bindings if b.enabled],
         requires=_requires(svc, r.name),
         source_status=source_status,
     )
 
 
-def _binding_out(b: BindingState, agents_by_id: dict[int, Resource]) -> SkillBindingOut:
+def _binding_out(b: BindingState, agents_by_uid: dict[str, Resource]) -> SkillBindingOut:
     """One delivery row on the wire.
 
     A binding whose agent row has gone is still reported, because the row is
     evidence that a copy was delivered somewhere and dropping it would make the
     delivery list quietly shorter than the truth. It is rendered with the
-    integer FK in both fields, which is what the surface has: there is no uid to
-    invent for a row that is no longer there.
+    agent's uid in both fields, which is what the binding still holds.
     """
-    agent = agents_by_id.get(b.agent_resource_id)
-    fallback = str(b.agent_resource_id)
+    agent = agents_by_uid.get(b.agent_uid)
+    fallback = b.agent_uid
     return SkillBindingOut(
         agent_uid=agent.uid if agent else fallback,
         agent_name=agent.name if agent else fallback,
@@ -318,14 +313,14 @@ async def list_skills(
     sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillListOut:
     rs = await svc.list_skills()
-    agents_by_id = await _agents_by_id(svc)
+    agents_by_uid = await _agents_by_uid(svc)
     # Prebuild the binding lookup once — collapses what was a 2N+2 query
     # pattern (one ``list_for_skill`` + one ``get`` per skill) into ~3.
     bindings_by_skill = await svc.bindings_grouped_by_skill()
     statuses = await sources.statuses() if sources is not None else {}
     items = [
         await _to_skill_out(
-            svc, r, agents_by_id, bindings_by_skill=bindings_by_skill, statuses=statuses
+            svc, r, agents_by_uid, bindings_by_skill=bindings_by_skill, statuses=statuses
         )
         for r in rs
     ]
@@ -339,7 +334,7 @@ async def import_skill(
     actor: str = Depends(_actor),
 ) -> SkillOut:
     r = await svc.import_local(path=body.path, actor=actor, overwrite=body.overwrite)
-    return await _to_skill_out(svc, r, await _agents_by_id(svc))
+    return await _to_skill_out(svc, r, await _agents_by_uid(svc))
 
 
 @router.get("/{uid}", response_model=SkillOut)
@@ -349,7 +344,7 @@ async def get_skill(
     sources: SkillSourceService | None = Depends(get_optional_skill_source_service),  # noqa: B008
 ) -> SkillOut:
     r = await svc.get_skill(uid)
-    return await _to_skill_out(svc, r, await _agents_by_id(svc), sources=sources)
+    return await _to_skill_out(svc, r, await _agents_by_uid(svc), sources=sources)
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

@@ -2,7 +2,8 @@
 // The open skill in the Skills page's reading pane (spec skill-manager "Cover
 // skill management on REST, the CLI and the web"): the header, the banners of
 // what needs the reader (SkillBanners), and four tabs in this order — Files ·
-// N (the default), Delivery, Requires · N, History. The Files tab carries the
+// N (the default), Delivery, Requires · N, History (the master folder's
+// versions, from the vault's history). The Files tab carries the
 // built-in note or a Git skill's Source block above the files, and, when the
 // master folder is gone, the two ways forward instead of them. The page owns
 // the address (`/skills/<name>/<tab>`); this pane only renders the tab it is
@@ -10,15 +11,15 @@
 // Markdown pipeline).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { History, Info } from "lucide-react";
+import { Info } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
 import { SkillBanners } from "@/components/skills/SkillBanners";
 import { SkillCopyDialog } from "@/components/skills/SkillCopyDialog";
 import { SkillDeliveryTab } from "@/components/skills/SkillDeliveryTab";
 import { SkillDetailHeader } from "@/components/skills/SkillDetailHeader";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { SkillGitSourcePanel } from "@/components/skills/SkillGitSource";
+import { SkillHistoryTab } from "@/components/skills/SkillHistoryTab";
 import { SkillMissingMaster } from "@/components/skills/SkillMissingMaster";
 import { SkillRequiresTab } from "@/components/skills/SkillRequiresTab";
 import { SkillUpdateDialog } from "@/components/skills/SkillUpdateDialog";
@@ -113,11 +114,7 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted, onCheckCop
           <SkillRequiresTab skill={skill} />
         </TabsContent>
         <TabsContent value="history">
-          <EmptyState
-            icon={History}
-            title={t("skills.history.title")}
-            description={t("skills.history.body")}
-          />
+          <SkillHistoryTab skill={skill} />
         </TabsContent>
       </Tabs>
 

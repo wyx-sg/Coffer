@@ -19,7 +19,7 @@ from coffer.application.mcp.tiering_split import tiering_split
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Resource
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
-from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo, MCPInvocationRepo
+from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore, MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.mcp.dependencies import (
@@ -34,6 +34,10 @@ from coffer.surfaces.http.mcp.page_schemas import (
     ToolTieringOut,
     invocation_summary_out,
 )
+
+#: The seen-time of a capability this machine has never seen (see
+#: ``MCPCapabilityPreferenceStore.list_for``).
+_NEVER_SEEN = datetime.fromtimestamp(0, tz=UTC)
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -83,15 +87,16 @@ async def server_log(
 
 
 async def _current_tools(
-    prefs: MCPCapabilityPreferenceRepo, resource: Resource
+    prefs: MCPCapabilityPreferenceStore, resource: Resource
 ) -> list[tuple[str, bool]]:
     """The tools discovery last saw for ``resource``, with their switch.
 
     Every rediscovery stamps each tool it still sees with one ``last_seen_at``;
     rows for tools the server no longer offers keep an older stamp, so the
-    current set is the rows carrying the newest one.
+    current set is the rows carrying the newest one. A tool switched off on
+    another machine and never seen here has no stamp, and is not current.
     """
-    rows = await prefs.list_for(resource.id, "tool")
+    rows = [r for r in await prefs.list_for(resource.uid, "tool") if r.last_seen_at > _NEVER_SEEN]
     if not rows:
         return []
     newest = max(r.last_seen_at for r in rows)
@@ -102,7 +107,7 @@ async def _current_tools(
 async def tool_tiering(
     uid: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    prefs: MCPCapabilityPreferenceStore = Depends(get_preferences_repo),  # noqa: B008
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
 ) -> ToolTieringOut:
     """Which of this server's tools are listed to agents and which only reached through search."""

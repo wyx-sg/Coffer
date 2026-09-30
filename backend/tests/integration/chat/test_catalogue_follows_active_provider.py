@@ -47,7 +47,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
@@ -55,6 +55,7 @@ from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_model
 from coffer.surfaces.http.chat_wiring import _ActiveProviderModels
 from coffer.surfaces.http.provider_dependencies import set_provider_service
 from tests.support.facets import agent_catalog
+from tests.support.vault_stores import make_resource_repo
 from tests.unit.chat.conftest import FakeAgentProvider
 
 _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
@@ -149,7 +150,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
         secrets=store,
     )

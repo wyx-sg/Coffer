@@ -1,46 +1,36 @@
 // frontend/src/pages/sync/SyncRollbackAction.tsx
 //
-// Undo one converge round, from the History row that describes it.
+// Roll one round back, from the Runs row that describes it.
 //
-// Until this existed, a user whose vault had just been damaged by a round
-// could see exactly what the round did — the History row lists every path —
-// and had no way to undo it without opening a terminal. `coffer sync restore`
-// was the only door.
-//
-// The button belongs to ONE row, never to all of them: `POST /sync/rollback`
-// reverses the round that left the newest pre-apply snapshot and takes no
-// argument, so an Undo on every row would run the same call from each and undo
-// a round the user was not pointing at. Which row that is is decided in
-// `syncRunColumns.rollbackTargetId`.
-//
-// What the dialog has to say is what will come back, not that something will:
-// the round's own applied paths, rendered by the same `SyncRoundPathList` the
-// expanded row uses, so the list in the confirmation and the list in the row
-// are visibly the same list.
+// The dialog says what will come back before anything does: the daemon is
+// asked for the plan (`GET /sync/runs/{id}/rollback-plan`) the moment the
+// dialog opens — the snapshot the round took, each file it would put back, and
+// the files edited since, which are kept as they are. Rolling back is a new
+// commit here that the next round pushes, so nothing another machine did after
+// is lost.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Undo2 } from "lucide-react";
 
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import type { RunRecord } from "@/lib/api/sync";
-import { useRollbackRound } from "@/lib/hooks/useSync";
+import type { SyncRound } from "@/lib/api/sync";
+import { useRollbackPlan, useRollbackRound } from "@/lib/hooks/useSync";
 import { formatDateTime } from "@/lib/utils";
 import { SyncRoundPathList } from "./SyncRoundPathList";
+import { changeLine } from "./syncRoundStatus";
 
-/** Paths past this are summarised — a dialog that scrolls past the confirm
- *  button is worse at answering "what is about to happen" than a count is.
- *  The same cap the held-round banner uses. */
+/** Past this, lines are summarised: a dialog that scrolls past its own confirm
+ *  button answers "what is about to happen" worse than a count does. */
 const MAX_PATHS = 20;
 
-export function SyncRollbackAction({ run }: { run: RunRecord }) {
+export function SyncRollbackAction({ run }: { run: SyncRound & { id: number } }) {
   const { t } = useTranslation();
-  const rollback = useRollbackRound();
   const [open, setOpen] = useState(false);
-  const when = formatDateTime(run.finished_at);
-  const applied = run.applied.changes;
-  const shown = applied.slice(0, MAX_PATHS);
-  const hidden = applied.length - shown.length;
+  const plan = useRollbackPlan(run.id, open);
+  const rollback = useRollbackRound();
+  const reverses = plan.data?.reverses ?? [];
+  const shown = reverses.slice(0, MAX_PATHS);
 
   return (
     // The row opens its own detail on click; without this the click that
@@ -52,7 +42,6 @@ export function SyncRollbackAction({ run }: { run: RunRecord }) {
         onClick={() => setOpen(true)}
         disabled={rollback.isPending}
       />
-
       <ConfirmDialog
         open={open}
         onOpenChange={(next) => {
@@ -61,28 +50,43 @@ export function SyncRollbackAction({ run }: { run: RunRecord }) {
           if (!next) rollback.reset();
         }}
         title={t("sync.rollback.title")}
-        description={t("sync.rollback.description", { when })}
-        confirmLabel={rollback.isPending ? t("sync.rollback.undoing") : t("sync.rollback.confirm")}
-        pending={rollback.isPending}
-        error={rollback.error}
+        description={t("sync.rollback.description", { when: formatDateTime(run.finished_at) })}
+        confirmLabel={
+          rollback.isPending ? t("sync.rollback.rollingBack") : t("sync.rollback.confirm")
+        }
+        pending={rollback.isPending || plan.isLoading}
+        error={rollback.error ?? plan.error}
         onConfirm={() =>
-          // Closes only in `onSuccess`, so a daemon that refuses the rollback
-          // leaves the dialog up with its reason (.agents/frontend.md §5).
-          rollback.mutate(undefined, { onSuccess: () => setOpen(false) })
+          // Closes only on success, so a refusal stays up with its reason.
+          rollback.mutate(run.id, { onSuccess: () => setOpen(false) })
         }
       >
-        {applied.length > 0 ? (
-          <div className="space-y-1">
+        {plan.isLoading ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : plan.data ? (
+          <div className="space-y-3" data-testid="sync-rollback-plan">
+            <p className="text-sm">
+              {t("sync.rollback.snapshot", {
+                name: plan.data.snapshot,
+                when: plan.data.snapshot_time ? formatDateTime(plan.data.snapshot_time) : "—",
+              })}
+            </p>
             <SyncRoundPathList
-              titleKey="sync.rollback.willUndo"
-              items={shown.map((c) => t(`sync.round.change.${c.status}`, { path: c.path }))}
+              titleKey="sync.rollback.reverses"
+              items={shown.map(changeLine)}
               testId="sync-rollback-paths"
             />
-            {hidden > 0 ? (
+            {reverses.length > shown.length ? (
               <p className="text-xs text-muted-foreground">
-                {t("sync.rollback.morePaths", { count: hidden })}
+                {t("sync.rollback.morePaths", { count: reverses.length - shown.length })}
               </p>
             ) : null}
+            <p className="text-xs text-muted-foreground">{t("sync.rollback.keptNote")}</p>
+            <SyncRoundPathList
+              titleKey="sync.rollback.kept"
+              items={plan.data.kept.slice(0, MAX_PATHS)}
+              testId="sync-rollback-kept"
+            />
           </div>
         ) : null}
       </ConfirmDialog>

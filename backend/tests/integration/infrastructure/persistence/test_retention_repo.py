@@ -18,8 +18,10 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.models import AuditLogModel
-from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
+)
 
 #: What this module's repo is allowed to sweep, registered the way the
 #: composition root registers the real thing: audit_log by its timestamp, and
@@ -59,7 +61,7 @@ async def _repo(tmp_path):
     registry = PrunableRegistry()
     for table in _TABLES:
         registry.register(table)
-    repo = SqlAlchemyRetentionRepo(
+    repo = FileRetentionRepo(
         session_maker(engine), allowlist=allowlist_from_registry(registry.all())
     )
     return repo, engine

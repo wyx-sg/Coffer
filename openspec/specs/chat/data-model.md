@@ -1,7 +1,8 @@
 # Data Model: Chat
 
 Two tables, one JSON column, one block union, one event union. Everything a
-turn produces lands in the two tables; everything a turn streams is the event
+turn produces lands in the two tables, which are history in `~/.coffer/runs.db`
+(machine-local, never synced); everything a turn streams is the event
 union, which is a wire contract and not storage.
 
 ## `conversations`
@@ -89,7 +90,7 @@ and discriminated by `type`:
 | `text` | `text` | |
 | `tool_use` | `tool_use_id`, `tool_name`, `tool_input` | Rendered as its own card. |
 | `tool_result` | `tool_use_id`, `tool_name`, `output`, `error` | Pairs with its `tool_use` by id. |
-| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/channel-media` for a channel's download, `~/.coffer/chat-media` for a Chat page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
+| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/content/channel-media` for a channel's download, `~/.coffer/content/chat-media` for a Chat page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
 
 ### The attachment value object
 
@@ -102,7 +103,8 @@ anything else survive as attachments for the adapter to materialise natively.
 ### Chat page uploads — files, not a table
 
 A file attached on the Chat page is stored before its message is sent, as two
-flat files under `~/.coffer/chat-media` (see "Upload a file for a web message"):
+flat files under `~/.coffer/content/chat-media` (see "Upload a file for a web message"), in the
+`content/` class: the user's only copy, not synced:
 
 | File | Content |
 | --- | --- |

@@ -2,15 +2,13 @@
 
 Spec daemon "Report what Coffer stores and clear the rebuildable cache", read
 by Settings > Data. Measuring and clearing are in
-``infrastructure/storage_usage.py``; this module only picks the sync working
-tree (the vault, when sync is set up), refuses a clear while a memory pass is
-rewriting the tree, and records the clear.
+``infrastructure/storage_usage.py``; this module only refuses a clear while a
+memory pass is rewriting the tree, and records the clear.
 """
 
 from __future__ import annotations
 
 import asyncio
-import pathlib
 
 from fastapi import APIRouter, Depends
 
@@ -18,9 +16,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpkeepAlreadyRunning
-from coffer.domain.sync.backup import DEFAULT_WORKTREE
 from coffer.infrastructure import storage_usage
-from coffer.surfaces.http import sync_routes
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.daemon_schemas import (
     CacheClearOut,
@@ -35,24 +31,17 @@ from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 router = APIRouter(prefix="/api/v1/storage", tags=["daemon"], dependencies=[Depends(require_token)])
 
 
-async def _sync_worktree() -> pathlib.Path:
-    """The configured sync tree, else the default one (which may not exist)."""
-    worktree = DEFAULT_WORKTREE
-    try:
-        remote = await sync_routes.get_sync_service().get_remote()
-    except Exception:
-        remote = None
-    if remote is not None:
-        worktree = remote.worktree_path
-    return pathlib.Path(worktree).expanduser()
-
-
 @router.get("", response_model=StorageSummaryOut)
 async def storage_summary() -> StorageSummaryOut:
-    usage = await asyncio.to_thread(storage_usage.measure, await _sync_worktree())
+    usage = await asyncio.to_thread(storage_usage.measure)
     return StorageSummaryOut(
         vault=VaultUsageOut(
-            path=usage.vault.path, bytes=usage.vault.bytes, versions=usage.vault.versions
+            path=usage.vault.path,
+            bytes=usage.vault.bytes,
+            versions=usage.vault.versions,
+            latest_time=usage.vault.latest_time,
+            latest_writer=usage.vault.latest_writer,
+            sync_configured=usage.vault.sync_configured,
         ),
         local_content=LocalContentUsageOut(
             folder=usage.local_content.folder,

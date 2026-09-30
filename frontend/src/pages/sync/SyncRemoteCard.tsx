@@ -1,20 +1,17 @@
-// frontend/src/pages/sync/SyncRemoteCard.tsx — Sync → Status → Remote
-// (spec vault-sync). The one git repository this vault converges with: name
-// the repository and branch, say how often, say whether secret
-// ciphertext rides along, save it, and run a round now — or, on a machine that
-// has not joined yet, see what joining would do and join (SyncConvergeAction).
+// frontend/src/pages/sync/SyncRemoteCard.tsx — Sync → Setup → Remote
+// (spec vault-sync). The one git repository this vault syncs with: name the
+// repository and branch, say how often, say whether the encrypted secrets ride
+// along, check what the repository holds, save it — and pause, resume or stop.
 //
 // An explicit form rather than field-by-field auto-save: a half-typed URL is
-// not a remote the daemon should be handed, so the draft is checked
-// client-side and Save stays disabled until it is both changed and valid.
-// The one exception is "Converge automatically", which flips the stored
-// remote on and off the moment it moves — and only once a remote is stored,
-// because before that there is nothing for it to switch.
+// not a remote the daemon should be handed, so Save stays disabled until the
+// draft is both changed and valid. The one exception is the pause switch,
+// which flips the STORED remote the moment it moves — and only once a remote
+// is stored, because before that there is nothing for it to switch.
 //
-// Nothing here ever holds the push secret. The form's secret field is
-// a *reference* — a name in Coffer's secret store — which the daemon
-// resolves at push time and nowhere else; that is why this card can render a
-// fully configured remote in a browser with nothing to redact.
+// Nothing here ever holds the push secret: the field is a REFERENCE — a
+// name in Coffer's secret store — which the daemon resolves at push time
+// and nowhere else, so a configured remote renders with nothing to redact.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -25,9 +22,10 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useSaveSyncRemote } from "@/lib/hooks/useSync";
-import { SyncConvergeAction } from "./SyncConvergeAction";
-import { SyncJoinReport } from "./SyncJoinReport";
+import { SyncRemoteCheck } from "./SyncRemoteCheck";
 import { SyncRemoteFields } from "./SyncRemoteFields";
+import { SyncStopSyncing } from "./SyncStopSyncing";
+import { SyncVaultPath } from "./SyncVaultPath";
 import {
   DEFAULT_BRANCH,
   DEFAULT_INTERVAL_SECONDS,
@@ -47,51 +45,44 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   const savedUrl = saved?.url ?? "";
   const savedBranch = saved?.branch ?? DEFAULT_BRANCH;
   const savedSecretRef = saved?.secret_ref ?? "";
-  const savedIncludeSecrets = saved?.include_secrets ?? false;
+  const savedIncludeSecret = saved?.include_secret ?? false;
   const savedInterval = saved?.interval_seconds ?? DEFAULT_INTERVAL_SECONDS;
   const savedEnabled = saved?.enabled ?? true;
-  const worktreePath = saved?.worktree_path ?? null;
 
   const savedForm = useMemo<FormState>(
     () => ({
       url: savedUrl,
       branch: savedBranch,
       secretRef: savedSecretRef,
-      includeSecrets: savedIncludeSecrets,
+      includeSecret: savedIncludeSecret,
       intervalSeconds: savedInterval,
     }),
-    [savedUrl, savedBranch, savedSecretRef, savedIncludeSecrets, savedInterval],
+    [savedUrl, savedBranch, savedSecretRef, savedIncludeSecret, savedInterval],
   );
   const [form, setForm] = useState<FormState>(savedForm);
-
-  // Re-sync once the daemon's answer lands (and after every save round-trip);
-  // without this the form keeps whatever the first render saw.
+  // Re-sync once the daemon's answer lands (and after every save round-trip).
   useEffect(() => setForm(savedForm), [savedForm]);
 
   const busy = save.isPending;
   const errors = validateRemote(form);
   const dirty = isDirty(form, savedForm);
-  // Field errors only once the user has changed something — an untouched
-  // empty form is not a mistake yet.
+  // Field errors only once the user has changed something.
   const shownErrors = dirty ? errors : {};
   const canSave = dirty && !errors.url && !errors.interval && !busy;
 
-  /**
-   * Persist the whole remote. `worktree_path` rides along unchanged when the
-   * daemon already has one: this card does not offer it, and omitting it
-   * would silently reset an adopted working tree to the default. A remote
-   * saved for the first time starts enabled — the switch takes over after.
-   */
+  /** Persist the whole remote. A remote saved for the first time starts
+   *  enabled — the pause switch takes over after. */
   const persist = (next: FormState, enabled: boolean) =>
     save.mutate(
       {
         url: next.url.trim(),
         branch: next.branch.trim() || DEFAULT_BRANCH,
         secret_ref: next.secretRef.trim() || null,
-        include_secrets: next.includeSecrets,
+        // Not on this form (set with `coffer sync remote set --username`): kept.
+        ...(saved?.username ? { username: saved.username } : {}),
+        include_secret: next.includeSecret,
         interval_seconds: next.intervalSeconds,
         enabled,
-        ...(worktreePath ? { worktree_path: worktreePath } : {}),
       },
       { onSuccess: () => toast.success(t("common.saved")) },
     );
@@ -103,6 +94,9 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{t("sync.remote.description")}</p>
+        {status ? (
+          <SyncVaultPath path={status.vault_path} synchroniser={status.synchroniser} />
+        ) : null}
 
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -128,40 +122,24 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
             if (canSave) persist(form, savedEnabled);
           }}
         >
-          <SyncRemoteFields form={form} setForm={setForm} errors={shownErrors} busy={busy} />
-
+          <SyncRemoteFields
+            form={form}
+            secrets={status?.areas.secrets ?? 0}
+            setForm={setForm}
+            errors={shownErrors}
+            busy={busy}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" disabled={!canSave}>
               {busy ? t("common.saving") : t("sync.remote.save")}
             </Button>
-            <SyncConvergeAction
-              disabled={busy || !saved}
-              joined={!saved || status?.joined !== false}
-            />
-            {worktreePath ? (
-              <span className="text-xs text-muted-foreground">
-                {t("sync.remote.worktree", { path: worktreePath })}
-              </span>
-            ) : null}
+            <SyncRemoteCheck form={form} disabled={busy || Boolean(errors.url)} />
+            {saved ? <SyncStopSyncing disabled={busy} /> : null}
           </div>
         </form>
 
         {!saved ? (
           <p className="text-xs text-muted-foreground">{t("sync.remote.notConfigured")}</p>
-        ) : null}
-        {saved && status?.joined === false ? (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">{t("sync.join.notJoined")}</p>
-            {/* What the last round detected, before anyone joins. */}
-            {status.last_run?.join_report ? (
-              <>
-                <p className="text-sm">
-                  {t(`sync.join.detected.${status.last_run.join_report.case ?? "new"}`)}
-                </p>
-                <SyncJoinReport report={status.last_run.join_report} />
-              </>
-            ) : null}
-          </div>
         ) : null}
       </CardContent>
     </Card>

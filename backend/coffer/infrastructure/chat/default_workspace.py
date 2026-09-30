@@ -3,25 +3,24 @@
 A chat draft (the per-turn working-directory picker was removed) or a channel
 turn (a channel without a configured workspace) names no cwd. Rather than fail
 the turn — which leaves a chat bot silently dead — the agent providers default
-to a single Coffer-managed workspace under ``~/.coffer/workspace``, created on
-first use. ``HOME`` is honored (not ``Path.home()``) so tests redirect it to a
-tmp dir and never touch the real ``~/.coffer``.
+to a single Coffer-managed workspace under ``~/.coffer/content/workspace``,
+created on first use. It is ``content`` (ADR storage-is-five-classes-by-nature):
+what an agent leaves there is the user's only copy, and it is not synced. The
+path is resolved from ``HOME`` at every call, so a test's throwaway home moves it.
 """
 
 from __future__ import annotations
 
-import os
-import pathlib
+from coffer.infrastructure.vault.home import content_root
 
 
 def default_workspace_dir() -> str:
-    """Return ``~/.coffer/workspace``, creating it (and parents) if absent.
+    """Return ``~/.coffer/content/workspace``, creating it (and parents) if absent.
 
     Returns the absolute path as a string — the shape the providers store as
     ``agent_config.cwd``.
     """
-    home = pathlib.Path(os.environ.get("HOME") or "~").expanduser()
-    workspace = home / ".coffer" / "workspace"
+    workspace = content_root() / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     return str(workspace)
 

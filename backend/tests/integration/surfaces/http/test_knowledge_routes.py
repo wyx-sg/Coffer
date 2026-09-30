@@ -27,12 +27,10 @@ rule.
 
 from __future__ import annotations
 
-import os
-
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.infrastructure.knowledge import fs
+from coffer.infrastructure.knowledge import curation_state, fs
 
 from .conftest import _create_collection, _hold_material, _submit
 
@@ -58,7 +56,7 @@ def test_creating_a_collection_creates_one_tree_and_a_readme(client, tmp_path) -
     assert resp.status_code == 201, resp.text
     assert resp.json()["name"] == "shopee"
 
-    collection = tmp_path / "knowledge" / "shopee"
+    collection = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
     assert collection.is_dir()
     # No lanes: a collection is one tree the person and curation share.
     assert not (collection / "sources").exists()
@@ -100,7 +98,7 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
     """Per "Read a collection's description from its README": never out of a row — a
     README edited in an editor is the truth the next listing reports."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "First."})
-    readme = tmp_path / "knowledge" / "shopee" / "README.md"
+    readme = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "README.md"
     readme.write_text("# shopee\n\nEdited by hand.\n", encoding="utf-8")
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
@@ -148,7 +146,7 @@ def test_the_tree_of_an_unknown_collection_is_not_found_and_creates_nothing(  # 
     resp = client.get("/api/v1/knowledge/tree", params={"path": "typo"})
     assert resp.status_code == 404, resp.text
     assert resp.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_NOT_FOUND"
-    assert not (tmp_path / "knowledge" / "typo").exists()
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "typo").exists()
 
 
 def test_a_path_escaping_the_root_is_refused(client) -> None:  # type: ignore[no-untyped-def]
@@ -168,8 +166,10 @@ def test_the_inbox_can_be_listed_and_read_but_nothing_else_hidden(  # type: igno
         "/api/v1/knowledge/material",
         json={"collection": "shopee", "title": "Waiting", "description": "w", "body": "later"},
     )
-    (tmp_path / "knowledge" / "shopee" / ".scratch").mkdir()
-    (tmp_path / "knowledge" / "shopee" / ".scratch" / "x.md").write_text("x", encoding="utf-8")
+    (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch").mkdir()
+    (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch" / "x.md").write_text(
+        "x", encoding="utf-8"
+    )
 
     inbox = client.get("/api/v1/knowledge/tree", params={"path": "shopee/.inbox"})
     assert inbox.status_code == 200, inbox.text
@@ -230,8 +230,10 @@ def test_reading_carries_the_absolute_paths_the_ui_opens_with(client, tmp_path) 
     resp = client.get("/api/v1/knowledge/file", params={"path": path})
     assert resp.status_code == 200, resp.text
     out = resp.json()
-    assert out["file_path"] == str(tmp_path / "knowledge" / "shopee" / "session.md")
-    assert out["folder_path"] == str(tmp_path / "knowledge" / "shopee")
+    assert out["file_path"] == str(
+        tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "session.md"
+    )
+    assert out["folder_path"] == str(tmp_path / ".coffer" / "vault" / "knowledge" / "shopee")
     assert out["body"].strip() == "account.session"
     assert out["actor"] == "user"
 
@@ -286,7 +288,9 @@ def test_material_becomes_a_document_when_no_model_could_merge_it(client, tmp_pa
         "path": "shopee/account-gateway.md",
     }
     # And nothing is left waiting behind it.
-    assert list((tmp_path / "knowledge" / "shopee" / ".inbox").iterdir()) == []
+    assert (
+        list((tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox").iterdir()) == []
+    )
     # Stamped, so the sweep does not hand the promoted document straight back.
     read = client.get("/api/v1/knowledge/file", params={"path": out["path"]}).json()
     assert read["curated_at"]
@@ -309,7 +313,7 @@ def test_material_waits_in_the_inbox_when_a_pass_could_merge_it(  # type: ignore
         "title": "Gateway",
         "path": None,
     }
-    inbox = tmp_path / "knowledge" / "shopee" / ".inbox"
+    inbox = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox"
     assert [p.name for p in inbox.iterdir()] == ["gateway.md"]
     # And no document yet: a pass writes those.
     assert client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()["files"] == []
@@ -335,7 +339,7 @@ def test_material_for_an_unknown_collection_is_not_found(client, tmp_path) -> No
     )
     assert resp.status_code == 404, resp.text
     assert resp.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_NOT_FOUND"
-    assert not (tmp_path / "knowledge" / "typo").exists()
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "typo").exists()
 
 
 def test_material_with_no_description_is_refused(client) -> None:  # type: ignore[no-untyped-def]
@@ -351,19 +355,16 @@ def test_material_with_no_description_is_refused(client) -> None:  # type: ignor
 
 def test_saving_keeps_the_frontmatter_and_audits_the_edit(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """``PUT /file`` replaces the body only ("Save a document edited in the web UI"):
-    every frontmatter key — the curation stamp and a person's own included — is
-    kept byte for byte, and the file's mtime moves so the sweep sees an edit."""
+    every frontmatter key — a person's own included — is kept byte for byte, and
+    the save is a ``user`` commit whose content curation has not settled, so the
+    sweep sees an edit."""
     _create_collection(client, "shopee")
-    head = (
-        "---\ntitle: Cache\ndescription: How the cache works\ntags:\n- infra\n"
-        "coffer_curated_at: '2026-01-01T00:00:00+00:00'\n---"
-    )
-    on_disk = tmp_path / "knowledge" / "shopee" / "cache.md"
+    head = "---\ntitle: Cache\ndescription: How the cache works\ntags:\n- infra\n---"
+    on_disk = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "cache.md"
     on_disk.write_text(f"{head}\n\nold body\n", encoding="utf-8")
-    stamp = 1767225600.0  # 2026-01-01T00:00:00Z, the stamp above
-    os.utime(on_disk, (stamp, stamp))
     path = "shopee/cache.md"
-    assert fs.edited_documents("shopee") == ()
+    fs.mark_curated(path)
+    assert curation_state.edited_documents("shopee") == ()
     fingerprint = client.get("/api/v1/knowledge/file", params={"path": path}).json()["fingerprint"]
 
     resp = client.put(
@@ -374,7 +375,7 @@ def test_saving_keeps_the_frontmatter_and_audits_the_edit(client, tmp_path) -> N
     assert resp.json()["body"].strip() == "new body"
     assert resp.json()["fingerprint"] != fingerprint
     assert on_disk.read_text(encoding="utf-8") == f"{head}\n\nnew body\n"
-    assert fs.edited_documents("shopee") == (path,)
+    assert curation_state.edited_documents("shopee") == (path,)
 
     audit = client.get("/api/v1/audit", params={"event_type": "knowledge_edited"})
     assert audit.status_code == 200, audit.text
@@ -401,7 +402,7 @@ def test_saving_refuses_anything_but_an_existing_document(client, path: str) -> 
 def test_deleting_a_document_removes_it_from_disk(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     path = _submit(client, collection="shopee", title="Stale", description="d", body="b")
-    on_disk = tmp_path / "knowledge" / path
+    on_disk = tmp_path / ".coffer" / "vault" / "knowledge" / path
     assert on_disk.is_file()
 
     resp = client.delete("/api/v1/knowledge/file", params={"path": path})
@@ -417,7 +418,7 @@ def test_deleting_a_document_curation_wrote_is_allowed(client, tmp_path) -> None
 
     resp = client.delete("/api/v1/knowledge/file", params={"path": derived})
     assert resp.status_code == 204, resp.text
-    assert not (tmp_path / "knowledge" / derived).exists()
+    assert not (tmp_path / ".coffer" / "vault" / "knowledge" / derived).exists()
 
 
 def test_deleting_the_readme_is_refused(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -429,7 +430,7 @@ def test_deleting_the_readme_is_refused(client, tmp_path) -> None:  # type: igno
     resp = client.delete("/api/v1/knowledge/file", params={"path": "shopee/README.md"})
     assert resp.status_code == 400, resp.text
     assert resp.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"
-    assert (tmp_path / "knowledge" / "shopee" / "README.md").is_file()
+    assert (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "README.md").is_file()
 
 
 # ----- curating ------------------------------------------------------------
@@ -460,7 +461,9 @@ def test_curating_with_no_model_promotes_what_the_inbox_holds(  # type: ignore[n
     # the whole inbox, and the run ends there.
     assert [p["status"] for p in out["passes"]] == ["no_model"]
     assert out["passes"][0]["promoted"] == ["shopee/gateway.md"]
-    assert list((tmp_path / "knowledge" / "shopee" / ".inbox").iterdir()) == []
+    assert (
+        list((tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox").iterdir()) == []
+    )
     promoted = client.get("/api/v1/knowledge/file", params={"path": "shopee/gateway.md"})
     assert promoted.status_code == 200, promoted.text
 

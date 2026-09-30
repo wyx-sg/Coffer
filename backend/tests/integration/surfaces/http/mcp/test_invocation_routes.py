@@ -26,10 +26,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -38,6 +35,7 @@ from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as invocation_aggregate_router,
 )
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
+from tests.support.vault_stores import make_resource_repo
 
 _STDIO = {"transport": {"type": "stdio", "command": "/bin/true", "args": []}}
 
@@ -90,7 +88,7 @@ async def _build_app(
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     uids = {

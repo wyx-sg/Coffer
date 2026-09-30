@@ -203,7 +203,7 @@ def test_0049_downgrade_restores_the_tables_so_the_chain_keeps_running(tmp_path,
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0114")
     with sqlite3.connect(db_path) as conn:
         _seed(conn, "mcp_server", "collapsed", ["claude-code"])
         conn.commit()
@@ -223,5 +223,5 @@ def test_0049_downgrade_restores_the_tables_so_the_chain_keeps_running(tmp_path,
     assert _scopes(db_path)["collapsed"] == ["claude-code"]
 
     # And back up again: the restored tables are dropped a second time.
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0114")
     assert not (DROPPED_TABLES & _user_tables(db_path))

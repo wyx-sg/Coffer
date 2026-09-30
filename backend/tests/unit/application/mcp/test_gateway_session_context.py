@@ -40,7 +40,6 @@ _NOT_AN_AGENT_UID = "5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c"
 def _row(uid: str, kind: str, name: str) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        id=1,
         uid=uid,
         kind=kind,
         name=name,

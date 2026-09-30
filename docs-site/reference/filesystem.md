@@ -7,15 +7,21 @@ description: Every file and directory Coffer keeps under ~/.coffer and writes in
 
 This page maps everything Coffer keeps on disk: the `~/.coffer` tree, the one file outside it, and the entries Coffer writes into each registered agent's own config directory. Use it to back up a vault, to clean up safely, or to understand what a file you found is for.
 
-Every path below is resolved against `$HOME`. The storage-location environment variables in [Configuration](/reference/configuration#storage-locations) move individual trees elsewhere.
+Every path below is resolved against `$HOME`. There is no per-tree override: `coffer path` prints the roots, and the only locations environment variables move are the logs, the model proxy's usage spool and the history database (see [Configuration](/reference/configuration#storage-locations)).
 
 ## The ~/.coffer tree
 
+State is kept in five [storage classes](/architecture/persistence), one directory or file each, plus the files the daemon and the installer need:
+
 ```text
 ~/.coffer/
-├── coffer.db                     # the database (SQLite, WAL mode)
-├── coffer.db-wal, coffer.db-shm  # SQLite write-ahead log and shared memory
-├── coffer.db.pre-<revision>      # copy taken before a schema migration (newest 3 kept)
+├── vault/                        # the vault: a git repository — configuration and content
+├── local/                        # this machine only: never synced, can be set again
+├── content/                      # media and the chat workspace: your only copy, not synced
+├── runs.db                       # history (SQLite, WAL mode)
+├── runs.db-wal, runs.db-shm      # SQLite write-ahead log and shared memory
+├── runs.db.pre-<revision>        # copy taken before a schema migration (newest 3 kept)
+├── derived/                      # rebuilt from the rest: always safe to delete
 ├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
 ├── daemon.json                   # running daemon: pid, port, API token
@@ -23,43 +29,111 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 ├── daemon-config.json            # ports, machine name, experimental features
 ├── proxy.json                    # running model proxy: pid, port, control token
 ├── proxy-usage/                  # model proxy usage spool, ingested by the daemon
-├── bin/
-│   ├── coffer -> <version>/coffer
-│   ├── coffer-daemon -> <version>/coffer-daemon
-│   ├── coffer-mcp-shim -> <version>/coffer-mcp-shim
-│   └── <version>/                # one directory per deployed build (newest 2 kept)
-├── logs/
-│   ├── daemon.log, daemon.log.1…3
-│   ├── proxy.log
-│   ├── shim-<pid>-<epoch>.log
-│   └── upstream/<server>.log, <server>.log.1
-├── knowledge/<collection>/       # knowledge documents (+ README.md, hidden .inbox/)
-├── knowledge/.git/               # knowledge history: every write as one commit
-├── memory/<partition>/           # derived memory (MEMORY.md, notes/, RETIRED.md, .raw/)
-├── vault/memory-triggers/        # memory triggers you wrote or armed, one file each
-├── skills/<name>/                # skill master store (SKILL.md, .coffer.meta.json, …)
-├── sync/                         # vault sync working tree (a git repository)
-├── cache/agent/                  # derived agent state
+├── bin/                          # deployed builds and the stable symlinks
+├── logs/                         # daemon, proxy, shim and upstream logs
 ├── state/                        # one-off markers
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
-├── channel-media/                # attachments received over channels
-├── chat-media/                   # files attached on the Conversations page
-├── workspace/                    # default working directory for chats
 ├── vendor/                       # operator-supplied SeaTalk SDK
+├── coffer.db.pre-vault, pre-vault/   # only after the one-time upgrade: its backup set
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
 ```
 
-### Database and keys
+### The vault
+
+`~/.coffer/vault/` is a git repository from the first time Coffer runs, whether or not you sync. Every accepted change is a commit naming its writer. See [Editing the vault by hand](/guides/vault-files).
+
+```text
+~/.coffer/vault/
+├── manifest.json                       # {"schema_version": 3}
+├── resources/<kind>/<name>.json        # mcp_server, skill, channel, provider, knowledge
+├── state/mcp-preferences/<server>.json
+├── state/channel-peers/<channel>.json
+├── state/settings/internal-engine.json
+├── knowledge/<collection>/             # documents, README.md, hidden .inbox/
+├── skills/<name>/                      # skill master folders
+├── memory-triggers/<id>.md
+├── secret/<ref>.enc
+├── machines/<machine id>.json
+└── .git/
+```
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `coffer.db` | Every resource (MCP servers, agents, providers, channels, …), secrets as Fernet ciphertext, conversations, audit log, MCP invocation log, settings. | daemon | Resources and shared settings travel as YAML documents in the sync tree; the file itself never does | **No.** This is the vault. Stop the daemon before copying it. |
-| `coffer.db-wal`, `coffer.db-shm` | SQLite write-ahead log and shared-memory index. The WAL can hold committed data not yet folded into `coffer.db`. | daemon | No | **No**, and never copy `coffer.db` without them while the daemon runs. |
-| `coffer.db.pre-<revision>` (+ `-wal`, `-shm`) | A copy of the database taken just before a migration changes the schema. Only the newest three are kept. | daemon | No | Yes, once the upgraded daemon works. To roll back a failed upgrade, stop the daemon and rename the copy to `coffer.db`. |
-| `master.key` | The Fernet key that decrypts stored secrets, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). Always beside the database file. | daemon | **Never.** Back it up in the desktop app and install it on another machine with `coffer sync key import`. | **No.** Without it every stored secret is unreadable. |
+| `vault/` as a whole | Your configuration and authored content, and its full history in `.git/`. | you, daemon, sync | Yes, when [vault sync](/guides/vault-sync) is on | **No.** It is the only copy. Stop the daemon before copying it. |
+| `manifest.json` | The vault's layout number, `schema_version`, read before a sync round merges anything. | daemon | Yes | No |
+| `resources/<kind>/<name>.json` | One JSON file per resource: `uid`, `kind`, `format_version`, `name`, an optional `title`, `description`, `config`. Identity is the `uid` inside, not the path. | you, daemon | Yes | No: the resource is gone on every machine that syncs. |
+| `state/mcp-preferences/<server>.json` | The tools, prompts and resources you switched off on one MCP server, with that server's uid. | you, daemon | Yes | Yes: everything on that server is switched back on. |
+| `state/channel-peers/<channel>.json` | The identities paired with one channel, including the owner. | daemon | Yes | The pairings are lost. |
+| `state/settings/internal-engine.json` | Coffer's model, the curation owner machine, the per-call timeout, the transcription model and each upkeep pass's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
+| `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing it. You and Coffer's curation pass both edit these files. | you, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/.inbox/` | Items waiting to be curated into the documents: extracted upload text, an agent's `coffer__write`, a document added on the Knowledge page. | daemon | Yes | No: items not yet curated are lost. |
+| `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
+| `memory-triggers/<id>.md` | One memory trigger: the note it names, its kind (`block` or `context`), its command, `unless` and error patterns, who proposed and who armed it. | you, daemon | Yes | **No.** A trigger is authored; rebuilding memory does not bring it back. |
+| `secret/<ref>.enc` | One secret's Fernet ciphertext, mode `0600`. Never the key. Excluded from the repository unless the sync remote carries secrets. | daemon | Only with `--with-secret` | **No.** The secret is gone. |
+| `machines/<machine id>.json` | One descriptor per machine that syncs: name, OS, hostname, Coffer version, last round, last converged commit, key fingerprint, agents and their plugins. | sync (each machine writes only its own) | Yes | Retire another machine with `coffer sync machine rm`. |
+| `.git/` | The history of every file above. Snapshots before sync rounds are tags under `refs/tags/coffer/pre-apply/`. `.git/info/exclude` lists what the repository ignores. | daemon | The commits are what syncs | **No.** Every version and every rollback is lost. |
+
+### Local
+
+| Path | Purpose | Owner | Syncs | Safe to delete |
+| --- | --- | --- | --- | --- |
+| `local/resources/agent/<name>.json` | This machine's agents, one resource file each. | daemon | Never | The agent is unregistered here. |
+| `local/reach.json` | Every resource's reach on this machine: enabled, and for which agents. | daemon | Never | Every resource returns to its kind's default reach. |
+| `local/tool-reach.json` | Custom tools' per-tool reach overrides. | daemon | Never | The overrides are lost. |
+| `local/engine.json` | When this machine last changed Coffer's engine settings. | daemon | Never | Yes. |
+| `local/retention.json` | Each prunable table's retention and when it was last pruned. | daemon | Never | Yes: the defaults apply. |
+| `local/curation.json` | The content each knowledge document had when curation last settled it, so a person's later edit is noticed. | daemon | Never | Curation re-reads every document once. |
+| `local/skill-source-status.json` | What this machine last found at each Git-imported skill's source. | daemon | Never | Yes: the next check fills it in. |
+| `local/secret/` | Machine-local ciphertext, such as the model proxy's tokens. | daemon | Never | The proxy tokens are minted again; agents on a provider re-read theirs. |
+| `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here. | daemon | Never | Every secret waits for approval again. |
+| `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, username, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
+| `local/sync/round.json` | A stopped round, a hold, or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |
+| `local/migration.json` | The record of the one-time upgrade: every move it made, read by `coffer migrate --rollback`. | `coffer migrate` | Never | Not until you are sure you will not roll back. |
+
+A local file that does not parse is moved aside as `<name>.unreadable-<n>` and read as empty.
+
+### Content
+
+| Path | Purpose | Owner | Syncs | Safe to delete |
+| --- | --- | --- | --- | --- |
+| `content/channel-media/` | Attachments received over Telegram and SeaTalk, saved so the agent can open them. Files older than 30 days are pruned. | daemon | No | Yes. |
+| `content/chat-media/` | Files attached on the Conversations page: each upload's bytes (`<id><ext>`) beside a small `<id>.json` record of its name, type and size. Files older than 30 days are pruned. | daemon | No | Yes. A conversation keeps showing the file's chip, but a later turn can no longer open it. |
+| `content/workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
+
+### History and keys
+
+| Path | Purpose | Owner | Syncs | Safe to delete |
+| --- | --- | --- | --- | --- |
+| `runs.db` | History: audit log, MCP invocation log, conversations and messages, channel threads and outbox, sync rounds, usage and quota. `COFFER_DB_URL` names another database. | daemon | Never | You lose history, not configuration. Stop the daemon first. |
+| `runs.db-wal`, `runs.db-shm` | SQLite write-ahead log and shared-memory index. The WAL can hold committed data not yet folded into `runs.db`. | daemon | No | **No**, and never copy `runs.db` without them while the daemon runs. |
+| `runs.db.pre-<revision>` (+ `-wal`, `-shm`) | A copy taken just before a migration changes the schema. Only the newest three are kept. | daemon | No | Yes, once the upgraded daemon works. |
+| `master.key` | The Fernet key that decrypts stored secrets, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). | daemon | **Never.** Back it up in the desktop app and install it on another machine with `coffer sync key import`. | **No.** Without it every stored secret is unreadable. |
 | `machine-id` | A random id, mode `0600`, used only when the host exposes no hardware id (macOS `IOPlatformUUID`, Linux machine-id). Never rewritten. | daemon | No | No: a new id splits this machine's identity in a synced vault. |
 
-See [Persistence](/architecture/persistence) and [Secret store](/guides/secret-store).
+### Derived
+
+Everything under `derived/` is rebuilt from the rest, so deleting it (with the daemon stopped) is always safe. **Settings → Data** clears the caches for you.
+
+| Path | Purpose | Rebuilt by |
+| --- | --- | --- |
+| `derived/derived.db` | MCP server health, which skill copies were delivered into which agent, when each upstream capability was first and last seen. Recreated when its schema version differs. | Health checks, skill delivery, the gateway |
+| `derived/memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/`, `RETIRED.md` (what was retired and why), hidden `.raw/` (what aggregation read, verbatim). `.source_state.json` at the root records what the last aggregation read. | Aggregation and distil (retirement decisions in `RETIRED.md` are lost) |
+| `derived/cache/agent/.transcript_summaries.json` | What the transcript reader already parsed. | The next read, slowly |
+| `derived/index/resources.json` | The uid index: where each resource file was found, and its revision counter. | The next read |
+| `derived/resources/` | Derived resource files: memory partitions, and `skill/coffer-guide.json`. | The daemon at start |
+| `derived/skills/coffer-guide/` | Coffer's own guide skill, rendered from this build. | The daemon at start |
+| `derived/sync-conflicts/` | Marked-up copies of a stopped round's conflicting files, for a hand merge. | Opening the file in an editor again |
+
+### After the one-time upgrade
+
+| Path | Purpose | Safe to delete |
+| --- | --- | --- |
+| `coffer.db.pre-vault` (+ `-wal`, `-shm`) | The database as it was before `coffer migrate`. Never opened for writing again; `coffer migrate --rollback` copies it back. | Once you will not roll back. |
+| `pre-vault/knowledge.git`, `pre-vault/knowledge-stamped/`, `pre-vault/daemon-config.json` | The old knowledge history, the knowledge documents before their curation stamps were removed, and the old `daemon-config.json`. | Once you will not roll back. |
+| `sync/` | The previous build's sync working tree, left where it was. Nothing reads it. | Yes. |
+| `vault.rolled-back-<ts>/`, `local.rolled-back-<ts>/` | What a rollback set aside. | Once you have taken what you need from them. |
+
+See [Upgrading an existing Coffer](/guides/upgrading).
 
 ### Daemon files {#daemon-files}
 
@@ -94,44 +168,10 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 
 `COFFER_LOG_DIR` moves the daemon, proxy, upstream and shim logs together. See [Observability](/architecture/observability).
 
-### Knowledge, memory and skills
+### Other files
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing the collection. You and Coffer's curation pass both edit these files. | you, daemon | Yes, when [vault sync](/guides/vault-sync) is on | **No.** This is written knowledge. |
-| `knowledge/<collection>/.inbox/` | Items waiting to be curated into the documents: extracted upload text, an agent's `coffer__write`, a document added on the Knowledge page. Each item is removed once curation folds it in. | daemon | Yes | No: items not yet curated are lost. |
-| `knowledge/.git/` | The history of every write to the knowledge tree: one git commit per change, naming its writer (you, an agent, curation, sync, or an edit on disk). Created on first use. Read it with `coffer knowledge history` and `coffer knowledge changes`. | daemon | No | Yes, but every earlier version and every undo is lost; a new history starts from the current tree. |
-| `knowledge.pre-<revision>.bak/` | A copy of the knowledge tree taken before a migration that restructured it. | daemon | No | Yes, once you have checked the migrated tree. |
-| `memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/` (Coffer's notes), `RETIRED.md` (what was retired and why). | daemon (distil pass) | **No** (derived and local) | Yes: aggregation and distil rebuild it. Retirement decisions in `RETIRED.md` are lost. |
-| `memory/<partition>/.raw/` | What aggregation read out of the agents' own memory, verbatim. | daemon (aggregate pass) | No | Yes: the next aggregation rereads the agents. |
-| `vault/memory-triggers/<id>.md` | One memory trigger: the note it names, its kind (`block` or `context`), its command, `unless` and error patterns, who proposed and who armed it. Written by `coffer memory trigger add`, by the distil pass as an unarmed proposal, and by you in an editor. `COFFER_MEMORY_TRIGGERS_ROOT` moves the directory. | you, daemon | No | **No.** A trigger is authored; rebuilding memory does not bring it back. |
-| `memory/.source_state.json` | The digest of each native memory file at the last aggregation (`digests`), and the `version` of the filing rules it was written under. A file from another version reads as empty, so every source is re-read once. | daemon (aggregate pass) | No | Yes: the next pass re-reads every source. |
-| `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | daemon | Yes, except `skills/coffer-guide/`, which each machine renders for itself | **No.** Deleting a folder breaks the symlinks delivered to agents. |
-
-`COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_SKILLS_ROOT` move these three trees; `COFFER_SKILLS_ROOT` moves the skill store and the tree vault sync mirrors together (see [Configuration](/reference/configuration#storage-locations)). See [Knowledge](/guides/knowledge), [Memory](/guides/memory) and [Skills](/guides/skills).
-
-### Sync
-
-| Path | Purpose | Owner | Syncs | Safe to delete |
-| --- | --- | --- | --- | --- |
-| `sync/` | The git working tree that converges with your sync remote. The location is part of the remote's configuration; `~/.coffer/sync` is the default. It may not sit inside, at or above the knowledge, skills or memory roots. | daemon | It *is* what syncs | Not while a remote is configured: it holds the merge base. |
-| `sync/manifest.json` | Layout version of the tree, read before anything is applied. | daemon | Yes | — |
-| `sync/resources/<kind>/<uid>.yaml` | One document per synced resource. | daemon | Yes | — |
-| `sync/state/<area>/…yaml` | Shared state owned by one module, for example the internal engine settings. | daemon | Yes | — |
-| `sync/secret/<ref>.enc` | Secret ciphertext, only when you opt in. Never the key. | daemon | Yes | — |
-| `sync/machines/<machine-id>.yaml` | One descriptor per machine sharing the vault. | daemon | Yes | — |
-| `sync/knowledge/`, `sync/skills/` | Mirrors of the live trees. | daemon | Yes | — |
-
-Each applied round is preceded by a git tag under `coffer/pre-apply/` in this repository, which `coffer sync restore` returns to. See [Vault sync](/architecture/vault-sync).
-
-### Caches, media and working directories
-
-| Path | Purpose | Owner | Syncs | Safe to delete |
-| --- | --- | --- | --- | --- |
-| `cache/agent/.transcript_summaries.json` | What the transcript reader already parsed, so the conversation history list loads without rereading every transcript. | daemon | No | Yes; it is rebuilt, slowly, on the next read. |
-| `channel-media/` | Attachments (images, files, voice, documents) received over Telegram and SeaTalk, saved so the agent can open them. Files older than 30 days are pruned. | daemon | No | Yes. |
-| `chat-media/` | Files attached on the Conversations page: each upload's bytes (`<id><ext>`) beside a small `<id>.json` record of its name, type and size. Files older than 30 days are pruned. | daemon | No | Yes. A conversation keeps showing the file's chip, but a later turn can no longer open it. |
-| `workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
 | `vendor/` | Where you place the SeaTalk WebSocket SDK (`seatalk_oapi_sdk`). Coffer only reads it. | you | No | Yes, if you do not use SeaTalk. |
 | `eval-capture.jsonl` | Captured `coffer__search_tools` calls, only when `COFFER_EVAL_CAPTURE` is set. | daemon | No | Yes. |
 
@@ -155,7 +195,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Connecting the agent to Coffer. See [Agents](/guides/agents#connect-an-agent-to-coffer). |
 | `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> proxy token --agent-uid <agent uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found), which prints the agent's local proxy token; `env.ANTHROPIC_BASE_URL` set to the model proxy's `http://127.0.0.1:<proxy port>/anthropic`; `127.0.0.1,localhost` appended to `env.NO_PROXY`; and the model keys (`model`, `effortLevel`, `env.ANTHROPIC_DEFAULT_<TIER>_MODEL`, `modelPicker`). No provider key is ever written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
 | `settings.json` | Four hook entries whose command begins `: coffer-memory;` and runs the `coffer` CLI by full path as `coffer memory hook --agent-uid <uid> --cwd "$PWD"`: `hooks.SessionStart` (matcher `startup\|resume\|clear\|compact`, 10-second timeout), `hooks.UserPromptSubmit`, and `hooks.PreToolUse` and `hooks.PostToolUse` (matcher `Bash`), each with a 5-second timeout. | Connecting the agent to Coffer while `memory` is on. See [Memory](/guides/memory#install-the-hook). |
-| `skills/<name>` | A symlink to `~/.coffer/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
+| `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex
 
@@ -165,7 +205,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `config.toml` | `model_provider = "coffer"`, a `[model_providers.coffer]` table with `base_url` set to the model proxy's `http://127.0.0.1:<proxy port>/openai/v1`, `supports_websockets = false`, `requires_openai_auth = false` and an `auth` command (`coffer` by absolute path, `args = ["proxy", "token", "--agent-uid", "<agent uid>"]`), and `model_catalog_json` pointing at the catalogue below. No provider key is ever written. | Switching the agent to a model provider. |
 | `coffer-model-catalog.json` | The provider's curated model list, so Codex's own model picker shows it. Removed when the provider is switched off. | Switching the agent to a model provider. |
 | `hooks.json` | The same four hook entries as for Claude Code, on the same events with the same matchers and timeouts, all running `coffer memory hook`. Coffer reads, and never writes, Codex's approval of each entry in `config.toml`'s `[hooks.state]`. | Connecting the agent to Coffer while `memory` is on. |
-| `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
+| `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>`. | Delivering a skill to the agent. |
 
 Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
 
@@ -179,4 +219,6 @@ Before removing Coffer, disconnect each agent from Coffer and remove the provide
 - [Persistence](/architecture/persistence)
 - [Security model](/architecture/security)
 - [Vault sync](/guides/vault-sync)
+- [Editing the vault by hand](/guides/vault-files)
+- [Upgrading an existing Coffer](/guides/upgrading)
 - [Troubleshooting](/guides/troubleshooting)

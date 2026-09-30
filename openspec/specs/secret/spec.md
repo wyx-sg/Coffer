@@ -22,7 +22,7 @@ The capability ships no web page of its own and still satisfies the End-to-End D
 delivers a complete CLI (`coffer secret set|get|list|rm|approvals|reject|scan|import`,
 `coffer run`, plus the `secrets.storage` and `secrets.require_approval` keys of `coffer config`)
 and a complete route family (`/api/v1/secrets/*` plus `/api/v1/settings/secrets` and
-`/api/v1/settings/secret-boundary`) over its own tables. Approving, revealing and writing a key
+`/api/v1/settings/secret-boundary`) over its own files under `local/secret-boundary/`. Approving, revealing and writing a key
 backup have no CLI counterpart on purpose: each needs the desktop app's presence check, and the
 CLI names the app instead. Its only
 visual surface is Settings → Security, the master key's card; the secret fields themselves live in
@@ -41,30 +41,17 @@ re-enters their secrets.
 
 ## Requirements
 
-### Requirement: Store secrets only as ciphertext
-The system MUST persist every secret only as Fernet ciphertext in the `secrets` table
-([Envelope-Encrypted Credential Store](../../../docs/decisions/envelope-encrypted-credential-store.md)).
-Secret plaintext MUST NOT be written to the database, any log file, any audit entry, or any
-structured event. A stored secret records its ref, its ciphertext and its creation and update
-timestamps, and nothing else, because anything else would be a place for the secret to leak.
-
-#### Scenario: a stored secret is only ciphertext in the secrets table
-- **GIVEN** an empty secret store
-- **WHEN** a secret is stored under a ref
-- **THEN** the `secrets` row for that ref holds bytes that do not contain the secret's plaintext
-- **AND** those bytes decrypt with the master key back to the secret
-
 ### Requirement: Address a secret by an opaque reference
 A secret MUST be addressed by an opaque reference — a slash-separated string of `[A-Za-z0-9_.-]`
 segments — which carries no meaning to the store. A write to an existing ref MUST re-encrypt in
-place rather than create a second row, so rotating a secret needs no change anywhere that cites it.
-When two writes reach the same ref, the later write wins, and the row keeps its creation time.
+place rather than create a second file, so rotating a secret needs no change anywhere that cites it.
+When two writes reach the same ref, the later write wins, and the ref keeps its creation time.
 
 #### Scenario: writing an existing ref re-encrypts it in place
 - **GIVEN** a secret stored under a ref
 - **WHEN** a second value is written under the same ref
-- **THEN** the store still holds exactly one row for that ref, which now decrypts to the second value
-- **AND** the row keeps its original creation time
+- **THEN** the store still holds exactly one file for that ref, which now decrypts to the second value
+- **AND** the ref keeps its original creation time
 
 ### Requirement: Report undecryptable ciphertext as unreadable
 A stored ciphertext that will not decrypt with the current master key MUST raise
@@ -81,9 +68,9 @@ never stored.
 
 ### Requirement: Keep blocking store calls off the event loop
 The store's blocking methods MUST NOT be called on the event loop; every async caller MUST go
-through the store's own `a*` facade or an explicit worker thread. The store is a blocking SQLite
-writer: a store write busy-waits on SQLite's lock, and on the loop that wait blocks the coroutine
-holding the lock, so the wait can only ever time out.
+through the store's own `a*` facade or an explicit worker thread. The store is a blocking
+writer: a store write waits for the vault's one write lock and commits with git, and on the loop
+that wait blocks the coroutine holding the lock, so the wait can only ever time out.
 
 #### Scenario: an async caller reaches the store through its async facade
 - **GIVEN** a secret store used from a coroutine running on the event loop
@@ -118,7 +105,7 @@ command — MUST NOT reach the keychain.
 
 ### Requirement: Resolve the master key file-first and create it only for an empty store
 Key resolution MUST read the file first and the keychain second, and MUST create a new key only
-while the `secrets` table is empty. It MUST also never create a key while the keychain cannot be read —
+while the store holds no ciphertext file. It MUST also never create a key while the keychain cannot be read —
 locked, or its unlock prompt dismissed: the key may be there (it is opted into with a relocation),
 and a new file key would shadow it on every later start because the file is read first. The
 daemon then refuses to start with `SECRET_LOCKED`, naming the key file it looked for and
@@ -127,13 +114,13 @@ nothing there, so it is treated as an empty keychain. Resolution order is what m
 recoverable; the creation rule is what stops a fresh key silently orphaning existing ciphertext.
 
 #### Scenario: the master key is never regenerated over existing ciphertext
-- **GIVEN** a vault whose `secrets` table holds at least one row and whose master key is absent from both the file location and the keychain,
+- **GIVEN** a vault holding at least one ciphertext file and whose master key is absent from both the file location and the keychain,
 - **WHEN** the daemon starts,
 - **THEN** it refuses to start with `MASTER_KEY_MISSING` naming the expected key path,
 - **AND** no new key is written, so restoring the original key restores access.
 
 #### Scenario: a locked keychain at start creates no key
-- **GIVEN** a vault whose `secrets` table is empty, no key file, and an OS keychain that raises "locked" on every read
+- **GIVEN** a vault holding no ciphertext file, no key file, and an OS keychain that raises "locked" on every read
 - **WHEN** the daemon starts
 - **THEN** it refuses to start with `SECRET_LOCKED`, naming the expected key path and saying to unlock the keychain
 - **AND** no key file is written, so the keychain's key is the one read once it is unlocked
@@ -145,7 +132,7 @@ ciphertext under any condition. Restoring the original key MUST restore access t
 stored secret. Because an empty store gets a key at its first start and a store with
 ciphertext does not start without one, a running daemon always holds a master key; a machine can
 be without one only when the key disappears while the daemon runs, which is the case
-[vault-sync](../vault-sync/spec.md) "Report refs without a key as locked" covers.
+[vault-sync](../vault-sync/spec.md) "Report the refs a key cannot open as locked" covers.
 
 #### Scenario: a missing master key is a named, fatal startup failure
 - **GIVEN** a key file that exists but is truncated or corrupt, beside ciphertext,
@@ -215,7 +202,7 @@ present, and record a `secret_deleted` audit entry when it removed something.
 #### Scenario: delete a secret frees the reference
 - **GIVEN** a secret `{ref}` exists and is cited by zero MCP servers,
 - **WHEN** the user issues `DELETE /api/v1/secrets/{ref}` (or the equivalent CLI),
-- **THEN** the ciphertext row is removed, the deletion is audited, and a later registration may reuse `{ref}` without conflict.
+- **THEN** the ciphertext file is removed, the deletion is audited, and a later registration may reuse `{ref}` without conflict.
 
 ### Requirement: Refuse to delete a secret still in use
 The delete MUST be refused with `409 SECRET_IN_USE` while any registered resource's
@@ -228,7 +215,7 @@ A Coffer-initiated delete MUST NOT leave any resource citing a reference the sto
 #### Scenario: a secret in use cannot be deleted
 - **GIVEN** a stored secret whose ref is cited by at least one registered resource,
 - **WHEN** the user deletes it,
-- **THEN** the request is refused with `409 SECRET_IN_USE`, the message names every citing resource as its kind plus its current name (`channel 'my-bot'`, `mcp_server 'github'`) rather than as a uid — the user has to go and find the thing, and an opaque identity is not what the page they go to shows them, and the ciphertext row is still present afterwards.
+- **THEN** the request is refused with `409 SECRET_IN_USE`, the message names every citing resource as its kind plus its current name (`channel 'my-bot'`, `mcp_server 'github'`) rather than as a uid — the user has to go and find the thing, and an opaque identity is not what the page they go to shows them, and the ciphertext file is still present afterwards.
 
 ### Requirement: Read a secret on the command line without shell history
 `coffer secret set <ref>` MUST take the secret from standard input, or from a hidden prompt on
@@ -275,7 +262,7 @@ cites no secrets and is never probed. A reference is resolved only at the moment
 #### Scenario: store and reference a secret
 - **GIVEN** the user has not yet stored an HTTP secret,
 - **WHEN** the user issues `POST /api/v1/secrets` (or the equivalent CLI) with `ref` and the secret `value` in the request body, then registers an HTTP MCP server whose `secret_refs` cites `{ref}`,
-- **THEN** the secret value is written only as Fernet ciphertext in the `secrets` table (its plaintext never reaches the SQLite DB, any log, or the audit), and the server registration succeeds with the secret resolved (decrypted) at upstream-spawn time.
+- **THEN** the secret value is written only as Fernet ciphertext in its file under `vault/secret/` (its plaintext never reaches any file, the history database, any log, or the audit), and the server registration succeeds with the secret resolved (decrypted) at upstream-spawn time.
 
 ### Requirement: Store a pasted secret before persisting its reference
 Any surface that accepts a pasted or typed secret MUST write it into the store first and persist
@@ -308,12 +295,13 @@ secret lingers, which is the status quo, rather than the deletion appearing to h
 ### Requirement: Hold plaintext only in memory at the moment of use
 Plaintext MUST exist only in memory, between the decrypt that produces it and the process spawn or
 header injection that consumes it. It MUST NOT be held longer, and it MUST NOT be written anywhere:
-no secret value may appear in any database table, log file, audit entry or invocation record.
+no secret value may appear in any file under `~/.coffer`, database table, log file, audit entry
+or invocation record.
 
 #### Scenario: secrets never leak to logs or audit
 - **GIVEN** an MCP server registered with a secret reference,
 - **WHEN** the server is spawned, exercised, and torn down through one representative session,
-- **THEN** an automated scan of every database row, audit entry, invocation record, and log file under `~/.coffer/logs/` reveals zero occurrences of the secret's literal value.
+- **THEN** an automated scan of every file under `~/.coffer` — the vault, `local/`, the history database, and every log file under `~/.coffer/logs/` — and of every database row, audit entry and invocation record reveals zero occurrences of the secret's literal value.
 
 ### Requirement: Keep secret values out of secret audit events
 The events `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`,
@@ -731,3 +719,39 @@ password); in a browser Approve MUST be disabled, naming the desktop app, while
 - **WHEN** the approvals window shows it
 - **THEN** Approve is disabled and says to approve in the Coffer desktop app
 - **AND** Reject is enabled and refuses the approval over REST
+
+### Requirement: Store every secret only as a ciphertext file
+The system MUST persist every secret only as Fernet ciphertext
+([Envelope-Encrypted Credential Store](../../../docs/decisions/envelope-encrypted-credential-store.md)),
+one file per ref: `~/.coffer/vault/secret/<ref>.enc`, or `~/.coffer/local/secret/<ref>.enc` for a
+ref that is true of this machine only, such as a model-proxy token
+([vault-storage](../vault-storage/spec.md) "Keep secret ciphertext as one file per reference").
+Secret plaintext MUST NOT be written to any file, the history database, any log file, any audit
+entry, or any structured event. A file holds the ciphertext and nothing else, because anything
+else would be a place for the secret to leak: the ref is its name, its update time is the
+token's own encryption time, and when this machine first stored it is a machine-local record
+beside the boundary's (see "Keep the boundary's bindings, approvals and switch on this machine").
+
+#### Scenario: a stored secret is only ciphertext in its file
+- **GIVEN** an empty secret store
+- **WHEN** a secret is stored under a ref
+- **THEN** the ref's file under `vault/secret/` holds the Fernet token and a trailing newline, which do not contain the secret's plaintext
+- **AND** those bytes decrypt with the master key back to the secret, and no file under `~/.coffer` holds the plaintext
+
+### Requirement: Keep the boundary's bindings, approvals and switch on this machine
+The secret boundary's state MUST be files of this machine, under `~/.coffer/local/secret-boundary/`:
+`bindings.json` (which destination and target each ref is approved for), `approvals.json` (the
+approvals asked and answered, a pending replacement's sealed value with them), `settings.json` (the
+`require_approval` switch), `times.json` (when this machine first stored each ref) and
+`last-used.json` (when a consumer last had each ref decrypted here). Each MUST be written
+atomically with mode `0600`, and none of them MUST ever be written into the vault or travel with
+sync: an approval is a person's answer on this machine, given with a presence grant here, and a
+second machine decides for itself which targets receive its values. A ref that arrived from
+another machine by sync therefore has no creation time here, and MUST NOT be counted as a value a
+person here has just supplied (see "Hold a secret for a new destination until a person approves it").
+
+#### Scenario: the boundary's state is machine-local files
+- **GIVEN** an empty home
+- **WHEN** a binding is approved, an approval is asked and the protection switch is set
+- **THEN** `bindings.json`, `approvals.json` and `settings.json` exist under `~/.coffer/local/secret-boundary/`, each with mode `0600`
+- **AND** nothing was written into the vault

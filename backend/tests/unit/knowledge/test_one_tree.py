@@ -6,28 +6,37 @@ them are right, every surface above is reading the truth (spec knowledge "Store
 each collection as one tree of Markdown files").
 
 What these pin: a collection is one tree of documents with a README beside
-them, new material waits in a hidden inbox that nothing lists, and the stamp
-that decides which documents curation still owes is read off the file rather
-than out of any state Coffer keeps (see "Settle an item only after its pass
-completes").
+them, new material waits in a hidden inbox that nothing lists, and which
+documents curation still owes is decided by content — the blob a document has
+at the vault's ``HEAD`` against the one curation last settled, and who wrote
+the last commit — never by modification time (see "Settle an item only after
+its pass completes").
 """
 
 from __future__ import annotations
 
+import os
 import pathlib
-import time
 
 import pytest
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.domain.vault.writers import (
+    OP_EDIT,
+    OP_SYNC,
+    WRITER_CURATION,
+    WRITER_SYNC,
+    CommitMeta,
+)
+from coffer.infrastructure.knowledge import catalogue, curation_state, fs, inbox, paths
 from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
+from coffer.infrastructure.vault.instance import vault_writer
 
 
 @pytest.fixture(autouse=True)
 def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    root = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(root))
+    root = _knowledge_root()
     fs.create_collection_dir("shopee")
     return root
 
@@ -149,7 +158,7 @@ def test_promoting_material_makes_it_a_stamped_document(knowledge_root) -> None:
     )
     assert promoted.curated_at != ""
     assert inbox.inbox_items("shopee") == ()
-    assert fs.edited_documents("shopee") == ()
+    assert curation_state.edited_documents("shopee") == ()
 
 
 @pytest.mark.parametrize("bad", ["../x.md", ".hidden.md", "a/b.md"])
@@ -158,73 +167,118 @@ def test_an_inbox_item_is_named_by_its_file_name_alone(bad: str) -> None:
         inbox.read_material("shopee", bad)
 
 
-# ----- the curation stamp ---------------------------------------------------
+# ----- what curation owes ------------------------------------------------------
+
+
+def _edit_on_disk(relpath: str, extra: str = "\nmore\n") -> None:
+    path = paths.resolve(relpath)
+    path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
+
+
+def _commit_as(relpath: str, writer: str, operation: str, extra: str) -> None:
+    """Change ``relpath`` the way another writer would, as one vault commit."""
+    path = paths.resolve(relpath)
+    data = (path.read_text(encoding="utf-8") + extra).encode("utf-8")
+    vault_writer().write_file(
+        paths.vault_path(relpath),
+        data,
+        meta=CommitMeta(writer=writer, operation=operation, summary=f"{writer} change"),
+        expected=None,
+    )
 
 
 def test_a_document_nobody_curated_is_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     # A person writing a document from scratch in their editor is an edit like
     # any other: the sweep picks it up.
     relpath = _document()
-    assert fs.edited_documents("shopee") == (relpath,)
+    assert curation_state.edited_documents("shopee") == (relpath,)
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="an item is curated once, not on every sweep")
-def test_a_stamped_document_stops_being_owed_until_it_changes(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+def test_a_settled_document_stops_being_owed_until_it_changes(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     relpath = _document()
     fs.mark_curated(relpath)
-    assert fs.edited_documents("shopee") == ()
+    assert curation_state.edited_documents("shopee") == ()
 
-    # The stamp is on the file, and it is the file's own modification time it
-    # is compared against — so touching the file makes it owed again with
-    # nothing else consulted.
-    time.sleep(0.01)
-    path = paths.resolve(relpath)
-    path.write_text(path.read_text(encoding="utf-8") + "\nmore\n", encoding="utf-8")
-    assert fs.edited_documents("shopee") == (relpath,)
+    # A person's edit in their own editor changes the content, which is all
+    # that is compared: it is owed again, committed first as a ``disk`` write.
+    _edit_on_disk(relpath)
+    assert curation_state.edited_documents("shopee") == (relpath,)
+    latest = vault_writer().repo.log(paths.vault_path(relpath), limit=1)[0]
+    assert latest.meta.writer == "disk"
+
+
+def test_settling_leaves_the_file_untouched(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document(body="the original body")
+    raw = paths.resolve(relpath).read_bytes()
+    fs.mark_curated(relpath, when="2026-09-17T00:00:00+00:00")
+    assert paths.resolve(relpath).read_bytes() == raw
+    assert b"coffer_curated_at" not in raw
+    assert fs.read_file(relpath).curated_at == "2026-09-17T00:00:00+00:00"
+    # The record lives in local state, never in the vault.
+    assert (curation_state.local_root() / curation_state.STATE_FILENAME).is_file()
+
+
+def test_a_changed_document_reads_as_not_curated(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document()
+    fs.mark_curated(relpath)
+    _edit_on_disk(relpath)
+    assert fs.read_file(relpath).curated_at == ""
 
 
 def test_curation_s_own_write_is_not_an_edit(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     _document(curated=True)
-    assert fs.edited_documents("shopee") == ()
+    assert curation_state.edited_documents("shopee") == ()
 
 
-def test_stamping_changes_nothing_but_the_stamp(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _document(body="the original body")
-    before = fs.read_file(relpath)
-    fs.mark_curated(relpath, when="2026-09-17T00:00:00+00:00")
-    after = fs.read_file(relpath)
-    assert after.body == before.body
-    assert (after.title, after.description, after.actor) == (
-        before.title,
-        before.description,
-        before.actor,
-    )
-    assert after.created_at == before.created_at
-    assert after.curated_at == "2026-09-17T00:00:00+00:00"
+def test_a_curation_commit_is_not_an_edit(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document(curated=True)
+    _commit_as(relpath, WRITER_CURATION, "pass", "\ncurated\n")
+    assert curation_state.edited_documents("shopee") == ()
 
 
-def test_stamping_keeps_frontmatter_coffer_did_not_write(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    # A document is a person's as much as Coffer's, and the stamp is Coffer
-    # editing it unattended, on a timer. Dropping a key it does not recognise
-    # would delete their own `tags:` from under them.
+def test_a_sync_commit_is_not_an_edit(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    # Another machine's change arrives already curated there; carrying it
+    # outward again here would curate it twice.
+    relpath = _document(curated=True)
+    _commit_as(relpath, WRITER_SYNC, OP_SYNC, "\nfrom the other machine\n")
+    assert curation_state.edited_documents("shopee") == ()
+
+
+def test_an_edit_committed_by_a_person_is_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document(curated=True)
+    _commit_as(relpath, "user", OP_EDIT, "\nsaved from the page\n")
+    assert curation_state.edited_documents("shopee") == (relpath,)
+
+
+def test_a_checkout_that_only_moves_mtimes_is_not_an_edit(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     relpath = _document()
-    path = paths.resolve(relpath)
-    path.write_text(
-        path.read_text(encoding="utf-8").replace(
-            "actor: user", "actor: user\ntags: [account, session]\nreviewed_by: yuxing"
-        ),
-        encoding="utf-8",
-    )
     fs.mark_curated(relpath)
-    frontmatter, _ = split_frontmatter(path.read_text(encoding="utf-8"))
-    assert frontmatter["tags"] == ["account", "session"]
-    assert frontmatter["reviewed_by"] == "yuxing"
-    assert frontmatter[fs.CURATED_AT_KEY]
+    assert curation_state.edited_documents("shopee") == ()
+    path = paths.resolve(relpath)
+    later = path.stat().st_mtime + 3600
+    os.utime(path, (later, later))
+    assert curation_state.edited_documents("shopee") == ()
+
+
+def test_the_oldest_change_is_owed_first(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    first = _document(title="First")
+    curation_state.edited_documents("shopee")  # commits it
+    second = _document(title="Second")
+    assert curation_state.edited_documents("shopee") == (first, second)
+
+
+def test_a_renamed_collection_keeps_what_curation_settled(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document()
+    fs.mark_curated(relpath)
+    fs.rename_collection_dir("shopee", "seamoney")
+    curation_state.move("shopee", "seamoney")
+    assert curation_state.edited_documents("seamoney") == ()
 
 
 def test_a_readme_is_never_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     paths.readme_path("shopee").write_text("# shopee\n\nAbout.\n", encoding="utf-8")
-    assert fs.edited_documents("shopee") == ()
+    assert curation_state.edited_documents("shopee") == ()
 
 
 def test_a_description_containing_a_rule_does_not_end_the_frontmatter() -> None:

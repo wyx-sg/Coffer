@@ -36,9 +36,9 @@ Coffer deliberately pins away (PR #415).
 ### Option A — Opt-in ciphertext in the repository; the key moved out of band; the push token through a credential helper (chosen)
 
 **Secrets.** When the remote is configured to carry them
-(`include_credentials` on the remote, default off, fixed per remote rather than
+(`include_secret` on the remote, default off, fixed per remote rather than
 per round), each ref travels as its raw Fernet ciphertext at
-`credentials/<ref>.enc` — read and written without the master key, so neither
+`secret/<ref>.enc` — read and written without the master key, so neither
 direction of a round touches plaintext (`infrastructure/sync/secret.py`;
 spec vault-sync "Carry secrets as ciphertext only"). Two ciphertexts for one
 ref never reach a text merge: a Fernet token carries its encryption time in
@@ -66,7 +66,7 @@ machine publishes its fingerprint in its descriptor
 outright which peers' credentials will not decrypt here. Until the key is
 present, arrived refs are reported **locked**; a key that exists but cannot be
 read right now reports none locked and logs why, and the key is resolved at
-most once per daemon start (spec vault-sync "Report refs without a key as locked").
+most once per daemon start (spec vault-sync "Report the refs a key cannot open as locked").
 
 **The push token.** It is resolved from the store at push time and reaches git
 as a **credential helper** passed with `-c` — a shell snippet that answers
@@ -149,7 +149,7 @@ Pros: no secret, however encrypted, ever leaves the machine.
 Cons: every arriving resource is broken until someone re-enters its secret, and
 rotating a token means repeating it on every machine.
 
-Kept as the **default** (`include_credentials` is off until the user opts in),
+Kept as the **default** (`include_secret` is off until the user opts in),
 lost as the only mode: a user who has chosen a private remote they trust
 should not pay that cost.
 

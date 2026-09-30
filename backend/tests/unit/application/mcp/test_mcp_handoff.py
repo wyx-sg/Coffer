@@ -20,7 +20,7 @@ STDIO = {
         "command": "npx",
         "args": ["-y", "@acme/mcp", "--api-key", ARG_TOKEN, f"--github={GH_TOKEN}"],
         "env": {"ACME_REGION": ENV_VALUE},
-        "credential_refs": {"ACME_TOKEN": "coffer://secret/acme"},
+        "secret_refs": {"ACME_TOKEN": "coffer://secret/acme"},
         "cwd": "/work/acme",
     }
 }
@@ -58,7 +58,7 @@ def test_an_http_server_is_summarised_by_its_redacted_url_and_header_names() -> 
                 "type": "http",
                 "url": "https://user:pw@mcp.example.com/mcp?api_key=zzz999&region=eu",
                 "headers": {"X-Api-Key": HEADER_VALUE},
-                "credential_refs": {"Authorization": "secret/web"},
+                "secret_refs": {"Authorization": "secret/web"},
             }
         },
         error=None,

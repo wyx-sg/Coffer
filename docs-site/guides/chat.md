@@ -44,7 +44,7 @@ The open conversation is part of the URL, `/conversations/<id>`, so a refresh, a
 
 ### Working directory
 
-A conversation's working directory is chosen in the **New conversation** dialog: pick a folder with **Browse**, or type or paste its absolute path. The dialog opens on the folder you used last. Leave the field empty and the turn runs in the Coffer-managed workspace, `~/.coffer/workspace`, which is created on first use. The draft's header shows the folder the conversation will use.
+A conversation's working directory is chosen in the **New conversation** dialog: pick a folder with **Browse**, or type or paste its absolute path. The dialog opens on the folder you used last. Leave the field empty and the turn runs in the Coffer-managed workspace, `~/.coffer/content/workspace`, which is created on first use. The draft's header shows the folder the conversation will use.
 
 A conversation's agent and working directory are fixed when it is created, because the agent's session belongs to that one directory. To work somewhere else, start a new conversation.
 
@@ -165,7 +165,7 @@ How the agent receives an attachment depends on its kind, whichever way it arriv
 - **Documents** (PDF, office formats, epub, rtf) — extracted to text and folded into the prompt, so every agent reads the content. If extraction is unavailable or fails, the agent receives the file path.
 - **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings › General → Coffer's model**. With transcription off, nothing leaves your machine and the agent receives the audio file.
 
-The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Conversations page are kept in `~/.coffer/chat-media`, and files a channel received in `~/.coffer/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
+The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Conversations page are kept in `~/.coffer/content/chat-media`, and files a channel received in `~/.coffer/content/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
 
 Retrying a failed turn resends the message with its attachments. If a file it carried has since been pruned, the retry is refused with an error saying so, and nothing is sent: attach the file again and send a new message.
 
@@ -205,7 +205,7 @@ A Coffer conversation is backed by one real session of the agent. Coffer stores 
 
 There are two records of that conversation:
 
-- **Coffer's conversation** — messages, tool calls, results, model and token usage, in Coffer's database. This is what the Conversations page shows, and it is the record of what the agent did. Turns are not written to the audit log.
+- **Coffer's conversation** — messages, tool calls, results, model and token usage, in Coffer's history database, `runs.db`. This is what the Conversations page shows, and it is the record of what the agent did. Turns are not written to the audit log.
 - **The agent's own session files** — kept by the agent itself, as for any session. The agent's detail page lists these under **Agents → *agent* → Conversations** (**Transcript sessions**), together with the sessions you ran directly in a terminal.
 
 Each conversation has one owner — you — whichever screen you are on. Chat does not model several people sharing a conversation; the channel pairing that lets your phone drive a conversation is the same trust decision as your browser session.

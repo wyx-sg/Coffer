@@ -17,6 +17,7 @@ shutdown to drain the queue cleanly.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -29,7 +30,6 @@ from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.keyset import newest_first_after
-from coffer.infrastructure.persistence.models import ResourceModel
 
 
 class MCPInvocationModel(Base):
@@ -133,8 +133,12 @@ class MCPInvocationRepo:
         queue_max: int = DEFAULT_QUEUE_MAX,
         flush_batch_size: int = DEFAULT_BATCH_SIZE,
         flush_interval_seconds: float = DEFAULT_FLUSH_INTERVAL_S,
+        name_of: Callable[[str], str | None] = lambda _uid: None,
     ) -> None:
         self._sm = sm
+        # uid -> the server's current name (the resource store's), for
+        # ``usage_counts``: resources are files now, so the join is here.
+        self._name_of = name_of
         self._queue_max = queue_max
         self._flush_batch_size = flush_batch_size
         self._flush_interval = flush_interval_seconds
@@ -247,12 +251,12 @@ class MCPInvocationRepo:
         turns one into the other belongs here rather than in the caller: the
         only consumer is the tiering policy, which ranks the namespaced wire
         names (``<server>__<tool>``) of an aggregated ``tools/list``, and that
-        namespace is the label. Doing it in SQL also means the counts already
+        namespace is the label. Resolving through the uid also means the counts
         answer to the server's CURRENT name — the history a rename used to split
         in two now ranks as one server, which is the behaviour a user would
         expect and never got.
 
-        An inner join, so rows that resolve to no resource simply do not appear:
+        Rows whose uid resolves to no resource simply do not appear:
         Coffer's own built-ins (which never enter tiering — they are listed
         unconditionally and outside the budget) and servers deleted before the
         window closed (whose tools are not in the catalogue being ranked). No
@@ -262,20 +266,22 @@ class MCPInvocationRepo:
         async with self._sm() as session:
             stmt = (
                 select(
-                    ResourceModel.name,
+                    MCPInvocationModel.resource_uid,
                     MCPInvocationModel.capability_key,
                     func.count().label("n"),
                 )
-                .join(ResourceModel, ResourceModel.uid == MCPInvocationModel.resource_uid)
                 .where(MCPInvocationModel.capability_type == "tool")
                 .where(MCPInvocationModel.timestamp >= since)
-                .group_by(
-                    ResourceModel.name,
-                    MCPInvocationModel.capability_key,
-                )
+                .group_by(MCPInvocationModel.resource_uid, MCPInvocationModel.capability_key)
             )
             rows = (await session.execute(stmt)).all()
-        return {(r.name, r.capability_key): int(r.n) for r in rows}
+        out: dict[tuple[str, str], int] = {}
+        for r in rows:
+            name = self._name_of(r.resource_uid)
+            if name is not None:
+                key = (name, r.capability_key)
+                out[key] = out.get(key, 0) + int(r.n)
+        return out
 
     async def summary(self, *, resource_uid: str, since: datetime) -> InvocationSummary:
         """One server's call counts since ``since`` (``invocation_summary``)."""

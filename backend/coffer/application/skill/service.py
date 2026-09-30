@@ -153,18 +153,18 @@ class SkillService:
         from coffer.application.skill.copy_ops import refuse_foreign_copies
 
         await refuse_foreign_copies(self, skill)
-        await self._cleanup_bindings_internal(skill_id=skill.id)
+        await self._cleanup_bindings_internal(skill_uid=skill.uid)
         self._store.delete(skill.name)
 
     async def cleanup_bindings_for_agent(self, agent: Resource) -> None:
         """Hook bound to `agent` Kind's `on_delete` at the composition root."""
-        self._unlink_all(await self._bindings.list_for_agent(agent.id))
-        await self._bindings.delete_for_agent(agent.id)
+        self._unlink_all(await self._bindings.list_for_agent(agent.uid))
+        await self._bindings.delete_for_agent(agent.uid)
 
-    async def _cleanup_bindings_internal(self, *, skill_id: int) -> None:
-        bindings = await self._bindings.list_for_skill(skill_id)
+    async def _cleanup_bindings_internal(self, *, skill_uid: str) -> None:
+        bindings = await self._bindings.list_for_skill(skill_uid)
         self._unlink_all(bindings)
-        await self._bindings.delete_for_skill(skill_id)
+        await self._bindings.delete_for_skill(skill_uid)
 
     def _unlink_all(self, bindings: list[BindingState]) -> None:
         """Best-effort symlink teardown for a list of bindings."""
@@ -237,13 +237,13 @@ class SkillService:
 
     async def bindings_for(self, skill_uid: str) -> list[BindingState]:
         skill = await self._rs.get(skill_uid)
-        return await self._bindings.list_for_skill(skill.id)
+        return await self._bindings.list_for_skill(skill.uid)
 
-    async def bindings_grouped_by_skill(self) -> dict[int, list[BindingState]]:
-        """``skill_resource_id -> [bindings]`` map; collapses N+1 in list."""
-        grouped: dict[int, list[BindingState]] = {}
+    async def bindings_grouped_by_skill(self) -> dict[str, list[BindingState]]:
+        """``skill_uid -> [bindings]`` map; collapses N+1 in list."""
+        grouped: dict[str, list[BindingState]] = {}
         for b in await self._bindings.list_all():
-            grouped.setdefault(b.skill_resource_id, []).append(b)
+            grouped.setdefault(b.skill_uid, []).append(b)
         return grouped
 
     # ---------- read API for surfaces ----------

@@ -23,7 +23,7 @@ Two further forces:
   (PR #406) a resource can be renamed on every kind except the two whose name
   agents see ([MCP servers and skills](names-visible-to-agents-are-fixed.md)),
   so anything keyed on a resource's name breaks on rename.
-- **Sync has no handshake.** Ciphertext travels at `credentials/<ref>.enc`, so
+- **Sync has no handshake.** Ciphertext travels at `secret/<ref>.enc`, so
   a ref is also a file path two machines must agree on without talking
   ([Credentials Across Machines](credentials-across-machines.md)); and deleting
   a resource while its credential rows lingered is what let the 2026-07-10

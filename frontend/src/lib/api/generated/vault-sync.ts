@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/sync/adopt": {
+    "/api/v1/sync/continue": {
         parameters: {
             query?: never;
             header?: never;
@@ -14,24 +14,18 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Adopt
-         * @description Join the configured remote.
-         *
-         *     The same round as any other, and the only one allowed to join: ``/run``
-         *     on a machine with no pointer reports ``awaiting_join``. Whether this is a
-         *     join, and of which kind, is still read from the pointer and the registry,
-         *     so configuring a remote on a machine that forgot its pointer cannot route
-         *     around the new-versus-returning distinction. The surfaces call
-         *     ``GET /join`` first and show its answer.
+         * Continue Round
+         * @description Continue the stopped round once every file is answered: the resolved
+         *     tree is validated, guarded, snapshotted, checked out and pushed.
          */
-        post: operations["adopt_api_v1_sync_adopt_post"];
+        post: operations["continue_round_api_v1_sync_continue_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/confirm": {
+    "/api/v1/sync/hold/confirm": {
         parameters: {
             query?: never;
             header?: never;
@@ -40,8 +34,31 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm */
-        post: operations["confirm_api_v1_sync_confirm_post"];
+        /**
+         * Confirm Hold
+         * @description Apply the held deletions, and continue the round.
+         */
+        post: operations["confirm_hold_api_v1_sync_hold_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/hold/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Hold
+         * @description Keep the held files, and continue the round (it pushes them back).
+         */
+        post: operations["restore_hold_api_v1_sync_hold_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -55,14 +72,53 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
-         * Preview Join
-         * @description State the join ``/adopt`` would make, applying nothing.
-         *
-         *     The surfaces call this first so the user sees the case, the day this
-         *     machine last converged and the counts before a single document moves.
+         * Join
+         * @description Join as the preview said: nothing is deleted on either side.
          */
-        get: operations["preview_join_api_v1_sync_join_get"];
+        post: operations["join_api_v1_sync_join_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/join-choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Join Choices */
+        get: operations["join_choices_api_v1_sync_join_choices_get"];
+        put?: never;
+        /**
+         * Choose
+         * @description Keep this machine's version (pushed by the next round) or take the
+         *     remote's, for one or several of a join's differing files.
+         */
+        post: operations["choose_api_v1_sync_join_choices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/join/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Join Preview
+         * @description What joining the remote would do; nothing is applied.
+         */
+        get: operations["join_preview_api_v1_sync_join_preview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -160,10 +216,7 @@ export interface paths {
         head?: never;
         /**
          * Rename Self
-         * @description Rename this machine.
-         *
-         *     Free: nothing keys on the label — a channel's binding and the curation
-         *     owner name the derived id — so nothing else has to change.
+         * @description Rename this machine. Free: nothing keys on the label.
          */
         patch: operations["rename_self_api_v1_sync_machines_self_patch"];
         trace?: never;
@@ -178,50 +231,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Retire Machine */
-        delete: operations["retire_machine_api_v1_sync_machines__machine_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/rebuild": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Rebuild
-         * @description Rebuild this machine from the remote, discarding local-only documents.
-         *
-         *     The answer for a machine whose vault is gone. Such a machine rejoins with a
-         *     valid base and nothing to publish but the loss, so neither ordinary answer
-         *     serves it: confirming spreads the loss and rejecting refuses the same round
-         *     forever. Destructive on purpose.
+         * Retire Machine
+         * @description Retire another machine: its descriptor goes, in a commit of yours.
          */
-        post: operations["rebuild_api_v1_sync_rebuild_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reject */
-        post: operations["reject_api_v1_sync_reject_post"];
-        delete?: never;
+        delete: operations["retire_machine_api_v1_sync_machines__machine_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -239,14 +253,17 @@ export interface paths {
         /** Put Remote */
         put: operations["put_remote_api_v1_sync_remote_put"];
         post?: never;
-        /** Delete Remote */
+        /**
+         * Delete Remote
+         * @description Stop syncing: forget the remote. The vault and its history stay.
+         */
         delete: operations["delete_remote_api_v1_sync_remote_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/restore": {
+    "/api/v1/sync/remote/check": {
         parameters: {
             query?: never;
             header?: never;
@@ -255,25 +272,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Restore */
-        post: operations["restore_api_v1_sync_restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rollback */
-        post: operations["rollback_api_v1_sync_rollback_post"];
+        /**
+         * Check Remote
+         * @description What a remote holds, before it is saved: nothing is kept.
+         */
+        post: operations["check_remote_api_v1_sync_remote_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -289,7 +292,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run Round */
+        /**
+         * Run Round
+         * @description One round now. Never an error for what the round ran into: an
+         *     unreachable remote or a conflict is the round's recorded status.
+         */
         post: operations["run_round_api_v1_sync_run_post"];
         delete?: never;
         options?: never;
@@ -306,13 +313,64 @@ export interface paths {
         };
         /**
          * List Runs
-         * @description Every round this vault has run, newest first.
-         *
-         *     Read-only and unfiltered. The surface searches, filters and pages in the
-         *     browser over the window it is handed, the same way the Activity page does,
-         *     so this route stays one query with one knob.
+         * @description Every round this machine ran, newest first.
          */
         get: operations["list_runs_api_v1_sync_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_api_v1_sync_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/runs/{run_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rollback
+         * @description Put back what the round changed, as a new commit here; edits made
+         *     since are kept.
+         */
+        post: operations["rollback_api_v1_sync_runs__run_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/runs/{run_id}/rollback-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rollback Plan */
+        get: operations["rollback_plan_api_v1_sync_runs__run_id__rollback_plan_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -338,73 +396,281 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stop */
+        get: operations["stop_api_v1_sync_stop_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/stop/files/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer
+         * @description Record an answer for one file; ``edited`` reads the saved editor copy
+         *     and refuses it while a conflict marker is left in it.
+         */
+        post: operations["answer_api_v1_sync_stop_files_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/stop/files/editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Editor
+         * @description Write (once) git's marked-up merge of the file outside the vault and
+         *     answer where it is.
+         */
+        post: operations["open_editor_api_v1_sync_stop_files_editor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/stop/files/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** File Versions */
+        get: operations["file_versions_api_v1_sync_stop_files_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault Changes
+         * @description Recent commits across the vault, or under one prefix, newest first.
+         */
+        get: operations["vault_changes_api_v1_vault_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault Content
+         * @description A file's content as a version left it, or as it is now, with its fingerprint.
+         */
+        get: operations["vault_content_api_v1_vault_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault Diff
+         * @description What one version did to one file, as a unified diff.
+         */
+        get: operations["vault_diff_api_v1_vault_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault History
+         * @description The versions of a file or folder, newest first, each naming its writer.
+         */
+        get: operations["vault_history_api_v1_vault_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault Problems
+         * @description Hand edits validation refused: still on disk, uncommitted, with ``HEAD``
+         *     in effect until each is fixed.
+         */
+        get: operations["vault_problems_api_v1_vault_problems_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vault/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vault Restore
+         * @description Write a version back as a new commit naming the writer and the version
+         *     it restored; a stale ``expected_fingerprint`` is 409 and changes nothing.
+         */
+        post: operations["vault_restore_api_v1_vault_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AdoptIn */
-        AdoptIn: {
-            /** Choice */
-            choice?: "keep-local" | null;
+        /** AgentInventoryOut */
+        AgentInventoryOut: {
+            /** Name */
+            name: string;
+            /** Plugins */
+            plugins: components["schemas"]["SyncPluginOut"][];
+            /** Type */
+            type: string;
+        };
+        /**
+         * Answer
+         * @enum {string}
+         */
+        Answer: "mine" | "theirs" | "edited";
+        /** AreaCountOut */
+        AreaCountOut: {
+            /** Area */
+            area: string;
+            /** Files */
+            files: number;
+        };
+        /** AreaCountsOut */
+        AreaCountsOut: {
+            /** Knowledge Documents */
+            knowledge_documents: number;
+            /** Resources */
+            resources: number;
+            /** Secrets */
+            secrets: number;
+            /** Secrets Synced */
+            secrets_synced: boolean;
+            /** Skills */
+            skills: number;
         };
         /** BreachOut */
         BreachOut: {
             /** Area */
             area: string;
-            /** Deleted */
-            deleted: number;
+            /** Lost */
+            lost: number;
             /** Total */
             total: number;
         };
-        /**
-         * ChangeStatus
-         * @enum {string}
-         */
-        ChangeStatus: "added" | "modified" | "deleted";
-        /**
-         * ConvergeStatus
-         * @enum {string}
-         */
-        ConvergeStatus: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled" | "awaiting_join";
-        /**
-         * DiffCountsOut
-         * @description What a round moved, as a tally AND as the list behind it.
-         *
-         *     The tally alone is what a row can show; the list is what the reader opens
-         *     the row to find out. A round reporting `+1 ~1` and then "nothing further to
-         *     report" is the surface refusing to answer the only question the row raises,
-         *     and the paths were in the payload the whole time.
-         */
-        DiffCountsOut: {
-            /**
-             * Added
-             * @default 0
-             */
-            added: number;
-            /**
-             * Changes
-             * @default []
-             */
-            changes: components["schemas"]["DocChangeOut"][];
-            /**
-             * Deleted
-             * @default 0
-             */
-            deleted: number;
-            /**
-             * Modified
-             * @default 0
-             */
-            modified: number;
-        };
-        /**
-         * DocChangeOut
-         * @description One document's fate in one round: what moved, and which way.
-         */
-        DocChangeOut: {
+        /** ConflictFileOut */
+        ConflictFileOut: {
+            answer: components["schemas"]["Answer"] | null;
+            /** Area */
+            area: string;
+            /** Editor Path */
+            editor_path: string | null;
+            /** Other Path */
+            other_path: string | null;
+            /** Ours Time */
+            ours_time: string | null;
             /** Path */
             path: string;
-            status: components["schemas"]["ChangeStatus"];
+            reason: components["schemas"]["ConflictReason"];
+            /** Theirs Machine */
+            theirs_machine: string | null;
+            /** Theirs Time */
+            theirs_time: string | null;
+        };
+        /**
+         * ConflictReason
+         * @enum {string}
+         */
+        ConflictReason: "both_changed" | "changed_and_deleted" | "same_name_different_uid" | "duplicate_uid" | "invalid_merge" | "join_differs";
+        /** EditorCopyOut */
+        EditorCopyOut: {
+            /** Editor Path */
+            editor_path: string;
+            /** Path */
+            path: string;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -427,35 +693,121 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
-        /** FailureOut */
-        FailureOut: {
+        /** FileAnswerIn */
+        FileAnswerIn: {
+            answer: components["schemas"]["Answer"];
             /** Path */
             path: string;
-            /** Reason */
-            reason: string;
+        };
+        /** FilePathIn */
+        FilePathIn: {
+            /** Path */
+            path: string;
+        };
+        /** FileVersionsOut */
+        FileVersionsOut: {
+            /** Base */
+            base: string | null;
+            /** Binary */
+            binary: boolean;
+            /** Ours */
+            ours: string | null;
+            /** Path */
+            path: string;
+            /** Take Theirs */
+            take_theirs: string;
+            /** Theirs */
+            theirs: string | null;
+        };
+        /**
+         * HoldGroupOut
+         * @description The held files under one folder, and how many files it held.
+         */
+        HoldGroupOut: {
+            /** Folder */
+            folder: string;
+            /** Paths */
+            paths: string[];
+            /** Total */
+            total: number;
+        };
+        /** HoldOut */
+        HoldOut: {
+            /** Breaches */
+            breaches: components["schemas"]["BreachOut"][];
+            /** Confirmed */
+            confirmed: boolean;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "incoming" | "outgoing";
+            /** Groups */
+            groups: components["schemas"]["HoldGroupOut"][];
+            /** Machines */
+            machines: string[];
+            /** Paths */
+            paths: string[];
+        };
+        /** JoinChoiceIn */
+        JoinChoiceIn: {
+            /**
+             * Answer
+             * @enum {string}
+             */
+            answer: "mine" | "theirs";
+            /** Path */
+            path: string;
+        };
+        /** JoinChoicesIn */
+        JoinChoicesIn: {
+            /** Choices */
+            choices: components["schemas"]["JoinChoiceIn"][];
+        };
+        /** JoinChoicesOut */
+        JoinChoicesOut: {
+            /** Files */
+            files: components["schemas"]["ConflictFileOut"][];
         };
         /**
          * JoinPreviewOut
-         * @description The join a round would make, stated before anything is applied.
-         *
-         *     ``joining`` is False for a machine that already converged here: adopting
-         *     is then an ordinary round with nothing to announce. ``case`` is
-         *     ``ambiguous`` for a returning machine whose base is gone, which still
-         *     needs the explicit ``keep-local`` choice (or a rebuild) before it joins.
+         * @description What joining would do. ``empty``: the remote is empty and this vault is
+         *     pushed whole; ``new``: the union is taken, nothing deleted, differing
+         *     files left here until chosen; ``returning``: a three-way merge from the
+         *     commit this machine last converged at.
          */
         JoinPreviewOut: {
-            /** Base */
-            base: string | null;
-            /** Case */
-            case: ("new" | "returning" | "ambiguous") | null;
-            /** Joining */
-            joining: boolean;
-            /** Last Converged On */
-            last_converged_on: string | null;
-            /** Remote Changed */
-            remote_changed: number | null;
-            /** Vault Documents */
-            vault_documents: number | null;
+            /** Conflicts */
+            conflicts: string[];
+            /** Deleted */
+            deleted: string[];
+            /** Differ */
+            differ: string[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "empty" | "new" | "returning";
+            /** Pulled */
+            pulled: components["schemas"]["AreaCountOut"][];
+            /** Pulled Files */
+            pulled_files: number;
+            /** Pushed */
+            pushed: components["schemas"]["AreaCountOut"][];
+            /** Pushed At */
+            pushed_at: string | null;
+            /** Pushed By */
+            pushed_by: string | null;
+            /** Pushed Files */
+            pushed_files: number;
+            /** Refused */
+            refused: string | null;
+            /** Remote Tip */
+            remote_tip: string | null;
+            /** Same */
+            same: number;
+            /** Same Name */
+            same_name: string[];
         };
         /** KeyFingerprintOut */
         KeyFingerprintOut: {
@@ -507,17 +859,23 @@ export interface components {
         /** MachineOut */
         MachineOut: {
             /** Agents */
-            agents: string[];
+            agents: components["schemas"]["AgentInventoryOut"][];
             /** Coffer Version */
             coffer_version: string;
             /** Hostname */
             hostname: string;
             /** Is Self */
             is_self: boolean;
+            /** Key Fingerprint */
+            key_fingerprint: string | null;
             /** Key Matches */
             key_matches: boolean | null;
-            /** Last Converged On */
-            last_converged_on: string | null;
+            /** Last Converged Commit */
+            last_converged_commit: string | null;
+            /** Last Round */
+            last_round: string | null;
+            /** Last Round At */
+            last_round_at: string | null;
             /** Machine Id */
             machine_id: string;
             /** Name */
@@ -535,154 +893,189 @@ export interface components {
             /** Name */
             name: string;
         };
-        /**
-         * PendingConfirmationOut
-         * @description A round the deletion guard held.
-         *
-         *     ``direction`` says which way it tripped: ``apply`` means the remote would
-         *     delete too much of this vault, ``publish`` means this vault would delete
-         *     too much of the remote — the case where this machine is the damaged one.
-         */
-        PendingConfirmationOut: {
-            /** Breaches */
-            breaches: components["schemas"]["BreachOut"][];
+        /** ProblemOut */
+        ProblemOut: {
             /**
-             * Direction
+             * Kind
              * @enum {string}
              */
-            direction: "apply" | "publish";
-            /** Paths */
-            paths: string[];
-            /**
-             * Raised At
-             * Format: date-time
-             */
-            raised_at: string;
+            kind: "unreachable" | "auth_failed" | "push_failed" | "cloud_folder" | "layout" | "failed";
+            /** Message */
+            message: string;
+            /** Secret Ref */
+            secret_ref: string | null;
+            /** Since */
+            since: string | null;
         };
-        /** RestoreIn */
-        RestoreIn: {
-            /** At */
-            at?: string | null;
+        /** PulledCommitOut */
+        PulledCommitOut: {
+            /** Files */
+            files: number;
+            /** Machine */
+            machine: string | null;
+            /** Time */
+            time: string;
+            /** Version */
+            version: string;
+        };
+        /** RemoteCheckIn */
+        RemoteCheckIn: {
+            /**
+             * Branch
+             * @default main
+             */
+            branch?: string;
+            /** Secret Ref */
+            secret_ref?: string | null;
+            /** Url */
+            url: string;
+            /**
+             * Username
+             * @default coffer
+             */
+            username?: string;
+        };
+        /**
+         * RemoteCheckOut
+         * @description What the remote holds: ``empty`` (the first push fills it), ``vault``
+         *     (a Coffer vault, with its layout), ``other`` (a repository that is not
+         *     one), ``unreachable``, ``auth_failed`` or ``failed`` (with git's
+         *     message).
+         */
+        RemoteCheckOut: {
+            /** Detail */
+            detail: string | null;
+            /** Layout */
+            layout: number | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "empty" | "vault" | "other" | "unreachable" | "auth_failed" | "failed";
+            /** Tip */
+            tip: string | null;
+        };
+        /** RollbackPlanOut */
+        RollbackPlanOut: {
+            /** Kept */
+            kept: string[];
+            /** Reverses */
+            reverses: components["schemas"]["SyncChangeOut"][];
+            /** Snapshot */
+            snapshot: string;
+            /** Snapshot Commit */
+            snapshot_commit: string;
+            /** Snapshot Time */
+            snapshot_time: string | null;
         };
         /**
          * RoundOut
-         * @description One converge round's outcome.
+         * @description One recorded round: what it pulled, applied and pushed, and why it
+         *     stopped or failed.
          */
         RoundOut: {
-            /**
-             * Agent Resolved
-             * @default []
-             */
-            agent_resolved: string[];
-            applied: components["schemas"]["DiffCountsOut"];
-            /** Commit */
-            commit: string | null;
-            /**
-             * Conflicts
-             * @default []
-             */
-            conflicts: string[];
-            /** Error */
-            error: string | null;
-            /**
-             * Failures
-             * @default []
-             */
-            failures: components["schemas"]["FailureOut"][];
+            /** Applied */
+            applied: components["schemas"]["SyncChangeOut"][];
+            /** Conflicts */
+            conflicts: number;
+            /** Detail */
+            detail: string | null;
+            /** Finished At */
+            finished_at: string;
+            /** From Commit */
+            from_commit: string | null;
+            /** Held */
+            held: number;
+            /** Id */
+            id: number | null;
             /** Join */
             join: string | null;
-            join_report: components["schemas"]["JoinPreviewOut"] | null;
-            /**
-             * Locked Refs
-             * @default []
-             */
-            locked_refs: string[];
-            /**
-             * Not Applicable
-             * @default []
-             */
-            not_applicable: string[];
-            pending: components["schemas"]["PendingConfirmationOut"] | null;
-            published: components["schemas"]["DiffCountsOut"];
-            status: components["schemas"]["ConvergeStatus"];
+            /** Path */
+            path: string | null;
+            /** Pulled */
+            pulled: components["schemas"]["PulledCommitOut"][];
+            /** Pulled Files */
+            pulled_files: number;
+            /** Pushed */
+            pushed: components["schemas"]["SyncChangeOut"][];
+            /** Pushed Files */
+            pushed_files: number;
+            /** Snapshot */
+            snapshot: string | null;
+            /** Started At */
+            started_at: string;
+            status: components["schemas"]["RoundStatus"];
+            /** To Commit */
+            to_commit: string | null;
+            /** Trigger */
+            trigger: string;
+            /** With Machines */
+            with_machines: string[];
         };
         /**
-         * RunRecordOut
-         * @description One round as the history holds it: the same report, plus when.
-         *
-         *     A superset of ``RoundOut`` rather than a shape of its own, so the two
-         *     surfaces that show a round — the status page and the history table — can
-         *     never drift into describing it differently. The timestamps are what the
-         *     last-round view never needed and a history cannot do without.
+         * RoundStatus
+         * @enum {string}
          */
-        RunRecordOut: {
-            /**
-             * Agent Resolved
-             * @default []
-             */
-            agent_resolved: string[];
-            applied: components["schemas"]["DiffCountsOut"];
-            /** Commit */
-            commit: string | null;
-            /**
-             * Conflicts
-             * @default []
-             */
-            conflicts: string[];
-            /** Error */
-            error: string | null;
-            /**
-             * Failures
-             * @default []
-             */
-            failures: components["schemas"]["FailureOut"][];
-            /**
-             * Finished At
-             * Format: date-time
-             */
-            finished_at: string;
-            /** Id */
-            id: number;
+        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "remote_too_old" | "rolled_back" | "failed";
+        /** StopStateOut */
+        StopStateOut: {
+            round: components["schemas"]["StoppedRoundOut"] | null;
+            /** Stopped */
+            stopped: boolean;
+        };
+        /** StoppedRoundOut */
+        StoppedRoundOut: {
+            /** Files */
+            files: components["schemas"]["ConflictFileOut"][];
+            hold: components["schemas"]["HoldOut"] | null;
             /** Join */
             join: string | null;
-            join_report: components["schemas"]["JoinPreviewOut"] | null;
             /**
-             * Locked Refs
-             * @default []
+             * Kind
+             * @enum {string}
              */
-            locked_refs: string[];
+            kind: "conflicts" | "hold";
+            /** Local */
+            local: string;
+            /** Raised At */
+            raised_at: string;
+            /** Remote */
+            remote: string;
+            /** Unanswered */
+            unanswered: number;
+        };
+        /**
+         * SyncChangeOut
+         * @description One file a round (or a commit) changed.
+         */
+        SyncChangeOut: {
+            /** Path */
+            path: string;
             /**
-             * Not Applicable
-             * @default []
+             * Status
+             * @enum {string}
              */
-            not_applicable: string[];
-            pending: components["schemas"]["PendingConfirmationOut"] | null;
-            published: components["schemas"]["DiffCountsOut"];
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            status: components["schemas"]["ConvergeStatus"];
+            status: "added" | "modified" | "removed";
+        };
+        /** SyncPluginOut */
+        SyncPluginOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Id */
+            id: string;
+            /** Marketplace */
+            marketplace: string | null;
+            /** Name */
+            name: string;
+            /** Version */
+            version: string | null;
         };
         /** SyncRemoteClearedOut */
         SyncRemoteClearedOut: {
             /** Cleared */
             cleared: boolean;
         };
-        /**
-         * SyncRemoteIn
-         * @description The remote as the user configures it.
-         *
-         *     Every field but the URL carries the spec's default, so a ``PUT`` with a
-         *     bare URL is a complete configuration rather than a half-set one.
-         *
-         *     The URL and the branch become arguments to ``git``. Neither may begin with
-         *     ``-`` — git would read it as an option, and ``--receive-pack=<cmd>`` is a
-         *     command — and the branch is held to ``git check-ref-format --branch``. The
-         *     ``pattern`` catches the shape at the wire; the validators run the domain's
-         *     full rule, so a bad name is a 422 here rather than a git error later.
-         */
+        /** SyncRemoteIn */
         SyncRemoteIn: {
             /**
              * Branch
@@ -695,10 +1088,10 @@ export interface components {
              */
             enabled?: boolean;
             /**
-             * Include Secrets
+             * Include Secret
              * @default false
              */
-            include_secrets?: boolean;
+            include_secret?: boolean;
             /**
              * Interval Seconds
              * @default 3600
@@ -709,10 +1102,10 @@ export interface components {
             /** Url */
             url: string;
             /**
-             * Worktree Path
-             * @default ~/.coffer/sync
+             * Username
+             * @default coffer
              */
-            worktree_path?: string;
+            username?: string;
         };
         /** SyncRemoteOut */
         SyncRemoteOut: {
@@ -720,16 +1113,16 @@ export interface components {
             branch: string;
             /** Enabled */
             enabled: boolean;
-            /** Include Secrets */
-            include_secrets: boolean;
+            /** Include Secret */
+            include_secret: boolean;
             /** Interval Seconds */
             interval_seconds: number;
             /** Secret Ref */
             secret_ref: string | null;
             /** Url */
             url: string;
-            /** Worktree Path */
-            worktree_path: string;
+            /** Username */
+            username: string;
         };
         /** SyncRemoteStateOut */
         SyncRemoteStateOut: {
@@ -737,31 +1130,199 @@ export interface components {
             configured: boolean;
             remote: components["schemas"]["SyncRemoteOut"] | null;
         };
-        /** SyncRunListOut */
+        /**
+         * SyncRunListOut
+         * @description A page of the history, newest first, and how many rounds it holds.
+         */
         SyncRunListOut: {
-            /** Runs */
-            runs: components["schemas"]["RunRecordOut"][];
+            /** Rounds */
+            rounds: components["schemas"]["RoundOut"][];
+            /** Total */
+            total: number;
         };
         /** SyncStatusOut */
         SyncStatusOut: {
+            areas: components["schemas"]["AreaCountsOut"];
             /** Configured */
             configured: boolean;
-            /**
-             * Joined
-             * @default false
-             */
+            /** Conflicts */
+            conflicts: number;
+            /** Held */
+            held: number;
+            /** Join Choices */
+            join_choices: number;
+            /** Joined */
             joined: boolean;
-            last_run: components["schemas"]["RoundOut"] | null;
+            last_round: components["schemas"]["RoundOut"] | null;
             /** Machine Id */
             machine_id: string;
-            /** Machine Id Is Derived */
-            machine_id_is_derived: boolean;
-            /**
-             * Not Applicable
-             * @default []
-             */
-            not_applicable: string[];
+            /** Machine Name */
+            machine_name: string;
+            /** Machines */
+            machines: number;
+            /** Next Round At */
+            next_round_at: string | null;
+            problem: components["schemas"]["ProblemOut"] | null;
             remote: components["schemas"]["SyncRemoteOut"] | null;
+            /** Running Since */
+            running_since: string | null;
+            /** Synchroniser */
+            synchroniser: string | null;
+            /** Vault Path */
+            vault_path: string;
+            /** Waiting */
+            waiting: components["schemas"]["WaitingCommitOut"][];
+        };
+        /** VaultChangesOut */
+        VaultChangesOut: {
+            /** Changes */
+            changes: components["schemas"]["VaultVersionOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** VaultContentOut */
+        VaultContentOut: {
+            /** Binary */
+            binary: boolean;
+            /** Content */
+            content: string;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Version */
+            version: string | null;
+        };
+        /** VaultDiffOut */
+        VaultDiffOut: {
+            /** Added */
+            added: number;
+            /** Diff */
+            diff: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+        };
+        /** VaultHistoryOut */
+        VaultHistoryOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Path */
+            path: string;
+            /** Versions */
+            versions: components["schemas"]["VaultVersionOut"][];
+        };
+        /**
+         * VaultPathChangeOut
+         * @description One file a version touched, with its line counts (0/0 for binary).
+         */
+        VaultPathChangeOut: {
+            /** Added */
+            added: number;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * VaultProblemOut
+         * @description A hand edit validation refused: on disk, uncommitted, not in effect.
+         */
+        VaultProblemOut: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
+            /** Severity */
+            severity: string;
+            /** Uid */
+            uid: string | null;
+        };
+        /** VaultProblemsOut */
+        VaultProblemsOut: {
+            /** Problems */
+            problems: components["schemas"]["VaultProblemOut"][];
+        };
+        /** VaultRestoreIn */
+        VaultRestoreIn: {
+            /** Expected Fingerprint */
+            expected_fingerprint: string | null;
+            /** Path */
+            path: string;
+            /** Version */
+            version: string;
+        };
+        /** VaultRestoreOut */
+        VaultRestoreOut: {
+            /** Path */
+            path: string;
+            /** Paths */
+            paths: string[];
+            /** Restored From */
+            restored_from: string;
+            /** Version */
+            version: string | null;
+        };
+        /**
+         * VaultVersionOut
+         * @description One version of a file or folder: the commit that produced it.
+         */
+        VaultVersionOut: {
+            /** Actor */
+            actor: string | null;
+            /** Display Writer */
+            display_writer: string;
+            /** Machine */
+            machine: string | null;
+            /** Operation */
+            operation: string;
+            /** Paths */
+            paths: components["schemas"]["VaultPathChangeOut"][];
+            /**
+             * Removed
+             * @default false
+             */
+            removed: boolean;
+            /** Restored From */
+            restored_from: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Version */
+            version: string;
+            /** Writer */
+            writer: string;
+        };
+        /**
+         * WaitingCommitOut
+         * @description One commit the remote does not have yet.
+         */
+        WaitingCommitOut: {
+            /** Changes */
+            changes: components["schemas"]["SyncChangeOut"][];
+            /** Summary */
+            summary: string;
+            /** Time */
+            time: string;
+            /** Version */
+            version: string;
+            /** Writer */
+            writer: string;
         };
     };
     responses: never;
@@ -772,51 +1333,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    adopt_api_v1_sync_adopt_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AdoptIn"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    confirm_api_v1_sync_confirm_post: {
+    continue_round_api_v1_sync_continue_post: {
         parameters: {
             query?: never;
             header?: {
@@ -856,11 +1373,213 @@ export interface operations {
             };
         };
     };
-    preview_join_api_v1_sync_join_get: {
+    confirm_hold_api_v1_sync_hold_confirm_post: {
         parameters: {
-            query?: {
-                choice?: "keep-local" | null;
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
             };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_hold_api_v1_sync_hold_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    join_api_v1_sync_join_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    join_choices_api_v1_sync_join_choices_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinChoicesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    choose_api_v1_sync_join_choices_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinChoicesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinChoicesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    join_preview_api_v1_sync_join_preview_get: {
+        parameters: {
+            query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
             };
@@ -1152,86 +1871,6 @@ export interface operations {
             };
         };
     };
-    rebuild_api_v1_sync_rebuild_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    reject_api_v1_sync_reject_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     get_remote_api_v1_sync_remote_get: {
         parameters: {
             query?: never;
@@ -1356,7 +1995,7 @@ export interface operations {
             };
         };
     };
-    restore_api_v1_sync_restore_post: {
+    check_remote_api_v1_sync_remote_check_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1365,9 +2004,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["RestoreIn"] | null;
+                "application/json": components["schemas"]["RemoteCheckIn"];
             };
         };
         responses: {
@@ -1377,47 +2016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    rollback_api_v1_sync_rollback_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
+                    "application/json": components["schemas"]["RemoteCheckOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1484,6 +2083,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                offset?: number;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -1500,6 +2100,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncRunListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_api_v1_sync_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rollback_api_v1_sync_runs__run_id__rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rollback_plan_api_v1_sync_runs__run_id__rollback_plan_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackPlanOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1540,6 +2266,438 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stop_api_v1_sync_stop_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StopStateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answer_api_v1_sync_stop_files_answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StopStateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    open_editor_api_v1_sync_stop_files_editor_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilePathIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditorCopyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    file_versions_api_v1_sync_stop_files_versions_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileVersionsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_changes_api_v1_vault_changes_get: {
+        parameters: {
+            query?: {
+                /** @description Only commits under this path (default: the whole vault) */
+                prefix?: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultChangesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_content_api_v1_vault_content_get: {
+        parameters: {
+            query: {
+                path: string;
+                /** @description Omit for the file as it is on disk now */
+                version?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultContentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_diff_api_v1_vault_diff_get: {
+        parameters: {
+            query: {
+                path: string;
+                version: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultDiffOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_history_api_v1_vault_history_get: {
+        parameters: {
+            query: {
+                /** @description A file, or a folder ending in / */
+                path: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultHistoryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_problems_api_v1_vault_problems_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultProblemsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    vault_restore_api_v1_vault_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VaultRestoreIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VaultRestoreOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

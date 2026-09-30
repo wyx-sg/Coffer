@@ -366,28 +366,28 @@ that item. A multi-step switch MUST keep reconcile passes out until its writes a
 - **AND** when the user applies that item, Coffer's keys are removed
 
 ### Requirement: Converge connections across machines
-The `provider` kind MUST be registered into the composition root's kind table so the sync exporter
-and the resource applier carry it automatically ([vault-sync](../vault-sync/spec.md)): the exporter
-writes each row to `resources/provider/<uid>.yaml`, git three-way-merges the tree against the remote,
-and the applier puts the resulting difference back one document at a time. An incoming document MUST
-NOT change the local row's reach (`enabled` / `scope`), which is one decision the user makes per
-machine: a row that already exists keeps the reach it has, and a row that has just arrived takes the
-kind's own default. Secrets travel as Fernet ciphertext at `credentials/<ref>.enc`, only when the
+The `provider` kind MUST be registered into the composition root's kind table like every kind, so each
+connection is one vault file, `resources/provider/<name>.json`, that a sync round merges and checks out
+like every resource file ([vault-sync](../vault-sync/spec.md) "Converge resources as their own files"). A connection's reach
+(`enabled` / `scope`) MUST NOT travel: it is this machine's reach record, one decision the user makes
+per machine, so a connection that already exists keeps the reach it has, and one that has just arrived
+takes the kind's own default. Secrets travel as Fernet ciphertext at `secret/<ref>.enc`, only when the
 remote is configured to carry them; the master key never enters the repository, and no raw key MUST
-appear in the sync tree's plaintext.
+appear in the vault's plaintext.
 
-Projection is a machine-local side effect, so after a round applies, the reconcile pass it runs
-with the import's warrant MUST re-derive every agent's projection from the converged rows: for each
+Projection is a machine-local side effect, so after a round that applied changes, the reconcile pass it
+runs with the import's warrant ([vault-sync](../vault-sync/spec.md) "Run the reconciler once after a round that applied changes")
+MUST re-derive every agent's projection from the connections as they now are: for each
 agent type with a registered agent, the active connection whose scope reaches it is projected, and a
 type with no active connection is de-projected — the import carries the user's switch either way.
 
 #### Scenario: a provider profile round-trips through sync export and import
 - **GIVEN** a connection with a secret ref exists on one machine,
-- **WHEN** a converge round runs — the exporter writes the connection into the tree and the resource **applier** puts that document into the second machine's vault,
-- **THEN** the row lands there with identical `config` fields, the secret ciphertext is present at `credentials/<ref>.enc`, and no secret appears anywhere in the tree's plaintext. A later edit converges the same way, so the second machine ends up with the edited config and description.
+- **WHEN** a second machine joins a remote that carries secrets, and the first machine later edits the connection and both run a round,
+- **THEN** the connection's file arrives on the second machine byte for byte, the secret ciphertext is present at `secret/<ref>.enc`, and no secret appears in the file's plaintext; the edit arrives the same way, so the second machine ends up with the edited config.
 
 #### Scenario: an import projects a switch made on another machine
-- **GIVEN** a connection activated on another machine, whose row arrives here with `is_active` set while this machine's agent carries none of Coffer's keys
+- **GIVEN** a connection activated on another machine, whose file arrives here with `is_active` set while this machine's agent carries none of Coffer's keys
 - **WHEN** the round's reconcile pass runs
 - **THEN** the connection is projected into the agent rather than its flag being cleared
 
@@ -526,61 +526,6 @@ rule (see "Store an inline secret under a minted opaque ref") stands.
 - **GIVEN** no connection named `local-llm` exists,
 - **WHEN** the user creates one with `protocol="ollama"`, a `base_url`, and neither `secret_value` nor `secret_ref`,
 - **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `internal_default=false`.
-
-### Requirement: Keep at most one internal-engine default
-At most one connection globally MUST have `internal_default=true`. `set_internal_default` MUST clear
-the flag on all others, then set the target (sequential clear-then-set, serialised by the
-single-process daemon); it is the one operation that moves the flag on this machine. A direct write
-never makes a second one, and a synced one is settled the same way on every machine:
-
-- **Any other write** that would set the flag while a different connection holds it — the generic
-  `PATCH /api/v1/resources/{uid}` or `POST /api/v1/resources` — MUST be refused before anything is
-  written with 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN`, naming the connection that holds the flag. The
-  holder keeps the flag, the refused write changes nothing, and the answer is never a 500. Writing
-  the flag back onto the connection that already holds it is not a second one.
-- **A converge round** ([vault-sync](../vault-sync/spec.md)) applying a document that sets the flag on
-  a connection other than the local holder MUST NOT fail the round and MUST NOT hold the path for
-  retry. When the tree the round applies also clears the flag on the local holder, the flag was
-  moved on another machine, and the holder MUST be released first so the move lands whatever order
-  the two documents apply in. Otherwise two machines each flagged a different connection, and the
-  connection whose uid sorts first (lexicographically) MUST keep the flag — a tie-break every machine
-  computes the same way, so the fleet converges on one default instead of each machine keeping its
-  own and then receiving a clear for it. If that is the incoming connection, the local holder MUST
-  be released and the document applied as written; if it is the local holder, the document MUST be
-  applied with `internal_default` false and everything else as written — whether the connection
-  already exists here or is new — and the path MUST be reported among the round's failures, naming
-  the holder. A release runs only once the incoming document has passed its gate, just before its
-  write, and is reverted if that write fails, so a document that cannot land leaves this machine its
-  internal default.
-
-The invariant MUST be enforced by the database as well. `internal_default` is an ordinary config
-field, and a live vault was found holding two flagged connections, which makes "which connection
-does the internal engine use?" a question with no defined answer. A partial unique index restricted
-to flagged provider rows makes a second one unrepresentable, whatever writes it; the refusal and the
-normalisation above keep every write from reaching it.
-
-#### Scenario: setting a new internal default clears the previous one
-- **GIVEN** connection A is the internal default,
-- **WHEN** the user sets connection B as the internal default,
-- **THEN** B's `internal_default` becomes true and A's becomes false (one internal default globally, enforced by the database as well as by the operation).
-#### Scenario: a second internal default outside the dedicated route is refused
-- **GIVEN** connection A is the internal default,
-- **WHEN** `PATCH /api/v1/resources/{B}` sets B's `internal_default` true, or `POST /api/v1/resources` creates a provider with it true,
-- **THEN** the answer is 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN` naming A, A keeps the flag, B stays unflagged and no connection is created,
-- **AND** `POST /api/v1/providers/{B}/internal-default` still moves the flag to B.
-#### Scenario: a synced second internal default is dropped, not fatal
-- **GIVEN** connection A is the internal default on this machine, its document in the tree still flags it, and A's uid sorts before B's,
-- **WHEN** a converge round applies a document flagging connection B — an existing connection or a new one — with other edits beside the flag,
-- **THEN** the round completes and its pointer advances, A keeps the flag, B is applied with every other field as written and `internal_default` false,
-- **AND** the round's failures name B's path and A, and the path is not held for retry.
-#### Scenario: a synced internal default whose uid sorts first takes the flag
-- **GIVEN** connection A is the internal default on this machine, its document in the tree still flags it, and B's uid sorts before A's,
-- **WHEN** a converge round applies a document flagging connection B,
-- **THEN** B holds the flag, A's is cleared, and the round reports no failure for it.
-#### Scenario: two machines that each set a different internal default converge on one
-- **GIVEN** two machines in sync, and within one sync interval machine 1 sets connection X as the internal default and machine 2 sets connection Y,
-- **WHEN** both machines run converge rounds until they settle,
-- **THEN** both machines hold exactly one internal default, the same one on each, and it is whichever of X and Y has the smaller uid.
 
 ### Requirement: Set the internal-engine default
 `POST /api/v1/providers/{uid}/internal-default` (and `coffer config set engine.provider <name>`)
@@ -1402,3 +1347,52 @@ dash tooltip names the same day.
 - **GIVEN** Refresh model prices turned off
 - **WHEN** the refresh's schedule comes round
 - **THEN** nothing is fetched and prices come from the bundled snapshot
+
+### Requirement: Keep at most one internal default connection
+At most one connection globally MUST have `internal_default=true`. `set_internal_default` MUST clear
+the flag on all others, then set the target (sequential clear-then-set, serialised by the
+single-process daemon); it is the one operation that moves the flag on this machine. Nothing else
+makes a second one:
+
+- **Any other write** that would set the flag while a different connection holds it — the generic
+  `PATCH /api/v1/resources/{uid}` or `POST /api/v1/resources` — MUST be refused before anything is
+  written with 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN`, naming the connection that holds the flag. The
+  holder keeps the flag, the refused write changes nothing, and the answer is never a 500. Writing
+  the flag back onto the connection that already holds it is not a second one.
+- **A sync round** whose merged tree would flag a connection other than the one flagged here MUST
+  NOT check that tree out: the vault's validation refuses a tree holding two flagged connections,
+  so the round stops on the file and the person answers it like any other
+  ([vault-sync](../vault-sync/spec.md) "Stop the round on any conflict") — keeping this machine's
+  version or taking the other machine's. A tree that moves the flag, clearing it on one connection
+  and setting it on another, holds one and is checked out like any change. No tie-break picks one
+  silently: which connection Coffer's own model borrows is the person's decision.
+
+The invariant MUST be enforced by the vault's validation as well. `internal_default` is an ordinary
+config field, and a live vault was found holding two flagged connections, which makes "which
+connection does the internal engine use?" a question with no defined answer. The rule over the
+provider files ([vault-storage](../vault-storage/spec.md) "Admit every vault write through one compare-and-swap path")
+makes a second one unrepresentable in the vault, whatever writes it — a surface, a hand edit or a
+round; the refusal above keeps every surface write from reaching it.
+
+#### Scenario: setting a new internal default clears the previous one
+- **GIVEN** connection A is the internal default,
+- **WHEN** the user sets connection B as the internal default,
+- **THEN** B's `internal_default` becomes true and A's becomes false (one internal default globally, enforced by the vault's validation as well as by the operation).
+
+#### Scenario: a second internal default outside the dedicated route is refused
+- **GIVEN** connection A is the internal default,
+- **WHEN** `PATCH /api/v1/resources/{B}` sets B's `internal_default` true, or `POST /api/v1/resources` creates a provider with it true,
+- **THEN** the answer is 409 `PROVIDER_INTERNAL_DEFAULT_TAKEN` naming A, A keeps the flag, B stays unflagged and no connection is created,
+- **AND** `POST /api/v1/providers/{B}/internal-default` still moves the flag to B.
+
+#### Scenario: a file flagging a second internal default is refused by the vault
+- **GIVEN** a connection file that flags `internal_default` in the vault
+- **WHEN** a second connection file flagging it is written, and separately a change clears the first file's flag while setting the second's
+- **THEN** the second file alone is refused as an invalid config naming the file that already holds the flag
+- **AND** the change that moves the flag is accepted
+
+#### Scenario: two machines that each set a different internal default stop the round
+- **GIVEN** two machines in sync, and within one sync interval machine 1 sets connection X as the internal default and machine 2 sets connection Y
+- **WHEN** machine 1's round pushes and machine 2's round then merges
+- **THEN** machine 2's round stops on the connection files instead of checking out a tree with two internal defaults
+- **AND** machine 2's vault is left as it was, holding only its own flag, until the person answers

@@ -1,9 +1,9 @@
-"""``coffer sync remote ...`` (spec vault-sync).
+"""``coffer sync remote ...`` (spec vault-sync "Allow at most one user-owned
+sync remote").
 
 Split out of ``sync_cmd.py`` for the file-size tier. Re-running ``remote set``
-changes what it names and nothing else (spec vault-sync "Pause a configured
-remote without forgetting it"), so every option defaults to "keep what is
-stored" and the stored remote is the base the request is built on.
+changes what it names and nothing else, so every option defaults to "keep
+what is stored" and the stored remote is the base the request is built on.
 """
 
 from __future__ import annotations
@@ -13,22 +13,22 @@ from typing import Any
 import typer
 from rich.console import Console
 
-from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
+from coffer.domain.sync.remote import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS, DEFAULT_USERNAME
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_ids, settle_ids
 from coffer.surfaces.cli._options import ExitCode
 
-remote_app = typer.Typer(help="The one git remote this vault converges with")
+remote_app = typer.Typer(help="The one git remote this vault syncs with")
 
 _console = Console()
 
 #: What a remote configured for the first time takes for an option not given.
-#: ``worktree_path`` is absent: the daemon's own default applies.
 _FIRST_TIME: dict[str, Any] = {
     "branch": DEFAULT_BRANCH,
     "interval_seconds": DEFAULT_INTERVAL_SECONDS,
-    "include_secrets": False,
+    "include_secret": False,
     "secret_ref": None,
+    "username": DEFAULT_USERNAME,
     "enabled": True,
 }
 
@@ -57,11 +57,13 @@ def print_remote(remote: dict[str, Any]) -> None:
     _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
     _console.print(
         f"  every {remote['interval_seconds']}s · "
-        f"secrets {'included' if remote['include_secrets'] else 'excluded'} · "
-        f"{'enabled' if remote['enabled'] else 'disabled'}"
+        f"encrypted secrets {'included' if remote['include_secret'] else 'not synced'} · "
+        f"{'enabled' if remote['enabled'] else 'paused'}"
     )
-    _console.print(f"  push secret: {remote.get('secret_ref') or '(none)'}")
-    _console.print(f"  working tree: {remote['worktree_path']}")
+    _console.print(
+        f"  push token: {remote.get('secret_ref') or '(none)'}"
+        f" · username {remote.get('username') or DEFAULT_USERNAME}"
+    )
 
 
 @remote_app.command("set")
@@ -74,32 +76,29 @@ def remote_set(
         "--interval",
         help=f"Seconds between automatic rounds (default {DEFAULT_INTERVAL_SECONDS})",
     ),
-    with_secrets: bool | None = typer.Option(
+    with_secret: bool | None = typer.Option(
         None,
-        "--with-secrets/--without-secrets",
-        help="Carry secret ciphertext (never the master key); default off",
+        "--with-secret/--without-secret",
+        help="Carry the encrypted secrets (ciphertext, never the master key); default off",
     ),
     secret_ref: str | None = typer.Option(
         None,
         "--secret-ref",
-        help="Name of the secret holding the push token ('' removes it)",
+        help="Name of the push token in the secret store ('' removes it)",
     ),
-    worktree: str | None = typer.Option(
+    username: str | None = typer.Option(
         None,
-        "--worktree",
-        help="Absolute path of the git working tree, outside the vault (default ~/.coffer/sync)",
+        "--username",
+        help=f"Username sent with an HTTPS token (default {DEFAULT_USERNAME}; "
+        "Bitbucket and Azure DevOps need a real one)",
     ),
     wait: bool = WAIT_OPTION,
 ) -> None:
-    """Configure the remote. It is probed before being accepted.
+    """Configure the remote ('coffer sync remote check' looks at it first).
 
     On a configured remote an option not given keeps its stored value, and a
     paused remote stays paused (`coffer sync remote resume` resumes it). A
-    remote set for the first time takes the defaults and starts enabled. A
-    working tree at, inside or above the vault is refused, with the reason.
-
-    \f
-    Spec vault-sync "Keep the working tree outside the vault"."""
+    remote set for the first time takes the defaults and starts enabled."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -110,9 +109,9 @@ def remote_set(
             url,
             branch=branch,
             interval_seconds=interval,
-            include_secrets=with_secrets,
+            include_secret=with_secret,
             secret_ref=secret_ref,
-            worktree_path=worktree,
+            username=username,
         )
         r = c.put("/sync/remote", json=body)
         # An existing push token pointed at a new URL is the token going
@@ -127,7 +126,7 @@ def remote_set(
 
 @remote_app.command("clear")
 def remote_clear(ctx: typer.Context) -> None:
-    """Forget the remote. The vault is left exactly as it is."""
+    """Stop syncing: forget the remote. The vault is left exactly as it is."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -139,8 +138,7 @@ def remote_clear(ctx: typer.Context) -> None:
 
 def _switch(ctx: typer.Context, *, enabled: bool) -> None:
     """Flip the stored remote's ``enabled`` and nothing else — the same
-    ``PUT /sync/remote`` the web UI's switch sends, built on what is stored
-    (spec vault-sync "Pause a configured remote without forgetting it")."""
+    ``PUT /sync/remote`` the web UI's switch sends, built on what is stored."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -167,3 +165,44 @@ def remote_pause(ctx: typer.Context) -> None:
 def remote_resume(ctx: typer.Context) -> None:
     """Resume a paused remote where the vault left off."""
     _switch(ctx, enabled=True)
+
+
+@remote_app.command("check")
+def remote_check(
+    ctx: typer.Context,
+    url: str | None = typer.Argument(None, help="A remote to look at (default: the stored one)"),
+    branch: str | None = typer.Option(None, "--branch", help=f"Default {DEFAULT_BRANCH}"),
+    secret_ref: str | None = typer.Option(None, "--secret-ref", help="Push token to use"),
+) -> None:
+    """Look at a remote without keeping it: empty, a Coffer vault (and its
+    layout), another repository, unreachable, or refusing the token."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        stored = c.get("/sync/remote")
+        _cli_client.check(stored, verbose=verbose)
+        current = stored.json().get("remote") or {}
+        target = url or current.get("url")
+        if not target:
+            typer.echo("no remote given or stored", err=True)
+            raise typer.Exit(int(ExitCode.NOT_FOUND))
+        body = {
+            "url": target,
+            "branch": branch or current.get("branch") or DEFAULT_BRANCH,
+            "secret_ref": secret_ref if secret_ref is not None else current.get("secret_ref"),
+        }
+        r = c.post("/sync/remote/check", json=body)
+        _cli_client.check(r, verbose=verbose)
+        found = r.json()
+    result = found["result"]
+    words = {
+        "empty": "empty — the first round pushes this vault",
+        "vault": f"a Coffer vault (layout {found.get('layout')})",
+        "other": "a repository that is not a Coffer vault",
+    }
+    style = "green" if result in words else "red"
+    _console.print(f"[{style}]{words.get(result, result)}[/{style}]")
+    if found.get("detail"):
+        _console.print(f"  {found['detail']}")
+    if result not in words:
+        raise typer.Exit(code=1)

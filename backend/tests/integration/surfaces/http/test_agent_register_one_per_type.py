@@ -29,16 +29,14 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_dependencies import get_agent_service, get_auto_detect_service
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.auth import set_active_token
 from tests.support.facets import agent_catalog, installed
+from tests.support.vault_stores import make_resource_repo
 
 _TOKEN = "test-token-one-per-type"
 
@@ -75,7 +73,7 @@ async def env(
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
         kinds={"agent": make_agent_kind(on_delete=None)},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     agents = AgentService(platform=HostPlatform(), resource_service=resources, audit=audit)

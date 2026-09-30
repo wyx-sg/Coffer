@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-sync "Keep the working tree outside the vault", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec memory "Keep the memory tree derived and local"
+**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec memory "Keep the memory tree derived and local"
 
 ## Context
 
@@ -56,7 +56,7 @@ the class, not a rule inside a translator.
 
 | Class | Directory | Holds (today's source) | Writers | Sync policy | If lost |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources`); skills; knowledge; capability toggles (`mcp_capability_preferences`); channel pairings (`channel_peers`); engine settings and the curation owner machine (`internal_engine_config`); a channel's `runs_on`; the machine descriptors; authored memory triggers under `vault/memory-triggers/`, one file per trigger; **credential ciphertext** under `vault/credentials/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `vault/credentials/` only when that remote's `include_credentials` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
+| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources`); skills; knowledge; capability toggles (`mcp_capability_preferences`); channel pairings (`channel_peers`); engine settings and the curation owner machine (`internal_engine_config`); a channel's `runs_on`; the machine descriptors; authored memory triggers under `vault/memory-triggers/`, one file per trigger; **credential ciphertext** under `vault/secret/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `vault/secret/` only when that remote's `include_secret` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
 | **local** | `~/.coffer/local/` | reach, per resource uid (`resources.enabled`, `resources.scope_json`); the sync remote (`sync_remotes`); held paths and the pending confirmation (`sync_held_paths`, `sync_convergence_state`); retention (`retention_policies`); `daemon-config.json` | the daemon, through its settings API | never — it is true of this machine only | settings can be set again |
 | **content** | `~/.coffer/content/` | chat and channel media; the chat workspace | the service that owns each | not for now; a later decision may converge part of it | unrecoverable — needs a backup; retiring a machine asks export, migrate or discard |
 | **runs** | `~/.coffer/runs.db` (+ `logs/`) | `audit_log`, `mcp_invocations`, `conversations`, `chat_messages`, `channel_thread_conversations`, `sync_runs`; later Run records and usage, with a `source` and a dedupe key reserved | the daemon, the only writer | never | history; pruned by retention anyway |
@@ -74,7 +74,7 @@ Rules that come with the classes:
   "Reach never travels" becomes a fact about where reach is stored, not a line
   the exporter must remember to omit.
 - **Ciphertext lives in the vault; the key lives in the OS credential store.** With
-  `include_credentials` off, `vault/credentials/` is excluded from every
+  `include_secret` off, `vault/secret/` is excluded from every
   commit (a path filter in the repository's own `info/exclude`, never a
   tracked `.gitignore` another machine could change); with it on, the subtree
   is committed but settled by the fresher-encryption rule, never a text merge
@@ -177,7 +177,7 @@ Move everything as Option A except the `credentials` table.
   its own, so "the remote can be rebuilt from any one machine" would need the
   database too.
 - **Why it loses.** Ciphertext is safe to hold as files — it is exactly what
-  already crosses the remote at `credentials/<ref>.enc` — and keeping it in a
+  already crosses the remote at `secret/<ref>.enc` — and keeping it in a
   table keeps one translator alive for no protection gained. The protection is
   the key's location, which Option A keeps outside the tree, in the OS
   credential store.
@@ -188,8 +188,8 @@ Coffer's state is stored in five classes by nature — **vault**, **local**,
 **content**, **runs**, **derived** — each in its own directory under
 `~/.coffer/`, with the contents, writers, sync policy and loss consequence in
 the table above. The vault is always a git repository. Credential ciphertext
-lives in `vault/credentials/`, one file per ref; it is committed only when the
-remote's `include_credentials` is on (default off) and is never three-way
+lives in `vault/secret/`, one file per ref; it is committed only when the
+remote's `include_secret` is on (default off) and is never three-way
 merged. The master key lives in the OS credential store (the macOS Keychain on the
 shipped platform, behind the platform port), never in a file under
 `~/.coffer/`; it never syncs, and must be exported to survive the loss of the
@@ -234,3 +234,41 @@ Rules a future change must respect:
   filesystem reference pages rewritten; Settings › Data regrouped by class; an
   AST or path gate that `derived/` is never read as the only source of a
   fact.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **`daemon-config.json` stays at `~/.coffer/daemon-config.json`**, not under
+  `local/`. It carries the port the daemon binds and is read before any
+  migration can run, so it cannot sit in a directory the migration creates.
+  It is, with `daemon.json`, a file of the daemon rather than stored state of
+  any class.
+- **Derived tables are one SQLite file, `derived/derived.db`** (server health,
+  capability first-seen times, skill delivery bindings), beside the
+  `derived/index/` JSON indexes. The one-time upgrade copies its rows instead of
+  leaving them to rebuild: an empty first-seen table would show every
+  capability as new, and a lost binding loses the link path a delivered copy is
+  reclaimed by.
+- **Held join choices and the stopped round** are `local/sync/round.json`, and
+  the remote is `local/sync/remote.json`. Secrets named machine-local live under
+  `local/secret/`, and the secret boundary's approvals, times and last-used
+  stamps under `local/secret-boundary/`. The Overview's dismissed attention
+  items (`attention_ignores`) stay in `runs.db`.
+- **The master key in a development build** is a `0600` file,
+  `~/.coffer/master.key`, unless the login keychain is opted in; a signed
+  release keeps it in the Keychain as decided. It is exported only by the
+  desktop app's passphrase-protected backup (**Settings › Security**) and
+  imported with `coffer sync key import`; there is no `coffer sync key export`,
+  because an agent could run it.
+- **The move is not done at daemon start.** The daemon refuses a home that
+  still holds `coffer.db` (`VAULT_MIGRATION_REQUIRED`) and names `coffer
+  migrate`, which the person runs once with the daemon stopped. It backs up
+  `coffer.db.pre-vault` and `~/.coffer/pre-vault/` first, records every move in
+  `local/migration.json`, can be rehearsed on a copy (`--rehearse`) and rolled
+  back byte for byte (`--rollback`, which leaves a hold marker that `--resume`
+  lifts). "The old database kept read-only for one version" is that backup: no
+  code reads the old layout except the upgrade and its rollback.
+- Skill folders that Coffer sets aside (a replaced copy, a deleted orphan) go to
+  `content/backup/skills/`, outside the vault repository, so a backup is not
+  committed.

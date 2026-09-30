@@ -146,7 +146,7 @@ async def settings_in_effect(
     thread's sticky settings, else the group's, else the channel's defaults
     (spec channels "Keep a chat's settings across its conversations")."""
     threads = commands._threads
-    row = await threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
+    row = await threads.get(binding.resource.uid, peer.chat_id, conversation_thread_id)
     if use_conversation and row is not None and row.active_conversation_id is not None:
         try:
             conv = await commands._conversations.get_conversation(row.active_conversation_id)
@@ -158,7 +158,7 @@ async def settings_in_effect(
             return Settings(conv.agent_key, cfg.model, cfg.effort, cwd, conv)
     group = None
     if conversation_thread_id and chat_kind == "group":
-        group = await threads.get(binding.resource.id, peer.chat_id, "")
+        group = await threads.get(binding.resource.uid, peer.chat_id, "")
 
     def pick(field: str) -> str | None:
         return inherited_setting(row, group, field)

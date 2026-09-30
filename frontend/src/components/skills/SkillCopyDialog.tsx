@@ -4,7 +4,7 @@
 // it alone. The dialog compares the two sides and offers two confirmed
 // choices (spec skill-manager "Resolve a folder in the way of a skill's
 // link"):
-//   Replace it with Coffer's link — the folder is moved to ~/.coffer/backup/
+//   Replace it with Coffer's link — the folder is moved to ~/.coffer/content/backup/
 //     first, then the master is linked in its place;
 //   Adopt this folder — its files become the master, so every other agent
 //     gets them too.

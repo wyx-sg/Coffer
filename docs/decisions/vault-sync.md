@@ -42,7 +42,7 @@ The forces on the answer:
 A background worker (default interval one hour, `DEFAULT_INTERVAL_SECONDS` in
 `domain/sync/backup.py`) runs a **round** in a dedicated git working tree
 (`~/.coffer/sync` by default, never inside the vault) in a fixed order
-(spec vault-sync "Run the seven round steps in order"):
+(spec vault-sync "Run a round as pull, merge, guard, check out, push", which this ADR's successor rewrote):
 
 ```
 0  Repair    — working tree HEAD back to the pointer; refuse a layout this build does not know
@@ -64,16 +64,16 @@ A background worker (default interval one hour, `DEFAULT_INTERVAL_SECONDS` in
   in machine-local SQLite (`infrastructure/persistence/convergence_state_repo.py`)
   and is never an input another machine reads
   (spec vault-sync "Keep the pointer local"). It advances only when a round
-  completes (spec vault-sync "Advance the pointer only on absorption"). Because
+  completes (the former vault-sync requirement "Advance the pointer only on absorption"). Because
   everything applied is relative to it, a deletion reaches the vault only when
   some machine actually deleted that document against a shared base; a machine
   that merely *lacks* a document has changed nothing relative to its own base
   (spec vault-sync "Apply a deletion only when the diff carries one").
 - **The retry set** holds paths the tree carries that this vault failed to
   absorb. The exporter never publishes a retry-set path as a deletion
-  (spec vault-sync "Never export a retry-set path as a deletion"), and the
+  (the former vault-sync requirement "Never export a retry-set path as a deletion"), and the
   exporter writes differentially, never clearing and rewriting a directory
-  (spec vault-sync "Export differentially") — the two rules that keep the diff
+  (the former vault-sync requirement "Export differentially") — the two rules that keep the diff
   honest. A path that cannot apply on this machine at all (an `agent` whose
   `config_dir` does not exist here) is held as *not applicable here* rather
   than retried.
@@ -87,19 +87,19 @@ A background worker (default interval one hour, `DEFAULT_INTERVAL_SECONDS` in
   2. in `knowledge/` and `skills/`, a delete-versus-edit conflict keeps the
      edit — the deletion is a housekeeping judgement a curation pass will make
      again, the edit is unrecoverable if lost
-     (spec vault-sync "Let an edit beat a curation deletion");
+     (the former vault-sync requirement "Let an edit beat a curation deletion");
   3. where an internal model is configured, a bounded agent pass
      (`infrastructure/sync/conflict_resolver.py`: caps on files, file size and
      time) attempts the rest **in the working tree only**, and its output must
      pass a validation gate — file exists, no conflict marker, a resource or
-     state document still parses (spec vault-sync "Validate an agent's resolution");
+     state document still parses (the former vault-sync requirement "Validate an agent's resolution");
   4. otherwise the round aborts: the vault is untouched, the pointer does not
      move, and the surfaces name the conflicted paths and the working tree
-     (spec vault-sync "Abort the round on an unresolved conflict").
+     (the former vault-sync requirement "Abort the round on an unresolved conflict").
 - **Two guards bound a defect in the apply.** `L` is tagged as a pre-apply
   snapshot (ten kept, `SNAPSHOTS_KEPT` in `application/sync/convergence_ops.py`),
   so rollback is the same machinery run backwards and does not move the pointer
-  (spec vault-sync "Snapshot before applying and roll back from it"). And the
+  (the former vault-sync requirement "Snapshot before checking out and roll a round back from it"). And the
   [deletion breaker](sync-deletion-breaker.md) holds a round that would lose
   too much, in either direction.
 

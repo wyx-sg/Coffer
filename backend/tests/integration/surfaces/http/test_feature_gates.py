@@ -28,6 +28,7 @@ from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.domain import features as domain_features
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import app as app_module
 from coffer.surfaces.http import feature_dependencies
@@ -45,8 +46,6 @@ runner = CliRunner()
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pathlib.Path]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59780")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
@@ -354,11 +353,11 @@ def test_switching_a_feature_off_and_on_keeps_what_it_holds(
         assert r.status_code == 201, r.text
         before = c.get("/api/v1/knowledge/collections").json()
         tree_before = c.get("/api/v1/knowledge/tree").json()
-        files_before = sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*"))
+        files_before = sorted(p.relative_to(home) for p in knowledge_root().rglob("*"))
 
         _switch(c, FAKE_FEATURE, False)
         _assert_disabled(c.get("/api/v1/knowledge/collections"), FAKE_FEATURE)
-        assert sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*")) == files_before
+        assert sorted(p.relative_to(home) for p in knowledge_root().rglob("*")) == files_before
 
         _switch(c, FAKE_FEATURE, True)
         assert c.get("/api/v1/knowledge/collections").json() == before

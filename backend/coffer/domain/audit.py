@@ -95,6 +95,10 @@ class AuditEventType(StrEnum):
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
+    # spec vault-storage: a person's edit found on disk and committed as a
+    # ``disk`` write, and a version of a vault file or folder put back.
+    VAULT_FILE_EDITED = "vault_file_edited"
+    VAULT_FILE_RESTORED = "vault_file_restored"
     # spec vault-sync
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"
@@ -128,13 +132,13 @@ class AuditEntry:
     timestamp: datetime
     event_type: str
     actor: str
-    #: The resource this happened TO, by its stable row id. It is what makes a
-    #: trail survive a rename: the kind+name below are the LABEL the resource
-    #: carried AT THE TIME, so old rows keep saying what was true then instead
-    #: of being rewritten to the new name. All three are ``None`` for an event
-    #: that names no resource, and the id is ``None`` for rows written before
-    #: the column existed.
-    resource_id: int | None = None
+    #: The resource this happened TO, by its uid. It is what makes a trail
+    #: survive a rename: the kind+name below are the LABEL the resource carried
+    #: AT THE TIME, so old rows keep saying what was true then instead of being
+    #: rewritten to the new name. All three are ``None`` for an event that
+    #: names no resource, and the uid is ``None`` for rows written before the
+    #: trail was keyed on identity.
+    resource_uid: str | None = None
     resource_kind: str | None = None
     resource_name: str | None = None
     details: dict[str, Any] = field(default_factory=dict)

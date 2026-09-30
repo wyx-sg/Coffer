@@ -72,8 +72,8 @@ AGENT_DIR_MISSING = "agent_dir_missing"
 class _World:
     """One read of Coffer's own state, shared by a desired/observe pair."""
 
-    skills: dict[int, Resource]
-    agents: dict[int, Resource]
+    skills: dict[str, Resource]
+    agents: dict[str, Resource]
     #: Agent uid → its skills directory, for agents whose config parses.
     skill_dirs: dict[str, pathlib.Path]
     bindings: list[BindingState]
@@ -131,8 +131,8 @@ class SkillLinkTarget:
 
     async def _world(self) -> _World:
         rs = self._svc._rs
-        skills = {s.id: s for s in await rs.list(kind="skill")}
-        agents = {a.id: a for a in await rs.list(kind="agent")}
+        skills = {s.uid: s for s in await rs.list(kind="skill")}
+        agents = {a.uid: a for a in await rs.list(kind="agent")}
         skill_dirs: dict[str, pathlib.Path] = {}
         for agent in agents.values():
             try:
@@ -168,8 +168,8 @@ class SkillLinkTarget:
         items: list[Item] = []
         seen: set[str] = set()
         for b in world.bindings:
-            skill = world.skills.get(b.skill_resource_id)
-            agent = world.agents.get(b.agent_resource_id)
+            skill = world.skills.get(b.skill_uid)
+            agent = world.agents.get(b.agent_uid)
             if not b.enabled or skill is None or agent is None:
                 continue
             key = key_for(skill, agent)
@@ -223,7 +223,8 @@ class SkillLinkTarget:
         return items
 
     def decide(self, differences: Sequence[Difference], trigger: Trigger) -> Sequence[Decision]:
-        return [_decide(d) for d in differences]
+        backup = pathlib.Path(self._svc._store.backup_root)
+        return [_decide(d, backup) for d in differences]
 
     async def apply(self, change: PlannedChange) -> Applied:
         d = change.difference
@@ -280,7 +281,7 @@ class SkillLinkTarget:
         return Applied(AuditEvent(event.value, skill, details), undo=_undo)
 
 
-def _decide(d: Difference) -> Decision:
+def _decide(d: Difference, backup: pathlib.Path) -> Decision:
     """The direction policy for one difference. Independent of the trigger:
     what is safe to repair unattended is exactly what is safe on request."""
     if d.key.startswith(ORPHAN_PREFIX):
@@ -293,7 +294,11 @@ def _decide(d: Difference) -> Decision:
             "A folder in Coffer's skill store is not in your library, so no agent gets it; "
             "Coffer leaves it for you to add to the library or delete.",
             handoff=drift_handoff(
-                kind, skill=d.key.removeprefix(ORPHAN_PREFIX), path=folder, master=folder
+                kind,
+                skill=d.key.removeprefix(ORPHAN_PREFIX),
+                path=folder,
+                master=folder,
+                backup=backup,
             ),
         )
     if d.op is Op.ADD:
@@ -320,7 +325,11 @@ def _decide(d: Difference) -> Decision:
             f"{link} holds a folder Coffer did not put there; Coffer never overwrites it, "
             "so the skill's copy and that folder wait for you to keep one.",
             handoff=drift_handoff(
-                DriftKind.REPLACED_WITH_REGULAR, skill=d.subject.title, path=link, master=master
+                DriftKind.REPLACED_WITH_REGULAR,
+                skill=d.subject.title,
+                path=link,
+                master=master,
+                backup=backup,
             ),
         )
     if state == DriftKind.MISSING_MASTER.value:
@@ -329,7 +338,11 @@ def _decide(d: Difference) -> Decision:
             DriftKind.MISSING_MASTER.value,
             "The skill's master folder is gone, so there is nothing to link to.",
             handoff=drift_handoff(
-                DriftKind.MISSING_MASTER, skill=d.subject.title, path=link, master=master
+                DriftKind.MISSING_MASTER,
+                skill=d.subject.title,
+                path=link,
+                master=master,
+                backup=backup,
             ),
         )
     if d.observed.params["link"] != d.desired.params["link"]:

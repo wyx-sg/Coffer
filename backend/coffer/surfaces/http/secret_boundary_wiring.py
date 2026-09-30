@@ -28,7 +28,7 @@ from coffer.application.secret.presence import PresenceGrants, derive_grant_key
 from coffer.application.secret.resolver import SecretResolver, SecretStorePort
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretApproval, SecretDestination
-from coffer.infrastructure.secret.boundary_store import SqliteBoundaryStore
+from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
 from coffer.infrastructure.secret.build_identity import keychain_access_group
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
@@ -37,6 +37,7 @@ from coffer.infrastructure.secret.master_key_backends import (
     ACCOUNT,
     KeychainAccessGroupBackend,
 )
+from coffer.infrastructure.vault.home import coffer_home
 from coffer.surfaces.http.secret_schemas import ApprovalOut
 
 #: One resource's secrets as the boundary sees them: where they go, and which
@@ -110,7 +111,14 @@ def boundary_resolver(store: SecretStorePort) -> SecretResolver:
     return SecretResolver(store, _boundary)
 
 
-def make_master_key_manager(db_path: pathlib.Path) -> MasterKeyManager:
+def master_key_path(home: pathlib.Path | None = None) -> pathlib.Path:
+    """The development key file: ``~/.coffer/master.key``, wherever the
+    history database is — the key opens the vault's ciphertext, so it follows
+    the home the vault is in, not ``COFFER_DB_URL``."""
+    return coffer_home(home) / "master.key"
+
+
+def make_master_key_manager(home: pathlib.Path | None = None) -> MasterKeyManager:
     """The master key's home, chosen by how this build was made.
 
     A signed release carries its Team ID access group and keeps the key only
@@ -125,7 +133,7 @@ def make_master_key_manager(db_path: pathlib.Path) -> MasterKeyManager:
         return KeychainAccessGroupBackend(group, account=f"{ACCOUNT}.bak-{stamp}")
 
     return MasterKeyManager(
-        key_path=db_path.parent / "master.key",
+        key_path=master_key_path(home),
         keyring=KeyringAdapter(),
         vault=vault,
         vault_backup=backup if group else None,
@@ -133,15 +141,16 @@ def make_master_key_manager(db_path: pathlib.Path) -> MasterKeyManager:
 
 
 def init_secret_boundary(
-    db_path: pathlib.Path, store: EncryptedSecretStore, manager: MasterKeyManager
+    store: EncryptedSecretStore,
+    manager: MasterKeyManager,
+    *,
+    home: pathlib.Path | None = None,
 ) -> None:
     def grant_key() -> bytes | None:
         key = manager.current
         return derive_grant_key(key) if key else None
 
-    set_secret_boundary(
-        SecretBoundary(SqliteBoundaryStore(db_path), store), PresenceGrants(grant_key)
-    )
+    set_secret_boundary(SecretBoundary(FileBoundaryStore(home), store), PresenceGrants(grant_key))
 
 
 def approval_out(approval: SecretApproval) -> ApprovalOut:
@@ -222,6 +231,7 @@ __all__ = [
     "get_secret_boundary",
     "init_secret_boundary",
     "make_master_key_manager",
+    "master_key_path",
     "on_approval_applied",
     "optional_secret_boundary",
     "refresh_approvals",

@@ -42,7 +42,7 @@ async def _entries(ctx: CommandContext) -> tuple[list[Any], str | None]:
     one it is bound to now."""
     threads = ctx.commands._threads
     ids = await threads.history(
-        ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, limit=HISTORY_LIMIT
+        ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, limit=HISTORY_LIMIT
     )
     found = []
     for conversation_id in ids:
@@ -50,7 +50,7 @@ async def _entries(ctx: CommandContext) -> tuple[list[Any], str | None]:
             found.append(await ctx.commands._conversations.get_conversation(conversation_id))
         except ConversationNotFound:
             continue
-    row = await threads.get(ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id)
+    row = await threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
     return found, row.active_conversation_id if row is not None else None
 
 
@@ -113,6 +113,6 @@ async def apply_resume(ctx: CommandContext, conversation_id: str) -> None:
 
 async def _rebind(ctx: CommandContext, conversation: Any) -> None:
     await ctx.commands._threads.set_active_conversation(
-        ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, str(conversation.id)
+        ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, str(conversation.id)
     )
     await ctx.say(f'↩️ Resumed "{_title(conversation)}".')

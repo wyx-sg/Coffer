@@ -3,8 +3,9 @@ be undone as a whole (spec knowledge "Keep every document's history and undo a
 pass as a whole", "Follow knowledge changes across collections").
 
 Integration tier because the history is real git over a real directory — the
-repository, its trailers and its diffs are the mechanism, and a fake of any of
-them would be testing the fake. The services are real; the registry and the
+vault repository, whose ``knowledge/`` directory holds every collection; its
+trailers and its diffs are the mechanism, and a fake of any of them would be
+testing the fake. The services are real; the registry and the
 audit log are small in-memory stand-ins, and the curation pass's agentic loop
 is scripted, because it is an LLM call.
 """
@@ -27,6 +28,8 @@ from coffer.domain.knowledge.errors import KnowledgeUndoConflict
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, inbox, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
+from coffer.infrastructure.vault.home import vault_root
+from coffer.infrastructure.vault.instance import vault_repository
 
 pytestmark = pytest.mark.anyio
 
@@ -38,7 +41,6 @@ class _Resources:
     async def register(self, *, kind: str, name: str, **_: Any) -> Resource:
         now = datetime.now(tz=UTC)
         row = Resource(
-            id=len(self.rows) + 1,
             uid=f"uid-{name}",
             kind=kind,
             name=name,
@@ -66,7 +68,7 @@ class _Resources:
 class _Entry:
     event_type: str
     actor: str
-    resource_id: int | None
+    resource_uid: str | None
     details: dict[str, Any] = field(default_factory=dict)
 
 
@@ -79,7 +81,7 @@ class _Audit:
     async def record(
         self, event_type: str, *, resource: Any = None, actor: str, details: Any = None
     ) -> None:
-        rid = resource.id if resource is not None else None
+        rid = resource.uid if resource is not None else None
         self.entries.append(_Entry(event_type, actor, rid, dict(details or {})))
 
     async def query(
@@ -89,7 +91,7 @@ class _Audit:
             e
             for e in reversed(self.entries)
             if (event_type is None or e.event_type == event_type)
-            and (resource is None or e.resource_id == resource.id)
+            and (resource is None or e.resource_uid == resource.uid)
         ]
         return found[:limit]
 
@@ -153,9 +155,8 @@ class _World:
 
 
 @pytest.fixture
-def world(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> _World:
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    (tmp_path / "knowledge").mkdir()
+def world() -> _World:
+    paths.knowledge_root().mkdir(parents=True)
     return _World()
 
 
@@ -377,12 +378,15 @@ async def test_a_refused_undo_carries_the_by_hand_prompt(world: _World) -> None:
     details = refused.value.error_details
     assert (details["document"], details["later_version"]) == (alpha, later)
     prompt = details["handoff"]["prompt"]  # type: ignore[index]
-    root = str(paths.resolve(alpha)).removesuffix(f"/{alpha}")
+    # The history is the vault repository's; the knowledge folder is
+    # ``knowledge/`` inside it.
+    root = str(vault_root())
     # The pass, the document edited since and its version, where to read the
     # diffs, and that the later edits stay and nothing is committed by hand.
     assert pass_version in prompt and later in prompt
     assert f"{alpha} (last changed in {later})" in prompt
-    assert f"git -C {root} show {pass_version}" in prompt
+    assert f"git -C {root} show {pass_version} -- knowledge" in prompt
+    assert "-- knowledge/<document>" in prompt
     assert "keep the edits made to those documents since" in prompt
     assert "Do not commit" in prompt
     assert _body(alpha) == "The user's own words."
@@ -405,6 +409,57 @@ async def test_an_edit_on_disk_is_committed_before_coffers_next_write(world: _Wo
     [save, *_] = await world.histories.versions(saved)
     assert save.change.meta.writer == "user"
     assert [d.path for d in save.change.documents] == [saved]
+    # Two vault commits, the disk edit first: the save names only its own path.
+    [newest, before] = vault_repository().log("knowledge", limit=2)
+    assert newest.version == save.change.version
+    assert before.version == edit.change.version
+    assert [pc.path for pc in before.paths] == [paths.vault_path(edited)]
+
+
+async def test_knowledge_history_is_the_vault_repositorys(world: _World) -> None:
+    """There is no knowledge repository of its own: every commit lands in the
+    vault's, under ``knowledge/``, authored by its writer."""
+    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
+    added = await world.knowledge.submit(
+        collection="shopee",
+        title="T",
+        description="d",
+        body="b",
+        actor_kind=ACTOR_USER,
+        actor=ACTOR_USER,
+    )
+    assert added.document is not None
+    assert not (paths.knowledge_root() / ".git").exists()
+    assert (vault_root() / ".git").is_dir()
+    [commit] = vault_repository().log(paths.vault_path(added.document.path))
+    assert commit.meta.writer == "user"
+    assert commit.meta.operation == "promote"
+    assert all(pc.path.startswith("knowledge/shopee/") for pc in commit.paths)
+    # And the knowledge view hands the same commit back knowledge-root-relative.
+    [version] = await world.histories.versions(added.document.path)
+    assert version.change.version == commit.version
+    assert {d.path for d in version.change.documents} == {
+        pc.path.removeprefix("knowledge/") for pc in commit.paths
+    }
+    diff = await world.histories.version_diff(added.document.path, commit.version)
+    assert f"b/{added.document.path}" in diff.diff
+
+
+async def test_a_save_over_a_change_it_did_not_see_is_refused(world: _World) -> None:
+    from coffer.domain.knowledge.errors import KnowledgeFileConflict
+
+    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
+    doc = fs.write_file(directory="shopee", title="Doc", description="d", body="v1").path
+    stale = fs.read_file(doc).fingerprint
+    target = paths.resolve(doc)
+    target.write_text(target.read_text(encoding="utf-8").replace("v1", "v2"), encoding="utf-8")
+
+    with pytest.raises(KnowledgeFileConflict) as refused:
+        await world.knowledge.save_document(
+            doc, "from the page", expected_fingerprint=stale, actor=ACTOR_USER
+        )
+    assert "v2" in str(refused.value.error_details["current_body"])
+    assert _body(doc) == "v2"
 
 
 @pytest.mark.acceptance(
@@ -506,17 +561,15 @@ async def test_without_git_writes_work_and_history_says_so(
     world: _World, monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
     from coffer.domain.knowledge.errors import KnowledgeHistoryUnavailable
-    from coffer.infrastructure.knowledge import history as history_module
+    from coffer.infrastructure.vault import git
 
-    monkeypatch.setattr(history_module, "git_available", lambda: False)
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "elsewhere"))
-    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.setattr(git, "git_available", lambda: False)
     await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
     added = await world.knowledge.submit(
         collection="shopee", title="T", description="d", body="b", actor=ACTOR_USER
     )
     assert added.document is not None
-    assert not (tmp_path / "elsewhere" / ".git").exists()
+    assert not (vault_root() / ".git").exists()
     with pytest.raises(KnowledgeHistoryUnavailable) as refused:
         await world.histories.versions(added.document.path)
     # The refusal carries the install hand-off: the machine, what needed git,

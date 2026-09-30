@@ -22,6 +22,7 @@ from typing import Any
 
 from coffer.application.provider.ports import ReportedPrices
 from coffer.domain.usage.pricing import ModelPrice
+from coffer.infrastructure.vault.home import derived_root
 
 _logger = logging.getLogger(__name__)
 
@@ -29,8 +30,7 @@ _FIELDS = ("input", "output", "cache_write_5m", "cache_write_1h", "cache_read", 
 
 
 def default_path() -> Path:
-    home = Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "derived" / "reported-prices.json"
+    return derived_root() / "reported-prices.json"
 
 
 def _encode(price: ModelPrice) -> dict[str, float]:

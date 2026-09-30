@@ -2,9 +2,9 @@
 
 The layer's state is a directory. This document describes what is on disk —
 one tree of documents per collection, the hidden inbox new material waits in,
-the frontmatter contract, the naming rule — plus the one database row a
-collection still occupies and the in-memory value objects the surfaces answer
-with. Authority is [`spec.md`](spec.md) and
+the frontmatter contract, the naming rule — plus the one resource file a
+collection has, curation's machine-local record, and the in-memory value
+objects the surfaces answer with. Authority is [`spec.md`](spec.md) and
 [Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md).
 
 ## There is no schema
@@ -16,24 +16,23 @@ full-text index, no embeddings — therefore no content hash to compare, no
 reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
-Curation's state lives in the same directory as everything else. What is still
-waiting to be merged is a file in the collection's hidden `.inbox/`; what a
-person has edited since curation last saw it is a document whose modification
-time is newer than the `coffer_curated_at` stamp in its own frontmatter. That is
-why there is no curation state table and no scan journal: both questions the
-sweep asks are answered by the disk itself, where the answer cannot disagree
-with the disk.
+Curation needs two answers, and neither is a table. What is still waiting to
+be merged is a file in the collection's hidden `.inbox/`. What a person has
+edited since curation last saw it is a document whose blob at the vault's
+`HEAD` differs from the blob curation last settled it as — recorded in
+`~/.coffer/local/curation.json` — and whose newest commit is not a `curation`
+or `sync` write. Modification time never decides.
 
-The only database presence a collection has is the same one every Resource has:
-a row in the kind-agnostic `resources` table. That row carries the collection's
-name, and nothing about its contents. There is no per-agent reach and no
-`enabled` switch in play for this kind (see "Serve every collection to every
-agent"): the kind is non-toggleable, and its `enabled` column is always true.
+Beyond its tree, a collection is one resource file,
+`vault/resources/knowledge/<name>.json` (spec resource-framework), carrying the
+collection's name and nothing about its contents. There is no per-agent reach
+and no `enabled` switch in play for this kind (see "Serve every collection to
+every agent"): the kind is non-toggleable, and it is always enabled.
 
 ## On-disk layout
 
 ```text
-~/.coffer/knowledge/
+~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
 │   ├── README.md                   # first paragraph = the collection's description; not a document
 │   ├── account/                    # nesting chosen by a person or by curation
@@ -41,14 +40,16 @@ agent"): the kind is non-toggleable, and its `enabled` column is always true.
 │   ├── gateway-routing.md          # a document: read by agents, edited by people and curation
 │   └── .inbox/                     # hidden: items waiting to be curated
 │       └── q3-review.md            # an upload's extracted text, deleted once curated
-├── coffer/
-│   ├── README.md
-│   └── release-process.md
-└── .git/                           # hidden: the knowledge history, one commit per write
+└── coffer/
+    ├── README.md
+    └── release-process.md
 ```
 
-- `~/.coffer/knowledge/` is the root; `$COFFER_KNOWLEDGE_ROOT` overrides it for
-  tests. Path construction lives in exactly one module,
+- `~/.coffer/vault/knowledge/` is the root, inside the vault repository, so a
+  collection's history is the vault's history under `knowledge/`. There is no
+  override: the root is resolved from `HOME` at every call, because a tree
+  outside the vault would be a tree its history cannot see. Path construction
+  lives in exactly one module,
   `infrastructure/knowledge/paths.py` (see "Guard every path through one
   module"), which also owns the inbox name.
 - A **collection** is a top-level subdirectory *and* one `knowledge` Resource.
@@ -104,7 +105,6 @@ description: Which service owns a login session, and what reads it.
 actor: agent
 created_at: '2026-09-12T04:18:33Z'
 updated_at: '2026-09-23T04:18:33Z'
-coffer_curated_at: '2026-09-23T04:18:33Z'
 ---
 
 Login state is owned by `account.session`.
@@ -117,54 +117,68 @@ Login state is owned by `account.session`.
 | `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, or the tool's own actor. |
 | `created_at` | ISO-8601 `str` | Preserved across a rewrite, so a document keeps its own history even though nothing but the file records it. |
 | `updated_at` | ISO-8601 `str` | Set on every write Coffer makes. |
-| `coffer_curated_at` | ISO-8601 `str` | Written by Coffer (see "Carry title, description and actor in frontmatter", "Settle an item only after its pass completes"): when curation last had this document in front of it. Absent on a document curation has never seen. |
+
+When curation last had a document in front of it is **not** in the document:
+it is `local/curation.json` (below), so settling a document changes no file and
+makes no commit.
 
 These are the keys **Coffer writes**, not the only keys a document may carry. A
 person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
-rewrite Coffer makes — a pass's `write_document`, the stamp `mark_curated` adds
-— renders the known keys in a fixed order and then everything else unharmed,
+rewrite Coffer makes — a pass's `write_document` — renders the known keys in a fixed order and then everything else unharmed,
 values carried through as parsed rather than stringified. There is still no `id`
 — the path is the identity (see "Use the file path as a document's identity") —
 and none of the keys that described retired machinery (`lane`, `source_path`,
 `source_sha256`, `source_format`, `source_mode`, `converter`, `embed_status`,
-`content_sha256`, `coffer_ingested_at`).
+`content_sha256`, `coffer_ingested_at`, `coffer_curated_at`).
 
 Frontmatter parsing degrades rather than raising: a file with no fence, or with
 malformed YAML inside one, yields empty frontmatter and its body, so one
 hand-edited file with a stray colon cannot break a whole collection walk.
 
-### What the sweep owes a collection, and why there is no state file
+### What the sweep owes a collection, and curation's one local file
 
 `curate.pending_items` answers it from the disk, in this order (see "Run
 curation on a sweep and on demand"):
 
 1. **Inbox material**, oldest first by modification time (`fs.inbox_items`).
    Material first, because until it is merged it is knowledge no agent can read.
-2. **Edited documents** (`fs.edited_documents`): every visible Markdown document
-   whose modification time is newer than its own `coffer_curated_at` — or that
-   has no stamp at all, like a document a person wrote from scratch. An edit in
-   any editor moves the mtime past the stamp, and the next sweep hands the
-   document to a pass, which carries the edit into the rest of the collection
-   and never reverts it (see "Let newer statements win and a person's edit
-   stand"). Nothing has to be told.
+2. **Edited documents** (`curation_state.edited_documents`): every visible
+   Markdown document whose blob at `HEAD` differs from the one
+   `local/curation.json` settled — or that curation never settled, like a
+   document a person wrote from scratch — and whose newest commit's writer is
+   not `curation` or `sync`, oldest change first. Edits still on disk are
+   committed first as `disk` writes, so an edit in any editor is judged by the
+   same `HEAD`; the next sweep hands the document to a pass, which carries the
+   edit into the rest of the collection and never reverts it (see "Let newer
+   statements win and a person's edit stand"). Nothing has to be told, and a
+   checkout, a restore from backup or a clock change that only moves
+   modification times makes nothing pending.
+
+`~/.coffer/local/curation.json` is machine-local (it can be rebuilt by letting
+curation look at everything once), never committed and never synced:
+
+```json
+{ "documents": { "<collection>/<path>.md": { "blob": "<git blob id>", "at": "<iso time>" } } }
+```
+
+A collection rename moves its documents' entries with it.
 
 Two consequences keep this honest:
 
 - **Curation's own output does not come back.** A pass's `write_document` writes
-  with `curated=True`, which stamps the document; and because writing a stamp is
-  itself a modification, `fs.mark_curated` and the curated write both set the
-  file's mtime back to the stamp they just wrote. Without that, every document
-  would be pending on every sweep forever.
+  with `curated=True`, which records the blob it wrote in `local/curation.json`,
+  and its commit's writer is `curation` — either is enough to keep the document
+  out of the next sweep.
 - **An item is settled only after its pass completes** (see "Settle an item only
   after its pass completes"). Material is deleted from the inbox
-  (`fs.discard_material`) and an edited document stamped (`fs.mark_curated`)
-  after the loop returns; a pass that raises leaves both as they were, so a
+  (`fs.discard_material`) and an edited document recorded as settled
+  (`fs.mark_curated`) after the loop returns; a pass that raises leaves both as they were, so a
   later sweep retries rather than losing what one half-ran over.
 
 With no internal model configured there is nothing to merge with, so material
 does not wait (see "Promote material directly when no model is configured"):
 `KnowledgeService.submit` promotes it on the spot (`fs.promote` — a document of
-its own at the collection root, stamped curated), and a pass run with no model
+its own at the collection root, recorded as settled), and a pass run with no model
 promotes whatever is still in the inbox and reports `no_model` with the
 `promoted` paths.
 
@@ -194,7 +208,7 @@ collection itself and its `README.md`; the inbox is out of reach already,
 because it is dot-prefixed. The one allowance is `paths.inbox_parts`, which
 recognises `<collection>/.inbox` and `<collection>/.inbox/<item>` for the tree
 and read routes alone — spelled out beside the guard rather than made by
-loosening it, so every write, delete and stamp still refuses the inbox. A
+loosening it, so every write, delete and settle still refuses the inbox. A
 violation is `UnsafeKnowledgePath`
 (`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The resolved path is checked against the
 root too, on its nearest existing ancestor, so a symlink inside the root cannot
@@ -262,8 +276,8 @@ wire never means hiding one from the layer.
 
 `make_knowledge_kind()` leaves `supports_scope` at the Kind default of `False`
 and declares `generic_create_allowed=False`, because a collection is a directory
-as much as a row and the generic `POST /resources` path would create the row with
-no folder behind it. Being a Resource buys the collection a lifecycle, an audit
+as much as a resource file and the generic `POST /resources` path would create
+the file with no folder behind it. Being a Resource buys the collection a lifecycle, an audit
 trail — not a switch and not a reach.
 
 **Every collection is served to every agent** (see "Serve every collection to
@@ -278,8 +292,7 @@ do.
 The per-agent reach that used to sit here is withdrawn too. It was never set — every collection's scope was null in
 the live vault — and it could not have withheld anything it was asked to: the
 skill it narrows hands the agent the absolute knowledge root and tells it to
-grep. `PUT .../scope` on this kind is now refused with `SCOPE_INVALID`, and
-migration `0088` cleared the column for every `knowledge` row.
+grep. `PUT .../scope` on this kind is refused with `SCOPE_INVALID`.
 
 `KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
 keys**. A collection has no settings at all: no retrieval modes, no chunk size,
@@ -289,43 +302,44 @@ used to be configured per scope was configuring machinery that no longer exists.
 
 What the layer serves is **files on disk** (see "Present knowledge as files on
 disk"). An agent that also holds shell or file-read tools can read anything
-under `~/.coffer/knowledge/`, which is why neither a per-agent reach nor an
+under `~/.coffer/vault/knowledge/`, which is why neither a per-agent reach nor an
 enabled switch is offered: an allow-list that withholds a path from a reader
 already holding the root withholds nothing at all.
 
 ## The history
 
-Every accepted write to a collection is one commit, naming its writer, in a git
-repository at `<knowledge root>/.git` (see "Keep every document's history and
-undo a pass as a whole"). It is the knowledge root's own until the vault is one
-repository (ADR every-vault-write-is-a-validated-commit-naming-its-writer), and
-is shaped to fold into it as a history import under `knowledge/`. It is created
-on first use with one baseline commit of whatever the root already holds. Like
-every dot-prefixed entry it is in no listing, count or catalogue, and vault sync
-never mirrors a `.git` directory. `.git/info/exclude` ignores every hidden entry
-except `.inbox/`, so a submission is a commit and the text a pass consumed stays
-in history after the inbox file is deleted.
+Every accepted write to a collection is one commit, naming its writer, in the
+vault repository (see "Keep every document's history and undo a pass as a
+whole"; ADR every-vault-write-is-a-validated-commit-naming-its-writer): the
+knowledge history is the vault's history pathspec-limited to `knowledge/`, with
+every path handed back knowledge-root-relative (`KnowledgeHistory`,
+`infrastructure/knowledge/history.py`, a view over the process's one vault
+writer). The history a knowledge root kept in its own `.git` before the vault
+layout was replayed into the vault under `knowledge/` by the one-time upgrade,
+messages, authors and dates kept. The vault's `.git/info/exclude` ignores every
+hidden entry under `knowledge/` except `.inbox/`, so a submission is a commit
+and the text a pass consumed stays in history after the inbox file is deleted.
 
 There is still no table and no index: the history is git's, read back through
-`git log` when a surface asks, and a machine with no git keeps every write
-working and records nothing.
+`git log` when a surface asks.
 
 **One commit per operation.** A person's save, delete, restore or undo; material
 promoted on arrival; a collection created, renamed or removed; one curation pass
-(everything it wrote, retired, stamped and settled). Before any of them, whatever
-changed in the tree that no open operation owns is committed first as an edit on
-disk, so a person's own editor is never counted as Coffer's; the sweep and every
-history read do the same. Paths vault sync applied are committed as sync.
+(everything it wrote and retired). Before any of them, whatever changed under
+`knowledge/` that no open operation owns is committed first as a `disk` write,
+so a person's own editor is never counted as Coffer's; the sweep and every
+history read do the same. A sync round's merge is a `sync` commit by
+construction.
 
-**Trailers.** Each commit's message is a summary line and these trailers, the
-names the ADR gives, so the history reads the same after it folds into the
-vault's:
+**Trailers.** Each commit's message is a summary line and the vault's trailers
+(spec vault-storage), with the knowledge history's own four added:
 
 | Trailer | Value |
 | --- | --- |
 | `Coffer-Writer` | `user`, `agent`, `curation`, `sync` or `disk` |
 | `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `pass`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove`, `baseline` |
 | `Coffer-Actor` | the audit actor of the operation |
+| `Coffer-Machine` | the machine that made the commit |
 | `Coffer-Agent` | an agent writer's name; for a pass, who submitted the item — from its `knowledge_written` event, which names the inbox `item` |
 | `Coffer-Collection` | the collection's name |
 | `Coffer-Item` | the item a pass curated (an inbox path or a document) |
@@ -428,13 +442,14 @@ nothing is lost by not having built it yet.
 
 ## The installation-wide curation setting
 
-The one setting the layer has is not the layer's. Three columns on the singleton
-`internal_engine_config` row carry it (see "Curate on one owner machine only"):
+The one setting the layer has is not the layer's. Three fields of the engine's
+settings document, `vault/state/settings/internal-engine.json` (spec
+internal-engine), carry it (see "Curate on one owner machine only"):
 
-| column | notes |
+| field | notes |
 | --- | --- |
-| `auto_curate_enabled` | the switch, **default true** — curation is what merges new material into the documents and carries a person's edit through the rest of the collection, so an installation where it never runs has material waiting in the inbox forever |
-| `curate_interval_s` | the timer; null means the built-in cadence (one hour); a stored value is kept as chosen |
+| `upkeep.curate.enabled` | the switch, **default true** — curation is what merges new material into the documents and carries a person's edit through the rest of the collection, so an installation where it never runs has material waiting in the inbox forever |
+| `upkeep.curate.interval_s` | the timer; null means the built-in cadence (one hour); a stored value is kept as chosen |
 | `curate_owner_machine_id` | the one machine allowed to run the sweep. Null means a single-machine vault, where "here" is the only answer there is |
 
 The switch and the owner are read **together, on every sweep**, so the setting
@@ -442,10 +457,14 @@ means *on, here* rather than merely *on*. All three govern only the background
 worker, which re-reads them every tick so a change needs no daemon restart; the
 manual trigger consults none of them. A sweep runs at most five passes per
 collection, one item each, and stops a collection's sweep early on `no_model` or
-`failed`. The whole row is synced state, so every machine agrees on who the
+`failed`. The document is in the vault, so every machine agrees on who the
 owner is.
 
 ## What migration 0101 does
+
+*History.* 0101 and 0085 below are Alembic revisions of the pre-vault
+database; they ran against the knowledge root at its old place
+(`~/.coffer/knowledge/`) before the one-time upgrade moved it into the vault.
 
 `20260923_0101_knowledge_one_tree.py`, with the on-disk rewrite frozen beside it
 in `migrations/knowledge_tree_0101.py` (see "Migrate the two-lane corpus into

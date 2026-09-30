@@ -22,30 +22,32 @@ flowchart TB
     CR["Secret store"]
     AU["Audit log"]
   end
-  subgraph vault["Vault: ~/.coffer"]
-    DB[("coffer.db")]
-    FILES["skills, knowledge, memory"]
+  subgraph vault["~/.coffer"]
+    FILES["vault/: resources, skills, knowledge, secrets (git)"]
+    DB[("runs.db: history")]
   end
   CC -->|"shim + agent uid"| GW
   CX -->|"shim + agent uid"| GW
   GW --> BT
   GW --> UP["Upstream MCP servers"]
-  RF --> DB
   RF --> FILES
-  CR --> DB
+  AU --> DB
+  CR --> FILES
   FILES -.->|"skill links"| agents
   RF -.->|"provider config"| agents
 ```
 
 ## Daemon
 
-`coffer-daemon` is the one long-running process that owns all of Coffer's state. It listens on `127.0.0.1`, on port 8000 unless you set a different one. It serves the REST API under `/api/v1`, the MCP endpoint at `/mcp`, and the web UI. It is the only process that writes the database. The CLI, the shim and the desktop app are all clients that find the daemon through `~/.coffer/daemon.json` and start one if none is running.
+`coffer-daemon` is the one long-running process that owns all of Coffer's state. It listens on `127.0.0.1`, on port 8000 unless you set a different one. It serves the REST API under `/api/v1`, the MCP endpoint at `/mcp`, and the web UI. It is the only process that writes Coffer's state (you can also edit the vault's files by hand, and the daemon picks the edits up). The CLI, the shim and the desktop app are all clients that find the daemon through `~/.coffer/daemon.json` and start one if none is running.
 
 Guide: [Running the daemon](/guides/daemon). Architecture: [Daemon and processes](/architecture/daemon).
 
 ## Vault
 
-The vault is the directory `~/.coffer` and everything in it. `coffer.db` (SQLite) is the system of record for configuration, resources, the audit log and encrypted secrets. Skills, knowledge and memory are plain file trees next to it, and those files are the only copy: Coffer does not index or embed them. To back up Coffer, copy this directory with the daemon stopped.
+The vault is `~/.coffer/vault`, a git repository that holds your configuration and authored content as plain files: one JSON file per resource, the skill folders, the knowledge collections, memory triggers and encrypted secrets. Those files are the only copy, and every accepted change is a commit that names who made it, so any file can be compared with and restored to an earlier version. Beside the vault, `~/.coffer` keeps machine-local settings (`local/`), media (`content/`), history such as the audit log and conversations (`runs.db`), and derived state Coffer can rebuild, such as the memory tree (`derived/`). To back up Coffer, copy `~/.coffer` with the daemon stopped.
+
+Guide: [Editing the vault by hand](/guides/vault-files).
 
 Reference: [Files and directories](/reference/filesystem). Architecture: [Persistence](/architecture/persistence).
 
@@ -93,7 +95,7 @@ Besides upstream tools, the gateway always offers Coffer's own tools, prefixed `
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
 | `coffer__write` | Files new material into a knowledge collection. Available when Knowledge is on. |
 
-There is no memory or log tool. Memory notes are Markdown files under `~/.coffer/memory/` that an agent searches with its own file tools, and Coffer's records are read with `coffer log audit|mcp|daemon`.
+There is no memory or log tool. Memory notes are Markdown files under `~/.coffer/derived/memory/` that an agent searches with its own file tools, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
 The gateway takes the calling agent's identity from the MCP handshake. It is not an argument the agent can set.
 
@@ -101,19 +103,19 @@ Reference: [MCP tools](/reference/mcp-tools).
 
 ## Skills and delivery
 
-A **skill** is a folder containing a `SKILL.md` in the [AgentSkills](https://agentskills.io) format. Coffer keeps one master copy of each skill in `~/.coffer/skills/<name>/` and **delivers** it by linking that folder into each agent's `skills/` directory. A skill is delivered to an agent only while the skill is enabled and its scope includes that agent. Coffer checks this again whenever either changes, and repairs broken links when the daemon starts. `coffer-guide` is Coffer's own skill. It is rebuilt from the running build and delivered like any other, and it tells the agent about Coffer's tools and your knowledge collections.
+A **skill** is a folder containing a `SKILL.md` in the [AgentSkills](https://agentskills.io) format. Coffer keeps one master copy of each skill in `~/.coffer/vault/skills/<name>/` and **delivers** it by linking that folder into each agent's `skills/` directory. A skill is delivered to an agent only while the skill is enabled and its scope includes that agent. Coffer checks this again whenever either changes, and repairs broken links when the daemon starts. `coffer-guide` is Coffer's own skill. It is rebuilt from the running build and delivered like any other, and it tells the agent about Coffer's tools and your knowledge collections.
 
 Guide: [Skills](/guides/skills).
 
 ## Knowledge collections and curation
 
-A **collection** is a folder under `~/.coffer/knowledge/<collection>/` holding one tree of Markdown documents that you and Coffer write together. A document's path is its identity. You can edit documents in any editor, and agents read them with their own file tools, finding them through the catalogue in `coffer-guide`. New material, whether from `coffer__write`, an upload or a channel, first lands in the collection's hidden `.inbox/`. A **curation** pass run by Coffer's own model then merges it into the existing documents. With no model configured, each item becomes a document on its own.
+A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and Coffer write together. A document's path is its identity. You can edit documents in any editor, and agents read them with their own file tools, finding them through the catalogue in `coffer-guide`. New material, whether from `coffer__write`, an upload or a channel, first lands in the collection's hidden `.inbox/`. A **curation** pass run by Coffer's own model then merges it into the existing documents. With no model configured, each item becomes a document on its own.
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
 ## Memory partitions
 
-Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It distils what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. Everything there is derived and can be rebuilt. If you install a delivery hook for an agent, Coffer hands that agent the index at session start, the few notes each prompt names, and, before a command you marked as a known trap, the note that says why. A turn that arrives from a channel carries the index in its system prompt instead.
+Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It distils what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/derived/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. Everything there is derived and can be rebuilt. If you install a delivery hook for an agent, Coffer hands that agent the index at session start, the few notes each prompt names, and, before a command you marked as a known trap, the note that says why. A turn that arrives from a channel carries the index in its system prompt instead.
 
 Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 

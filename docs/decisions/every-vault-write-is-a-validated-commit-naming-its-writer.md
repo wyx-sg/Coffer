@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-sync "Snapshot before applying and roll back from it"
+**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-sync "Snapshot before checking out and roll a round back from it"
 
 ## Context
 
@@ -164,13 +164,13 @@ snapshots.
   human write: the daemon sees `HEAD` move, validates the new tree, and flags
   what fails. A person who rewrites history that has already been pushed is told
   the next round must rejoin the remote.
-- **Credentials when not carried.** With `include_credentials` off,
-  `vault/credentials/` is excluded from every commit, so there is no local
+- **Secrets when not carried.** With `include_secret` off,
+  `vault/secret/` is excluded from every commit, so there is no local
   history of ciphertext either. Keeping one in a separate ignored repository
   was considered: it would let a person roll a secret back, but it retains the
   old ciphertext of every rotated or compromised secret indefinitely — the
   thing rotation exists to retire — and a Fernet key read once would open all
-  of it. Rolling a secret back is re-entering it. With `include_credentials`
+  of it. Rolling a secret back is re-entering it. With `include_secret`
   on, ciphertext is committed because it must be pushed, and its history is the
   remote's, as today. Stripping ciphertext from commits only at push time is
   not possible without rewriting the commits, which would break `HEAD` as the
@@ -262,3 +262,25 @@ carries credentials.
   refused rather than lost, that an invalid edit leaves `HEAD` in effect, and
   that a restore produces a new commit with the restored bytes; the skill
   History tab (versions, writer, diff, restore) as the first UI consumer.
+
+## Implementation notes (2026-09-30)
+
+Where the adopting change departs from the text above, and why:
+
+- **The writer vocabulary is six words**, written as `Coffer-Writer` and as the
+  author `Coffer (<writer>)`: `user` (a person through a Coffer surface),
+  `disk` (a change found in the working tree that no Coffer operation made — an
+  editor, a shell, an agent's own file tools, a person's own `git commit`),
+  `agent`, `daemon`, `curation` and `sync`. `disk` replaces `human`, because the
+  scanner cannot tell a person's editor from an agent's file tool; the audit
+  row for such a change keeps the actor `human` (`vault_file_edited`, one row
+  per file). A commit without trailers reads as `disk`.
+- **`rev` stays an integer counter** kept in the derived index, not a field of
+  the file (see [A Resource's Identity Is the `uid` Inside Its File](identity-is-the-uid-inside-the-file.md)).
+- **The fingerprint is mandatory** on every content write surface — saving a
+  skill file, saving a knowledge document, restoring a version. There is no
+  unconditional mode; a stale fingerprint is `VAULT_FILE_STALE` (409), which the
+  skill and knowledge surfaces report under their own codes.
+- **The audit backfill is not built.** When the audit row cannot be written,
+  the failure is logged and the commit stands, as decided; commits without an
+  audit row are not yet found and backfilled at boot.

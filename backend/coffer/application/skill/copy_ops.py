@@ -6,7 +6,7 @@ real folder at an agent's link path (that is drift kind
 ``replaced_with_regular``, left alone by every pass); these are the two
 choices a person confirms instead, after comparing the two sides:
 
-- keep **master** — the folder is moved to ``~/.coffer/backup/skills/<agent>/
+- keep **master** — the folder is moved to ``~/.coffer/content/backup/skills/<agent>/
   <name>-<UTC stamp>/`` (never deleted) and Coffer's link is made in its place;
 - keep the **agent**'s version — its files become the master (every other
   agent sees them at once through its link), then the folder is backed up the
@@ -88,7 +88,7 @@ async def _pair(
 ) -> tuple[Resource, Resource, pathlib.Path, pathlib.Path]:
     skill = await service.get_skill(skill_uid)
     agent = await service._rs.get(agent_uid)
-    binding = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
+    binding = await service._bindings.find(skill_uid=skill.uid, agent_uid=agent.uid)
     link = _link_for(service, skill, agent, binding)
     master = pathlib.Path(service._store.paths_for(skill.name).folder)
     if not _is_foreign(service, link, master, binding.link_mode if binding else None):
@@ -112,9 +112,9 @@ async def compare(service: SkillService, *, skill_uid: str, agent_uid: str) -> C
 def _backup(
     service: SkillService, agent: Resource, name: str, folder: pathlib.Path
 ) -> pathlib.Path:
-    """Move ``folder`` under ``~/.coffer/backup/skills/<agent>/`` — never delete it."""
+    """Move ``folder`` under ``~/.coffer/content/backup/skills/<agent>/`` — never delete it."""
     stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    root = pathlib.Path(service._store.root).parent / "backup" / "skills" / agent.name
+    root = pathlib.Path(service._store.backup_root) / agent.name
     root.mkdir(parents=True, exist_ok=True)
     dest = root / f"{name}-{stamp}"
     shutil.move(str(folder), str(dest))
@@ -180,13 +180,13 @@ async def resolve(
 async def refuse_foreign_copies(service: SkillService, skill: Resource) -> None:
     """Refuse a delete that would leave (or wipe) a folder Coffer did not make."""
     master = pathlib.Path(service._store.paths_for(skill.name).folder)
-    agents = {a.id: a for a in await service.list_agents()}
-    for b in await service._bindings.list_for_skill(skill.id):
+    agents = {a.uid: a for a in await service.list_agents()}
+    for b in await service._bindings.list_for_skill(skill.uid):
         if not b.enabled or not b.last_link_path:
             continue
         link = pathlib.Path(b.last_link_path)
         if _is_foreign(service, link, master, b.link_mode):
-            agent = agents.get(b.agent_resource_id)
+            agent = agents.get(b.agent_uid)
             raise SkillCopyNotOurs(skill.name, str(link), agent.name if agent else "")
 
 

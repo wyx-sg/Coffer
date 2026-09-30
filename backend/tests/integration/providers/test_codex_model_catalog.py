@@ -32,7 +32,6 @@ _NOW = datetime(2026, 9, 11, tzinfo=UTC)
 
 def _agent(config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid="bd93f0a1c2e34556778899aabbccddee",
         kind="agent",
         name="cx",
@@ -60,7 +59,6 @@ def _connection(models: list[CuratedModel]) -> tuple[Resource, ProviderConfig]:
         models=models,
     )
     resource = Resource(
-        id=2,
         uid="0f1e2d3c4b5a69788796a5b4c3d2e1f0",
         kind="provider",
         name="agnes",

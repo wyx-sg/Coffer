@@ -72,11 +72,11 @@ class SkillSourceService:
 
     # ---------- a Git-imported skill's updates ----------
 
-    async def statuses(self) -> dict[int, SourceStatus]:
+    async def statuses(self) -> dict[str, SourceStatus]:
         return await self.status_repo.list_all()
 
     async def status(self, skill: Resource) -> SourceStatus | None:
-        return await self.status_repo.get(skill.id)
+        return await self.status_repo.get(skill.uid)
 
     async def check(self, uid: str) -> SourceStatus:
         return await update_ops.check(self, await self.skills.get_skill(uid))

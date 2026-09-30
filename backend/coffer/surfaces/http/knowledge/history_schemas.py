@@ -3,8 +3,8 @@ document's history and undo a pass as a whole", "Follow knowledge changes
 across collections").
 
 Each mirrors a value object in ``domain.knowledge.history``. A change is one
-git commit of the knowledge history, named by its commit id (``version``) and
-by the writer its trailers record.
+vault commit that touched ``knowledge/``, named by its commit id (``version``)
+and by the writer its trailers record.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from coffer.domain.knowledge.history import (
+    WRITER_DISK,
+    WRITERS,
     Change,
     ChangeDetail,
     DocumentDiff,
@@ -71,7 +73,10 @@ def change_out(change: Change) -> ChangeOut:
     return ChangeOut(
         version=change.version,
         time=change.time,
-        writer=meta.writer,  # type: ignore[arg-type]
+        # The vault's ``daemon`` writer (a layout upgrade touching knowledge)
+        # is not a knowledge writer; it is Coffer acting on the files outside
+        # any knowledge operation, which the contract names ``disk``.
+        writer=meta.writer if meta.writer in WRITERS else WRITER_DISK,  # type: ignore[arg-type]
         operation=meta.operation,
         summary=meta.summary,
         actor=meta.actor,

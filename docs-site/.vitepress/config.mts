@@ -61,7 +61,9 @@ const guides = [
     text: 'Operating Coffer',
     items: [
       { text: 'Running the daemon', link: '/guides/daemon' },
+      { text: 'Editing the vault by hand', link: '/guides/vault-files' },
       { text: 'Vault sync', link: '/guides/vault-sync' },
+      { text: 'Upgrading an existing Coffer', link: '/guides/upgrading' },
       { text: 'Activity and audit', link: '/guides/activity' },
       { text: 'Experimental features', link: '/guides/experimental-features' },
       { text: 'Troubleshooting', link: '/guides/troubleshooting' },

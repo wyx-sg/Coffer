@@ -74,7 +74,7 @@ The request form asks for:
 - **Body template** — for POST, PUT or PATCH, JSON with holes: `{"service": {service}, "note": "rollback by {user}"}`. A hole outside quotes becomes the argument's JSON value; inside quotes it becomes text. With no template, the arguments the path and headers did not use are sent as a JSON object.
 - **Arguments** — name, type, whether it is required, and a description for the agent. Every hole must be an argument.
 
-Nothing is saved until **Add to <group>**. A saved tool opens in a drawer on the group's page, where the same fields (except the name) are edited, with its **Available to**, an **On** switch and **Delete tool**; nothing changes until **Save**.
+Nothing is saved until **Add to `<group>`**. A saved tool opens in a drawer on the group's page, where the same fields (except the name) are edited, with its **Available to**, an **On** switch and **Delete tool**; nothing changes until **Save**.
 
 ```sh
 coffer tool op add deploy rollback --method POST \

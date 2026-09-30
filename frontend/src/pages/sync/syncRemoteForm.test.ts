@@ -7,7 +7,7 @@ const base: FormState = {
   url: "https://git.example.com/me/vault.git",
   branch: "main",
   secretRef: "",
-  includeSecrets: false,
+  includeSecret: false,
   intervalSeconds: 3600,
 };
 
@@ -54,7 +54,7 @@ describe("isDirty", () => {
   });
 
   test("any real difference counts", () => {
-    expect(isDirty({ ...base, includeSecrets: true }, base)).toBe(true);
+    expect(isDirty({ ...base, includeSecret: true }, base)).toBe(true);
     expect(isDirty({ ...base, intervalSeconds: 120 }, base)).toBe(true);
     expect(isDirty({ ...base, branch: "vault" }, base)).toBe(true);
   });

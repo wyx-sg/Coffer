@@ -5,13 +5,11 @@ Curation rewrites a collection's documents with no review step (spec knowledge
 safety net after the fact but the properties checked here: it is fenced to one
 collection's documents, it cannot write more than a handful of files, it cannot
 record a reference that will rot, and an item it did not finish absorbing stays
-owed — material stays in the inbox, an edited document stays unstamped.
+owed — material stays in the inbox, an edited document stays unsettled.
 """
 
 from __future__ import annotations
 
-import os
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,6 +29,7 @@ from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 class _Resources:
@@ -38,7 +37,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 # A uid a test can spell, and deliberately not the name: a
                 # lookup that worked because the two matched would prove
                 # nothing about addressing a collection by identity.
@@ -129,8 +127,7 @@ class _Loop:
 
 @pytest.fixture(autouse=True)
 def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    root = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(root))
+    root = _knowledge_root()
     fs.create_collection_dir("shopee")
     return root
 
@@ -272,8 +269,6 @@ async def test_an_oversized_edited_document_is_stamped_and_not_offered_again(
     target = paths.resolve(relpath)
     edited = "y" * (MAX_SOURCE_CHARS + 1)
     target.write_text(target.read_text().replace("short", edited))
-    later = time.time() + 5
-    os.utime(target, (later, later))
     stamped_before = fs.read_file(relpath).curated_at
     assert pending_items("shopee") == (Pending(document=relpath),)
 
@@ -353,8 +348,6 @@ async def test_a_cut_off_pass_over_an_edited_document_leaves_it_unstamped(
     relpath = _document("Login state", body="the old wording")
     target = paths.resolve(relpath)
     target.write_text(target.read_text().replace("the old wording", "the new wording"))
-    later = time.time() + 5
-    os.utime(target, (later, later))
     stamped_before = fs.read_file(relpath).curated_at
 
     outcome = await _run(_CutOffLoop([]))
@@ -412,12 +405,11 @@ async def test_an_edited_document_is_carried_through_then_stamped(knowledge_root
     relpath = _document("Login state", body="the old wording")
     assert pending_items("shopee") == ()
 
-    # A person rewrites it in their own editor: no stamp moves, the mtime does.
+    # A person rewrites it in their own editor: its content is no longer what
+    # curation settled.
     target = paths.resolve(relpath)
     fm_and_body = target.read_text().replace("the old wording", "the corrected wording")
     target.write_text(fm_and_body)
-    later = time.time() + 5
-    os.utime(target, (later, later))
     assert pending_items("shopee") == (Pending(document=relpath),)
 
     loop = _Loop([])
@@ -429,7 +421,7 @@ async def test_an_edited_document_is_carried_through_then_stamped(knowledge_root
     assert f"The document a person edited: {relpath}" in loop.prompt
     assert "the corrected wording" in loop.prompt
     # And once carried through, it is not handed back on the next sweep — nor
-    # is the person's wording touched by the stamp.
+    # is the person's wording touched by settling it.
     assert pending_items("shopee") == ()
     assert "the corrected wording" in fs.read_file(relpath).body
 
@@ -832,8 +824,6 @@ async def test_an_edited_document_cut_off_three_times_running_is_stamped(
     relpath = _document("Login state", body="the old wording")
     target = paths.resolve(relpath)
     target.write_text(target.read_text().replace("the old wording", "the new wording"))
-    later = time.time() + 5
-    os.utime(target, (later, later))
     pass_ = _cut_off_pass(_CutOffLoop([]))
 
     outcomes = [await pass_(_service(), _SHOPEE_UID) for _ in range(3)]
@@ -853,7 +843,6 @@ async def test_a_completed_pass_resets_the_cut_off_count(knowledge_root) -> None
 
     def edit(old: str, new: str, offset: float) -> None:
         target.write_text(target.read_text().replace(old, new))
-        os.utime(target, (time.time() + offset, time.time() + offset))
 
     class _Scripted(_Loop):
         def __init__(self, truncs: list[bool]) -> None:
@@ -889,7 +878,6 @@ async def test_an_item_shelved_as_too_large_starts_its_cut_off_count_again(
 
     def edit(old: str, new: str, offset: float) -> None:
         target.write_text(target.read_text().replace(old, new))
-        os.utime(target, (time.time() + offset, time.time() + offset))
 
     ledger = TruncationLedger()
     edit("v1", "v2", 5)

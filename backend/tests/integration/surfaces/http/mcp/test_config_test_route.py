@@ -36,7 +36,6 @@ _URL = "/api/v1/resources/mcp_server/test-config"
 def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
     app = create_app()
     set_active_token(_TOKEN)
@@ -62,10 +61,18 @@ def _stdio(*args: str, **transport: object) -> dict[str, object]:
 def test_a_stdio_config_is_tested_without_saving_anything(
     app_client: TestClient, tmp_path: Path
 ) -> None:
+    # Nothing saved anywhere: no history row, no health row, no vault file.
     db = tmp_path / "c.db"
-    before = {
-        t: _count(db, t) for t in ("resources", "mcp_server_health", "mcp_invocations", "audit_log")
-    }
+    derived = tmp_path / ".coffer" / "derived" / "derived.db"
+    vault_files = tmp_path / ".coffer" / "vault" / "resources" / "mcp_server"
+
+    def snapshot() -> dict[str, object]:
+        out: dict[str, object] = {t: _count(db, t) for t in ("mcp_invocations", "audit_log")}
+        out["mcp_server_health"] = _count(derived, "mcp_server_health") if derived.exists() else 0
+        out["files"] = sorted(p.name for p in vault_files.glob("*")) if vault_files.exists() else []
+        return out
+
+    before = snapshot()
     body = _stdio(_FAKE, "--tools", "read", "write", "--resources", "file:///a", "--prompts", "p")
     r = app_client.post(_URL, json={**body, "name": "fs"})
     assert r.status_code == 200, r.text
@@ -74,8 +81,7 @@ def test_a_stdio_config_is_tested_without_saving_anything(
     assert [t["name"] for t in out["tools"]] == ["read", "write"]
     assert (out["tool_count"], out["resource_count"], out["prompt_count"]) == (2, 1, 1)
     assert out["error_code"] is None
-    after = {t: _count(db, t) for t in before}
-    assert after == before
+    assert snapshot() == before
     assert (
         app_client.get("/api/v1/resources", params={"kind": "mcp_server"}).json()["resources"] == []
     )

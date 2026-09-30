@@ -34,7 +34,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
@@ -47,6 +47,7 @@ from coffer.surfaces.http.proxy_routes import router as proxy_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from tests.support.facets import agent_catalog
 from tests.support.no_approvals import router as no_approvals_router
+from tests.support.vault_stores import make_resource_repo
 
 _runner = CliRunner()
 _TOKEN = "test-token-011-cli"
@@ -99,7 +100,7 @@ def provider_daemon(tmp_path, monkeypatch):
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     resources = ResourceService(
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
         secrets=store,
     )

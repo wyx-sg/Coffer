@@ -21,7 +21,8 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 class _Config(BaseModel):
@@ -41,7 +42,7 @@ async def _service(tmp_path: pathlib.Path) -> tuple[ResourceService, list[Change
     }
     svc = ResourceService(
         kinds=kinds,
-        repo=HintingResourceRepo(SqlAlchemyResourceRepo(sm), hints.append),
+        repo=HintingResourceRepo(make_resource_repo(), hints.append),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     return svc, hints
@@ -87,7 +88,7 @@ async def test_a_failing_hint_sink_never_fails_the_write(tmp_path: pathlib.Path)
 
     svc = ResourceService(
         kinds={"thing": Kind(name="thing", display_name="Thing", config_schema=_Config)},
-        repo=HintingResourceRepo(SqlAlchemyResourceRepo(sm), _boom),
+        repo=HintingResourceRepo(make_resource_repo(), _boom),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     r = await svc.register(kind="thing", name="a", config={"foo": 1}, actor="cli")

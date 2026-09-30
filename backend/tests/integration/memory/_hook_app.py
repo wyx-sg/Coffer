@@ -89,10 +89,6 @@ def boot(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ho
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", str(PORT))
     monkeypatch.setenv("COFFER_PORT_RANGE_END", str(PORT + 9))
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "skills"))
-    monkeypatch.delenv("COFFER_MEMORY_TRIGGERS_ROOT", raising=False)
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")

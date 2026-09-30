@@ -1,11 +1,11 @@
 """Folders in the skills store that no skill claims ("Not in your library").
 
 Spec skill-manager "Act on a folder in the skills store that no skill claims".
-A folder copied into ``~/.coffer/skills/`` by hand, or left behind by an
+A folder copied into ``~/.coffer/vault/skills/`` by hand, or left behind by an
 interrupted import, reaches no agent. The drift report lists it
 (``orphan_master``); these are the two things a person can do with it: add
 it to the library in place, or move it out of the store (to
-``~/.coffer/backup/skills/orphans/``, never a hard delete).
+``~/.coffer/content/backup/skills/orphans/``, never a hard delete).
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ async def remove_orphan(service: SkillService, *, name: str, actor: str) -> path
     """Move the folder out of the store into the backup folder."""
     folder = await _folder(service, name)
     stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    root = pathlib.Path(service._store.root).parent / "backup" / "skills" / "orphans"
+    root = pathlib.Path(service._store.backup_root) / "orphans"
     root.mkdir(parents=True, exist_ok=True)
     dest = root / f"{name}-{stamp}"
     shutil.move(str(folder), str(dest))

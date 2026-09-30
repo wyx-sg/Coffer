@@ -51,10 +51,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from tests.support.facets import TEST_COFFER_CLI, agent_catalog
 from tests.support.homes import FakeAgentDir, IsolatedHome, fake_agent_dir
+from tests.support.vault_stores import make_resource_repo
 
 pytestmark = pytest.mark.asyncio
 
@@ -98,7 +99,7 @@ async def rig(isolated_home: IsolatedHome) -> AsyncIterator[_Rig]:
     audit = AuditService(repo)
     rs = ResourceService(
         kinds={"agent": make_agent_kind(on_delete=None)},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     store = ConfigFileStore()
@@ -255,7 +256,9 @@ async def test_an_audit_that_cannot_be_recorded_puts_the_file_back(
 def _fingerprint(root: pathlib.Path) -> dict[str, tuple[int, str, int]]:
     out: dict[str, tuple[int, str, int]] = {}
     for p in sorted(root.rglob("*")):
-        if p.is_file() and not p.is_symlink():
+        # SQLite's ``-shm`` is the WAL index every *reader* updates: a read of
+        # runs.db touches it without writing anything.
+        if p.is_file() and not p.is_symlink() and not p.name.endswith("-shm"):
             st = p.stat()
             digest = hashlib.sha256(p.read_bytes()).hexdigest()
             out[str(p.relative_to(root))] = (st.st_size, digest, st.st_mtime_ns)

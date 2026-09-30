@@ -7,7 +7,7 @@ that tool.
 
 The rows are STORED by the server's uid and the counts come back keyed by its
 name, because the tiering policy ranks the namespaced wire names a
-``tools/list`` carries. The join that bridges the two lives in the repo, and the
+``tools/list`` carries. The uid -> name resolution lives in the repo, and the
 tests below pin both of its consequences: a renamed server's whole history
 counts under its current name, and a row that resolves to no server is left out.
 """
@@ -17,7 +17,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import sqlalchemy as sa
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.invocation_writer import MCPInvocationRepo
@@ -32,33 +31,23 @@ CONFLUENCE_UID = "0099887766ff55ee44dd33cc22bb11aa"
 GONE_UID = "1234567890abcdef1234567890abcdef"
 
 
+#: The server names the resource store answers for each uid; a test renames
+#: a server by changing its entry.
+_NAMES: dict[str, str] = {}
+
+
 async def _make_repo(tmp_path):
-    """A repo plus the two ``mcp_server`` rows its counts join against."""
+    """A repo whose uid -> name lookup knows the two ``mcp_server`` resources."""
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    sm = session_maker(engine)
-    async with sm() as session:
-        for uid, name in ((JIRA_UID, "jira"), (CONFLUENCE_UID, "confluence")):
-            await session.execute(
-                sa.text(
-                    "INSERT INTO resources (uid, kind, name, config_json, enabled,"
-                    " created_at, updated_at)"
-                    " VALUES (:uid, 'mcp_server', :name, '{}', 1, :t, :t)"
-                ),
-                {"uid": uid, "name": name, "t": datetime.now(tz=UTC)},
-            )
-        await session.commit()
-    return MCPInvocationRepo(sm), engine
+    _NAMES.clear()
+    _NAMES.update({JIRA_UID: "jira", CONFLUENCE_UID: "confluence"})
+    return MCPInvocationRepo(session_maker(engine), name_of=_NAMES.get), engine
 
 
 async def _rename(engine, uid: str, new_name: str) -> None:
-    async with session_maker(engine)() as session:
-        await session.execute(
-            sa.text("UPDATE resources SET name = :n WHERE uid = :uid"),
-            {"n": new_name, "uid": uid},
-        )
-        await session.commit()
+    _NAMES[uid] = new_name
 
 
 def _inv(

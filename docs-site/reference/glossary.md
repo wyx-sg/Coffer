@@ -1,6 +1,6 @@
 ---
 title: Glossary
-description: Definitions of the terms Coffer uses, from reach and kind to converge round and curation pass, each linked to the page that explains it.
+description: Definitions of the terms Coffer uses, from reach and kind to sync round and curation pass, each linked to the page that explains it.
 outline: 2
 ---
 
@@ -93,7 +93,7 @@ receive notifications when you are away from the machine. A channel is a
 ### Collection
 
 One knowledge tree: a directory of Markdown documents under
-`~/.coffer/knowledge/<collection>/`, written together by you and Coffer. A collection is a
+`~/.coffer/vault/knowledge/<collection>/`, written together by you and Coffer. A collection is a
 [resource](#resource) of kind `knowledge`. See [Knowledge](/guides/knowledge).
 
 ### `coffer-guide`
@@ -116,12 +116,6 @@ the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-co
 A model-provider profile: a wire protocol, a base URL and one secret. Switching a
 connection on for an agent [projects](#projection) it into that agent's config. A connection
 is a [resource](#resource) of kind `provider`. See [Model providers](/guides/providers).
-
-### Converge round
-
-One pass of [vault sync](#vault-sync): Coffer exports the vault into a git working tree and
-commits it, merges the remote branch, applies the merged diff back into the vault, pushes, and
-advances the [pointer](#pointer). See [Vault sync](/architecture/vault-sync#the-converge-round).
 
 ### Curation owner
 
@@ -153,12 +147,13 @@ and API token, mode `0600`, written at start and removed at exit. Its companion
 `daemon-config.json` holds settings read before the daemon binds: the fixed port, the machine
 name and the experimental-feature switches. See [Files and directories](/reference/filesystem#daemon-files).
 
-### Deletion guard
+### Deletion breaker
 
-The [vault sync](#vault-sync) safeguard that holds a [converge round](#converge-round)
-whose diff would lose 20 or more documents, or more than 20% of an area, in either
-direction, until you confirm or reject it with `coffer sync confirm` or `coffer sync reject`.
-See [Vault sync](/architecture/vault-sync#the-deletion-guard).
+The [vault sync](#vault-sync) safeguard that holds a [sync round](#sync-round) that would
+lose 20 or more files, or more than 20% of an area, in either direction, until you answer
+it with `coffer sync hold --confirm` (delete the files) or `coffer sync hold --restore`
+(keep them). Moves and renames are not losses. See
+[Vault sync](/architecture/vault-sync#the-deletion-breaker).
 
 ### Delivery
 
@@ -218,6 +213,16 @@ The record of every MCP call through the gateway, upstream and built-in: server,
 duration, status (`ok`, `error`, `timeout` or `denied`) and session. It never holds arguments or
 results. See [Observability](/architecture/observability#the-mcp-invocation-log).
 
+## J
+
+### Join
+
+How a machine starts syncing with a remote it has never synced with, always previewed and
+never automatic: against an empty remote it pushes its vault; as a new machine it takes the
+union, deleting nothing and leaving files that differ for you to choose; as a returning
+machine it resumes from the commit its descriptor names. Run with `coffer sync join`. See
+[Vault sync](/architecture/vault-sync#joining).
+
 ## K
 
 ### Kind
@@ -245,7 +250,7 @@ machine with `coffer sync key import`. See [Secret store](/guides/secret-store#w
 
 ### Master store
 
-`~/.coffer/skills/`, where Coffer keeps the one authoritative copy of every managed
+`~/.coffer/vault/skills/`, where Coffer keeps the one authoritative copy of every managed
 [skill](#skill). Agents receive symlinks into it. See [Skills](/guides/skills).
 
 ### Material
@@ -305,20 +310,15 @@ with it becomes the channel's owner, and every other sender is ignored silently.
 ### Partition
 
 One unit of Coffer's memory: `global`, or one repository. Each partition is a directory
-under `~/.coffer/memory/` holding its [notes](#note), its `MEMORY.md` index and its
+under `~/.coffer/derived/memory/` holding its [notes](#note), its `MEMORY.md` index and its
 [raw entries](#raw-entry). A partition is a [resource](#resource) of kind `memory`. See
 [Memory](/guides/memory).
 
-### Pointer
-
-The machine-local record of the last commit this vault provably absorbed from the sync
-remote. Every [converge round](#converge-round) diffs against it; a machine with no pointer
-is joining. See [Vault sync](/architecture/vault-sync#the-pointer-the-retry-set-and-the-not-applicable-set).
-
 ### Pre-apply snapshot
 
-A git tag Coffer places before applying a [converge round](#converge-round), so the round
-can be rolled back with `coffer sync restore`. See [Vault sync](/architecture/vault-sync#recovery).
+A git tag (`refs/tags/coffer/pre-apply/<time>`, the ten newest kept) Coffer places before a
+[sync round](#sync-round) checks anything out, so the round can be rolled back with
+`coffer sync rollback <round>`. See [Vault sync](/architecture/vault-sync#rollback).
 
 ### Presence grant
 
@@ -363,12 +363,6 @@ memory partition or provider connection. Every resource has a [kind](#kind), an 
 Per-table limits on how long Coffer keeps log-like rows, such as the audit log and the
 [invocation log](#invocation-log), enforced by a background pruner. Manage it with
 `coffer config set retention.<table>`. See [Observability](/architecture/observability#retention).
-
-### Retry set
-
-The paths a [converge round](#converge-round) could not apply. Coffer retries them on the
-next round and never exports them as deletions meanwhile. See
-[Vault sync](/architecture/vault-sync#the-pointer-the-retry-set-and-the-not-applicable-set).
 
 ### `runs_on`
 
@@ -417,6 +411,22 @@ A secret that belongs to no resource, stored as `secret/<name>` (`coffer secret 
 secret/<name>`) and cited from skills and env files as `coffer://secret/<name>`. Commands use
 it through [`coffer run`](#coffer-run). Its name is fixed once created. See
 [Secrets](/guides/secrets).
+
+### Storage class
+
+One of the five kinds of state Coffer keeps, each in its own place under `~/.coffer`:
+`vault/` (your configuration and content, in git), `local/` (true of this machine only),
+`content/` (media and the chat workspace), `runs.db` (history) and `derived/` (rebuilt from
+the rest). The class decides whether something syncs and whether it is safe to delete. See
+[Persistence](/architecture/persistence).
+
+### Sync round
+
+One pass of [vault sync](#vault-sync): fetch the remote, merge it with this vault outside the
+working tree, stop on any conflict, run the [deletion breaker](#deletion-breaker), take a
+[pre-apply snapshot](#pre-apply-snapshot), check the merge out and push. A round that stops
+waits for an answer per file (`coffer sync resolve`, then `coffer sync continue`). See
+[Vault sync](/architecture/vault-sync#the-round).
 
 ## T
 
@@ -477,14 +487,18 @@ See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/archi
 
 ### Vault
 
-Everything Coffer holds for you on one machine, under `~/.coffer/`: the database of
-resources and encrypted secrets, the skill master store, knowledge collections and
-memory partitions. See [Files and directories](/reference/filesystem).
+The git repository at `~/.coffer/vault/` that holds your configuration and authored
+content: resource files, state documents, knowledge collections, skill folders, memory
+triggers, secret ciphertext and machine descriptors. It is a repository from the first use,
+and every accepted change is a commit naming its [writer](#writer). More loosely, everything
+Coffer keeps under `~/.coffer/`, in its five [storage classes](#storage-class). See
+[Editing the vault by hand](/guides/vault-files) and [Files and directories](/reference/filesystem).
 
 ### Vault sync
 
-Keeping vaults on several machines converged through one git remote you own, by repeated
-[converge rounds](#converge-round). See [Vault sync](/guides/vault-sync).
+Keeping the vaults on several machines the same by pulling and pushing the vault
+repository to one git remote you own, in repeated [sync rounds](#sync-round). See
+[Vault sync](/guides/vault-sync).
 
 ## W
 
@@ -493,3 +507,10 @@ Keeping vaults on several machines converged through one git remote you own, by 
 The API protocol a [connection](#connection) speaks: `anthropic`, `openai`, `ollama` or
 `unknown`. The wire decides which agents a connection can serve. See
 [Model providers](/guides/providers).
+
+### Writer
+
+Who made a commit in the [vault](#vault), named in its `Coffer-Writer` trailer: `user` (you,
+through a Coffer surface), `disk` (a file edited in an editor, a shell or an agent's own file
+tools), `agent`, `daemon`, `curation` or `sync`. `coffer vault history` and a skill's
+**History** tab show it. See [Editing the vault by hand](/guides/vault-files).

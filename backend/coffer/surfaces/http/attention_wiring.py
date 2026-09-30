@@ -23,7 +23,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
-from coffer.application.sync.service import ConvergeService
+from coffer.application.sync.service import SyncService
 from coffer.infrastructure.mcp.health_repo import MCPServerHealthRepo
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
@@ -36,7 +36,7 @@ def build_attention_sources(
     secret_store: EncryptedSecretStore,
     connection_service: AgentConnectionService,
     auto_detect: AutoDetectService,
-    sync_service: ConvergeService | None,
+    sync_service: SyncService | None,
     channel_service: ChannelService | None,
     health_repo: MCPServerHealthRepo | None,
     cli_service: CliRequirementService | None = None,
@@ -73,7 +73,7 @@ def lifespan_attention_sources(
     resource_svc: ResourceService,
     secret_store: EncryptedSecretStore,
     connection_service: AgentConnectionService,
-    sync_service: ConvergeService | None,
+    sync_service: SyncService | None,
 ) -> list[AttentionSource]:
     """:func:`build_attention_sources` with the services the kinds published
     while they were wired (the channel service, the agent detector, the MCP

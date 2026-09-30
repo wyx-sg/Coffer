@@ -16,11 +16,11 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyRetentionRepo,
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.persistence.retention_repo import (
+    FileRetentionRepo,
+    allowlist_from_registry,
 )
-from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_retention_service
@@ -45,7 +45,7 @@ async def _client(tmp_path, *extra_tables: PrunableTable):
     )
     for extra in extra_tables:
         registry.register(extra)
-    repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
+    repo = FileRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = RetentionService(registry=registry, repo=repo, audit=audit)
     await svc.initialize_defaults()

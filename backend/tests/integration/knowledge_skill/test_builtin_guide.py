@@ -28,6 +28,7 @@ from alembic.config import Config as AlembicConfig
 from starlette.testclient import TestClient
 
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
+from coffer.infrastructure.vault.reach_store import Reach, ReachStore, reach_path
 from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-builtin-guide"
@@ -50,7 +51,6 @@ _ALEMBIC_INI = (
 def home(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59660")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59669")
     return tmp_path
@@ -99,7 +99,7 @@ def _guide_uid(client: TestClient) -> str:
 
 
 def _master(home: pathlib.Path) -> pathlib.Path:
-    return home / ".coffer" / "skills" / GUIDE_SKILL_NAME / "SKILL.md"
+    return home / ".coffer" / "derived" / "skills" / GUIDE_SKILL_NAME / "SKILL.md"
 
 
 @pytest.mark.acceptance(
@@ -177,8 +177,10 @@ def test_the_guide_carries_the_manual_and_the_catalogue(home) -> None:  # type: 
     # The manual half.
     assert "coffer__search_tools" in text
     assert "never writes it" in text
-    # The catalogue half, at the root this machine actually reads from.
-    assert str(home / "knowledge") in text
+    # The catalogue half, at the root this machine actually reads from — named
+    # from the home, so the rendered bytes carry no machine's home directory.
+    assert "~/.coffer/vault/knowledge" in text
+    assert str(home) not in text
     # And no tool that does not exist. Retrieval tools were removed from this
     # layer; a manual that still named one would have a model calling it.
     for gone in ("coffer__read", "coffer__list", "coffer__grep", "coffer__search\n"):
@@ -236,21 +238,17 @@ def test_disabling_the_guide_is_allowed_and_reclaims_the_copy(home) -> None:  # 
 def test_every_collection_is_in_the_guide_whatever_its_row_says(home) -> None:  # type: ignore[no-untyped-def]
     """No collection can be switched off, so none leaves the catalogue.
 
-    A row an earlier version stored disabled is written straight into the
-    database — the migration that enables such rows is its own test — and the
-    next boot's render must still name it: the knowledge layer no longer reads
-    ``enabled`` at all. The generic resource route then refuses to disable
+    A collection an earlier version stored disabled is written straight into
+    this machine's reach record (``local/reach.json``), and the next boot's
+    render must still name it: the knowledge layer no longer reads ``enabled``
+    at all. The generic resource route then refuses to disable
     either collection and the master does not move (spec knowledge "Serve every
     collection to every agent").
     """
     with _client() as client:
         shopee = _seed_collection(client, "shopee", "Shopee's account system.")
         personal = _seed_collection(client, "personal", "Things that are nobody else's business.")
-    with sqlite3.connect(home / "c.db") as conn:
-        conn.execute(
-            "UPDATE resources SET enabled = 0 WHERE kind = 'knowledge' AND name = 'shopee'"
-        )
-        conn.commit()
+    ReachStore(reach_path()).put(shopee, Reach(enabled=False))
 
     with _client() as client:
         text = _master(home).read_text(encoding="utf-8")
@@ -288,7 +286,9 @@ def test_a_second_boot_rewrites_rather_than_duplicates(home) -> None:  # type: i
 
     assert master.read_text(encoding="utf-8") == original
     assert sorted(p.name for p in (config_dir / "skills").iterdir()) == [GUIDE_SKILL_NAME]
-    assert sorted(p.name for p in (home / ".coffer" / "skills").iterdir()) == [GUIDE_SKILL_NAME]
+    assert sorted(p.name for p in (home / ".coffer" / "derived" / "skills").iterdir()) == [
+        GUIDE_SKILL_NAME
+    ]
 
 
 def test_the_seed_writes_nothing_when_the_catalogue_has_not_moved(home) -> None:  # type: ignore[no-untyped-def]
@@ -401,7 +401,7 @@ def test_the_master_folder_carries_no_machine_specific_provenance(home) -> None:
     with _client():
         pass
 
-    meta = home / ".coffer" / "skills" / GUIDE_SKILL_NAME / ".coffer.meta.json"
+    meta = home / ".coffer" / "derived" / "skills" / GUIDE_SKILL_NAME / ".coffer.meta.json"
     assert meta.is_file()
     assert json.loads(meta.read_text(encoding="utf-8")) == {
         "name": GUIDE_SKILL_NAME,

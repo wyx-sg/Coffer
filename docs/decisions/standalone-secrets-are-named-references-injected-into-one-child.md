@@ -22,7 +22,7 @@ says credentials live "in a credential store or a file such as
 `~/.coffer/secrets/<name>.env` with mode 600". In practice that file is the
 only option a skill author has, because nothing in Coffer can hand a secret to
 a command. The store already accepts an arbitrary ref
-(`coffer credentials set <ref>`, `POST /api/v1/credentials`), but:
+(`coffer secret set <ref>`, `POST /api/v1/credentials`), but:
 
 - nothing resolves a ref for a command a person or an agent runs;
 - `coffer credentials list` and `GET /api/v1/credentials` (`list_cited_refs`,

@@ -96,8 +96,9 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: When curation last had this document in front of it; empty when it
-    #: never has ("Settle an item only after its pass completes").
+    #: When curation last settled this document as it now reads; empty when
+    #: it never has, or it changed since ("Settle an item only after its pass
+    #: completes").
     curated_at: str = ""
     #: sha256 hex of the file's bytes as read — what an edit hands back so a
     #: file changed on disk since is refused rather than overwritten (spec

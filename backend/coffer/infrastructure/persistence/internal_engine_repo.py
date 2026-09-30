@@ -1,18 +1,31 @@
-"""SQLAlchemy InternalEngineConfigRepo — the singleton row of Coffer's own settings.
+"""Coffer's own settings as a vault document (plan D13; spec vault-storage).
 
-Split out of ``repos.py`` to keep that module within the file-size budget, as
-``retention_repo`` was before it; the public name
-``SqlAlchemyInternalEngineConfigRepo`` is re-exported from ``repos`` so existing
-import sites keep working.
+The engine's model, what it may run unattended and how often, the one machine
+allowed to curate: every field is a decision the person made for the whole
+fleet, so the settings are one vault document,
+``state/settings/internal-engine.json``::
+
+    {"format_version": 1, "model": "...", "curate_owner_machine_id": null,
+     "model_timeout_s": null, "transcribe_model": null,
+     "upkeep": {"aggregate": {"enabled": true, "interval_s": null}, ...}}
+
+A vault that never chose anything has no document, and reads as the defaults
+(``get`` answers ``None``); a change back to every default removes the
+document, so "the defaults" is always the absence of one. ``updated_at`` is
+not in the document — two machines stamping it would conflict on every edit — so it is local, in
+``local/engine.json``: when *this* machine last changed the settings.
+
+Each setter writes only its own fields: read-modify-write against ``HEAD``, so
+a change restating fields the caller never looked at cannot undo another
+machine's edit that arrived meanwhile.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from pathlib import Path
+from typing import Any
 
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
@@ -21,31 +34,114 @@ from coffer.domain.internal_engine_config import (
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
-from coffer.infrastructure.persistence.models import InternalEngineConfigModel
+from coffer.infrastructure.vault.home import local_root
+from coffer.infrastructure.vault.json_store import JsonStore
+from coffer.infrastructure.vault.state_documents import StateDocument
 
-#: Which pair of columns each unattended pass keeps its switch and timer in.
-#: One table rather than a branch per pass, so adding a pass is one entry.
-_UPKEEP_COLUMNS = {
-    AGGREGATE: ("auto_aggregate_enabled", "aggregate_interval_s"),
-    DISTIL: ("auto_distil_enabled", "distil_interval_s"),
-    CURATE: ("auto_curate_enabled", "curate_interval_s"),
-}
+AREA = "settings"
+DOC = "internal-engine"
+_PASSES = (AGGREGATE, DISTIL, CURATE)
 
 
-class SqlAlchemyInternalEngineConfigRepo:
-    """Concrete repo for the singleton ``internal_engine_config`` row."""
+def engine_local_path() -> Path:
+    return local_root() / "engine.json"
 
-    def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = sm
+
+def _int(raw: Any) -> int | None:
+    return int(raw) if isinstance(raw, int | float) and not isinstance(raw, bool) else None
+
+
+def _str(raw: Any) -> str | None:
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _upkeep(doc: Mapping[str, Any], name: str) -> UpkeepSetting:
+    block = doc.get("upkeep")
+    entry = block.get(name) if isinstance(block, dict) else None
+    if not isinstance(entry, dict):
+        return UpkeepSetting(enabled=True)
+    return UpkeepSetting(
+        enabled=entry.get("enabled", True) is not False, interval_s=_int(entry.get("interval_s"))
+    )
+
+
+def _to_domain(doc: Mapping[str, Any], updated_at: datetime) -> GlobalInternalEngineConfig:
+    aggregate, distil, curate = (_upkeep(doc, name) for name in _PASSES)
+    return GlobalInternalEngineConfig(
+        model=_str(doc.get("model")),
+        updated_at=updated_at,
+        auto_curate_enabled=curate.enabled,
+        curate_owner_machine_id=_str(doc.get("curate_owner_machine_id")),
+        auto_aggregate_enabled=aggregate.enabled,
+        aggregate_interval_s=aggregate.interval_s,
+        auto_distil_enabled=distil.enabled,
+        distil_interval_s=distil.interval_s,
+        curate_interval_s=curate.interval_s,
+        model_timeout_s=_int(doc.get("model_timeout_s")),
+        transcribe_model=_str(doc.get("transcribe_model")),
+    )
+
+
+def _to_doc(config: GlobalInternalEngineConfig) -> dict[str, Any]:
+    return {
+        "model": config.model,
+        "curate_owner_machine_id": config.curate_owner_machine_id,
+        "model_timeout_s": config.model_timeout_s,
+        "transcribe_model": config.transcribe_model,
+        "upkeep": {
+            name: {
+                "enabled": config.upkeep(name).enabled,
+                "interval_s": config.upkeep(name).interval_s,
+            }
+            for name in _PASSES
+        },
+    }
+
+
+#: What a vault that never chose anything holds, as a document.
+_DEFAULT_DOC = _to_doc(_to_domain({}, datetime.fromtimestamp(0, tz=UTC)))
+
+
+class VaultInternalEngineConfigRepo:
+    """``InternalEngineConfigRepo`` over ``state/settings/internal-engine.json``."""
+
+    def __init__(
+        self,
+        *,
+        home: Path | None = None,
+        local_path: Path | Callable[[], Path] = engine_local_path,
+    ) -> None:
+        self.document = StateDocument(AREA, DOC, home=home)
+        self._local = JsonStore(local_path)
+
+    def _updated_at(self) -> datetime:
+        raw = self._local.read().get("updated_at")
+        if isinstance(raw, str):
+            try:
+                value = datetime.fromisoformat(raw)
+                return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+            except ValueError:
+                pass
+        return datetime.now(tz=UTC)
 
     async def get(self) -> GlobalInternalEngineConfig | None:
-        async with self._sm() as session:
-            stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                return None
-            updated = row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC)
-            return self._to_domain(row, updated)
+        doc = self.document.get()
+        return _to_domain(doc, self._updated_at()) if doc is not None else None
+
+    def _change(
+        self, summary: str, change: Callable[[GlobalInternalEngineConfig], dict[str, Any]]
+    ) -> GlobalInternalEngineConfig:
+        now = datetime.now(tz=UTC)
+        current = _to_domain(self.document.get() or {}, now)
+        doc = {**_to_doc(current), **change(current)}
+        if doc == _DEFAULT_DOC:
+            # Back to the defaults is the same decision as never choosing:
+            # no document, so a fresh machine and this one agree.
+            self.document.remove(summary=summary)
+        else:
+            self.document.put(doc, summary=summary)
+        self._local.write({"updated_at": now.isoformat()})
+        return _to_domain(self.document.get() or doc, now)
 
     async def set(
         self,
@@ -54,82 +150,36 @@ class SqlAlchemyInternalEngineConfigRepo:
         curate_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
-        async with self._sm() as session:
-            stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            now = datetime.now(tz=UTC)
-            if row is None:
-                row = InternalEngineConfigModel(id=1, updated_at=now)
-                session.add(row)
-            row.model = model
+        def change(current: GlobalInternalEngineConfig) -> dict[str, Any]:
+            out: dict[str, Any] = {"model": model}
             if curate_owner_machine_id is not None:
                 # The empty string clears it back to "wherever this is read".
-                row.curate_owner_machine_id = curate_owner_machine_id or None
-            for name, setting in (upkeep or {}).items():
-                enabled_col, interval_col = _UPKEEP_COLUMNS[name]
-                setattr(row, enabled_col, setting.enabled)
-                setattr(row, interval_col, setting.interval_s)
-            row.updated_at = now
-            await session.commit()
-            await session.refresh(row)
-            return self._to_domain(row, now)
+                out["curate_owner_machine_id"] = curate_owner_machine_id or None
+            if upkeep:
+                block = _to_doc(current)["upkeep"]
+                for name, setting in upkeep.items():
+                    block[name] = {"enabled": setting.enabled, "interval_s": setting.interval_s}
+                out["upkeep"] = block
+            return out
+
+        return self._change("Changed the internal engine's settings", change)
 
     async def set_model_timeout(self, seconds: int | None) -> GlobalInternalEngineConfig:
-        """Write only the timeout column. ``None`` restores the built-in default."""
-        return await self._set_one("model_timeout_s", seconds)
+        """Write only the timeout. ``None`` restores the built-in default."""
+        return self._change("Changed the model timeout", lambda _c: {"model_timeout_s": seconds})
 
     async def set_transcribe_model(self, model: str | None) -> GlobalInternalEngineConfig:
         """Write only the transcription model. ``None`` stops transcription."""
-        return await self._set_one("transcribe_model", model)
+        return self._change(
+            "Changed the transcription model", lambda _c: {"transcribe_model": model}
+        )
 
     async def set_curation_owner(self, machine_id: str | None) -> GlobalInternalEngineConfig:
-        """Write only the curation owner. ``None`` clears it.
-
-        A setter of its own rather than a flag on ``set``, which rewrites the
-        model along with everything else — and because ``None`` has to mean
-        *clear* here. ``set`` reads it as "leave alone" and takes the empty
-        string for clear; that sentinel is right where the caller is restating
-        a whole config and wrong where the caller's entire subject is this one
-        field.
-        """
-        return await self._set_one("curate_owner_machine_id", machine_id)
-
-    async def _set_one(self, column: str, value: object) -> GlobalInternalEngineConfig:
-        """Read-modify-write ONE column of the singleton.
-
-        One column per write rather than a whole-config update: this row
-        converges through vault sync, so an update restating fields the caller
-        never looked at is a lost update waiting for the moment the operator
-        changes two settings on two machines. The same reasoning as
-        ``set_upkeep``'s one-pass-per-write.
-        """
-        async with self._sm() as session:
-            stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            now = datetime.now(tz=UTC)
-            if row is None:
-                row = InternalEngineConfigModel(id=1, updated_at=now)
-                session.add(row)
-            setattr(row, column, value)
-            row.updated_at = now
-            await session.commit()
-            await session.refresh(row)
-            return self._to_domain(row, now)
-
-    @staticmethod
-    def _to_domain(
-        row: InternalEngineConfigModel, updated_at: datetime
-    ) -> GlobalInternalEngineConfig:
-        return GlobalInternalEngineConfig(
-            model=row.model,
-            updated_at=updated_at,
-            auto_curate_enabled=bool(row.auto_curate_enabled),
-            curate_owner_machine_id=row.curate_owner_machine_id,
-            auto_aggregate_enabled=bool(row.auto_aggregate_enabled),
-            aggregate_interval_s=row.aggregate_interval_s,
-            auto_distil_enabled=bool(row.auto_distil_enabled),
-            distil_interval_s=row.distil_interval_s,
-            curate_interval_s=row.curate_interval_s,
-            model_timeout_s=row.model_timeout_s,
-            transcribe_model=row.transcribe_model,
+        """Write only the curation owner. ``None`` clears it (``set`` reads
+        ``None`` as "leave alone" and takes the empty string for clear)."""
+        return self._change(
+            "Changed the curation owner", lambda _c: {"curate_owner_machine_id": machine_id}
         )
+
+
+__all__ = ["VaultInternalEngineConfigRepo", "engine_local_path"]

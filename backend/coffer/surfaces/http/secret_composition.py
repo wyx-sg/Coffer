@@ -14,12 +14,9 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy import text as _sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine
-
 from coffer.domain.errors import SecretMissing
 from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
-from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore, ref_files
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.secret_boundary_wiring import (
     boundary_resolver as boundary_resolver,
@@ -27,6 +24,7 @@ from coffer.surfaces.http.secret_boundary_wiring import (
 from coffer.surfaces.http.secret_boundary_wiring import (
     init_secret_boundary,
     make_master_key_manager,
+    master_key_path,
 )
 
 _secret_store: EncryptedSecretStore | None = None
@@ -84,25 +82,24 @@ class SecretWiring:
     master_key: MasterKeyManager
 
 
-async def init_secret_store(engine: AsyncEngine, db_path: pathlib.Path) -> SecretWiring:
+async def init_secret_store(*, home: pathlib.Path | None = None) -> SecretWiring:
     """Resolve the master key, build the encrypted store, publish DI singletons.
 
     Envelope encryption: resolve the Fernet master key (file first, then
-    keychain), build the encrypted store.  Creating a brand-new key is only legal while the
-    secrets table is empty — otherwise existing ciphertext would be
-    silently undecryptable, so we fail loudly instead.
+    keychain), build the file-backed store over ``vault/secret/`` and
+    ``local/secret-boundary/``. Creating a brand-new key is only legal while no
+    ciphertext file exists — otherwise existing ciphertext would be silently
+    undecryptable, so we fail loudly instead. ``home`` is the user's home
+    (default: ``HOME``).
     """
     # The key's home is chosen by how this build was made (a signed release's
     # Keychain access group, or the development file / login-keychain pair).
-    master_key_manager = make_master_key_manager(db_path)
-    async with engine.connect() as conn:
-        ciphertext_rows = (
-            await conn.execute(_sa_text("SELECT COUNT(*) FROM secrets"))
-        ).scalar_one()
-    key_path = db_path.parent / "master.key"
+    master_key_manager = make_master_key_manager(home)
+    stored = len(await asyncio.to_thread(ref_files, home))
+    key_path = master_key_path(home)
     try:
         master_key = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
+            None, lambda: master_key_manager.resolve(allow_create=stored == 0)
         )
     except SecretLocked as e:
         # The keychain may hold the key; creating one in the file now would
@@ -116,14 +113,14 @@ async def init_secret_store(engine: AsyncEngine, db_path: pathlib.Path) -> Secre
     if master_key is None:
         raise MasterKeyMissing(str(key_path))
     try:
-        secret_store = EncryptedSecretStore(db_path=db_path, key=master_key)
+        secret_store = EncryptedSecretStore(master_key, home=home)
     except ValueError as e:
         # A present-but-corrupt key (e.g. truncated file) must fail loudly and
         # name its location — regenerating over live ciphertext is never safe.
-        raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
+        raise MasterKeyMissing(str(key_path)) from e
     set_secret_store(secret_store)
     set_master_key_manager(master_key_manager)
     # The approval gate and the presence grants, before any consumer of a
     # secret is built (every one gets ``boundary_resolver``).
-    init_secret_boundary(db_path, secret_store, master_key_manager)
+    init_secret_boundary(secret_store, master_key_manager, home=home)
     return SecretWiring(store=secret_store, master_key=master_key_manager)

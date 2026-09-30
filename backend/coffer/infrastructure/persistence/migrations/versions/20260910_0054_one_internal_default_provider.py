@@ -1,6 +1,6 @@
 """enforce the single internal-default provider invariant
 
-Spec provider-switching "Keep at most one internal-engine default" says at most
+Spec provider-switching "Keep at most one internal default connection" says at most
 one connection carries ``internal_default=true`` — it names the connection
 Coffer's own LLM engine runs on, and "the internal engine" is singular.
 ``ProviderService.set_internal_default`` upholds it by clearing every other

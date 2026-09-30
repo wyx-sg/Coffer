@@ -40,13 +40,12 @@ def test_a_seatalk_config_is_its_app_credentials_and_nothing_inbound():
     assert not fields & set(_WEBHOOK_ERA_KEYS)
 
 
-def test_a_document_still_carrying_webhook_era_keys_is_read_cleanly():
-    """A second machine on an older build may still publish them; they are
-    ignored like any unknown key and never come back out of a dump."""
-    cfg = parse_channel_config({**SEATALK_CONFIG, **_WEBHOOK_ERA_KEYS})
-    assert isinstance(cfg, SeaTalkChannelConfig)
-    dumped = cfg.model_dump(mode="json")
-    assert not set(dumped) & set(_WEBHOOK_ERA_KEYS)
+@pytest.mark.parametrize("key", sorted(_WEBHOOK_ERA_KEYS))
+def test_a_config_carrying_a_webhook_era_key_is_refused(key: str):
+    """A channel config refuses a key no channel type declares, as every
+    kind's config does."""
+    with pytest.raises(ValidationError, match=key):
+        parse_channel_config({**SEATALK_CONFIG, key: _WEBHOOK_ERA_KEYS[key]})
 
 
 @pytest.mark.parametrize("missing", ["app_id", "app_secret_ref"])

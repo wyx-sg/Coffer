@@ -282,7 +282,7 @@ Write the flow as numbered functions with explicit gates between them:
 
 ## Authoring workflow
 
-Author outside Coffer's master store. `coffer skill add` copies a folder into `~/.coffer/skills/`; authoring inside the store would mean importing a folder onto itself.
+Author outside Coffer's master store. `coffer skill add` copies a folder into `~/.coffer/vault/skills/`; authoring inside the store would mean importing a folder onto itself.
 
 ```sh
 # 1. Author and test in the authoring root

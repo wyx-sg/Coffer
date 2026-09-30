@@ -16,6 +16,7 @@ either.
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Collection
 from typing import TYPE_CHECKING, Protocol
 
@@ -46,6 +47,11 @@ class _Reconciler(Protocol):
 _KIND_OF_STATE = {AGENT_DIR_MISSING: DriftKind.MISSING_LINK}
 
 
+def _backup(service: SkillService) -> pathlib.Path:
+    """Where set-aside skill folders go, named in the drift hand-offs."""
+    return pathlib.Path(service._store.backup_root)
+
+
 async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | None:
     d = change.difference
     observed = d.observed
@@ -62,7 +68,9 @@ async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | N
             agent_name="",
             kind=kind,
             target_path=folder,
-            handoff=drift_handoff(kind, skill=name, path=folder, master=folder),
+            handoff=drift_handoff(
+                kind, skill=name, path=folder, master=folder, backup=_backup(service)
+            ),
         )
     if state == OK:
         return None
@@ -89,7 +97,11 @@ async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | N
         agent_uid=agent.uid,
         # The same prompt the attention item carries (link_reconcile._decide).
         handoff=drift_handoff(
-            kind, skill=skill.name, path=link, master=str(observed.params["target"])
+            kind,
+            skill=skill.name,
+            path=link,
+            master=str(observed.params["target"]),
+            backup=_backup(service),
         ),
     )
 

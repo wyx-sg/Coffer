@@ -30,6 +30,7 @@ from typer.testing import CliRunner
 import coffer.surfaces.cli._client as _cli_client
 from coffer.application.knowledge.service import KIND_KNOWLEDGE
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
@@ -55,7 +56,6 @@ def knowledge_cli_daemon(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59800")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59809")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
 
     app = create_app()
     set_active_token(_TOKEN)
@@ -134,7 +134,7 @@ def _write(collection: str, title: str, body: str = "b", description: str = "d")
 
 def _document(tmp_path, relpath: str, body: str) -> None:  # type: ignore[no-untyped-def]
     """A document written straight into the tree, as a person's editor would."""
-    path = tmp_path / "knowledge" / relpath
+    path = _knowledge_root() / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "---\ntitle: Derived\ndescription: d\nactor: agent\n"
@@ -150,7 +150,7 @@ def _document(tmp_path, relpath: str, body: str) -> None:  # type: ignore[no-unt
 def test_add_registers_a_collection_and_lists_it(knowledge_cli_daemon, tmp_path):
     _make_collection("shopee", "Internal systems")
 
-    collection = tmp_path / "knowledge" / "shopee"
+    collection = _knowledge_root() / "shopee"
     assert collection.is_dir()
     assert not (collection / "sources").exists() and not (collection / "topics").exists()
 
@@ -170,7 +170,7 @@ def test_add_registers_a_collection_and_lists_it(knowledge_cli_daemon, tmp_path)
 )
 def test_catalogue_description_comes_from_the_readme(knowledge_cli_daemon, tmp_path):
     _make_collection("shopee", "First description")
-    readme = tmp_path / "knowledge" / "shopee" / "README.md"
+    readme = _knowledge_root() / "shopee" / "README.md"
     readme.write_text("# shopee\n\nEdited by hand.\n", encoding="utf-8")
 
     listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
@@ -197,7 +197,7 @@ def test_write_becomes_a_document_under_a_readable_name(knowledge_cli_daemon, tm
     path = _write("shopee", "Account Gateway", body="The orchestration layer.")
 
     assert path == "shopee/account-gateway.md"
-    assert (tmp_path / "knowledge" / path).is_file()
+    assert (_knowledge_root() / path).is_file()
 
 
 def test_write_says_when_the_material_is_queued(knowledge_cli_daemon, tmp_path, monkeypatch):
@@ -214,9 +214,7 @@ def test_write_says_when_the_material_is_queued(knowledge_cli_daemon, tmp_path, 
     line = _write("shopee", "Gateway")
 
     assert line.startswith("queued in shopee")
-    assert [p.name for p in (tmp_path / "knowledge" / "shopee" / ".inbox").iterdir()] == [
-        "gateway.md"
-    ]
+    assert [p.name for p in (_knowledge_root() / "shopee" / ".inbox").iterdir()] == ["gateway.md"]
 
 
 def test_write_takes_no_folder(knowledge_cli_daemon):
@@ -251,7 +249,7 @@ def test_unknown_collection_is_an_error(knowledge_cli_daemon, tmp_path):
     assert shown.exit_code != 0
     located = _runner.invoke(cli_app, ["path", "knowledge", "typo"])
     assert located.exit_code != 0
-    assert not (tmp_path / "knowledge" / "typo").exists()
+    assert not (_knowledge_root() / "typo").exists()
 
 
 # ----- the lifecycle verbs ---------------------------------------------------
@@ -291,7 +289,7 @@ def test_edit_rewrites_the_description_in_the_readme(knowledge_cli_daemon, tmp_p
         cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--description", "Shopee's services."]
     )
     assert edited.exit_code == 0, edited.output
-    readme = (tmp_path / "knowledge" / "shopee" / "README.md").read_text(encoding="utf-8")
+    readme = (_knowledge_root() / "shopee" / "README.md").read_text(encoding="utf-8")
     assert readme == "# shopee\n\nShopee's services.\n"
     listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
     rows = json.loads(_extract_json(listed.output))["collections"]
@@ -321,7 +319,7 @@ def test_restore_deleted_brings_a_removed_collection_back(knowledge_cli_daemon, 
     restored = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "restore", "--deleted", removal["version"]])
     assert restored.exit_code == 0, restored.output
     assert doc in restored.output
-    assert (tmp_path / "knowledge" / doc).is_file()
+    assert (_knowledge_root() / doc).is_file()
     listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
     rows = json.loads(_extract_json(listed.output))["collections"]
     assert [(r["name"], r["description"]) for r in rows] == [("shopee", "Shopee services.")]
@@ -335,7 +333,7 @@ def test_the_route_refuses_to_delete_the_readme(knowledge_cli_daemon, tmp_path):
 
     resp = _daemon().delete("/knowledge/file", params={"path": "shopee/README.md"})
     assert resp.status_code >= 400, resp.text
-    assert (tmp_path / "knowledge" / "shopee" / "README.md").is_file()
+    assert (_knowledge_root() / "shopee" / "README.md").is_file()
 
 
 # ----- upload and curate ---------------------------------------------------
@@ -356,11 +354,11 @@ def test_cli_upload_becomes_one_document_and_keeps_no_original(knowledge_cli_dae
     # arrived as ("Use the file path as a document's identity").
     path = result.output.strip().splitlines()[-1]
     assert path == "shopee/team.md"
-    assert (tmp_path / "knowledge" / path).is_file()
+    assert (_knowledge_root() / path).is_file()
     # The original is not kept: the collection holds knowledge, not the
     # documents it arrived in ("Convert uploads into material without keeping
     # them").
-    collection = tmp_path / "knowledge" / "shopee"
+    collection = _knowledge_root() / "shopee"
     assert sorted(str(p.relative_to(collection)) for p in collection.rglob("*") if p.is_file()) == [
         "README.md",
         "team.md",
@@ -483,7 +481,7 @@ def test_cli_and_route_both_leave_material_in_the_inbox(
     assert resp.json()["status"] == "pending"
     assert resp.json()["path"] is None
 
-    collection = tmp_path / "knowledge" / "shopee"
+    collection = _knowledge_root() / "shopee"
     assert sorted(p.name for p in (collection / ".inbox").iterdir()) == [
         "from-the-cli.md",
         "from-the-route.md",
@@ -502,7 +500,7 @@ def test_a_person_deletes_agent_written_documents_by_route_and_on_disk(
     _document(tmp_path, "shopee/by-route.md", "b")
     _document(tmp_path, "shopee/by-hand.md", "b")
     for name in ("by-route.md", "by-hand.md"):
-        assert "actor: agent" in (tmp_path / "knowledge" / "shopee" / name).read_text()
+        assert "actor: agent" in (_knowledge_root() / "shopee" / name).read_text()
 
     resp = _daemon().delete("/knowledge/file", params={"path": "shopee/by-route.md"})
     assert resp.status_code == 204, resp.text
@@ -511,8 +509,8 @@ def test_a_person_deletes_agent_written_documents_by_route_and_on_disk(
     directory = located.output.strip().splitlines()[-1]
     (pathlib.Path(directory) / "by-hand.md").unlink()
 
-    assert not (tmp_path / "knowledge" / "shopee" / "by-route.md").exists()
-    assert not (tmp_path / "knowledge" / "shopee" / "by-hand.md").exists()
+    assert not (_knowledge_root() / "shopee" / "by-route.md").exists()
+    assert not (_knowledge_root() / "shopee" / "by-hand.md").exists()
     tree = _daemon().get("/knowledge/tree", params={"path": "shopee"}).json()
     assert tree["files"] == []
     listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])

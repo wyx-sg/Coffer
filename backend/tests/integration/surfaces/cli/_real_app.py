@@ -50,9 +50,6 @@ def boot(
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59940")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59949")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_SKILLS_ROOT", str(tmp_path / "skills"))
     monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
     if features is None:
         monkeypatch.delenv("COFFER_FEATURES", raising=False)

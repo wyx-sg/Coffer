@@ -75,9 +75,8 @@ class SecretResolver:
     ) -> dict[str, str]:
         """:meth:`materialize`, run in a worker thread.
 
-        The store read is a blocking SQLite call — on the event loop it would
-        stall every concurrent request for as long as the read takes, and can
-        deadlock against the coroutine holding the write lock. Every async
+        The store read is blocking file IO — on the event loop it would
+        stall every concurrent request for as long as the read takes. Every async
         consumer calls this one; nothing hand-rolls ``to_thread`` around
         :meth:`materialize` itself.
         """

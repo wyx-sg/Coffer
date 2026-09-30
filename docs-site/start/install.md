@@ -150,12 +150,14 @@ cd frontend && npm install && npm run build && cd ..
 | --- | --- |
 | `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim` | The public names. For a release build these are symlinks into a versioned directory. |
 | `~/.coffer/bin/<version>/` | One directory per deployed build. The current and previous versions are kept, so you can roll back by pointing the links at the older directory. |
-| `~/.coffer/coffer.db` | The SQLite database: resources, settings, audit log, encrypted secrets. |
-| `~/.coffer/coffer.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
+| `~/.coffer/vault/` | The vault: a git repository of resource files, skills, knowledge, memory triggers and encrypted secrets. |
+| `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
+| `~/.coffer/runs.db` | The history database: audit log, invocations, conversations, sync rounds, usage. |
+| `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
 | `~/.coffer/master.key` | The secret master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
 | `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
-| `~/.coffer/skills/`, `knowledge/`, `memory/` | The file-backed kinds' trees. |
+| `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
 A release-built daemon manages `~/.coffer/bin` itself. At every start it checks whether its build is already deployed there. If not, it copies the three binaries into `~/.coffer/bin/<version>/` and switches the public symlinks to them in one atomic step. A source install never does this. The [files and directories](/reference/filesystem) reference lists every path.
@@ -221,7 +223,7 @@ In a browser, **Settings › About** offers this upgrade as a prompt for your ag
 
 For the desktop app, quit Coffer, stop the daemon with `coffer daemon stop`, replace `Coffer.app` with the new version and clear its quarantine flag again. The next launch starts the new daemon, which deploys the new binaries.
 
-Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `coffer.db.pre-<revision>`.
+Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `runs.db.pre-<revision>`. Upgrading from a Coffer that still keeps its state in `coffer.db` is a one-time step you run yourself: see [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Uninstall
 

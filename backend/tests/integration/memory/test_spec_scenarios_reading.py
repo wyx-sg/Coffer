@@ -1,7 +1,7 @@
 """Acceptance scenarios for the reading half of the memory layer.
 
 Real readers over fixture config directories under ``tmp_path``, real git
-repositories, the real store under the suite-pinned ``COFFER_MEMORY_ROOT``.
+repositories, the real store under the per-test ``HOME``.
 ``ResourceService``/``AuditService`` stay fakes: nothing asserted here is about
 a database.
 """

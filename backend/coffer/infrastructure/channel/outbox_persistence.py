@@ -7,14 +7,14 @@ chat at once when it can be; when it cannot — the channel is not running, the
 platform refused — it waits here, with the agent's answer behind it, until the
 runtime finds the channel running again. A row is marked delivered, never
 deleted by a failure, so nothing the owner wrote is lost to a dropped
-connection. Rows hang off ``resources.id`` and go with the channel.
+connection. Rows name their channel by uid; the channel kind removes them when it is deleted.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import TIMESTAMP, ForeignKey, Index, Integer, String, Text, select
+from sqlalchemy import TIMESTAMP, Index, Integer, String, Text, delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,11 +28,7 @@ class ChannelOutboxModel(Base):
     __tablename__ = "channel_outbox"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
     thread_id: Mapped[str] = mapped_column(String, nullable=False, default="")
     chat_kind: Mapped[str] = mapped_column(String, nullable=False)
@@ -45,7 +41,7 @@ class ChannelOutboxModel(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     __table_args__ = (
-        Index("idx_channel_outbox_pending", "resource_id", "delivered_at"),
+        Index("idx_channel_outbox_pending", "resource_uid", "delivered_at"),
         Index("idx_channel_outbox_conversation", "conversation_id"),
     )
 
@@ -57,7 +53,7 @@ def _tz(dt: datetime) -> datetime:
 def _to_domain(row: ChannelOutboxModel) -> OutboxEntry:
     return OutboxEntry(
         id=row.id,
-        resource_id=row.resource_id,
+        resource_uid=row.resource_uid,
         chat_id=row.chat_id,
         thread_id=row.thread_id,
         chat_kind=row.chat_kind,
@@ -77,7 +73,7 @@ class ChannelOutboxRepo:
     async def add(
         self,
         *,
-        resource_id: int,
+        resource_uid: str,
         chat_id: str,
         thread_id: str,
         chat_kind: str,
@@ -87,7 +83,7 @@ class ChannelOutboxRepo:
     ) -> int:
         async with self._sm() as session:
             row = ChannelOutboxModel(
-                resource_id=resource_id,
+                resource_uid=resource_uid,
                 chat_id=chat_id,
                 thread_id=thread_id,
                 chat_kind=chat_kind,
@@ -100,13 +96,13 @@ class ChannelOutboxRepo:
             await session.commit()
             return int(row.id)
 
-    async def pending(self, resource_id: int) -> list[OutboxEntry]:
+    async def pending(self, resource_uid: str) -> list[OutboxEntry]:
         async with self._sm() as session:
             rows = (
                 await session.execute(
                     select(ChannelOutboxModel)
                     .where(
-                        ChannelOutboxModel.resource_id == resource_id,
+                        ChannelOutboxModel.resource_uid == resource_uid,
                         ChannelOutboxModel.delivered_at.is_(None),
                     )
                     .order_by(ChannelOutboxModel.id)
@@ -134,3 +130,12 @@ class ChannelOutboxRepo:
             if row is not None and row.delivered_at is None:
                 row.delivered_at = datetime.now(tz=UTC)
                 await session.commit()
+
+    async def delete_for_channel(self, resource_uid: str) -> None:
+        """Drop a deleted channel's rows, delivered or not: there is no chat
+        left to deliver them to."""
+        async with self._sm() as session:
+            await session.execute(
+                delete(ChannelOutboxModel).where(ChannelOutboxModel.resource_uid == resource_uid)
+            )
+            await session.commit()

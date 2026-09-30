@@ -2,14 +2,14 @@
 //
 // The remote form's draft shape and its client-side checks, kept apart from
 // the card so they can be tested without rendering it. The daemon validates
-// again on PUT (BACKUP_REMOTE_INVALID); these checks exist so the Save button
+// again on PUT; these checks exist so the Save button
 // can stay disabled until the draft is something the daemon would take.
 
 export interface FormState {
   url: string;
   branch: string;
   secretRef: string;
-  includeSecrets: boolean;
+  includeSecret: boolean;
   intervalSeconds: number;
 }
 
@@ -56,7 +56,7 @@ export function isDirty(form: FormState, saved: FormState): boolean {
     form.url.trim() !== saved.url ||
     form.branch.trim() !== saved.branch ||
     form.secretRef.trim() !== saved.secretRef ||
-    form.includeSecrets !== saved.includeSecrets ||
+    form.includeSecret !== saved.includeSecret ||
     form.intervalSeconds !== saved.intervalSeconds
   );
 }

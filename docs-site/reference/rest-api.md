@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 265 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 279 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -114,7 +114,8 @@ The daemon mounts 265 operations in 26 groups. Groups follow the order the daemo
 | [events](#events) | 1 |
 | [secrets](#secrets) | 15 |
 | [settings](#settings) | 4 |
-| [sync](#sync) | 19 |
+| [sync](#sync) | 27 |
+| [vault](#vault) | 6 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 38 |
 | [fs](#fs) | 5 |
@@ -236,25 +237,44 @@ The daemon mounts 265 operations in 26 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
-| `POST` | `/api/v1/sync/run` | Run Round |
-| `GET` | `/api/v1/sync/join` | State the join ``/adopt`` would make, applying nothing. |
-| `POST` | `/api/v1/sync/adopt` | Join the configured remote. |
-| `POST` | `/api/v1/sync/confirm` | Confirm |
-| `POST` | `/api/v1/sync/reject` | Reject |
-| `POST` | `/api/v1/sync/rebuild` | Rebuild this machine from the remote, discarding local-only documents. |
-| `POST` | `/api/v1/sync/rollback` | Rollback |
-| `POST` | `/api/v1/sync/restore` | Restore |
+| `GET` | `/api/v1/sync/join/preview` | What joining the remote would do; nothing is applied. |
+| `POST` | `/api/v1/sync/join` | Join as the preview said: nothing is deleted on either side. |
+| `GET` | `/api/v1/sync/join-choices` | Join Choices |
+| `POST` | `/api/v1/sync/join-choices` | Keep this machine's version (pushed by the next round) or take the remote's, for one or several of a join's differing files. |
+| `GET` | `/api/v1/sync/stop` | Stop |
+| `POST` | `/api/v1/sync/stop/files/answer` | Record an answer for one file; ``edited`` reads the saved editor copy and refuses it while a conflict marker is left in it. |
+| `POST` | `/api/v1/sync/stop/files/editor` | Write (once) git's marked-up merge of the file outside the vault and answer where it is. |
+| `GET` | `/api/v1/sync/stop/files/versions` | File Versions |
+| `POST` | `/api/v1/sync/continue` | Continue the stopped round once every file is answered: the resolved tree is validated, guarded, snapshotted, checked out and pushed. |
+| `POST` | `/api/v1/sync/hold/confirm` | Apply the held deletions, and continue the round. |
+| `POST` | `/api/v1/sync/hold/restore` | Keep the held files, and continue the round (it pushes them back). |
+| `GET` | `/api/v1/sync/runs/{run_id}/rollback-plan` | Rollback Plan |
+| `POST` | `/api/v1/sync/runs/{run_id}/rollback` | Put back what the round changed, as a new commit here; edits made since are kept. |
+| `GET` | `/api/v1/sync/status` | Status |
+| `POST` | `/api/v1/sync/run` | One round now. |
+| `GET` | `/api/v1/sync/runs` | Every round this machine ran, newest first. |
+| `GET` | `/api/v1/sync/runs/{run_id}` | Get Run |
 | `GET` | `/api/v1/sync/remote` | Get Remote |
 | `PUT` | `/api/v1/sync/remote` | Put Remote |
-| `DELETE` | `/api/v1/sync/remote` | Delete Remote |
-| `GET` | `/api/v1/sync/status` | Status |
-| `GET` | `/api/v1/sync/runs` | Every round this vault has run, newest first. |
+| `DELETE` | `/api/v1/sync/remote` | Stop syncing: forget the remote. |
+| `POST` | `/api/v1/sync/remote/check` | What a remote holds, before it is saved: nothing is kept. |
 | `GET` | `/api/v1/sync/machines` | List Machines |
 | `PATCH` | `/api/v1/sync/machines/self` | Rename this machine. |
-| `DELETE` | `/api/v1/sync/machines/{machine_id}` | Retire Machine |
+| `DELETE` | `/api/v1/sync/machines/{machine_id}` | Retire another machine: its descriptor goes, in a commit of yours. |
 | `GET` | `/api/v1/sync/key/fingerprint` | Key Fingerprint |
 | `POST` | `/api/v1/sync/key/import/preview` | Whose key a file holds and whether it is this machine's, changing nothing. |
 | `POST` | `/api/v1/sync/key/import` | Import Key |
+
+### vault
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/vault/history` | The versions of a file or folder, newest first, each naming its writer. |
+| `GET` | `/api/v1/vault/diff` | What one version did to one file, as a unified diff. |
+| `GET` | `/api/v1/vault/content` | A file's content as a version left it, or as it is now, with its fingerprint. |
+| `POST` | `/api/v1/vault/restore` | Write a version back as a new commit naming the writer and the version it restored; a stale ``expected_fingerprint`` is 409 and changes nothing. |
+| `GET` | `/api/v1/vault/changes` | Recent commits across the vault, or under one prefix, newest first. |
+| `GET` | `/api/v1/vault/problems` | Hand edits validation refused: still on disk, uncommitted, with ``HEAD`` in effect until each is fixed. |
 
 ### internal-engine
 
@@ -349,7 +369,7 @@ The daemon mounts 265 operations in 26 groups. Groups follow the order the daemo
 | `POST` | `/api/v1/skills/{uid}/source/merged` | "I merged it" (spec skill-manager "Record an update merged into local edits"): pin the skill to the upstream commit its local edits were merged with, leaving the master folder's files as they are. |
 | `GET` | `/api/v1/skills/{uid}/files` | Return the skill's master folder as a read-only file tree. |
 | `GET` | `/api/v1/skills/{uid}/files/content` | Read a single file's contents from the skill's master folder. |
-| `PUT` | `/api/v1/skills/{uid}/files/content` | Overwrite one existing text file in the skill's master folder. |
+| `PUT` | `/api/v1/skills/{uid}/files/content` | Overwrite one existing text file in the skill's master folder, as one vault commit naming the writer. |
 
 ### clis
 

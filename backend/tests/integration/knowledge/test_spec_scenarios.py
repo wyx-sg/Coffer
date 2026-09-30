@@ -1,8 +1,9 @@
 """Knowledge scenarios that need a real database or the migration's real tree.
 
-Every test pins ``HOME``, ``COFFER_DB_URL`` and ``COFFER_KNOWLEDGE_ROOT`` under
-``tmp_path``: the migrations move and delete files, and an unset knowledge
-root falls back to the developer's real ``~/.coffer/knowledge``.
+Every test pins ``HOME`` and ``COFFER_DB_URL`` under ``tmp_path``: the
+migrations move and delete files. The knowledge layer resolves its root
+(``~/.coffer/vault/knowledge``) from ``HOME``; the 0101 migration still reads
+its own historical ``COFFER_KNOWLEDGE_ROOT``, pinned here too.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ _ALEMBIC_INI = (
 def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    # The 0101 migration keeps reading its own historical root and override.
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     return tmp_path
 
@@ -118,7 +120,6 @@ class _Registry:
     async def register(self, *, kind, name, config, actor, **_):  # type: ignore[no-untyped-def]
         now = datetime.now(tz=UTC)
         row = Resource(
-            id=len(self.rows) + 1,
             uid=f"uid-{len(self.rows) + 1}",
             kind=kind,
             name=name,
@@ -150,7 +151,6 @@ def test_the_layer_adds_no_table_and_writes_only_under_its_root(home: pathlib.Pa
     with sqlite3.connect(db) as conn:
         tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
     assert not [t for t in tables if "knowledge" in t.lower()], tables
-    assert "resources" in tables
 
     before = set(_files(home))
     registry = _Registry()
@@ -168,4 +168,9 @@ def test_the_layer_adds_no_table_and_writes_only_under_its_root(home: pathlib.Pa
     assert [(r.kind, r.name) for r in registry.rows] == [(KIND_KNOWLEDGE, "shopee")]
     written = set(_files(home)) - before
     assert written
-    assert all(path.startswith("knowledge/") for path in written), written
+    # The documents, and the one machine-local record of what curation settled
+    # (the promoted document is settled as it stands).
+    assert all(
+        path.startswith(".coffer/vault/knowledge/") or path == ".coffer/local/curation.json"
+        for path in written
+    ), written

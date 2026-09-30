@@ -113,7 +113,7 @@ class MasterKeyManager:
         is not answered as None: a locked or unavailable keychain raises
         ``SecretLocked``, and a key file that cannot be read raises
         ``OSError``. A caller that must tell "no key" from "unknown" (spec
-        vault-sync "Report refs without a key as locked") uses this.
+        vault-sync "Report the refs a key cannot open as locked") uses this.
         """
         if self._vault is not None:
             in_vault = self._vault.read()

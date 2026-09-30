@@ -8,41 +8,28 @@ silent re-key that orphans every stored secret.
 from __future__ import annotations
 
 import pathlib
-import sqlite3
 
 import keyring.backends.fail
 import keyring.core
 import pytest
 from keyring.errors import KeyringLocked
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from coffer.domain.errors import MasterKeyMissing, SecretLocked
+from coffer.infrastructure.vault.home import coffer_home, vault_root
 from coffer.surfaces.http import secret_composition as cred_comp
 from tests.fixtures.keyring import install_in_memory_keyring
 
-_SCHEMA = """
-CREATE TABLE secrets (
-    ref TEXT PRIMARY KEY,
-    ciphertext BLOB NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    last_used_at TEXT
-)
-"""
+
+def _home_with_ciphertext(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A vault holding one ciphertext file — i.e. live ciphertext."""
+    path = vault_root(tmp_path) / "secret" / "gh.enc"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"gAAAAA-not-openable-here\n")
+    return tmp_path
 
 
-def _db_with_ciphertext(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A vault holding one secret row — i.e. live ciphertext."""
-    db_path = tmp_path / "coffer.db"
-    conn = sqlite3.connect(db_path)
-    conn.execute(_SCHEMA)
-    conn.execute(
-        "INSERT INTO secrets (ref, ciphertext, created_at, updated_at) "
-        "VALUES ('gh', X'00', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-    )
-    conn.commit()
-    conn.close()
-    return db_path
+def _key_path(home: pathlib.Path) -> pathlib.Path:
+    return coffer_home(home) / "master.key"
 
 
 @pytest.fixture(autouse=True)
@@ -60,19 +47,15 @@ async def test_absent_key_over_ciphertext_refuses_to_start(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     install_in_memory_keyring(monkeypatch)  # empty: no key in the keychain either
-    db_path = _db_with_ciphertext(tmp_path)
-    key_path = tmp_path / "master.key"
+    home = _home_with_ciphertext(tmp_path)
+    key_path = _key_path(home)
     assert not key_path.exists()
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    try:
-        with pytest.raises(MasterKeyMissing) as excinfo:
-            await cred_comp.init_secret_store(engine, db_path)
-    finally:
-        await engine.dispose()
+    with pytest.raises(MasterKeyMissing) as excinfo:
+        await cred_comp.init_secret_store(home=home)
 
     # The failure names the key it expected, and writes no replacement — so
-    # restoring the original key restores access to the row above.
+    # restoring the original key restores access to the file above.
     assert str(key_path) in str(excinfo.value)
     assert not key_path.exists()
 
@@ -85,30 +68,16 @@ async def test_corrupt_key_file_is_a_named_fatal_failure(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     install_in_memory_keyring(monkeypatch)
-    db_path = _db_with_ciphertext(tmp_path)
-    key_path = tmp_path / "master.key"
+    home = _home_with_ciphertext(tmp_path)
+    key_path = _key_path(home)
     key_path.write_bytes(b"not-a-fernet-key")  # present, but opens nothing
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    try:
-        with pytest.raises(MasterKeyMissing) as excinfo:
-            await cred_comp.init_secret_store(engine, db_path)
-    finally:
-        await engine.dispose()
+    with pytest.raises(MasterKeyMissing) as excinfo:
+        await cred_comp.init_secret_store(home=home)
 
     assert str(key_path) in str(excinfo.value)
     # The corrupt file is left exactly as found rather than replaced.
     assert key_path.read_bytes() == b"not-a-fernet-key"
-
-
-def _empty_db(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A vault with the secrets table but no rows — creation is legal."""
-    db_path = tmp_path / "coffer.db"
-    conn = sqlite3.connect(db_path)
-    conn.execute(_SCHEMA)
-    conn.commit()
-    conn.close()
-    return db_path
 
 
 class _LockedKeyring:
@@ -140,15 +109,10 @@ async def test_locked_keychain_with_an_empty_store_refuses_to_start(
     created now would win every later start, file-first, and the keychain key
     — the one any synced ciphertext was written under — would never be read."""
     monkeypatch.setattr(keyring.core, "_keyring_backend", _LockedKeyring())
-    db_path = _empty_db(tmp_path)
-    key_path = tmp_path / "master.key"
+    key_path = _key_path(tmp_path)
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    try:
-        with pytest.raises(SecretLocked) as excinfo:
-            await cred_comp.init_secret_store(engine, db_path)
-    finally:
-        await engine.dispose()
+    with pytest.raises(SecretLocked) as excinfo:
+        await cred_comp.init_secret_store(home=tmp_path)
 
     message = str(excinfo.value)
     assert "keychain is locked" in message
@@ -163,14 +127,30 @@ async def test_no_keychain_backend_at_all_still_creates_the_file_key(
     """A host with no keychain backend (a bare Linux box) cannot have stored
     the key there, so a first start creates the default file key as before."""
     monkeypatch.setattr(keyring.core, "_keyring_backend", keyring.backends.fail.Keyring())
-    db_path = _empty_db(tmp_path)
-    key_path = tmp_path / "master.key"
+    key_path = _key_path(tmp_path)
+    coffer_home(tmp_path).mkdir(parents=True)
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
-    try:
-        wiring = await cred_comp.init_secret_store(engine, db_path)
-    finally:
-        await engine.dispose()
+    wiring = await cred_comp.init_secret_store(home=tmp_path)
 
     assert key_path.exists()
     assert wiring.master_key.location == "file"
+
+
+async def test_the_key_file_follows_home_not_the_database_url(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The key opens the vault's ciphertext, so it lives in the home the vault
+    is in, wherever ``COFFER_DB_URL`` points the history database."""
+    monkeypatch.setattr(keyring.core, "_keyring_backend", keyring.backends.fail.Keyring())
+    monkeypatch.setenv("HOME", str(tmp_path))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{elsewhere / 'runs.db'}")
+    coffer_home().mkdir(parents=True)
+
+    wiring = await cred_comp.init_secret_store()
+
+    assert (tmp_path / ".coffer" / "master.key").is_file()
+    assert not (elsewhere / "master.key").exists()
+    wiring.store.set("gh/token", "v")
+    assert (tmp_path / ".coffer" / "vault" / "secret" / "gh" / "token.enc").is_file()

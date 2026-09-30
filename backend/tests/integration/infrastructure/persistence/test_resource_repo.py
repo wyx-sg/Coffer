@@ -17,9 +17,8 @@ from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
-    session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
+from tests.support.vault_stores import make_resource_repo
 
 
 def _now() -> datetime:
@@ -28,9 +27,8 @@ def _now() -> datetime:
 
 def _make_resource(kind: str = "fake_kind", name: str = "t", *, uid: str | None = None) -> Resource:
     # The uid is minted by the caller (ResourceService) and handed to the repo;
-    # the repo assigns only the integer surrogate key.
+    # the repo files it inside the resource's file.
     return Resource(
-        id=0,
         uid=uid or f"uid-{kind}-{name}",
         kind=kind,
         name=name,
@@ -46,14 +44,13 @@ async def _repo(tmp_path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    return SqlAlchemyResourceRepo(session_maker(engine)), engine
+    return make_resource_repo(), engine
 
 
 @pytest.mark.asyncio
 async def test_create_then_find(tmp_path):
     repo, engine = await _repo(tmp_path)
     created = await repo.create(_make_resource())
-    assert created.id != 0
     # The uid the caller minted survives the round trip untouched — the repo
     # never invents one and never rewrites one.
     assert created.uid == "uid-fake_kind-t"
@@ -144,7 +141,7 @@ async def test_rename_moves_the_label_only(tmp_path):
     # The row did not move: same identity, same surrogate key, so nothing
     # holding either has to be rewritten.
     assert renamed.uid == created.uid
-    assert renamed.id == created.id
+    assert renamed.uid == created.uid
     assert (await repo.find(created.uid)).name == "after"
     # And the label it left behind resolves to nothing.
     assert await repo.find_by_name("fake_kind", "before") is None

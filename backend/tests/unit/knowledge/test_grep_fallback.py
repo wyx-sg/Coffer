@@ -20,12 +20,12 @@ from coffer.domain.knowledge.entry import GrepMatch
 from coffer.infrastructure.knowledge import grep as grep_module
 from coffer.infrastructure.knowledge.grep import RipgrepSearch
 from coffer.infrastructure.knowledge.grep_fallback import grep_tree
+from coffer.infrastructure.knowledge.paths import knowledge_root as _knowledge_root
 
 
 @pytest.fixture
 def root(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
-    knowledge = tmp_path / "knowledge"
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(knowledge))
+    knowledge = _knowledge_root()
     shopee = knowledge / "shopee"
     (shopee / "nested").mkdir(parents=True)
     (shopee / ".history").mkdir()

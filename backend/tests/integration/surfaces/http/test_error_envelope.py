@@ -10,8 +10,10 @@ import pytest
 from starlette.testclient import TestClient
 
 from coffer.infrastructure.mcp.factory import build_upstream
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 
 def _app(tmp_path, monkeypatch, port_start: int):
@@ -127,7 +129,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
     from coffer.domain.mcp.server_config import MCPServerConfig
     from coffer.domain.resource import Kind
     from coffer.infrastructure.mcp.persistence import (
-        MCPCapabilityPreferenceRepo,
+        MCPCapabilityPreferenceStore,
         MCPInvocationRepo,
     )
     from coffer.infrastructure.persistence.base import Base
@@ -135,11 +137,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         create_async_engine_with_pragmas,
         session_maker,
     )
-    from coffer.infrastructure.persistence.repos import (
-        SqlAlchemyAuditRepo,
-        SqlAlchemyResourceRepo,
-    )
-    from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
+    from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
     from coffer.surfaces.http import errors as err_handlers
     from coffer.surfaces.http.auth import set_active_token as _set_token
     from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
@@ -178,7 +176,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
                 config_schema=MCPServerConfig,
             )
         },
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
     )
     fs = await rsvc.register(
@@ -193,7 +191,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         },
         actor="test",
     )
-    prefs = MCPCapabilityPreferenceRepo(sm)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv = MCPInvocationRepo(sm)
 
     def factory(session_id: str) -> MCPGatewaySession:
@@ -244,10 +242,8 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
                 headers={"Mcp-Session-Id": session_id},
             )
 
-            # Disable read_file via prefs. The preference table is joined by
-            # the integer surrogate key, which is what ``register`` already
-            # handed back — no lookup, and nothing that a label could shift.
-            await prefs.set_enabled(fs.id, "tool", "read_file", False)
+            # Disable read_file via prefs, keyed by the server's uid.
+            await prefs.set_enabled(fs.uid, "tool", "read_file", False)
 
             # Try calling the disabled tool
             r = await client.post(

@@ -35,14 +35,10 @@ from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS, AgentDescriptor
 from coffer.domain.agent.types import AgentType
 from tests.support.real_home_guard import write_home_skeleton
 
-#: The root pins the root conftest sets so every test gets its own trees. A
-#: machine built here derives its trees from its own ``HOME`` instead, the way
-#: an installed Coffer does, so these are removed wherever a home is applied.
+#: The pins the root conftest (or a test) may set that are not derived from
+#: ``HOME``. A machine built here derives everything from its own ``HOME``, the
+#: way an installed Coffer does, so these are removed wherever a home is applied.
 ROOT_PINS: tuple[str, ...] = (
-    "COFFER_KNOWLEDGE_ROOT",
-    "COFFER_MEMORY_ROOT",
-    "COFFER_AGENT_STATE_ROOT",
-    "COFFER_SKILLS_ROOT",
     "COFFER_LOG_DIR",
     "COFFER_DB_URL",
 )
@@ -66,7 +62,7 @@ class IsolatedHome:
 
     @property
     def knowledge_root(self) -> pathlib.Path:
-        return self.coffer_dir / "knowledge"
+        return self.coffer_dir / "vault" / "knowledge"
 
     def activate(self, monkeypatch: pytest.MonkeyPatch) -> IsolatedHome:
         """Make this the home of the current process for the rest of the test."""

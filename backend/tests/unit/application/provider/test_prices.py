@@ -55,7 +55,6 @@ class _Store:
 
 def _row(uid: str, config: dict[str, Any]) -> Resource:
     return Resource(
-        id=1,
         uid=uid,
         kind="provider",
         name=uid,

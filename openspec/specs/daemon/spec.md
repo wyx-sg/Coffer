@@ -629,9 +629,13 @@ name this build does not ship, so a binary a release dropped stops resolving to 
 instead of lingering on the user's `PATH`; anything at such a path that is not a symlink into a
 version directory is not Coffer's deployment and MUST be left alone.
 
-Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon MUST copy it (and any
-`-wal`/`-shm` companions) to `coffer.db.pre-<revision>`, keeping the three newest copies; an
-already-current schema or an in-memory database MUST NOT be copied. A source install MUST NOT do
+Before `alembic upgrade head` changes the on-disk history database, `~/.coffer/runs.db`, the
+daemon MUST copy it (and any `-wal`/`-shm` companions) to `runs.db.pre-<revision>`, keeping the
+three newest copies; an already-current schema or an in-memory database MUST NOT be copied.
+Before any of that the daemon MUST refuse a home that still holds only the single database of
+the layout before the vault, naming `coffer migrate`: moving a home into the vault layout is a
+step of its own that backs the old database up as `coffer.db.pre-vault` first, never a startup
+migration ([vault-storage](../vault-storage/spec.md) "Move an existing home into the vault layout once, on request, reversibly"). A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
 scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
 whichever tier it came from.
@@ -649,9 +653,9 @@ whichever tier it came from.
 - **AND** a regular file at `~/.coffer/bin/<name>` for a name the build does not ship is left untouched.
 
 #### Scenario: a schema upgrade keeps a copy of the vault
-- **GIVEN** a daemon starting against a `coffer.db` whose Alembic revision is behind this build's head,
+- **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
-- **THEN** `coffer.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+- **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
 ### Requirement: Change residency from the settings page or the command line
 The one residency setting — whether the login service is installed (see "Run as a login service")

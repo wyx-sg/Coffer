@@ -31,7 +31,6 @@ class _Resources:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
-                id=i,
                 # A uid a test can spell, and deliberately not the name: a
                 # lookup that worked because the two matched would prove
                 # nothing about addressing a collection by identity.
@@ -74,7 +73,6 @@ class _Audit:
 
 @pytest.fixture
 def handler(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     fs.create_collection_dir("personal")
     audit = _Audit()
@@ -122,7 +120,6 @@ async def test_a_write_waits_in_the_inbox_and_is_audited(handler) -> None:  # ty
 
 @pytest.mark.anyio
 async def test_with_no_model_a_write_is_a_document_at_once(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
@@ -180,7 +177,6 @@ async def test_every_agent_may_write_every_collection(handler) -> None:  # type:
 
 @pytest.mark.anyio
 async def test_a_caller_with_nothing_is_told_so(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
         registry,

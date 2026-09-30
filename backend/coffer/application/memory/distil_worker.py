@@ -15,7 +15,7 @@ partition before this boot's aggregation has run would spend a model on the
 same entries the pass a minute later would have seen anyway.
 
 **On by default**, like aggregation. Everything this pass writes is under
-``~/.coffer/memory/``, which is derived by construction (see "Keep the memory tree
+``~/.coffer/derived/memory/``, which is derived by construction (see "Keep the memory tree
 derived and local"): delete it, run aggregation and distil, and an equivalent partition
 comes back. The switch exists because each pass spends a model call, and the operator
 may turn it off or re-time it; the whole pass also stands still while the

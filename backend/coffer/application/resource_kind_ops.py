@@ -24,6 +24,7 @@ from typing import Any
 
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, normalise_title, validate_resource_name
+from coffer.domain.vault.layout import StorageClass
 
 Registry = Mapping[str, Kind]
 
@@ -52,54 +53,21 @@ def secret_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
     return kind_def.secret_ref_extractor(config)
 
 
-def converges(kinds: Registry, kind: str) -> bool:
-    """Whether this kind's rows travel to the sync remote (spec vault-sync).
+def storage_of(kinds: Registry, kind: str, config: Mapping[str, Any]) -> StorageClass:
+    """The storage class a new resource of ``kind`` with ``config`` is filed in
+    (ADR storage-is-five-classes-by-nature): the kind's ``storage`` refined by
+    its per-row ``storage_row``.
 
-    Public on the service for the same reason ``supports_scope`` is: the sync
-    layer has to ask, and the answer belongs to the kind.
-
-    An unregistered kind answers **True**, which is the conservative answer
-    and not the obvious one. This flag exists only to withhold, so a kind
-    nobody has declared anything about must keep whatever behaviour it had:
-    an unknown kind arriving in a document still reaches ``register`` and is
-    still refused there by name (``UnknownKind``). Answering False would have
-    turned that named refusal into a silent skip — a document quietly doing
-    nothing is exactly what a converge round must not produce.
-    """
-    kind_def = kinds.get(kind)
-    return kind_def.converges if kind_def is not None else True
-
-
-def converges_row(kinds: Registry, kind: str, config: Mapping[str, Any]) -> bool:
-    """Whether **this one row** travels to the sync remote (spec vault-sync).
-
-    The kind-level answer refined by the kind's own per-row predicate. A kind
-    that declares nothing answers exactly as :func:`converges` does, so this is
-    the question the sync layer should ask everywhere — there is no case where
-    "the kind travels" is the right answer but "this row travels" is not asked.
-
-    Note what it is **not**: it is not the machine-local kind list the
-    exporter's header refuses to reintroduce. That list was a table in the sync
-    layer naming kinds it had opinions about, so the sync layer had to be
-    edited whenever a kind changed its mind, and it could only ever speak about
-    a kind as a whole. This is the opposite direction — the kind still
-    declares, and the sync layer still only asks; all that has widened is the
-    granularity of what a kind may declare. The answer comes out of the row's
-    own config, so no name and no table appears in the sync slice at all.
-
-    ``config`` is accepted as a plain mapping because the sync applier asks
-    this of a document that has just arrived and has no row behind it yet; the
-    predicate reads raw keys and never parses, so a shape an older build wrote
-    answers rather than raising.
+    An unregistered kind answers ``vault``: the vault is where a person's
+    resources live, and a kind this build does not know (a newer build's) is
+    kept there, inert, rather than guessed into a class that would not travel.
     """
     kind_def = kinds.get(kind)
     if kind_def is None:
-        return True
-    if not kind_def.converges:
-        return False
-    if kind_def.converges_row is None:
-        return True
-    return kind_def.converges_row(dict(config))
+        return StorageClass.VAULT
+    if kind_def.storage_row is not None:
+        return kind_def.storage_row(dict(config))
+    return kind_def.storage
 
 
 def check_name(kind_def: Kind, name: str) -> None:
@@ -161,7 +129,6 @@ __all__ = [
     "check_derived_name",
     "check_name",
     "checked_title",
-    "converges",
-    "converges_row",
     "secret_refs",
+    "storage_of",
 ]

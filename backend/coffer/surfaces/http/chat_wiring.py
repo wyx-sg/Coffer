@@ -305,7 +305,7 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
-    # The web composer's uploads live in ``~/.coffer/chat-media`` (spec chat
+    # The web composer's uploads live in ``~/.coffer/content/chat-media`` (spec chat
     # "Upload a file for a web message"); the retention sweep over the same
     # directory is bound in ``build_retention_service``.
     set_attachment_service(ChatAttachmentService(FileChatMediaStore(default_chat_media_dir())))

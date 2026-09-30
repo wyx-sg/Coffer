@@ -108,10 +108,8 @@ class CapabilityDiscovery:
     Keyed throughout on the server's NAME, because a capability's public
     identity on the MCP wire is the namespaced ``<server>__<tool>`` this class
     builds, and that namespace is the label. The name is resolved to the row
-    once per cold path, and everything persisted from there on — the preference
-    rows this reconciles — is keyed on ``resource.id``, the surrogate key those
-    rows have always held (ADR resource-identity-is-an-immutable-uid leaves the
-    four kind-owned tables exactly as they were).
+    once per cold path, and everything persisted from there on — the switches
+    and seen-times this reconciles — is keyed on the server's uid.
     """
 
     def __init__(
@@ -352,7 +350,7 @@ class CapabilityDiscovery:
         # toggles take effect immediately, independent of the list cache TTL.
         if resource is None:
             resource = await self._resources.get_by_name("mcp_server", server_name)
-        prefs = await self._prefs.list_for(resource.id, capability_type)
+        prefs = await self._prefs.list_for(resource.uid, capability_type)
         return {p.capability_key: p.enabled for p in prefs}
 
     async def _reconcile_preferences(
@@ -376,7 +374,7 @@ class CapabilityDiscovery:
         not re-query the same row that the caller just loaded.
         """
         await self._prefs.reconcile(
-            resource.id,
+            resource.uid,
             capability_type,
             current_keys,
             default_enabled=True,

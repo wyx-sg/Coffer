@@ -79,10 +79,13 @@ def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSk
         raise RuntimeError("workspace scan dependencies are not wired")
     locations = resolver(agent)
     master_root = service._store.root
+    # Coffer's own skill is derived output under the store's derived root; a
+    # link to it is as managed as a link into the master store.
+    derived = (service._store.derived_root,)
     out: list[tuple[str, UnmanagedSkill]] = []
     for i, loc in enumerate(locations):
         entries = scanner.scan_dir(loc)
-        for u in classify(entries, master_root=master_root):
+        for u in classify(entries, master_root=master_root, also_managed=derived):
             out.append((_label(i), u))
     return out
 

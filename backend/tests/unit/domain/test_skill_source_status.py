@@ -10,7 +10,7 @@ NEW = "c" * 40
 
 
 def _status(**kw: object) -> SourceStatus:
-    return SourceStatus(skill_resource_id=1).with_(**kw)
+    return SourceStatus(skill_uid=1).with_(**kw)
 
 
 def test_a_moved_ref_with_commits_to_the_folder_is_an_update() -> None:

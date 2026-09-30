@@ -599,15 +599,16 @@ than vault state, and the transcript lands locally like any other turn text.
 ### Requirement: Treat an addressed group chat as its own peer
 The system MUST treat a group chat as a first-class peer. When the paired owner
 @mentions the bot (or the message is delivered as an addressed group event) the
-bot answers there; the group becomes an additional `channel_peers` row keyed by
-`(channel, group chat id)`, inheriting the owner's `sender_id`.
+bot answers there; the group becomes an additional peer in the channel's pairings, the vault document
+`state/channel-peers/<channel name>.json`, keyed by the group chat id and inheriting
+the owner's `sender_id`.
 
 #### Scenario: the owner @mentions the bot in a group main chat
 - **GIVEN** a paired channel and a group chat with no active thread
 - **WHEN** the owner @mentions the bot in the group's main chat
 - **THEN** a turn runs and the reply is delivered into a thread rather than the
-  group main chat, no thread history is read, and a `channel_peers` row is
-  created for the group chat inheriting the owner's `sender_id`
+  group main chat, no thread history is read, and a peer is
+  recorded for the group chat inheriting the owner's `sender_id`
 
 ### Requirement: Act in a group only on an addressed message from the owner
 The bot MUST act in a group ONLY on an addressed message (an @mention of the
@@ -751,7 +752,7 @@ channel is one answer the machines must share.
   on the next conversation rather than waiting on whoever set the preference.
 
 Reach and the machine binding answer different questions and MUST never be
-merged: reach (`enabled` + `scope`, on the resource row) says **which agents**
+merged: reach (`enabled` + `scope`, in this machine's reach record) says **which agents**
 this channel may drive and whether it is live here, and is set per machine and
 stays on it; the binding (`runs_on`, in the channel's config) says **which
 machine** runs the adapter, and travels because it is one answer for the whole
@@ -814,9 +815,9 @@ identity — a polled bot, a held WebSocket — tolerates
 exactly ONE consumer, so "which machine answers this bot" must have exactly one
 answer, and that answer is written down. Its configuration carries `runs_on`,
 the `machine_id` of the machine whose daemon starts this channel's adapter
-(spec `vault-sync`, "Derive machine identity from the host"). It is configuration and not a
-property of the row, because it MUST travel with the channel document — every
-machine holding the document reads the same name, and every machine but one
+(spec `vault-sync`, "Derive machine identity from the host"). It is configuration in the channel's
+file and not part of its reach, because it MUST travel with that file — every
+machine holding the file reads the same name, and every machine but one
 finds it is not being named; reach MUST NOT travel and MUST NOT be made to carry
 this.
 
@@ -903,8 +904,8 @@ which no field inside Coffer could prevent.
 - **GIVEN** an enabled channel running on this machine
 - **WHEN** the user binds it to another machine
 - **THEN** this machine stops its adapter on the next reconcile, without a
-  daemon restart, and the channel's binding is what the next converge round
-  publishes
+  daemon restart, and the channel's binding is what the next sync round
+  pushes
 
 ### Requirement: Drive every managed agent from one bot
 One bot MUST control all agents. A single paired Coffer-hosted bot drives any

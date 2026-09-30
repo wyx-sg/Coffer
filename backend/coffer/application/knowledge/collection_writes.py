@@ -40,8 +40,8 @@ from coffer.domain.knowledge.history import (
     REMOVED,
     WRITER_USER,
     Change,
-    ChangeMeta,
 )
+from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import catalogue, collection_files, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -51,7 +51,7 @@ async def describe_collection(
 ) -> CollectionEntry:
     """Make ``description`` the opening paragraph of the collection's README."""
     row = await knowledge.collection(uid)
-    meta = ChangeMeta(
+    meta = CommitMeta(
         WRITER_USER, OP_SAVE, f"Describe collection {row.name}", actor=actor, collection=row.name
     )
     async with recording(knowledge.history, meta) as tx:
@@ -105,7 +105,7 @@ async def restore_deleted(
             if paths.resolve(relpath).exists():
                 raise KnowledgeRestoreConflict(change.version, relpath)
         summary = f"Restore {removed[0]}"
-    meta = ChangeMeta(
+    meta = CommitMeta(
         WRITER_USER,
         OP_RESTORE,
         summary,

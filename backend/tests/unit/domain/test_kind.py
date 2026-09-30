@@ -12,7 +12,6 @@ class _FooConfig(BaseModel):
 def _resource(name: str = "bar") -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        id=1,
         uid="f00d1e55",
         kind="foo",
         name=name,

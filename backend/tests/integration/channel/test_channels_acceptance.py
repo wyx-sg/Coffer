@@ -45,7 +45,7 @@ async def test_notifications_and_turns_leave_no_channel_audit_entry(env: Channel
     _mark_running(env, resource, adapter)
     code, _expires, _link = await env.service.issue_pairing_code(resource.uid, actor="test")
     await env.processor.on_message(inbound("tg", "owner", code, sender_id="4242"))
-    assert await env.peers.owner_peer(resource.id) is not None
+    assert await env.peers.owner_peer(resource.uid) is not None
 
     before = await env.audit.query(resource=resource, limit=500)
     channel_specific = sorted(e.event_type for e in before if e.event_type.startswith("channel_"))

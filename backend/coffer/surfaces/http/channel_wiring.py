@@ -30,7 +30,6 @@ from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
-from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
@@ -50,7 +49,7 @@ from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
 from coffer.surfaces.http.secret_composition import boundary_resolver
-from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.vault_composition import VaultStores
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -75,10 +74,10 @@ def wire_channel_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
+    vault: VaultStores,
     secret_store: EncryptedSecretStore,
     chat: ChatWiring,
     knowledge: KnowledgeWiring,
-    sync: SyncContributions,
 ) -> ChannelRuntime:
     # Derived from the host, cached in ``daemon-config.json``, and stable for
     # the life of the daemon — so it is resolved once here rather than on every
@@ -88,8 +87,13 @@ def wire_channel_kind(
     async def local_machine_id() -> str:
         return machine_id
 
-    peers = ChannelPeerRepo(sm)
+    # Pairings are a vault document per channel that goes with it (spec
+    # vault-storage); what each thread is doing is history in runs.db.
+    peers = ChannelPeerRepo(name_of=vault.resources.name_of)
+    vault.resources.add_follower(peers.documents.follow)
+    peers.documents.add_owner_listener(vault.resources.announce)
     threads = ChannelThreadConversationRepo(sm)
+    outbox = ChannelOutboxRepo(sm)
     pairing = PairingManager()
     processor = InboundProcessor(
         peers=peers,
@@ -138,7 +142,7 @@ def wire_channel_kind(
         resources=resource_svc,
         threads=threads,
         peers=peers,
-        outbox=ChannelOutboxRepo(sm),
+        outbox=outbox,
         processor=processor,
     )
     set_channel_mirror(mirror)
@@ -168,6 +172,10 @@ def wire_channel_kind(
 
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)
+        # The history rows name the channel by uid and nothing cascades from
+        # a file, so they go here, with the channel.
+        await threads.delete_for_channel(channel.uid)
+        await outbox.delete_for_channel(channel.uid)
 
     async def agent_names() -> dict[str, str]:
         """Every registered agent's UID mapped to its name.
@@ -201,20 +209,6 @@ def wire_channel_kind(
         audit=audit,
     )
     set_channel_service(service)
-    # Pairing identity is a synced state area again. It was removed when
-    # channels stopped travelling — a published pairing would have named a
-    # channel the other machine did not have — and that premise is gone: a
-    # channel travels, so rebinding it to another machine is a thing that
-    # happens, and pairings are what make a rebind cost nothing. They carry
-    # platform identity only; the conversation pointer stays on this machine.
-    #
-    # Appended to the ``SyncContributions`` collector every other area uses
-    # (``app_mcp_composition``, ``engine_config_composition``,
-    # ``agent_skill_wiring``); ``start_sync`` reads it once every kind is wired.
-    # It must go through that object and not onto ``app.state``: nothing reads
-    # ``app.state`` for state providers, so an area that registers there
-    # silently does not converge.
-    sync.state_providers.append(ChannelPeerSyncState(resource_svc, peers))
     return runtime
 
 

@@ -50,10 +50,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyAuditRepo,
-    SqlAlchemyResourceRepo,
-)
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
@@ -67,6 +64,7 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
 from tests.support.facets import agent_catalog, installed
+from tests.support.vault_stores import make_resource_repo
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-cli"
@@ -88,7 +86,7 @@ def agent_cli_daemon(tmp_path, monkeypatch):
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     kinds = {"agent": make_agent_kind(on_delete=None)}
-    resource_svc = ResourceService(kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
+    resource_svc = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit)
     agent_svc = AgentService(platform=HostPlatform(), resource_service=resource_svc, audit=audit)
     detect_svc = AutoDetectService(
         agent_service=agent_svc,

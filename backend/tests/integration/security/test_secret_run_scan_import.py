@@ -150,7 +150,7 @@ def _plaintext(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     env = secrets / "db.env"
     env.write_text("# the test database\nDB_HOST=db.internal\nDB_PASSWORD=hunter2hunter2\n")
     env.chmod(0o600)
-    skill = home / ".coffer" / "skills" / "deploy"
+    skill = home / ".coffer" / "vault" / "skills" / "deploy"
     (skill / "scripts").mkdir(parents=True)
     script = skill / "scripts" / "run.sh"
     script.write_text(

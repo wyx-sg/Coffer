@@ -121,7 +121,7 @@ Records logged outside a request — background workers, the MCP session reaper 
 
 ## The audit log
 
-The audit log answers "what changed, and who changed it". It lives in the `audit_log` table of `~/.coffer/coffer.db`.
+The audit log answers "what changed, and who changed it". It lives in the `audit_log` table of `~/.coffer/runs.db`, the history database.
 
 ### Shape of a row
 
@@ -130,13 +130,13 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 | `timestamp` | when the event happened (UTC) |
 | `event_type` | one value from the vocabulary below |
 | `actor` | who caused it: `cli`, `api`, `ui`, `system`, or another short lowercase identifier |
-| `resource_id` | the resource's row id, or empty for an event that names no resource |
+| `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted before the vault layout |
 | `resource_kind`, `resource_name` | the label the resource carried **at the time** |
 | `details` | event-specific fields, already redacted |
 
 Two decisions shape this:
 
-- **Identity and label are stored separately.** A resource's trail is queried by its id, so renaming a resource leaves its history intact, and old rows keep the name that was true when they were written. There is no way to audit an event by label alone; see [Resource framework](/architecture/resource-framework).
+- **Identity and label are stored separately.** A resource's trail is queried by its uid, so renaming a resource leaves its history intact, and old rows keep the name that was true when they were written. There is no way to audit an event by label alone; see [Resource framework](/architecture/resource-framework).
 - **Redaction happens before storage, per kind.** Each resource kind can supply an `audit_redactor` that strips secret fields from a configuration before it becomes `details`. The MCP server kind uses one to drop the `env` and `headers` maps from its transport, keeping only secret references.
 
 The actor comes from the `X-Coffer-Actor` request header, which must match `^[a-z][a-z0-9_-]{0,31}$`; a missing header means `api`, and anything else is rejected with `400`.
@@ -158,6 +158,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
+| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_internal_default_set`, `provider_transcribe_default_set`, `provider_projection_refused` |
 
@@ -227,10 +228,10 @@ flowchart LR
     R --> T2["archive idle conversations"]
     S --> M["sweep channel media dir"]
     W --> F["prune_log_dir: shim and upstream logs older than 7 days"]
-    S --> P["retention_policies: last_pruned_at, rows"]
+    S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- `RetentionService.initialize_defaults` seeds a `retention_policies` row for each registered table at startup and never overwrites one you changed.
+- `RetentionService.initialize_defaults` seeds a policy for each registered table in `~/.coffer/local/retention.json` at startup and never overwrites one you changed.
 - `RetentionWorker` runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.

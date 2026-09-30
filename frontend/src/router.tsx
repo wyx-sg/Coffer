@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
@@ -182,8 +182,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
 /** The Settings modal's routes, rendered over the page underneath. */
 const settingsRoutes: RouteObject[] = [
   { path: "settings", element: <SettingsIndexRedirect /> },
-  // Legacy route — Sync was a Settings tab before it became a page.
-  { path: "settings/sync", element: <Navigate to="/sync" replace /> },
   { path: "settings/:tab", element: settingsModal },
 ];
 

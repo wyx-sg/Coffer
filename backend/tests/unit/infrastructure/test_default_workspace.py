@@ -15,12 +15,12 @@ from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 def test_returns_workspace_under_coffer_home(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     result = default_workspace_dir()
-    assert result == str(tmp_path / ".coffer" / "workspace")
+    assert result == str(tmp_path / ".coffer" / "content" / "workspace")
 
 
 def test_creates_the_directory_when_absent(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert not (tmp_path / ".coffer" / "workspace").exists()
+    assert not (tmp_path / ".coffer" / "content" / "workspace").exists()
     result = default_workspace_dir()
     assert Path(result).is_dir()
 

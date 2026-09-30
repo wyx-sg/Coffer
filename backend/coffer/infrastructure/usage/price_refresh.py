@@ -37,6 +37,7 @@ import httpx
 from coffer.domain.usage.bundled_prices import BundledPrices, validate_payload
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
 from coffer.infrastructure.daemon.config import config_path
+from coffer.infrastructure.vault.home import derived_root
 
 _logger = logging.getLogger(__name__)
 
@@ -58,8 +59,7 @@ _SETTING = "price_refresh"
 
 
 def default_cache_path() -> Path:
-    home = Path(os.environ.get("HOME") or "~").expanduser()
-    return home / ".coffer" / "derived" / "genai-prices.json"
+    return derived_root() / "genai-prices.json"
 
 
 # --- the setting ---------------------------------------------------------------

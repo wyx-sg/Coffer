@@ -124,7 +124,7 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
 
   fireEvent.click(screen.getByRole("button", { name: "Delete folder…" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete the folder lint-rules?" });
-  expect(dialog).toHaveTextContent("~/.coffer/backup/");
+  expect(dialog).toHaveTextContent("~/.coffer/content/backup/");
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
   expect(api.removeOrphan).not.toHaveBeenCalled();
 

@@ -35,7 +35,6 @@ _CONNECTION_UID = "3c9a7b15d0e24f6688aa1b2c3d4e5f60"
 
 def _agent(config_dir: pathlib.Path) -> Resource:
     return Resource(
-        id=1,
         uid="f0e1d2c3b4a596877665544332211009",
         kind="agent",
         name="cc",
@@ -60,7 +59,6 @@ def _connection() -> Resource:
     name because the two halves of it go to different places: the uid into the
     ``apiKeyHelper``, the name into Codex's human-readable provider label."""
     return Resource(
-        id=2,
         uid=_CONNECTION_UID,
         kind="provider",
         name="x",

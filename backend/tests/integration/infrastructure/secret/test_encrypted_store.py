@@ -1,9 +1,10 @@
-"""EncryptedSecretStore — Fernet-encrypted secrets in SQLite."""
+"""EncryptedSecretStore — Fernet ciphertext as one file per ref (ADR
+storage-is-five-classes-by-nature)."""
 
 from __future__ import annotations
 
 import pathlib
-import sqlite3
+import threading
 
 import pytest
 from cryptography.fernet import Fernet
@@ -11,30 +12,10 @@ from cryptography.fernet import Fernet
 from coffer.domain.errors import SecretUnreadable
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 
-_SCHEMA = """
-CREATE TABLE secrets (
-    ref TEXT PRIMARY KEY,
-    ciphertext BLOB NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    last_used_at TEXT
-)
-"""
-
 
 @pytest.fixture
-def db_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    p = tmp_path / "coffer.db"
-    conn = sqlite3.connect(p)
-    conn.execute(_SCHEMA)
-    conn.commit()
-    conn.close()
-    return p
-
-
-@pytest.fixture
-def store(db_path: pathlib.Path) -> EncryptedSecretStore:
-    return EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key())
+def store(tmp_path: pathlib.Path) -> EncryptedSecretStore:
+    return EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
 
 
 def test_set_get_roundtrip(store: EncryptedSecretStore) -> None:
@@ -59,7 +40,7 @@ def test_delete_is_idempotent(store: EncryptedSecretStore) -> None:
     assert store.get("ref") is None
 
 
-def test_remove_reports_whether_a_row_was_removed(store: EncryptedSecretStore) -> None:
+def test_remove_reports_whether_a_file_was_removed(store: EncryptedSecretStore) -> None:
     store.set("ref", "v")
     store.set("other", "w")
     assert store.remove("ref") is True
@@ -72,19 +53,24 @@ def test_remove_reports_whether_a_row_was_removed(store: EncryptedSecretStore) -
 def test_count(store: EncryptedSecretStore) -> None:
     assert store.count() == 0
     store.set("a", "1")
-    store.set("b", "2")
-    assert store.count() == 2
+    store.set("b/c", "2")
+    store.set("proxy-token/agent", "3")
+    assert store.count() == 3
 
 
-def test_plaintext_not_in_db_file(db_path: pathlib.Path, store: EncryptedSecretStore) -> None:
-    store.set("ref", "super-plain-secret")
-    assert b"super-plain-secret" not in db_path.read_bytes()
+def test_list_refs_names_every_ref_never_a_value(store: EncryptedSecretStore) -> None:
+    store.set("b/two", "second-secret")
+    store.set("a", "first-secret")
+    store.set("proxy-token/x", "third-secret")
+    listed = store.list_refs()
+    assert [ref for ref, _c, _u in listed] == ["a", "b/two", "proxy-token/x"]
+    assert not any("secret" in created + updated for _r, created, updated in listed)
 
 
 @pytest.mark.acceptance(spec="secret", scenario="an unreadable ciphertext names its ref")
-def test_wrong_key_raises_secret_unreadable(db_path: pathlib.Path) -> None:
-    EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key()).set("ref", "v")
-    other = EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key())
+def test_wrong_key_raises_secret_unreadable(tmp_path: pathlib.Path) -> None:
+    EncryptedSecretStore(Fernet.generate_key(), home=tmp_path).set("ref", "v")
+    other = EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
     with pytest.raises(SecretUnreadable):
         other.get("ref")
 
@@ -98,14 +84,44 @@ def test_exists_false_for_missing(store: EncryptedSecretStore) -> None:
     assert store.exists("nope") is False
 
 
-def test_exists_does_not_decrypt_corrupt_row(db_path: pathlib.Path) -> None:
-    # A row written under one key is undecryptable under another: exists()
+def test_exists_does_not_decrypt_a_foreign_ciphertext(tmp_path: pathlib.Path) -> None:
+    # A file written under one key is undecryptable under another: exists()
     # must report present (no decrypt) while get() raises SecretUnreadable.
-    EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key()).set("ref", "v")
-    other = EncryptedSecretStore(db_path=db_path, key=Fernet.generate_key())
+    EncryptedSecretStore(Fernet.generate_key(), home=tmp_path).set("ref", "v")
+    other = EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
     assert other.exists("ref") is True
     with pytest.raises(SecretUnreadable):
         other.get("ref")
+
+
+def test_created_at_is_this_machines_first_store_and_survives_a_rewrite(
+    store: EncryptedSecretStore,
+) -> None:
+    store.set("ref", "v1")
+    first = store.created_at("ref")
+    assert first is not None
+    store.set("ref", "v2")
+    assert store.created_at("ref") == first
+    store.remove("ref")
+    assert store.created_at("ref") is None
+
+
+def test_a_ref_that_arrived_from_elsewhere_has_no_created_at(tmp_path: pathlib.Path) -> None:
+    """A ciphertext file this machine did not write (a sync round, the
+    migration) was never supplied here, so the secret boundary must not count
+    it as freshly supplied (spec secret "Hold a secret for a new
+    destination until a person approves it")."""
+    key = Fernet.generate_key()
+    here = EncryptedSecretStore(key, home=tmp_path)
+    arrived = here.path_of("gh/token")
+    arrived.parent.mkdir(parents=True)
+    arrived.write_bytes(Fernet(key).encrypt(b"v") + b"\n")
+
+    assert here.get("gh/token") == "v"
+    assert here.created_at("gh/token") is None
+    [(ref, created, updated)] = here.list_refs()
+    assert ref == "gh/token"
+    assert created == updated  # the listing shows the encryption time instead
 
 
 # --------------------------------------------------------------------------- #
@@ -114,7 +130,7 @@ def test_exists_does_not_decrypt_corrupt_row(db_path: pathlib.Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_facade_roundtrips_through_the_same_rows(
+async def test_async_facade_roundtrips_through_the_same_files(
     store: EncryptedSecretStore,
 ) -> None:
     await store.aset("svc/key", "s3cret")
@@ -128,12 +144,10 @@ async def test_async_facade_roundtrips_through_the_same_rows(
 
 @pytest.mark.asyncio
 async def test_async_facade_runs_the_blocking_call_off_the_loop_thread(
-    db_path: pathlib.Path,
+    tmp_path: pathlib.Path,
 ) -> None:
-    """The point of the facade: the SQLite call must not run on the loop thread,
-    where its busy-wait would stall every other request."""
-    import threading
-
+    """The point of the facade: file IO and a vault commit must not run on
+    the loop thread."""
     seen: list[int] = []
 
     class _Recording(EncryptedSecretStore):
@@ -145,8 +159,43 @@ async def test_async_facade_runs_the_blocking_call_off_the_loop_thread(
             seen.append(threading.get_ident())
             return super().exists(ref)
 
-    store = _Recording(db_path=db_path, key=Fernet.generate_key())
+    store = _Recording(Fernet.generate_key(), home=tmp_path)
     await store.aget("nope")
     await store.aexists("nope")
     assert len(seen) == 2
     assert all(ident != threading.get_ident() for ident in seen)
+
+
+# --------------------------------------------------------------------------- #
+# last used, locked refs, an imported key                                      #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_read_for_a_consumer_is_stamped_and_a_peek_is_not(store: EncryptedSecretStore) -> None:
+    """Spec secret "List every stored and cited secret with what uses it": the
+    stamp is machine-local, beside the boundary's other files."""
+    store.set("svc/key", "v")
+    assert store.peek("svc/key") == "v"
+    assert store.last_used() == {}
+    assert store.get("svc/key") == "v"
+    assert set(store.last_used()) == {"svc/key"}
+    store.delete("svc/key")
+    assert store.last_used() == {}
+
+
+def test_a_ciphertext_under_another_key_is_unreadable_without_decrypting(
+    tmp_path: pathlib.Path,
+) -> None:
+    other = EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
+    other.set("from/elsewhere", "x")
+    store = EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
+    store.set("from/here", "y")
+    assert store.unreadable_refs() == ["from/elsewhere"]
+
+
+def test_an_imported_key_seals_what_is_stored_after_it(tmp_path: pathlib.Path) -> None:
+    store = EncryptedSecretStore(Fernet.generate_key(), home=tmp_path)
+    imported = Fernet.generate_key()
+    store.use_key(imported)
+    store.set("after/import", "v")
+    assert EncryptedSecretStore(imported, home=tmp_path).peek("after/import") == "v"

@@ -1340,9 +1340,23 @@ components:
         bytes:
           title: Bytes
           type: integer
+        latest_time:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Latest Time
+        latest_writer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest Writer
         path:
           title: Path
           type: string
+        sync_configured:
+          title: Sync Configured
+          type: boolean
         versions:
           anyOf:
           - type: integer
@@ -1352,5 +1366,8 @@ components:
       - path
       - bytes
       - versions
+      - latest_time
+      - latest_writer
+      - sync_configured
       title: VaultUsageOut
       type: object

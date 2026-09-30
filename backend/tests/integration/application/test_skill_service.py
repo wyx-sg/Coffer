@@ -544,7 +544,7 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     src_v1 = tmp_path / "src_v1"
     _write_skill_folder(src_v1, name="my-skill", body="version one")
     r1 = await skill_svc.import_local(path=str(src_v1), actor="cli")
-    original_id = r1.id
+    original_uid = r1.uid
 
     # import auto-binds — symlink must exist
     link = skill_dir / "my-skill"
@@ -567,12 +567,12 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     assert r2.config["version_hash"] != r1.config["version_hash"]
 
     # (c) per-agent binding still exists (Resource row preserved — same id)
-    assert r2.id == original_id
+    assert r2.uid == original_uid
     # ...and so is its identity: a re-import is an update of the same resource.
     assert r2.uid == r1.uid
     bindings = await skill_svc.bindings_for(r2.uid)
     agent_resource = await skill_svc._rs.get_by_name("agent", "claude-code")
-    assert any(b.agent_resource_id == agent_resource.id for b in bindings)
+    assert any(b.agent_uid == agent_resource.uid for b in bindings)
 
     # (d) delivered symlink still resolves to the master (content updated in place)
     assert link.exists(), "symlink must still exist after overwrite"
@@ -941,8 +941,8 @@ async def test_a_refused_name_change_then_a_refused_title_leave_the_master_folde
     assert link.exists() and link.resolve() == master.resolve()
     # The same binding row still records the delivery.
     binding_after = (await skill_svc.bindings_for(skill.uid))[0]
-    assert binding_after.skill_resource_id == binding_before.skill_resource_id
-    assert binding_after.agent_resource_id == agent.id
+    assert binding_after.skill_uid == binding_before.skill_uid
+    assert binding_after.agent_uid == agent.uid
     assert binding_after.enabled
     assert binding_after.last_link_path == binding_before.last_link_path
     # SKILL.md — comments, other fields, body — and the hash are unchanged.

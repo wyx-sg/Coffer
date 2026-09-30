@@ -80,7 +80,7 @@ Pairing again from a different account replaces the owner. The previous owner's 
 
 ## Talk to an agent
 
-Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
+Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/content/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
 
 - A reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
 - While the agent works, one status line sits at the top of the live reply, and its clock keeps moving even during a long silent tool:
@@ -203,7 +203,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 ### Working directory
 
-A conversation normally runs in the Coffer-managed workspace `~/.coffer/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
+A conversation normally runs in the Coffer-managed workspace `~/.coffer/content/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
 Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the agent's own); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off. Or from the CLI:
 
@@ -218,7 +218,7 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.
 - `/dir default` returns to the channel's default directory.
-- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in <path> — started a fresh conversation".
+- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in `<path>` — started a fresh conversation".
 - A directory outside the list is refused, naming the allowed ones. A channel with no allowed directory answers how to add one.
 
 ### Resume an earlier conversation
@@ -343,7 +343,7 @@ If the bot is removed from a group, that group's sessions stop. If a SeaTalk gro
 
 ## Media
 
-Send photos, files, voice messages and other media as you would to a person. Each attachment is downloaded to `~/.coffer/channel-media` and handed to the agent in the form it can use:
+Send photos, files, voice messages and other media as you would to a person. Each attachment is downloaded to `~/.coffer/content/channel-media` and handed to the agent in the form it can use:
 
 | You send | The agent receives |
 | --- | --- |
@@ -353,7 +353,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |
 
-A file larger than the platform lets a bot download is not fetched; the turn text notes it, so the reply acknowledges it. Attachments are stored as references, so a later turn in the same conversation can still reach them. Files in `~/.coffer/channel-media` are pruned 30 days after they were last modified.
+A file larger than the platform lets a bot download is not fetched; the turn text notes it, so the reply acknowledges it. Attachments are stored as references, so a later turn in the same conversation can still reach them. Files in `~/.coffer/content/channel-media` are pruned 30 days after they were last modified.
 
 ::: warning Voice transcription sends audio off your machine
 Transcription sends the audio to the transcription provider you configured. It is off until you choose both a transcription provider and a model. A transcription failure never fails the turn; the agent gets the audio file instead.

@@ -96,7 +96,8 @@ def test_compare_then_keep_master(c: TestClient, tmp_path: pathlib.Path) -> None
     assert r.status_code == 200, r.text
     assert link.is_symlink()
     assert "master text" in (link / "SKILL.md").read_text()
-    backups = list((tmp_path / ".coffer" / "backup" / "skills" / "claude-code").iterdir())
+    backup_root = tmp_path / ".coffer" / "content" / "backup" / "skills"
+    backups = list((backup_root / "claude-code").iterdir())
     assert len(backups) == 1 and "agent text" in (backups[0] / "SKILL.md").read_text()
     assert c.post("/api/v1/skills/verify").json()["entries"] == []
 
@@ -169,7 +170,7 @@ def test_orphans_list_adopt_and_remove(c: TestClient, tmp_path: pathlib.Path) ->
 
     assert c.delete("/api/v1/skills/orphans/old-notes").status_code == 204
     assert not (root / "old-notes").exists()
-    assert list((tmp_path / ".coffer" / "backup" / "skills" / "orphans").iterdir())
+    assert list((tmp_path / ".coffer" / "content" / "backup" / "skills" / "orphans").iterdir())
     assert c.get("/api/v1/skills/orphans").json()["items"] == []
     # A claimed folder is no orphan.
     r = c.delete("/api/v1/skills/orphans/lint-rules")

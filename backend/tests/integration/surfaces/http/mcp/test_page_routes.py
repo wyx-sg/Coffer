@@ -23,13 +23,13 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.infrastructure.logging.files import upstream_log_path
 from coffer.infrastructure.mcp.persistence import (
-    MCPCapabilityPreferenceRepo,
+    MCPCapabilityPreferenceStore,
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
@@ -41,6 +41,7 @@ from coffer.surfaces.http.mcp.dependencies import (
 )
 from coffer.surfaces.http.mcp.page_routes import router as page_router
 from coffer.surfaces.http.secret_composition import get_secret_store
+from tests.support.vault_stores import derived_sm, make_resource_repo
 
 NOW = datetime.now(tz=UTC)
 
@@ -72,7 +73,7 @@ class _Ctx:
 
     async def tools(self, resource, *names: str, seen: datetime = NOW, off: tuple = ()):
         for n in names:
-            await self.prefs.insert(resource.id, "tool", n, n not in off, seen, seen)
+            await self.prefs.insert(resource.uid, "tool", n, n not in off, seen, seen)
 
     async def call(self, uid: str, tool: str, status: str = "ok", *, ago: int = 60, **kw):
         await self.invocations.insert(
@@ -103,18 +104,16 @@ async def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    rsvc = ResourceService(
-        kinds={
-            "mcp_server": Kind(
-                name="mcp_server", display_name="MCP Server", config_schema=MCPServerConfig
-            )
-        },
-        repo=SqlAlchemyResourceRepo(sm),
-        audit=audit,
-    )
-    prefs = MCPCapabilityPreferenceRepo(sm)
-    invocations = MCPInvocationRepo(sm)
-    health = MCPServerHealthRepo(sm)
+    kinds = {
+        "mcp_server": Kind(
+            name="mcp_server", display_name="MCP Server", config_schema=MCPServerConfig
+        )
+    }
+    repo = make_resource_repo(kinds)
+    rsvc = ResourceService(kinds=kinds, repo=repo, audit=audit)
+    prefs = MCPCapabilityPreferenceStore(derived_sm())
+    invocations = MCPInvocationRepo(sm, name_of=repo.name_of)
+    health = MCPServerHealthRepo(derived_sm())
     store = _Store(set())
     set_active_token("tok")
     app = FastAPI()

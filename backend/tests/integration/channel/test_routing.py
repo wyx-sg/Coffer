@@ -69,11 +69,11 @@ async def test_switching_the_agent_drops_the_model_but_keeps_the_directory(
     env.add_agent("codex")
     resource, _adapter = await env.paired_channel()
     await env.processor.on_message(inbound("tg", "owner", "/model opus high"))
-    await env.threads.set_preferences(resource.id, "owner", "", cwd="/src/app")
+    await env.threads.set_preferences(resource.uid, "owner", "", cwd="/src/app")
 
     await env.processor.on_message(inbound("tg", "owner", "/new codex"))
 
-    row = await env.threads.get(resource.id, "owner", "")
+    row = await env.threads.get(resource.uid, "owner", "")
     assert row is not None
     assert (row.preferred_agent, row.preferred_model, row.preferred_effort) == (
         "codex",

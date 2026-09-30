@@ -27,13 +27,7 @@ from coffer.domain.skill.drift import DriftKind
 _HANDS_OFF = "Do not move, delete or edit any folder yourself; I press the button in Coffer."
 
 
-def _backup_root(store_folder: str) -> pathlib.Path:
-    """``~/.coffer/backup/skills`` for a folder in ``~/.coffer/skills/``."""
-    return pathlib.Path(store_folder).parent.parent / "backup" / "skills"
-
-
-def foreign_folder_handoff(*, skill: str, folder: str, master: str) -> str:
-    backup = _backup_root(master)
+def foreign_folder_handoff(*, skill: str, folder: str, master: str, backup: pathlib.Path) -> str:
     return render_handoff(
         Handoff(
             task=(
@@ -61,8 +55,7 @@ def foreign_folder_handoff(*, skill: str, folder: str, master: str) -> str:
     )
 
 
-def orphan_master_handoff(*, name: str, folder: str) -> str:
-    backup = _backup_root(folder)
+def orphan_master_handoff(*, name: str, folder: str, backup: pathlib.Path) -> str:
     return render_handoff(
         Handoff(
             task=(
@@ -89,8 +82,7 @@ def orphan_master_handoff(*, name: str, folder: str) -> str:
     )
 
 
-def missing_master_handoff(*, skill: str, master: str) -> str:
-    backup = _backup_root(master)
+def missing_master_handoff(*, skill: str, master: str, backup: pathlib.Path) -> str:
     return render_handoff(
         Handoff(
             task=(
@@ -105,11 +97,15 @@ def missing_master_handoff(*, skill: str, master: str) -> str:
                 f"`coffer skill show {skill} --json` prints where the skill came from (its "
                 "`source`: a Git repository, a folder or an archive).",
                 "An agent's skills folder may still hold a copied (not linked) copy of it.",
+                "The master folder is in Coffer's vault, whose history keeps its earlier "
+                "versions: Restore on the skill's Files tab in Coffer puts back the newest "
+                "version that still had files.",
             ),
             steps=(
                 "Look for a copy: in those backups, in the agents' skills folders and at the "
                 "skill's source; only read.",
-                "Tell me what you found, which copy is the newest, and whether it is complete "
+                "Tell me what you found, which copy is the newest — Coffer's own restore "
+                "included — and whether it is complete "
                 f"(a SKILL.md whose `name` is {skill}).",
                 f"Once I agree, copy (don't move) that copy to {master}; Coffer links it to the "
                 "agents again on its next pass. If nothing can be recovered, say so, and I will "
@@ -120,19 +116,23 @@ def missing_master_handoff(*, skill: str, master: str) -> str:
     )
 
 
-def drift_handoff(kind: DriftKind, *, skill: str, path: str, master: str) -> str | None:
+def drift_handoff(
+    kind: DriftKind, *, skill: str, path: str, master: str, backup: pathlib.Path
+) -> str | None:
     """The hand-off for one drift finding, or ``None`` when Repair is the fix.
 
     ``path`` is where the finding is (the link path; for an orphan, its
     folder); ``master`` is the skill's master folder (for an orphan, its folder
-    again).
+    again); ``backup`` is where set-aside folders go
+    (``MasterStorePort.backup_root``, class ``content`` — not beside the
+    master, which lives in the vault).
     """
     if kind is DriftKind.REPLACED_WITH_REGULAR:
-        return foreign_folder_handoff(skill=skill, folder=path, master=master)
+        return foreign_folder_handoff(skill=skill, folder=path, master=master, backup=backup)
     if kind is DriftKind.ORPHAN_MASTER:
-        return orphan_master_handoff(name=skill, folder=path)
+        return orphan_master_handoff(name=skill, folder=path, backup=backup)
     if kind is DriftKind.MISSING_MASTER:
-        return missing_master_handoff(skill=skill, master=master)
+        return missing_master_handoff(skill=skill, master=master, backup=backup)
     return None
 
 

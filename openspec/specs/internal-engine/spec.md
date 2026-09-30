@@ -48,22 +48,25 @@ gate.
 ### Requirement: Keep the engine's settings in one global row
 The system MUST keep Coffer's own operating settings — the engine model, the
 speech-to-text model, the bound on one model call, each unattended pass's
-switch and optional interval, and the curation owner, plus the timestamp of the
-last write — in one global row whose primary key is fixed, with a database
-constraint making a second row unrepresentable whatever writes it. `NULL` means
-"the built-in default" for an interval and for the bound, "unchosen" for a
-model, and "no owner named" for the curation owner.
+switch and optional interval, and the curation owner — in one vault document at
+one fixed path, `state/settings/internal-engine.json` ([vault-storage](../vault-storage/spec.md) "Keep every vault document a JSON object that preserves what it does not know"),
+so a second copy is unrepresentable whatever writes it. The time of the last
+write is not in the document, because two machines stamping it would conflict
+on every edit: it is this machine's own record, `~/.coffer/local/engine.json`.
+An absent key or `null` means "the built-in default" for an interval and for
+the bound, "unchosen" for a model, and "no owner named" for the curation owner.
 
 #### Scenario: a second engine settings row is unrepresentable
-- **GIVEN** the internal-engine settings row exists,
-- **WHEN** a second row is inserted directly into the table,
-- **THEN** the database refuses it, so "which settings does the engine use?"
-  cannot become a question with two answers.
+- **GIVEN** the internal-engine settings document exists,
+- **WHEN** the settings are written again,
+- **THEN** the vault still holds exactly one settings document, at
+  `state/settings/internal-engine.json`, so "which settings does the engine
+  use?" cannot become a question with two answers.
 
 ### Requirement: Report and set the engine model over HTTP
 `GET /api/v1/internal-engine-config` MUST report the engine model, the
 speech-to-text model, the chosen call bound beside the default that applies
-while none is chosen, when the row was last written, and every pass's switch,
+while none is chosen, when this machine last wrote the settings, and every pass's switch,
 chosen interval and default interval. `PUT /api/v1/internal-engine-config` MUST
 set the model, treating a blank or null value as clearing it.
 
@@ -77,12 +80,13 @@ set the model, treating a blank or null value as clearing it.
   internal-default connection.
 
 ### Requirement: Audit every write to the engine settings
-Every write to the row MUST record an `internal_engine_model_set` audit entry
-naming the actor and carrying the values after the write, so a change made on
-another machine and converged here is as visible as one made on this one.
+Every write to the settings MUST record an `internal_engine_model_set` audit
+entry naming the actor and carrying the values after the write. A change another
+machine made arrives as a sync commit to the settings document, and is as visible
+in that document's history as one made here ([vault-storage](../vault-storage/spec.md) "Show, compare and restore any version of a vault file").
 
 #### Scenario: record every settings write with its actor and values
-- **GIVEN** the internal-engine settings row,
+- **GIVEN** the internal-engine settings,
 - **WHEN** the model, one pass's switch, the call bound and the speech-to-text
   model are each written by an actor,
 - **THEN** each write records an `internal_engine_model_set` audit entry naming
@@ -91,14 +95,14 @@ another machine and converged here is as visible as one made on this one.
 
 ### Requirement: Resolve the engine's connection and model together
 `resolve_internal_connection()` MUST return the connection flagged
-`internal_default` ([provider-switching](../provider-switching/spec.md) "Keep at most one internal-engine default") paired with the engine model,
+`internal_default` ([provider-switching](../provider-switching/spec.md) "Keep at most one internal default connection") paired with the engine model,
 or `None` when no connection is flagged or no model is chosen. The connection
 carries no model of its own to fall back to, so the two halves resolve together
 or not at all.
 
 #### Scenario: pair the flagged connection with the chosen engine model
 - **GIVEN** two connections, one flagged `internal_default`, and an engine model
-  chosen on the settings row,
+  chosen in the settings,
 - **WHEN** a consumer asks the engine which connection to run on,
 - **THEN** it is answered with the flagged connection's endpoint and protocol
   paired with the chosen engine model — never the other connection,
@@ -163,7 +167,7 @@ kind-agnostic substrate rather than a facet of the connection registry.
   the engine's connection.
 
 ### Requirement: Carry a switch and interval for each unattended pass
-The same row MUST carry a switch and an interval for each of the three passes
+The same document MUST carry a switch and an interval for each of the three passes
 Coffer runs on its own behalf — `aggregate` (reads the agents' own memory into
 the derived tree, [memory](../memory/spec.md) "Aggregate on an interval and on demand"), `distil` (lets the model rewrite that
 derived digest, [memory](../memory/spec.md) "Distil incrementally in two stages") and `curate` (derives the knowledge documents
@@ -254,27 +258,26 @@ cannot ship OFF.
 
 ### Requirement: Converge the settings as the `settings` state area
 The settings MUST travel as sync state area `settings`, document
-`state/settings/internal-engine.yaml` (vault-sync), carrying the model, the call
+`state/settings/internal-engine.json` ([vault-sync](../vault-sync/spec.md) "Converge shared state areas"), carrying the model, the call
 bound, the speech-to-text model, the curation owner and every pass's switch and
 interval — Coffer's passes behave the same everywhere only when they run on the
 same model, switching a rewriter off is exactly the decision a second machine
 must not be left out of, and the owner only means anything when every machine
-holds the same one. A document that does not carry the owner MUST leave this
-machine's owner alone, by the same rule as the other keys (see "Leave settings
-alone for keys an incoming document omits").
+holds the same one. The document is the
+settings, with no second copy on this machine: a key it does not carry MUST read
+as that key's default, and a key this build does not know MUST survive every
+write this build makes.
 
 #### Scenario: the engine's settings converge and a deletion means the defaults
-- **GIVEN** one machine has chosen an engine model and switched `curate` off while
-  a second machine still holds the defaults,
-- **WHEN** a converge round runs,
-- **THEN** the second machine takes both decisions from
-  `state/settings/internal-engine.yaml`, which carries the call bound and the
-  speech-to-text model beside them; a machine holding only the defaults
-  publishes no document at all; a document carrying no upkeep block leaves this
-  machine's switches alone, and one carrying neither of the two newer keys
-  leaves this machine's bound and speech-to-text model alone for the same
-  reason; and deleting the document resets this machine to the defaults with the
-  write audited as `sync`.
+- **GIVEN** a machine that has chosen nothing, whose settings read as the defaults
+  with no settings document in the vault,
+- **WHEN** it chooses an engine model, switches `curate` off with an interval and
+  sets the call bound,
+- **THEN** `state/settings/internal-engine.json` carries each of those decisions and
+  no time of the write, which is in this machine's `local/engine.json`, and the
+  settings read back as written,
+- **AND** a key a newer build wrote into the document survives the next write,
+  and once the document is deleted every setting reads as its default again.
 
 ### Requirement: Publish no document while the defaults hold
 A machine still holding the defaults MUST publish NO document: the area carries
@@ -282,40 +285,25 @@ a decision, not a row. The tree holds the document exactly while some machine
 holds a non-default choice.
 
 #### Scenario: a machine holding the defaults publishes no settings document
-- **GIVEN** a machine that has never written the settings row, and a machine
-  whose row was written but holds only the defaults,
-- **WHEN** each exports the `settings` area,
-- **THEN** neither publishes a document,
+- **GIVEN** a machine that has never written the settings, and a machine whose
+  settings were written but hold only the defaults,
+- **WHEN** each machine's vault is read,
+- **THEN** neither holds a settings document,
 - **AND** once a non-default model is chosen, exactly one
   `internal-engine` document is published.
 
-### Requirement: Leave settings alone for keys an incoming document omits
-An incoming document that carries no upkeep block MUST leave this machine's
-switches and intervals alone rather than resetting them, and the same MUST hold
-key by key for the call bound and the speech-to-text model: a key the document
-does not carry is an older machine, not a decision. A key it carries —
-including an explicit null — is authoritative.
-
-#### Scenario: a document missing a key leaves this machine's value alone
-- **GIVEN** a machine with a pass switched off, a chosen call bound and a chosen
-  speech-to-text model,
-- **WHEN** it imports a settings document carrying only a model,
-- **THEN** the model is taken and the switch, the bound and the speech-to-text
-  model are left as they were,
-- **AND** a later document carrying an explicit null for the bound and the
-  speech-to-text model clears both.
-
 ### Requirement: Reset to the defaults when the document is deleted
-Deleting the document MUST reset this machine to the defaults, written through
-the same service as any other change and audited as `sync`.
+Deleting the document MUST put this machine on the defaults at once, with
+nothing written here: the absence of the document is the defaults. The deletion
+is itself the commit that removed the document — a sync commit naming the
+machine that made it, when it came from another one.
 
 #### Scenario: deleting the settings document resets this machine to the defaults
 - **GIVEN** a machine holding a chosen model, a switched-off pass, a chosen
   bound and a chosen speech-to-text model,
-- **WHEN** a converge round reports the settings document deleted,
+- **WHEN** a sync commit deletes the settings document,
 - **THEN** every one of those returns to its default,
-- **AND** the reset is recorded as audit entries whose actor is `sync`, and the
-  machine then publishes no document.
+- **AND** nothing is written back, so the vault holds no settings document.
 
 ### Requirement: Show, set and clear the engine model from the CLI
 A CLI MUST show, set and clear the engine model — `coffer config get engine.model`,
@@ -356,7 +344,7 @@ refused as an unknown key before any route is called.
   the first with the same error the route gives.
 
 ### Requirement: Carry the bound on one model call
-The row MUST carry the bound on ONE call to Coffer's own model, where `NULL`
+The settings document MUST carry the bound on ONE call to Coffer's own model, where `NULL`
 means the built-in default. The default MUST live in one place in the code
 rather than be copied into each vault, exactly as an unchosen interval's does
 (see "Report an unchosen interval beside its default"), so raising it later
@@ -416,7 +404,7 @@ wrong place to discover it.
   `PUT /api/v1/internal-engine-config/timeout` are refused.
 
 ### Requirement: Transcribe speech on its own connection and model
-The row MUST carry the speech-to-text model, separate from the engine model. The
+The settings document MUST carry the speech-to-text model, separate from the engine model. The
 connection it runs on MUST be the one flagged `transcribe_default`
 ([provider-switching](../provider-switching/spec.md) "Keep an independent speech-to-text default"), and the pair MUST resolve exactly as the
 engine's does: both halves or `None`. There MUST be NO fallback between the two

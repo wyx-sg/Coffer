@@ -43,7 +43,6 @@ def _agent(agent_type: AgentType, config_dir: pathlib.Path | None, *, uid: str) 
     if config_dir is not None:
         config["config_dir"] = str(config_dir)
     return Resource(
-        id=1,
         uid=uid,
         kind="agent",
         name=agent_type.default_name(),

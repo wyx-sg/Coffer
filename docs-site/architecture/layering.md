@@ -23,7 +23,7 @@ flowchart TB
   S["surfaces: http, cli, shim"]
   A["application: services, ports, workers"]
   D["domain: entities, value objects, rules"]
-  I["infrastructure: SQLite, keyring, files, SDKs"]
+  I["infrastructure: git, SQLite, keyring, files, SDKs"]
   CR["composition root"]
   S --> A
   A --> D
@@ -102,7 +102,7 @@ flowchart TB
   H --> W["Background workers"]
 ```
 
-[`kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway's handshake can name the memory root; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. What each kind contributes to sync — import gates, post-import hooks, synced state areas — is collected in one `SyncContributions` object and handed to the sync worker at the end.
+[`kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway's handshake can name the memory root; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. Sync needs nothing from any kind: it moves the vault repository's files, and after a round that changed something the reconciler runs one pass so each kind re-projects what arrived.
 
 HTTP routers are included from one table in [`surfaces/http/routing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/routing.py), which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in `surfaces/cli/main.py`.
 
@@ -134,7 +134,8 @@ backend/coffer/
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges, quota
-│   └── sync/               # manifest, diff, convergence and machine rules
+│   ├── vault/              # layout, storage classes, documents, format versions, writers
+│   └── sync/               # round statuses, stops, joins, the deletion breaker, machines
 ├── application/            # each kind package holds its services, ports and make_<kind>_kind()
 │   ├── resource_service.py # kind-agnostic CRUD, plus resource_*_ops.py
 │   ├── audit_service.py
@@ -157,9 +158,11 @@ backend/coffer/
 │   ├── memory/             # aggregate, distil, delivery, session-start context
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest, reports, subscription quota
-│   └── sync/               # converge round, exporter, appliers, worker, ports
+│   ├── vault/              # validation rules, history and restore, problems
+│   └── sync/               # the thin round, answers, join, rollback, worker
 ├── infrastructure/
-│   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic
+│   ├── persistence/        # runs.db (SQLAlchemy, Alembic) and derived.db
+│   ├── vault/              # the vault repository, its one writer, scanner, stores, the upgrade
 │   ├── secret/             # encrypted store, master key; the only keyring user
 │   ├── daemon/             # bootstrap, port, spawn, pid lock, daemon-config.json
 │   ├── net/                # SSRF guard
@@ -178,7 +181,7 @@ backend/coffer/
 │   ├── provider/           # provider introspector, local-runtime detection
 │   ├── model_proxy/        # the local model proxy process and its supervisor
 │   ├── usage/              # the proxy's usage spool, as the daemon reads it
-│   └── sync/               # git mirror, tree mirror, machine id
+│   └── sync/               # git over the vault, machine id and descriptor, local sync state
 └── surfaces/
     ├── http/               # FastAPI app, composition root, routes, *_wiring.py
     │   └── chat/ knowledge/ mcp/ memory/

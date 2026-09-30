@@ -93,7 +93,7 @@ class SkillSourceStatusOut(BaseModel):
 
 
 def status_out(status: SourceStatus | None, pinned: str) -> SkillSourceStatusOut:
-    s = status or SourceStatus(skill_resource_id=0)
+    s = status or SourceStatus(skill_uid="")
     return SkillSourceStatusOut(
         checked_at=s.checked_at,
         last_success_at=s.last_success_at,

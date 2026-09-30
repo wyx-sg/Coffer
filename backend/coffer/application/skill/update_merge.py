@@ -95,7 +95,7 @@ async def mark_merged(
         details={"from_commit": source.commit, "to_commit": target},
     )
     if target == latest:
-        status = await svc.status_repo.get(skill.id) or SourceStatus(skill_resource_id=skill.id)
+        status = await svc.status_repo.get(skill.uid) or SourceStatus(skill_uid=skill.uid)
         await svc.status_repo.put(
             status.with_(
                 latest_commit=latest, commits_ahead=0, files_changed=0, dismissed_commit=None

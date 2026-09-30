@@ -9,8 +9,7 @@
 //   key   — a ✓/✗ rather than two fingerprints to compare by eye. ✗ means that
 //           machine's secrets cannot be decrypted here; "—" means one side
 //           has published no fingerprint yet, which is not a mismatch.
-//   retire — says out loud that it also strips the machine from every scope
-//           naming it, because that is a change to OTHER resources.
+//   retire — removes only the machine's descriptor from the registry.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
@@ -22,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { Machine } from "@/lib/api/sync";
 import { useRenameSelf, useRetireMachine } from "@/lib/hooks/useMachines";
+import { formatDateTime } from "@/lib/utils";
+import { statusLabel } from "./syncRoundStatus";
 
 function KeyCell({ matches }: { matches: boolean | null }) {
   const { t } = useTranslation();
@@ -96,20 +97,33 @@ export function SyncMachineRow({ machine }: { machine: Machine }) {
       <TableCell>
         <NameCell machine={machine} />
       </TableCell>
-      <TableCell>{machine.os}</TableCell>
-      <TableCell className="font-mono text-xs">{machine.hostname}</TableCell>
-      <TableCell>{machine.coffer_version}</TableCell>
-      <TableCell title={t("sync.machines.lastConvergedHint")}>
-        {machine.last_converged_on ?? (
+      <TableCell>
+        {machine.os}
+        <span className="block font-mono text-xs text-muted-foreground">{machine.hostname}</span>
+      </TableCell>
+      <TableCell className="text-xs">
+        {machine.last_round_at ? (
+          formatDateTime(machine.last_round_at)
+        ) : (
           <span className="text-muted-foreground">{t("sync.machines.never")}</span>
         )}
       </TableCell>
+      <TableCell className="text-xs">
+        {machine.last_round ? statusLabel(t, machine.last_round) : "—"}
+      </TableCell>
+      <TableCell>{machine.coffer_version}</TableCell>
       <TableCell>
         <KeyCell matches={machine.key_matches} />
       </TableCell>
-      <TableCell>
+      <TableCell className="text-xs">
         {machine.agents.length > 0 ? (
-          machine.agents.join(", ")
+          <ul className="space-y-0.5">
+            {machine.agents.map((agent) => (
+              <li key={`${agent.type}:${agent.name}`}>
+                {t("sync.machines.agent", { type: agent.type, count: agent.plugins.length })}
+              </li>
+            ))}
+          </ul>
         ) : (
           <span className="text-muted-foreground">{t("sync.machines.noAgents")}</span>
         )}
@@ -125,13 +139,18 @@ export function SyncMachineRow({ machine }: { machine: Machine }) {
         )}
         <ConfirmDialog
           open={confirming}
-          onOpenChange={setConfirming}
+          onOpenChange={(next) => {
+            setConfirming(next);
+            if (!next) retire.reset();
+          }}
           title={t("sync.machines.retireTitle", { name: machine.name })}
           description={t("sync.machines.retireBody")}
           confirmLabel={t("sync.machines.retire")}
           pending={retire.isPending}
+          error={retire.error}
           onConfirm={() => {
-            retire.mutate(machine.machine_id, { onSettled: () => setConfirming(false) });
+            // Closes only on success, so a refusal stays up with its reason.
+            retire.mutate(machine.machine_id, { onSuccess: () => setConfirming(false) });
           }}
         />
       </TableCell>

@@ -154,7 +154,7 @@ For each of `coffer`, `coffer-daemon` and `coffer-mcp-shim`:
 
 Deployment is best-effort: a binary that cannot be copied is logged and skipped, and the daemon starts anyway. To roll back by hand, point the three symlinks at the previous version directory.
 
-Before running database migrations, the daemon also copies `coffer.db` (and its `-wal`/`-shm` files) to `coffer.db.pre-<revision>`, keeping the three most recent copies. See [Persistence](/architecture/persistence).
+Before running database migrations, the daemon also copies `runs.db` (and its `-wal`/`-shm` files) to `runs.db.pre-<revision>`, keeping the three most recent copies. The one-time move from `coffer.db` into the vault layout is not done by the daemon: it is `coffer migrate`, see [Upgrading an existing Coffer](/guides/upgrading). See [Persistence](/architecture/persistence).
 
 ::: warning
 `install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.

@@ -48,7 +48,7 @@ count, because they are never applied.
 It runs **in both directions** (spec vault-sync "Guard both directions"): over
 what the round would apply to the vault — the incoming diff plus the retry set,
 since a held path the tree has since dropped is absorbed as a deletion
-(spec vault-sync "Guard the retry set with the diff") — and over what this
+(the former vault-sync requirement "Guard the retry set with the diff") — and over what this
 round's export would publish as a deletion.
 
 It counts **losses** (`losses()` in `domain/sync/diff.py`;
@@ -71,7 +71,7 @@ real diff this took counted losses from 31 to 1 (PR #409).
 
 A trip records the round as `awaiting_confirmation` with the lost paths and
 the direction, and the user confirms, rejects, or — for a damaged machine —
-rebuilds from the remote (spec vault-sync "Rebuild a vault from the remote only on request").
+rebuilds from the remote (the former vault-sync requirement "Rebuild a vault from the remote only on request").
 A hold is **a question about one diff**, not a state:
 
 - the hold records the remote tip it was raised against, and a confirmation is
@@ -83,7 +83,7 @@ A hold is **a question about one diff**, not a state:
   (spec vault-sync "Release a hold whose diff no longer breaches") — so a vault
   held by a since-fixed defect converges on its own;
 - an outstanding hold is one recorded round, one log line and one audit event
-  however many ticks re-derive it (spec vault-sync "Record one outstanding confirmation once", PR #416).
+  however many ticks re-derive it (the former vault-sync requirement "Record one outstanding confirmation once", PR #416).
 
 Pros: bounds the damage of any defect in either direction; the three losses it
 exists for — wiped disk, failed restore, stray `rm -rf` — produce diffs with

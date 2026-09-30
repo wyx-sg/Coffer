@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import time
 import tomllib
 import types
 
@@ -66,6 +67,21 @@ def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
     monkeypatch.setenv("COFFER_PORT_RANGE_START", str(port_start))
     monkeypatch.setenv("COFFER_PORT_RANGE_END", str(port_start + 9))
     return create_app()
+
+
+def _settled(path: pathlib.Path, *, quiet: float = 1.0, limit: float = 15.0) -> bytes:
+    """``path``'s bytes once they have not changed for ``quiet`` seconds."""
+    deadline = time.monotonic() + limit
+    last = path.read_bytes()
+    stable_since = time.monotonic()
+    while time.monotonic() < deadline:
+        time.sleep(0.1)
+        now = path.read_bytes()
+        if now != last:
+            last, stable_since = now, time.monotonic()
+        elif time.monotonic() - stable_since >= quiet:
+            break
+    return last
 
 
 def _client(app) -> TestClient:
@@ -295,7 +311,10 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
     with _client(app) as c:
         uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
-        before = config.read_bytes()
+        # Registering the agent hints a reconcile pass that repairs Coffer's
+        # own entry in this file; wait it out, so "untouched" below is about
+        # the refused adoption and nothing else.
+        before = _settled(config)
 
         r = c.post(
             "/api/v1/resources",
@@ -316,7 +335,7 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
         assert err["code"] == "RESOURCE_ALREADY_EXISTS"
         assert err["details"]["suggested_name"] == "fetcher-codex"
         # Agent config untouched.
-        assert config.read_bytes() == before
+        assert _settled(config) == before
 
 
 @pytest.mark.acceptance(

@@ -15,6 +15,7 @@ This page takes you from a fresh clone to a running daemon and web UI built from
 | [uv](https://docs.astral.sh/uv/) | any recent | Installing the locked dependency set, `make lock` |
 | Node.js + npm | 20, the version every CI job uses | Web UI, the OpenSpec CLI, Playwright |
 | ripgrep (`rg`) | any | Knowledge curation, used by integration tests (CI installs it) |
+| git | 2.40 or later (`merge-tree --write-tree --merge-base`) | The vault is a git repository: the daemon refuses to start without git, and the vault and sync tests run it |
 | Rust toolchain ([rustup](https://rustup.rs)) + Xcode command line tools | stable | Only the desktop shell (`make desktop*`) |
 
 ::: warning Use Node 20
@@ -53,7 +54,7 @@ make dev
 `make dev` starts the daemon from `backend/` through its real entry point, `python -m coffer.infrastructure.daemon.entry`, with `COFFER_DEV_CORS=1`. It waits until `~/.coffer/daemon.json` exists and `GET /api/v1/daemon/status` answers, and then starts Vite on `http://localhost:5173`. A Vite plugin reads `daemon.json` and injects the daemon's port and API token into the page, so the UI is signed in without any setup. Press Ctrl-C to stop both processes. Backend changes need a restart, because the daemon runs without auto-reload.
 
 ::: danger `make dev` uses your real vault
-Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real database, knowledge, memory, skills and secrets. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 8000. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
+Run as-is, `make dev` reads and writes `~/.coffer`, which holds your real vault (configuration, knowledge, skills and secrets), history and memory. It also writes to your agents' configuration under your home directory, such as `~/.claude`. It also binds port 8000. If an installed Coffer is already running there, the dev daemon refuses to start and does not fall back to another port. Use a sandbox, as described next.
 :::
 
 Always start the daemon through `coffer.infrastructure.daemon.entry`, never with a bare `uvicorn coffer.main:app`. The entry point allocates the port, mints the API token and writes `daemon.json`. Without it every token-gated endpoint answers `503`.
@@ -96,8 +97,8 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | Bind the first free port in this range instead of the configured fixed port (default 8000) |
 | `COFFER_DEV_CORS=1` | Allow the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, plus the desktop shell's origins. Without it the daemon refuses requests from those origins with `403 ORIGIN_NOT_ALLOWED` |
 | `COFFER_CORS_ORIGINS` | Comma-separated list that replaces the CORS allowlist entirely, shell origins included. Use it when your UI runs on any other origin |
-| `COFFER_DB_URL` | SQLAlchemy URL of the database (default `sqlite+aiosqlite:///~/.coffer/coffer.db`) |
-| `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_AGENT_STATE_ROOT` | Move the knowledge tree, the memory tree or the agent-state cache |
+| `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
+| `COFFER_DB_URL` | SQLAlchemy URL of the history database (default `sqlite+aiosqlite:///~/.coffer/runs.db`) |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
 | `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. The registry is empty right now, so there is nothing to pin |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
@@ -105,7 +106,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.
 
 ::: danger Tests must never see your real vault
-`backend/tests/conftest.py` pins `COFFER_LOG_DIR`, `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_AGENT_STATE_ROOT` to temporary directories before any test module is imported. Without those pins, a test that boots the app runs the knowledge and memory migrations on the real `~/.coffer`. If you write a script or fixture outside pytest that starts the app, set these variables yourself.
+`backend/tests/conftest.py` points `HOME` at a throwaway directory and strips every inherited `COFFER_*` variable before any test module is imported, gives every test its own `HOME`, and pins `COFFER_LOG_DIR`. A tripwire (`tests/support/real_home_guard.py`) also refuses, and fails the test for, any file, SQLite or spawn event under the real `~/.coffer`. Because every tree resolves from `HOME`, a fresh `HOME` isolates all of them. If you write a script or fixture outside pytest that starts the app, give it its own `HOME`.
 :::
 
 ## A tour of the repository

@@ -4,8 +4,8 @@
 routes are wired exactly as production wires them — real SQLite, real
 markdown files under a temp HOME, the real converter registry — then drives
 them with a Starlette ``TestClient`` (an ``httpx.Client`` subclass). It pins
-``COFFER_KNOWLEDGE_ROOT`` into ``tmp_path``, so no test here ever touches a
-real ``~/.coffer``.
+``HOME`` to ``tmp_path`` — the knowledge root is ``tmp_path/.coffer/vault/knowledge``
+— so no test here ever touches a real ``~/.coffer``.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
 
     app = create_app()
     set_active_token(_TOKEN)

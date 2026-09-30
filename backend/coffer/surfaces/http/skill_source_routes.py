@@ -19,7 +19,7 @@ from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import GitImportSource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.skill_dependencies import get_skill_service, get_skill_source_service
-from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_id, _to_skill_out
+from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_uid, _to_skill_out
 from coffer.surfaces.http.skill_source_schemas import (
     SkillSourceStatusOut,
     SkillStageFolderRequest,
@@ -93,7 +93,7 @@ async def confirm_stage(
     actor: str = Depends(_actor),
 ) -> SkillStagingConfirmOut:
     added = await sources.confirm(staging_id, names=body.skills, replace=body.replace, actor=actor)
-    agents = await _agents_by_id(svc)
+    agents = await _agents_by_uid(svc)
     return SkillStagingConfirmOut(
         items=[await _to_skill_out(svc, r, agents, sources=sources) for r in added]
     )
@@ -167,7 +167,7 @@ async def apply_update(
     updated = await sources.apply(
         uid, body.staging_id, discard_local_edits=body.discard_local_edits, actor=actor
     )
-    return await _to_skill_out(svc, updated, await _agents_by_id(svc), sources=sources)
+    return await _to_skill_out(svc, updated, await _agents_by_uid(svc), sources=sources)
 
 
 @router.post("/{uid}/source/keep", response_model=SkillSourceStatusOut)
@@ -195,4 +195,4 @@ async def record_merged(
     edits"): pin the skill to the upstream commit its local edits were merged
     with, leaving the master folder's files as they are."""
     updated = await sources.mark_merged(uid, body.commit, actor=actor)
-    return await _to_skill_out(svc, updated, await _agents_by_id(svc), sources=sources)
+    return await _to_skill_out(svc, updated, await _agents_by_uid(svc), sources=sources)

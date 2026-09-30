@@ -21,6 +21,8 @@ from starlette.testclient import TestClient
 
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.knowledge.paths import knowledge_root
+from coffer.infrastructure.memory.paths import memory_root
 from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.support.features import FAKE_FEATURE
 
@@ -30,6 +32,17 @@ fake_tool = gates.fake_tool
 _assert_disabled = gates._assert_disabled
 _client = gates._client
 _switch = gates._switch
+
+
+def _names_memory(told: str) -> bool:
+    """Whether a text an agent is handed says where the memory notes are: the
+    guide names the root in its ``~`` form; the handshake names it absolutely,
+    or — when that would break its length cap, as a test HOME's long path does
+    — the command that prints it."""
+    return any(
+        root in told
+        for root in ("~/.coffer/derived/memory", str(memory_root()), "coffer path memory")
+    )
 
 
 def _collection(c: TestClient, name: str) -> str:
@@ -52,7 +65,7 @@ def test_a_switched_off_features_resources_are_out_of_reach(
 ) -> None:
     with _client() as c:
         uid = _collection(c, "research")
-        folder = home / "knowledge" / "research"
+        folder = knowledge_root() / "research"
         assert folder.is_dir()
 
         _switch(c, FAKE_FEATURE, False)
@@ -113,7 +126,7 @@ def _listed_tools(c: TestClient) -> set[str]:
 
 
 def _guide(home: pathlib.Path) -> str:
-    return (home / ".coffer" / "skills" / GUIDE_SKILL_NAME / "SKILL.md").read_text()
+    return (home / ".coffer" / "derived" / "skills" / GUIDE_SKILL_NAME / "SKILL.md").read_text()
 
 
 @pytest.mark.acceptance(
@@ -138,8 +151,8 @@ def test_agents_are_told_about_both_tools_and_both_roots(home: pathlib.Path) -> 
             assert tool in told
         for retired in ("coffer__recall", "coffer__diagnose"):
             assert retired not in told
-        assert str(home / "memory") in told
+        assert _names_memory(told)
         assert "coffer log" in told
         assert "coffer path logs" in told
     assert "<!--" not in guide
-    assert str(home / "knowledge") in guide
+    assert "~/.coffer/vault/knowledge" in guide

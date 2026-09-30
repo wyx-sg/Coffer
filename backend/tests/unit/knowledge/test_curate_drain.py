@@ -36,9 +36,9 @@ def _edited(title: str) -> str:
     path = fs.write_file(
         directory="shopee", title=title, description="d", body="b", curated=True
     ).path
-    # A person's edit on disk moves the file past its curation stamp.
-    later = time.time() + 5
-    os.utime(fs.paths.resolve(path), (later, later))
+    # A person's edit on disk changes the content curation last settled.
+    target = fs.paths.resolve(path)
+    target.write_text(target.read_text(encoding="utf-8") + "\nedited\n", encoding="utf-8")
     return path
 
 

@@ -73,7 +73,6 @@ class _Rig:
 
 @pytest.fixture
 def rig(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(tmp_path / "vault" / "memory-triggers"))
     repo = tmp_path / "work" / "coffer"
     other = tmp_path / "work" / "other"
     memory = corpus(str(repo))

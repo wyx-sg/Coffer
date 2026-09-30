@@ -1,93 +1,104 @@
-"""``skill_source_status`` — one row per Git-imported skill, machine-local.
+"""What this machine last learned about each Git-imported skill's source, in
+``local/skill-source-status.json`` (spec skill-manager "Update a Git-imported
+skill from its source"; plan D10).
 
-Spec skill-manager "Update a Git-imported skill from its source". The row is
-an observation (when this machine last checked, what it found), not vault
-state: nothing in the sync bundle reads this table, and the row goes with its
-skill (``ON DELETE CASCADE``).
+The record is an observation made here — when this machine last checked, what
+it found — so it is local state keyed by the skill's uid: never in the vault,
+never synced. The skill kind removes a record when its skill is deleted.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
-
-from sqlalchemy import TIMESTAMP, ForeignKey, Integer, String, Text, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
+from pathlib import Path
+from typing import Any
 
 from coffer.domain.skill.source_status import SourceStatus
-from coffer.infrastructure.persistence.base import Base
+from coffer.infrastructure.vault.home import local_root
+from coffer.infrastructure.vault.json_store import JsonStore
 
 
-class SkillSourceStatusModel(Base):
-    __tablename__ = "skill_source_status"
-
-    skill_resource_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
-    )
-    checked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    last_success_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
-    )
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    latest_commit: Mapped[str | None] = mapped_column(String, nullable=True)
-    commits_ahead: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    files_changed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    dismissed_commit: Mapped[str | None] = mapped_column(String, nullable=True)
+def source_status_path() -> Path:
+    return local_root() / "skill-source-status.json"
 
 
-def _tz(dt: datetime | None) -> datetime | None:
-    if dt is None:
+def _time(raw: Any) -> datetime | None:
+    if not isinstance(raw, str):
         return None
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+    try:
+        value = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
-def _to_domain(row: SkillSourceStatusModel) -> SourceStatus:
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _int(raw: Any) -> int:
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+
+
+def _str(raw: Any) -> str | None:
+    return raw if isinstance(raw, str) else None
+
+
+def _to_domain(uid: str, raw: dict[str, Any]) -> SourceStatus:
     return SourceStatus(
-        skill_resource_id=row.skill_resource_id,
-        checked_at=_tz(row.checked_at),
-        last_success_at=_tz(row.last_success_at),
-        error=row.error,
-        latest_commit=row.latest_commit,
-        commits_ahead=row.commits_ahead,
-        files_changed=row.files_changed,
-        dismissed_commit=row.dismissed_commit,
+        skill_uid=uid,
+        checked_at=_time(raw.get("checked_at")),
+        last_success_at=_time(raw.get("last_success_at")),
+        error=_str(raw.get("error")),
+        latest_commit=_str(raw.get("latest_commit")),
+        commits_ahead=_int(raw.get("commits_ahead")),
+        files_changed=_int(raw.get("files_changed")),
+        dismissed_commit=_str(raw.get("dismissed_commit")),
     )
+
+
+def _to_json(status: SourceStatus) -> dict[str, Any]:
+    return {
+        "checked_at": _iso(status.checked_at),
+        "last_success_at": _iso(status.last_success_at),
+        "error": status.error,
+        "latest_commit": status.latest_commit,
+        "commits_ahead": status.commits_ahead,
+        "files_changed": status.files_changed,
+        "dismissed_commit": status.dismissed_commit,
+    }
 
 
 class SkillSourceStatusRepo:
-    def __init__(self, sm: async_sessionmaker[AsyncSession]) -> None:
-        self._sm = sm
+    """``SourceStatusRepoPort`` over ``local/skill-source-status.json``."""
 
-    async def get(self, skill_id: int) -> SourceStatus | None:
-        async with self._sm() as session:
-            row = await session.get(SkillSourceStatusModel, skill_id)
-            return _to_domain(row) if row else None
+    def __init__(self, path: Path | Callable[[], Path] = source_status_path) -> None:
+        self._store = JsonStore(path)
 
-    async def list_all(self) -> dict[int, SourceStatus]:
-        async with self._sm() as session:
-            rows = (await session.execute(select(SkillSourceStatusModel))).scalars().all()
-            return {r.skill_resource_id: _to_domain(r) for r in rows}
+    async def get(self, skill_uid: str) -> SourceStatus | None:
+        raw = self._store.read().get(skill_uid)
+        return _to_domain(skill_uid, raw) if isinstance(raw, dict) else None
+
+    async def list_all(self) -> dict[str, SourceStatus]:
+        return {
+            uid: _to_domain(uid, raw)
+            for uid, raw in self._store.read().items()
+            if isinstance(raw, dict)
+        }
 
     async def put(self, status: SourceStatus) -> SourceStatus:
-        async with self._sm() as session, session.begin():
-            row = await session.get(SkillSourceStatusModel, status.skill_resource_id)
-            if row is None:
-                row = SkillSourceStatusModel(skill_resource_id=status.skill_resource_id)
-                session.add(row)
-            row.checked_at = status.checked_at
-            row.last_success_at = status.last_success_at
-            row.error = status.error
-            row.latest_commit = status.latest_commit
-            row.commits_ahead = status.commits_ahead
-            row.files_changed = status.files_changed
-            row.dismissed_commit = status.dismissed_commit
+        def change(doc: dict[str, Any]) -> None:
+            doc[status.skill_uid] = _to_json(status)
+
+        self._store.update(change)
         return status
 
-    async def delete(self, skill_id: int) -> None:
-        async with self._sm() as session, session.begin():
-            row = await session.get(SkillSourceStatusModel, skill_id)
-            if row is not None:
-                await session.delete(row)
+    async def delete(self, skill_uid: str) -> None:
+        def change(doc: dict[str, Any]) -> None:
+            doc.pop(skill_uid, None)
+
+        self._store.update(change)
 
 
-__all__ = ["SkillSourceStatusModel", "SkillSourceStatusRepo"]
+__all__ = ["SkillSourceStatusRepo", "source_status_path"]

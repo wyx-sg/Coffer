@@ -202,8 +202,8 @@ function SyncTile({ area, items }: AreaProps) {
       content={(sync) => ({
         status: tileStatus(t, area, items, sync.configured),
         value: sync.configured
-          ? t(`overview.health.sync.round.${sync.last_run?.status ?? "none"}`, {
-              defaultValue: sync.last_run?.status ?? "",
+          ? t(`overview.health.sync.round.${sync.last_round?.status ?? "none"}`, {
+              defaultValue: sync.last_round?.status ?? "",
             })
           : t("overview.health.sync.notSetUp"),
         summary: sync.remote?.url ?? t("overview.health.sync.noRemote"),

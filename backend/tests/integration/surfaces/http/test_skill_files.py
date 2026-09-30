@@ -1,7 +1,7 @@
 """HTTP coverage for the skill file viewer + editor (spec skill-manager).
 
 Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
-master store lands under ``tmp_path/.coffer/skills`` and a temp SQLite DB.
+master store lands under ``tmp_path/.coffer/vault/skills`` and a temp SQLite DB.
 Imports a skill with a nested folder, then exercises the endpoints:
 
 - ``GET /skills/{uid}/files`` — tree shape
@@ -15,7 +15,7 @@ Imports a skill with a nested folder, then exercises the endpoints:
 
 The skill is addressed by its ``uid``, taken straight off the import response
 (ADR resource-identity-is-an-immutable-uid). Its NAME still appears in the
-assertions, because the master folder on disk is ``~/.coffer/skills/<name>/``:
+assertions, because the master folder on disk is ``~/.coffer/vault/skills/<name>/``:
 the uid finds the row, the row's current name says where its bytes are, and the
 ``path`` parameter — still relative, still guarded by ``file_ops`` — says which
 file inside it. Three different questions; the tests keep them apart.
@@ -97,9 +97,9 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
         assert root["path"] == ""
 
         # The route was addressed by uid, but the master folder is still keyed
-        # by NAME on disk (~/.coffer/skills/<name>/, HOME=tmp_path): the tree
+        # by NAME on disk (~/.coffer/vault/skills/<name>/, HOME=tmp_path): the tree
         # the uid produced must be rooted at the folder the name points to.
-        master = (tmp_path / ".coffer" / "skills" / "tree-skill").resolve()
+        master = (tmp_path / ".coffer" / "vault" / "skills" / "tree-skill").resolve()
         # The read-only viewer backs open/reveal with absolute paths:
         # the root node's abs_path IS the master folder; its folder is the parent.
         assert root["abs_path"] == str(master)
@@ -156,7 +156,7 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
         assert body["size"] == len("print('hi')\n")
         # Absolute path + containing folder for the read-only viewer's
         # open/reveal affordances.
-        master = (tmp_path / ".coffer" / "skills" / "read-skill").resolve()
+        master = (tmp_path / ".coffer" / "vault" / "skills" / "read-skill").resolve()
         assert body["abs_path"] == str(master / "scripts" / "run.py")
         assert body["folder_abs_path"] == str(master / "scripts")
 
@@ -307,7 +307,7 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59790)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="stale-skill")
-    master = tmp_path / ".coffer" / "skills" / "stale-skill"
+    master = tmp_path / ".coffer" / "vault" / "skills" / "stale-skill"
 
     with _client(app) as c:
         uid = _import(c, src)["uid"]
@@ -356,29 +356,24 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
         assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('merged')\n"
 
 
-def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
-    """Programmatic clients that never read first keep working.
-
-    See "Save an existing skill file conditionally".
-    """
+@pytest.mark.acceptance(spec="skill-manager", scenario="a save without a fingerprint is refused")
+def test_a_write_without_a_fingerprint_is_refused(tmp_path, monkeypatch):
+    """Every vault write compares; there is no unconditional mode (ADR
+    every-vault-write-is-a-validated-commit-naming-its-writer), so a body
+    without ``expected_fingerprint`` is invalid and changes nothing."""
     app = _app(tmp_path, monkeypatch, 59800)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="uncond-skill")
-    master = tmp_path / ".coffer" / "skills" / "uncond-skill"
+    master = tmp_path / ".coffer" / "vault" / "skills" / "uncond-skill"
 
     with _client(app) as c:
         uid = _import(c, src)["uid"]
-
-        # Change the file behind the API — with no expected_fingerprint the
-        # write must still land (last writer wins).
-        (master / "scripts" / "run.py").write_text("print('drift')\n", encoding="utf-8")
-
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
             json={"path": "scripts/run.py", "content": "print('cli')\n"},
         )
-        assert r.status_code == 200, r.text
-        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('cli')\n"
+        assert r.status_code == 422, r.text
+        assert (master / "scripts" / "run.py").read_text(encoding="utf-8") == "print('hi')\n"
 
 
 def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
@@ -392,14 +387,14 @@ def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
         # A file that does not exist cannot be written (no create-file).
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/new.py", "content": "x"},
+            json={"path": "scripts/new.py", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 404, r.text
 
         # Path traversal out of the master folder is rejected.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "../../etc/passwd", "content": "x"},
+            json={"path": "../../etc/passwd", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 400, r.text
 
@@ -407,7 +402,7 @@ def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.put(
             f"/api/v1/skills/{'0' * 32}/files/content",
-            json={"path": "SKILL.md", "content": "x"},
+            json={"path": "SKILL.md", "content": "x", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 404, r.text
 
@@ -424,14 +419,18 @@ def test_write_skill_file_rejects_binary_and_oversize(tmp_path, monkeypatch):
         # Refuse to overwrite a binary file with text.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "blob.bin", "content": "text"},
+            json={"path": "blob.bin", "content": "text", "expected_fingerprint": "0" * 64},
         )
         assert r.status_code == 400, r.text
 
         # Content over the byte cap is rejected.
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "SKILL.md", "content": "a" * (MAX_FILE_BYTES + 1)},
+            json={
+                "path": "SKILL.md",
+                "content": "a" * (MAX_FILE_BYTES + 1),
+                "expected_fingerprint": "0" * 64,
+            },
         )
         assert r.status_code == 400, r.text
 
@@ -482,7 +481,7 @@ def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
         assert before.status_code == 200, before.text
 
         for body in (
-            {"path": "SKILL.md", "content": "hijacked\n"},
+            {"path": "SKILL.md", "content": "hijacked\n", "expected_fingerprint": "0" * 64},
             {
                 "path": "SKILL.md",
                 "content": "hijacked\n",
@@ -499,14 +498,19 @@ def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
         after = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
         assert after.json()["content"] == before.json()["content"]
         assert after.json()["fingerprint"] == before.json()["fingerprint"]
-        master = tmp_path / ".coffer" / "skills" / "coffer-guide" / "SKILL.md"
+        master = tmp_path / ".coffer" / "derived" / "skills" / "coffer-guide" / "SKILL.md"
         assert "hijacked" not in master.read_text(encoding="utf-8")
 
         # An imported skill is the user's own: still writable.
         uid = _import(c, src)["uid"]
+        mine = c.get(f"/api/v1/skills/{uid}/files/content", params={"path": "scripts/run.py"})
         r = c.put(
             f"/api/v1/skills/{uid}/files/content",
-            json={"path": "scripts/run.py", "content": "print('mine')\n"},
+            json={
+                "path": "scripts/run.py",
+                "content": "print('mine')\n",
+                "expected_fingerprint": mine.json()["fingerprint"],
+            },
         )
         assert r.status_code == 200, r.text
         assert r.json()["content"] == "print('mine')\n"

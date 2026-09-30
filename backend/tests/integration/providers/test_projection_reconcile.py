@@ -36,9 +36,10 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.facets import agent_catalog
 from tests.support.homes import FakeAgentDir, IsolatedHome, fake_agent_dir
+from tests.support.vault_stores import make_resource_repo
 
 _BASE_URL = "https://gateway.example/v1"
 
@@ -106,7 +107,7 @@ async def _build(
     store = _DictStore()
     resources = ResourceService(
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
-        repo=SqlAlchemyResourceRepo(sm),
+        repo=make_resource_repo(),
         audit=audit,
         secrets=store,
     )

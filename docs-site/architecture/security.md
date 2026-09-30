@@ -161,6 +161,8 @@ Two more changes widen where a secret goes and wait for the same approval:
 
 Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface, including `coffer secret reject`. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; the CLI prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals).
 
+The boundary's state is machine-local: its bindings, pending approvals, switches and the time each ref was first stored here are JSON files under `~/.coffer/local/secret-boundary/`, written atomically, never committed to the vault and never synced. A pending replacement value waits there as ciphertext.
+
 ## Development builds
 
 The boundary rests on one fact: in a signed release, only Coffer's signed binaries can read the master key, so only the desktop app can sign a grant. Coffer does not ship such binaries yet, and a build from source never will. In those **development builds**:
@@ -256,7 +258,7 @@ CORS grants exactly the cross-origin entries of the [Origin table](#origin-reque
 
 ### Envelope encryption
 
-Secrets live only as **Fernet ciphertext** in the `secrets` table of `~/.coffer/coffer.db`, keyed by a **ref** — a name such as `github-token`. Everything else in Coffer holds refs:
+Secrets live only as **Fernet ciphertext**, one file per secret, keyed by a **ref** — a name such as `github-token`. A ref's ciphertext is `~/.coffer/vault/secret/<ref>.enc`: the Fernet token and a newline, mode `0600` in `0700` directories. Refs that belong to this machine alone, such as the model proxy's tokens, live in `~/.coffer/local/secret/` and never enter the vault. Ciphertext is safe inside the vault repository because the key is not; `vault/secret/` is listed in the repository's `.git/info/exclude`, so it is not even committed until a sync remote carries secrets. Everything else in Coffer holds refs:
 
 - An MCP server's config maps environment variables or headers to refs in `transport.secret_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `secret_refs`.
 - A channel's bot token or app secret, a provider's API key, and the sync remote's push secret are refs.
@@ -269,7 +271,7 @@ Plaintext exists in memory only between decrypt and the spawn or header injectio
 
 ### The master key
 
-The one secret outside the database is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/master_key.py) behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
+The one secret that is not ciphertext is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/master_key.py) behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
 
 | Build | Where the key lives | Defends against an offline copy of `~/.coffer/`? | Defends against a same-user process? |
 | --- | --- | --- | --- |
@@ -283,7 +285,7 @@ The one secret outside the database is the Fernet master key, managed by [`Maste
 
 **In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set secrets.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
 
-Startup is fail-closed in every build. The daemon counts `secrets` rows *before* resolving the key, and creates a new key only when the table is empty. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
+Startup is fail-closed in every build. The daemon counts the ciphertext files *before* resolving the key, and creates a new key only when there are none. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
 
 `keyring` is imported by exactly one module, [`infrastructure/secret/keyring_adapter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/keyring_adapter.py), and an import contract fails the build if surfaces or application code import it.
 
@@ -292,7 +294,7 @@ The access-group backend is built behind the storage port and tested against a f
 :::
 
 ::: tip Back up the key
-A copy of `coffer.db` without its master key yields no secrets, and in a signed release the Keychain is the key's only home. Back it up in the desktop app, which writes a key file into a folder you pick behind a presence check. No command or browser page can export the key. See [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
+A copy of `~/.coffer` without its master key yields no secrets, and in a signed release the Keychain is the key's only home. Back it up in the desktop app, which writes a key file into a folder you pick behind a presence check. No command or browser page can export the key. See [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 :::
 
 ## Outbound requests
@@ -355,14 +357,16 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 
 ## Sync carries ciphertext only
 
-Vault sync converges the vault with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
+Vault sync pulls and pushes the vault repository with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
 
-- **Secrets travel only if you opt in** (`coffer sync remote set --with-secrets`), and then only as Fernet ciphertext, one `credentials/<ref>.enc` file per secret. What lands in the repository cannot be decrypted on its own.
+- **Secrets travel only if you opt in** (`coffer sync remote set --with-secret`, or **Include encrypted secrets**), and then only as Fernet ciphertext, the `secret/<ref>.enc` files. Until then `secret/` is excluded from the repository. What lands in the repository cannot be decrypted on its own, and ciphertext that has been pushed cannot be withdrawn: revoking a secret means rotating it. Machine-local ciphertext in `local/secret/` never travels.
 - **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, `coffer sync key import` or **Settings › Security › Import a master key** installs it on another, and `coffer sync key fingerprint` lets you compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
 - **The push token goes only to the URL it was approved for.** Pointing it at a new remote URL waits for an approval, like any new destination.
-- **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, rather than failing silently.
+- **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, and the **Machines** tab flags a machine whose key fingerprint differs, rather than failing silently.
+- **The secret boundary stays on the machine.** Its bindings, approvals and switches are in `local/secret-boundary/`, never in the vault, so another machine cannot pre-approve a destination for this one.
 - **Reach does not travel.** Which resources are enabled, and for which agents, is decided on each machine, so another machine's round can never widen what this one exposes.
-- **Deletions are guarded.** A round that would delete more than its configured share holds for your confirmation.
+- **Deletions are guarded.** A round that would lose 20 files or more than 20% of an area, in either direction, holds for your answer.
+- **Conflicting ciphertexts are never shown to you.** Two ciphertexts for one ref are ordered by the encryption time the token carries in clear, and the fresher wins; and a secret has no readable history or restore through `coffer vault`.
 
 See [Vault sync](/architecture/vault-sync) for the full protocol.
 
@@ -401,7 +405,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 
 ## Related
 
-- [Secrets guide](/guides/secrets)
+- [Secrets guide](/guides/secret-store)
 - [Secret store guide](/guides/secret-store)
 - [Security policy](/contributing/security) — how to report a vulnerability.
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
