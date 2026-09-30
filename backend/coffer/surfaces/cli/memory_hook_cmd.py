@@ -18,14 +18,17 @@ by a person"). ``delivered`` prints the Memory page's two delivery views.
 from __future__ import annotations
 
 import json as _json
+import os
 import sys
 from typing import Any
 
 import httpx
 import typer
 
+from coffer.domain.channel_turn import is_channel_turn
 from coffer.domain.memory import retrieval as ranking
 from coffer.domain.memory.delivery import (
+    CHANNEL_TURN_EVENTS,
     POST_TOOL_USE,
     PRE_TOOL_USE,
     SESSION_START,
@@ -69,7 +72,15 @@ def _output_text(response: Any) -> str:
 
 def _needs_daemon(event: str, prompt: str, tool: str, command: str, output: str) -> bool:
     """Whether this fire can deliver anything at all — answered locally, so an
-    ordinary command costs no round-trip."""
+    ordinary command costs no round-trip.
+
+    In a process Coffer spawned for a channel turn, the index and the prompt's
+    notes are already in the turn Coffer composed (spec memory "Deliver to
+    channel turns through the system prompt"), so those two moments are left to
+    it: answering them here too would hand the agent the same text twice and
+    audit it twice."""
+    if event in CHANNEL_TURN_EVENTS and is_channel_turn(os.environ):
+        return False
     if event == SESSION_START:
         return True
     if event == USER_PROMPT_SUBMIT:

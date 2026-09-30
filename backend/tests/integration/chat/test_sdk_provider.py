@@ -26,6 +26,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk import TextBlock as SdkTextBlock
 
+from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
@@ -380,7 +381,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     async def _gone(uid: str, conversation_id: str) -> ChannelNote | None:
         return None
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         return "## Coffer memory\nKnown about you:\n- **Likes tabs** (`likes-tabs.md`) — x."
 
     provider = ClaudeSdkProvider(
@@ -418,10 +419,10 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, str]] = []
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
-        calls.append((agent_key, cwd))
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
+        calls.append((agent_key, cwd, conversation_id))
         # The real composer's shape (application/memory/index.index_line): a
         # line per note naming the file its body is in, not a budgeted digest.
         # A stub that keeps the old shape teaches a reader the wrong payload.
@@ -443,7 +444,7 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
     assert "- **Likes tabs** (`likes-tabs.md`)" in append
     # Resolved lazily per turn, keyed by this agent and the conversation's cwd —
     # never guessed or hardcoded (mirrors how ``list_models`` is called).
-    assert calls == [("claude_code", str(tmp_path))]
+    assert calls == [("claude_code", str(tmp_path), conv.id)]
 
     await engine.dispose()
 
@@ -457,7 +458,7 @@ async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         return None
 
     provider = ClaudeSdkProvider(
@@ -484,7 +485,7 @@ async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # 
     conv = await repo.create(_conv())  # no channel binding
     factory, captured = _make_factory(_simple_messages())
 
-    async def _memory(agent_key: str, cwd: str) -> str | None:
+    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
         raise AssertionError("memory composer must not be called for a non-channel turn")
 
     provider = ClaudeSdkProvider(
@@ -524,6 +525,34 @@ async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # t
     assert "`fable`" in append
     assert "sonnet" in append
     assert "chat channel — " not in append  # no channel guidance for a web turn
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
+)
+async def test_a_channel_turn_marks_the_claude_code_it_spawns(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The Agent SDK loads the user's settings, so Coffer's memory hook fires
+    inside a channel turn too, with the CLI's environment. The mark in that
+    environment is what tells the hook the turn already carries the index and
+    the notes, so they arrive once."""
+    repo, engine = await _repo(tmp_path)
+    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    web = await repo.create(_conv())
+    envs: dict[str, dict[str, str]] = {}
+    for conv in (channel, web):
+        factory, captured = _make_factory(_simple_messages())
+        provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+        await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+        adapter = await provider.build_adapter(conv.id)
+        await _collect(adapter, _user_turn("hi", conv.id))
+        envs[conv.id] = dict(captured[0].env)
+
+    assert envs[channel.id] == {CHANNEL_TURN_ENV: "1"}
+    # A turn the developer drives is not marked: its hook is its memory.
+    assert CHANNEL_TURN_ENV not in envs[web.id]
 
     await engine.dispose()
 
