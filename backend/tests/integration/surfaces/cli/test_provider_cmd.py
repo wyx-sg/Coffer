@@ -46,6 +46,7 @@ from coffer.surfaces.http.proxy_dependencies import ProxyFacade, set_proxy_facad
 from coffer.surfaces.http.proxy_routes import router as proxy_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from tests.support.facets import agent_catalog
+from tests.support.no_approvals import router as no_approvals_router
 from tests.support.vault_stores import make_resource_repo
 
 _runner = CliRunner()
@@ -134,6 +135,7 @@ def provider_daemon(tmp_path, monkeypatch):
     # goes through the framework's shared resource route, so the CLI test app
     # must serve it too.
     app.include_router(resource_router)
+    app.include_router(no_approvals_router)
     app.include_router(proxy_router)
     tokens = ProxyTokenService(store)
 

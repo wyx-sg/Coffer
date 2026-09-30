@@ -71,6 +71,7 @@ from coffer.surfaces.http.mcp.server_test_routes import router as server_test_ro
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.secret_composition import get_secret_store
+from tests.support.no_approvals import router as no_approvals_router
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _runner = CliRunner()
@@ -226,6 +227,7 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
     err_handlers.register(fapp)
     fapp.include_router(daemon_router)
     fapp.include_router(resource_router)
+    fapp.include_router(no_approvals_router)
     fapp.include_router(retention_router)
     fapp.include_router(capability_router)
     fapp.include_router(invocation_router)

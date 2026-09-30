@@ -104,9 +104,15 @@ Resource files, state documents and machine descriptors are **JSON objects**
 order the file already had them. Knowledge documents, skill files and memory
 triggers are carried as bytes, not parsed as vault documents.
 
-- **Unknown keys are kept.** A reader validates the keys it knows and carries
-  every other key verbatim, in place; a write puts them back where they were.
-  They are reported as warnings, never refused.
+- **Unknown top-level keys are kept.** A reader validates the keys it knows
+  and carries every other top-level key verbatim, in place; a write puts them
+  back where they were. They are reported as warnings, never refused.
+- **A resource's `config` holds only what its kind declares.** Every kind's
+  config model refuses a key it does not declare (`extra="forbid"`), and the
+  vault's resource rule does the same for a file: one `config_invalid` finding
+  per unknown key, whether the file was edited by hand or brought by a sync
+  merge. The kind's name rule (`validate_name`) is applied to every change of
+  the file as well, and a `title` on a kind with `titled` false is refused.
 - **The encoding is deterministic.** The same document always encodes to the
   same bytes, so a write that changes nothing makes no commit and two machines
   writing the same value do not conflict.

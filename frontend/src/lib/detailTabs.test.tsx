@@ -1,17 +1,10 @@
 // src/lib/detailTabs.test.tsx — the path addressing of a detail page's tabs.
-// revise-web-ui-ia: web-ui "a detail tab lives in the path" and
-// "an old query-tab address redirects to the path".
+// revise-web-ui-ia: web-ui "a detail tab lives in the path".
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
-import {
-  canonicalDetailPath,
-  detailTabPath,
-  detailTabRedirect,
-  resolveByName,
-  useDetailTab,
-} from "./detailTabs";
+import { detailTabPath, detailTabRedirect, useDetailTab } from "./detailTabs";
 
 const TABS = ["overview", "files", "history"] as const;
 
@@ -26,21 +19,14 @@ describe("detailTabPath", () => {
     expect(detailTabPath("/skills/hello", undefined, TABS, "overview")).toBe("/skills/hello");
   });
 
-  it("keeps every search param except tab", () => {
-    expect(detailTabPath("/skills/hello", "files", TABS, "overview", "?tab=x&file=a.md")).toBe(
+  it("keeps the search params", () => {
+    expect(detailTabPath("/skills/hello", "files", TABS, "overview", "?file=a.md")).toBe(
       "/skills/hello/files?file=a.md",
     );
   });
 });
 
-describe("canonicalDetailPath / detailTabRedirect", () => {
-  it("a legacy ?tab= wins over the path segment and moves into the path", () => {
-    expect(canonicalDetailPath("/s/a", undefined, "?tab=files", TABS, "overview")).toBe(
-      "/s/a/files",
-    );
-    expect(detailTabRedirect("/s/a", "history", "?tab=files", TABS, "overview")).toBe("/s/a/files");
-  });
-
+describe("detailTabRedirect", () => {
   it("is null for an address that is already canonical", () => {
     expect(detailTabRedirect("/s/a", undefined, "", TABS, "overview")).toBeNull();
     expect(detailTabRedirect("/s/a", "files", "?file=x", TABS, "overview")).toBeNull();
@@ -49,24 +35,6 @@ describe("canonicalDetailPath / detailTabRedirect", () => {
   it("sends an unknown or default :tab segment to the bare address", () => {
     expect(detailTabRedirect("/s/a", "bogus", "", TABS, "overview")).toBe("/s/a");
     expect(detailTabRedirect("/s/a", "overview", "?file=x", TABS, "overview")).toBe("/s/a?file=x");
-  });
-});
-
-describe("resolveByName", () => {
-  const items = [
-    { uid: "sk-1", name: "hello" },
-    { uid: "sk-2", name: "world" },
-  ];
-  it("matches by name first", () => {
-    expect(resolveByName(items, "hello")).toEqual({ item: items[0], byUid: false });
-  });
-  it("matches an old uid address and says so", () => {
-    expect(resolveByName(items, "sk-2")).toEqual({ item: items[1], byUid: true });
-  });
-  it("is null for no match, an empty key, or a list not yet loaded", () => {
-    expect(resolveByName(items, "nope")).toBeNull();
-    expect(resolveByName(items, "")).toBeNull();
-    expect(resolveByName(undefined, "hello")).toBeNull();
   });
 });
 
@@ -121,12 +89,6 @@ describe("useDetailTab", () => {
     expect(screen.getByTestId("tab")).toHaveTextContent("overview");
   });
 
-  it("redirects an old ?tab= address to the path, keeping other params", async () => {
-    renderAt("/skills/hello?tab=files&file=a.md");
-    expect(screen.getByTestId("tab")).toHaveTextContent("files");
-    await waitFor(() => expect(where.url).toBe("/skills/hello/files?file=a.md"));
-  });
-
   it("falls back to the default tab for an unknown segment", async () => {
     renderAt("/skills/hello/bogus");
     expect(screen.getByTestId("tab")).toHaveTextContent("overview");
@@ -134,7 +96,7 @@ describe("useDetailTab", () => {
   });
 
   it("does not redirect while disabled", () => {
-    renderAt("/skills/hello?tab=files", false);
-    expect(where.url).toBe("/skills/hello?tab=files");
+    renderAt("/skills/hello/bogus", false);
+    expect(where.url).toBe("/skills/hello/bogus");
   });
 });

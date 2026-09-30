@@ -16,18 +16,13 @@ import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
-
 from coffer.application.provider.projection_reconcile import TARGET, ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.agent_projection import CodexProviderProjection
-from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
-from coffer.domain.provider.codex_projection import CodexAuthCommand
+from coffer.domain.provider.api_key_helper import proxy_token_helper
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
-    apply_codex_provider,
 )
 from coffer.domain.reconcile import ItemResult, Outcome, Trigger
 from coffer.domain.resource import Resource
@@ -41,7 +36,6 @@ _CONNECTION_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 _CLI = "/Users/me/.coffer/bin/coffer"
 #: Where the proxy-form projection points Claude Code (the default port).
 _PROXY_URL = "http://127.0.0.1:8001/anthropic"
-_AUTH = CodexAuthCommand(_CLI, proxy_token_args(_AGENT_UID))
 
 
 def _resource(
@@ -203,31 +197,6 @@ async def test_a_flag_the_agent_config_confirms_is_left_alone(tmp_path: pathlib.
     assert calls == []
 
 
-@pytest.mark.parametrize(
-    "helper",
-    [
-        # What Coffer wrote before the CLI was named by absolute path: still
-        # Coffer's, so a file carrying only this is still a live projection.
-        f"coffer provider key --connection-uid {_CONNECTION_UID}",
-        # The key-helper form before the proxy, with a path a shell needs quoted.
-        f"'/Users/me/My Apps/coffer' provider key --connection-uid {_CONNECTION_UID}",
-    ],
-    ids=["bare", "quoted-absolute"],
-)
-async def test_either_helper_form_counts_as_projected(tmp_path: pathlib.Path, helper: str) -> None:
-    """Present, so the flag stands — but not the command Coffer writes now,
-    so it is repaired as stale rather than passing a presence test."""
-    store = _Store({_settings(tmp_path): _projected_settings(helper)})
-    results, calls = await _run(store, [_agent(tmp_path)], [_connection()])
-
-    assert calls == []
-    assert [r.change.decision.reason_code for r in results] == ["projection_stale"]
-    assert results[0].change.difference.changed_params == ("apiKeyHelper",)
-    assert results[0].outcome is Outcome.APPLIED
-    doc = json.loads(store.files[_settings(tmp_path)])
-    assert doc["apiKeyHelper"] == proxy_token_helper(_AGENT_UID, coffer_cli=_CLI)
-
-
 async def test_an_inactive_connection_is_not_touched(tmp_path: pathlib.Path) -> None:
     store = _Store({_settings(tmp_path): "{}"})
     results, calls = await _run(store, [_agent(tmp_path)], [_connection(is_active=False)])
@@ -307,18 +276,3 @@ def test_secret_named_values_never_reach_the_rendering() -> None:
     assert params["env.ANTHROPIC_API_KEY"] != "sk-live"
     text = render(params)
     assert "sk-live" not in text and "<redacted>" in text and "coffer x" in text
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching", scenario="a leftover shell exclude entry is not a Codex projection"
-)
-def test_a_leftover_codex_shell_exclude_is_not_a_projection() -> None:
-    """The ``shell_environment_policy.exclude`` entry only hides the key; with the
-    provider block removed by hand it selects nothing, so the flag is stale."""
-    projected = apply_codex_provider(
-        "", base_url=_BASE_URL, model="m", wire_api="responses", display_name="x", auth=_AUTH
-    )
-    facet = CodexProviderProjection()
-    assert facet.is_present(projected)
-    leftover = '[shell_environment_policy]\nexclude = ["COFFER_PROVIDER_KEY"]\n'
-    assert not facet.is_present(leftover)

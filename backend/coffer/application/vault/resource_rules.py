@@ -12,11 +12,18 @@ daemon write, a merge — is judged here before it may be committed:
   today): a file this build cannot read is ``NEWER_FORMAT``, a readable newer
   one is committed with a ``NEWER_FORMAT_READ_ONLY`` warning, an edit to an
   older one waiting for its layout upgrade is ``OLDER_FORMAT_EDIT``;
-- its config is validated by the kind's ``config_schema`` over **the keys the
-  schema knows**: a key it does not know is an ``UNKNOWN_FIELD`` warning,
-  never a refusal — to this build a newer build's key and a typo look the same
-  — and so is a top-level field, and a kind this build does not know at all
-  (a newer build's kind: kept, inert);
+- its config is validated by the kind's ``config_schema``, and a config key
+  the schema does not declare is ``CONFIG_INVALID``, as the kinds' own models
+  refuse it (``extra="forbid"``): a file written by hand or arriving in a
+  merge is held to exactly what an API write is. A top-level document field
+  this build does not know is an ``UNKNOWN_FIELD`` warning and is kept (ADR
+  every-vault-file-carries-its-format-version: a newer build of the same
+  format may add one), and so is a kind this build does not know at all (a
+  newer build's kind: kept, inert);
+- its name passes the kind's own ``validate_name`` (``mcp_server``'s
+  24-character cap and ``__`` separator, a skill's hyphen-only charset), on
+  every change, so a merge or a hand rename is judged as a register is, and a
+  ``title`` on a kind that has none (``Kind.titled`` false) is refused;
 - a file with no ``uid`` is a new resource: the rule asks for a fix that
   mints one, which the writer commits as the daemon's own right after the
   person's commit;
@@ -67,14 +74,8 @@ def _config_findings(
     if known is not None:
         for key in doc.config:
             if key not in known:
-                out.append(
-                    Finding(
-                        path,
-                        FindingCode.UNKNOWN_FIELD,
-                        f"config key {key!r} is not known to this build; kept as it is",
-                        uid,
-                    )
-                )
+                message = f"config: {key!r} is not a {doc.kind} setting"
+                out.append(Finding(path, FindingCode.CONFIG_INVALID, message, uid))
         subset = {k: v for k, v in doc.config.items() if k in known}
     try:
         kind_def.config_schema.model_validate(subset)
@@ -225,6 +226,9 @@ def _judge(
         findings.append(Finding(path, FindingCode.UNKNOWN_FIELD, message, uid))
     else:
         findings.extend(_config_findings(path, doc, kind_def, uid))
+        if doc.title is not None and not kind_def.titled:
+            message = f"a {doc.kind} has no title; its name is what is shown"
+            findings.append(Finding(path, FindingCode.INVALID_DOCUMENT, message, uid))
     fixes: list[Fix] = []
     if uid is None:
         uid = uuid.uuid4().hex

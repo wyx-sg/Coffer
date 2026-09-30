@@ -124,10 +124,6 @@ class FileResourceRepo:
 
     # --- reading --------------------------------------------------------------
 
-    def _schema(self, kind: str) -> Any:
-        kind_def = self._kinds.get(kind)
-        return kind_def.config_schema if kind_def is not None else None
-
     def _default_reach(self, kind: str, config: dict[str, Any]) -> Reach:
         kind_def = self._kinds.get(kind)
         scope = None
@@ -145,7 +141,7 @@ class FileResourceRepo:
         configs: dict[str, dict[str, Any]] = {}
         reaches: dict[str, Reach] = {}
         for uid, entry in entries.items():
-            config = for_application(entry.doc.config, self._schema(entry.doc.kind))
+            config = for_application(entry.doc.config)
             configs[uid] = config
             reaches[uid] = reach.get(uid) or self._default_reach(entry.doc.kind, config)
             seen.append(
@@ -280,7 +276,7 @@ class FileResourceRepo:
             name=resource.name,
             description=resource.description,
             title=resource.title,
-            config=for_file(resource.config, None, self._schema(resource.kind)),
+            config=for_file(resource.config),
             created_at=resource.created_at.astimezone(UTC).isoformat(),
         )
         path = self.files.free_path(storage, resource.kind, resource.name, resource.uid)
@@ -314,8 +310,7 @@ class FileResourceRepo:
         self, uid: str, config: dict[str, Any], description: str | None
     ) -> Resource:
         def change(entry: Entry) -> ResourceDocument:
-            merged = for_file(config, entry.doc.config, self._schema(entry.doc.kind))
-            return entry.doc.replace(config=merged, description=description)
+            return entry.doc.replace(config=for_file(config), description=description)
 
         name = self.name_of(uid) or uid
         await asyncio.to_thread(self._rewrite, uid, f"Updated {name}", change)
@@ -332,7 +327,7 @@ class FileResourceRepo:
         entry = self.files.by_uid().get(uid)
         if entry is None:
             raise ResourceNotFound(uid)
-        config = for_application(entry.doc.config, self._schema(entry.doc.kind))
+        config = for_application(entry.doc.config)
         current = self._reach.get(uid) or self._default_reach(entry.doc.kind, config)
         self._reach.put(uid, change(current))
 

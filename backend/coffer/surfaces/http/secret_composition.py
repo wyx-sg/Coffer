@@ -2,41 +2,29 @@
 
 Owns the ``_secret_store`` / ``_master_key_manager`` provider pairs,
 ``init_secret_store`` (resolves the Fernet master key, builds the
-encrypted store, publishes both DI singletons) and
-``run_legacy_keychain_migration`` (best-effort one-time move of pre-0.2
-OS-keychain secrets into the store).  Kept separate from ``dependencies.py``
-and ``app.py`` to keep all three under the 400-line guideline.
+encrypted store, publishes both DI singletons).  Kept separate from
+``dependencies.py`` and ``app.py`` to keep all three under the 400-line
+guideline.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.application.audit_service import AuditService
-from coffer.application.repos import ResourceRepo
-from coffer.application.resource_service import ResourceService
-from coffer.application.secret_migration import (
-    migrate_legacy_keychain,
-)
-from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SecretMissing
-from coffer.domain.resource import Kind
 from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore, ref_files
-from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.secret_boundary_wiring import (
-    adopt_existing_bindings,
+    boundary_resolver as boundary_resolver,
+)
+from coffer.surfaces.http.secret_boundary_wiring import (
     init_secret_boundary,
     make_master_key_manager,
     master_key_path,
-)
-from coffer.surfaces.http.secret_boundary_wiring import (
-    boundary_resolver as boundary_resolver,
 )
 
 _secret_store: EncryptedSecretStore | None = None
@@ -94,29 +82,18 @@ class SecretWiring:
     master_key: MasterKeyManager
 
 
-#: The resource repository the one-time legacy keychain move reads citers
-#: from; None skips that move (a composition without resources).
-_legacy_resource_repo: ResourceRepo | None = None
-
-
-async def init_secret_store(
-    *, home: pathlib.Path | None = None, resource_repo: ResourceRepo | None = None
-) -> SecretWiring:
+async def init_secret_store(*, home: pathlib.Path | None = None) -> SecretWiring:
     """Resolve the master key, build the encrypted store, publish DI singletons.
 
     Envelope encryption: resolve the Fernet master key (file first, then
     keychain), build the file-backed store over ``vault/secret/`` and
-    ``local/secret-boundary/``, and replace every KeyringAdapter injection point.
-    Creating a brand-new key is only legal while no ciphertext file exists —
-    otherwise existing ciphertext would be silently undecryptable, so we fail
-    loudly instead. ``home`` is the user's home (default: ``HOME``);
-    ``resource_repo`` feeds the legacy keychain move at
-    :func:`run_secret_startup`.
+    ``local/secret-boundary/``. Creating a brand-new key is only legal while no
+    ciphertext file exists — otherwise existing ciphertext would be silently
+    undecryptable, so we fail loudly instead. ``home`` is the user's home
+    (default: ``HOME``).
     """
-    global _legacy_resource_repo
-    _legacy_resource_repo = resource_repo
     # The key's home is chosen by how this build was made (a signed release's
-    # Keychain access group, or the development file / legacy keychain pair).
+    # Keychain access group, or the development file / login-keychain pair).
     master_key_manager = make_master_key_manager(home)
     stored = len(await asyncio.to_thread(ref_files, home))
     key_path = master_key_path(home)
@@ -147,66 +124,3 @@ async def init_secret_store(
     # secret is built (every one gets ``boundary_resolver``).
     init_secret_boundary(secret_store, master_key_manager, home=home)
     return SecretWiring(store=secret_store, master_key=master_key_manager)
-
-
-_logger = logging.getLogger(__name__)
-
-
-async def run_secret_startup(
-    kinds: dict[str, Kind],
-    secret_store: EncryptedSecretStore,
-    audit: AuditService,
-    resources: ResourceService,
-) -> None:
-    """The secret steps that need every kind registered, once per start.
-
-    The legacy keychain move below, the audit of a master key the signed build
-    moved into its Keychain access group, and the one-time adoption of every
-    secret binding in use before the secret boundary existed — so upgrading
-    stops nothing that already worked (spec secret "Hold a secret for a
-    new destination until a person approves it").
-    """
-    if _legacy_resource_repo is not None:
-        await run_legacy_keychain_migration(kinds, _legacy_resource_repo, secret_store, audit)
-    manager = get_master_key_manager()
-    if manager.migrated_from is not None:
-        await audit.record(
-            AuditEventType.MASTER_KEY_RELOCATED.value,
-            actor="system",
-            details={"from": manager.migrated_from, "to": "keychain_access_group"},
-        )
-    try:
-        adopted = await adopt_existing_bindings(resources, audit)
-        if adopted:
-            _logger.info("secret_boundary.adopted", extra={"bindings": adopted})
-    except Exception:
-        # Not adopting leaves the marker unset, so the next start tries again;
-        # meanwhile a binding with no approval waits, which is the safe side.
-        _logger.exception("secret_boundary.adoption_failed")
-
-
-async def run_legacy_keychain_migration(
-    kinds: dict[str, Kind],
-    resource_repo: ResourceRepo,
-    secret_store: EncryptedSecretStore,
-    audit: AuditService,
-) -> None:
-    """One-time move of legacy OS-keychain secrets into the encrypted store.
-
-    No-op once migrated.  Best-effort: failures must not block startup.
-    Every citer is a resource now — the global embedding config was the last
-    non-resource owner of a ref, and it went with the rest of the embedding
-    layer (spec knowledge "Carry no vector or embedding dependency").
-    """
-    try:
-        moved = await migrate_legacy_keychain(
-            kinds,
-            resource_repo,
-            KeyringAdapter(),
-            secret_store,
-            audit,
-        )
-        if moved:
-            _logger.info("secret_migration.completed", extra={"moved": moved})
-    except Exception:
-        _logger.exception("secret_migration.failed")

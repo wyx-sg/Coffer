@@ -94,12 +94,8 @@ test("agent workspace tabs render MCP entries, plugins and the delivered skill",
     });
     expect(createResp.status).toBe(201);
 
-    // Open the agent detail page by its uid — an address from before the
-    // rebuild — and land on today's, which names the agent by its type.
-    const uid = await resolveResourceUid("agent", name);
-    expect(uid).not.toBeNull();
-    await page.goto(`/agents/${uid}`);
-    await expect(page).toHaveURL(/\/agents\/codex$/, { timeout: 10_000 });
+    // The agent detail page is addressed by the agent's type.
+    await page.goto("/agents/codex");
 
     // MCP servers tab — the direct entry parsed from config.toml renders.
     await page.getByRole("tab", { name: /^mcp servers/i }).click();

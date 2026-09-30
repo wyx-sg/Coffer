@@ -99,31 +99,6 @@ async def test_the_websocket_tracks_the_enabled_seatalk_channel(env: ChannelEnv)
     assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
 
 
-async def test_a_document_still_carrying_webhook_keys_connects_the_same_way(
-    env: ChannelEnv,
-) -> None:
-    """A channel document from a machine on an older build may still carry the
-    webhook-era keys; they are ignored and the channel holds its websocket."""
-    env.keyring.set("channel/st/app", "app-secret-value")
-    resource = await env.resources.register(
-        kind="channel",
-        name="st",
-        config=await env.bound(
-            {
-                **_SEATALK_CONFIG,
-                "delivery": "webhook",
-                "signing_secret_ref": "channel/st/sign",
-                "tunnel_token_ref": "channel/st/tunnel",
-            }
-        ),
-        actor="cli",
-    )
-
-    await env.runtime.reconcile_once()
-
-    assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
-
-
 async def test_deleting_a_websocket_channel_stops_its_connection(env: ChannelEnv) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")
     resource = await env.resources.register(

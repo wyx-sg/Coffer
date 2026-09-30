@@ -12,7 +12,7 @@ This spec owns the three `/api/v1/agents/{uid}/unmanaged-skills` routes (list, a
 ## Requirements
 
 ### Requirement: Register each skill as a resource with a SKILL.md-safe name
-The system MUST register each managed skill as a Resource of kind `skill`, identified by the framework's immutable `uid` ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)). Its `name` is taken from SKILL.md frontmatter at import or adoption, unique within the kind, and MUST satisfy the frontmatter's own charset (`^[a-z0-9][a-z0-9_-]{0,63}$`), so Coffer never registers a skill under a name its own importer would reject. The `name` MUST be **fixed** once the skill is registered, because it is the directory an agent loads the skill from and the identifier an agent invokes it by, so it is quoted in places Coffer cannot see ([resource-framework](../resource-framework/spec.md), the requirement that lets a kind declare its name fixed). An update whose `name` differs from the current one MUST be refused with `NAME_IMMUTABLE` (409) before anything moves, on REST and on the web UI alike. The refusal MUST say that a different name means removing the skill and importing it again, and that doing so resets its `enabled` flag, its scope and its deliveries. A skill carries no title ([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"): every surface shows its fixed name, beside the SKILL.md `description` agents choose it by, and a title submitted for one is refused as a validation error with nothing changed.
+The system MUST register each managed skill as a Resource of kind `skill`, identified by the framework's immutable `uid` ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)). Its `name` is taken from SKILL.md frontmatter at import or adoption, unique within the kind, and MUST satisfy the frontmatter's own charset (`^[a-z0-9][a-z0-9-]{0,63}$`), so Coffer never registers a skill under a name its own importer would reject. The `name` MUST be **fixed** once the skill is registered, because it is the directory an agent loads the skill from and the identifier an agent invokes it by, so it is quoted in places Coffer cannot see ([resource-framework](../resource-framework/spec.md), the requirement that lets a kind declare its name fixed). An update whose `name` differs from the current one MUST be refused with `NAME_IMMUTABLE` (409) before anything moves, on REST and on the web UI alike. The refusal MUST say that a different name means removing the skill and importing it again, and that doing so resets its `enabled` flag, its scope and its deliveries. A skill carries no title ([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"): every surface shows its fixed name, beside the SKILL.md `description` agents choose it by, and a title submitted for one is refused as a validation error with nothing changed.
 
 #### Scenario: refuse a skill name its own SKILL.md could not carry
 - **GIVEN** the daemon is running and no skill is registered under any of the names below
@@ -47,7 +47,7 @@ The system MUST validate skill configuration against a kind-specific schema with
 - **THEN** its config holds a `git_import` source carrying the URL, `main`, `skills/review`, the full commit id that was checked out and the content hash of the folder at that commit
 
 ### Requirement: Validate imported skill folders against AgentSkills
-The system MUST validate every imported skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size at most 50 MB, a fixed cap. A folder that violates any of these MUST be rejected with `unprocessable_entity` (422) and nothing persisted. A folder over the size limit is rejected as `SKILL_INVALID` with `details.reason` `size_limit_exceeded`.
+The system MUST validate every imported skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics or hyphen, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size at most 50 MB, a fixed cap. A folder that violates any of these MUST be rejected with `unprocessable_entity` (422) and nothing persisted. A folder over the size limit is rejected as `SKILL_INVALID` with `details.reason` `size_limit_exceeded`.
 
 #### Scenario: reject import of an invalid skill folder
 - **GIVEN** the daemon is running,
@@ -399,7 +399,7 @@ The Skills page is the library of managed skills beside the open skill: a list w
 
 A skill added from a Git repository also shows its source — the repository, the folder, the pinned commit and the update status — with **Check now** and **Change source…** ("Change a Git-imported skill's source").
 
-The old `/skills/<uid>` address MUST redirect to `/skills/<name>`, `?tab=overview` to Delivery and `?tab=files` to Files. The list's reach mark and the detail carry one reach button labelled with the answer ("Every agent", "2 agents", "Disabled") that opens a panel whose choices are Disabled, Every agent and Only selected agents — the last over the scope's list of agents, staged there and written once when the panel closes — and the list's filter offers those same states.
+The list's reach mark and the detail carry one reach button labelled with the answer ("Every agent", "2 agents", "Disabled") that opens a panel whose choices are Disabled, Every agent and Only selected agents — the last over the scope's list of agents, staged there and written once when the panel closes — and the list's filter offers those same states.
 
 #### Scenario: desktop and CLI cover every operation
 - **GIVEN** the daemon is running,
@@ -424,11 +424,6 @@ The old `/skills/<uid>` address MUST redirect to `/skills/<name>`, `?tab=overvie
 - **WHEN** the user opens its detail page
 - **THEN** the tabs read Files, Delivery, Requires and History, Files is selected with `SKILL.md` selected and rendered, and there is no SKILL.md tab
 - **AND** switching to Source shows the raw text, and Edit then saving writes the file through the conditional save
-
-#### Scenario: the old overview address opens delivery
-- **GIVEN** a skill named `release-notes` and a bookmark to `/skills/<its uid>?tab=overview`
-- **WHEN** it is opened
-- **THEN** the app lands on `/skills/release-notes/delivery` with the Delivery tab selected
 
 #### Scenario: the delivery tab shows each agent's copy
 - **GIVEN** a skill scoped to one of two registered agents and delivered to it as a link
@@ -635,15 +630,22 @@ the rest of its entry kept.
 - **THEN** the skill imports, both entries are skipped with a warning naming why, and nothing is run for them
 
 ### Requirement: Check every required command where the agent runs
-The system MUST check each required command once, however many skills need
-it: look it up on the agent's real `PATH` (the login shell's, merged with the
+Beside the commands skills declare, the launcher every enabled stdio MCP
+server starts with MUST be required too, by that server, under the command that
+provides it — `uv` for `uvx`, `node` for `npx`, `bun` for `bunx`, the launcher
+itself otherwise — with no minimum and no login check; a launcher given as a
+path is a file, not a command on `PATH`, and is not listed. A server that is
+off or reached over HTTP requires nothing.
+The system MUST check each required command once, however many skills and
+servers need it: look it up on the agent's real `PATH` (the login shell's, merged with the
 inherited one), read its version with `<command> --version` under a timeout,
 compare it with the highest minimum any skill asks for, and run its login check
 under a timeout, without a shell, keeping only the exit status — the check's
 output MUST be discarded unread and MUST NOT reach any log, record or response.
 Each command MUST report `missing`, `outdated`, `logged_out` or `ready`, the
 path and version found, the login state (`logged_in`, `logged_out` or
-`not_needed`) and every skill that needs it. Results MUST be kept until the
+`not_needed`), every skill that needs it and every MCP server started with
+it. Results MUST be kept until the
 user asks to check again or the daemon restarts.
 
 #### Scenario: a required command is found with its version on the agent's path
@@ -666,11 +668,19 @@ user asks to check again or the daemon restarts.
 - **WHEN** the user logs in and asks to check it again
 - **THEN** the command is probed again and reported `ready`
 
+#### Scenario: a stdio MCP server's launcher is listed under the command that provides it
+- **GIVEN** an enabled stdio MCP server `duckdb` started with `uvx`, one `files` started with `npx`, one started with `./run.sh`, and a skill requiring `uv` with minimum `0.4`
+- **WHEN** the required commands are checked
+- **THEN** `uv` is listed as needed by the skill and by `duckdb` (launcher `uvx`), and `node` as needed by `files` alone
+- **AND** nothing is listed for `./run.sh`
+
 ### Requirement: Serve required commands on REST, the command line and the web
 The required commands MUST be readable and checkable through
 `GET /api/v1/clis`, `GET /api/v1/clis/{command}`, `POST /api/v1/clis/check`
 and `POST /api/v1/clis/{command}/check`, each command carrying its hand-off
-prompt, and reachable from `coffer cli list|show|check|prompt` (`--json` on
+prompt and the MCP servers started with it (`needed_by_servers`: each server's
+uid, name and launcher) beside the skills that need it (`needed_by`), and
+reachable from `coffer cli list|show|check|prompt` (`--json` on
 every read). Lists MUST put problems first: missing, then outdated, then not
 logged in, then ready. The web UI's CLIs page shows them (spec web-ui "Show
 every CLI a skill requires on the CLIs page") and a skill's detail page
@@ -688,12 +698,18 @@ command's page and offering the hand-off for a command that needs the user.
 - **THEN** it prints exactly the `handoff.prompt` that `GET /api/v1/clis/jq` returns
 - **AND** `coffer cli prompt uv` exits non-zero saying there is nothing to hand off
 
+#### Scenario: a CLI page lists the MCP servers started with the command
+- **GIVEN** an enabled stdio MCP server `duckdb` started with `uvx`, a skill `data-profiling` requiring `uv`, and no `uv` on the agent's `PATH`
+- **WHEN** the user reads `GET /api/v1/clis/uv`
+- **THEN** it is `missing`, `needed_by` names `data-profiling`, `needed_by_servers` names `duckdb` with launcher `uvx`, and its hand-off prompt names both
+
 ### Requirement: Hand a required command to an agent with a prompt
 The system MUST NOT install, update or log in to a required command itself.
 For a command that is `missing` or `outdated` it MUST offer a prompt, built by
 the daemon, for the user to give their agent, which names the command (and its
-title), every skill that needs it with the minimum version each asks for, what
-was found for an outdated one, and this machine's operating system and CPU
+title), every skill that needs it with the minimum version each asks for, every
+MCP server started with it and the launcher it is started with, what was found
+for an outdated one, and this machine's operating system and CPU
 architecture; asks the agent to choose the install method that suits this
 machine, to check with the user before running anything that needs `sudo` or
 changes system settings, and to confirm with `<command> --version` when it is
@@ -701,9 +717,9 @@ done; and says that any login is left to the user, whose credentials the agent
 does not handle. For a command that is `logged_out` the prompt MUST ask only
 for help logging in: it names the login check that failed and the declared
 login command, asks the agent to tell the user what to run, and leaves running
-it and entering credentials to the user. A `ready` command MUST carry no
-prompt. The prompt MUST be served as `handoff.prompt` on every response that
-carries the command, and the same text by `coffer cli prompt <command>`.
+it and entering credentials to the user. A prompt MUST NOT name an install
+command. A `ready` command MUST carry no prompt. The prompt MUST be served as
+`handoff.prompt` on every response that carries the command, and the same text by `coffer cli prompt <command>`.
 
 #### Scenario: a missing command carries an install prompt for an agent
 - **GIVEN** skills `issues` (minimum `2.40`) and `triage` requiring `gh` (titled GitHub CLI), and no `gh` on the agent's `PATH`

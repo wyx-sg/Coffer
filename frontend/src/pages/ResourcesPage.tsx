@@ -6,9 +6,9 @@
 // the full-width first-run welcome, or a prompt to choose one. One header
 // action, Add server. Scoped to `mcp_server` server-side. (The file keeps its old
 // name — the naming exception in .agents/frontend.md.) A server is addressed by
-// its fixed NAME; `/mcp-servers/<uid>` and an old `?tab=` redirect to it.
+// its fixed NAME.
 import { lazy, Suspense, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Server } from "lucide-react";
 
@@ -17,14 +17,12 @@ import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
-import { MCP_SERVER_TABS } from "@/components/mcp/mcpServerTabs";
 import { McpFirstRun } from "@/components/mcp/server/McpFirstRun";
 import { BUILTIN_NAME, McpServerList } from "@/components/mcp/server/McpServerList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { isCustomToolGroup } from "@/lib/customTools/groups";
-import { canonicalDetailPath, resolveByName } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useResources } from "@/lib/hooks/useResources";
 
@@ -50,7 +48,6 @@ const McpServerPane = lazy(() =>
 export function ResourcesPage() {
   const { t } = useTranslation();
   const { name: nameParam = "", tab: pathTab } = useParams<{ name?: string; tab?: string }>();
-  const location = useLocation();
   const navigate = useNavigate();
   const list = useResources("mcp_server");
   const [add, setAdd] = useState<"paste" | "importAgents" | null>(null);
@@ -61,29 +58,13 @@ export function ResourcesPage() {
   // address naming one goes there.
   const all = list.data ?? [];
   const servers = all.filter((r) => !isCustomToolGroup(r));
-  const match = resolveByName(list.data ? servers : undefined, nameParam);
+  const match = nameParam ? servers.find((r) => r.name === nameParam) : undefined;
   const basePath = `/mcp-servers/${encodeURIComponent(nameParam)}`;
   const group = nameParam
-    ? all.find((r) => isCustomToolGroup(r) && (r.name === nameParam || r.uid === nameParam))
+    ? all.find((r) => isCustomToolGroup(r) && r.name === nameParam)
     : undefined;
   if (group) {
     return <Navigate replace to={`/custom-tools/${encodeURIComponent(group.name)}`} />;
-  }
-
-  if (match?.byUid) {
-    return (
-      <Navigate
-        replace
-        state={location.state}
-        to={canonicalDetailPath(
-          `/mcp-servers/${encodeURIComponent(match.item.name)}`,
-          pathTab,
-          location.search,
-          MCP_SERVER_TABS,
-          "overview",
-        )}
-      />
-    );
   }
 
   const tabSegment = pathTab && pathTab !== "overview" ? `/${pathTab}` : "";
@@ -112,8 +93,8 @@ export function ResourcesPage() {
     pane = (
       <Suspense fallback={<PaneSkeleton />}>
         <McpServerPane
-          key={match.item.uid}
-          resource={match.item}
+          key={match.uid}
+          resource={match}
           basePath={basePath}
           onDeleted={() => navigate("/mcp-servers", { replace: true })}
         />
@@ -180,7 +161,7 @@ export function ResourcesPage() {
             <McpServerList
               servers={servers}
               isLoading={list.isPending}
-              selectedName={match?.item.name ?? null}
+              selectedName={match?.name ?? null}
               hrefFor={hrefFor}
               builtinSelected={!match && nameParam === BUILTIN_NAME}
             />

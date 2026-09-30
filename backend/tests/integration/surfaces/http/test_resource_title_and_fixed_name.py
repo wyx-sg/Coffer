@@ -329,13 +329,7 @@ async def test_a_kind_whose_name_is_not_fixed_still_renames(tmp_path):
     scenario="a server name longer than 24 characters is refused at registration",
 )
 async def test_a_new_server_name_over_24_characters_is_refused(tmp_path):
-    c, svc, engine = await _app(tmp_path)
-    # A server registered before the cap: it arrives the way the only such row
-    # can still arrive — with the identity another machine already gave it —
-    # and the rule for NEW names does not apply to it.
-    earlier = await svc.register(
-        "mcp_server", "a" * 30, _SERVER_CONFIG, "sync", uid="0123456789abcdef0123456789abcdef"
-    )
+    c, _svc, engine = await _app(tmp_path)
     async with c:
         refused = await c.post(
             "/api/v1/resources",
@@ -357,9 +351,6 @@ async def test_a_new_server_name_over_24_characters_is_refused(tmp_path):
                 "resources"
             ]
         )
-        # Nothing was persisted for the refused name; the earlier server keeps
-        # its 30-character name and still loads.
-        assert names == ["a" * 30, "c" * 24]
-        loaded = (await c.get(f"/api/v1/resources/{earlier.uid}")).json()
-        assert loaded["name"] == "a" * 30
+        # Nothing was persisted for the refused name.
+        assert names == ["c" * 24]
     await engine.dispose()

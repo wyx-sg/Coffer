@@ -97,16 +97,16 @@ test("overview lists an MCP server whose launcher is missing, with its reason an
     const row = needsYou.getByRole("listitem").filter({ hasText: name });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText(
-      `Its launcher \`${MISSING_LAUNCHER}\` is not installed`,
+      `Its launcher ${MISSING_LAUNCHER} isn't found on this machine`,
     );
     await expect(row.getByRole("img", { name: "Failing" })).toBeVisible();
 
     const action = row.getByRole("link", {
       name: new RegExp(`^Test again: ${name}$`),
     });
-    await expect(action).toHaveAttribute("href", `/mcp-servers/${uid}`);
+    // The server's page is addressed by its fixed name.
+    await expect(action).toHaveAttribute("href", `/mcp-servers/${name}`);
     await action.click();
-    // The uid address redirects to the server's name-keyed page.
     await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}$`), {
       timeout: 10_000,
     });

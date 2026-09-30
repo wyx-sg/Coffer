@@ -96,21 +96,6 @@ def check_name(kind_def: Kind, name: str) -> None:
             raise ConfigValidationError(str(e)) from e
 
 
-def check_new_name(kind_def: Kind, name: str) -> None:
-    """The kind's rule for the name of a resource created on this machine.
-
-    Asked by registration only when it mints the uid, after :func:`check_name`
-    — so a rule tightened today refuses new names without refusing a row that
-    was registered before it, whether that row is loaded here or arrives from
-    another machine carrying its own uid.
-    """
-    if kind_def.validate_new_name is not None:
-        try:
-            kind_def.validate_new_name(name)
-        except ValueError as e:
-            raise ConfigValidationError(str(e)) from e
-
-
 def checked_title(kind_def: Kind, title: str | None) -> str | None:
     """The title to store — ``None`` for a blank one — or ``ConfigValidationError``
     for one over the cap, or for any title on a kind that carries none

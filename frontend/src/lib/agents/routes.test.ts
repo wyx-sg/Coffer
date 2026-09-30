@@ -1,4 +1,4 @@
-// src/lib/agents/routes.test.ts — the /agents addresses and the redirects of the old ones.
+// src/lib/agents/routes.test.ts — the /agents addresses.
 import { describe, expect, test } from "vitest";
 
 import {
@@ -9,7 +9,6 @@ import {
   agentSessionPath,
   agentTabPath,
   isAgentType,
-  legacyAgentPath,
   unmanagedSkillPath,
 } from "./routes";
 
@@ -57,34 +56,5 @@ describe("agent addresses", () => {
     expect(isAgentType("codex")).toBe(true);
     expect(isAgentType("agt_01J8")).toBe(false);
     expect(isAgentType(undefined)).toBe(false);
-  });
-});
-
-describe("old addresses", () => {
-  test("old ?tab= values move to their path tab, other params kept", () => {
-    expect(legacyAgentPath("codex", "", "?tab=mcpServers")).toBe("/agents/codex/mcp-servers");
-    expect(legacyAgentPath("codex", "", "?tab=conversations&x=1")).toBe(
-      "/agents/codex/sessions?x=1",
-    );
-  });
-
-  test("the Conversations tab and its session page become Sessions", () => {
-    expect(legacyAgentPath("codex", "/conversations", "")).toBe("/agents/codex/sessions");
-    expect(legacyAgentPath("codex", "/conversations", "?path=%2Fa.jsonl")).toBe(
-      "/agents/codex/sessions?session=%2Fa.jsonl",
-    );
-  });
-
-  test("a memory store opened from the tab's own address moves under /memory/store", () => {
-    expect(legacyAgentPath("codex", "/memory", "?dir=%2Fm&project=P")).toBe(
-      "/agents/codex/memory/store?dir=%2Fm&project=P",
-    );
-  });
-
-  test("current addresses are left alone (the path-tab ?tab= form is useDetailTab's)", () => {
-    expect(legacyAgentPath("codex", "", "")).toBeNull();
-    expect(legacyAgentPath("codex", "/skills", "?owner=own")).toBeNull();
-    expect(legacyAgentPath("codex", "", "?tab=skills")).toBeNull();
-    expect(legacyAgentPath("codex", "/memory", "")).toBeNull();
   });
 });

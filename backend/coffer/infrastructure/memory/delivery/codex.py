@@ -6,8 +6,8 @@ tool arrives as `tool_name: "Bash"` with `tool_input.command` — and its hook
 input carries the session's id. Coffer installs one entry on each, all running
 the same `coffer memory hook` command. Anything once-per-session is keyed on
 that `session_id`, never on a process id: under Codex Desktop and the IDE hosts
-every session of one `codex app-server` shares a parent pid, so the `$PPID`
-guard an older build used let only the first session of each app-server fire.
+every session of one `codex app-server` shares a parent pid, so a guard keyed
+on `$PPID` would let only the first session of each app-server fire.
 
 Three things make the hooks actually run and actually arrive:
 

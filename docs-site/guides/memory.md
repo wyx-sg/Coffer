@@ -162,7 +162,7 @@ Every entry runs the same command, `coffer memory hook --agent-uid <uid> --cwd "
 Codex runs a hook only after you have approved it, and it skips an unapproved one without saying so. After connecting a Codex agent, and again after any Coffer update that changes the hook's command, open Codex, run `/hooks` and trust each of Coffer's four entries: `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse`. An entry you leave unapproved is simply skipped, so trusting only `SessionStart` gives you the index and nothing else. Coffer does not approve its own hook; it only reports it as untrusted. The agent's **Hooks** tab, `coffer agent hooks <name>` and the attention list all show when an approval is missing.
 :::
 
-The daemon keeps installed hooks current. On every reconcile pass it rewrites any hook whose command or set of events is out of date for the running build; an older build's single session-start entry is rewritten into the four entries this way. It never adds a hook to an agent that does not have one.
+The daemon keeps installed hooks current. On every reconcile pass it rewrites any hook whose command or set of events is out of date for the running build, back into the four current entries. It never adds a hook to an agent that does not have one.
 
 Whether the hook is installed, current and trusted is shown on the **agent's** page (its connection status and **Hooks** tab), not with memory. The delivery views in [See it working](#see-it-working) report what was delivered, never the state of a hook.
 

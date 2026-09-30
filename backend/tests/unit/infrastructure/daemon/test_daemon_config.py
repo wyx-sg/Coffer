@@ -130,22 +130,3 @@ def test_a_file_from_an_older_build_keeps_its_keys_and_still_reads() -> None:
         "machine_name": "laptop",
     }
     assert daemon_config.read_machine_name() == "laptop"
-
-
-# --- a retired idle window (spec daemon "Change residency from the settings
-# page or the command line") -------------------------------------------------
-
-
-def test_a_stale_idle_window_is_ignored_on_read_and_dropped_on_write() -> None:
-    path = daemon_config.config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"port": 9123, "idle_shutdown_hours": 6, "from_the_future": 7}))
-
-    assert daemon_config.read_fixed_port() == 9123
-
-    daemon_config.write_machine_name("laptop")
-    assert json.loads(path.read_text()) == {
-        "port": 9123,
-        "from_the_future": 7,
-        "machine_name": "laptop",
-    }

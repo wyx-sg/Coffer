@@ -40,7 +40,7 @@ A conversation can also start from **Ask an agent** elsewhere in the app — on 
 
 The first send creates the conversation. Opening the draft and leaving creates nothing. The conversation is titled after the first thing you wrote; rename it at any time and Coffer does not overwrite your name.
 
-The open conversation is part of the URL, `/conversations/<id>` (old `/chat/<id>` links redirect), so a refresh, a bookmark or a second tab reopens the same thread. A link to a conversation that has been deleted shows **Conversation not found** with a **Start a new conversation** button.
+The open conversation is part of the URL, `/conversations/<id>`, so a refresh, a bookmark or a second tab reopens the same thread. A link to a conversation that has been deleted shows **Conversation not found** with a **Start a new conversation** button.
 
 ### Working directory
 

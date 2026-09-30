@@ -209,9 +209,14 @@ def test_no_memory_tool_is_listed_and_the_context_names_the_memory_root(
     assert [n for n in builtins if "memory" in n or "remember" in n or "recall" in n] == []
     assert set(builtins) <= {"coffer__search_tools", "coffer__write"}
 
-    r = client.post("/api/v1/memory/context", json={"cwd": str(repository)})
+    # The session context is what the installed hook's SessionStart fire adds.
+    agents = client.get("/api/v1/resources", params={"kind": "agent"}).json()["resources"]
+    r = client.post(
+        "/api/v1/memory/hook",
+        json={"agent_uid": agents[0]["uid"], "event": "SessionStart", "cwd": str(repository)},
+    )
     assert r.status_code == 200, r.text
-    text = r.json()["text"]
+    text = r.json()["output"]["hookSpecificOutput"]["additionalContext"]
 
     # The root ``coffer path memory`` prints is the one the memory paths
     # resolve, absolute, under the pinned ``COFFER_MEMORY_ROOT``.

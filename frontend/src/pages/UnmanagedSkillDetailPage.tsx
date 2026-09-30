@@ -36,7 +36,7 @@ export function UnmanagedSkillDetailPage() {
   const route = useAgentRoute();
   const uid = route.uid;
   const { data: skill, isPending: skillPending, error } = useUnmanagedSkill(uid, location, name);
-  const isPending = route.isPending || route.redirecting || (uid !== "" && skillPending);
+  const isPending = route.isPending || (uid !== "" && skillPending);
 
   const back = {
     to: route.type ? agentTabPath(route.type, "skills") : "/agents",

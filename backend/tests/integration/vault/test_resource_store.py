@@ -164,22 +164,39 @@ async def test_reach_is_local_and_never_committed() -> None:
 @pytest.mark.acceptance(
     spec="vault-storage", scenario="a field this build does not know survives a write"
 )
-async def test_unknown_fields_survive_a_write_at_the_top_and_inside_config() -> None:
+async def test_an_unknown_top_level_field_survives_a_write() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
     path = _vault_file("resources/widget/w.json")
     raw = json.loads(path.read_text())
     raw["future_field"] = {"x": 1}
-    raw["config"]["shade"] = "dark"
     path.write_text(json.dumps(raw, indent=2) + "\n")
     vault_writer().settle()
-    seen = await svc.get(r.uid)
-    assert "shade" not in seen.config
+    assert "resources/widget/w.json" not in vault_writer().problems()
     await svc.update_config(r.uid, {"colour": "red"}, actor="user", description="changed")
     after = json.loads(path.read_text())
     assert after["future_field"] == {"x": 1}
-    assert after["config"]["shade"] == "dark" and after["config"]["colour"] == "red"
+    assert after["config"]["colour"] == "red" and "shade" not in after["config"]
     assert list(after) == list(raw)
+
+
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a config key the kind does not declare is refused"
+)
+async def test_a_config_key_the_kind_does_not_declare_is_refused() -> None:
+    svc, _repo = _service(_kinds())
+    r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
+    path = _vault_file("resources/widget/w.json")
+    committed = path.read_bytes()
+    raw = json.loads(committed)
+    raw["config"]["shade"] = "dark"
+    path.write_text(json.dumps(raw, indent=2) + "\n")
+    vault_writer().settle()
+    [finding] = vault_writer().problems()["resources/widget/w.json"]
+    assert finding.code is FindingCode.CONFIG_INVALID and "'shade'" in finding.message
+    assert vault_repository().read("HEAD", "resources/widget/w.json") == committed
+    assert (await svc.get(r.uid)).config["colour"] == "blue"
+    assert "shade" not in (await svc.get(r.uid)).config
 
 
 @pytest.mark.acceptance(

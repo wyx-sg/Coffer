@@ -60,9 +60,14 @@ Every document Coffer parses in the vault — resource files, state documents,
 machine descriptors — SHALL be a JSON object written with one deterministic
 encoding (two-space indent, a trailing newline, keys in the order the file
 already has them), so a write that changes nothing makes no commit. A reader
-SHALL validate the fields it knows and keep every other key verbatim, in
-place, on every write; an unknown field MUST be reported as a warning and
-MUST NOT be refused.
+SHALL validate the fields it knows and keep every other top-level field
+verbatim, in place, on every write; an unknown top-level field MUST be
+reported as a warning and MUST NOT be refused. A resource file's `config` is
+its kind's and SHALL hold only the keys the kind's schema declares: a file
+whose config holds any other key, a name the kind's name rule refuses, and a
+`title` on a kind that has no titles, MUST be refused with a finding naming it — the same rules a registration
+through the API meets — whether a person wrote the file or a sync merge
+brought it.
 
 #### Scenario: a document round-trips to the same bytes
 - **GIVEN** a resource file written by Coffer
@@ -70,9 +75,15 @@ MUST NOT be refused.
 - **THEN** its bytes are identical and no commit is made
 
 #### Scenario: a field this build does not know survives a write
-- **GIVEN** a resource file carrying a key this build does not know
-- **WHEN** Coffer changes the resource's description
-- **THEN** the key is still in the file, in the same place, with the same value
+- **GIVEN** a resource file carrying a top-level field this build does not know
+- **WHEN** Coffer changes the resource's config
+- **THEN** the field is still in the file, in the same place, with the same value
+
+#### Scenario: a config key the kind does not declare is refused
+- **GIVEN** a registered resource
+- **WHEN** a person adds a config key its kind does not declare to its file
+- **THEN** the edit is not committed and a finding names the key
+- **AND** the resource keeps its last valid config
 
 ### Requirement: Identify a resource by the uid inside its file
 A resource file SHALL carry its `uid`, `kind`, `format_version`, `name`,

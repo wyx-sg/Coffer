@@ -256,8 +256,7 @@ class DeliveryAdapter(Protocol):
         ...
 
     def find(self, text: str) -> InstalledHook | None:
-        """Coffer's entry on whichever event it sits — an older build's may sit
-        on an event this build no longer installs on — or `None`."""
+        """Coffer's entry on whichever event it sits, or `None`."""
         ...
 
     def find_all(self, text: str) -> list[InstalledHook]:

@@ -32,12 +32,6 @@ export function isAgentType(value: string | undefined): value is AgentType {
   return value !== undefined && (AGENT_TYPES as readonly string[]).includes(value);
 }
 
-/** Old `?tab=` values (and the old Conversations segment) → today's tab. */
-const LEGACY_TAB_ALIASES: Readonly<Record<string, AgentTab>> = {
-  mcpServers: "mcp-servers",
-  conversations: "sessions",
-};
-
 const enc = encodeURIComponent;
 
 export function agentBasePath(type: string): string {
@@ -75,32 +69,4 @@ export function agentMemoryStorePath(type: string, dir: string, project?: string
 /** The Sessions tab with one transcript open, addressed by its file (its identity). */
 export function agentSessionPath(type: string, sessionPath: string): string {
   return `${agentTabPath(type, "sessions")}?${new URLSearchParams({ session: sessionPath })}`;
-}
-
-/**
- * Where an address in an older form belongs today, or `null` when it is
- * current. `rest` is the path after `/agents/<type>` (with its leading `/`, or
- * ""), `search` the query string. Covers the old `?tab=` values, the
- * Conversations tab (now Sessions, whose open session moved from the session
- * page's `?path=` to the tab's `?session=`), and a memory store opened from the
- * tab's own address (`/memory?dir=` → `/memory/store?dir=`).
- */
-export function legacyAgentPath(type: string, rest: string, search: string): string | null {
-  const params = new URLSearchParams(search);
-  const queryTab = params.get("tab");
-  const segments = rest.split("/").filter(Boolean);
-
-  if (segments.length === 1 && segments[0] === "conversations") {
-    const session = params.get("path");
-    return session ? agentSessionPath(type, session) : agentTabPath(type, "sessions");
-  }
-  if (segments.length === 1 && segments[0] === "memory" && params.get("dir")) {
-    return agentMemoryStorePath(type, params.get("dir") ?? "", params.get("project"));
-  }
-  if (segments.length === 0 && queryTab !== null && queryTab in LEGACY_TAB_ALIASES) {
-    params.delete("tab");
-    const other = params.toString();
-    return agentTabPath(type, LEGACY_TAB_ALIASES[queryTab], other ? `?${other}` : "");
-  }
-  return null;
 }

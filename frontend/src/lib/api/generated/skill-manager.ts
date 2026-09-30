@@ -153,7 +153,7 @@ export interface paths {
         /**
          * Get Cli
          * @description One required command, with the hand-off prompt when it needs the
-         *     person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it.
+         *     person; 404 ``CLI_NOT_REQUIRED`` when no skill or MCP server requires it.
          */
         get: operations["get_cli_api_v1_clis__command__get"];
         put?: never;
@@ -711,6 +711,8 @@ export interface components {
             min_version: string | null;
             /** Needed By */
             needed_by: components["schemas"]["CliNeededByOut"][];
+            /** Needed By Servers */
+            needed_by_servers: components["schemas"]["CliServerOut"][];
             /** Path */
             path: string | null;
             /**
@@ -722,6 +724,19 @@ export interface components {
             title: string | null;
             /** Version */
             version: string | null;
+        };
+        /**
+         * CliServerOut
+         * @description One enabled stdio MCP server started with the command (or with a
+         *     launcher it provides: ``uvx`` for ``uv``, ``npx`` for ``node``).
+         */
+        CliServerOut: {
+            /** Launcher */
+            launcher: string;
+            /** Server Name */
+            server_name: string;
+            /** Server Uid */
+            server_uid: string;
         };
         /**
          * CliWarningOut

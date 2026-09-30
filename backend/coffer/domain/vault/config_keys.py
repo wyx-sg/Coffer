@@ -2,15 +2,14 @@
 vault-storage "Keep every vault document a JSON object that preserves what it
 does not know").
 
-The store hands a kind only the keys its schema reads and keeps every other
-key in the file; the validator reports the others as warnings. Both ask here,
-so they can never disagree about what "known" means.
+The vault's resource rule refuses a file whose config holds any other key,
+one finding per key, so a person sees each key by name rather than one
+schema error.
 
 A plain model reads its fields (by name and alias); one with
-``extra="allow"`` reads every key (``None``). A model that ignores extras is
-still handed only its fields: were it handed the others, a service that
-validates and dumps the config would drop them before the store could keep
-them. A ``RootModel`` over a union — a
+``extra="allow"`` reads every key (``None``). A model that ignores extras
+still reads only its fields, so a key it would drop silently is refused too.
+A ``RootModel`` over a union — a
 channel's config, discriminated by ``channel_type`` — reads the keys of the
 member the config is; the member is the one that accepts the config's own
 keys, and when none does, the union of every member's keys is what is known.

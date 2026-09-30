@@ -67,6 +67,31 @@ def test_each_resource_is_its_stores_file_with_uid_and_no_created_at(legacy: Leg
         assert data == expected, f"{kind} {name} is not the store's own bytes"
 
 
+def test_a_retired_mcp_server_key_is_dropped_on_the_way_into_the_file(
+    legacy: LegacyHome,
+) -> None:
+    """``MCPServerConfig`` refuses keys it does not declare, so a row still
+    carrying ``idle_timeout_seconds`` becomes a file without it — and the
+    upgrade's own check counts that as carried, not as a difference."""
+    with sqlite3.connect(legacy.db) as conn:
+        (raw,) = conn.execute(
+            "SELECT config_json FROM resources WHERE kind='mcp_server' AND name='github'"
+        ).fetchone()
+        config = json.loads(raw)
+        conn.execute(
+            "UPDATE resources SET config_json=? WHERE kind='mcp_server' AND name='github'",
+            (json.dumps({**config, "idle_timeout_seconds": 600}),),
+        )
+    inventory = take_inventory(legacy.home)
+    report = _migrate(legacy)
+    assert report.outcome == "migrated", report.lines()
+    assert check(legacy.home, inventory) == []
+    written = parse_resource(
+        (legacy.coffer / "vault" / "resources" / "mcp_server" / "github.json").read_bytes()
+    )
+    assert written.config == config
+
+
 @pytest.mark.acceptance(spec="vault-sync", scenario="reach stays on the machine it was set on")
 def test_reach_is_local_and_keeps_enabled_and_scope(legacy: LegacyHome) -> None:
     _migrate(legacy)

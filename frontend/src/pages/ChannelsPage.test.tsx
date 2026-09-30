@@ -293,11 +293,6 @@ describe("tabs live in the path", () => {
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
     await waitFor(() => expect(where.url).toBe(`/channels/${TEAM.uid}`));
   });
-
-  test("an old ?tab= address redirects to the path form", async () => {
-    renderChannelsPage(`/channels/${TEAM.uid}?tab=settings`);
-    await waitFor(() => expect(where.url).toBe(`/channels/${TEAM.uid}/settings`));
-  });
 });
 
 test("Conversations from this channel links to Conversations filtered by it", async () => {

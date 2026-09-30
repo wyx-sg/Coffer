@@ -52,10 +52,14 @@ describe("sortAttention", () => {
 
 describe("pages", () => {
   test("each kind opens its own page", () => {
-    expect(itemPage(item({ kind: "agent", uid: "a1" }))).toBe("/agents/a1");
-    expect(itemPage(item({ kind: "mcp_server", uid: "m1" }))).toBe("/mcp-servers/m1");
+    expect(itemPage(item({ kind: "agent", uid: "a1" }), "claude_code")).toBe("/agents/claude_code");
+    expect(itemPage(item({ kind: "mcp_server", uid: "m1", title: "github" }))).toBe(
+      "/mcp-servers/github",
+    );
     expect(itemPage(item({ kind: "channel", uid: "c1" }))).toBe("/channels/c1");
-    expect(itemPage(item({ kind: "skill", uid: "s1" }))).toBe("/skills/s1");
+    expect(itemPage(item({ kind: "skill", uid: "s1", title: "code-review" }))).toBe(
+      "/skills/code-review",
+    );
     expect(itemPage(item({ kind: "provider", uid: "p1" }))).toBe("/model-providers/p1");
     expect(itemPage(item({ kind: "sync", uid: null }))).toBe("/sync");
     expect(itemPage(item({ kind: "reconcile", uid: null }))).toBe("/activity?tab=daemon");
@@ -66,10 +70,14 @@ describe("pages", () => {
     expect(itemPage(item({ kind: "skill", uid: null }))).toBe("/skills");
   });
 
+  test("an agent whose type is not known yet opens the agent list", () => {
+    expect(itemPage(item({ kind: "agent", uid: "a1" }))).toBe("/agents");
+  });
+
   test("a missing secret is added on the Secrets page, the name still opens the server", () => {
     const secret = item({ reason_code: "mcp_missing_secret", uid: "m1" });
     expect(actionPage(secret)).toBe("/secrets");
-    expect(itemPage(secret)).toBe("/mcp-servers/m1");
+    expect(itemPage(secret)).toBe("/mcp-servers/github");
   });
 });
 
@@ -80,14 +88,20 @@ test("a memory-hook problem opens the agent's Hooks tab and repairs as a hook", 
     reason_code: "stale_command",
     action: { verb: "repair", method: "POST", path: "/api/v1/reconcile/apply", body: null },
   });
-  expect(actionPage(hook)).toBe("/agents/a1/hooks");
-  expect(itemPage(hook)).toBe("/agents/a1");
+  expect(actionPage(hook, "claude_code")).toBe("/agents/claude_code/hooks");
+  expect(itemPage(hook, "claude_code")).toBe("/agents/claude_code");
   expect(itemActionLabelKey(hook)).toBe("overview.actions.repairHook");
   const untrusted = item({ ...hook, reason_code: "hook_untrusted" });
-  expect(actionPage(untrusted)).toBe("/agents/a1/hooks");
+  expect(actionPage(untrusted, "codex")).toBe("/agents/codex/hooks");
   // Only a hook reason on an agent: a skill's drift keeps its own page and label.
-  const drift = item({ ...hook, kind: "skill", uid: "s1", reason_code: "link_missing" });
-  expect(actionPage(drift)).toBe("/skills/s1");
+  const drift = item({
+    ...hook,
+    kind: "skill",
+    uid: "s1",
+    title: "code-review",
+    reason_code: "link_missing",
+  });
+  expect(actionPage(drift)).toBe("/skills/code-review");
   expect(itemActionLabelKey(drift)).toBe("overview.actions.repair");
 });
 

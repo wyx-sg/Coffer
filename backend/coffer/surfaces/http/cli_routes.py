@@ -45,7 +45,7 @@ async def get_cli(
     service: CliRequirementService = Depends(get_cli_requirement_service),  # noqa: B008
 ) -> CliOut:
     """One required command, with the hand-off prompt when it needs the
-    person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it."""
+    person; 404 ``CLI_NOT_REQUIRED`` when no skill or MCP server requires it."""
     return cli_out(await service.get(command))
 
 

@@ -339,7 +339,7 @@ The **Hooks** tab lists every hook the agent will run in one table (owner filter
 Coffer's own hook — the [memory delivery hook](/guides/memory#install-the-hook) — is marked on each of its four entries and reported as one hook. On the tab it is a single row: the Event column reads **Memory hook · 4 events** with a chip for each event it sits on, and the summary above the table counts it once. Its state says how it is doing:
 
 - **Current** — installed on exactly the four events, each with exactly the command this version of Coffer writes.
-- **Out of date** — Coffer's hook is there but carries a command an older version wrote, or sits on another set of events (an older build installed one `SessionStart` entry). The daemon rewrites it on its next reconcile pass; **Repair** does it now.
+- **Out of date** — Coffer's hook is there but carries another command than the one Coffer writes now, or sits on another set of events. The daemon rewrites it on its next reconcile pass; **Repair** does it now.
 - **Missing** — no Coffer hook. **Repair** connects the agent to Coffer again, which installs it.
 
 For Codex it also says whether Codex will run the hook. Codex skips an entry you have not approved, and Coffer's hook counts as trusted only when all four entries are, so **Needs approval in Codex** (or **Needs re-approval in Codex**, after a Coffer update changed the command) means at least one entry is installed but not running. Open Codex, run `/hooks` and trust each of Coffer's four entries. Coffer does not approve them for you.
@@ -390,7 +390,7 @@ For Codex, `responses` is the only accepted `--wire-api` value; Codex refuses to
 
 ## Model, native memory and sessions in the web UI
 
-The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`) and has nine tabs, each at its own address: **Overview** (`/agents/<type>`), **Model**, **Skills**, **MCP servers**, **Plugins**, **Hooks**, **Config files**, **Memory** and **Sessions** (`/agents/<type>/model`, `…/skills`, `…/mcp-servers`, `…/plugins`, `…/hooks`, `…/config`, `…/memory`, `…/sessions`). Overview shows the Coffer connection, one summary row per installed kind (each opening its tab), the model, the details — type, config directory, uid, registered — and the recent sessions; an agent's name is its type, so there is no name or title to edit. Old addresses (by uid, `?tab=`, the former Conversations tab) redirect.
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`) and has nine tabs, each at its own address: **Overview** (`/agents/<type>`), **Model**, **Skills**, **MCP servers**, **Plugins**, **Hooks**, **Config files**, **Memory** and **Sessions** (`/agents/<type>/model`, `…/skills`, `…/mcp-servers`, `…/plugins`, `…/hooks`, `…/config`, `…/memory`, `…/sessions`). Overview shows the Coffer connection, one summary row per installed kind (each opening its tab), the model, the details — type, config directory, uid, registered — and the recent sessions; an agent's name is its type, so there is no name or title to edit.
 
 The **Model** tab is the one place an agent's provider is switched: the built-in login or a compatible connection, the model, the effort levels that model reports, and — for Claude Code on a connection — the model per tier (Opus, Sonnet, Haiku, and Fable when the connection lists one), prefilled with suggestions. A connection must pass **Test connection** first; the review pane lists what Coffer will write before **Confirm switch**.
 

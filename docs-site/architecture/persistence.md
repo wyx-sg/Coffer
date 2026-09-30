@@ -27,7 +27,7 @@ So the class decides the directory, and the directory decides whether something 
 | --- | --- |
 | Five classes, one directory each: `vault/`, `local/`, `content/`, `runs.db`, `derived/`. | Where a fact lives says whether it syncs, whether it has history, and whether deleting it is safe. |
 | The vault is a git repository from the first use, whether or not it syncs. | Every change has a version, a writer and a diff; restoring is a commit; sync only adds a remote. |
-| Vault documents are JSON files, one per resource or state area, with the uid inside. | You can read and edit them in any editor; unknown fields are kept in place; the uid, not the path, is the identity. |
+| Vault documents are JSON files, one per resource or state area, with the uid inside. | You can read and edit them in any editor; unknown top-level fields are kept in place, while a config key the kind does not declare is refused; the uid, not the path, is the identity. |
 | Every vault write goes through one writer: lock, compare-and-swap, validate, one commit naming the writer. | Three writers (you, the daemon, sync) change the vault and none waits for the others. None can silently overwrite another. |
 | `runs.db` holds history only, as the one Alembic lineage, keyed by uid. | History is relational, append-only and pruned; it never travels. |
 | `derived/` is rebuilt, never migrated. `derived.db` is recreated when its schema version differs. | Nothing there is the only copy of a fact, so deleting it is always safe. |

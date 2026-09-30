@@ -15,6 +15,7 @@ A skill that drives a command-line tool fails at the step that calls it when the
 - **Nothing a check prints is kept.** A login check's stdout and stderr go to `/dev/null`; only its exit status is used, because such output may hold an account name or a token.
 - **Coffer checks; the agent installs.** Installing depends on the machine — which package manager, which architecture, whether `sudo` is involved — and the person's agent can find that out. Coffer runs no installer and no login. It writes the facts it has into a prompt, the [agent hand-off](#the-agent-hand-off), and the person gives it to an agent.
 - **One row per command.** A missing `gh` is one problem, however many skills need it.
+- **MCP servers' launchers are requirements too.** An enabled stdio MCP server needs its launcher, so the check lists it under the command that provides it (`uv` for `uvx`, `node` for `npx`, `bun` for `bunx`) with no minimum and no login. The two kinds meet only at the composition root: `application/mcp/stdio_launchers.py` reads the servers, `agent_skill_wiring.py` hands them to the check through `McpLaunchersPort`, and the skill kind never imports the MCP kind.
 
 ## The pieces
 
@@ -22,12 +23,12 @@ A skill that drives a command-line tool fails at the step that calls it when the
 | --- | --- | --- |
 | Declaration | `domain/skill/requirements.py` | Parses `requires:` leniently: an entry it cannot use is skipped with a warning and never fails the skill's import. |
 | Versions | `domain/versions.py` | Reads a dotted version out of `--version` output and compares two, shared with agent detection. |
-| Status | `domain/skill/cli_status.py` | `missing`, `outdated`, `logged_out` or `ready`, and the problems-first order. |
-| Aggregation and cache | `application/skill/cli_requirements.py` | One row per command across every managed skill: the highest minimum, the first skill's title, login check and login command, and every skill that needs it. Results are cached until Check again or the daemon restarts; probes run in worker threads. |
+| Status | `domain/skill/cli_status.py` | `missing`, `outdated`, `logged_out` or `ready`, the problems-first order, and `launcher_cli` (which command a stdio launcher is checked as). |
+| Aggregation and cache | `application/skill/cli_requirements.py` | One row per command across every managed skill and enabled stdio MCP server: the highest minimum, the first skill's title, login check and login command, every skill that needs it and every server started with it. Results are cached until Check again or the daemon restarts; probes run in worker threads. |
 | Probe | `infrastructure/skill/command_probe.py` | Locates on `UserPath`, runs `--version` (5 s) and the login check (10 s) with `stdin` closed and output discarded. |
 | Hand-off | `application/skill/cli_handoff.py`, `domain/handoff.py` | The prompt for a missing, outdated or not-logged-in command, carried as `handoff.prompt` on every command the routes return. |
 | Machine | `infrastructure/platform/host.py` (`machine_label`) | The OS and CPU architecture the prompt names, e.g. `macOS 15.6, arm64`, read once per daemon. |
-| Attention | `application/skill/cli_attention.py` | Kind `cli`, the command as the uid: `cli_missing`, `cli_outdated`, `cli_logged_out`, each offering `check`. |
+| Attention | `application/skill/cli_attention.py` | Kind `cli`, the command as the uid: `cli_missing`, `cli_outdated`, `cli_logged_out`, each offering `check`. A command only MCP servers need raises none: the server's `mcp_missing_launcher` item already names it. |
 | Surfaces | `surfaces/http/cli_routes.py`, `surfaces/cli/cli_cmd.py` | `/api/v1/clis…` and `coffer cli list|show|check|prompt`. |
 
 ## The agent hand-off
@@ -43,7 +44,7 @@ For a required command the facts are:
 
 | Status | The prompt asks the agent to | Facts it names |
 | --- | --- | --- |
-| `missing` | install it, choosing the method for this machine, and run `<command> --version` | the skills that need it, with each one's minimum; the machine |
+| `missing` | install it, choosing the method for this machine, and run `<command> --version` | the skills that need it, with each one's minimum; the MCP servers started with it and their launcher; the machine |
 | `outdated` | update it the way it was installed, and run `<command> --version` | the version and path found against the minimum; the skills; the machine |
 | `logged_out` | tell the person what to run to log in, and run the login check afterwards | the login check that failed; the declared login command; the skills; the machine |
 

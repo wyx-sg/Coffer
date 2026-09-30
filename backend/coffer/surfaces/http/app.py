@@ -88,12 +88,11 @@ from coffer.surfaces.http.reconcile_wiring import (
     start_reconciler,
     wire_attention,
 )
-from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
 from coffer.surfaces.http.secret_composition import (
     init_secret_store,
     make_secret_resolver,
-    run_secret_startup,
 )
 from coffer.surfaces.http.vault_composition import build_vault_stores
 from coffer.surfaces.http.vault_wiring import start_vault_scanning
@@ -127,12 +126,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Run migrations BEFORE building services so they have a schema to talk to.
     await asyncio.get_running_loop().run_in_executor(None, run_migrations, _db_url())
 
-    # 0048 dropped the removed-type agent rows; name what they left on disk.
-    try:  # Courtesy notice only: never fatal.
-        report_removed_agent_leftovers()
-    except Exception:
-        _logger.exception("removed_agent_type.leftover_scan_failed")
-
     # Startup process hygiene (ADR daemon-detect-or-spawn), BEFORE new upstreams: reap leaked MCP
     # upstreams AND stale sibling daemons. Best-effort; never blocks startup.
     try:
@@ -148,7 +141,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # validator every vault write passes (ADR storage-is-five-classes-by-nature).
     vault = await build_vault_stores(app.state.kinds)
 
-    secrets = await init_secret_store(resource_repo=vault.resources)
+    secrets = await init_secret_store()
     secret_store = secrets.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
     # ingest, the curation pass, the memory distil pass) shares one resolver
@@ -250,8 +243,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app, resource_svc, audit, sm, vault, secret_store, chat, kinds.knowledge
     )
 
-    # Legacy keychain move + one-time adoption of the secret bindings in use.
-    await run_secret_startup(app.state.kinds, secret_store, audit, resource_svc)
+    # Every kind has registered its secret destinations: the approval refresh
+    # reads them from here on.
+    remember_destination_sources(resource_svc, audit)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.

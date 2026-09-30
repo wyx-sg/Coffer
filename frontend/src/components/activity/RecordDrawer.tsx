@@ -86,7 +86,7 @@ export function RecordDrawer({
     record.source === "change"
       ? changeLink(record.entry)
       : call?.resource_name
-        ? { to: `/mcp-servers/${encodeURIComponent(call.resource_uid)}`, name: call.resource_name }
+        ? { to: `/mcp-servers/${encodeURIComponent(call.resource_name)}`, name: call.resource_name }
         : null;
 
   let secondary: ReactNode;

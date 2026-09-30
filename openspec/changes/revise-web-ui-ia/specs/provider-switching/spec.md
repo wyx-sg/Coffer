@@ -22,8 +22,7 @@ independent speech-to-text default"), not through a `provider` subcommand.
 
 The web surfaces:
 
-- **Model providers** (route `/model-providers`, in the sidebar's AGENTS group, beside the agents whose models it serves; the old
-  `/settings/models`, `/settings/providers` and `/settings/llm-connections` routes redirect there) is
+- **Model providers** (route `/model-providers`, in the sidebar's AGENTS group, beside the agents whose models it serves) is
   the connection library: one table of name / vendor / base URL / reach, an Add action and Delete per
   row, and no tabs — no view of which agent runs on what and no Coffer's model tab, because an
   agent's connection is shown and switched on that agent's Model tab and Coffer's own is chosen in
@@ -200,4 +199,3 @@ compatibility key is a field the user sets.
 - **WHEN** the user picks it on the Model tab and enters 32000
 - **THEN** confirm stays disabled until a window is entered, and the tab warns that 32000 is below 64k
 - **AND** confirming writes that window
-

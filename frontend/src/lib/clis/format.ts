@@ -61,3 +61,35 @@ export function relativeTime(iso: string, locale: string, now: number = Date.now
 export function skillNames(cli: Pick<Cli, "needed_by">): string {
   return cli.needed_by.map((n) => n.skill_name).join(", ");
 }
+
+/** The MCP servers started with the command, by name, comma-joined. */
+export function serverNames(cli: Pick<Cli, "needed_by_servers">): string {
+  return cli.needed_by_servers.map((s) => s.server_name).join(", ");
+}
+
+type T = (key: string, options?: Record<string, unknown>) => string;
+
+/** How the three places word who needs a command: the list row ("1 server ·
+ *  1 skill"), the Needed by heading ("1 MCP server · 1 skill") and the
+ *  sentences ("1 MCP server and 1 skill"). */
+const NEEDED_STYLE = {
+  row: { server: "clis.serverCount", pair: "clis.countPair" },
+  heading: { server: "clis.mcpServerCount", pair: "clis.countPair" },
+  sentence: { server: "clis.mcpServerCount", pair: "clis.neededPair" },
+} as const;
+
+/** Who needs the command, counted: "2 skills", "1 MCP server and 1 skill". */
+export function neededByCount(
+  t: T,
+  cli: Pick<Cli, "needed_by" | "needed_by_servers">,
+  style: keyof typeof NEEDED_STYLE = "sentence",
+): string {
+  const keys = NEEDED_STYLE[style];
+  const skills = cli.needed_by.length;
+  const servers = cli.needed_by_servers.length;
+  const skillPart = t("clis.skillCount", { count: skills });
+  if (servers === 0) return skillPart;
+  const serverPart = t(keys.server, { count: servers });
+  if (skills === 0) return serverPart;
+  return t(keys.pair, { servers: serverPart, skills: skillPart });
+}

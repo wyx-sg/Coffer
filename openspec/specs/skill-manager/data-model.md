@@ -71,14 +71,13 @@ with the agentskills.io constraints:
 
 | Field           | Type                | Constraint                                                        |
 | --------------- | ------------------- | ----------------------------------------------------------------- |
-| `name`          | `str`               | required, 1–64 chars, `^[a-z0-9][a-z0-9_-]{0,63}$`                |
+| `name`          | `str`               | required, 1–64 chars, `^[a-z0-9][a-z0-9-]{0,63}$`                |
 | `description`   | `str`               | required, 1–1024 chars                                            |
 | `license`       | `str \| None`       | optional; recognized, not interpreted                             |
 | `allowed_tools` | `list[str] \| None` | optional (`allowed-tools`); normalized from list or delimited str |
 
-`name` accepts a documented superset of the standard's charset — the standard
-allows lowercase letters, digits, and hyphens, and Coffer also tolerates
-underscores for backward-compatibility. `license` and `allowed-tools` are
+`name` uses the standard's charset: lowercase letters, digits, and hyphens.
+`license` and `allowed-tools` are
 third-party authored, so recognizing them stays additive: a non-string
 `license` scalar is coerced to a string and a malformed `allowed-tools` value
 is tolerated (treated as absent) rather than failing validation. Every other
@@ -106,7 +105,7 @@ it never fails a skill.
 | `title`       | `str \| None`            | display name, one line, ≤ 200 chars                                        |
 | `min_version` | `str \| None`            | dotted numbers (`"2.40"`); an unquoted YAML float is refused, since `2.40` reads as `2.4` |
 | `login_check` | `tuple[str, ...] \| None` | argv (a string is split shell-style, never run in a shell); first word MUST equal `command` |
-| `login`       | `str \| None`            | the login command to show; never run                                       |
+| `login`       | `str \| None`            | the login command the login hand-off names; never run, never shown on the page |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
 
 A bare string entry is a command with no conditions. An entry that breaks a
@@ -120,7 +119,12 @@ entry kept; a command named twice in one skill keeps its first entry.
 `RequiredCommand` per command: `min_version` is the highest any skill asks
 for; `title`, `login_check` and `login` come from the first skill (by
 name) that declares each; `needed_by` lists every declaring skill with its own
-minimum and `why`.
+minimum and `why`. Every enabled stdio MCP server adds a `ServerLauncher`
+(`server_uid`, `server_name`, `launcher`) to `needed_by_servers` of the command
+`launcher_cli()` maps its launcher to — `uv` for `uvx`, `node` for `npx`, `bun`
+for `bunx`, the launcher itself otherwise, nothing for a path — creating the row
+when no skill declares it (no minimum, no login check). On the wire it is
+`CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
 `CliRequirementService` until **Check again** or a daemon restart (no

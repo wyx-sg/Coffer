@@ -1,9 +1,7 @@
 // frontend/src/lib/secretRef.test.ts
 //
-// The shape of a secret ref, and the ownership test that reads it back.
-// Both used to be derived from the resource's name, which is what made a
-// rename able to strand a secret; these assertions are the statement that
-// nothing mutable gets into an address any more.
+// The shape of a secret ref, and the ownership test that reads it back:
+// nothing mutable gets into an address.
 import { describe, expect, test } from "vitest";
 
 import { isMintedSecretRef, mintSecretRef } from "./secretRef";
@@ -47,11 +45,9 @@ describe("isMintedSecretRef", () => {
 
   test("never claims a ref a person wrote", () => {
     // These are the refs the cleanup must leave alone: hand-written ones, and
-    // the legacy name-derived shapes a vault may still hold where the secret
-    // was never stored (migration 0093 leaves those exactly as they are).
+    // refs of other shapes.
     for (const foreign of [
       "smart.SMART_PAT",
-      "channel/tg/bot-token",
       "my-token",
       "provider/1b2c3d4e5f60718293a4b5c6d7e8f900/key",
       "mcp_server/NOT-HEX-0000000000000000000000/TOKEN",

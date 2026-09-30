@@ -141,10 +141,7 @@ pub fn parse_login(body: &str) -> Option<Login> {
     let v: Value = serde_json::from_str(body).ok()?;
     Some(Login {
         installed: v.get("login_service_installed")?.as_bool()?,
-        supported: v
-            .get("login_service_supported")
-            .and_then(Value::as_bool)
-            .unwrap_or(true),
+        supported: v.get("login_service_supported")?.as_bool()?,
     })
 }
 

@@ -33,8 +33,8 @@ class HookSource(StrEnum):
 
 class HookHealth(StrEnum):
     """Coffer's own delivery hook: ``current`` is exactly the command Coffer
-    would write now; ``stale`` carries Coffer's marker with another command (an
-    older build's); ``missing`` is not there at all."""
+    would write now; ``stale`` carries Coffer's marker with another command;
+    ``missing`` is not there at all."""
 
     CURRENT = "current"
     STALE = "stale"

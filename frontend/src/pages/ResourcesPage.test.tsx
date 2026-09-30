@@ -205,7 +205,7 @@ describe("ResourcesPage", () => {
     const attention = await screen.findByRole("region", { name: "Needs attention" });
     await within(attention).findByText(/Connection refused · since/);
     expect(within(attention).getByText("Secret missing · LINEAR_API_KEY")).toBeInTheDocument();
-    expect(within(attention).getByText("uvx is not installed")).toBeInTheDocument();
+    expect(within(attention).getByText("uvx isn't found on this machine")).toBeInTheDocument();
     const healthy = screen.getByRole("region", { name: "Healthy" });
     expect(within(healthy).getByText("github")).toBeInTheDocument();
     await within(healthy).findByText("stdio · 3 tools");
@@ -222,12 +222,6 @@ describe("ResourcesPage", () => {
     // The open tab is kept when another server is chosen.
     expect(where.url).toBe("/mcp-servers/linear/tools");
     await waitFor(() => expect(screen.getByTestId("pane")).toHaveTextContent("pane: linear"));
-  });
-
-  test("an old uid address redirects to the name address, keeping the tab", async () => {
-    stubQuery({ data: [server("u-github", "github")] });
-    renderAt("/mcp-servers/u-github?tab=tools");
-    await waitFor(() => expect(where.url).toBe("/mcp-servers/github/tools"));
   });
 
   test("filtering narrows the list by name or command", async () => {

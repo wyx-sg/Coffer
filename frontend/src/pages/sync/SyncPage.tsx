@@ -3,7 +3,7 @@
 //
 // Sync is cross-cutting rather than a resource kind, and syncing is something
 // a person opens deliberately rather than a setting they tweak once, so it is a
-// page under System, not a Settings tab. `/settings/sync` redirects here.
+// page under System, not a Settings tab.
 //
 // Three tabs: **Runs** (whether sync is working, anything it is waiting on a
 // person for, what is waiting to push, and every round), **Setup** (the remote

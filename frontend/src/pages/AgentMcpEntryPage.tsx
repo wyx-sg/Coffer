@@ -39,7 +39,7 @@ export function AgentMcpEntryPage() {
 
   const type = route.type ?? "";
   const agentLabel = agentTypeLabel(type);
-  // No way back until the type is known (an old uid address is still redirecting).
+  // No way back from an address whose segment is not a type.
   const back = type
     ? {
         to: agentTabPath(type, "mcp-servers"),
@@ -47,7 +47,7 @@ export function AgentMcpEntryPage() {
       }
     : undefined;
 
-  if (route.isPending || route.redirecting || (route.uid && isPending)) {
+  if (route.isPending || (route.uid && isPending)) {
     return (
       <div className="space-y-6">
         <PageHeader back={back} title={entryName} />

@@ -52,7 +52,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer agent`](#coffer-agent) | Manage registered AI agents |
 | [`coffer channel`](#coffer-channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](#coffer-skill) | Manage skills (AgentSkills standard) |
-| [`coffer cli`](#coffer-cli) | Check the command-line tools skills require |
+| [`coffer cli`](#coffer-cli) | Check the command-line tools skills and MCP servers require |
 | [`coffer knowledge`](#coffer-knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/vault/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
@@ -1780,7 +1780,7 @@ Report drift between bindings and on-disk symlinks.
 coffer cli [OPTIONS] COMMAND [ARGS]...
 ```
 
-Check the command-line tools skills require
+Check the command-line tools skills and MCP servers require
 
 ### cli list
 
@@ -1788,7 +1788,7 @@ Check the command-line tools skills require
 coffer cli list [OPTIONS]
 ```
 
-List every command a skill requires, problems first.
+List every command a skill or MCP server requires, problems first.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2082,23 +2082,6 @@ Every partition left holding undistilled entries is distilled in the same call; 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  |  |
-
-### memory context
-
-```sh
-coffer memory context [OPTIONS]
-```
-
-Print the composed session-start context to stdout.
-
-This is the text the installed hook (``coffer memory hook``) delivers at session start, printed for you to read. It prints nothing, and exits 0, when the daemon is not running.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
-| `--cwd` | option | text | required | The session's working directory |
-| `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
-| `--hook-event` | option | text | `""` | Print the text as this hook event's JSON additionalContext instead of plain |
 
 ### memory hook
 

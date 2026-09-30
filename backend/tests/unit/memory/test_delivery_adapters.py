@@ -96,36 +96,24 @@ def test_a_cli_path_with_a_space_is_quoted() -> None:
     assert "'/Users/a b/.coffer/bin/coffer' memory hook" in cc.command_for("u1")
 
 
-def test_codex_install_moves_an_older_builds_user_prompt_submit_hook() -> None:
-    """The migration: an older build's guarded entry on UserPromptSubmit is
-    replaced by this build's entries; foreign hooks on both events stay first."""
-    legacy = f': {MARKER}; f="$TMPDIR/x-$PPID"; [ -e "$f" ] || {{ coffer memory context; }}'
-    foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeSubmitPrompt.sh"}]}
+def test_codex_install_sweeps_a_marked_entry_off_an_event_it_does_not_use() -> None:
+    """Install takes Coffer's marked entries off every event first, so a marked
+    entry on an event this build does not install on is not left behind;
+    foreign hooks on every event stay first."""
+    stray = {"hooks": [{"type": "command", "command": f": {MARKER}; coffer memory hook"}]}
+    foreign = {"hooks": [{"type": "command", "command": "/skynet/stop.sh"}]}
     orca = {"hooks": [{"type": "command", "command": "/orca/session.sh"}]}
-    text = json.dumps(
-        {
-            "hooks": {
-                "UserPromptSubmit": [foreign, {"hooks": [{"type": "command", "command": legacy}]}],
-                "SessionStart": [orca],
-            }
-        }
-    )
-    found = _CODEX.find(text)
-    assert found is not None and found.event == "UserPromptSubmit"
+    text = json.dumps({"hooks": {"Stop": [foreign, stray], "SessionStart": [orca]}})
 
     data = json.loads(_CODEX.install(text, "cx"))
-    ups = data[HOOKS_KEY]["UserPromptSubmit"]
-    assert len(ups) == 2
-    assert ups[0] == foreign
-    assert ups[1]["hooks"][0]["command"] == _CODEX.command_for("cx")
-    assert legacy not in json.dumps(data)
+    assert data[HOOKS_KEY]["Stop"] == [foreign]
     assert data[HOOKS_KEY]["SessionStart"][0] == orca
     assert data[HOOKS_KEY]["SessionStart"][1]["hooks"][0]["command"] == _CODEX.command_for("cx")
 
 
-def test_codex_remove_takes_out_an_older_builds_entry_too() -> None:
-    legacy = {"hooks": [{"type": "command", "command": f": {MARKER}; coffer memory context"}]}
-    text = json.dumps({"hooks": {"UserPromptSubmit": [legacy]}})
+def test_codex_remove_sweeps_every_event() -> None:
+    stray = {"hooks": [{"type": "command", "command": f": {MARKER}; coffer memory hook"}]}
+    text = json.dumps({"hooks": {"Stop": [stray]}})
     assert json.loads(_CODEX.remove(text)) == {}
 
 

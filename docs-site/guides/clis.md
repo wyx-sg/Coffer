@@ -1,11 +1,11 @@
 ---
 title: CLIs
-description: Declare the command-line tools a skill needs, see on one page which are missing, too old or not logged in, and hand the install to your agent with a prompt Coffer writes for this machine.
+description: Declare the command-line tools a skill needs, see on one page which of those and of your MCP servers' launchers are missing, too old or not logged in, and hand the fix to your agent with a prompt Coffer writes for this machine.
 ---
 
 # CLIs
 
-Many skills drive a command-line tool — `gh` to triage issues, `jq` to filter JSON, `aws` to read a bucket. When the tool is missing, older than the skill expects or not logged in, the agent following the skill fails at the step that calls it. The **CLIs** page shows every command your skills say they need, checked on this machine, with the problems first.
+Many skills drive a command-line tool — `gh` to triage issues, `jq` to filter JSON, `aws` to read a bucket. When the tool is missing, older than the skill expects or not logged in, the agent following the skill fails at the step that calls it. MCP servers depend on commands too: a stdio server started with `uvx` cannot start without `uv`. The **CLIs** page shows every command your skills say they need and every launcher your MCP servers start with, checked on this machine, with the problems first.
 
 ## Declare what a skill needs
 
@@ -35,16 +35,20 @@ requires:
 | `title` | A display name, e.g. `GitHub CLI`. |
 | `min_version` | The lowest version the skill works with, as dotted numbers. Quote it — unquoted, YAML reads `2.40` as the number `2.4`. |
 | `login_check` | A subcommand **of the same command** that exits 0 when you are logged in, e.g. `gh auth status`. |
-| `login` | The command that logs you in, shown for you to copy. Coffer never runs it. |
+| `login` | The command that logs you in. Coffer never runs it; the [login prompt](#logging-in) names it for your agent. |
 | `why` | One line on what the skill uses the command for. |
 
 A bare name (`- uv`) is a command with no conditions, and `- "node>=20.1"` a command with a minimum; `requires: [jq, "gh>=2.40"]` and `requires: {commands: [...]}` are read the same way. An entry Coffer cannot use — a path instead of a name, a login check that runs a different program — is skipped with a warning on the CLIs page; it never stops the skill from being imported or delivered.
 
 Coffer reads `requires:` from the skill's folder every time it checks, so an edit in your editor is picked up by the next **Check again** without importing the skill again. This top-level `requires:` lists commands; it is unrelated to `metadata.requires`, which a skill library uses for [the skills a domain depends on](/guides/writing-skill-libraries#declared-dependencies).
 
+## Launchers your MCP servers start with
+
+Every MCP server that is on and started as a command (stdio) needs its launcher. Coffer lists the launcher under the command that provides it — `uv` for `uvx`, `node` (Node.js) for `npx`, `bun` for `bunx`, and the launcher itself for anything else, such as `docker`. Nothing needs declaring: the server's own command is enough. A launcher has no minimum version and no login check; a server started from a path (`./run.sh`) is a file, not a command, and is not listed, and a server that is off or reached over HTTP needs nothing.
+
 ## How Coffer checks a command
 
-One row per command, however many skills need it:
+One row per command, however many skills and servers need it:
 
 1. **Found?** The command is looked up on your real `PATH` — your login shell's, merged with the one the daemon inherited — the same `PATH` an agent gets when you start it from a terminal. A command installed where only your shell looks (Homebrew, `~/.local/bin`) is found.
 2. **Version.** Coffer runs `<command> --version` and compares the version with the **highest** minimum any skill asks for. A version it cannot read is shown as unknown and is not called too old.
@@ -54,9 +58,9 @@ Each command is then **Not found**, **Too old**, **Not logged in** or **Ready**.
 
 ## The CLIs page
 
-The page is a list beside the command you choose. The list puts **Needs you** — not found, then too old, then not logged in — above **Ready**, each command with its version or its problem and how many skills need it. The command on the right shows where it was found, its version against the minimum, its login state and every skill that needs it with the minimum each asks for; one that needs you has its problem at the top and the [hand-off](#hand-the-install-to-your-agent) beside its name.
+The page is a list beside the command you choose. The list puts **Needs you** — not found, then too old, then not logged in — above **Ready**, each command with its version or its problem and how many MCP servers and skills need it. The command on the right shows where it was found, its version against the minimum, its login state, and under **Needed by** every MCP server started with it (opening that server's page, with the launcher it starts with) and every skill that needs it with the minimum each asks for. One that needs you says what it costs in a plain sentence at the top — "duckdb can't start, and data-profiling fails at the step that calls uv." — and has the [hand-off](#hand-the-install-to-your-agent) beside its name. The page shows no install, update or login command, and nothing to run in a terminal.
 
-A skill's own page has a **Requires** tab listing what that skill declares, each command linking to its place here and offering the same hand-off when it needs you. And while any required command is missing, too old or not logged in, **Overview** lists it under what needs you, and the **CLIs** entry in the sidebar carries a dot.
+A skill's own page has a **Requires** tab listing what that skill declares, each command linking to its place here and offering the same hand-off when it needs you. And while any required command is missing, too old or not logged in, **Overview** lists it under what needs you, and the **CLIs** entry in the sidebar carries a count. A launcher only MCP servers need is listed on Overview once, as the server's own "launcher isn't found on this machine" item, not a second time as a CLI.
 
 ## Hand the install to your agent
 
@@ -74,7 +78,7 @@ Check with me before running anything that needs sudo or changes system settings
 If a login is needed, tell me how and I will log in myself; do not handle my credentials.
 ```
 
-A command that is too old gets the same prompt asking for an update, with the version found and where. The command's page and the skill's **Requires** tab offer two ways to use it:
+A launcher adds the servers that start with it (`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``). A command that is too old gets the same prompt asking for an update, with the version found and where. The prompt names no install command: choosing one is the agent's job. The command's page and the skill's **Requires** tab offer two ways to use it:
 
 - **Copy prompt** — paste it into whichever agent you use, in a terminal or an IDE.
 - **Ask an agent** — choose one of the agents Coffer manages and a folder, and a new [conversation](/guides/chat) opens with the prompt already in the message box. **Nothing is sent until you press Send**: a managed agent runs with full permissions, so read what it is about to be asked first. Without a managed agent on this machine only Copy prompt is offered.
@@ -83,14 +87,14 @@ When the agent is done, press **Check again**.
 
 ## Logging in
 
-Coffer never logs in for you. A command that is not logged in shows its login command — `gh auth login` — to copy: run it in a terminal, then press **Check again**. If you would rather have help, its prompt asks your agent only to tell you what to run; you run the login and type anything it asks for yourself.
+Coffer never logs in for you, and the page shows no login command. A command that is not logged in hands the login to your agent the same way: its prompt names the login check that failed and the login command the skill declared, and asks your agent only to tell you what to run; you run the login and type anything it asks for yourself. Then press **Check again**.
 
 ## On the command line
 
 ```sh
 coffer cli list                 # every required command, problems first
 coffer cli list --json
-coffer cli show gh              # one command: path, version, login, skills
+coffer cli show uv              # one command: path, version, login, servers and skills
 coffer cli check                # probe every command again
 coffer cli check gh             # probe one again
 coffer cli prompt gh            # the prompt to give your agent

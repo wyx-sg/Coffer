@@ -78,8 +78,8 @@ def needs_deploy(link: Path, source: Path, version: str) -> bool:
 
     Deploys when the versioned copy is missing, differs in size, lacks its
     sentinel (a copy that never completed), or when the public name does not
-    yet point at it — a fresh install, a legacy in-place file, or a link left
-    on an older version after a manual rollback the user has since undone.
+    yet point at it — a fresh install, or a link left on an older version
+    after a manual rollback the user has since undone.
     """
     target = versioned_target(link, version)
     try:
@@ -107,16 +107,13 @@ def _flip_symlink(link: Path, target: Path) -> None:
     """Point ``link`` at ``target`` atomically (a temp link renamed over it).
 
     Relative, so the whole ``bin`` directory can be moved as a unit. Replaces
-    whatever ``link`` was before — a legacy in-place binary included — in one
-    rename, so a concurrent exec sees either the old file or the new one.
+    whatever ``link`` was before in one rename, so a concurrent exec sees
+    either the old binary or the new one.
     """
     tmp = link.with_name(f".{link.name}.link.tmp")
     tmp.unlink(missing_ok=True)
     os.symlink(os.path.relpath(target, link.parent), tmp)
     os.replace(tmp, link)
-    # The legacy layout kept a sentinel beside the in-place binary; it is
-    # meaningless next to a symlink and would be read as the link's version.
-    _sentinel_for(link).unlink(missing_ok=True)
 
 
 def _is_version_dir(path: Path) -> bool:

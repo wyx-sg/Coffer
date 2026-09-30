@@ -1,7 +1,8 @@
 // src/components/clis/CliPane.tsx — the CLIs page's detail pane: one required command.
 //
 // Spec web-ui "Show every CLI a skill requires on the CLIs page". The header
-// names the command with its status pill and "<title> · needed by N skills",
+// names the command with its status pill and "<title> · needed by N skills"
+// (or "… by 1 MCP server and 1 skill" for a launcher MCP servers start with),
 // and — for a command that needs the person (missing, too old, not logged in)
 // — its one action: the daemon's hand-off prompt (AgentHandoff). Then the
 // problem banner and the Command / Login / Needed by sections. A command not
@@ -15,7 +16,7 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { Cli } from "@/lib/api/clis";
 import { translateApiError } from "@/lib/api/errors";
-import { cliTone } from "@/lib/clis/format";
+import { cliTone, neededByCount } from "@/lib/clis/format";
 import { useCli } from "@/lib/hooks/useClis";
 import { CliDetailSections } from "./CliDetailSections";
 import { CliProblemBanner } from "./CliProblemBanner";
@@ -37,10 +38,15 @@ function CliDetail({ cli }: { cli: Cli }) {
             <StatusPill tone={cliTone(cli.status)}>{t(`clis.status.${cli.status}`)}</StatusPill>
           </div>
           <p className="text-sm text-text-muted">
-            {t("clis.detail.subtitle", {
-              title: cli.title ?? cli.command,
-              count: cli.needed_by.length,
-            })}
+            {cli.needed_by_servers.length === 0
+              ? t("clis.detail.subtitle", {
+                  title: cli.title ?? cli.command,
+                  count: cli.needed_by.length,
+                })
+              : t("clis.detail.subtitleNeeded", {
+                  title: cli.title ?? cli.command,
+                  needed: neededByCount(t, cli),
+                })}
           </p>
         </div>
         {cli.handoff ? <AgentHandoff prompt={cli.handoff.prompt} /> : null}

@@ -9,9 +9,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ConfigDict
 
+from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.vault.resource_rules import resource_rule
 from coffer.application.vault.state_rules import state_rule
 from coffer.domain.resource import Kind
+from coffer.domain.skill.frontmatter import validate_frontmatter_name
 from coffer.domain.vault.findings import FindingCode, Severity
 from coffer.domain.vault.writes import Change
 
@@ -19,6 +21,10 @@ from coffer.domain.vault.writes import Change
 class _Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
     colour: str
+
+
+class _Open(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
 
 KINDS = {"widget": Kind(name="widget", display_name="Widget", config_schema=_Config)}
@@ -56,11 +62,19 @@ def test_the_kind_must_match_its_directory() -> None:
     assert [f.code for f in verdict.findings] == [FindingCode.KIND_MISMATCH]
 
 
-def test_unknown_fields_and_config_keys_are_warnings_not_refusals() -> None:
-    data = _doc(extra=1, config={"colour": "b", "shade": "x"})
+def test_an_unknown_top_level_field_is_a_warning_not_a_refusal() -> None:
+    data = _doc(extra=1)
     verdict = _judge([Change("resources/widget/w.json", data, None)])
-    assert {f.code for f in verdict.findings} == {FindingCode.UNKNOWN_FIELD}
+    assert [f.code for f in verdict.findings] == [FindingCode.UNKNOWN_FIELD]
     assert all(f.severity is Severity.WARNING for f in verdict.findings)
+
+
+def test_a_config_key_the_schema_does_not_declare_is_refused() -> None:
+    data = _doc(config={"colour": "b", "shade": "x"})
+    verdict = _judge([Change("resources/widget/w.json", data, None)])
+    [finding] = verdict.findings
+    assert finding.code is FindingCode.CONFIG_INVALID and "'shade'" in finding.message
+    assert finding.severity is Severity.ERROR
 
 
 def test_an_unknown_kind_is_kept_with_a_warning() -> None:
@@ -162,3 +176,47 @@ def test_an_exclusive_flag_held_elsewhere_refuses_only_the_newcomer() -> None:
         tree,
     )
     assert moved.findings == []
+
+
+def test_a_file_is_held_to_the_kinds_own_name_rules() -> None:
+    """A hand edit or a merge meets the same name rule a register does: an
+    ``mcp_server`` name over 24 characters and a skill name with ``_`` are
+    refused, not tolerated because the file arrived already named."""
+    kinds = {
+        "mcp_server": make_mcp_kind({}),
+        "skill": Kind(
+            name="skill",
+            display_name="Skill",
+            config_schema=_Open,
+            validate_name=validate_frontmatter_name,
+        ),
+    }
+    rule = resource_rule(kinds, dict)
+    transport = {"transport": {"type": "stdio", "command": "x"}}
+    long_name = "a" * 25
+    server = _doc(kind="mcp_server", name=long_name, config=transport)
+    skill = _doc(uid="u2", kind="skill", name="old_style", config={})
+    verdict = rule(
+        [
+            Change(f"resources/mcp_server/{long_name}.json", server, None),
+            Change("resources/skill/old_style.json", skill, None),
+        ],
+        _Tree(),
+    )
+    assert sorted((f.path, f.code) for f in verdict.findings) == [
+        (f"resources/mcp_server/{long_name}.json", FindingCode.INVALID_DOCUMENT),
+        ("resources/skill/old_style.json", FindingCode.INVALID_DOCUMENT),
+    ]
+    ok = _doc(kind="mcp_server", name="a" * 24, config=transport)
+    assert rule([Change(f"resources/mcp_server/{'a' * 24}.json", ok, None)], _Tree()).findings == []
+
+
+def test_a_title_on_a_kind_without_titles_is_refused() -> None:
+    kinds = {
+        "widget": Kind(name="widget", display_name="Widget", config_schema=_Config, titled=False)
+    }
+    rule = resource_rule(kinds, dict)
+    titled = Change("resources/widget/w.json", _doc(title="Pretty"), None)
+    [finding] = rule([titled], _Tree()).findings
+    assert finding.code is FindingCode.INVALID_DOCUMENT and "no title" in finding.message
+    assert rule([Change("resources/widget/w.json", _doc(), None)], _Tree()).findings == []

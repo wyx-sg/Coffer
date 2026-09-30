@@ -44,6 +44,13 @@ def _mcp_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
     return {str(k): str(v) for k, v in refs.items()}
 
 
+#: The longest name a server may take (spec mcp-gateway "Manage MCP servers as
+#: resources"). ``mcp__coffer__`` (13) + the name + ``__`` (2) is the part of a
+#: client's 64-character tool-name budget the name spends, and 24 leaves 25
+#: characters for the upstream tool's own name.
+MCP_SERVER_NAME_MAX_LEN = 24
+
+
 def _validate_mcp_name(name: str) -> None:
     """Reject mcp_server names that would break tool/prompt namespacing.
 
@@ -51,28 +58,16 @@ def _validate_mcp_name(name: str) -> None:
     parsed back by splitting on the first ``__``. A server name containing
     ``__`` makes that parse ambiguous (it would route to the wrong server, so
     the tool lists but can never be invoked). Reserve the separator.
+
+    A name longer than :data:`MCP_SERVER_NAME_MAX_LEN` is refused too, so that
+    every tool's client-visible name fits the 64 characters model provider
+    APIs accept.
     """
     if "__" in name:
         raise ValueError(
             f"mcp_server name {name!r} may not contain '__' "
             "(reserved as the tool/prompt namespace separator)"
         )
-
-
-#: The longest name a NEW server may take (spec mcp-gateway "Manage MCP servers
-#: as resources"). ``mcp__coffer__`` (13) + the name + ``__`` (2) is the part of
-#: a client's 64-character tool-name budget the name spends, and 24 leaves 25
-#: characters for the upstream tool's own name.
-MCP_SERVER_NAME_MAX_LEN = 24
-
-
-def _cap_new_mcp_name(name: str) -> None:
-    """Refuse a new server name longer than :data:`MCP_SERVER_NAME_MAX_LEN`.
-
-    Registration only (``Kind.validate_new_name``): a server registered before
-    the cap keeps its longer name and keeps working, and one arriving from
-    another machine with its uid converges whatever its length.
-    """
     if len(name) > MCP_SERVER_NAME_MAX_LEN:
         raise ValueError(
             f"mcp_server name {name!r} is {len(name)} characters; the limit is "
@@ -154,7 +149,6 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         on_enabled_changed=on_enabled_changed,
         on_update_config=on_update_config,
         validate_name=_validate_mcp_name,
-        validate_new_name=_cap_new_mcp_name,
         # The name prefixes every tool name an agent sees
         # (``mcp__coffer__<server>__<tool>``), and agents' permission rules and
         # skills quote those names, so a registered server's name never changes

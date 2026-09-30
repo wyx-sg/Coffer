@@ -92,7 +92,7 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
 
 function hookLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines: string[] } {
   const uid = agent.uid || opts.placeholders.uid;
-  const command = detailOf(agent, "memory_hook") ?? `coffer memory context --agent-uid ${uid} …`;
+  const command = detailOf(agent, "memory_hook") ?? `coffer memory hook --agent-uid ${uid} …`;
   return {
     hunk: "hooks.SessionStart",
     lines: [`{ "hooks": [{ "type": "command",`, `    "command": "${command}" }] },`],

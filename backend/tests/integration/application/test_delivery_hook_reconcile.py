@@ -6,13 +6,12 @@ by ``fake_agent_dir`` from their own descriptors, the database sits at the
 home's ``~/.coffer/coffer.db``, and "connected" is the real answer — the agent
 carries Coffer's gateway MCP entry, installed by ``AgentMcpService``.
 
-- PR #413 reproduced: a hook carrying the dropped ``--agent`` option on an
-  older build's single ``SessionStart`` entry is found as a MODIFY of
-  ``command`` and ``event`` and rewritten into this build's four entries,
-  foreign hooks untouched, one audit row from ``system`` (spec memory "Repair
-  stale delivery hooks"). For Codex the stale hook is an older build's on
-  ``UserPromptSubmit``; the rewritten entries are then reported as needing the
-  user's approval in Codex until ``config.toml`` records each of them.
+- A stale hook — a bare ``coffer`` command on ``SessionStart`` alone — is
+  found as a MODIFY of ``command`` and ``event`` and rewritten into this
+  build's four entries, foreign hooks untouched, one audit row from
+  ``system`` (spec memory "Repair stale delivery hooks"). For Codex the
+  rewritten entries are then reported as needing the user's approval in Codex
+  until ``config.toml`` records each of them.
 - An audit that cannot be recorded puts the file back as it was.
 - A dry-run writes nothing anywhere under HOME, nor any row, nor any of the
   reconciler's own bookkeeping.
@@ -138,25 +137,17 @@ async def _connected_agent_with_stale_hook(
     rig: _Rig, agent_type: AgentType
 ) -> tuple[Resource, FakeAgentDir, pathlib.Path]:
     """An agent connected to Coffer whose settings file carries Coffer's hook
-    with the OLD command, beside foreign hooks on the same and other events."""
+    with a stale command on one event, beside foreign hooks on the same and
+    other events."""
     agent_dir = fake_agent_dir(rig.home, agent_type)
     agent = await rig.agents.register(agent_type=agent_type, actor="cli")
     await rig.mcp.install(agent.uid, actor="ui")
     adapter = agent_catalog().delivery_hook(agent_type)
     assert adapter is not None
     key = "settings" if agent_type is AgentType.CLAUDE_CODE else "hooks"
-    if agent_type is AgentType.CLAUDE_CODE:
-        stale = f': {MARKER}; coffer memory context --agent {agent.uid} --cwd "$PWD"'
-        # What a build before per-prompt delivery wrote: one SessionStart entry.
-        stale_event = "SessionStart"
-    else:
-        # What a build before SessionStart support wrote: UserPromptSubmit,
-        # bare `coffer` (not on the hook's PATH), a `$PPID` guard.
-        stale = (
-            f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; [ -e "$f" ] || '
-            f'{{ : > "$f"; coffer memory context --agent-uid {agent.uid} --cwd "$PWD"; }}'
-        )
-        stale_event = "UserPromptSubmit"
+    # Bare `coffer` (not on the hook's PATH), and on one event only.
+    stale = f': {MARKER}; coffer memory hook --agent-uid {agent.uid} --cwd "$PWD"'
+    stale_event = "SessionStart"
     leaf = {"type": "command", "command": stale}
     doc = {
         "theme": "dark",
@@ -180,7 +171,7 @@ async def _connected_agent_with_stale_hook(
     scenario="a hook whose command went stale is repaired without being asked",
 )
 @pytest.mark.parametrize("agent_type", [AgentType.CLAUDE_CODE, AgentType.CODEX])
-async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
+async def test_a_stale_hook_is_rewritten_into_the_current_entries(
     rig: _Rig, agent_type: AgentType
 ) -> None:
     agent, _dir, path = await _connected_agent_with_stale_hook(rig, agent_type)
@@ -206,10 +197,7 @@ async def test_pr_413_a_hook_passing_a_dropped_option_is_repaired(
     data = json.loads(path.read_text())
     assert data["theme"] == "dark"
     assert data["hooks"]["Stop"] == [_FOREIGN_STOP]
-    assert (
-        _FOREIGN_SESSION
-        in data["hooks"]["UserPromptSubmit" if agent_type is AgentType.CODEX else "SessionStart"]
-    )
+    assert _FOREIGN_SESSION in data["hooks"]["SessionStart"]
     coffer_commands = [
         (event, leaf["command"])
         for event, groups in data["hooks"].items()

@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { ChatRedirect, SettingsIndexRedirect } from "./components/shell/redirects";
+import { SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
 import type { FeatureKey } from "./lib/hooks/useFeatures";
@@ -75,8 +75,7 @@ const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "
 // Detail routes follow one rule (spec web-ui "Lay out every detail page's tabs
 // alike"): `/<kind>/<id>/<tab>`, the default tab at the bare path. `<id>` is the
 // name where a kind's name is fixed — skills and MCP servers — and the immutable
-// uid where a name can be renamed (ADR resource-identity-is-an-immutable-uid);
-// each page redirects an old `?tab=` or old uid address to the new one.
+// uid where a name can be renamed (ADR resource-identity-is-an-immutable-uid).
 const pageRoutes: RouteObject[] = gateRoutes([
   { index: true, element: <OverviewPage /> },
   // One element for both addresses, so opening a conversation from the list —
@@ -84,14 +83,9 @@ const pageRoutes: RouteObject[] = gateRoutes([
   // the page mounted and its state (the draft's pending first message) alive.
   { path: "conversations", element: conversationsPage },
   { path: "conversations/:id", element: conversationsPage },
-  // Legacy routes — Conversations was Chat.
-  { path: "chat", element: <ChatRedirect /> },
-  { path: "chat/:id", element: <ChatRedirect /> },
   { path: "mcp-servers", element: <ResourcesPage /> },
   { path: "mcp-servers/:name", element: <ResourcesPage /> },
   { path: "mcp-servers/:name/:tab", element: <ResourcesPage /> },
-  // Legacy route — this surface used to live at /resources.
-  { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
   {
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
@@ -107,8 +101,7 @@ const pageRoutes: RouteObject[] = gateRoutes([
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
-  // and every page opened from a tab is nested under it. An old uid address,
-  // `?tab=` and the old Conversations tab are redirected by `useAgentRoute`.
+  // and every page opened from a tab is nested under it.
   {
     path: "agents/:type",
     element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
@@ -177,30 +170,11 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "model-providers/:uid",
     element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
   },
-  {
-    path: "model-providers/:uid/:tab",
-    element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
-  },
-  // Legacy route — `knowledge_base` was a resource kind with its own
-  // surface before it merged into the one Knowledge kind. Keep old
-  // bookmarks for the LIST working by redirecting to the merged path.
-  //
-  // There is deliberately no redirect for an individual collection. A
-  // detail URL is built from the collection's uid, and an old link carries
-  // its name — such a link lands on the list, from which the collection is
-  // one click away.
-  { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
   { path: "secrets", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
   {
     path: "activity",
     element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
   },
-  // Legacy routes — the audit log had its own page at /audit, and
-  // "Observability" was the name this surface carried before Activity
-  // gathered all three records. Keep old bookmarks and links working by
-  // redirecting to the page that now holds what they were asking for.
-  { path: "audit", element: <Navigate to="/activity" replace /> },
-  { path: "observability", element: <Navigate to="/activity" replace /> },
   { path: "usage", element: lazyPage(() => import("./pages/UsagePage"), "UsagePage") },
   { path: "*", element: <NotFoundPage /> },
 ]);
@@ -208,20 +182,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
 /** The Settings modal's routes, rendered over the page underneath. */
 const settingsRoutes: RouteObject[] = [
   { path: "settings", element: <SettingsIndexRedirect /> },
-  // Legacy routes — Coffer's model was a tab of its own before it became a
-  // section of General (spec web-ui "Choose Coffer's model in Settings ›
-  // General"), and `/settings/embedding` is an old bookmark only: there is no
-  // embedding configuration (ADR knowledge-is-plain-files).
-  { path: "settings/engine", element: <Navigate to="/settings/general" replace /> },
-  { path: "settings/embedding", element: <Navigate to="/settings/general" replace /> },
-  // Legacy routes — this surface used to live under Settings as "LLM
-  // connections" (and before that as separate Models/Providers pages). It is
-  // /model-providers now. Keep old bookmarks and links working.
-  { path: "settings/llm-connections", element: <Navigate to="/model-providers" replace /> },
-  { path: "settings/models", element: <Navigate to="/model-providers" replace /> },
-  { path: "settings/providers", element: <Navigate to="/model-providers" replace /> },
-  // Legacy route — Sync was a Settings tab before it became a page.
-  { path: "settings/sync", element: <Navigate to="/sync" replace /> },
   { path: "settings/:tab", element: settingsModal },
 ];
 

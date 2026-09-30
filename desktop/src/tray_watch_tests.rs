@@ -78,6 +78,9 @@ fn the_login_service_is_read_from_residency() {
     let unsupported = r#"{"login_service_installed":false,"login_service_supported":false}"#;
     assert!(!parse_login(unsupported).unwrap().supported);
     assert_eq!(parse_login("{}"), None);
+    // The daemon always states whether a login service is supported; an
+    // answer without it is not read as "supported".
+    assert_eq!(parse_login(r#"{"login_service_installed":true}"#), None);
 }
 
 #[test]

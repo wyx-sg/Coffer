@@ -36,13 +36,15 @@ export const NEEDS_YOU_CELL = CELL;
 
 interface Props {
   item: AttentionItem;
+  /** The type of the agent an agent item is about — its pages' address. */
+  agentType?: string;
   /** Shown under "N ignored · Show": the row is muted and offers Stop ignoring. */
   ignored?: boolean;
   onIgnore?: () => void;
   onRestore?: () => void;
 }
 
-export function NeedsYouRow({ item, ignored = false, onIgnore, onRestore }: Props) {
+export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRestore }: Props) {
   const { t } = useTranslation();
   const meta = kindMeta(item.kind);
   const KindIcon = meta.icon;
@@ -75,7 +77,10 @@ export function NeedsYouRow({ item, ignored = false, onIgnore, onRestore }: Prop
       >
         <StatusDot tone={severityTone(item.severity)} className="size-2" />
       </span>
-      <Link to={itemPage(item)} className={cn(CELL, "group flex min-w-0 flex-col gap-0.5")}>
+      <Link
+        to={itemPage(item, agentType)}
+        className={cn(CELL, "group flex min-w-0 flex-col gap-0.5")}
+      >
         <span
           className={cn(
             "block truncate text-text group-hover:underline",
@@ -96,17 +101,14 @@ export function NeedsYouRow({ item, ignored = false, onIgnore, onRestore }: Prop
       <div className={cn(CELL, "flex items-center gap-1.5 md:justify-self-end")}>
         <Button asChild variant="outline">
           <Link
-            to={actionPage(item)}
+            to={actionPage(item, agentType)}
             aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
           >
             {action}
           </Link>
         </Button>
         {menu.length ? (
-          <ActionMenu
-            label={t("overview.needsYou.moreFor", { name: item.title })}
-            actions={menu}
-          />
+          <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
         ) : null}
         {handoff.dialog}
       </div>

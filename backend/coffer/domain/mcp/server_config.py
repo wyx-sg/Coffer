@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from coffer.domain.mcp.http_api import HttpApiTransport
 
@@ -76,6 +76,10 @@ AnyTransport = StdioTransport | HttpTransport | HttpApiTransport
 
 
 class MCPServerConfig(BaseModel):
+    # A key the model does not declare is refused rather than dropped, so a
+    # retired field cannot linger in a stored config unnoticed.
+    model_config = ConfigDict(extra="forbid")
+
     transport: Transport
     spawn_timeout_seconds: int = Field(default=30, ge=5, le=120)
     request_timeout_seconds: int = Field(default=120, ge=5, le=1800)

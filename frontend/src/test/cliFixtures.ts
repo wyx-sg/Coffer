@@ -17,6 +17,7 @@ export function cli(overrides: Partial<Cli> & Pick<Cli, "command">): Cli {
     login: { state: "not_needed", check: null, command: null },
     handoff: null,
     needed_by: [need("any-skill")],
+    needed_by_servers: [],
     checked_at: CHECKED,
     ...overrides,
   };
@@ -66,4 +67,17 @@ export const UV_READY = cli({
   version: "0.4.18",
   min_version: "0.4",
   needed_by: [need("gh-triage", "0.4")],
+});
+
+/** uv missing, needed by the MCP server duckdb (started with uvx) and a skill. */
+export const UV_MISSING_FOR_SERVER = cli({
+  command: "uv",
+  status: "missing",
+  path: null,
+  version: null,
+  min_version: "0.4",
+  login: { state: null, check: null, command: null },
+  handoff: { prompt: "Install uv on this machine so Coffer can start duckdb." },
+  needed_by: [need("data-profiling", "0.4")],
+  needed_by_servers: [{ server_uid: "srv-duckdb", server_name: "duckdb", launcher: "uvx" }],
 });

@@ -33,7 +33,7 @@ def _item(uid: str, handoff: str | None) -> AttentionItem:
         uid=uid,
         title=uid,
         reason_code="mcp_missing_launcher",
-        reason="Its launcher `uvx` is not installed on this machine.",
+        reason="Its launcher uvx isn't found on this machine.",
         severity=Severity.ERROR,
         action=AttentionAction("test", "POST", f"/api/v1/resources/mcp_server/{uid}/test"),
         handoff=handoff,

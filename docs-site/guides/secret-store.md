@@ -126,7 +126,7 @@ Where the key lives is fixed by how Coffer was built, not by a setting.
 | **Signed release** | One item in the macOS data-protection Keychain, in an access group limited to Coffer's Apple Team ID | Only Coffer's signed binaries. Any other program — an agent's script, `/usr/bin/security` — gets no access and no "Allow" dialog to click. The daemon reads it silently at every start. |
 | **Development build** | `~/.coffer/master.key`, mode `0600` (default), or the OS keychain (opt-in) | Any program running as you can read the file. |
 
-At the first start of a signed release, a key found in `master.key` or in the old keychain item is moved into the Keychain item — written, read back and compared, then the source is deleted — and audited as `master_key_relocated`. If the two disagree the daemon stops and names both fingerprints rather than guessing.
+A signed release reads only its Keychain item: it never looks in `master.key` or the login keychain.
 
 ::: warning Signed releases do not exist yet
 Coffer does not yet ship binaries signed with an Apple Developer ID, so every build today is a development build and keeps the key in a file. In a development build the [secret boundary](/guides/secrets) does not hold: any process running as you can read the key and forge the desktop app's approval. The desktop app says "Development build" on every presence prompt. See [Security model → Development builds](/architecture/security#development-builds).

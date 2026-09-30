@@ -15,6 +15,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     RootModel,
     field_validator,
@@ -45,6 +46,11 @@ def _reject_raw_secret(field: str, value: str) -> str:
 
 class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default."""
+
+    # A key no channel type declares is refused, as for every kind's config,
+    # so a retired field (SeaTalk's webhook-era delivery keys) cannot linger
+    # in a stored config unnoticed.
+    model_config = ConfigDict(extra="forbid")
 
     # The **uid** of the agent resource this channel drives by default (ADR
     # resource-identity-is-an-immutable-uid). It is a cross-resource reference,
@@ -161,9 +167,6 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     # outbound websocket connection"). Its register handshake authenticates
     # from exactly these two values, so the configuration carries nothing
     # else — no delivery switch, no signing secret, no public URL, no tunnel.
-    # A stored document still carrying those webhook-era keys (a second
-    # machine on an older build) is read cleanly: unknown keys are ignored,
-    # as for every channel config.
 
     @field_validator("app_secret_ref")
     @classmethod

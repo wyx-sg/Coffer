@@ -222,8 +222,6 @@ acceptance("web-ui", "every resource entry opens a list page of its own", () => 
 
   const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href")!);
   expect(hrefs).toHaveLength(15);
-  // The check below can tell a redirect apart: the retired /resources is one.
-  expect(isRedirect("/resources")).toBe(true);
   const resolved = hrefs.map((href) => leafRoute(href));
   // Each entry is its own route — the path itself, never the catch-all.
   resolved.forEach((route, i) => {

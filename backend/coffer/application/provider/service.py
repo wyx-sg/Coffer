@@ -127,13 +127,10 @@ class ProviderService:
     def _mint_ref() -> str:
         """A fresh vault address for a profile created with an inline secret.
 
-        Deliberately opaque rather than ``provider/<name>/key``: a ref is an
-        ADDRESS, and deriving it from the connection's name made the name a key
-        — renaming then had to move the secret, in an order chosen so a live
-        agent never saw a missing one. Nothing reads the ref's shape; ownership
-        is decided by citation (``release_orphaned_secrets``), not by the
-        ref matching the name. Refs already minted under the old shape keep
-        working untouched: they are just strings this config happens to hold.
+        Deliberately opaque: a ref is an ADDRESS, and one derived from the
+        connection's name would make the name a key, so a rename would have to
+        move the secret. Nothing reads the ref's shape; ownership is decided by
+        citation (``release_orphaned_secrets``).
         """
         return f"provider/{uuid4().hex}/key"
 
@@ -271,9 +268,7 @@ class ProviderService:
         The secret goes with it when nothing else cites it — but that is
         ``ResourceService.delete``'s job, not this one's: the kind declares a
         ``secret_ref_extractor``, so the generic path already releases the
-        cited ref by citation count. This used to repeat that check here by
-        asking whether the ref matched ``provider/<name>/key``, which only ever
-        worked for refs whose shape spelled the name out.
+        cited ref by citation count.
         """
         await self.get(uid)  # 404 (and the kind check) before anything is removed
         await self._resources.delete(uid, actor)

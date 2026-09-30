@@ -164,10 +164,6 @@ class ResourceService:
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(kind)
         resource_kind_ops.check_name(kind_def, name)
-        if uid is None:
-            # A resource created HERE, not one arriving with the identity another
-            # machine gave it: only a new name meets a kind's rules for new names.
-            resource_kind_ops.check_new_name(kind_def, name)
         title = resource_kind_ops.checked_title(kind_def, title)
         validated = self._validate_config(kind_def, config)
         resource_kind_ops.check_derived_name(kind_def, name, validated)

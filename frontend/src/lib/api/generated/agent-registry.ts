@@ -817,8 +817,8 @@ export interface components {
         /**
          * HookHealth
          * @description Coffer's own delivery hook: ``current`` is exactly the command Coffer
-         *     would write now; ``stale`` carries Coffer's marker with another command (an
-         *     older build's); ``missing`` is not there at all.
+         *     would write now; ``stale`` carries Coffer's marker with another command;
+         *     ``missing`` is not there at all.
          * @enum {string}
          */
         HookHealth: "current" | "stale" | "missing";

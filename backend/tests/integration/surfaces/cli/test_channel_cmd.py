@@ -47,6 +47,7 @@ from coffer.surfaces.http.channel_routes import (
 from coffer.surfaces.http.channel_routes import set_channel_service
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.no_approvals import router as no_approvals_router
 from tests.support.vault_stores import make_resource_repo
 
 runner = CliRunner()
@@ -207,6 +208,7 @@ def channel_daemon(tmp_path, monkeypatch):
     fapp = FastAPI()
     err_handlers.register(fapp)
     fapp.include_router(resource_router)
+    fapp.include_router(no_approvals_router)
     fapp.include_router(channel_router)
 
     # `coffer channel register` and `coffer channel bind` ask the daemon which

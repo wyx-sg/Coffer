@@ -83,7 +83,7 @@ consulted from the synchronous resolve path.
 | ---- | ----- |
 | `bindings.json` | `{"bindings": [binding, ...]}` — a ref approved for one slot of one destination, unique on `(ref, destination_kind, destination_uid, slot)` |
 | `approvals.json` | `{"approvals": [approval, ...]}` — what waits for the desktop app |
-| `settings.json` | `{key: value}` — `require_approval`, `adopted_existing_bindings` |
+| `settings.json` | `{key: value}` — `require_approval` |
 | `times.json` | `{ref: iso time}` — when this machine first stored each ref (the ciphertext's `created_at`, above) |
 | `last-used.json` | `{ref: iso time}` — when a consumer last had each ref decrypted here (`last_used_at`, above) |
 
@@ -92,7 +92,7 @@ consulted from the synchronous resolve path.
 | `ref`, `destination_kind`, `destination_uid`, `slot` | the key |
 | `target_fingerprint` | `sha256(target)[:32]`; a new target is a new destination |
 | `approved_at` | ISO time |
-| `approval_id` | `null` when adopted, fresh, or approved while protection was off |
+| `approval_id` | `null` when fresh, or approved while protection was off |
 
 | Approval field | Notes |
 | -------------- | ----- |
@@ -130,10 +130,9 @@ secrets, is never probed at register time, and releases nothing on delete.
 | ---------------------- | ------------------------------------------------------------------ | ----------- |
 | `SECRET_MISSING`   | A ref a configuration cites does not resolve                        | 400 / startup failure at the citing surface |
 | `SECRET_IN_USE`    | Delete attempted while a resource config still cites the ref | 409, with `details.references` naming each citer by kind and current label (`channel 'my-bot'`) — never by uid, which is not what the user sees on the page they must visit next |
-| `SECRET_LOCKED`    | The OS keychain refused or could not be read                        | 503; the legacy migration treats it as "skip and retry next start" |
+| `SECRET_LOCKED`    | The OS keychain refused or could not be read                        | 503 |
 | `SECRET_UNREADABLE`| Ciphertext will not decrypt with the current key                   | 5xx, naming the ref |
 | `MASTER_KEY_MISSING`   | Ciphertext exists and no key resolves, or the key is corrupt | Fatal at daemon startup, naming the path |
-| `MASTER_KEY_CONFLICT`  | A signed build finds one key in its Keychain item and a different one in the file or legacy item | Fatal at daemon startup, naming both fingerprints |
 | `SECRET_BINDING_PENDING` | A secret would go to a destination or target nobody approved | 409, `details.approval_ids`; the CLI exits `9` |
 | `PRESENCE_GRANT_INVALID` | A presence grant is missing, expired, reused, for another operation or target, or not signed with the grant key | 403 |
 | `APPROVAL_NOT_FOUND` / `APPROVAL_NOT_PENDING` | An approval id that does not exist, or was already decided | 404 / 409 |
@@ -150,7 +149,7 @@ shape is the framework's):
 | `secret_revealed`  | `{ref}` — the desktop app's presence-gated reveal |
 | `secret_deleted`   | `{ref}`                          |
 | `secret_migrated`  | `{ref}`                          |
-| `master_key_relocated` | `{to}` (and `{from}` for the signed build's move into its access group) |
+| `master_key_relocated` | `{to}` |
 | `master_key_exported`  | `{path, fingerprint}` — the desktop app's key backup |
 | `secret_resolved`      | `{name, argv0, cwd}` — one `coffer run` resolve, never the rest of argv |
 | `secret_approval_requested` / `_approved` / `_rejected` | `{approval_id, op, ref}` |

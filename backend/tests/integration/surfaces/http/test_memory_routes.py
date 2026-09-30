@@ -14,7 +14,8 @@ tiers that already cover the layer's behaviour: the **wire**. Field names and
 error codes, the status codes a client branches on, and the two payload promises
 "Deliver the index and the notes path at session start" and "Bound delivery and
 prefer the current repository" make that a client can only check by reading the
-response — that ``POST /context`` carries a line for *every* note plus the
+response — that the ``SessionStart`` answer of ``POST /hook`` carries a line
+for *every* note plus the
 absolute ``notes/`` path, and that under a binding ceiling it is ``global`` that
 loses lines while the repository the session is open in keeps its own.
 
@@ -36,15 +37,18 @@ import shutil
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.application.memory.context import compose_context
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.memory.budget import estimate_tokens
+from coffer.domain.memory.delivery import DELIVERY_CEILING_BYTES
 from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import paths as memory_paths
 from coffer.infrastructure.memory import store as memory_store
 from coffer.infrastructure.memory.paths import memory_root as _memory_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.memory.dependencies import get_memory_service
 from tests.integration.memory.conftest import claude_code_config, init_repository
 
 _TOKEN = "test-token-memory-routes"
@@ -482,12 +486,24 @@ def test_update_memory_skips_a_partition_whose_distil_is_already_running(client,
 # ----- context: the payload the whole redesign is about ---------------------
 
 
+def _session_context(c: TestClient, agent_uid: str, cwd: str) -> str:
+    """The text a ``SessionStart`` fire of the installed hook adds to a session."""
+    r = c.post(
+        "/api/v1/memory/hook",
+        json={"agent_uid": agent_uid, "event": "SessionStart", "cwd": cwd},
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()["output"]
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    return str(out["hookSpecificOutput"]["additionalContext"])
+
+
 @pytest.mark.acceptance(
     spec="memory",
     scenario="the composed context carries the whole index and the path to the bodies",
 )
 def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path) -> None:
-    """The measured failure this route exists to fix: the old surface shipped
+    """The measured failure this payload exists to fix: the old surface shipped
     8 of 189 lines and pointed at ``coffer__recall``, which was called five
     times in its life. The payload now carries a line per note and the absolute
     directory the bodies are in, and names no tool at all ("Deliver the index and
@@ -505,35 +521,24 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
     partition = _distilled(client, tmp_path, files)
     repository = tmp_path / "coffer"
 
-    r = client.post(
-        "/api/v1/memory/context",
-        json={
-            "agent_uid": _uid(client, "agent", "claude-code"),
-            "cwd": str(repository / "backend"),
-        },
+    text = _session_context(
+        client, _uid(client, "agent", "claude-code"), str(repository / "backend")
     )
-    assert r.status_code == 200, r.text
-    data = r.json()
 
-    assert data["partition"] == partition
-    assert data["notes_included"] == 7
-    assert data["notes_omitted"] == 0
     # A cwd deep inside the repository resolves to the repository's partition.
     for slug in [f"project-{i}" for i in range(4)] + [f"about-{i}" for i in range(3)]:
-        assert data["text"].count(f"`{slug}.md`") == 1
-    assert len(_lines(data["text"])) == 7
+        assert text.count(f"`{slug}.md`") == 1
+    assert len(_lines(text)) == 7
 
     # The path is the current repository partition's, absolute, and the payload says
     # a body is read as a file rather than naming a tool for it ("Deliver the index
     # and the notes path at session start").
     notes_dir = str(memory_paths.notes_dir(partition))
     assert notes_dir.startswith("/")
-    assert notes_dir in data["text"]
-    assert "read one as a file" in data["text"]
+    assert notes_dir in text
+    assert "read one as a file" in text
     for tool in ("coffer__recall", "coffer__read", "coffer__search", "MCP"):
-        assert tool not in data["text"]
-    # There is no `layers` field any more: delivery is not a two-tier digest.
-    assert "layers" not in data
+        assert tool not in text
 
 
 @pytest.mark.acceptance(
@@ -546,7 +551,10 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     of what this layer did before. The previous design spent its budget on
     ``global`` first and delivered, on a live vault of 189 entries, 8 lines of
     which none were about the project the session was open in — so what is
-    pinned here is *which* partition loses lines."""
+    pinned here is *which* partition loses lines.
+
+    The ceiling is a parameter only ``compose_context`` takes, so this composes
+    against the daemon's own memory service, on the app's own event loop."""
     files = {
         f"project-{i}.md": _cc_memory_file(f"project-{i}", f"Project fact {i}", "project", "b")
         for i in range(3)
@@ -559,38 +567,36 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     )
     partition = _distilled(client, tmp_path, files)
     repository = tmp_path / "coffer"
-    cc_uid = _uid(client, "agent", "claude-code")
+    svc = get_memory_service()
 
-    full = client.post(
-        "/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": str(repository)}
-    ).json()
-    assert full["notes_omitted"] == 0, "the untrimmed payload is the baseline"
+    async def compose(**kw: int):  # type: ignore[no-untyped-def]
+        return await compose_context(
+            svc, cwd=str(repository), ceiling_bytes=DELIVERY_CEILING_BYTES, **kw
+        )
 
-    ceiling = _binding_ceiling(full["text"], room_for=6)
+    full = client.portal.call(compose)  # type: ignore[union-attr]
+    assert full.notes_omitted == 0, "the untrimmed payload is the baseline"
 
-    r = client.post(
-        "/api/v1/memory/context",
-        json={"agent_uid": cc_uid, "cwd": str(repository), "ceiling_tokens": ceiling},
-    )
-    assert r.status_code == 200, r.text
-    data = r.json()
+    ceiling = _binding_ceiling(full.text, room_for=6)
 
-    assert data["notes_omitted"] > 0
-    assert estimate_tokens(data["text"]) <= ceiling
+    data = client.portal.call(lambda: compose(ceiling_tokens=ceiling))  # type: ignore[union-attr]
+
+    assert data.notes_omitted > 0
+    assert estimate_tokens(data.text) <= ceiling
     # The repository the session is open in keeps every line it has …
     for i in range(3):
-        assert f"`project-{i}.md`" in data["text"]
+        assert f"`project-{i}.md`" in data.text
     # … and `global` is what gives way — some of it, not all: the ceiling was
     # sized for six lines and the repository's three were spent first.
-    kept = [i for i in range(12) if f"`about-{i}.md`" in data["text"]]
+    kept = [i for i in range(12) if f"`about-{i}.md`" in data.text]
     assert kept, "the ceiling left room for global lines too"
     assert len(kept) < 12
     # The trim says how many were dropped AND where those notes are, which is
     # what makes it a small loss: every line that did not fit is still a file.
-    assert f"({data['notes_omitted']} older line(s) not shown" in data["text"]
-    assert str(memory_paths.notes_dir("global")) in data["text"]
-    assert data["notes_included"] + data["notes_omitted"] == 15
-    assert data["partition"] == partition
+    assert f"({data.notes_omitted} older line(s) not shown" in data.text
+    assert str(memory_paths.notes_dir("global")) in data.text
+    assert data.notes_included + data.notes_omitted == 15
+    assert data.partition == partition
 
 
 @pytest.mark.acceptance(
@@ -604,9 +610,9 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
 
     The notes here were aggregated from ``cc`` alone, and ``outsider`` — a
     Codex agent that contributed not one entry — opens a session in the same
-    repository and is served the same payload. This route used to narrow by
+    repository and is served the same payload. Delivery used to narrow by
     the partition's per-agent reach, which aggregation had defaulted to the
-    agents it read from, so this exact request came back **empty**: on the
+    agents it read from, so this exact session came back **empty**: on the
     maintainer's own vault a Codex session in the Coffer repository was served
     no project memory at all. Nobody chose that, and it defeated the point of
     aggregating several agents' memory into one place.
@@ -628,36 +634,27 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     assert refused.json()["error"]["code"] == "RESOURCE_NOT_TOGGLEABLE"
     assert client.get(f"/api/v1/resources/{partition_uid}").json()["enabled"] is True
 
-    served = client.post(
-        "/api/v1/memory/context", json={"agent_uid": outsider_uid, "cwd": str(repository)}
-    ).json()
-    to_a_source = client.post(
-        "/api/v1/memory/context",
-        json={"agent_uid": _uid(client, "agent", "claude-code"), "cwd": str(repository)},
-    ).json()
+    served = _session_context(client, outsider_uid, str(repository))
+    to_a_source = _session_context(client, _uid(client, "agent", "claude-code"), str(repository))
 
-    assert served["partition"] == partition
-    assert "`python-lockfile.md`" in served["text"]
-    assert served["notes_included"] > 0
+    assert str(memory_paths.notes_dir(partition)) in served
+    assert "`python-lockfile.md`" in served
     # Byte-identical: who is asking decides nothing about the payload. The uid
-    # travels for ``record_fired`` — who fired — and for nothing else.
-    assert served["text"] == to_a_source["text"]
+    # travels for the audited fire — who fired — and for nothing else.
+    assert served == to_a_source
 
 
 def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) -> None:
     _distilled(client, tmp_path)
 
-    data = client.post(
-        "/api/v1/memory/context",
-        json={
-            "agent_uid": _uid(client, "agent", "claude-code"),
-            "cwd": str(tmp_path / "Documents" / "2026-09-17"),
-        },
-    ).json()
+    text = _session_context(
+        client,
+        _uid(client, "agent", "claude-code"),
+        str(tmp_path / "Documents" / "2026-09-17"),
+    )
 
-    assert data["partition"] == "global"
-    assert "`worktree-development.md`" in data["text"]
-    assert "in no repository Coffer has aggregated yet" in data["text"]
+    assert "`worktree-development.md`" in text
+    assert "in no repository Coffer has aggregated yet" in text
 
 
 # ----- delivery -------------------------------------------------------------
@@ -673,7 +670,7 @@ def _hook(client: TestClient, uid: str, method: str = "GET") -> dict:
     return next(p for p in r.json()["parts"] if p["key"] == "memory_hook")
 
 
-def test_connect_status_and_record_fired_round_trip(client) -> None:
+def test_connect_status_and_a_hook_fire_round_trip(client) -> None:
     cc_uid = _register_agent(client)
 
     status = _hook(client, cc_uid)
@@ -692,8 +689,8 @@ def test_connect_status_and_record_fired_round_trip(client) -> None:
     assert any(e["event_type"] == "memory_delivery_installed" for e in audit["entries"])
 
     r = client.post(
-        "/api/v1/memory/context",
-        json={"agent_uid": cc_uid, "cwd": "/tmp", "record_fired": True},
+        "/api/v1/memory/hook",
+        json={"agent_uid": cc_uid, "event": "SessionStart", "cwd": "/tmp"},
     )
     assert r.status_code == 200, r.text
 
@@ -704,16 +701,6 @@ def test_connect_status_and_record_fired_round_trip(client) -> None:
 
     removed = client.delete(f"/api/v1/agents/{cc_uid}/coffer-connection").json()
     assert removed["state"] == "disconnected"
-
-
-def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
-    cc_uid = _register_agent(client)
-    _hook(client, cc_uid, "POST")
-
-    client.post("/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": "/tmp"})
-
-    audit = client.get("/api/v1/audit").json()
-    assert not any(e["event_type"] == "memory_delivery_fired" for e in audit["entries"])
 
 
 def test_the_delivery_management_routes_are_gone(client) -> None:

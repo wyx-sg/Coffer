@@ -43,7 +43,6 @@ vi.mock("@/lib/hooks/useAgentRoute", () => ({
     isPending: false,
     error: null,
     notAdded: false,
-    redirecting: false,
   }),
 }));
 

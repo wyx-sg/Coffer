@@ -129,7 +129,7 @@ the vault entry, guarded by `find_secret_citations`. Ownership is decided by cit
 ref spelling the name.
 
 #### Scenario: delete a provider profile cleans up its owned secret
-- **GIVEN** a connection whose `secret_ref` is `provider/my-provider/key` (owned; nothing else cites it),
+- **GIVEN** a connection whose `secret_ref` is `provider/<uuid4>/key` (owned; nothing else cites it),
 - **WHEN** the user deletes it,
 - **THEN** the vault entry at that ref is deleted and `resource_deleted` is audited.
 
@@ -165,16 +165,13 @@ pinned, `env.ANTHROPIC_DEFAULT_FABLE_MODEL`, from "Suggest a model for each Clau
 `modelPicker`, which fills Claude Code's `/model` picker with the connection's curated text models,
 replacing the built-in rows on an endpoint that serves no Claude ids and keeping them on one that
 does. Every option Coffer writes into `modelPicker` carries the description `via Coffer`, which is
-how de-projection tells Coffer's picker from the user's. Every projection write MUST delete
-`env.ANTHROPIC_SMALL_FAST_MODEL`, the deprecated background-model key that Claude Code still reads
-ahead of the Haiku pin, and an `env.ANTHROPIC_MODEL` an earlier build wrote. For a connection to
+how de-projection tells Coffer's picker from the user's. For a connection to
 a model runtime on this machine it also writes `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local
 runtimes reject Claude Code's beta request fields) and `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to
 the chosen model's recorded window (Claude Code otherwise assumes 200k for an id it does not know).
 
 De-projection drops `apiKeyHelper` only when it is Coffer's own — a helper line running the coffer
-CLI (by absolute path or bare) with `proxy token`, or the `provider key` form earlier builds wrote —
-and leaves a helper the user wrote alone.
+CLI (by absolute path or bare) with `proxy token` — and leaves a helper the user wrote alone.
 
 Every projection write — this one, the Codex one (see "Project into Codex config without clobbering
 it"), and their de-projections — MUST surface a fingerprint refusal as 409 `CONFIG_FILE_STALE` and
@@ -194,11 +191,6 @@ own CLI is never silently overwritten.
 - **WHEN** the projection write runs,
 - **THEN** the write is refused with 409 `CONFIG_FILE_STALE`, the user's edit is left intact on disk, no `.bak` is written, and an audit row `provider_projection_refused` names the connection, the agent type and the file — the caller re-reads and retries.
 
-#### Scenario: every write deletes the deprecated background-model key
-- **GIVEN** `~/.claude/settings.json` carrying `env.ANTHROPIC_SMALL_FAST_MODEL` and `env.ANTHROPIC_MODEL` from an earlier build
-- **WHEN** Coffer projects a connection for an agent bound to a model and a Haiku tier
-- **THEN** both keys are gone, the model is in the top-level `model` key, and the Haiku tier is in `env.ANTHROPIC_DEFAULT_HAIKU_MODEL`
-
 ### Requirement: Project into Codex config without clobbering it
 The system MUST project into `~/.codex/config.toml` via `tomlkit` (comment- and order-preserving),
 merging only the managed keys and preserving everything else; a file that does not exist is created
@@ -209,9 +201,9 @@ WebSocket transport first and stalls), `requires_openai_auth = false`, and
 `auth = {command = "<absolute path to the coffer CLI>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}`,
 so Codex fetches its local proxy token itself — a Codex the user starts in their own terminal needs
 nothing exported, and no provider key is in any Codex process's environment. The command-backed
-`auth` table needs Codex 0.155.1 or later. The table names no `env_key`, and the
-`COFFER_PROVIDER_KEY` entry earlier builds added to `shell_environment_policy.exclude` is removed,
-keeping the user's own entries, and the table when nothing else is left in it.
+`auth` table needs Codex 0.155.1 or later. The table MUST name no `env_key`, and the
+projection MUST NOT put a provider key into any environment variable Codex passes to the shell
+commands the agent runs; the user's own `shell_environment_policy` is left as it is.
 
 `wire_api = "responses"` is the only accepted value, enforced in `AgentConfig`, so anything else is a
 422 at the moment it is set: Codex refuses to load a `config.toml` carrying `wire_api = "chat"`, and
@@ -246,9 +238,9 @@ not used).
 - **THEN** `~/.codex/config.toml` contains `model` (from the agent's binding), `model_provider = "coffer"`, and a `[model_providers.coffer]` table with the proxy's loopback `base_url`, `wire_api = "responses"`, `supports_websockets = false`, `requires_openai_auth = false` and an `auth` command printing the agent's proxy token, and no `env_key`; and the connection's `is_active` becomes `true`.
 
 #### Scenario: the projected key is hidden from the agent's shell commands
-- **GIVEN** a Codex agent whose `config.toml` carries `[shell_environment_policy]` with `exclude = ["AWS_*", "COFFER_PROVIDER_KEY"]` from an earlier build
+- **GIVEN** a Codex agent whose `config.toml` carries the user's own `[shell_environment_policy]` with `exclude = ["AWS_*"]`
 - **WHEN** the user activates a connection reaching it
-- **THEN** `exclude` is `["AWS_*"]`, the provider block names no `env_key`, and Coffer puts no key into the environment of the Codex processes it starts
+- **THEN** `exclude` is still `["AWS_*"]`, the provider block names no `env_key` and authenticates through its `auth` command, and Coffer puts no key into the environment of the Codex processes it starts
 
 #### Scenario: the Codex catalogue carries each model's window and effort levels
 - **GIVEN** a Codex agent switched to an API-key connection whose curated model `gpt-x` records a 200000-token window and the levels `low`, `medium`, `high`, and the agent's effort set to `high`
@@ -353,7 +345,7 @@ revert to the built-in login.
 - **THEN** a `provider_switched` entry appears with details `{from, to, protocol, agents}`, a timestamp, and an actor.
 
 ### Requirement: Clear an active flag the agent's config contradicts
-On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each enabled agent an active connection reaches, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent and no agent of that type carries them, the system MUST clear `is_active`, so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a flag left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import, which carries the user's explicit switch from another machine, and an item a person applies, both of which project. Where they are absent from one agent of a type while another agent of that type carries them, that agent MUST be projected too. For Codex, the `shell_environment_policy.exclude` entry alone does not count as carrying the projection: it selects no provider. The opposite drift — Coffer's keys present while no active connection reaches the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
+On every reconcile pass ([resource-framework](../resource-framework/spec.md) "Converge what Coffer writes outside its database with one reconciler"), the provider-projection target MUST compare, for each enabled agent an active connection reaches, the keys Coffer's projection would write — base URL, model keys, the key helper command, Codex's provider block and its model catalogue — with the keys the agent's native config carries, by value and not by presence. Where Coffer's keys are present but differ, the connection MUST be projected again. Where they are absent and no agent of that type carries them, the system MUST clear `is_active`, so every surface then says the agent is on its built-in login, and MUST NOT write the projection back, because a flag left from an earlier session is no warrant to re-route a user's agent through a gateway they are not currently using; the exceptions are a pass run for a sync import, which carries the user's explicit switch from another machine, and an item a person applies, both of which project. Where they are absent from one agent of a type while another agent of that type carries them, that agent MUST be projected too. The opposite drift — Coffer's keys present while no active connection reaches the agent — MUST be reported rather than removed, unless the pass runs for a sync import or a person applies
 that item. A multi-step switch MUST keep reconcile passes out until its writes and its flags agree. `is_active` is not redundant with `enabled`: `enabled` is the user's switch on the resource, while `is_active` records that this is the connection currently written into the agents it reaches — a claim about a file on disk that the agent's own CLI, other tooling, the user and a restore from backup all rewrite.
 
 #### Scenario: boot clears an active flag the agent's config does not carry
@@ -361,11 +353,6 @@ that item. A multi-step switch MUST keep reconcile passes out until its writes a
 - **WHEN** a reconcile pass runs at daemon start or on its period
 - **THEN** the connection's `is_active` is cleared
 - **AND** the agent's `settings.json` is left exactly as it was, with no projection written back
-
-#### Scenario: a leftover shell exclude entry is not a Codex projection
-- **GIVEN** an active connection reaching a registered Codex agent whose `config.toml` holds only `[shell_environment_policy]` with `exclude = ["COFFER_PROVIDER_KEY"]`
-- **WHEN** a reconcile pass runs
-- **THEN** the connection's `is_active` is cleared
 
 #### Scenario: a projection whose values went stale is projected again
 - **GIVEN** an active connection projected into a Claude Code agent, whose `settings.json` then carries another base URL or another key helper command than the connection's
@@ -462,8 +449,7 @@ independent speech-to-text default"), not through a `provider` subcommand.
 
 The web surfaces:
 
-- **Model providers** (route `/model-providers`, in the sidebar's RESOURCES group; the old
-  `/settings/models`, `/settings/providers` and `/settings/llm-connections` routes redirect there) is
+- **Model providers** (route `/model-providers`, in the sidebar's RESOURCES group) is
   the connection library: a table of name / vendor / base URL / reach, an Add action and Delete per
   row. It has no per-row switch, because activation is per agent. A row MUST say what Coffer ITSELF
   uses the connection for: the `internal_default` connection carries a "Coffer · background model"
@@ -816,9 +802,8 @@ index.
 remove every key Coffer wrote from every enabled agent of that type — for Claude Code `apiKeyHelper`,
 `env.ANTHROPIC_BASE_URL`, the top-level `model` and `effortLevel`, the four
 `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins, Coffer's `modelPicker`, the local-runtime compatibility
-keys, and any `env.ANTHROPIC_SMALL_FAST_MODEL` or
-`env.ANTHROPIC_MODEL`; for Codex the provider table, `model_provider`, `model`,
-`model_reasoning_effort`, the catalogue pointer and file, and the shell-environment exclusion — so no
+keys and Coffer's `env.NO_PROXY` pair; for Codex the provider table, `model_provider`, `model`,
+`model_reasoning_effort`, and the catalogue pointer and file — so no
 stale pin keeps redirecting a tier after the agent is back on its own login. A `model` or effort the
 user has since changed through `/model` or `/effort` no longer equals the agent's binding, is theirs
 and is kept. It also clears the flag of the connection active for it, idempotently — succeeding when

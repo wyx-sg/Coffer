@@ -372,12 +372,9 @@ groups (`/custom-tools/<group>`), which are `mcp_server` resources — the agent
 type for agents (`/agents/<type>`), and the command for CLIs (`/clis/<command>`).
 A kind whose name can be renamed — model providers, channels, knowledge
 collections, memory partitions — MUST keep its immutable `uid` as the `<id>`
-(`/model-providers/<uid>/models`), because a renamed name would break every
+(`/model-providers/<uid>`), because a renamed name would break every
 address to it. A page opened from a tab (a plugin, a direct MCP entry, an
-unmanaged skill) nests under that tab's path. An old `?tab=<tab>` address MUST
-redirect to the matching path, and an old uid address of a kind now addressed by
-name MUST redirect to its name address, rather than resolve to "page not
-found".
+unmanaged skill) nests under that tab's path.
 
 #### Scenario: detail pages share one tab layout
 - **GIVEN** two detail pages of different kinds
@@ -391,33 +388,10 @@ found".
 - **THEN** the addresses read `/skills/release-notes/delivery` and `/mcp-servers/github/tools`
 - **AND** `/skills/release-notes` and `/mcp-servers/github` open each page on its default tab
 
-#### Scenario: an old query-tab address redirects to the path
-- **GIVEN** bookmarks to `/mcp-servers/<uid>?tab=tools` and `/model-providers/<uid>?tab=models`
-- **WHEN** each is opened
-- **THEN** the first lands on `/mcp-servers/github/tools` and the second on `/model-providers/<uid>/models`, and no "page not found" view is shown
-
 #### Scenario: a renamable kind keeps its uid in the address
 - **GIVEN** a model provider renamed from `work` to `work-proxy`
 - **WHEN** the user follows an address to it saved before the rename
 - **THEN** the address still opens that provider, because it carries the uid and not the name
-
-### Requirement: Redirect legacy resource paths
-The legacy path `/resources` MUST resolve as a redirect to the MCP server
-surface rather than as a "page not found" view. Detail routes are addressed as
-"Lay out every detail page's tabs alike" says — by name for kinds whose name is
-fixed, by `uid` for the rest — and an old uid address of a fixed-name kind MUST
-redirect to its name address, which needs only the lookup by `uid` every kind
-already has.
-
-#### Scenario: legacy resource paths redirect instead of 404ing
-- **GIVEN** a user follows an old bookmark to `/resources`
-- **WHEN** the route resolves
-- **THEN** the app redirects to the MCP server surface and no "page not found" view is shown
-
-#### Scenario: an old uid address of a fixed-name kind redirects to its name
-- **GIVEN** a skill named `release-notes` and a bookmark to `/skills/<its uid>`
-- **WHEN** the route resolves
-- **THEN** the app lands on `/skills/release-notes` and no "page not found" view is shown
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
@@ -545,7 +519,7 @@ calls and changes are kept, linking to Settings › Data where that is set.
 - **AND** a change reads as a plain-language line, not a raw event code
 
 #### Scenario: the daemon tab reads every writer in the log
-- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before [daemon](../daemon/spec.md) "Write one bounded daemon log in one format" was met, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
+- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, an upstream's `LEVEL - logger - message` lines, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
 - **WHEN** the user opens the Daemon tab
 - **THEN** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
 - **AND** no message renders a terminal escape sequence as text
@@ -701,7 +675,6 @@ disabled.
 - **WHEN** the user chooses Copy diagnostics beside the version
 - **THEN** the clipboard holds the version, channel, host, daemon state and port and the enabled features, and no token or secret value
 
-
 ### Requirement: Group the sidebar by what the user comes to do
 The sidebar MUST be grouped by what the user comes to Coffer to do, so that each
 heading names one intent and a new entry has one obvious home. There are five
@@ -855,11 +828,8 @@ action for each that tries the chosen pair and shows the result beside it. Each
 picker MUST show its state inline: *not set* (saying what Coffer does without
 it — no internal pass runs; voice messages reach the agent as audio files),
 *set*, or *failing* (the last test or call failed, with the error). The Model
-providers page MUST carry no Coffer's model tab. The legacy `/settings/engine`
-path MUST open the Settings modal on General rather than resolve to a "page not
-found" view, and so MUST `/settings/embedding`, which the router already keeps
-only as a redirect for old bookmarks: Coffer has no embedding configuration
-(search is literal-only), and the second picker is Speech to text.
+providers page MUST carry no Coffer's model tab. Coffer has no embedding
+configuration (search is literal-only), and the second picker is Speech to text.
 
 #### Scenario: coffer's model is chosen in settings general
 - **GIVEN** two connections, each with a list of models
@@ -877,11 +847,6 @@ only as a redirect for old bookmarks: Coffer has no embedding configuration
 - **WHEN** the user chooses Test beside the Engine model picker
 - **THEN** the picker reads as failing with the endpoint's error beside it
 - **AND** the chosen pair is kept as it was
-
-#### Scenario: the old coffer's model address opens settings general
-- **GIVEN** a user follows an old bookmark to `/settings/engine`
-- **WHEN** the route resolves
-- **THEN** the Settings modal opens on General and no "page not found" view is shown
 
 ### Requirement: Show the daemon's state in the shell footer
 The shell MUST show the daemon's state at all times in a footer at the bottom of
@@ -1385,20 +1350,26 @@ transport.
 
 ### Requirement: Show every CLI a skill requires on the CLIs page
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that
-any skill requires, with the version found beside the minimum the skills ask
-for, the login state where the command has one, and which skills need it,
-problems first — missing, older than the minimum, or not logged in, grouped
-under Needs you above Ready — as a split view with the selected CLI's detail
-beside the list (`/clis/<command>`). The app MUST NOT show an install command or
-run an install. For a CLI that needs the
-user, its detail page and the skill's Requires tab MUST offer the daemon's
-hand-off prompt (spec skill-manager "Hand a required command to an agent with a
-prompt") through **Copy prompt** and **Ask an agent** — the latter opens a new
-conversation with a Coffer-managed agent chosen in the New conversation dialog,
-with the prompt in the composer and nothing sent until the user presses Send;
-with no managed agent available only Copy prompt is offered. The detail page
-also offers the **login command** to copy and **Check again**, which probes the
-command afresh. A skill's detail page MUST link each requirement it declares to
+any skill requires or any enabled stdio MCP server starts with (spec
+skill-manager "Check every required command where the agent runs"), with the
+version found beside the minimum the skills ask for, the login state where the
+command has one, and how many MCP servers and skills need it, problems first —
+missing, older than the minimum, or not logged in, grouped under Needs you above
+Ready — as a split view with the selected CLI's detail beside the list
+(`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
+with the command, each opening that server's page and naming its launcher, and
+the skills that declare it, each opening that skill's Requires tab; each row
+carries its kind when both need it. The app MUST NOT show an install, update or
+login command, a "run it in a terminal" instruction, or run any of them: a CLI
+that needs the user says what it costs in a plain sentence — which servers can't
+start and which skills fail — and its detail page and the skill's Requires tab
+MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
+command to an agent with a prompt") through **Copy prompt** and **Ask an agent**
+— the latter opens a new conversation with a Coffer-managed agent chosen in the
+New conversation dialog, with the prompt in the composer and nothing sent until
+the user presses Send; with no managed agent available only Copy prompt is
+offered. The detail page also offers **Check again**, which probes the command
+afresh. A skill's detail page MUST link each requirement it declares to
 that CLI's page, and Overview MUST show an attention item while any required CLI
 is missing, outdated or not logged in. What a skill declares and how a command
 is probed are specified by skill-manager; this page shows what they report.
@@ -1415,9 +1386,15 @@ is probed are specified by skill-manager; this page shows what they report.
 - **AND** the page offers Copy prompt, shows no install command, and with no managed agent available offers only Copy prompt
 
 #### Scenario: check again after logging in
-- **GIVEN** a CLI's detail page showing not logged in and its login command to copy
-- **WHEN** the user runs the login command in a terminal and chooses Check again
+- **GIVEN** a CLI's detail page showing not logged in, with the hand-off to an agent and no login command shown
+- **WHEN** the user logs in and chooses Check again
 - **THEN** the page probes the command afresh and shows it as logged in
+
+#### Scenario: a CLI an MCP server starts with lists that server
+- **GIVEN** `uv` missing, needed by the MCP server `duckdb` (started with `uvx`) and the skill `data-profiling`
+- **WHEN** the user opens `/clis/uv`
+- **THEN** the list row reads "Not found · duckdb needs it" with "1 server · 1 skill", the header reads "needed by 1 MCP server and 1 skill", and the banner says duckdb can't start and data-profiling fails at the step that calls uv
+- **AND** Needed by lists `duckdb` (MCP server, "starts with uvx") opening `/mcp-servers/duckdb` and `data-profiling` (Skill) opening its Requires tab
 
 #### Scenario: a skill's requirement links to its CLI
 - **GIVEN** a skill that requires `gh`

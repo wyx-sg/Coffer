@@ -105,7 +105,7 @@ class McpAttentionSource:
                     uid=server.uid,
                     title=server.name,
                     reason_code="mcp_missing_launcher",
-                    reason=f"Its launcher {runner} is not found on this machine.",
+                    reason=f"Its launcher {runner} isn't found on this machine.",
                     severity=Severity.ERROR,
                     action=_test_action(server.uid),
                     handoff=(

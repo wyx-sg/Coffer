@@ -108,8 +108,9 @@ Validation rules:
   shim (house rule). The secret values the two removed refs cited are left
   in the secret store: a migration that deletes secrets could not be undone
   by its downgrade, and `coffer secret rm <ref>` removes them on
-  purpose. A document still carrying those keys — from a machine running an
-  older build — is read like any other unknown key and ignored.
+  purpose. A channel config refuses every key no channel type declares, so a
+  file still carrying one is refused by the vault (spec vault-storage "Keep
+  every vault document a JSON object that preserves what it does not know").
 - Channel turns run in the Coffer-managed default workspace
   `~/.coffer/content/workspace` (created on first use).
 

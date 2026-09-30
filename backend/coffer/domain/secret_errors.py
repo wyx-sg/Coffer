@@ -139,14 +139,3 @@ class SecretNotFound(CofferError):  # noqa: N818
     def __init__(self, name: str) -> None:
         super().__init__(f"no standalone secret named {name!r} (coffer://secret/{name})")
         self.name = name
-
-
-class MasterKeyConflict(CofferError):  # noqa: N818
-    """Two different master keys, one in the Keychain and one in a source to move.
-
-    Fatal at start, never resolved by choosing: the wrong one would orphan
-    every ciphertext the other opens (spec secret "Keep the master key
-    behind a storage port chosen by the build").
-    """
-
-    code = "MASTER_KEY_CONFLICT"

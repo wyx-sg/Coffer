@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING
@@ -29,6 +30,7 @@ from coffer.application.agent.service import AgentService
 from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.mcp.stdio_launchers import McpStdioLaunchers
 from coffer.application.platform_port import PlatformPort
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
@@ -42,6 +44,7 @@ from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.reconcile import PassReport, Trigger
 from coffer.domain.resource import Resource
+from coffer.domain.skill.cli_status import ServerLauncher
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
@@ -76,6 +79,20 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 _log = logging.getLogger(__name__)
+
+
+class _CliServerLaunchers:
+    """The MCP kind's stdio launchers in the skill kind's shape, for the CLIs
+    page (the two kinds meet only here, at the composition root)."""
+
+    def __init__(self, source: McpStdioLaunchers) -> None:
+        self._source = source
+
+    async def stdio_launchers(self) -> Sequence[ServerLauncher]:
+        return [
+            ServerLauncher(s.server_uid, s.server_name, s.launcher)
+            for s in await self._source.stdio_launchers()
+        ]
 
 
 @dataclass(frozen=True)
@@ -199,8 +216,7 @@ def wire_agent_and_skill_kinds(
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
     # Coffer's own MCP entry, judged by its shim path and --agent-uid on every
-    # pass (ADR one-level-triggered-reconciler-compares-parameters); this is
-    # also what moves an entry an older build left in another agent's file.
+    # pass (ADR one-level-triggered-reconciler-compares-parameters).
     reconciler.register(
         McpEntryTarget(
             agents=agent_svc, store=config_file_store, shim_resolver=default_shim_resolver
@@ -309,7 +325,7 @@ def wire_agent_and_skill_kinds(
     set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
-    wire_cli_requirements(skill_svc)
+    wire_cli_requirements(skill_svc, servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)))
 
     return AgentSkillWiring(
         skill_sources=skill_sources,

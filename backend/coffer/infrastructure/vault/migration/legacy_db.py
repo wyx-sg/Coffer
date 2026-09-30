@@ -86,6 +86,13 @@ def _rows(conn: sqlite3.Connection, tables: set[str], table: str) -> list[Row]:
     return [dict(r) for r in conn.execute(f"SELECT * FROM {table}")]
 
 
+#: Config keys a kind has retired, frozen as of this build. The upgrade drops
+#: them while it reads, so the file it writes is one the kind's model accepts
+#: (``MCPServerConfig`` refuses undeclared keys; no idle collector was ever
+#: built, so ``idle_timeout_seconds`` decided nothing).
+_RETIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {"mcp_server": ("idle_timeout_seconds",)}
+
+
 def _resource(row: Row, skipped: list[str]) -> OldResource | None:
     label = f"{row['kind']} {row['name']}"
     if not row.get("uid"):
@@ -99,6 +106,8 @@ def _resource(row: Row, skipped: list[str]) -> OldResource | None:
     if not isinstance(config, dict):
         skipped.append(f"resource {label}: config is not an object")
         return None
+    for key in _RETIRED_CONFIG_KEYS.get(row["kind"], ()):
+        config.pop(key, None)
     scope: Scope | None = None
     if row.get("scope_json"):
         try:

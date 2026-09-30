@@ -134,12 +134,8 @@ def test_locate_a_partitions_notes(daemon: TestClient, tmp_path: pathlib.Path) -
     as_json = extract_json(_run("memory", name, "--json").output)
     assert as_json == {"memory": root, "partition": directory}
     removed = {"partitions", "notes", "note", "retired", "ls", "read", "distil"}
-    removed |= {"delivery", "delivery-install", "delivery-remove"}
+    removed |= {"delivery", "delivery-install", "delivery-remove", "context"}
     assert not removed & _group_commands("memory")
-    # `context` is what an installed session-start hook runs: same name, same
-    # options (its behaviour is pinned in test_memory_cmd.py).
-    context = _group_commands("memory", "context")
-    assert {"agent_uid", "cwd", "ceiling_tokens"} <= context
 
 
 @pytest.mark.acceptance(

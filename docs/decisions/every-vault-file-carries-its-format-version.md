@@ -59,7 +59,11 @@ rolled back, with the old data kept read-only for one version.
   they were. An unknown key is reported on the resource as a warning ("field
   `enabeld` is not known to this build"), never refused: to an older build a
   newer build's field and a typo look the same, and refusing the first to catch
-  the second is the `title` failure above.
+  the second is the `title` failure above. This covers a document's top-level
+  fields. A resource's `config` is its kind's own, and every kind's config
+  model refuses a key it does not declare; the vault's resource rule refuses
+  such a file the same way (amended 2026-09-30, when 1.0 dropped the tolerance
+  of retired config keys).
 - **An older file is read, not rewritten.** A build reads a file below its
   current version through the upgrade chain, in memory. It never writes that
   file back at a new version on an ordinary write, and an edit to such a file

@@ -3,9 +3,8 @@
 // The header (the agent's mark and name, its Coffer state, the action that
 // state calls for and the ⋯ menu) over nine tabs addressed by path. The page is
 // addressed by the agent's TYPE; `useAgentRoute` turns that into the uid the
-// REST routes take and redirects every older address (a uid, `?tab=`,
-// `/conversations`) to today's. A type that is not added yet still has a page:
-// the header, and what adding it takes.
+// REST routes take. A type that is not added yet still has a page: the header,
+// and what adding it takes.
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Bot } from "lucide-react";
 
@@ -25,7 +24,7 @@ export function AgentDetailPage() {
   const route = useAgentRoute();
   const { t } = useTranslation();
 
-  if (route.redirecting || route.isPending) {
+  if (route.isPending) {
     return (
       <div className="space-y-6" aria-busy="true">
         <Skeleton className="h-4 w-20" />

@@ -26,10 +26,6 @@ settings without clobbering them"):
   does not know).
 - ``env.NO_PROXY`` gains ``127.0.0.1,localhost`` when the base URL is the local
   model proxy, so a corporate ``HTTPS_PROXY`` never captures the loopback leg.
-
-Every write deletes ``env.ANTHROPIC_SMALL_FAST_MODEL`` — deprecated, and still
-read AHEAD of the Haiku pin, so a stale one would win — and an
-``env.ANTHROPIC_MODEL`` an earlier build wrote.
 """
 
 from __future__ import annotations
@@ -70,8 +66,6 @@ _BASE_URL = "ANTHROPIC_BASE_URL"
 _DISABLE_BETAS = "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"
 _MAX_CONTEXT = "CLAUDE_CODE_MAX_CONTEXT_TOKENS"
 _NO_PROXY = "NO_PROXY"
-#: Deprecated or wrong-place keys an earlier build wrote; every write deletes them.
-_RETIRED_ENV = ("ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL")
 #: What ``NO_PROXY`` gains while the base URL is the loopback proxy.
 LOOPBACK_NO_PROXY = ("127.0.0.1", "localhost")
 #: The description every ``modelPicker`` option Coffer writes carries — the
@@ -167,8 +161,6 @@ def apply_anthropic_settings(
         env = {}
         data["env"] = env
     env[_BASE_URL] = base_url
-    for retired in _RETIRED_ENV:
-        env.pop(retired, None)
     if model:
         data["model"] = model
     if effort:
@@ -225,7 +217,7 @@ def remove_anthropic_settings(
         data.pop("effortLevel", None)
     env = data.get("env")
     if isinstance(env, dict):
-        for key in (_BASE_URL, *_RETIRED_ENV, _DISABLE_BETAS, _MAX_CONTEXT):
+        for key in (_BASE_URL, _DISABLE_BETAS, _MAX_CONTEXT):
             env.pop(key, None)
         for tier in CLAUDE_TIERS:
             env.pop(tier_env_key(tier), None)

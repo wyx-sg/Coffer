@@ -80,7 +80,7 @@ def _document(r: OldResource) -> bytes:
         name=r.name,
         description=r.description,
         title=r.title,
-        config=for_file(r.config, None, None),
+        config=for_file(r.config),
     )
     return doc.to_bytes()
 

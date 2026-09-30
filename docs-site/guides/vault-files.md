@@ -49,7 +49,8 @@ Some rules to know:
 
 - **Keep the `uid`.** It is the resource's identity. You can rename the file or move it within its kind's folder and it stays the same resource. A file you create with no `uid` gets one: Coffer writes it into the file in its own commit. A copy of a file with the same `uid` is refused and flagged; the original stays in effect.
 - **`name` is a label**, but some kinds fix it once agents can see it (an MCP server's name is part of its tool names). Change a name through Coffer when it refuses a rename.
-- **Unknown fields are kept.** A field this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
+- **Unknown top-level fields are kept.** A field beside `uid`, `kind`, `name` and `config` that this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
+- **`config` holds only the settings the kind has.** A key the kind does not declare (a typo, or a setting Coffer has retired) is refused: the edit is not committed, the problem names the key, and the last valid version stays in effect. The same goes for a name the kind does not allow (an MCP server's name is at most 24 characters and has no `__`; a skill's name uses lowercase letters, digits and hyphens), and for a `title` on an MCP server, agent or skill, which have none.
 - **`${HOME}`** stands for your home directory, so the same file works on every machine.
 - **Never edit `secret/`.** The files are ciphertext; use `coffer secret set`.
 
