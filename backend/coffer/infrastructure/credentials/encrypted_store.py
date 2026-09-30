@@ -1,25 +1,25 @@
 """Fernet-encrypted credentials as files, one per ref (ADR storage-is-five-classes-by-nature).
 
-A ref's ciphertext is ``vault/credentials/<ref>.enc`` — the Fernet token and a
+A ref's ciphertext is ``vault/secret/<ref>.enc`` — the Fernet token and a
 trailing newline, the file name being the opaque ref (``ref_paths``). The
 vault is where the user's configuration lives, and ciphertext is safe to hold
 there because the key is not: it stays in the OS credential store or the
 ``0600`` key file, never in the tree. Whether the files are committed is the
-repository's business, not this store's — ``credentials/`` is in the vault's
+repository's business, not this store's — ``secret/`` is in the vault's
 ``info/exclude`` until a sync remote carries credentials (ADR
 credentials-across-machines) — so every vault write still goes through the
 process's one vault writer (ADR every-vault-write-is-a-validated-commit-naming-its-writer),
 compare-and-swap against what was just read, and becomes a ``daemon`` commit
 naming the ref when the repository carries credentials.
 
-Machine-local refs (a proxy token) live in ``local/credentials/`` instead,
+Machine-local refs (a proxy token) live in ``local/secret/`` instead,
 written atomically under this store's lock, and never enter the vault.
 
 Timestamps. ``updated_at`` is the token's own encryption time, which the
 ciphertext carries in clear (``coffer.domain.vault.fernet_time``), so it is
 right on every machine without a second file to keep in step. ``created_at``
 is when *this machine* first stored the ref, kept in
-``local/secrets/credential-times.json``; a ref that arrived from elsewhere (a
+``local/secret-boundary/times.json``; a ref that arrived from elsewhere (a
 sync round, the migration) has no such moment, so ``created_at`` answers None
 for it and the secret boundary never counts it as a value a person here has
 just supplied (spec credentials "Hold a secret for a new destination until a
@@ -46,7 +46,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from coffer.domain.errors import CredentialUnreadable
 from coffer.domain.vault.fernet_time import encrypted_at
-from coffer.domain.vault.layout import CREDENTIALS
+from coffer.domain.vault.layout import SECRET
 from coffer.domain.vault.writers import WRITER_DAEMON, CommitMeta
 from coffer.domain.vault.writes import Expect
 from coffer.infrastructure.credentials.ref_paths import is_local_ref, ref_to_relpath, relpath_to_ref
@@ -75,9 +75,7 @@ class EncryptedCredentialStore:
         self._fernet = Fernet(key)
         self._home = home
         self._local_lock = threading.RLock()
-        self._times = JsonStore(
-            lambda: local_root(self._home) / "secrets" / "credential-times.json"
-        )
+        self._times = JsonStore(lambda: local_root(self._home) / "secret-boundary" / "times.json")
 
     # --- where things are ------------------------------------------------------
 
@@ -211,7 +209,7 @@ class EncryptedCredentialStore:
         return ref_files(self._home)
 
     def _write_vault(self, ref: str, data: bytes) -> None:
-        rel = f"{CREDENTIALS}/{ref_to_relpath(ref)}"
+        rel = f"{SECRET}/{ref_to_relpath(ref)}"
         writer = vault_writer(vault_root(self._home))
         meta = CommitMeta(
             writer=WRITER_DAEMON, operation=OP_CREDENTIAL_SET, summary=f"Stored credential {ref}"
@@ -225,7 +223,7 @@ class EncryptedCredentialStore:
             os.chmod(writer.repo.root / rel, _FILE_MODE)
 
     def _delete_vault(self, ref: str) -> bool:
-        rel = f"{CREDENTIALS}/{ref_to_relpath(ref)}"
+        rel = f"{SECRET}/{ref_to_relpath(ref)}"
         writer = vault_writer(vault_root(self._home))
         if not (writer.repo.root / rel).is_file():
             return False
@@ -257,11 +255,11 @@ class EncryptedCredentialStore:
 
 
 def _vault_dir(home: Path | None) -> Path:
-    return vault_root(home) / CREDENTIALS
+    return vault_root(home) / SECRET
 
 
 def _local_dir(home: Path | None) -> Path:
-    return local_root(home) / CREDENTIALS
+    return local_root(home) / SECRET
 
 
 def ref_files(home: Path | None = None) -> dict[str, Path]:

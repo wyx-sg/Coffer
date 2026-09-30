@@ -10,7 +10,7 @@ job. ``stage`` and ``commit_staged`` are the two primitives it calls.
 
 ``.git/info/exclude`` — never a tracked ``.gitignore`` another machine could
 change — keeps out editor and OS litter, hidden entries in knowledge (except
-the inbox), and ``credentials/`` unless this vault carries credentials.
+the inbox), and ``secret/`` unless this vault carries secrets.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
 from coffer.domain.vault.history import Commit, looks_like_a_version
-from coffer.domain.vault.layout import CREDENTIALS, MANIFEST, MANIFEST_SCHEMA_VERSION
+from coffer.domain.vault.layout import MANIFEST, MANIFEST_SCHEMA_VERSION, SECRET
 from coffer.domain.vault.writers import OP_BASELINE, WRITER_DAEMON, CommitMeta, message
 from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.atomic import atomic_write
@@ -41,7 +41,7 @@ __pycache__/
 /knowledge/**/.*
 !/knowledge/**/.inbox
 """
-_EXCLUDE_CREDENTIALS = f"/{CREDENTIALS}/\n"
+_EXCLUDE_SECRET = f"/{SECRET}/\n"
 
 
 class VaultRepository:
@@ -51,7 +51,7 @@ class VaultRepository:
         self._root = root if callable(root) else (lambda: root)
         self._lock = threading.RLock()
         self._ready: set[str] = set()
-        self._carry_credentials = False
+        self._carry_secret = False
 
     # --- the repository ---------------------------------------------------
 
@@ -93,20 +93,20 @@ class VaultRepository:
                 )
             self._ready.add(key)
 
-    def set_carry_credentials(self, carry: bool) -> None:
-        """Whether ``credentials/`` is committed (only when the remote carries
+    def set_carry_secret(self, carry: bool) -> None:
+        """Whether ``secret/`` is committed (only when the remote carries
         credentials; ADR credentials-across-machines)."""
         with self._lock:
-            self._carry_credentials = carry
+            self._carry_secret = carry
             if self.exists():
                 self._write_exclude(self.root)
 
     @property
-    def carries_credentials(self) -> bool:
-        return self._carry_credentials
+    def carries_secret(self) -> bool:
+        return self._carry_secret
 
     def _write_exclude(self, root: Path) -> None:
-        wanted = _EXCLUDE_BASE + ("" if self._carry_credentials else _EXCLUDE_CREDENTIALS)
+        wanted = _EXCLUDE_BASE + ("" if self._carry_secret else _EXCLUDE_SECRET)
         path = root / ".git" / "info" / "exclude"
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.is_file() or path.read_text(encoding="utf-8") != wanted:
@@ -245,7 +245,7 @@ class VaultRepository:
     def stage(self, paths: Iterable[str]) -> None:
         """Stage exactly ``paths``: added or modified where the file exists,
         removed where it does not. A path the exclude file ignores is never
-        staged either way — switching ``credentials/`` off stops recording
+        staged either way — switching ``secret/`` off stops recording
         ciphertext, it never records its deletion (which would delete the
         other machines' copies on their next round)."""
         root = self.root
@@ -284,7 +284,7 @@ class VaultRepository:
     def ignored(self, paths: Sequence[str]) -> set[str]:
         """The subset of paths the exclude file keeps out of every commit
         (a path that is ignored is staged as absent, so a tracked file that
-        became ignored — credentials/ switched off — leaves the index)."""
+        became ignored — secret/ switched off — leaves the index)."""
         if not paths:
             return set()
         done = git.run(

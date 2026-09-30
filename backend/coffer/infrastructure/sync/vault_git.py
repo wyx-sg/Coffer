@@ -47,8 +47,8 @@ class VaultSyncGit:
     def clear_remote(self) -> None:
         remote.clear_remote(self._repo)
 
-    def set_carry_credentials(self, carry: bool) -> None:
-        self._repo.set_carry_credentials(carry)
+    def set_carry_secret(self, carry: bool) -> None:
+        self._repo.set_carry_secret(carry)
 
     def fetch(self, branch: str, token: str | None) -> str | None:
         self._branch = branch

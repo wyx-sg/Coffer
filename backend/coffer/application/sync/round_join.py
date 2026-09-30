@@ -53,7 +53,7 @@ def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinP
     d = engine.d
     d.git.ensure()
     d.git.set_remote(remote.url)
-    d.git.set_carry_credentials(remote.include_credentials)
+    d.git.set_carry_secret(remote.include_secret)
     d.writer.settle()
     local = d.git.head() or ""
     tip = d.git.fetch(remote.branch, token)

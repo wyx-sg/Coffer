@@ -183,12 +183,12 @@ def test_listeners_hear_every_commit(writer: VaultWriter) -> None:
 def test_credentials_are_never_committed_unless_carried(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
-    writer.write_file("credentials/ref.enc", b"gAAAA\n", meta=USER, expected=Expect.ABSENT)
-    assert repo.read("HEAD", "credentials/ref.enc") is None
-    assert "credentials/ref.enc" not in writer.pending()
-    repo.set_carry_credentials(True)
+    writer.write_file("secret/ref.enc", b"gAAAA\n", meta=USER, expected=Expect.ABSENT)
+    assert repo.read("HEAD", "secret/ref.enc") is None
+    assert "secret/ref.enc" not in writer.pending()
+    repo.set_carry_secret(True)
     writer.settle()
-    assert repo.read("HEAD", "credentials/ref.enc") == b"gAAAA\n"
+    assert repo.read("HEAD", "secret/ref.enc") == b"gAAAA\n"
 
 
 def test_writers_in_parallel_threads_each_land_whole(

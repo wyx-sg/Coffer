@@ -52,7 +52,7 @@ def store(tmp_path: pathlib.Path) -> FileBoundaryStore:
 
 
 def _secrets(tmp_path: pathlib.Path) -> pathlib.Path:
-    return local_root(tmp_path) / "secrets"
+    return local_root(tmp_path) / "secret-boundary"
 
 
 def test_bindings_upsert_on_their_key_and_are_listed_in_order(

@@ -50,7 +50,7 @@ def test_blob_ids_are_gits() -> None:
         ("state/channel-peers/bot.json", "state/channel-peers"),
         ("knowledge/global/a.md", "knowledge"),
         ("skills/pdf/SKILL.md", "skills"),
-        ("credentials/x.enc", "credentials"),
+        ("secret/x.enc", "credentials"),
         ("manifest.json", "manifest"),
         ("notes.txt", "other"),
     ],

@@ -111,33 +111,33 @@ def test_credentials_travel_only_when_carried_and_the_fresher_ciphertext_wins(
     tmp_path: Path,
 ) -> None:
     url = str(bare_remote(tmp_path))
-    carried = SyncRemote(url=url, include_credentials=True)
+    carried = SyncRemote(url=url, include_secret=True)
     mac = Machine(tmp_path / "mac", "MacBook Pro", carried)
     mini = Machine(tmp_path / "mini", "Mac mini", carried)
     from coffer.application.sync.round_join import join
 
-    mac.repo.set_carry_credentials(True)
-    mac.put("credentials/provider/p1/key.enc", _fernet(1000))
+    mac.repo.set_carry_secret(True)
+    mac.put("secret/provider/p1/key.enc", _fernet(1000))
     join(mac.engine, carried, None)
     join(mini.engine, carried, None)
-    assert mini.disk("credentials/provider/p1/key.enc") == _fernet(1000)
-    mac.put("credentials/provider/p1/key.enc", _fernet(2000))
-    mini.put("credentials/provider/p1/key.enc", _fernet(1500))
+    assert mini.disk("secret/provider/p1/key.enc") == _fernet(1000)
+    mac.put("secret/provider/p1/key.enc", _fernet(2000))
+    mini.put("secret/provider/p1/key.enc", _fernet(1500))
     mac.round()
     # The mini's older ciphertext loses to the fresher one: nothing to push.
     assert mini.round().status is RoundStatus.PULLED
-    assert mini.disk("credentials/provider/p1/key.enc") == _fernet(2000)
+    assert mini.disk("secret/provider/p1/key.enc") == _fernet(2000)
 
 
 def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(
     pair: tuple[Machine, Machine],
 ) -> None:
     mac, mini = pair
-    mac.put("credentials/provider/p1/key.enc", _fernet(1000))
+    mac.put("secret/provider/p1/key.enc", _fernet(1000))
     mac.round()
     mini.round()
-    assert mini.disk("credentials/provider/p1/key.enc") is None
-    assert mac.repo.read("HEAD", "credentials/provider/p1/key.enc") is None
+    assert mini.disk("secret/provider/p1/key.enc") is None
+    assert mac.repo.read("HEAD", "secret/provider/p1/key.enc") is None
 
 
 def test_a_remote_at_a_newer_layout_is_refused(pair: tuple[Machine, Machine]) -> None:

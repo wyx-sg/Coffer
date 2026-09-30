@@ -3,8 +3,8 @@
 A ref is an opaque name (``channel/seatalk/app-secret``, ``secret/github``),
 and its ciphertext is one file per ref whose path *is* that name: ``/``
 separates directories, and ``.enc`` is appended to the last segment. So the
-tree under ``credentials/`` reads as the list of refs, and the file names are
-the ones sync already carried as ``credentials/<ref>.enc``.
+tree under ``secret/`` reads as the list of refs, and the file names are
+the ones sync already carried as ``secret/<ref>.enc``.
 
 A ref is a name, never a path a caller may aim anywhere: every segment is made
 a safe file name by percent-encoding each byte outside ``[A-Za-z0-9._-]``
@@ -13,7 +13,7 @@ segment is a hidden or ``.git`` entry), and a ref with an empty, ``.`` or
 ``..`` segment is refused outright rather than encoded.
 
 Machine-local refs — a proxy token unlocks only this machine's loopback model
-proxy (``PROXY_TOKEN_REF_PREFIX``) — are filed under ``local/credentials/``,
+proxy (``PROXY_TOKEN_REF_PREFIX``) — are filed under ``local/secret/``,
 which no commit and no sync round ever reads.
 """
 

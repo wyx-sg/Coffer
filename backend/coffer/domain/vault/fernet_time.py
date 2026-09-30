@@ -2,7 +2,7 @@
 
 A Fernet token is ``version || timestamp || IV || ciphertext || HMAC``, and the
 timestamp is cleartext: eight big-endian bytes of Unix seconds right after the
-version byte. So a credential file under ``vault/credentials/`` says when its
+version byte. So a credential file under ``vault/secret/`` says when its
 value was last set on a machine that cannot decrypt it — which is both the
 credential store's ``updated_at`` (there is no other place to keep it once the
 ciphertext is a file) and the order two machines' copies of one ref are

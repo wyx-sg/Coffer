@@ -23,9 +23,9 @@ from coffer.domain.sync.stops import ConflictFile, ConflictReason
 from coffer.domain.vault.document import DocumentInvalid, parse_resource
 from coffer.domain.vault.fernet_time import is_fresher
 from coffer.domain.vault.layout import (
-    CREDENTIALS,
     MACHINES,
     RESOURCES,
+    SECRET,
     area_of,
     kind_of_resource_path,
 )
@@ -90,10 +90,10 @@ def settle_machines(git: SyncGitPort, tree: str, tip: str, own: str) -> str:
     return git.build_tree(tree, overrides) if overrides else tree
 
 
-def settle_credentials(
+def settle_secrets(
     git: SyncGitPort, tree: str, conflicts: Sequence[ConflictEntry]
 ) -> tuple[str, list[ConflictEntry]]:
-    """Resolve every conflict under ``credentials/`` by the fresher Fernet
+    """Resolve every conflict under ``secret/`` by the fresher Fernet
     token (a deletion never beats a ciphertext); answer the tree and the
     conflicts that remain."""
     overrides: dict[str, str | None] = {}
@@ -101,7 +101,7 @@ def settle_credentials(
     for c in conflicts:
         if c.path.startswith(MACHINES + "/"):
             continue  # settled by settle_machines
-        if not c.path.startswith(CREDENTIALS + "/"):
+        if not c.path.startswith(SECRET + "/"):
             remaining.append(c)
             continue
         if c.ours and c.theirs:
@@ -224,6 +224,6 @@ __all__ = [
     "conflict_files",
     "identity_conflicts",
     "overrides_for",
-    "settle_credentials",
     "settle_machines",
+    "settle_secrets",
 ]

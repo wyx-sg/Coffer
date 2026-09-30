@@ -22,7 +22,7 @@ from tests.fixtures.keyring import install_in_memory_keyring
 
 def _home_with_ciphertext(tmp_path: pathlib.Path) -> pathlib.Path:
     """A vault holding one ciphertext file — i.e. live ciphertext."""
-    path = vault_root(tmp_path) / "credentials" / "gh.enc"
+    path = vault_root(tmp_path) / "secret" / "gh.enc"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"gAAAAA-not-openable-here\n")
     return tmp_path
@@ -153,4 +153,4 @@ async def test_the_key_file_follows_home_not_the_database_url(
     assert (tmp_path / ".coffer" / "master.key").is_file()
     assert not (elsewhere / "master.key").exists()
     wiring.store.set("gh/token", "v")
-    assert (tmp_path / ".coffer" / "vault" / "credentials" / "gh" / "token.enc").is_file()
+    assert (tmp_path / ".coffer" / "vault" / "secret" / "gh" / "token.enc").is_file()

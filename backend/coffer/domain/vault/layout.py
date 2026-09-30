@@ -42,7 +42,7 @@ STATE = "state"
 KNOWLEDGE = "knowledge"
 SKILLS = "skills"
 MEMORY_TRIGGERS = "memory-triggers"
-CREDENTIALS = "credentials"
+SECRET = "secret"
 MACHINES = "machines"
 MANIFEST = "manifest.json"
 
@@ -54,7 +54,7 @@ MANIFEST_SCHEMA_VERSION = 3
 #: Every top-level directory of the vault repository. Anything else a person
 #: puts there is kept and committed like any other file, but belongs to no
 #: area Coffer reads.
-VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, MEMORY_TRIGGERS, CREDENTIALS, MACHINES)
+VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, MEMORY_TRIGGERS, SECRET, MACHINES)
 
 #: The suffix of every document Coffer parses (resources, state, machines).
 DOCUMENT_SUFFIX = ".json"
@@ -116,7 +116,6 @@ def area_of(path: str) -> str:
 
 
 __all__ = [
-    "CREDENTIALS",
     "DOCUMENT_SUFFIX",
     "KNOWLEDGE",
     "MACHINES",
@@ -124,6 +123,7 @@ __all__ = [
     "MANIFEST_SCHEMA_VERSION",
     "MEMORY_TRIGGERS",
     "RESOURCES",
+    "SECRET",
     "SKILLS",
     "STATE",
     "VAULT_DIRS",

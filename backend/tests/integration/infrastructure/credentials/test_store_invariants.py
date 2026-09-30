@@ -46,7 +46,7 @@ def test_a_stored_secret_is_only_ciphertext_in_its_file(tmp_path: pathlib.Path) 
 
     store.set("svc/key", secret)
 
-    path = vault_root(tmp_path) / "credentials" / "svc" / "key.enc"
+    path = vault_root(tmp_path) / "secret" / "svc" / "key.enc"
     data = path.read_bytes()
     assert data.endswith(b"\n") and data.count(b"\n") == 1
     assert secret.encode() not in data
@@ -123,15 +123,15 @@ def test_files_are_0600_and_their_directories_0700(tmp_path: pathlib.Path) -> No
     store.set("channel/seatalk/app-secret", "v")
     store.set("proxy-token/agent-1", "t")
 
-    vault_file = vault_root(tmp_path) / "credentials" / "channel" / "seatalk" / "app-secret.enc"
-    local_file = local_root(tmp_path) / "credentials" / "proxy-token" / "agent-1.enc"
+    vault_file = vault_root(tmp_path) / "secret" / "channel" / "seatalk" / "app-secret.enc"
+    local_file = local_root(tmp_path) / "secret" / "proxy-token" / "agent-1.enc"
     assert _mode(vault_file) == 0o600
     assert _mode(local_file) == 0o600
     for directory in (
-        vault_root(tmp_path) / "credentials",
+        vault_root(tmp_path) / "secret",
         vault_file.parent,
         vault_file.parent.parent,
-        local_root(tmp_path) / "credentials",
+        local_root(tmp_path) / "secret",
         local_file.parent,
     ):
         assert _mode(directory) == 0o700, directory
@@ -141,22 +141,22 @@ def test_proxy_tokens_live_under_local_and_never_under_the_vault(tmp_path: pathl
     """A proxy token unlocks only this machine's loopback model proxy, so it
     is machine-local state and has no file the vault could ever commit."""
     store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
-    vault_repository(vault_root(tmp_path)).set_carry_credentials(True)
+    vault_repository(vault_root(tmp_path)).set_carry_secret(True)
     store.set("proxy-token/agent-1", "loopback-token")
 
-    assert (local_root(tmp_path) / "credentials" / "proxy-token" / "agent-1.enc").is_file()
+    assert (local_root(tmp_path) / "secret" / "proxy-token" / "agent-1.enc").is_file()
     assert not list((tmp_path / ".coffer" / "vault").rglob("agent-1.enc"))
     assert store.get("proxy-token/agent-1") == "loopback-token"
     assert store.remove("proxy-token/agent-1") is True
-    assert not (local_root(tmp_path) / "credentials" / "proxy-token").exists()
+    assert not (local_root(tmp_path) / "secret" / "proxy-token").exists()
 
 
-def test_a_set_is_a_vault_commit_when_the_repository_carries_credentials(
+def test_a_set_is_a_vault_commit_when_the_repository_carries_secret(
     tmp_path: pathlib.Path,
 ) -> None:
     store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
     root = vault_root(tmp_path)
-    vault_repository(root).set_carry_credentials(True)
+    vault_repository(root).set_carry_secret(True)
 
     store.set("gh/token", "v1")
     body = _git(root, "log", "-1", "--format=%an%n%B")
@@ -165,15 +165,15 @@ def test_a_set_is_a_vault_commit_when_the_repository_carries_credentials(
     assert "Coffer-Writer: daemon" in body
     assert "Coffer-Operation: credential-set" in body
     assert "v1" not in body
-    assert _git(root, "ls-files", "credentials").split() == ["credentials/gh/token.enc"]
+    assert _git(root, "ls-files", "secret").split() == ["secret/gh/token.enc"]
 
     store.remove("gh/token")
     body = _git(root, "log", "-1", "--format=%B")
     assert "Coffer-Operation: credential-delete" in body
-    assert _git(root, "ls-files", "credentials") == ""
+    assert _git(root, "ls-files", "secret") == ""
 
 
-def test_a_set_is_no_commit_while_the_repository_does_not_carry_credentials(
+def test_a_set_is_no_commit_while_the_repository_does_not_carry_secret(
     tmp_path: pathlib.Path,
 ) -> None:
     store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
@@ -184,16 +184,16 @@ def test_a_set_is_no_commit_while_the_repository_does_not_carry_credentials(
     store.remove("gh/token")
     store.set("gh/other", "v3")
 
-    assert (root / "credentials" / "gh" / "other.enc").is_file()
+    assert (root / "secret" / "gh" / "other.enc").is_file()
     assert _git(root, "rev-list", "--count", "HEAD").strip() == "1"  # the baseline only
-    assert _git(root, "ls-files", "credentials") == ""
+    assert _git(root, "ls-files", "secret") == ""
     assert _git(root, "status", "--porcelain") == ""
 
 
 def test_odd_refs_are_stored_under_their_encoded_names(tmp_path: pathlib.Path) -> None:
     store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
     store.set("team one/.git/ключ", "v")
-    creds = vault_root(tmp_path) / "credentials"
+    creds = vault_root(tmp_path) / "secret"
     expected = creds / "team%20one" / "%2Egit" / "%D0%BA%D0%BB%D1%8E%D1%87.enc"
     assert expected.is_file()
     assert [ref for ref, _c, _u in store.list_refs()] == ["team one/.git/ключ"]
@@ -204,4 +204,4 @@ def test_a_ref_that_would_leave_its_directory_is_refused(tmp_path: pathlib.Path,
     store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
     with pytest.raises(ValueError):
         store.set(ref, "v")
-    assert not (tmp_path / ".coffer" / "vault" / "credentials").exists()
+    assert not (tmp_path / ".coffer" / "vault" / "secret").exists()

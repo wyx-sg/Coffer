@@ -99,7 +99,7 @@ class BoundaryDaemon:
     def local_secrets(self, name: str) -> dict[str, Any]:
         """One of the boundary's machine-local files (``bindings``,
         ``approvals``, ``settings``) as it is on disk."""
-        path = local_root(self.home) / "secrets" / f"{name}.json"
+        path = local_root(self.home) / "secret-boundary" / f"{name}.json"
         return dict(json.loads(path.read_text())) if path.is_file() else {}
 
     def sql(self, statement: str, *args: Any) -> list[tuple[Any, ...]]:

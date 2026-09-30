@@ -5,7 +5,7 @@ person, and the boundary's own switches are true of this machine only — the
 approval happened here, in front of this machine's app (ADR
 only-a-present-human-sees-a-secret-or-sends-it-somewhere-new) — so they are
 ``local/`` state (ADR storage-is-five-classes-by-nature), never in the vault
-and never synced. Three JSON files under ``local/secrets/``, each read whole
+and never synced. Three JSON files under ``local/secret-boundary/``, each read whole
 and changed under its file's lock (``JsonStore``):
 
 - ``bindings.json`` — ``{"bindings": [binding, ...]}``, unique on
@@ -58,7 +58,7 @@ def _newest_first(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 class FileBoundaryStore:
-    """Bindings, approvals and switches as JSON files under ``local/secrets/``.
+    """Bindings, approvals and switches as JSON files under ``local/secret-boundary/``.
 
     ``home`` is the user's home; left out, every call resolves it from
     ``HOME``.
@@ -66,7 +66,7 @@ class FileBoundaryStore:
 
     def __init__(self, home: Path | None = None) -> None:
         def at(name: str) -> Callable[[], Path]:
-            return lambda: local_root(home) / "secrets" / name
+            return lambda: local_root(home) / "secret-boundary" / name
 
         self._bindings = JsonStore(at("bindings.json"))
         self._approvals = JsonStore(at("approvals.json"))

@@ -7,7 +7,7 @@ this machine converges with is a fact about this machine.
 
 ``credential_ref`` names a secret in the credential store; the secret itself
 is never on this object, so a remote can be logged or returned by the API
-without redaction. ``include_credentials`` decides whether ``credentials/``
+without redaction. ``include_secret`` decides whether ``secret/``
 is committed at all (ADR credentials-across-machines).
 """
 
@@ -72,7 +72,7 @@ class SyncRemote:
     url: str
     branch: str = DEFAULT_BRANCH
     credential_ref: str | None = None
-    include_credentials: bool = False
+    include_secret: bool = False
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS
     enabled: bool = True
 

@@ -27,8 +27,8 @@ from coffer.application.sync.round_guard import hold_for, invalid_files
 from coffer.application.sync.round_trees import (
     conflict_files,
     identity_conflicts,
-    settle_credentials,
     settle_machines,
+    settle_secrets,
 )
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
@@ -85,7 +85,7 @@ class RoundEngine:
             return rec(RoundStatus.PAUSED_CLOUD_FOLDER, detail=where)
         d.git.ensure()
         d.git.set_remote(remote.url)
-        d.git.set_carry_credentials(remote.include_credentials)
+        d.git.set_carry_secret(remote.include_secret)
         d.writer.settle()
         local = d.git.head()
         if local is None:
@@ -161,7 +161,7 @@ class RoundEngine:
         else:
             merged = d.git.merge(local, tip, base=base if explicit_base else None)
             tree, entries = merged.tree, list(merged.conflicts)
-        tree, entries = settle_credentials(d.git, tree, entries)
+        tree, entries = settle_secrets(d.git, tree, entries)
         tree = settle_machines(d.git, tree, tip, d.machine.descriptor_path())
         found = conflict_files(entries) + identity_conflicts(d.trees, tree, local, tip)
         if not found:
