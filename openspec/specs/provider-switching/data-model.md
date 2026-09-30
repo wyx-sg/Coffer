@@ -105,15 +105,19 @@ text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
 - `apply_anthropic_settings(text, *, base_url, api_key_helper, model, effort, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
   and its inverse `remove_anthropic_settings(text, *, managed_model, managed_effort) -> str`
-- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, effort, auth, provider_id, env_key, catalog_path) -> str`
+- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, auth, effort, provider_id, catalog_path) -> str`
   (in `domain/provider/codex_projection.py`) and its inverse
   `remove_codex_provider(text, *, provider_id, managed_effort) -> str`
 - `suggest_tier_models(model, curated, *, local) -> dict` (`domain/agent/tiers.py`) —
   the tier pins used when the agent stores none
 - `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
-- `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
-  writes; it cites the connection's uid, so the line survives a rename
+- `proxy_token_helper(agent_uid, *, coffer_cli) -> str` and
+  `proxy_token_args(agent_uid)` (`domain/provider/api_key_helper.py`) — the
+  only helper line Coffer writes and the argument list Codex's `auth` command
+  runs; both cite the agent's uid, so they survive a rename.
+  `is_managed_api_key_helper(helper)` recognises that line and the
+  `provider key` line earlier builds wrote
 
 Each agent's provider projection facet (`domain/provider/agent_projection.py`:
 `ClaudeCodeProviderProjection`, `CodexProviderProjection`) composes these into a
@@ -121,13 +125,14 @@ Each agent's provider projection facet (`domain/provider/agent_projection.py`:
 its `config_key`, declares the `protocols` its native config speaks (possibly
 none) and answers `is_present(text)`. The writer is chosen by AGENT, never by
 protocol, and nothing maps a protocol to one agent.
-- Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `CODEX_MODEL_CATALOG_FILENAME`,
-  `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`,
-  `MANAGED_API_KEY_HELPER_PREFIX`
+- Constants: `CODEX_PROVIDER_ID`, `CODEX_MODEL_CATALOG_FILENAME`,
+  `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`
 
-`CODEX_ENV_KEY` is re-exported from `domain/connection.py`, where it lives so
-the provider kind and the chat kind's Codex adapter can agree on the variable
-name without importing each other.
+`domain/provider/codex_shell_env.py` holds `LEGACY_CODEX_ENV_KEY`
+(`COFFER_PROVIDER_KEY`), the variable earlier builds named as the provider
+block's `env_key` and listed in `shell_environment_policy.exclude`.
+`drop_legacy_shell_env_exclude` removes that entry on every Codex write and
+de-projection; nothing writes it.
 
 ### Managed native-config keys, per agent type
 
@@ -154,8 +159,9 @@ which earlier builds wrote. A `provider key` helper an earlier build wrote is
 still recognised as Coffer's, so de-projection removes it.
 
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
-De-projection removes an `apiKeyHelper` only when it starts with
-`MANAGED_API_KEY_HELPER_PREFIX`, so a helper the user wrote is left alone.
+De-projection removes an `apiKeyHelper` only when `is_managed_api_key_helper`
+recognises it — the `coffer` CLI (bare or by any path) followed by
+`proxy token` or `provider key` — so a helper the user wrote is left alone.
 
 **Codex — `~/.codex/config.toml` (TOML, via tomlkit):**
 
