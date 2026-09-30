@@ -55,8 +55,8 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Capabilities | **Custom tools** | `/custom-tools` | Tools you define yourself for your agents. |
 | Capabilities | **Skills** | `/skills` | The skill library Coffer delivers to agents. See [Skills](/guides/skills). |
 | Capabilities | **CLIs** | `/clis` | The command-line tools your skills need, and whether each is installed. |
-| Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
-| Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
+| Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`: one tree beside a reader and editor, each collection's Inbox, every document's History and Recent changes. See [Knowledge](/guides/knowledge). |
+| Context | **Memory** | `/memory` | What your agents learned, read from their own memory and distilled into one memory per subject: deliveries at session start over the last 7 days, and the partitions. A partition's page has **Memories** and **Delivered** tabs. See [Memory](/guides/memory). |
 | System | **Secrets** | `/secrets` | Every stored secret with what uses it: add, replace, delete, find plaintext keys in files and move them into the vault. See [Secrets](/guides/secrets). |
 | System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **MCP calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
 | System | **Usage** | `/usage` | Each subscription's quota as its agent reported it, and the tokens and estimated cost of API-key requests through Coffer's local proxy. See [Usage](/guides/usage). |
@@ -153,7 +153,7 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 **Some paths redirect.** `/chat` opens **Conversations**; `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**. Old `?tab=` links to a skill, MCP server or model provider, and old uid links to a skill or MCP server, move to the current address. Any other unknown path shows a page-not-found view with the sidebar intact.
 
-File trees and previews — on the skill, knowledge, memory and agent pages — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
+File trees and previews — on the skill, knowledge and agent pages, and a memory partition's list — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
 ## When the daemon is not reachable
 

@@ -901,14 +901,14 @@
         "unknownMachine": "Unknown machine ({{id}})",
         "self": "Curation runs here. The other machines sharing this vault leave the derived documents to this one.",
         "other": "Curation runs on {{machine}}. This machine reads what that one derives and never rewrites it.",
-        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both fold the same material into their own documents and the vault ends up holding the same knowledge twice.",
+        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both curate the same items into their own documents and the vault ends up holding the same knowledge twice.",
         "fault": "Curation is assigned to {{id}}, which no machine in the registry claims. It is running on no machine at all — the switch above still reads on, and nothing else in Coffer reports this. Take it over here to start it again.",
         "takeOver": "Run curation on this machine",
         "takeOverHint": "Names this machine as the owner. Whichever machine held it stops curating after the next sync round brings the change over; this one starts at its next pass.",
         "noMachineId": "This machine has no id yet, so it cannot be named as the owner.",
         "clear": "Clear owner",
         "clearTitle": "Let every machine curate?",
-        "clearBody": "With no owner, every machine sharing this vault merges the same material into documents. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
+        "clearBody": "With no owner, every machine sharing this vault curates the same items into documents. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
         "claimedToast": "Curation now runs on this machine",
         "clearedToast": "Curation is no longer tied to one machine"
       },
@@ -922,9 +922,9 @@
           "writes": "The model turns the entries read from your agents into Coffer's own notes and rewrites the index. Deleting the tree and re-running reproduces an equivalent set."
         },
         "curate": {
-          "name": "Merge new knowledge into documents",
-          "writes": "Coffer's model merges new material — uploads and what agents write down — into a collection's documents, and carries a document you edited through to the others.",
-          "caution": "Switch this off and new material waits unmerged until you run a pass by hand, and edits are not carried through."
+          "name": "Curate new knowledge into documents",
+          "writes": "Coffer's model curates new items — uploads and what agents write down — into a collection's documents, and carries a document you edited through to the others.",
+          "caution": "Switch this off and new items wait in the inbox until you curate by hand, and edits are not carried through."
         }
       }
     },
@@ -2132,117 +2132,334 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "Each collection is one folder of Markdown documents that you and Coffer write together. New material is merged into them by curation, and agents read every collection with their own tools.",
-    "add": "New collection",
-    "loadFailed": "Failed to load collections",
-    "searchPlaceholder": "Search collections…",
-    "noMatches": "No collections match your search.",
-    "cols": {
-      "name": "Name",
-      "description": "Description",
+    "loadFailed": "Couldn't load your collections",
+    "nav": {
+      "label": "Collections and documents",
+      "collections": "Collections",
+      "expand": "Expand {{name}}",
+      "collapse": "Collapse {{name}}"
+    },
+    "tree": {
+      "empty": "No documents yet",
+      "emptyFolder": "Nothing here yet"
+    },
+    "notFound": {
+      "title": "This collection isn't here",
+      "body": "It may have been deleted, or the link is from another machine."
+    },
+    "stats": {
       "documents": "Documents",
-      "pending": "Pending"
+      "waiting": "Waiting",
+      "curated": "Curated",
+      "never": "not yet"
     },
-    "detail": {
-      "emptyFolder": "Nothing here yet",
-      "selectAFile": "Select a file to read it",
-      "deleteFile": "Delete document",
-      "deleteFileTitle": "Delete this document?",
-      "deleteFileConfirm": "Delete “{{path}}” from disk? The document is the only copy — this cannot be undone.",
-      "curate": "Curate",
-      "curateHint": "Merge the next pending item into this collection's documents.",
-      "curateRunning": "A pass is already running",
-      "curateStatus": {
-        "ok": "Curation pass finished.",
-        "no_model": "No internal model is configured, so nothing was merged — pending material became documents as it was ({{count}}).",
-        "up_to_date": "Nothing is waiting to be merged.",
-        "too_large": "That item is too large for one pass to take in, so it was kept as it stands rather than merged.",
-        "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and the item will be tried again.",
-        "truncatedGaveUp": "The curation pass hit its step limit for the third time in a row, so Coffer kept the item as it stands and will not run it again.",
-        "failed": "The curation pass didn't finish. Nothing was lost — it will be tried again."
-      },
-      "curatedAt": "Last curated {{when}}",
-      "notCuratedYet": "Not curated yet",
-      "inboxFolder": "Inbox (waiting to merge)",
-      "inboxReadOnly": "Waiting to be merged into the collection; it disappears from here once merged.",
-      "editorLabel": "Edit {{path}}",
-      "treeLabel": "Documents in this collection",
-      "empty": "No documents yet — upload one, or drop a Markdown file into this folder."
+    "noModel": {
+      "line": "Items become documents as they arrive. Set Coffer's model to curate new items into your documents:",
+      "link": "Settings › General"
     },
-    "welcome": {
-      "title": "One place for everything your agents know",
-      "body": "A collection is one folder of documents that you, your agents and Coffer build together. Make one, then let agents read it.",
-      "featureEntries": {
-        "title": "What goes in",
-        "body": "Upload a document, let an agent write down what it learned, or edit a document yourself in your own editor."
-      },
-      "featureDocuments": {
-        "title": "What Coffer does",
-        "body": "Coffer's own model merges new material into the documents, so a fact lives in one place instead of piling up as notes."
-      },
-      "featureLocal": {
-        "title": "Local-first",
-        "body": "Everything is plain Markdown on your machine. Nothing is indexed, and no agent reads through a tool of Coffer's."
-      }
+    "collection": {
+      "emptyTitle": "{{name}} is empty",
+      "emptyBody": "Write the first document, upload one you already have, or drop Markdown files into the folder. Agents already see the collection and can write to its inbox.",
+      "pickDocument": "Choose a document in the tree to read it."
     },
     "create": {
       "title": "New collection",
+      "body": "A folder of Markdown documents you and your agents write together.",
       "name": "Name",
-      "description": "Description",
-      "descriptionHint": "One sentence: what belongs in here"
+      "folder": "Folder: ~/.coffer/knowledge/{{name}}/",
+      "description": "What belongs in here",
+      "descriptionHint": "One sentence: what belongs in this collection",
+      "everyAgent": "Every agent sees it through the coffer-guide skill.",
+      "submit": "Create collection"
     },
-    "delete": {
-      "title": "Delete collection",
-      "description": "Delete “{{name}}” and every file in it? This cannot be undone.",
-      "bulkDescription": "Delete {{count}} collections? Every file under each one is removed from disk."
+    "deleteCollection": {
+      "zone": "Danger zone",
+      "hint_one": "Removes the folder and its {{count}} document from disk.",
+      "hint_other": "Removes the folder and all {{count}} documents from disk.",
+      "button": "Delete…",
+      "title": "Delete {{name}}?",
+      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. This can't be undone.",
+      "typeToConfirm": "Type {{name}} to confirm",
+      "confirm": "Delete collection"
+    },
+    "add": {
+      "button": "Add a document",
+      "here": "Add a document here",
+      "title": "Add a document",
+      "hint": "It goes to the collection's Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
+      "hintNoModel": "Coffer's model isn't set, so it is written as a document as it is.",
+      "collection": "Collection",
+      "titleField": "Title",
+      "body": "Document",
+      "submit": "Add to Inbox",
+      "submitNoModel": "Add document",
+      "pending": "Added to {{collection}}'s Inbox — it will be curated within the hour.",
+      "written": "Saved as {{path}}."
     },
     "upload": {
       "button": "Upload",
+      "title": "Upload a document",
+      "body": "Coffer converts it to Markdown and curates it into the collection. The original file is not kept.",
+      "choose": "Choose a file",
+      "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
+      "remove": "Remove this file",
+      "into": "Into collection",
+      "converting": "Converting to Markdown…",
       "uploading": "Uploading…",
-      "pending": "Uploaded “{{title}}” — it will be merged into the documents shortly.",
+      "pending": "Uploaded “{{title}}” — it waits in the Inbox and will be curated shortly.",
       "written": "Uploaded “{{title}}” — saved as {{path}}."
+    },
+    "curate": {
+      "now": "Curate now",
+      "running": "Curating…",
+      "progress": "Curating · {{done}} of {{total}}",
+      "alreadyRunning": "A curation pass is already running",
+      "status": {
+        "ok": "Curation finished.",
+        "no_model": "Coffer's model isn't set, so nothing was curated — waiting items became documents as they were ({{count}}).",
+        "up_to_date": "Nothing is waiting to be curated.",
+        "too_large": "That item is too large for one pass, so it was kept as its own document.",
+        "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and it will try again.",
+        "truncatedGaveUp": "The curation pass was cut off three times in a row, so the item was kept as its own document and won't be run again.",
+        "failed": "Curation didn't finish. Nothing was lost — it will try again."
+      }
+    },
+    "inbox": {
+      "title": "Inbox",
+      "hint": "Waiting to be curated · Curated automatically within the hour",
+      "automatic": "Curated automatically within the hour",
+      "waitingCount_one": "{{count}} item waiting",
+      "waitingCount_other": "{{count}} items waiting",
+      "empty": "Nothing waiting. New items from agents and uploads show up here first.",
+      "back": "All items",
+      "writtenBy": "Written by {{who}} · {{when}}",
+      "waitingSince": "Written by {{who}} · {{when}} · waiting to be curated",
+      "readOnly": "An item is read-only: curation files it into the right document, and it leaves the Inbox then."
+    },
+    "document": {
+      "tab": "Document",
+      "where": "Where this document is",
+      "meta": "Edited {{updated}} · Created {{created}} by {{actor}}",
+      "more": "More actions for {{path}}",
+      "curatedBanner": "Curation last changed this document from {{agent}}'s item, {{when}}.",
+      "seePass": "See what this pass changed"
+    },
+    "editor": {
+      "label": "Edit {{path}}",
+      "title": "Title",
+      "description": "Description",
+      "frontmatterNote": "Frontmatter · read-only here · curation keeps it current",
+      "footer": "Markdown · ⌘S save · esc cancel",
+      "footerUnsaved": "Markdown · Unsaved changes · ⌘S save · esc cancel",
+      "footerNotSaved": "Markdown · Not saved",
+      "conflictTitle": "This document changed on disk while you were editing",
+      "conflictBody": "Your text was not saved: the file is newer than the copy you opened. Reload to get the current version, or compare first; copy your text if you want to keep it.",
+      "compare": "Compare",
+      "reload": "Reload",
+      "copyMine": "Copy my text",
+      "copyFailed": "Couldn't copy your text",
+      "compareTitle": "On disk now, against your text",
+      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text."
+    },
+    "deleteDocument": {
+      "menu": "Delete document…",
+      "title": "Delete {{name}}?",
+      "body": "Coffer deletes this file from disk:",
+      "afterwards": "Agents stop finding it from their next read. It stays in the vault's History, so it can be restored as a new version.",
+      "confirm": "Delete document"
+    },
+    "history": {
+      "tab": "History",
+      "count_one": "{{count}} version · newest first",
+      "count_other": "{{count}} versions · newest first",
+      "current": "Current",
+      "none": "No versions recorded yet.",
+      "versionLabel": "The chosen version",
+      "wholePass": "See the whole pass",
+      "restore": "Restore this version",
+      "restored": "Restored as a new version.",
+      "failedTitle": "Couldn't read this document's history",
+      "failedFine": "The document itself is fine.",
+      "openActivity": "Open Activity"
+    },
+    "diff": {
+      "none": "No changes to the text."
+    },
+    "writer": {
+      "user": "You",
+      "agent": "An agent",
+      "curation": "Curation",
+      "sync": "Sync",
+      "disk": "Edited on disk"
+    },
+    "changes": {
+      "op": {
+        "pass_one": "curated {{agent}}'s item into {{document}}",
+        "pass_other": "curated {{agent}}'s item into {{count}} documents",
+        "save": "edited {{document}}",
+        "delete": "deleted {{document}}",
+        "promote": "added {{document}} as written",
+        "submit": "submitted an item",
+        "restore": "restored an earlier version of {{document}}",
+        "undo": "undid a curation pass",
+        "edit": "edited {{document}} outside Coffer",
+        "sync": "brought in changes from another machine",
+        "create": "created the collection",
+        "rename": "moved {{document}}",
+        "remove": "removed {{document}}",
+        "baseline": "recorded the collection as it was"
+      }
+    },
+    "recent": {
+      "title": "Recent changes",
+      "window": "Last 7 days",
+      "writerFilter": "Who made the change",
+      "writer": {
+        "everyone": "Everyone",
+        "agents": "Agents",
+        "you": "You"
+      },
+      "collectionFilter": "Collection",
+      "allCollections": "All collections",
+      "waitingTitle": "Waiting to be curated",
+      "waitingCount_one": "{{count}} item",
+      "waitingCount_other": "{{count}} items",
+      "waitingMeta": "{{collection}} · written by {{who}} · {{when}}",
+      "nothingWaiting": "Nothing waiting. New items from agents and uploads show up here first.",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "empty": "No changes in the last 7 days.",
+      "failed": "Couldn't read recent changes"
+    },
+    "pass": {
+      "title": "Curation pass · {{when}}",
+      "undo": "Undo this pass",
+      "undone": "Undone",
+      "status": {
+        "added": "Add",
+        "modified": "Modify",
+        "removed": "Remove"
+      },
+      "itemsLeft": "The items this pass curated left the Inbox. Their text stays in each document's History.",
+      "undoTitle": "Undo this curation pass?",
+      "undoBody": "Puts every document this pass changed back to how it was before {{when}}.",
+      "undoEffect": {
+        "added": "removed",
+        "modified": "back to its version before the pass",
+        "removed": "restored"
+      },
+      "undoNote": "Each document gets a new version by you, so this can be undone from its History too. The items are not queued again.",
+      "undoConfirm": "Undo pass",
+      "undoing": "Undoing…",
+      "undoRefused": "Nothing was undone: {{document}} was changed after this pass, and undoing would overwrite that change.",
+      "undoneToast": "Undid the pass."
+    },
+    "welcome": {
+      "title": "Nothing written down yet",
+      "body": "Knowledge is plain Markdown on this Mac that you and your agents edit together. Agents read it with their own file tools.",
+      "collection": {
+        "title": "Start a collection",
+        "body": "A folder for one subject, like your architecture or your runbooks."
+      },
+      "upload": {
+        "title": "Bring in what you have",
+        "body": "Upload PDF, Word or Markdown into a collection; Coffer turns it into documents."
+      },
+      "agents": {
+        "title": "Let agents write",
+        "body": "Agents file what they learn with coffer__write; it lands in the Inbox.",
+        "automatic": "Automatic"
+      }
     }
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents already learned, read out of their own memory — Claude Code's per-project notes and Codex's task groups — and distilled into notes of Coffer's own, one topic per file, filed by repository, plus one global partition for what is about you rather than any one project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
+    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject. Read-only.",
     "update": "Update memory",
     "updating": "Updating…",
-    "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's notes.",
+    "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's memories.",
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
-    "empty": "No partitions yet. Update memory to import what your agents already know.",
-    "searchPlaceholder": "Search partitions…",
+    "deliveries": {
+      "title": "Delivered at session start",
+      "window_one": "Last day",
+      "window_other": "Last {{count}} days",
+      "delivered_one": "Delivered once in the last {{days}} days",
+      "delivered_other": "Delivered {{count}} times in the last {{days}} days",
+      "read_one": "{{count}} memory read",
+      "read_other": "{{count}} memories read",
+      "readUnavailable": "memories read unavailable",
+      "readUnavailableHint": "Coffer can't read this agent's transcripts, so it can't count which memories its sessions opened.",
+      "last": "last {{when}}",
+      "notDelivered": "Not delivered in the last {{days}} days",
+      "none": "No agent is connected to Coffer, so memory is delivered to nobody.",
+      "loadFailed": "Couldn't load deliveries."
+    },
+    "partitions": {
+      "title": "Partitions",
+      "count_one": "{{count}} partition",
+      "count_other": "{{count}} partitions",
+      "memories_one": "{{count}} memory",
+      "memories_other": "{{count}} memories"
+    },
     "cols": {
       "name": "Partition",
-      "repository": "Repository",
-      "global": "Global — about you, not one project",
-      "notes": "Notes",
+      "path": "Path",
+      "global": "Every project",
+      "memories": "Memories",
       "unresolvable": "Repository missing",
       "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide."
     },
-    "files": {
-      "tree": "Files",
-      "selectFile": "Select a file to view.",
-      "binary": "Binary file ({{size}} bytes)",
-      "truncated": "Content truncated — showing the start of the file."
+    "delete": {
+      "title": "Delete {{name}}?",
+      "body_one": "Coffer deletes its {{count}} distilled memory and stops delivering it; the partition leaves this list.",
+      "body_other": "Coffer deletes its {{count}} distilled memories and stops delivering them; the partition leaves this list.",
+      "untouched": "The agents' own memory for that folder is not touched.",
+      "confirm": "Delete partition"
     },
     "welcome": {
       "title": "Nothing distilled yet",
-      "body": "Your agents already know things — which service owns what, the trap you hit last month, how this repo is built. They keep that in their own native memories, in their own formats. Coffer reads those and distils them into notes of its own: one file per subject, filed by repository, plus a global partition about you rather than about a project.",
-      "featureRead": {
-        "title": "Read, never written",
-        "body": "Coffer only ever reads an agent's own memory. Nothing here is written back into it."
+      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository."
+    },
+    "detail": {
+      "notFound": "This partition no longer exists.",
+      "tabs": {
+        "memories": "Memories",
+        "delivered": "Delivered"
       },
-      "featureShape": {
-        "title": "One subject, one file",
-        "body": "Filed by repository, with a global partition for what is true of you rather than of a project."
-      },
-      "featureOneWay": {
-        "title": "It keeps itself current",
-        "body": "Coffer re-reads on its own schedule. The button is only for when you want it now."
+      "menu": {
+        "label": "More actions for {{name}}",
+        "reveal": "Reveal partition folder",
+        "copyPath": "Copy path",
+        "delete": "Delete partition…"
       }
+    },
+    "memories": {
+      "listLabel": "Memories",
+      "retired": "Retired",
+      "readOnly": "read-only",
+      "learnedBy": "Learned by {{agents}} · updated {{date}}",
+      "updated": "Updated {{date}}",
+      "select": "Select a memory to read it.",
+      "loadFailed": "Couldn't load the memories.",
+      "emptyTitle": "No memories for {{name}} yet",
+      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours."
+    },
+    "noModel": {
+      "title": "Coffer's model isn't set, so each agent's entry becomes its own memory",
+      "body": "The same lesson from two agents stays as two memories until a model is set.",
+      "link": "Settings › General › Coffer's model"
+    },
+    "delivered": {
+      "agentsLabel": "Agent",
+      "intro": "What a session in {{path}} starts with · read-only",
+      "introGlobal": "What every session starts with · read-only",
+      "copy": "Copy",
+      "characters_one": "{{count}} character",
+      "characters_other": "{{count}} characters",
+      "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
+      "loadFailed": "Couldn't load what is delivered."
     }
   },
   "chat": {

@@ -21,9 +21,7 @@
 // under the old label while its detail page mounted a fresh, empty one.
 import type { QueryKey } from "@tanstack/react-query";
 
-// ---------------------------------------------------------------------------
-// resources — the generic /resources API (every kind)
-// ---------------------------------------------------------------------------
+// --- resources — the generic /resources API (every kind) -------------------
 
 export const resourcesKey = ["resources"] as const;
 /** One kind's list (`kind` undefined = every kind). Object segment so a
@@ -34,9 +32,7 @@ export const resourcesByKindKey = (kind?: string) => ["resources", { kind }] as 
  *  wrong. */
 export const resourceKey = (uid: string) => ["resources", uid] as const;
 
-// ---------------------------------------------------------------------------
-// agents
-// ---------------------------------------------------------------------------
+// --- agents ----------------------------------------------------------------
 
 export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
@@ -85,9 +81,7 @@ export const agentTranscriptsKey = <P extends object>(uid: string, params?: P) =
 export const agentTranscriptSessionKey = (uid: string, sourcePath: string, offset: number) =>
   ["agents", uid, "conversations", "session", sourcePath, offset] as const;
 
-// ---------------------------------------------------------------------------
-// agentProviders — the turn platform's agent registry (/agent-providers)
-// ---------------------------------------------------------------------------
+// --- agentProviders — the turn platform's agent registry (/agent-providers) ---
 
 export const agentProvidersKey = ["agentProviders"] as const;
 /** An agent's model catalogue (/agent-providers/{key}/models), keyed by the
@@ -95,9 +89,7 @@ export const agentProvidersKey = ["agentProviders"] as const;
 export const agentProviderModelsKey = (agentKey: string) =>
   ["agentProviders", agentKey, "models"] as const;
 
-// ---------------------------------------------------------------------------
-// skills
-// ---------------------------------------------------------------------------
+// --- skills ----------------------------------------------------------------
 
 export const skillsKey = ["skills"] as const;
 export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
@@ -106,9 +98,7 @@ export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file
 export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
   ["skills", uid, "compare", stagingId, path] as const;
 
-// ---------------------------------------------------------------------------
-// mcp — per-server discovery, health and invocation log
-// ---------------------------------------------------------------------------
+// --- mcp — per-server discovery, health and invocation log -----------------
 
 export const mcpCapabilitiesKey = (serverUid: string) =>
   ["mcp", "capabilities", serverUid] as const;
@@ -119,16 +109,12 @@ export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unk
 export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
   ["mcp", "invocations", "all", filters] as const;
 
-// ---------------------------------------------------------------------------
-// attention — the cross-kind "needs you" list the Overview shows
-// ---------------------------------------------------------------------------
+// --- attention — the cross-kind "needs you" list the Overview shows --------
 
 /** GET /attention. A `change` event of kind `attention` invalidates it. */
 export const attentionKey = ["attention"] as const;
 
-// ---------------------------------------------------------------------------
-// providers (connections)
-// ---------------------------------------------------------------------------
+// --- providers (connections) -----------------------------------------------
 
 export const providersKey = ["providers"] as const;
 export const providerKey = (uid: string) => ["providers", uid] as const;
@@ -144,17 +130,13 @@ export const usageKey = ["usage"] as const;
 export const usageSummaryKey = (p: Record<string, unknown>) => ["usage", "summary", p] as const;
 export const usageQuotaKey = ["usage", "quota"] as const;
 
-// ---------------------------------------------------------------------------
-// channels — channel resources ride `resourcesKey`; only live status is here
-// ---------------------------------------------------------------------------
+// --- channels — channel resources ride `resourcesKey`; only live status is here ---
 
 /** Prefix of every channel status key: a title or rename refreshes them all. */
 const channelsKey = ["channels"] as const;
 export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
 
-// ---------------------------------------------------------------------------
-// daemon
-// ---------------------------------------------------------------------------
+// --- daemon ----------------------------------------------------------------
 
 export const daemonStatusKey = ["daemon", "status"] as const;
 export const daemonLogsKey = (filters: Record<string, unknown>) =>
@@ -164,25 +146,19 @@ export const daemonVersionSkewKey = (version: string | undefined) =>
 export const daemonResidencyKey = ["daemon", "residency"] as const;
 export const daemonFeaturesKey = ["daemon", "features"] as const;
 
-// ---------------------------------------------------------------------------
-// fs — the loopback daemon's view of the local filesystem
-// ---------------------------------------------------------------------------
+// --- fs — the loopback daemon's view of the local filesystem ---------------
 
 export const fsBrowseKey = (path: string) => ["fs", "browse", path] as const;
 export const fsEditorsKey = ["fs", "editors"] as const;
 
-// ---------------------------------------------------------------------------
-// audit / retention
-// ---------------------------------------------------------------------------
+// --- audit / retention -----------------------------------------------------
 
 export const auditListKey = (filters: Record<string, unknown>) => ["audit", filters] as const;
 
 export const retentionKey = ["retention"] as const;
 export const retentionPoliciesKey = ["retention", "policies"] as const;
 
-// ---------------------------------------------------------------------------
-// sync — rounds, machine registry, master key
-// ---------------------------------------------------------------------------
+// --- sync — rounds, machine registry, master key ---------------------------
 
 export const syncKey = ["sync"] as const;
 export const syncStatusKey = ["sync", "status"] as const;
@@ -190,50 +166,49 @@ export const syncMachinesKey = ["sync", "machines"] as const;
 export const syncRunsKey = ["sync", "runs"] as const;
 export const syncKeyFingerprintKey = ["sync", "key-fingerprint"] as const;
 
-// ---------------------------------------------------------------------------
-// scope — per-agent activation scope of one resource
-// ---------------------------------------------------------------------------
+// --- scope — per-agent activation scope of one resource --------------------
 
 export const scopeKey = ["scope"] as const;
 export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
-// ---------------------------------------------------------------------------
-// knowledge — collections, one directory level per key, one file per key
-// ---------------------------------------------------------------------------
+// --- knowledge — collections, tree levels, files, changes, document history ---
 
 export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
-/** Every directory level of every collection — the prefix a save invalidates. */
 export const knowledgeTreeRootKey = ["knowledge", "tree"] as const;
-/** One directory level; `path` is relative to the knowledge root. */
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
+export const knowledgeChangesRootKey = ["knowledge", "changes"] as const;
+export const knowledgeChangesKey = (collection: string | null) =>
+  ["knowledge", "changes", "list", collection ?? ""] as const;
+export const knowledgeChangeKey = (version: string) =>
+  ["knowledge", "changes", "detail", version] as const;
+export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
+export const knowledgeVersionDiffKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "diff", version] as const;
 
-// ---------------------------------------------------------------------------
-// memory — partitions, files
-// ---------------------------------------------------------------------------
+// --- memory — partitions, their memories, what is delivered ---------------
 
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
-/** A partition's own directory, and one file in it — the tree the detail page
- *  browses (spec memory "Present partitions as a table and a file tree"). */
-export const memoryPartitionFilesKey = (partitionUid: string) =>
-  ["memory", "partitions", partitionUid, "files"] as const;
-export const memoryPartitionFileKey = (partitionUid: string, path: string) =>
-  ["memory", "partitions", partitionUid, "files", "content", path] as const;
+export const memoryPartitionFilesKey = (uid: string) =>
+  ["memory", "partitions", uid, "files"] as const;
+export const memoryNotesKey = (uid: string) => ["memory", "partitions", uid, "notes"] as const;
+export const memoryNoteKey = (uid: string, slug: string) =>
+  ["memory", "partitions", uid, "notes", slug] as const;
+export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "retired"] as const;
+export const memoryDeliveredKey = (uid: string) =>
+  ["memory", "partitions", uid, "delivered"] as const;
+export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
 
-// ---------------------------------------------------------------------------
-// upkeep — the long rewrites (memory organise, knowledge curation) in flight
-// ---------------------------------------------------------------------------
+// --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
 
 /** Deliberately NOT under `memoryKey` or `knowledgeKey`: one read answers for
  *  every kind, and a pass ending must not drag either kind's whole subtree
  *  into the same invalidation. */
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
-// ---------------------------------------------------------------------------
-// chat — conversations, their messages and per-conversation agent config
-// ---------------------------------------------------------------------------
+// --- chat — conversations, their messages and per-conversation agent config ---
 
 export const conversationsKey = ["conversations"] as const;
 export const archivedConversationsKey = ["conversations", "archived"] as const;
@@ -248,9 +223,7 @@ export const agentConfigKey = (conversationId: string) =>
  *  would clobber the partial the turn hooks are writing into this key. */
 export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
 
-// ---------------------------------------------------------------------------
-// credentials — the secret boundary's approvals
-// ---------------------------------------------------------------------------
+// --- credentials — the secret boundary's approvals -------------------------
 
 export const credentialsKey = ["credentials"] as const;
 /** The approvals still waiting for a present human. */
@@ -259,16 +232,12 @@ export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
 export const credentialsListKey = ["credentials", "list"] as const;
 export const credentialScanKey = ["credentials", "scan"] as const;
 
-// ---------------------------------------------------------------------------
-// settings — daemon-side settings the Settings pages edit
-// ---------------------------------------------------------------------------
+// --- settings — daemon-side settings the Settings pages edit ---------------
 
 export const credentialSettingsKey = ["settings", "credentials"] as const;
 export const internalEngineKey = ["settings", "internalEngine"] as const;
 
-// ---------------------------------------------------------------------------
-// cross-kind helpers
-// ---------------------------------------------------------------------------
+// --- cross-kind helpers ----------------------------------------------------
 
 /**
  * Some kinds are read through their OWN list key rather than the generic

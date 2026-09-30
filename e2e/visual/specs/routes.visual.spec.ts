@@ -1,6 +1,6 @@
 // e2e/visual/specs/routes.visual.spec.ts
 //
-// Visual baseline: each sidebar route, the Settings modal and every agent detail tab, in light and dark, on a fresh
+// Visual baseline: each sidebar route, the Settings modal, every agent detail tab and the Knowledge page with a collection, in light and dark, on a fresh
 // daemon, compared against the committed screenshot for this platform.
 // Pages behind an experimental gate render their gate notice — that notice is
 // the baseline for them until the feature is on by default.
@@ -215,6 +215,75 @@ test.describe("agent detail", () => {
         await expect(page.getByRole("tab")).toHaveCount(9);
         await settle(page);
         await expect(page).toHaveScreenshot(`agent-${tab}-${theme}.png`, {
+          fullPage: false,
+          mask: [...timeDependent(page), ...runDependent(page)],
+        });
+      });
+    }
+  }
+});
+
+/**
+ * The Knowledge page with a collection in it: its overview, an open document,
+ * the document's History tab and Recent changes. The visual daemon runs
+ * without Coffer's model, so the submitted items are written as documents on
+ * the spot and the page shows the no-model line — the same on every machine.
+ */
+test.describe("knowledge collection", () => {
+  let uid = "";
+  const collection = "visual-notes";
+  const document = `${collection}/daemon-port.md`;
+
+  test.beforeAll(async () => {
+    const json = fs.readFileSync(path.join(VISUAL_HOME, ".coffer", "daemon.json"), "utf-8");
+    const { token, port } = JSON.parse(json) as { token: string; port: number };
+    const base = `http://127.0.0.1:${port}/api/v1/knowledge`;
+    const headers = { "Content-Type": "application/json", "X-Coffer-Token": token };
+    const listed = await fetch(`${base}/collections`, { headers });
+    const { collections } = (await listed.json()) as { collections: { uid: string; name: string }[] };
+    const existing = collections.find((c) => c.name === collection);
+    if (existing) {
+      uid = existing.uid;
+      return;
+    }
+    const created = await fetch(`${base}/collections`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: collection, description: "How the daemon and its shim fit together." }),
+    });
+    expect(created.status).toBe(201);
+    uid = ((await created.json()) as { uid: string }).uid;
+    for (const [title, body] of [
+      ["Daemon port", "# Daemon port\n\nThe daemon binds one fixed port, read before the database opens.\n\n## Startup\n\n- The shell waits for the health check.\n"],
+      ["Vault sync", "# Vault sync\n\nA sync round takes the vault lock; curation waits for it.\n"],
+    ]) {
+      const res = await fetch(`${base}/material`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ collection, title, description: title, body }),
+      });
+      expect(res.status).toBe(201);
+    }
+  });
+
+  const VIEWS: [string, () => string][] = [
+    ["knowledge-collection", () => `/knowledge/${uid}`],
+    ["knowledge-document", () => `/knowledge/${uid}?file=${encodeURIComponent(document)}`],
+    ["knowledge-history", () => `/knowledge/${uid}/history?file=${encodeURIComponent(document)}`],
+    ["knowledge-recent", () => "/knowledge"],
+  ];
+
+  for (const [name, address] of VIEWS) {
+    for (const theme of THEMES) {
+      test(`${name} (${theme})`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+        await page.goto(address());
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await expect(
+          page.getByRole("navigation", { name: "Collections and documents" }),
+        ).toBeVisible();
+        await settle(page);
+        await expect(page).toHaveScreenshot(`${name}-${theme}.png`, {
           fullPage: false,
           mask: [...timeDependent(page), ...runDependent(page)],
         });
