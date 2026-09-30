@@ -28,6 +28,25 @@ One **UI** ties them together — register and configure your agents, browse and
 
 ## Download & install
 
+**Let your agent install it.** Coffer is for people who already work with a
+coding agent, so the quickest install is to paste this into Claude Code, Codex
+or any agent that can run commands on your machine:
+
+```text
+Install Coffer on this machine by following
+https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
+this machine (a release build if one is published for this OS and architecture,
+otherwise from source). Ask me before running anything with sudo or editing my
+shell profile. When it is installed, check it with `coffer daemon status`.
+Then, for each coding agent installed here (claude-code, codex), run
+`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
+config files connect will change before you run it. Do not handle any
+credentials: if a step needs a login, tell me what to do instead.
+```
+
+The agent reads the install page, chooses the path for your machine and checks
+the result. To install by hand instead, use one of the paths below.
+
 > **No tagged release yet.** The desktop app, the prebuilt binaries, the one-line
 > installer and the release archive below ship with Coffer's first tagged release
 > and are not yet published — those links will 404 until then. For now, **[install

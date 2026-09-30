@@ -6,7 +6,7 @@ description: The binding project principles, technology constraints, quality gat
 # Principles
 
 ::: tip This page is normative
-This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, and architectural style. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The three principles](#the-three-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them. The reasoning behind each design choice is laid out in [Design philosophy](/architecture/design-principles).
+This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, architectural style, and how the product hands work to an agent. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The four principles](#the-four-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them. The reasoning behind each design choice is laid out in [Design philosophy](/architecture/design-principles).
 :::
 
 > Coffer is a local-first AI agent vault: a developer's accumulated AI assets
@@ -25,9 +25,9 @@ Coffer's answer to this slice is a long-lived local daemon that registers upstre
 
 The MCP gateway, though, is only one capability of a broader vault. The same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, aggregated agent memory, model providers, and messaging channels — **seven** resource kinds in all (`mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `provider`, `channel`) — plus the cross-cutting turn platform that drives those agents behind the channels, and bidirectional vault sync against a git remote you own. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
 
-## The three principles
+## The four principles
 
-Everything else — technology choices, layering, process model, persistence strategy — is a consequence of these three.
+Everything else — technology choices, layering, process model, persistence strategy, how the product asks a person for help — is a consequence of these four.
 
 ### I. Local-First (NON-NEGOTIABLE)
 
@@ -68,6 +68,19 @@ No wire type is hand-written on either side. The Pydantic models are the only ha
 License (MIT), governance, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. A change that would shorten this list — adding a closed-source dependency without an exception, omitting attribution for AI-authored content — violates this principle and requires an amendment with an explicit migration plan.
 
 This prevents the hidden cost of "we'll open-source it later" — retrofitting licenses, attribution, and governance onto a codebase after the fact is expensive and error-prone.
+
+### IV. AI-Native
+
+Everyone who uses Coffer already works with a coding agent, so Coffer treats an agent as the way environment-dependent work gets done. When a task depends on the person's machine and has no single right procedure — installing a program, setting up a tool or an outside account, diagnosing and fixing the environment — the product hands it to an agent. It builds a prompt that states the facts (what is missing, why it is needed, the constraints) and offers it two ways: copied, for the person's own agent, or opened as a new conversation with an agent Coffer manages, pre-filled and sent only when the person presses Send. The product does not hard-code one package manager's install commands, run installers, or walk the person through long manual step lists. Work the person could do in the UI but may not want to — resolving a sync conflict, merging a skill's upstream update with local edits — also offers the hand-off beside the manual controls, so the person chooses whether to look at it themselves. The prompt is built by the daemon, so the CLI and the UI offer the same words.
+
+Two cases stay outside the hand-off:
+
+1. **Work Coffer owns and can do deterministically and safely** — repairing its own entry in an agent's config, a reconcile pass, rotating its own token — is a plain button.
+2. **Work only the person can do** — a login in a browser, an approval, a setting in a platform's portal — stays with the person; a prompt may still help with the steps around it.
+
+A prompt never asks an agent to handle a credential; where a login is needed, it tells the agent to leave the login to the person.
+
+This holds because a hard-coded procedure is right for one kind of machine and wrong for the rest, and it goes stale as tools change, while an agent reads the machine it is on. A hand-off also keeps the person in control: nothing runs until they send it.
 
 ## Technology & architectural constraints
 
