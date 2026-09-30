@@ -22,8 +22,7 @@ Knowledge is not [memory](/guides/memory). Memory is what agents learn while wor
 A **collection** is a top-level folder under the knowledge root:
 
 ```text
-~/.coffer/knowledge/
-├── .git/                         ← hidden: the history of every change
+~/.coffer/vault/knowledge/
 └── payments/                     ← one collection
     ├── README.md               ← what this collection is about
     ├── session-ownership.md    ← a document
@@ -35,9 +34,9 @@ A **collection** is a top-level folder under the knowledge root:
 - **Documents** are the Markdown files in the collection. A document's path is its identity; there is no separate id. File names are slugs of the title, with a suffix such as `-2` on a collision.
 - **Folders** inside a collection are optional and carry no meaning. You, or curation, can create, move and remove them.
 - **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document, counted or curated.
-- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. At the knowledge root it keeps `.git/`, the [history](#history-and-undo) of every change. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
+- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
 
-To move the knowledge root, set `COFFER_KNOWLEDGE_ROOT` in the daemon's environment.
+The knowledge root is inside the vault repository, `~/.coffer/vault`, and `coffer path knowledge` prints it. It cannot be moved elsewhere: a tree outside the vault would be a tree its history cannot see.
 
 ### Frontmatter
 
@@ -86,7 +85,7 @@ Knowledge → New collection → Name, What belongs in here → Create collectio
 
 :::
 
-This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. From then on the README is the description; edit the file to change it. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it; `--title` sets the title Coffer's pages show in place of the name.
+This creates `~/.coffer/vault/knowledge/payments/` and, when you give a description, a `README.md` holding it. From then on the README is the description; edit the file to change it. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it; `--title` sets the title Coffer's pages show in place of the name.
 
 List what you have:
 
@@ -331,7 +330,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 Every change to a collection is kept as a version: your saves and deletes, each curation pass, a submission that became a document at once, what vault sync brought in, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `curation` (with the item it curated and who submitted it), `sync` or `disk` — so you can always tell who changed what.
 
-The history is a git repository of the knowledge root's own, `~/.coffer/knowledge/.git`, created the first time Coffer records a change. It stays on this machine: vault sync does not carry it. If git is not installed, everything else works as before and history is simply not recorded; the history commands then answer `KNOWLEDGE_HISTORY_UNAVAILABLE`.
+The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `coffer vault history knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the daemon does not start and names the install step.
 
 ### Look at a document's history
 

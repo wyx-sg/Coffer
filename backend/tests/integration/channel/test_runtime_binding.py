@@ -29,6 +29,7 @@ def _config(**overrides: object) -> dict[str, object]:
     return {**_TELEGRAM, **overrides}
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a channel travels and runs only on the machine it names")
 @pytest.mark.acceptance(
     spec="channels", scenario="only the machine a channel names starts its adapter"
 )

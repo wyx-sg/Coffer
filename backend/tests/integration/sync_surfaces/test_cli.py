@@ -22,6 +22,7 @@ def _cli(monkeypatch: pytest.MonkeyPatch, box: Box) -> None:
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, None))
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the status command reports the remote's settings")
 def test_status_now_and_history(monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
     _cli(monkeypatch, mac)
@@ -38,6 +39,7 @@ def test_status_now_and_history(monkeypatch: pytest.MonkeyPatch, pair: tuple[Box
     assert '"configured": true' in as_json.output
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="keeping this machine's version continues the round")
 def test_a_stopped_round_is_resolved_from_the_command_line(
     monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
 ) -> None:
@@ -65,6 +67,7 @@ def test_a_stopped_round_is_resolved_from_the_command_line(
     assert runner.invoke(app, ["conflicts"]).output.strip() == "no round is waiting for you"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a rollback shows its plan first")
 def test_rollback_prints_the_plan_first(
     monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
 ) -> None:
@@ -82,6 +85,7 @@ def test_rollback_prints_the_plan_first(
     assert mini.disk(DOC) == b"Primary on-call rotates every Monday.\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="pause and resume a remote from the command line")
 def test_remote_machine_and_key_commands(
     monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
 ) -> None:
@@ -103,6 +107,7 @@ def test_remote_machine_and_key_commands(
     assert "cleared" in cleared.output
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a join states its case and its counts before applying")
 def test_join_prints_the_preview_and_asks(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object, pair: tuple[Box, Box]
 ) -> None:

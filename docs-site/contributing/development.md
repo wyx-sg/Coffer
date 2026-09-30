@@ -96,8 +96,8 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | Bind the first free port in this range instead of the configured fixed port (default 8000) |
 | `COFFER_DEV_CORS=1` | Allow the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, plus the desktop shell's origins. Without it the daemon refuses requests from those origins with `403 ORIGIN_NOT_ALLOWED` |
 | `COFFER_CORS_ORIGINS` | Comma-separated list that replaces the CORS allowlist entirely, shell origins included. Use it when your UI runs on any other origin |
-| `COFFER_DB_URL` | SQLAlchemy URL of the database (default `sqlite+aiosqlite:///~/.coffer/coffer.db`) |
-| `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_AGENT_STATE_ROOT` | Move the knowledge tree, the memory tree or the agent-state cache |
+| `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
+| `COFFER_DB_URL` | SQLAlchemy URL of the history database (default `sqlite+aiosqlite:///~/.coffer/runs.db`) |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
 | `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. The registry is empty right now, so there is nothing to pin |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
@@ -105,7 +105,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.
 
 ::: danger Tests must never see your real vault
-`backend/tests/conftest.py` pins `COFFER_LOG_DIR`, `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_AGENT_STATE_ROOT` to temporary directories before any test module is imported. Without those pins, a test that boots the app runs the knowledge and memory migrations on the real `~/.coffer`. If you write a script or fixture outside pytest that starts the app, set these variables yourself.
+`backend/tests/conftest.py` points `HOME` at a throwaway directory and strips every inherited `COFFER_*` variable before any test module is imported, gives every test its own `HOME`, and pins `COFFER_LOG_DIR`. A tripwire (`tests/support/real_home_guard.py`) also refuses, and fails the test for, any file, SQLite or spawn event under the real `~/.coffer`. Because every tree resolves from `HOME`, a fresh `HOME` isolates all of them. If you write a script or fixture outside pytest that starts the app, give it its own `HOME`.
 :::
 
 ## A tour of the repository

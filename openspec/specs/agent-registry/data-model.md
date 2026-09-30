@@ -1,8 +1,11 @@
 # Data Model — Agent Registry
 
 Entities, fields, relationships, and storage notes for the agent registry.
-Builds on the kind-agnostic Resource framework from spec resource-framework — agents are rows
-in the generic `resources` table, so spec agent-registry adds no table of its own.
+Builds on the kind-agnostic Resource framework from spec resource-framework — an agent is a
+resource file, so spec agent-registry adds no table of its own. The `agent`
+kind's storage class is `local` (`Kind.storage`): an agent names a config
+directory on this disk, so its file is `~/.coffer/local/resources/agent/<name>.json`,
+never committed and never synced.
 
 ## Domain entities (`backend/coffer/domain/agent/`)
 
@@ -90,7 +93,7 @@ field existed briefly and is gone: migration `0060` backfilled it and migration
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`.
 
-Beside this schema the agent row carries the kind-agnostic Resource `enabled` flag (resource-framework), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
+Beside this schema the agent carries the kind-agnostic Resource `enabled` flag (resource-framework, kept in `local/reach.json`), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields it once carried are gone, stripped from stored configs by migration `0058`.
 
 Validators:
 
@@ -207,28 +210,37 @@ described under `AgentMcpService`; it can also be edited like any other
 allowlisted config file through `AgentConfigFileService.write_file`. Both paths
 share the same atomic-write + `.bak` machinery.
 
-## SQLite schema additions
+## Storage
 
-**None.** The `agent` kind needs no table of its own — agents are rows in the
-generic `resources` table (kind-agnostic Resource framework from spec resource-framework), and
-discovery is read-only with no suppression list to persist. Spec agent-registry
-creates no table and so introduces no Alembic revision of its own; the head
-revision is whatever the newest file under
-`backend/coffer/infrastructure/persistence/migrations/versions/` declares, and
-it moves with other specs. These revisions rewrite `kind='agent'` rows without
-changing any schema: `0031` and `0048` drop agents of removed types, `0056`
-strips config keys this spec removed, `0058` strips the skill-follow policy,
-`0060` backfills the curated-`models` key, `0061` flips `wire_api` from `chat`
-to `responses`, and `0063` strips the curated-`models` key again.
+**No table of its own.** An agent is one resource file,
+`~/.coffer/local/resources/agent/<name>.json` (spec resource-framework), with
+its reach in `local/reach.json`. Both are machine-local: another machine's
+agents are its own, discovered there. Discovery is read-only, with no
+suppression list to persist.
 
-**Config files and Coffer connection state are NOT persisted in SQLite** — the
+The Alembic data migrations that shaped stored agents ran while agents were
+rows of the pre-vault database — `0031` and `0048` dropped agents of removed
+types, `0056` stripped config keys this spec removed, `0058` the skill-follow
+policy, `0060` backfilled the curated-`models` key, `0061` flipped `wire_api`
+from `chat` to `responses`, and `0063` stripped the curated-`models` key again;
+the one-time upgrade to the vault layout carried their result into the files.
+
+**Config files and Coffer connection state are NOT persisted by Coffer** — the
 agent's on-disk config files are the source of truth. Connection status is
 derived by reading the relevant config files on demand.
 
-### Reuse of existing tables
+**The plugin inventory travels in the machine descriptor.** This machine's
+descriptor (`vault/machines/<machine id>.json`, spec vault-sync)
+lists every agent with the plugins `AgentPluginService.list_plugins` reported
+before the last round that moved anything
+(`{type, name, plugins: [{id, name, marketplace, enabled, version}]}`,
+`application/sync/inventory.py`). An inventory, not a replicator: nothing on
+any machine writes an agent's plugin configuration from it.
 
-- `resources`: new rows with `kind='agent'`. No schema change.
-- `audit_log`: new event types written (see below). No schema change.
+### Also written
+
+- resource files with `kind: agent`, under `local/`.
+- `audit_log` in `runs.db`: new event types (see below). No schema change.
 
 ## Audit event types added
 
@@ -278,7 +290,7 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 | `discover() -> list[AgentTypeDetection]` | The rows of `types()` with no agent registered and either signal present — at most one candidate per type. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer scan`. |
 | `detect(agent_type, config_dir) -> AgentDetection` | The detection state and version of one agent at one directory — what the agent read model carries. |
 
-`AgentTypeDetection` is a derived value object (not a SQLite entity, never
+`AgentTypeDetection` is a derived value object (not a stored entity, never
 stored): what this machine holds of one supported type. Fields: `type`
 (`AgentType`), `display_name`, `config_dir` (as a string), `standard_config_dir`,
 `default_skill_dir` (`<config_dir>/skills`), `state` (`DetectionState`),
@@ -507,7 +519,7 @@ The sources themselves live in `infrastructure/agent/` — one reader per source
 each named by the type's child spec (`claude_binary_models.py` and
 `claude_effort.py` for agent-registry/claude-code, `codex_rpc_models.py` for
 agent-registry/codex), behind `model_discovery.py`. Nothing here is written to
-SQLite, to the vault, or to the agent: the catalogue is re-derived on every
+a database, to the vault, or to the agent: the catalogue is re-derived on every
 request, which is the whole point of "Keep one source of truth for an agent's
 models". What a PICKER is offered — the narrowing an active connection applies —
 is spec provider-switching's read over this same service, not a second list.
@@ -547,7 +559,7 @@ import infrastructure directly).
 - `display_name='Agent'`
 - `config_schema=AgentConfig`
 - `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
-- `on_enabled_changed=...` — hook invoked when the row's `enabled` flag changes; the composition root passes one that runs the reconciler's skill-link pass (`Trigger.CHANGE`, actor `system`).
+- `on_enabled_changed=...` — hook invoked when the agent's `enabled` flag changes; the composition root passes one that runs the reconciler's skill-link pass (`Trigger.CHANGE`, actor `system`).
 - `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
 - `name_from_config=agent_name_for`, `name_fixed=True`, `titled=False` — the name is the type's (`claude-code`, `codex`), fixed, and there is no title (spec agent-registry "Keep one agent per type, named by it"). Migration 0109 collapsed a database's agents to one per type.
 
@@ -576,7 +588,7 @@ Discovery is read-only and is **not** run on startup — no agent is ever
 auto-registered. The user runs discovery on demand and confirms which
 candidates to add.
 
-The `on_delete` hook is bound to a callable supplied by the skill module (spec skill-manager), so that removing an agent triggers the skill-side binding cleanup before the resource row is deleted. Spec agent-registry owns the seam; spec skill-manager owns what it calls.
+The `on_delete` hook is bound to a callable supplied by the skill module (spec skill-manager), so that removing an agent triggers the skill-side binding cleanup before the resource file is deleted. Spec agent-registry owns the seam; spec skill-manager owns what it calls.
 
 ## Constraints summary
 

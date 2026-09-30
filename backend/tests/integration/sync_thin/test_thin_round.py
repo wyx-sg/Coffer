@@ -3,6 +3,8 @@ guard, check out, push (coffer.application.sync.round_*)."""
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 from coffer.application.sync.round_answers import answer, editor_copy
@@ -13,6 +15,9 @@ from coffer.domain.sync.stops import Answer, ConflictReason
 from .machines import Machine, resource
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an arriving file is written and a deleted one removed")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a local-only document survives a round")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a changed vault converges and pushes")
 def test_a_clean_merge_is_applied_and_pushed(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     mac.put("knowledge/team/a.md", "from the mac\n")
@@ -28,6 +33,7 @@ def test_a_clean_merge_is_applied_and_pushed(pair: tuple[Machine, Machine]) -> N
     assert mini.disk("knowledge/team/a.md") == b"from the mac\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="concurrent edits to different parts of one document merge")
 def test_edits_to_different_parts_of_one_file_merge(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     base = "".join(f"line {i}\n" for i in range(12))
@@ -42,6 +48,7 @@ def test_edits_to_different_parts_of_one_file_merge(pair: tuple[Machine, Machine
     assert b"line one" in merged and b"line ten" in merged
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a real conflict stops the round without touching the vault")
 def test_any_conflict_stops_the_round_with_vault_and_remote_untouched(
     pair: tuple[Machine, Machine],
 ) -> None:
@@ -65,6 +72,7 @@ def test_any_conflict_stops_the_round_with_vault_and_remote_untouched(
     assert mini.round().status is RoundStatus.STOPPED
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="keeping this machine's version continues the round")
 def test_keep_mine_continues_the_round_and_the_other_machine_follows(
     pair: tuple[Machine, Machine],
 ) -> None:
@@ -81,6 +89,7 @@ def test_keep_mine_continues_the_round_and_the_other_machine_follows(
     assert mac.disk("knowledge/team/on-call.md") == b"15 min\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a hand merge with conflict markers left is refused")
 def test_a_hand_merge_is_refused_while_markers_are_left(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     mac.put("knowledge/team/on-call.md", "30 min\n")
@@ -105,6 +114,7 @@ def test_a_hand_merge_is_refused_while_markers_are_left(pair: tuple[Machine, Mac
     assert mac.disk("knowledge/team/on-call.md") == b"20 min, a compromise\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a stop is asked again when the remote moves")
 def test_a_stop_is_asked_again_when_the_remote_moves(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     mac.put("knowledge/team/on-call.md", "30 min\n")
@@ -119,6 +129,7 @@ def test_a_stop_is_asked_again_when_the_remote_moves(pair: tuple[Machine, Machin
     assert first and second and first.remote != second.remote
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the same name with a different uid stops the round")
 def test_the_same_name_with_a_different_uid_is_a_conflict(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     mac.put("resources/mcp_server/linear.json", resource("mcp_server", "linear", "a" * 32))
@@ -132,6 +143,7 @@ def test_the_same_name_with_a_different_uid_is_a_conflict(pair: tuple[Machine, M
     assert ConflictReason.SAME_NAME_DIFFERENT_UID in reasons
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="moving resource files is not a loss")
 def test_moving_a_resource_file_is_not_a_loss(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     with mac.writer.begin(mac_meta()) as txn:

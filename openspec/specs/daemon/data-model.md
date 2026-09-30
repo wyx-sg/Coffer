@@ -1,9 +1,10 @@
 # Data Model — Daemon
 
-The daemon owns no table. Everything it records is a file, and for one reason:
-each of these is read or written at a moment when the database is not available
-— before it is opened, while it is being migrated, or after the process that
-opened it has died.
+The daemon owns no table. Everything it records is a file directly under
+`~/.coffer`, outside the five storage classes (spec vault-storage), and for one
+reason: each of these is read or written at a moment when neither the vault nor
+`runs.db` is available — before they are opened, while they are being
+migrated, or after the process that opened them has died.
 
 ## `~/.coffer/daemon.json` — the discovery file
 
@@ -41,8 +42,9 @@ be inspected answers `False`, and every caller treats that as "do nothing".
 
 ## `~/.coffer/daemon-config.json` — pre-bind configuration
 
-Settings read **before** the database is opened, so nothing here can live in
-SQLite (`infrastructure/daemon/config.py`). Mode `0600`. Written by **merge**,
+Settings read **before** `runs.db` and the vault are opened — before the
+one-time upgrade to the vault layout can run — so nothing here can live in
+either (`infrastructure/daemon/config.py`). Mode `0600`. Written by **merge**,
 never by replacement, so several settings share one file and a key written by a
 newer build survives being touched by an older one — with one exception:
 `idle_shutdown_hours`, which earlier builds wrote for an idle stand-down the
@@ -53,7 +55,7 @@ daemon no longer has, is ignored on read and removed by every write (spec daemon
 | --- | --- | --- |
 | `port` | int or absent | The port the user pinned. Absent, unreadable or nonsensical all mean "no usable instruction", which resolves to the default of `8000` — never to some other port. Validated to `1024 ≤ port ≤ 65535`, because below 1024 needs privileges the daemon does not have and must not acquire. |
 | `machine_name` | string or absent | This machine's display label. Defaults to the hostname with a `.local` suffix stripped. Free to change: nothing references it. |
-| `features` | object or absent | This machine's own experimental-feature switches, `{"<key>": true\|false}` (spec experimental-features "Decide a feature's state per machine"). A key that is absent falls back to the build channel's default — off on `stable`, on on `dev` — and a `COFFER_FEATURES` pin (`key=on\|off`, comma-separated, read once at start) overrides it. Written by `PUT /api/v1/daemon/features/{key}` before it answers, and takes effect at once, without a restart. A value that is not a boolean is warned about and ignored; keys the build does not know are kept. Machine-local on purpose: the database syncs, and a switch in it would switch every machine. |
+| `features` | object or absent | This machine's own experimental-feature switches, `{"<key>": true\|false}` (spec experimental-features "Decide a feature's state per machine"). A key that is absent falls back to the build channel's default — off on `stable`, on on `dev` — and a `COFFER_FEATURES` pin (`key=on\|off`, comma-separated, read once at start) overrides it. Written by `PUT /api/v1/daemon/features/{key}` before it answers, and takes effect at once, without a restart. A value that is not a boolean is warned about and ignored; keys the build does not know are kept. Machine-local on purpose: the vault syncs, and a switch in it would switch every machine. |
 | `machine_id` | string or absent | A **cache** of the derived machine id (spec vault-sync). Never authoritative — deleting it recomputes the same value, and a cached value that disagrees with the host loses. |
 
 A file that will not parse is warned about and ignored, not fatal: an
@@ -107,12 +109,30 @@ Staleness is decided by **byte size** and the **version sentinel**, never by
 mtime — a build's mtime says when it was extracted, not what it contains, which
 re-copied every binary on every start after a reinstall of the same release.
 
-## `coffer.db.pre-<revision>` — the pre-migration copy
+## `runs.db.pre-<revision>` — the pre-migration copy
 
-Written beside the live database before `alembic upgrade head` changes it, with
-its `-wal` and `-shm` companions when they exist. The three newest are kept. A
+Written beside `runs.db` before `alembic upgrade head` changes it, with its
+`-wal` and `-shm` companions when they exist. The three newest are kept. A
 start against an already-current schema copies nothing, and an in-memory
-database copies nothing.
+database copies nothing. `runs.db` is the one Alembic lineage (head 0117); its
+path is `~/.coffer/runs.db` unless `COFFER_DB_URL` names another.
+
+## The pre-vault backup set
+
+The one-time upgrade to the vault layout (`coffer migrate`, spec
+vault-storage) keeps what it started from, never opened for writing again:
+
+| Path | What |
+| --- | --- |
+| `~/.coffer/coffer.db.pre-vault` (+`-wal`/`-shm`) | the database before the upgrade touched it |
+| `~/.coffer/pre-vault/knowledge.git` | the knowledge root's own history, after its commits were replayed into the vault |
+| `~/.coffer/pre-vault/knowledge-stamped/` | the knowledge documents as they were before their curation stamps were stripped |
+| `~/.coffer/pre-vault/daemon-config.json` | `daemon-config.json` before revision 0116 rewrote it |
+
+`coffer migrate --rollback` restores from this set. The daemon refuses a home
+that holds only `coffer.db` (`VAULT_MIGRATION_REQUIRED`, naming `coffer
+migrate`) and one held by the `~/.coffer/MIGRATION_ROLLED_BACK` marker
+(`VAULT_MIGRATION_ON_HOLD`, naming `coffer migrate --resume`).
 
 ## `~/.coffer/logs/` — the log directory
 

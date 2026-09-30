@@ -1,29 +1,14 @@
 # Data Model — MCP Gateway
 
-Entities, fields, relationships, and the SQLite schema for the `mcp_server`
-kind. ORM models follow these names exactly; OpenAPI schemas match the same
-field names.
+Entities, fields, relationships, and where each is stored for the
+`mcp_server` kind. OpenAPI schemas match the same field names.
 
-The kind-agnostic half — `Resource` (its immutable `uid`, its mutable `name`
-label and the internal surrogate `id`), `Kind`, `Scope`,
-`AuditEntry`, `RetentionPolicy`, `PrunableTable`, and the `resources`,
-`audit_log` and `retention_policies` tables — is modelled by spec
-[resource-framework](../resource-framework/data-model.md). This document covers
-only what the MCP kind adds on top, and the `credentials` table in the same
-database belongs to spec credentials.
-
-This spec's own tables were created by two early Alembic revisions; the lineage
-has grown well past them as later specs landed, so the head revision is whatever
-the newest file under
-`backend/coffer/infrastructure/persistence/migrations/versions/` declares rather
-than a number written down here.
-
-| Revision | File                                 | What it creates                                 |
-| -------- | ------------------------------------ | ----------------------------------------------- |
-| `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
-| `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
-| `0113`   | `20260930_0113_mcp_invocations_agent_uid.py` | `mcp_invocations.agent_uid` and its index |
-| `0115`   | `20260930_0115_custom_tool_reach.py` | `mcp_tool_reach` |
+The kind-agnostic half — `Resource` (its immutable `uid` and its mutable `name`
+label), `Kind`, `Scope`, `AuditEntry`, `RetentionPolicy`, `PrunableTable`, the
+resource file, reach, the audit log and the retention policies — is modelled by
+spec [resource-framework](../resource-framework/data-model.md); the storage
+classes and state documents by spec vault-storage. This document covers only
+what the MCP kind adds on top; ciphertext belongs to spec credentials.
 
 ## What this kind contributes to the framework
 
@@ -39,8 +24,8 @@ resource-framework:
 | `validate_name`            | reserves the `__` namespace separator, which the prefixing scheme depends on                  |
 | `credential_ref_extractor` | the transport's `credential_refs`, so refs are probed before any write and released after a delete |
 | `audit_redactor`           | an audit-safe copy of a transport config                                                     |
-| `on_delete`                | tears down any running upstream for that server before its row goes                          |
-| `on_rename`                | releases every live connection held under the name being left behind, before the row changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)) |
+| `on_delete`                | tears down any running upstream for that server before its file goes                         |
+| `on_rename`                | releases every live connection held under the name being left behind, before the file changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)) |
 
 ## MCP kind value objects (`backend/coffer/domain/mcp/`)
 
@@ -102,7 +87,7 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `operation`     | `str \| None`           | `"<METHOD> <path>"` of the imported operation, for re-import                 |
 
 A tool's **reach override** is not in the config: reach is machine-local, so it
-is the `mcp_tool_reach` table below.
+is `local/tool-reach.json` (below).
 
 ### `MCPServerConfig` (`domain/mcp/server_config.py`)
 
@@ -152,21 +137,24 @@ persisted (per [Capability State Model](../../../docs/decisions/capability-state
 
 ### `MCPCapabilityPreference` (`domain/mcp/capability.py`)
 
+One capability's switch with when this machine saw it: the switch is read
+from the server's `state/mcp-preferences/` document, the times from
+`derived.db`.
+
 | Field             | Type                                    | Notes                                                       |
 | ----------------- | --------------------------------------- | ----------------------------------------------------------- |
-| `id`              | `int \| None`                           | DB surrogate                                                |
-| `resource_id`     | `int`                                   | FK to `resources.id`                                        |
+| `resource_uid`    | `str`                                   | the server's uid                                            |
 | `capability_type` | `Literal["tool", "resource", "prompt"]` |                                                             |
 | `capability_key`  | `str`                                   | original (unprefixed) name; for resources, the original URI |
-| `enabled`         | `bool`                                  | enabled by default when first discovered                    |
-| `first_seen_at`   | `datetime`                              |                                                             |
+| `enabled`         | `bool`                                  | on unless the key is listed under `disabled` in the document |
+| `first_seen_at`   | `datetime`                              | the epoch for a capability this machine has never seen      |
 | `last_seen_at`    | `datetime`                              | updated every successful discovery                          |
 
 ### `MCPInvocation` (`domain/mcp/capability.py`)
 
 | Field             | Type                                          | Notes                           |
 | ----------------- | --------------------------------------------- | ------------------------------- |
-| `id`              | `int \| None`                                 | DB surrogate                    |
+| `id`              | `int \| None`                                 | `runs.db` row id                |
 | `timestamp`       | `datetime`                                    |                                 |
 | `resource_uid`    | `str`                                         | the MCP server's uid, or one of two reserved non-uid values — see below |
 | `capability_type` | `Literal["tool", "resource", "prompt"]`       |                                 |
@@ -182,35 +170,96 @@ neither can collide with one (`domain/mcp/capability.py`):
 
 | Value              | Means                                                                                                                                                                                                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `coffer`           | one of Coffer's own `coffer__*` builtin tools. Builtins share this log so retention and the activity surfaces work uniformly, but no `mcp_server` row stands behind them and there is no uid to record.                                                          |
+| `coffer`           | one of Coffer's own `coffer__*` builtin tools. Builtins share this log so retention and the activity surfaces work uniformly, but no `mcp_server` resource stands behind them and there is no uid to record.                                                          |
 | `deleted:<name>`   | a server already deleted when migration 0097 re-keyed the log. Its identity was never recorded and cannot be recovered, so the label it did carry survives behind a marker that is visibly not an identity. The row joins to no resource, which is the truth about it. |
 
-A row carrying either joins to nothing, which is what the tiering query's inner
-join relies on.
+A row carrying either resolves to no resource, so the tiering counts leave it
+out.
 
 **Never store args or results** — schema cannot hold them.
 
-## SQLite schema
+## Storage
 
-The DDL below is the shape these tables have today. The kind-agnostic
-`resources`, `audit_log` and `retention_policies` tables they sit beside are in
-spec resource-framework's data model.
+| What | Where | Class |
+| ---- | ----- | ----- |
+| the server itself | `vault/resources/mcp_server/<name>.json` (spec resource-framework) | vault |
+| capability switches | `vault/state/mcp-preferences/<server name>.json` | vault |
+| when each capability was first and last seen | `derived/derived.db` `mcp_capability_seen` | derived |
+| the last health check | `derived/derived.db` `mcp_server_health` | derived |
+| custom tools' reach overrides | `local/tool-reach.json` | local |
+| the invocation log | `runs.db` `mcp_invocations` | runs |
+
+In the one-time upgrade to the vault layout the rows of
+`mcp_capability_preferences` were split into the switch documents and
+`mcp_capability_seen`, `mcp_server_health` was copied into `derived.db`,
+`mcp_tool_reach` became `local/tool-reach.json`, and revision 0117 dropped the
+three tables.
+
+### Capability switches — `state/mcp-preferences/<server name>.json`
+
+Whether a person switched a capability off is theirs, and travels, so it is a
+vault state document (spec vault-storage), one per server that has anything
+switched off:
+
+```json
+{
+  "server_uid": "3f2a9c0e8b1d4c6a9e7f0b2d4c6a8e0f",
+  "format_version": 1,
+  "disabled": { "tool": ["delete_repo"], "prompt": ["summarise"] }
+}
+```
+
+| Key | Notes |
+| --- | ----- |
+| `server_uid` | the owner's uid — what the document is found by; the file name only follows the server's name |
+| `format_version` | the state document's format (1) |
+| `disabled` | `{capability_type: [capability_key, ...]}`, sorted; only switched-off capabilities are listed. A capability nobody touched is on, so a new upstream tool writes nothing into the vault |
+
+A server with nothing switched off has no document: turning its last capability
+back on removes the file. The document is deleted with its server in the same
+commit (`MCPCapabilityPreferenceStore`, `infrastructure/mcp/persistence.py`).
+
+### `derived/derived.db`
+
+Observations this machine can make again: no Alembic lineage, created at open,
+recreated when its `PRAGMA user_version` differs (spec vault-storage).
 
 ```sql
--- MCP-specific: user's capability preferences
-CREATE TABLE mcp_capability_preferences (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    resource_id      INTEGER NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
-    capability_type  TEXT    NOT NULL,                      -- 'tool' | 'resource' | 'prompt'
-    capability_key   TEXT    NOT NULL,
-    enabled          BOOLEAN NOT NULL DEFAULT 1,
+CREATE TABLE mcp_capability_seen (
+    server_uid       VARCHAR   NOT NULL,
+    capability_type  VARCHAR   NOT NULL,              -- 'tool' | 'resource' | 'prompt'
+    capability_key   VARCHAR   NOT NULL,
     first_seen_at    TIMESTAMP NOT NULL,
-    last_seen_at     TIMESTAMP NOT NULL,
-    UNIQUE (resource_id, capability_type, capability_key)
+    last_seen_at     TIMESTAMP NOT NULL,              -- updated on every successful discovery
+    CONSTRAINT pk_mcp_capability_seen PRIMARY KEY (server_uid, capability_type, capability_key)
 );
-CREATE INDEX idx_prefs_resource ON mcp_capability_preferences(resource_id, capability_type, enabled);
 
--- MCP-specific: invocation log
+CREATE TABLE mcp_server_health (
+    resource_uid   VARCHAR   PRIMARY KEY,             -- the server's uid, so a rename keeps its row
+    status         VARCHAR   NOT NULL,                -- 'healthy' | 'failing'
+    checked_at     TIMESTAMP NOT NULL
+);
+```
+
+A capability switched off on another machine that this machine has never seen
+reads with its seen-times at the epoch, and is left out of "current tools".
+
+### Custom tools' reach — `local/tool-reach.json`
+
+```json
+{ "<group uid>": { "<tool name>": ["<agent uid>", "..."] } }
+```
+
+A custom tool may narrow its group's reach to some agents; like every reach it
+is true of this machine only, so it is local state beside `local/reach.json`
+and never in the group's vault file (`MCPToolReachStore`,
+`infrastructure/mcp/tool_reach_repo.py`). A tool with no entry reaches wherever
+its group does; an emptied group is removed. Entries go with their tool
+(removed, renamed away, dropped by a re-import) and with their group.
+
+### `runs.db` — `mcp_invocations`
+
+```sql
 CREATE TABLE mcp_invocations (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp        TIMESTAMP NOT NULL,
@@ -227,61 +276,32 @@ CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
 CREATE INDEX idx_invocations_agent    ON mcp_invocations(agent_uid, timestamp);
-
--- MCP-specific: persisted upstream health (revision 0003; re-keyed by 0097)
-CREATE TABLE mcp_server_health (
-    resource_uid   TEXT      PRIMARY KEY,
-    status         TEXT      NOT NULL,                    -- 'healthy' | 'failing' | 'unknown'
-    checked_at     TIMESTAMP NOT NULL
-);
-
--- MCP-specific: custom tools' machine-local reach overrides (revision 0115)
-CREATE TABLE mcp_tool_reach (
-    resource_uid   TEXT      NOT NULL,                    -- the custom-tool group's uid
-    tool           TEXT      NOT NULL,                    -- the tool's name in the group
-    agents_json    TEXT      NOT NULL,                    -- JSON list of agent uids the tool still reaches
-    updated_at     TIMESTAMP NOT NULL,
-    PRIMARY KEY (resource_uid, tool)
-);
-
 ```
 
-## SQLAlchemy mapping (summary)
+`MCPInvocationModel` (`infrastructure/mcp/invocation_writer.py`) is on the
+shared `Base.metadata` of `runs.db`; `_inv_to_domain` / `_inv_to_model`
+convert. The tiering counts resolve each row's uid to the server's current name
+through the resource store (`name_of`), so a row whose uid names no resource —
+a builtin, a deleted server — counts for nothing.
 
-This kind's ORM models live under `backend/coffer/infrastructure/mcp/`,
-registered against the same `Base.metadata` as every other spec's:
+## Integrity rules
 
-| ORM class                      | Table                        | Lives in                                  |
-| ------------------------------ | ---------------------------- | ----------------------------------------- |
-| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`       |
-| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/invocation_writer.py` |
-| `MCPServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`       |
-| `MCPToolReachModel`            | `mcp_tool_reach`             | `infrastructure/mcp/tool_reach_repo.py`   |
-
-Conversion between rows and domain entities is by private module functions:
-`_pref_to_domain` in `persistence.py`, and `_inv_to_domain` / `_inv_to_model`
-in `invocation_writer.py`. The health model has no domain entity; its repository
-reads a row as a `(status, checked_at)` tuple.
-
-## Cascade and integrity rules
-
-| Action                                    | Effect                                                                                                                                                               |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
-| `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade.                                                |
-| `mcp_tool_reach`                          | rows are deleted by the custom-tool service with their tool (removed, renamed away, dropped by a re-import) and with their group; keyed by the group's `uid`, never synced (spec vault-sync "Keep reach machine-local"). |
-| `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0097), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
+| Action | Effect |
+| ------ | ------ |
+| delete a server | its `state/mcp-preferences/` document goes in the same commit. Does **not** touch `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does |
+| switch a capability | adds or removes its key in the server's document (one commit); the seen-times are untouched, which is what makes a decision survive an upstream upgrade |
+| `local/tool-reach.json` | never synced (spec vault-sync "Keep reach machine-local") |
+| `mcp_server_health` | keyed by the server's uid, so a rename keeps the row it already has |
 
 The kind-agnostic rules these sit under — what a rename does to the audit trail
 (nothing: the identity does not move, so the history follows the resource),
-why `kind` is never updated, why a retention policy is never deleted — are spec
-resource-framework's.
+why `kind` is never changed — are spec resource-framework's.
 
 ## Retention
 
 `mcp_invocations` registers with spec resource-framework's prunable-table
 registry, carrying a 30-day default that the daemon seeds at startup. The
-policy row, the periodic pass that reads it and the surfaces that change it are
+policy, the periodic pass that reads it and the surfaces that change it are
 that spec's; all this one does is contribute the table, its timestamp column
 and the default.
 

@@ -66,6 +66,7 @@ def _resources(machine: Machine) -> dict[str, bytes]:
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.glob("resources/*/*")}
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine")
 def test_the_old_remote_is_refused_and_rebuilt_then_the_second_machine_joins_as_new(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

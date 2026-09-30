@@ -36,7 +36,7 @@ Earlier builds let you register several agents of one type under names you chose
 :::
 
 ::: info The agent's files are the source of truth
-Coffer never copies an agent's configuration into its database. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory and the model binding.
+Coffer never copies an agent's configuration into its own store. Config files, MCP entries, plugins, native memory and transcripts are read from disk every time you look at them. The agent record itself holds only the type, the config directory and the model binding.
 :::
 
 ## Register an agent

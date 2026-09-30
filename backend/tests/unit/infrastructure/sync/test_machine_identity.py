@@ -32,6 +32,7 @@ def _linux_host(monkeypatch: pytest.MonkeyPatch, *sources: pathlib.Path) -> None
     monkeypatch.setattr(platform_identity, "LINUX_SOURCES", tuple(str(s) for s in sources))
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a machine identity survives reinstalling Coffer")
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a machine id is derived from the host and cached"
 )

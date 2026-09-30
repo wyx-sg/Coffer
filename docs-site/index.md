@@ -73,8 +73,8 @@ flowchart LR
 ```
 
 - **The gateway.** Each agent session gets its own set of upstream MCP servers. Coffer lists their tools under a `<server>__<tool>` prefix, next to its own `coffer__*` tools.
-- **Delivery into agents.** Skills arrive as directory links in each agent's `skills/` folder. Provider switches are written into the agent's own config file. Coffer never copies an agent's files into its database.
-- **The vault.** Configuration and state live in `~/.coffer/coffer.db` (SQLite). Skills, knowledge and memory are plain files in the same directory, and secrets are encrypted.
+- **Delivery into agents.** Skills arrive as directory links in each agent's `skills/` folder. Provider switches are written into the agent's own config file. Coffer never copies an agent's files into its own store.
+- **The vault.** Configuration and content live as plain files in `~/.coffer/vault`, a git repository: one JSON file per resource, skill folders, knowledge collections, and secrets as ciphertext. You can edit any of them by hand, and every change has a history. History such as the audit log lives beside it in `runs.db`.
 
 The [architecture overview](/architecture/) explains each part in depth.
 

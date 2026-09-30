@@ -1,349 +1,229 @@
 ---
 title: Vault sync
-description: How Coffer converges one vault across your machines through a git remote you own — the converge round, the pointer, joining, per-path application, conflicts and the deletion guard.
+description: How Coffer keeps one vault across your machines by pulling and pushing the vault's own git repository — the thin round, stopping on any conflict, the deletion breaker, joining, rollback, machines and the problems a round reports.
 ---
 
 # Vault sync
 
-Vault sync keeps one vault across several machines by converging each of them with a git repository you own. This page is for engineers who want the mechanism: what a converge round does step by step, why every diff is taken against a local pointer, how a new machine is told from a returning one, how each kind of document is applied, and which guards stop an unattended writer from doing damage. For setup and day-to-day use, see the [Vault sync guide](/guides/vault-sync).
+Vault sync keeps one vault across several machines by pulling and pushing the vault's git repository to a remote you own. This page is for engineers who want the mechanism: what a round does step by step, why any conflict stops it, how a new machine is told from a returning one, which guards stop an unattended writer from doing damage, and how a round is undone. For setup and day-to-day use, see the [Vault sync guide](/guides/vault-sync).
 
 ## The problem
 
-You work the same projects from a laptop and a desktop, and both produce vault state: knowledge documents, skills, MCP server registrations, agent configuration, provider profiles, credentials. Without convergence each machine is an island. Exporting from one and importing on the other is a chore nobody does often enough, and it is a wholesale overwrite with no base, so it cannot tell "this machine never had that document" from "this machine deleted it".
+You work the same projects from a laptop and a desktop, and both change the vault: knowledge documents, skills, MCP server registrations, provider profiles, secrets. Without sync each machine is an island. Copying one onto the other is a wholesale overwrite with no base, so it cannot tell "this machine never had that document" from "this machine deleted it".
 
-Convergence has to meet four constraints that pull against each other:
+Sync has to meet four constraints that pull against each other:
 
-- **Local-first.** Each machine's vault stays complete and authoritative. The remote is a rendezvous, never a system of record: you can delete it and rebuild it from any single machine.
-- **Deletions must propagate**, or the machines never agree, and **absence must never be mistaken for deletion**, or one stale machine erases what the others hold.
-- **Secrets travel only as ciphertext**, and the master key never enters the repository.
-- **Nothing happens by default.** Sync does nothing until you configure a remote.
+- **Local-first.** Each machine's vault stays complete and authoritative. The remote is a rendezvous, never a system of record: you can delete it and rebuild it from any one machine.
+- **Deletions must travel**, or the machines never agree, and **absence must never be mistaken for deletion**, or one stale machine erases what the others hold.
+- **Secrets travel only as ciphertext, and only if you ask**, and the master key never enters the repository.
+- **Nothing Coffer does on its own should need finding and undoing later.** An unattended writer may apply what git merges cleanly; everything else is your decision.
 
 ## The design in decisions
 
 | Decision | Reason |
 | --- | --- |
-| Git is the transport and git's three-way merge is the arbiter | Git brings history, diff and merge for free, and your remote is an ordinary repository you can clone and inspect. Coffer writes no timestamp arbitration: "newest commit wins" is a fact about when a machine ran, not about what you meant. |
-| The vault is serialized into a separate working tree, `~/.coffer/sync` by default | `~/.coffer` mixes vault truth with machine-local state (`coffer.db`, logs, `daemon-config.json`). A dedicated tree keeps git's diffs meaningful and leaves SQLite the local system of record. |
-| Local state is committed before the merge | Committing first gives git all three inputs (base, local, remote), so the diff from the local commit to the merge result is exactly what the remote contributed. |
-| Every diff is taken against a **pointer**: the last commit this vault provably absorbed | A deletion can only appear in the diff because some machine removed that document relative to a shared base. A machine that merely lacks a document has changed nothing relative to its own base. |
-| The exporter writes differentially and never deletes a held path | A clear-and-rewrite export, or publishing a document this vault failed to apply, would turn "not absorbed" into "deleted". |
-| A machine with no pointer is joining, and the remote's registry decides whether it is new or returning | A new machine can safely take the union. A returning machine taking the union would republish everything the others deleted while it was away. |
-| A deletion guard holds oversized losses in both directions | The apply runs unattended. The guard bounds the damage of a defect here, on the machine that pushed, or on a machine whose disk was wiped. |
-| Reach and derived output never travel | `enabled` and `scope` are answers each machine gives for itself; derived rows and the rendered `coffer-guide` skill differ per machine by construction. |
+| The vault *is* the git repository; sync only adds a remote and runs fetch and push. | There is no second copy to serialize into and translate back. What you see in `~/.coffer/vault` is exactly what travels. See [Persistence](/architecture/persistence). |
+| The merge is computed outside the working tree (`git merge-tree --write-tree`). | Nothing in the vault is touched until the round knows the merge is clean, valid and within the breaker. |
+| **Any** conflict stops the whole round, with an answer per file. | Automatic resolvers change data without anyone deciding. A stopped round leaves the vault and the remote exactly as they were. |
+| The checkout is a compare-and-swap over the whole tree. | An edit you have not saved into a commit is never overwritten; the round waits on it instead. |
+| The deletion breaker holds oversized losses in both directions. | Rounds run unattended. The breaker bounds the damage of a defect, a wiped disk or a bad restore. |
+| A safety snapshot before every checkout, and rollback as a new commit. | A clean merge you regret is one command away from undone, and later edits survive the undo. |
+| Joining is explicit and previewed; a new machine takes the union. | A timer must never decide how an unknown vault meets a remote. A union deletes nothing. |
+| Machine-local state lives outside the vault. | Reach, the remote, retention and agents are in `local/`, which is never committed, so they cannot travel by accident. |
 
-## The working tree
+## What travels
 
-The working tree is a plain git repository. Its layout is versioned by `manifest.json` (`schema_version`, currently `2`):
+Everything committed in the vault repository, and nothing else:
 
-```text
-~/.coffer/sync/
-├── manifest.json                    {"schema_version": 2}
-├── knowledge/<collection>/…         mirrored from ~/.coffer/knowledge/, .inbox/ included
-├── skills/<skill>/…                 mirrored from ~/.coffer/skills/, except skills/coffer-guide/
-├── memory-triggers/<id>.md          mirrored from ~/.coffer/vault/memory-triggers/ (authored memory triggers)
-├── resources/<kind>/<uid>.yaml      one document per resource, keyed by its immutable uid
-├── state/<area>/<doc>.yaml          module-owned shared state
-├── credentials/<ref>.enc            Fernet ciphertext, only if the remote carries credentials
-└── machines/<machine_id>.yaml       one descriptor per machine
-```
+| Travels (in `~/.coffer/vault`) | Stays on each machine |
+| --- | --- |
+| Resource files of `mcp_server`, `skill`, `channel`, `provider` and `knowledge` | Agents (`local/resources/agent/`): an agent's config directory is a fact about this machine |
+| Knowledge documents and `.inbox/` material, skill master folders, memory triggers | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
+| MCP capability switches, channel pairings, Coffer's model and upkeep settings (`state/`) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
+| Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext (`local/secret/`), the secret boundary, the master key |
+| One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
 
-A resource document carries identity, description and config, and nothing else. Keys are sorted and machine-local fields (`id`, `created_at`, `updated_at`) are excluded, so an unchanged vault serializes to byte-identical files on every machine and a round with nothing to say makes no commit:
+**Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered. See [Resource framework](/architecture/resource-framework).
 
-```yaml
-config:
-  transport:
-    args: []
-    command: ${HOME}/.local/bin/jira-mcp
-    credential_refs:
-      JIRA_TOKEN: jira-token
-    type: stdio
-description: Company Jira
-kind: mcp_server
-name: jira
-uid: 5f0c1e9a2b7d4c3e8a6f9b0d1c2e3f4a
-```
+**Channels** travel with a `runs_on` field naming the one machine whose daemon starts the adapter. The document, its credential references and its pairings travel, so moving a bot to another machine is a rebind. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
 
-Paths under your home directory are written against the `${HOME}` sentinel and expanded on the receiving machine (`domain/sync/portability.py`). Paths outside home travel verbatim and may simply not resolve elsewhere, which surfaces as a per-path failure rather than a silent mismatch.
+**Secrets.** `secret/` is listed in the repository's `.git/info/exclude` until the remote's `include_secret` is on; then the ciphertext files are committed like any other. Ciphertext that has entered a pushed commit cannot be withdrawn: revocation is rotation.
 
-Four state areas converge, each owned by the module that owns the state:
+## The round
 
-| Area | Directory | Provider |
-| --- | --- | --- |
-| MCP capability preferences | `state/mcp-preferences/` | `application/mcp/sync_state.py` |
-| Internal-engine settings, including the curation switch and owner | `state/settings/internal-engine.yaml` | `application/engine_settings_sync.py` |
-| Agent plugin inventory (recorded, never replicated into an agent) | `state/agent-plugins/` | `application/agent/plugin_sync_state.py` |
-| Channel peer pairings (platform identity only) | `state/channel-peers/<channel_uid>/<chat>.yaml` | `application/channel/sync_state.py` |
-
-An area publishes a document only while there is a decision to carry, never for its defaults. Otherwise a machine that reset a choice and a machine that never made one would add and delete the same document at each other on every round.
-
-## The converge round
-
-A round is seven steps, in this order. The order is the design.
+A round is eight steps, in this order. The order is the design.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant W as ConvergeWorker
-    participant S as ConvergeService
-    participant R as ConvergeRound
-    participant G as Git working tree
+    participant W as Sync worker
+    participant S as Sync service
+    participant V as Vault repository
     participant O as origin (your remote)
-    participant V as Vault (files and SQLite)
-    W->>S: run_once()
-    S->>S: take the vault-write lock
-    S->>R: run(token)
-    R->>R: 0 repair: reset tree to pointer P if HEAD drifted
-    R->>O: fetch
-    R->>G: refuse a manifest newer than this build
-    R->>G: 1 serialize vault differentially, commit L
-    R->>R: publish guard on diff P..L
-    R->>G: 2 merge origin/branch into L, giving M
-    R->>R: 3 diff D = L..M, plus the retry set
-    R->>R: 4 apply guard on D, tag L as pre-apply snapshot
-    R->>V: 5 apply D path by path, then post-import hooks
-    R->>O: 6 push M
-    R->>R: pointer := M
-    R-->>S: ConvergeRun(status, applied, published, failures)
-    S->>S: release lock, record run and audit event
+    W->>S: run a round
+    S->>S: take the vault lock
+    S->>V: check: a repository, not inside a cloud-synced folder
+    S->>V: settle your valid edits; L := HEAD
+    S->>O: fetch; R := origin/branch
+    S->>S: refuse a remote at another layout
+    S->>V: git merge-tree L R, giving tree T (outside the working tree)
+    S->>S: any conflict, identity clash or invalid file? stop
+    S->>S: deletion breaker, incoming (L to T) and outgoing (base to L)
+    S->>V: snapshot L; M := commit(T; L, R); read-tree -m -u L M
+    S->>V: this machine's descriptor
+    S->>O: push
+    S->>S: record the round; reconcile once if anything changed
 ```
 
-**Step 0, repair.** If the working tree's HEAD is not the pointer (a crashed round left it elsewhere), the tree is reset to the pointer first. Serializing onto a drifted tree would turn "never absorbed" into "deleted" the moment the diff is taken. If the pointer names a commit the repository no longer has (the working tree was deleted or moved), the pointer is cleared and the round becomes a join.
+1. **Check.** The vault is a repository, and not inside a folder another tool synchronises (a Syncthing folder, Dropbox, iCloud Drive or a File Provider root). Two tools syncing one git repository corrupt it, so such a vault pauses with `paused_cloud_folder`.
+2. **Local.** Your valid hand edits are committed first, so `L`, this machine's `HEAD`, holds everything accepted here. There is no separate export step: every accepted write is already a commit.
+3. **Fetch.** `origin/<branch>` becomes `R`. A remote whose `manifest.json` names another layout is refused before anything is merged: newer is `remote_too_new` (upgrade this machine), older is `remote_too_old` (the remote must be rebuilt, see [Remote layout](#remote-layout)).
+4. **Merge.** `git merge-tree --write-tree L R` computes the merged tree `T` in the object store. Nothing in the vault changes.
+5. **Stop?** A content conflict, the same resource name with two different uids, or a merged file that fails validation stops the round, whole. Nothing is checked out and nothing is pushed.
+6. **Guard.** The [deletion breaker](#the-deletion-breaker) runs over what the round would remove here and what this machine's own commits would remove from the shared history.
+7. **Check out.** `L` is tagged `refs/tags/coffer/pre-apply/<timestamp>` (ten kept). `M` is committed with parents `L` and `R`, and `git read-tree -m -u L M` moves the vault to it under the vault's write lock. Git verifies every path it will change against `L` before it writes a file, so a path you are editing (an uncommitted or invalid edit) makes the round wait with `waiting_on_edit` and name the file.
+8. **Publish.** This machine's descriptor is updated in its own commit, then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
 
-**Fetch and layout check.** The fetch happens before anything compares against the remote. The remote's `manifest.json` is then read: a `schema_version` newer than this build's refuses the round with `SYNC_BUNDLE_TOO_NEW` before anything is serialized, merged, applied or pushed. Refusing matters on both sides, because an older build would not only half-apply a newer tree, it would publish into it, and every area it does not understand would leave as deletions nobody made. A manifest that is missing or unreadable is not a refusal, since no newer Coffer produces one.
-
-**Step 1, serialize.** `SyncExporter` writes the vault into the tree and `MachineRegistry.publish_self` writes this machine's descriptor in the same step, so a descriptor always sits in the same commit as the state it describes. If `git add -A` stages nothing, no commit is made and `L` is the pointer. The **publish-side guard** runs here, right after the local commit and before any merge, over `P..L`: what this round would publish as deletions. Each direction is guarded at the first step that knows its diff, so a breach in either holds the round before the vault or the remote is touched.
-
-**Step 2, merge.** `git merge --allow-unrelated-histories origin/<branch>` into `L` produces `M`. A remote with no branch yet (the first machine on a fresh repository) has nothing to merge, so `M = L`. Conflicts go to the arbiter described below; any conflict left unresolved aborts the merge, returns status `conflict`, leaves the vault untouched and does not move the pointer.
-
-**Step 3, diff.** `D = git diff L..M` is exactly what the remote contributed. The retry set is appended: each held path is re-read from the working tree, and a path the tree has since dropped is carried as a deletion.
-
-**Step 4, guard and snapshot.** The **apply-side guard** runs over `D` plus the retry set. If it passes, `L` is tagged `coffer/pre-apply/<UTC timestamp>`; the ten newest tags are kept.
-
-**Step 5, apply.** Each path is applied independently by the applier that owns its prefix. A failure is reported, the path is held, and the round carries on. Then every kind's post-import hook runs once, from current state, to re-project the machine-local side of what changed (native agent config, shims, skill deliveries).
-
-**Step 6, publish.** `M` is pushed and the pointer advances to `M`. If the push fails the local commit stays, the status is `push_failed`, and the next round carries the outstanding work. The pointer still advances because the vault did absorb `M`.
+After a round that changed the vault, the [reconciler](/architecture/reconciler) runs one pass, so each kind re-projects what arrived: agent config, shims, skill deliveries, provider projections. Sync itself imports no kind.
 
 ### Round outcomes
 
-A round returns a `ConvergeRun` for every outcome, so the worker never has to decide what is survivable:
+Every round is recorded in `runs.db` (`sync_runs`) and audited, whatever its outcome:
 
 | Status | Meaning |
 | --- | --- |
-| `ok` | Something was published or applied. |
-| `no_change` | Nothing to do on either side. A success, not a skip. |
-| `conflict` | Git could not merge and nothing resolved it. Vault untouched, pointer unmoved. |
-| `awaiting_confirmation` | The deletion guard held the round. |
-| `awaiting_join` | This machine has no pointer; only `adopt` joins. |
-| `push_failed` | Applied locally; the push did not land. |
-| `failed` | The round could not complete, including the two refusals `SYNC_JOIN_AMBIGUOUS` and `SYNC_BUNDLE_TOO_NEW`. |
-| `disabled` | No remote, or the remote is paused. |
+| `nothing_to_do` | Nothing to pull and nothing to push. A success, not a skip. |
+| `pulled`, `pushed`, `pulled_and_pushed` | What moved. |
+| `push_failed` | Applied here; the remote refused the push. |
+| `stopped` | A conflict. Nothing checked out, nothing pushed. |
+| `held` | The deletion breaker held the round. |
+| `waiting_on_edit` | An edit you have not finished is on a path the round would change. |
+| `join_required`, `joined` | This machine has not joined the remote yet; it has now. |
+| `unreachable`, `auth_failed` | The remote could not be reached, or refused to sign in. |
+| `paused_cloud_folder` | The vault is inside a folder another tool synchronises. |
+| `remote_too_new`, `remote_too_old` | The remote is at another vault layout. |
+| `rolled_back` | A round was rolled back. |
+| `failed` | Anything else, with git's message. |
 
-### The pointer, the retry set and the not-applicable set
+## Conflicts stop the round
 
-Three facts are machine-local and never travel. They live in SQLite (`sync_convergence_state` and `sync_held_paths`, through `infrastructure/persistence/convergence_state_repo.py`), because `coffer.db` is already outside the tree and cannot be published by accident:
+Most concurrent edits are not conflicts: git merges different files, and different parts of one file, on its own, and a clean merge is applied unattended. What git cannot settle stops the round, and it stays stopped until you answer every file. The stopped round is kept in `local/sync/round.json`.
 
-- **The pointer** is the base of every diff. A pointer that travelled would be another machine's claim about what this vault absorbed.
-- **The retry set** holds paths the tree has that this vault failed to apply. The exporter must not delete them, or a local failure becomes a published deletion. They are retried every round and leave the set on success.
-- **The not-applicable set** holds paths that can never apply here, such as an `agent` document whose `config_dir` does not exist on this machine (error codes `AGENT_CONFIG_DIR_MISSING`, `KIND_NOT_APPLICABLE`). They are preserved like retry paths but neither retried nor reported as failures. Each round re-runs only the cheap precondition (the kind's import gate) and moves a path back to the retry set once it passes.
+Each conflicting file gets one of three answers:
 
-The same database also stores a held round's `PendingConfirmation` whole, so your "yes" means what you were shown.
+- **Keep this machine's** (`mine`).
+- **Take the other's** (`theirs`), shown with the diff of what changes here.
+- **Edit.** Coffer writes a marked-up copy of git's merge under `derived/sync-conflicts/` and opens it in your editor. The vault's own file never receives a conflict marker. Marking it resolved is refused while a marker is left, and the refusal names the line.
 
-## Joining: new and returning machines
+Answers are recorded, not applied one by one. When every file has one, **Continue** takes the resolved tree through the same validation, breaker, snapshot, checkout and push. A stop is a question about one pair of commits: if either side moves before you answer, the round is derived again and asks again. Local writes keep being committed while a round is stopped; only sync waits.
 
-A machine with no pointer is joining, and the two kinds of joiner need opposite treatment. `JoinResolver` reads `machines/<machine_id>.yaml` at `origin/<branch>` to decide:
+Two cases never ask:
 
-```mermaid
-stateDiagram-v2
-    [*] --> NoPointer
-    NoPointer --> AwaitingJoin: timer or sync now
-    AwaitingJoin --> NoPointer: report only, nothing applied
-    NoPointer --> Resolve: adopt
-    Resolve --> New: no descriptor for this id
-    Resolve --> Returning: descriptor names a reachable commit
-    Resolve --> Ambiguous: descriptor names a commit that is gone
-    New --> Converged: pointer = empty tree, diff can only add
-    Returning --> Converged: pointer = recorded commit, tree reset to it
-    Ambiguous --> New: keep-local choice
-    Ambiguous --> Rebuilt: rebuild from remote
-    Rebuilt --> Converged
-    Converged --> [*]
-```
+- **Secret ciphertext.** A Fernet token carries its encryption time in clear, so two ciphertexts for one ref are ordered without the key and the fresher wins. A two-choice prompt over two opaque blobs would be no choice at all.
+- **Machine descriptors.** Each machine writes only its own file, so descriptors never conflict.
 
-- **New machine.** The pointer is git's empty tree, so `D` is a diff from nothing and can only contain additions. The machine takes everything the remote holds, keeps everything it had, and publishes the union. Deletion is structurally impossible rather than merely avoided.
-- **Returning machine.** It converged before and lost its pointer to a reinstall or a wiped `~/.coffer`. Its descriptor names the commit it last absorbed; that becomes the pointer and the tree is reset to it, so the merge has a real common ancestor. The round is an ordinary stale-machine round: the remote's deletions apply, this machine's edits survive, nothing resurrects.
-- **Ambiguous.** The descriptor exists but its commit is gone from history (the remote was rewritten). There is no safe default, so the round raises `SYNC_JOIN_AMBIGUOUS` until you choose: `coffer sync adopt --keep-local` joins as new and may resurrect deletions, or `coffer sync rebuild` makes this machine a copy of the remote.
+## The deletion breaker
 
-Treating a returning machine as new looks conservative and is a data-loss bug: a union has no base to disagree with, so every deletion the fleet made while the machine was away comes back with no conflict raised. The mirror image is a returning machine whose vault was wiped: its recovered base is valid and its vault is empty, which the diff reads as "delete everything". The publish-side guard holds that round, and `rebuild` is offered as the honest answer.
+A round is **held** when, in any area and in either direction, its losses reach **20 files** or exceed **20%** of what the area held before. An area is the first path segment, except that `resources/<kind>/` and `state/<area>/` are areas of their own, so a mass deletion of one kind is not diluted by the others. The thresholds are fixed, and nothing skips the breaker.
 
-Detection runs on every round without a pointer, not only in `adopt`, so reconfiguring a remote cannot route around it. Joining itself is explicit: the timer and `coffer sync now` report `awaiting_join` and apply nothing, and `adopt` states the case and the counts before it asks.
+- **Incoming** is what the round would remove from this vault (`L` to `T`).
+- **Outgoing** is what this machine's own commits remove from the shared history. This is what stops a machine that lost its files to a reinstall, a failed restore or a stray `rm -rf` from pushing that loss to every other machine.
 
-### Machine identity
+It counts **losses, not deletions**. A resource file is lost only when its uid is gone from the other side, so a renamed or moved file is a move by construction. Any other file is a move when its exact bytes land elsewhere in the same area, or git's own rename detection pairs it with a file in the same area. The empty blob never pairs anything, and a pairing across areas is not a move. `machines/` and the manifest are never counted.
 
-`machine_id` must survive reinstalling Coffer, because only a surviving id can tell a returning machine from a new one. It is derived from the host (`infrastructure/sync/machine_id.py`): `IOPlatformUUID` on macOS, `/etc/machine-id` or `/var/lib/dbus/machine-id` on Linux. Only where neither exists is a UUID generated once into `~/.coffer/machine-id` (mode `0600`), and the registry reports that such an identity does not survive deleting `~/.coffer`.
+A hold is answered one of two ways, and either continues the round:
 
-The raw identifier never leaves the machine. What travels is `sha256("coffer-machine:" + raw)` truncated to 16 hex characters (`domain/sync/machine.py`). The machine **name** is a separate, freely changeable label stored inside the descriptor; nothing references it.
+- **Confirm** applies the deletions (`coffer sync hold --confirm`, **Delete n files**).
+- **Restore** keeps the files (`coffer sync hold --restore`, **Restore n files**). Incoming, the merged tree takes this machine's versions of them, so they stay here and go back up. Outgoing, the deleted files are written back from the shared base as a commit of yours, and the next round pushes them.
 
-### The registry is a view, not a table
+## Joining
 
-Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never another machine's, so descriptors cannot conflict and git merges them trivially. The registry is whatever `machines/*.yaml` holds. A descriptor carries `name`, `os`, `hostname`, `coffer_version`, `last_converged_on`, `last_converged_commit`, `key_fingerprint` (a 12-character SHA-256 prefix of the master key, so another machine can say its credentials will not decrypt here) and the registered `agents`.
+A machine that has never converged with the remote is **joining**. A timer never joins on its own: until you join, rounds end as `join_required` and move nothing. Joining is always previewed first, from the same facts the join then uses, so what you are shown is what happens:
 
-`last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine rm`) is the one deliberate write to another machine's path.
-
-## Applying a diff
-
-`ConvergeRound` routes each path to the applier whose prefix owns it. Every applier has exactly two operations, `upsert` and `remove`, because removal is the operation that had to be authorised and belongs visibly at the seam. `machines/` and `manifest.json` have no applier and are never applied.
-
-```mermaid
-flowchart LR
-    D["Diff D + retry set"] --> K["knowledge/ → TreeApplier"]
-    D --> SK["skills/ → TreeApplier (coffer-guide excluded)"]
-    D --> MT["memory-triggers/ → TreeApplier"]
-    D --> RS["resources/ → ResourceApplier"]
-    D --> ST["state/ → StateApplier"]
-    D --> CR["credentials/ → CredentialApplier"]
-    RS --> SVC["ResourceService + ImportGate"]
-    ST --> SP["SyncedStatePort of the area"]
-    K --> FS["~/.coffer/knowledge"]
-    SK --> FS2["~/.coffer/skills"]
-    CR --> CS["credential store"]
-```
-
-- **Knowledge and skill files** (`TreeApplier`) are copied in or unlinked; an emptied collection directory is removed too. Symlinks in the working tree are refused. There is no index to rebuild, because [knowledge is plain files](/architecture/knowledge).
-- **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook (a kind whose name is fixed refuses it, and the path is held). Config and description are updated, and, on a kind that carries a title, the title is set from the document's `title` key, or cleared when the document carries none (a document from an older build that still carries a title for an agent, MCP server or skill is accepted and its title ignored); the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases credentials no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
-- **State documents** (`StateApplier`) are handed to the `SyncedStatePort` that claims the area, with `${HOME}` expanded. Each area defines what deleting its document means: an un-pairing, capabilities re-enabled, engine settings back to defaults, or nothing at all for the plugin inventory. An area this build does not know is skipped rather than failed.
-- **Credential blobs** (`CredentialApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
-
-After the apply, the round lists credential refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band: the desktop app writes a key backup behind a presence check, and `coffer sync key import` installs it on the other machine.
-
-### Kinds reach sync through ports
-
-The sync package imports no kind. Kinds contribute at the composition root through a `SyncContributions` collector (`surfaces/http/sync_contributions.py`):
-
-| Port | Contributed by |
-| --- | --- |
-| `SyncedStatePort` | MCP preferences, engine settings, agent plugin inventory, channel peers |
-| `ImportGate` | `agent` (its `config_dir` must exist here) |
-| `ImportNormaliser` | `provider` |
-| `PostImportHook` | `agent` (native config and skill delivery), `provider` (projection into this machine's agents) |
-
-## What travels and what does not
-
-| Travels | Stays on the machine |
-| --- | --- |
-| Knowledge documents and `.inbox/` material | Reach: every resource's `enabled` and `scope` |
-| Skill folders | `skills/coffer-guide/` and its resource row (derived output) |
-| Resource documents of every converging kind, `channel` included | `memory` partitions (`Kind.converges = False`) and `~/.coffer/memory/` |
-| The four state areas | Conversations, the active conversation pointer, the audit log, MCP invocation records |
-| Credential ciphertext, if the remote opts in | The master key, `coffer.db`, `daemon-config.json`, logs, PID files |
-| One descriptor per machine | The pointer, retry set, not-applicable set and any held round |
-
-**Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered: the laptop that left a server dark would find it live after the desktop's next round. See [Resource framework](/architecture/resource-framework).
-
-**Derived output** is withheld in both halves. `Kind.converges_row` lets the `skill` kind decline the row for `coffer-guide`, which every machine renders from its own build and its own knowledge and memory root paths. The exporter protects that row's path instead of publishing its absence, and both appliers ignore arriving documents for it in either direction. Otherwise a machine on an older build that still publishes the folder would overwrite the one this machine rendered, or delete it only for the next boot to bring it back.
-
-**Channels** travel with a `runs_on` field naming the one `machine_id` whose daemon starts the adapter. The document, its credential references and its pairings converge, so taking over a bot on another machine is a rebind rather than a re-registration. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
-
-## Conflicts
-
-Most concurrent edits are not conflicts: git merges different hunks of one file on its own. What git cannot settle goes to `ConflictArbiter` (`application/sync/conflicts.py`), narrowest rule first:
-
-1. **Credential blobs never reach a text merge.** A Fernet token carries its encryption time in cleartext, so two blobs for one ref are ordered without the key and the fresher one wins. Unreadable headers are refused rather than guessed.
-2. **Delete versus edit in `knowledge/`, `skills/` and `memory-triggers/` resolves toward the edit.** A deletion there is usually a curation pass's housekeeping, which the next pass will redo; losing an edit is unrecoverable. This rule does not apply to `resources/`.
-3. **An agent may attempt the rest** if an internal model is configured. `AgenticConflictResolver` works in the working tree only and never sees the vault. It is bounded (at most 20 files, 96 KiB per file, 90 s per call, 300 s per pass) and untrusted: each file it claims must exist, carry no conflict marker and, under `resources/` or `state/`, parse as a YAML mapping. Agent-resolved paths are reported on the round so you can review them.
-4. **Otherwise the round stops** with status `conflict`. The merge is aborted, the vault is untouched and the pointer stays; you resolve in the working tree with your own git tools. Two machines waiting is better than two machines quietly disagreeing.
-
-## The deletion guard
-
-`DeletionGuard` (`domain/sync/diff.py`) holds a round when, in any area (`knowledge`, `skills`, `resources`, `state`, `credentials`), the losses are **20 or more** documents, **more than 20%** of the area's documents, or any at all from an area the base holds none of. The thresholds are fixed constants, not settings, and nothing can skip the guard. Area totals are read from the commit the diff starts from, so they cannot move mid-round.
-
-It runs **in both directions**: over what the round would publish (`P..L`) and over what it would apply (`D` plus the retry set). The publish side is what stops a machine that lost its files to a reinstall, a failed restore or a stray `rm -rf` from publishing that loss and taking every other machine down with it.
-
-### Counting losses, not deletions
-
-A layout migration moves documents, and a guard that counted deletions would hold every one. So the guard counts only deletions with no destination in the **same area of the same diff**. There are two ways to show a destination:
-
-- **The same content id reappears.** `git diff --raw` hands over a blob id for each side, so identical bytes are a fact to read, not a resemblance to guess. The empty blob never counts as evidence.
-- **Git's own rename detection pairs the two sides.** This is asked as a separate `git diff -M --diff-filter=R` call, at git's default similarity, so the diff the vault applies stays rename-blind and still lands one path at a time. Pairings that cross areas are discarded.
-
-The trade-off is explicit. A similarity pairing can only excuse a deletion when a similar addition exists in the same diff, and the losses the guard exists for (a wiped disk, a failed restore) come with no additions, so they are held exactly as before. A relocation that rewrites most documents past git's threshold is still held, which is the conservative half of the trade. A hold lists only the lost paths, not the moves.
-
-### Holds are questions about one diff
-
-A held round records its direction, the local commit, the remote tip at the time, the breached areas and the lost paths. Every later round re-derives the diff rather than short-circuiting on the hold:
-
-- If the direction that tripped no longer breaches (a defect was fixed, a file came back), the hold is released and the round proceeds.
-- If the same question stands, it is stored as the same hold, keeping the original time; the run history row is refreshed rather than duplicated and the log says it once.
-
-`coffer sync confirm` re-runs the round with the guard waived **only for the direction you answered, and only while the remote tip is unchanged**. If the remote moved, the guard runs again and the round is held afresh, because a "yes" that outlived the diff it was given for is how accidents happen. `coffer sync reject` resets the working tree to the pointer; the vault was never touched, since the guard runs before the apply.
-
-## Recovery
-
-The history on the remote is the backup, and recovery reuses the round's own machinery:
-
-| Command | What it does | Pointer |
+| Case | How it is recognised | What joining does |
 | --- | --- | --- |
-| `coffer sync restore` (no `--at`) | Applies the diff from the current state back to the newest `coffer/pre-apply/*` snapshot. | Unchanged, so the next round publishes the undo as a local change. |
-| `coffer sync restore --at <sha, ref or YYYY-MM-DD>` | Brings back documents from an earlier revision, dropping that diff's deletions so later work survives. | Unchanged, so the recovered documents publish as additions. |
-| `coffer sync rebuild` | Makes this vault the remote's tip, discarding what only this machine holds. Offered where the publish guard holds a wiped vault. | Set to the tip. |
+| **Empty** remote | The branch has no commits. | This machine is the first; the round pushes the whole vault. |
+| **New** machine | The remote has no descriptor for this machine. | The union: files only the remote has come down, files only this machine has go up, identical files need nothing. A file both hold with different content is left exactly as it is here, not pushed, until you choose. Nothing is deleted on either side. |
+| **Returning** machine | The remote holds this machine's descriptor, naming the commit it last converged at, and that commit is still in the remote's history. | An ordinary three-way merge from that commit, so what the others deleted while it was away is deleted here, its own edits survive, and nothing deleted comes back. Its own deletions since then are real deletions, guarded by the breaker. |
 
-Each refuses a remote layout newer than the build first.
+A file a new machine's join left different is settled per file or all at once: **keep mine** or **take theirs** (`coffer sync choose`). A same-name resource with a different uid stops the join and asks, like any conflict.
+
+Treating a returning machine as new looks conservative and is a data-loss bug: a union has no base to disagree with, so every deletion the fleet made while the machine was away comes back. That is why the descriptor records the last converged commit.
+
+## Rollback
+
+`coffer sync rollback <round>` (or **Roll back** on the round's row) puts back what one round changed, from its snapshot, as a new `user` commit on this machine that the next round pushes. Only the paths that round changed are touched, and a file edited since the round is kept and listed. The plan is shown first. A round that applied nothing, and a rollback itself, cannot be rolled back.
+
+Rolling back never moves `HEAD` backwards: history only grows, so the other machines follow the undo like any other change.
+
+## Machines
+
+Each machine writes exactly one file, `machines/<machine id>.json`, and never another machine's. The registry is whatever `machines/` holds. A descriptor carries its format version, the machine id, a name, the OS and hostname, the Coffer version, when it last ran a round that moved something, the commit it last converged at, a fingerprint of its master key (so another machine can say its secrets will not decrypt here), and its agents with their plugins. The plugin list is an inventory: it is recorded, never installed into any agent.
+
+- **Identity.** The machine id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux) and hashed before it is published, so it survives reinstalling Coffer. Only where neither exists is a random id stored in `~/.coffer/machine-id`, which does not survive deleting `~/.coffer`.
+- **Name.** A label. Renaming is free, nothing keys on it, and the new name is committed at once.
+- **Retire.** Deleting another machine's descriptor is an ordinary commit of yours that the next round pushes. A machine that syncs again comes back.
+
+## Problems a round reports
+
+| Problem | Round status | What it means | What to do |
+| --- | --- | --- | --- |
+| Unreachable | `unreachable` | Git could not reach the repository. | Nothing is lost; changes wait and go up with the next round that gets through. |
+| Sign-in failed | `auth_failed` | The remote refused the credential, or a token pointed at a new URL is waiting for approval. | Check the token, or approve it in the desktop app. |
+| Push rejected | `push_failed` | Applied here; the remote refused the push. | Check the branch's protection and the token's rights. |
+| Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder. |
+| Layout | `remote_too_new`, `remote_too_old` | The remote was written with another vault layout. | Newer: upgrade this machine. Older: rebuild the remote. |
+
+Each problem is shown as a banner on the **Sync** page, marks the **Sync** entry in the sidebar, and makes `coffer sync status` exit non-zero.
+
+### Remote layout
+
+The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number, such as one written by a Coffer from before the vault layout, is refused and never converted in place: converting a shared remote from one machine while others still push the old layout is how data gets lost. It is rebuilt instead. The first upgraded machine is pointed at an empty branch or an empty repository and publishes its vault there; the other machines upgrade and then join it as new machines. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Sharing the lock with curation
 
-The knowledge [curation pass](/architecture/knowledge) also rewrites vault content with no human approving the diff. Two rules keep it and sync apart:
+The knowledge [curation pass](/architecture/knowledge) also rewrites vault content unattended. Two rules keep it and sync apart:
 
-- **One lock.** `ConvergeService` owns an `asyncio.Lock` that every round, confirm, reject, rollback, restore and rebuild takes. The composition root hands the same lock to the curation pass (`set_vault_write_lock`), so an export never captures a half-finished rewrite.
-- **One owner machine.** Two machines folding the same inbox item into different documents would merge cleanly and hold the knowledge twice, and git would see nothing wrong. So the curation owner is a `machine_id` carried in the synced `internal-engine` settings document, and the pass is a no-op on every other machine. It is also skipped while a round holds a confirmation or last stopped on a conflict (`divergence_outstanding`), so a rewrite never moves documents underneath a question you are about to answer.
-
-An owner that names a machine the registry does not hold is reported as a fault, not folded into "runs elsewhere", because the pass then runs nowhere.
+- **One lock.** A round, an answer, a rollback and a curation pass all take the same vault lock, so a round never merges over a half-finished rewrite.
+- **One owner machine.** Two machines folding the same inbox item into different documents would merge cleanly and hold the knowledge twice. So the curation owner is a machine id in the synced engine settings (`state/settings/internal-engine.json`), and the pass does nothing on every other machine. It also waits while a round is stopped, held, or waiting on a join's choices, so a rewrite never moves documents under a question you are about to answer.
 
 ## Talking to git safely
 
-`GitMirror` (`infrastructure/sync/git_mirror.py`) shells out to the real `git` binary so the remote stays an ordinary repository. `git_invoke.py` makes each invocation safe:
+Coffer shells out to the real `git`, so the remote stays an ordinary repository you can clone and inspect.
 
-- The push credential is resolved from the credential store for one call and reaches git through a credential helper given with `-c` that reads `$COFFER_GIT_TOKEN` from the environment. It is never in the remote URL, argv, `.git/config` or any recorded error; failure text is redacted in the adapter and again in the service. A helper is used rather than `GIT_ASKPASS` because macOS's own git ignores the latter.
-- `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` point at `/dev/null`, and the commit identity is supplied as `Coffer <coffer@localhost>`, so your own git configuration cannot change what a round does. `core.quotepath=false` keeps non-ASCII paths parseable.
-- The remote URL may not start with `-`, the branch must pass `git check-ref-format --branch` rules, and positional arguments sit behind `--`, so no configured value can be read as an option.
-- The working tree may not overlap the knowledge or skills roots, contain `~/.coffer`, or sit elsewhere inside `~/.coffer` than the default. A repository Coffer creates or adopts is marked `coffer.managed` in its local config.
+- **The push token** is resolved from the secret store for one call and reaches git through a credential helper given on the command line that reads it from the environment. It is never in the URL, argv, `.git/config` or any recorded error. The username sent with it defaults to `coffer`; GitHub and GitLab ignore it for a token, while Bitbucket and Azure DevOps need a real one. A token pointed at a URL it has not been approved for waits for a person's approval, and rounds report `auth_failed` until then.
+- **Your git configuration cannot change what a round does.** Global and system config point at `/dev/null`, hooks are off, signing is off, and the commit identity is supplied by Coffer.
+- **No value can be read as an option.** The remote URL may not start with `-`, the branch must pass git's ref-name rules, and positional arguments sit behind `--`.
 
 ## The worker
 
-`ConvergeWorker` (`application/sync/worker.py`) runs one round 30 seconds after the daemon starts and then on the remote's interval, which defaults to one hour (`coffer sync remote set --interval`) and is never shorter than 60 seconds: every surface refuses a smaller value, and a remote stored with one before the floor existed loads as 60. With no remote configured, or with the remote paused, a round is a `disabled` no-op and the worker re-checks every 15 minutes. Quiet outcomes (`ok`, `no_change`, `awaiting_join`, a hold already reported) log at debug level; anything new that needs you logs a warning. Every recorded round also writes a `sync_run` audit event.
+The sync worker runs one round 30 seconds after the daemon starts and then on the remote's interval, one hour by default and never shorter than 60 seconds. The interval is re-read before each wait, so a change needs no restart. With no remote, or a paused one, nothing runs; **Sync now** and `coffer sync now` still run a round on request.
 
 ## Trade-offs and alternatives
 
-- **Leave the file trees to your own git and sync only structured state.** If Coffer runs the pull it is convergence anyway; if you run it, the drift stays. It also splits `skill`, whose files and registry row are one thing.
-- **Tombstones, timestamp arbitration and quarantine.** These are what a database projected into files needs. With knowledge and skills as plain files and the rest a few dozen deterministic documents, git's commit graph already records deletions, `git merge` already arbitrates, and a set of held paths replaces quarantine.
-- **Commit `~/.coffer` in place.** It mixes machine-local state with vault truth, and `coffer.db` is binary and unmergeable.
-- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record. Peer-to-peer and object stores have no history or three-way merge. Git suits an audience that already holds git credentials.
-- **Manual convergence by default.** A vault that converges only when someone remembers is the island problem with an extra step. The interval is the knob, pausing the remote is the off switch, and `coffer sync now` avoids waiting.
-- **Local export and import.** A bundle written to a directory and read back is a wholesale overwrite with no base. A new machine runs `coffer sync adopt`, an offline medium is a `file://` remote, and handing someone a copy is `git clone ~/.coffer/sync`.
+- **Full automatic convergence** (the previous design): a second working tree, a translation layer from the database to files and back, a pointer table, a retry set and automatic conflict resolvers, one of them an agent. It never stopped for a person, and every piece of it was a place where Coffer changed data nobody had decided on. Thin sync deletes all of it.
+- **Backup only** (push, never pull) gives up the reason to have more than one machine.
+- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record; peer-to-peer tools and object stores have no three-way merge. Git suits an audience that already holds git credentials.
+- **Commit all of `~/.coffer`.** It would carry machine-local state and binary databases. The five storage classes put only the vault under git.
 
-The cost is real: Coffer writes your vault without a human in the loop. That is why the pointer, the snapshot and the guard are mandatory, and why an unresolved conflict blocks convergence on both machines until you settle it.
+The cost is real: a genuine conflict stops sync on this machine until you answer it. That is surfaced where you already are: the sidebar mark, `coffer sync status`, and the desktop notification.
 
 ## Where it lives in the code
 
 | Path | Responsibility |
 | --- | --- |
-| [`domain/sync/diff.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/diff.py) | Changes, areas, `losses`, `DeletionGuard` and its constants |
-| [`domain/sync/convergence.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/convergence.py) | `ConvergeRun`, statuses, `JoinKind`, `PendingConfirmation` |
-| [`domain/sync/manifest.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/manifest.py) | Layout version and the too-new refusal |
-| [`domain/sync/machine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/machine.py) | Machine id hashing and the descriptor |
-| [`domain/sync/fernet_time.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/fernet_time.py) | Ordering ciphertexts by encryption time |
-| [`domain/sync/serialization.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/serialization.py), [`portability.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/sync/portability.py) | Resource documents and `${HOME}` rewriting |
-| [`application/sync/convergence.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/convergence.py), [`convergence_ops.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/convergence_ops.py) | The round and its steps |
-| [`application/sync/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/service.py), [`worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/worker.py) | Lock, confirm/reject/rollback/restore/rebuild, audit, interval loop |
-| [`application/sync/exporter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/exporter.py) | Serialization into the tree |
-| [`application/sync/appliers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/appliers.py), [`appliers_resource.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/appliers_resource.py) | Per-area application |
-| [`application/sync/joining.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/joining.py), [`machines.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/machines.py) | Join resolution and the machine registry |
-| [`application/sync/conflicts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/conflicts.py) | Conflict arbitration |
-| [`application/sync/ports.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/ports.py) | `SyncedStatePort`, `ImportGate`, `VaultApplyPort`, `ConvergenceStatePort` and the rest |
-| [`infrastructure/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/sync) | Git mirror and invocation, differential tree mirror, bundle IO, machine id, agentic conflict resolver |
-| [`infrastructure/persistence/convergence_state_repo.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/convergence_state_repo.py) | Pointer, held paths, pending confirmation |
-| [`surfaces/http/sync_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_wiring.py), [`sync_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_routes.py) | Composition and the `/api/v1/sync` routes |
+| [`domain/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/sync) | Round statuses and records, stops and answers, joins, the deletion breaker, the machine descriptor, the remote |
+| [`application/sync/round_engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_engine.py) | The round |
+| [`application/sync/round_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_guard.py), [`round_trees.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_trees.py) | Validation, the breaker, identity clashes, descriptors and ciphertext in a merged tree |
+| [`application/sync/round_answers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_answers.py), [`round_resume.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_resume.py) | Answers to a stop, a hold and a join, and continuing the round |
+| [`application/sync/round_join.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_join.py), [`round_rollback.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_rollback.py) | Join preview and join; rollback plan and rollback |
+| [`application/sync/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/service.py), [`worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/worker.py) | The lock, recording and auditing rounds, the remote, machines; the interval loop |
+| [`infrastructure/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/sync) | Git over the vault, machine id and descriptor, cloud-folder detection, local sync state |
+| [`infrastructure/vault/git.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/git.py), [`merge.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/merge.py) | One safe `git` process; the merge and the checkout |
+| [`surfaces/http/sync_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_wiring.py), [`sync_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_routes.py), [`sync_stop_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_stop_routes.py) | Composition and the `/api/v1/sync` routes |
 
 ## Related
 
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
-- Decision records: [Vault Sync](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Resource Identity Is an Immutable uid](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md), [Envelope-Encrypted Credentials](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
-- [Vault sync guide](/guides/vault-sync) · [Knowledge architecture](/architecture/knowledge) · [Persistence](/architecture/persistence) · [Security model](/architecture/security)
+- Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Credentials Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
+- [Vault sync guide](/guides/vault-sync) · [Persistence](/architecture/persistence) · [Knowledge architecture](/architecture/knowledge) · [Security model](/architecture/security)

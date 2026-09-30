@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 from coffer.application.sync.round_answers import choose_join
@@ -14,6 +16,8 @@ from coffer.domain.sync.stops import Answer, ConflictReason
 from .machines import Machine, resource
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a joining machine is placed from the remote's registry")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a remote rebuilt from one machine loses nothing")
 def test_the_first_machine_pushes_the_whole_vault(mac: Machine) -> None:
     mac.put("knowledge/team/a.md", "a\n")
     shown = preview(mac.engine, mac.remote, None)
@@ -22,10 +26,15 @@ def test_the_first_machine_pushes_the_whole_vault(mac: Machine) -> None:
     assert mac.git.remote_tip("main") == mac.repo.head()
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an ordinary round on a machine without a pointer still detects the join")
 def test_a_timer_round_never_joins_on_its_own(mac: Machine) -> None:
     assert mac.round().status is RoundStatus.JOIN_REQUIRED
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a join states its case and its counts before applying")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a differing file waits until the person chooses")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a new machine takes the union and deletes nothing")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a joining machine is placed from the remote's registry")
 def test_a_new_machine_takes_the_union_and_leaves_differing_files_alone(
     mac: Machine, mini: Machine
 ) -> None:
@@ -53,6 +62,7 @@ def test_a_new_machine_takes_the_union_and_leaves_differing_files_alone(
     assert mac.disk("knowledge/team/on-call.md") == b"escalate after 15 min\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a differing file waits until the person chooses")
 def test_taking_theirs_for_a_differing_file_replaces_it_here(mac: Machine, mini: Machine) -> None:
     mac.put("knowledge/team/x.md", "theirs\n")
     join(mac.engine, mac.remote, None)
@@ -63,6 +73,7 @@ def test_taking_theirs_for_a_differing_file_replaces_it_here(mac: Machine, mini:
     assert mini.writer.pending() == {}
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the same name with a different uid stops the round")
 def test_a_join_with_the_same_name_and_a_different_uid_stops(mac: Machine, mini: Machine) -> None:
     mac.put("resources/mcp_server/linear.json", resource("mcp_server", "linear", "a" * 32))
     join(mac.engine, mac.remote, None)
@@ -73,6 +84,10 @@ def test_a_join_with_the_same_name_and_a_different_uid_stops(mac: Machine, mini:
     assert stop and stop.conflicts[0].reason is ConflictReason.SAME_NAME_DIFFERENT_UID
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a returning machine does not resurrect what was deleted while it was away")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a joining machine is placed from the remote's registry")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a machine identity survives reinstalling Coffer")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a descriptor publishes the pointer this machine reached")
 def test_a_returning_machine_merges_from_the_base_in_its_descriptor(
     tmp_path: Path, remote: SyncRemote, pair: tuple[Machine, Machine]
 ) -> None:

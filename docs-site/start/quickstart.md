@@ -206,7 +206,7 @@ added: skill commit-message
 └────────────────┴──────────────┴────────────┴──────────────┴──────────────┘
 ```
 
-Coffer copied the folder into its library at `~/.coffer/skills/commit-message/` and linked it into Claude Code:
+Coffer copied the folder into its library at `~/.coffer/vault/skills/commit-message/` and linked it into Claude Code:
 
 ```sh
 ls -l ~/.claude/skills
@@ -235,7 +235,7 @@ flowchart LR
   SHIM --> D["coffer-daemon"]
   D --> FS["filesystem server"]
   D -.->|"symlink"| SK["~/.claude/skills/commit-message"]
-  SK --> LIB["~/.coffer/skills/commit-message"]
+  SK --> LIB["~/.coffer/vault/skills/commit-message"]
 ```
 
 ## Next steps

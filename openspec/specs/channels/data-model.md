@@ -2,9 +2,9 @@
 
 ## Resource kind: `channel`
 
-Channels are rows in the existing `resources` table (kind = `channel`).
-`config_json` is validated by a discriminated Pydantic union on
-`channel_type`. The per-type halves are specified in the children
+A channel is a resource file, `vault/resources/channel/<name>.json`
+(spec resource-framework). Its `config` is validated by a discriminated
+Pydantic union on `channel_type`. The per-type halves are specified in the children
 ([`channels/telegram`](telegram/spec.md), [`channels/seatalk`](seatalk/spec.md));
 this file is where their storage shape lives, because a child spec carries only
 a `spec.md`:
@@ -37,7 +37,7 @@ Validation rules:
   a long high-entropy string is rejected with a pointer to the credential
   store) — same posture as `mcp_server`'s static-value secret rejection.
 - The kind declares `credential_ref_extractor`, so `ResourceService` probes
-  every ref before the row is written; a dangling ref aborts registration.
+  every ref before the file is written; a dangling ref aborts registration.
 - `default_agent` is the **uid of an agent resource**
   ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
   It is a cross-resource reference, so it holds the one thing about that agent
@@ -45,12 +45,12 @@ Validation rules:
   agent key. It has **no default value**: a uid is minted per vault, so nothing
   a schema could name would stand for "the usual agent", and `None` means
   exactly what it says — this channel is bound to no agent.
-  It is validated against the agent rows at **both** create (`validate_config`)
+  It is validated against the registered agents at **both** create (`validate_config`)
   and edit (`on_update_config`): a uid naming no registered agent is rejected up
   front rather than failing silently on the first turn. Both hooks are async,
   which `validate_config` did not have to be while this field held an agent key
   an in-memory registry could answer for; a uid is only answerable from the
-  resource table. Validation is skipped only when no agent is registered at all,
+  resource store. Validation is skipped only when no agent is registered at all,
   so a vault with no agents yet never blocks all channel writes.
   `default_agent_config` is still a pass-through.
 - **A channel with no resolvable `default_agent` is deliberately dark.** The
@@ -65,7 +65,7 @@ Validation rules:
   the channel as not running, and no message is ever accepted only to be refused.
 - The **agent key** the turn platform routes on survives in exactly one place:
   the live `ChannelBinding`, onto which the runtime gate projects
-  `default_agent` (uid → agent row → `config["type"]`) and the channel's scope.
+  `default_agent` (uid → agent resource → `config["type"]`) and the channel's scope.
   That projection is the single crossing between the two vocabularies. It
   replaced `application/channel/agent_vocabulary.py`, which existed only because
   a scope named agent RESOURCES while `default_agent` named an agent KEY and
@@ -78,11 +78,11 @@ Validation rules:
   no id. Migration `20260912_0068_drop_channel_model_curation.py` takes both keys
   off every stored channel config in one direction only, with no load-time shim
   (house rule). `_CommonChannelFields` IGNORES unknown keys, so nothing
-  rejects a row still carrying them — the migration is what removes them.
+  rejects a file still carrying them — the migration is what removes them.
 - `runs_on` is the `machine_id` of the one machine whose daemon starts this
-  channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config_json` and not in a column of
-  its own because it must TRAVEL: config is what a resource document carries
-  between machines, while the row's `enabled` / `scope_json` carry reach, which
+  channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config` because it must TRAVEL:
+  config is what the resource file carries between machines, while the
+  channel's `enabled` / scope are reach, in `local/reach.json`, which
   deliberately stays home. `None` is unbound and runs nowhere — never "runs
   here", which a document naming nobody would mean on every machine at once.
   Migration `20260914_0079_bind_channels_to_this_machine.py` writes this
@@ -96,66 +96,83 @@ Validation rules:
 - A channel bound to a machine OTHER than this one is exempt from the
   `default_agent` registry check on both write paths. That check asks whether
   the channel will be able to drive anything when it starts, and a channel this
-  machine never starts has no answer to give; without the exemption a converged
-  channel whose owner machine has an agent this one lacks would be refused at
-  the registry door every round.
+  machine never starts has no answer to give; without the exemption a channel
+  synced from an owner machine that has an agent this one lacks would be
+  refused at the registry door.
 - A SeaTalk channel has **one inbound transport**, the outbound websocket
   connection (spec channels/seatalk "Receive every event over one outbound
   websocket connection"), so its configuration carries no transport field and no
   ingress field. The webhook-era keys — `delivery`, `signing_secret_ref`,
-  `public_base_url`, `tunnel_token_ref` — were removed from every stored row by
+  `public_base_url`, `tunnel_token_ref` — were removed from every stored config by
   migration `0103` (below), in one direction for the data and with no load-time
   shim (house rule). The credential values the two removed refs cited are left
   in the credential store: a migration that deletes secrets could not be undone
   by its downgrade, and `coffer credentials rm <ref>` removes them on
   purpose. A document still carrying those keys — from a machine running an
   older build — is read like any other unknown key and ignored.
-- Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
-  (created on first use).
+- Channel turns run in the Coffer-managed default workspace
+  `~/.coffer/content/workspace` (created on first use).
 
-## Table: `channel_peers`
+## Pairings — `vault/state/channel-peers/<channel name>.json`
 
-**The pairing row, and nothing else.** One row per `(channel, chat)`: the paired
-owner's DM, plus one row per group or thread the owner has addressed the bot in.
-It answers "may this sender drive turns here", and the `(resource_id, chat_id)`
-unique key is what let group support arrive as new rows rather than a migration.
+**The pairings, and nothing else.** One entry per `(channel, chat)`: the paired
+owner's DM, plus one per group or thread the owner has addressed the bot in. It
+answers "may this sender drive turns here". Which chats on a platform belong to
+the channel's owner is the person's, and travels, so it is a vault state
+document (spec vault-storage), one per channel with at least one pairing
+(`ChannelPeerRepo`, `infrastructure/channel/persistence.py`):
 
-| column                   | type                                         | notes                                                                                                                                               |
-| ------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                     | INTEGER PK                                   |                                                                                                                                                     |
-| `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                                                         |
-| `chat_id`                | TEXT                                         | Telegram chat id / SeaTalk employee_code or group id                                                                                                |
-| `display_name`           | TEXT                                         | sender's name at pairing time, for UI/status                                                                                                        |
-| `paired_at`              | DATETIME (UTC)                               |                                                                                                                                                     |
-| `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
+```json
+{
+  "channel_uid": "3f2a9c0e8b1d4c6a9e7f0b2d4c6a8e0f",
+  "format_version": 1,
+  "peers": [
+    {
+      "chat_id": "e12345",
+      "sender_id": "e12345",
+      "display_name": "Ada",
+      "paired_at": "2026-09-30T08:00:00+00:00"
+    }
+  ]
+}
+```
 
-Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
+| key | notes |
+| --- | ----- |
+| `channel_uid` | the channel's uid — what the document is found by; the file name only follows the channel's name |
+| `format_version` | the state document's format (1) |
+| `peers[].chat_id` | Telegram chat id / SeaTalk employee_code or group id; unique within the document |
+| `peers[].sender_id` | the paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. `null` → the chat-id-only gate |
+| `peers[].display_name` | the sender's name at pairing time, for UI/status |
+| `peers[].paired_at` | ISO time (UTC) |
 
-`sender_id` is nullable so a peer paired before the sender gate existed degrades
-gracefully: a null sender id means the chat-id-only gate.
+`peers` keeps pairing order, and the owner peer is the earliest-paired entry
+(`chat_id` breaks a tie), so every machine holding the document gives the same
+answer. Re-pairing one chat replaces its entry without touching any other;
+un-pairing the last chat removes the file. The document moves when the channel
+is renamed and is deleted with it, in the channel's own commit.
 
-The table is **partly synced**, and the seam runs through the row rather than
-around it (spec vault-sync, `state/channel-peers/**`). `chat_id`, `sender_id`
-and `display_name` are facts about the platform, so they
-travel with the channel — a channel that moved to another machine without them
-would make the owner re-pair from their phone every time. The conversation
-pointer is a soft reference into THIS machine's conversations, which do not
-sync, so an incoming pairing keeps whatever pointer is already here.
+Everything in it is a fact about the platform, which is why it travels: a
+channel that moved to another machine without its pairings would make the
+owner re-pair from their phone. What a chat's live conversation is — and the
+agent a thread has stuck to — is not in it: those are `runs.db`'s thread tables
+below, because conversations are machine-local. In the one-time upgrade to the
+vault layout each channel's `channel_peers` rows became its document and
+revision 0117 dropped the table.
 
-Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
-`20260614_0022_channel_peer_differentiation.py` adds `sender_id`,
-`preferred_agent` and a `preferred_workspace` that
-`20260620_0028_drop_channel_peer_preferred_workspace.py` takes back off when
-workspace switching is removed; `20260916_0084_drop_dead_channel_peer_columns.py`
-drops the superseded `active_conversation_id` and `preferred_agent`, whose live
-copies have been on `channel_thread_conversations` since 0041. The model module is imported by
-`migrations/env.py` so Alembic sees the metadata.
+## `runs.db` — the thread tables
 
-## Table: `channel_thread_conversations`
+The three tables below are history and machine-local: they name
+conversations, and conversations do not travel. Each names its channel by
+`resource_uid` (revision 0117 re-keyed them from the integer channel id). No
+foreign key points at the channel — it is a file — so the channel's `on_delete`
+deletes its thread, history and outbox rows (`delete_for_channel`).
+
+### `channel_thread_conversations`
 
 **Where a chat's live conversation actually is.** "Key conversation identity
-by channel, chat and thread" moved conversation identity off the peer row and
-onto the `(channel, chat, thread)` triple, because a peer is one owner while a
+by channel, chat and thread" keeps conversation identity off the pairing and
+on the `(channel, chat, thread)` triple, because a peer is one owner while a
 group is many threads: keyed by the peer alone, two threads of one group
 collided on one conversation and the second turn was refused with "a turn is
 already running".
@@ -163,7 +180,7 @@ already running".
 | column                   | type                                         | notes                                                                                                        |
 | ------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `id`                     | INTEGER PK                                   |                                                                                                              |
-| `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                  |
+| `resource_uid`           | VARCHAR NOT NULL                             | the channel's uid                                                                                            |
 | `chat_id`                | TEXT                                         | the DM, or the group                                                                                         |
 | `thread_id`              | TEXT                                         | `""` is the DM or a group's main chat; each group thread and each parallel thread is its own row             |
 | `active_conversation_id` | TEXT NULL                                    | this thread's current conversation; cleared when the conversation disappears                                  |
@@ -176,7 +193,7 @@ already running".
 | `preferred_effort`       | TEXT NULL                                    | the thread's sticky reasoning effort                                                                         |
 | `preferred_cwd`          | TEXT NULL                                    | the thread's sticky working directory (`/dir`), one of the channel's `directories` or beneath one             |
 
-Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
+Constraints: `UNIQUE (resource_uid, chat_id, thread_id)`; index on `resource_uid`.
 
 `active_conversation_id` is a soft reference into the turn platform's
 `conversations` table (no FK across the seam): if the conversation was deleted,
@@ -184,8 +201,6 @@ the next inbound message detects the dangling id and opens a fresh one, built
 from this row's sticky agent plus the channel's defaults. The sticky agent is
 dropped in favour of the channel default once the channel's scope no longer
 admits it ("Limit the agents a channel may drive to its scope"), so narrowing a scope takes effect on the next conversation.
-This table is machine-local and does **not** sync — it names conversations, and
-conversations do not travel.
 
 A row is only keyed by a direct-chat thread when that thread is a conversation
 of its own ("Key conversation identity by channel, chat and thread"): a
@@ -195,23 +210,21 @@ reply-in-thread in a SeaTalk direct chat keys to the chat's `""` row. The
 ordinal is `max + 1` over the chat's rows, so a number is never reused after
 its conversation is replaced ("Open parallel conversations beside a direct chat").
 
-Migration: `20260708_0041_channel_thread_conversations.py` creates it and
-backfills every existing peer's conversation and sticky agent as that peer's
-`thread_id=""` row, so no live DM conversation is lost. Idempotent on a database
-that already holds the table; reversible by dropping it.
+Migrations: `20260708_0041_channel_thread_conversations.py` creates it;
 `20260928_0104_channel_parallel_threads.py` adds `parallel_ordinal` and
 `parallel_title`, nullable, with no backfill: the direct-chat thread rows that
 exist were casual replies, and leaving them without an ordinal is what folds
 them into the direct chat's conversation. Reversible by dropping both columns.
 `20260930_0108_channel_sticky_settings_history_outbox.py` adds `chat_kind` and
-the three `preferred_*` settings, nullable, no backfill.
+the three `preferred_*` settings, nullable, no backfill; 0117 re-keys it to
+`resource_uid`.
 
 A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
 group's defaults from its main chat"): a group thread with no setting of its own
 opens with the group row's, except that a model and effort chosen for another
 agent are not inherited.
 
-## Table: `channel_thread_history`
+### `channel_thread_history`
 
 Every conversation a chat thread opened — what `/resume` lists ("Resume an
 earlier conversation from chat") and what a reply typed on the web is mirrored
@@ -220,18 +233,17 @@ back through (spec chat "Mirror a web reply into the channel it came from").
 | column            | type                                         | notes                                     |
 | ----------------- | -------------------------------------------- | ----------------------------------------- |
 | `id`              | INTEGER PK                                   | order of opening                          |
-| `resource_id`     | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                               |
+| `resource_uid`    | VARCHAR NOT NULL                             | the channel's uid                         |
 | `chat_id`         | TEXT                                         | the chat                                  |
 | `thread_id`       | TEXT                                         | the conversation thread (`""` for a DM)   |
 | `conversation_id` | TEXT, UNIQUE                                 | soft reference into `conversations`       |
 | `chat_kind`       | TEXT NULL                                    | `direct` / `group`, when known            |
 | `opened_at`       | DATETIME (UTC)                               |                                           |
 
-Index on `(resource_id, chat_id, thread_id)`. Machine-local, like the thread
-table. Migration 0108 creates it and back-fills each thread's current
-conversation; reversible by dropping it.
+Index on `(resource_uid, chat_id, thread_id)`. Migration 0108 creates it; 0117
+re-keys it to `resource_uid`.
 
-## Table: `channel_outbox`
+### `channel_outbox`
 
 Messages Coffer owes a chat and has not delivered: a web reply (`kind=reply`,
 stored with its `(from Coffer) ` prefix) and the agent's answer collected behind
@@ -240,7 +252,7 @@ it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
 | column            | type                                         | notes                                   |
 | ----------------- | -------------------------------------------- | --------------------------------------- |
 | `id`              | INTEGER PK                                   | delivery order                          |
-| `resource_id`     | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                             |
+| `resource_uid`    | VARCHAR NOT NULL                             | the channel's uid                       |
 | `chat_id`         | TEXT                                         |                                         |
 | `thread_id`       | TEXT                                         |                                         |
 | `chat_kind`       | TEXT                                         | `direct` / `group`                      |
@@ -250,10 +262,14 @@ it (`kind=answer`). A row is marked delivered, never deleted by a failed send.
 | `created_at`      | DATETIME (UTC)                               |                                         |
 | `delivered_at`    | DATETIME NULL                                | NULL while pending                      |
 
-Indexes on `(resource_id, delivered_at)` and `conversation_id`. Machine-local.
-Migration 0108 creates it; reversible by dropping it.
+Indexes on `(resource_uid, delivered_at)` and `conversation_id`. Migration 0108
+creates it; 0117 re-keys it to `resource_uid`.
 
 ## Migrations that touch a channel's config
+
+These Alembic data migrations ran against channel configs while resources were
+rows of the pre-vault database; they are its history, and the one-time upgrade
+carried their result into the resource files.
 
 | revision | what it does |
 | --- | --- |

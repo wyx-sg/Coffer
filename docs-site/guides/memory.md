@@ -40,7 +40,7 @@ If an agent's memory format changes and a file can no longer be parsed, that age
 
 ## Partitions
 
-A **partition** is a folder under `~/.coffer/memory/`. There is one per repository, plus one named `global`:
+A **partition** is a folder under `~/.coffer/derived/memory/`. There is one per repository, plus one named `global`:
 
 - An entry is filed under the repository it was learned in. The main checkout, its worktrees and another clone of the same repository all map to one partition, named after the repository's directory.
 - An entry about **you** rather than a project (type `user`: your preferences, Codex's profile) is filed under `global`, whichever repository it came from.
@@ -50,7 +50,7 @@ A **partition** is a folder under `~/.coffer/memory/`. There is one per reposito
 Partitions are created by aggregation only; you do not create them.
 
 ```text
-~/.coffer/memory/
+~/.coffer/derived/memory/
 ├── global/
 └── payments-api/
     ├── MEMORY.md      ← the index: one line per note
@@ -67,7 +67,7 @@ Partitions are created by aggregation only; you do not create them.
 | `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
 | `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI and not readable through the partition's file routes; open it on disk under `coffer path memory <partition>`. |
 
-Everything under `~/.coffer/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it. To move the memory root, set `COFFER_MEMORY_ROOT` in the daemon's environment.
+Everything under `~/.coffer/derived/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it. To move the memory root, set `COFFER_MEMORY_ROOT` in the daemon's environment.
 
 ## How the passes run
 
@@ -173,7 +173,7 @@ The session-start context contains, in order:
 1. the `global` partition's index — what is known about you,
 2. the index of the partition for the repository the session is in,
 3. the absolute path of that partition's `notes/` folder, with the instruction that a note's body is read as a file, and
-4. the memory root (`~/.coffer/memory/`), which spans every partition, so a note from another repository is one search away with the agent's own tools.
+4. the memory root (`~/.coffer/derived/memory/`), which spans every partition, so a note from another repository is one search away with the agent's own tools.
 
 What a hook prints is capped at 9,500 bytes, which is under both agents' limits for a hook's output: Claude Code shows the model only a short preview of anything past about 10,000 characters, and Codex cuts the middle out of anything past about 2,500 tokens. A large vault's index is bigger than that. When the index does not fit, the oldest lines are dropped first, the current repository's lines are kept in preference to `global`'s, and the text says how many lines were dropped and which folder still holds them — every note stays readable as a file.
 
@@ -215,7 +215,7 @@ A turn you send from the [Conversations](/guides/chat) page does not get this ap
 
 ### On demand: search the memory root
 
-For a note from a different repository than the one the session is in, an agent searches the memory root with its own file tools — `grep` over `~/.coffer/memory/` covers every partition at once, and the session-start payload names that root. Every note is a Markdown file with its title and one-line description in its frontmatter. `coffer path memory` prints the root, and `coffer path memory <partition>` one partition's folder. There is no memory tool: Coffer exposes nothing for an agent to call.
+For a note from a different repository than the one the session is in, an agent searches the memory root with its own file tools — `grep` over `~/.coffer/derived/memory/` covers every partition at once, and the session-start payload names that root. Every note is a Markdown file with its title and one-line description in its frontmatter. `coffer path memory` prints the root, and `coffer path memory <partition>` one partition's folder. There is no memory tool: Coffer exposes nothing for an agent to call.
 
 There is no tool for an agent to write memory through Coffer. An agent records something the way it always does, in its own memory, and Coffer reads it on the next pass. The `coffer-guide` skill tells agents this.
 
@@ -352,16 +352,16 @@ To see the memory an agent keeps for itself, open **Agents → choose the agent 
 
 A partition has no on/off switch and no per-agent reach. Every partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating — through the memory hook. `coffer memory` has no `enable` or `disable`, and the generic enable and disable routes refuse a partition with `RESOURCE_NOT_TOGGLEABLE`.
 
-This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/memory/`.
+This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/derived/memory/`.
 
 To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)).
 
 ## Rebuild a partition
 
-Because everything under `~/.coffer/memory/` is derived, you can throw a partition away and build it again from the agents' own memory. Triggers live in the vault, not in the partition, so they survive a rebuild:
+Because everything under `~/.coffer/derived/memory/` is derived, you can throw a partition away and build it again from the agents' own memory. Triggers live in the vault, not in the partition, so they survive a rebuild:
 
 ```sh
-rm -rf ~/.coffer/memory/payments-api
+rm -rf ~/.coffer/derived/memory/payments-api
 coffer memory sync
 ```
 

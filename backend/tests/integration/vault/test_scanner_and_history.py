@@ -85,6 +85,7 @@ async def test_a_version_diff_and_its_content(
         await history.diff("knowledge/other.md", second)
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="restore brings back a document deleted last week")
 async def test_restore_is_a_new_commit_through_the_same_checks(
     history: VaultHistoryService, writer: VaultWriter, repo: VaultRepository
 ) -> None:

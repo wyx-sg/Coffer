@@ -23,7 +23,7 @@ Aggregation brings its own problem. Once a user registers a handful of servers, 
 | Each downstream session gets its own upstream processes. | MCP is a per-session protocol. Sharing one upstream session between clients would mean re-implementing capability negotiation and notification routing inside the gateway. |
 | Upstreams are spawned lazily. | Sessions start fast, and a server the agent never touches costs nothing. |
 | Names are rewritten to `<server>__<name>` and `coffer://<server>/<uri>`. | Two servers that both expose `search` never collide. `__` was chosen because `:`, `.`, `/` and `-` are all legal inside upstream tool names. |
-| Capabilities are discovered live, and only preferences are stored. | An upstream upgrade cannot leave a stale copy of its schema in the database. The user's enable or disable decision survives upgrades and temporary disappearances. |
+| Capabilities are discovered live, and only preferences are stored. | An upstream upgrade cannot leave a stale copy of its schema behind. The user's enable or disable decision survives upgrades and temporary disappearances. |
 | Listing is budgeted, and calling is not. | Tiering decides what the model sees. It never decides what the model may call. |
 | The agent's identity is taken once, at the handshake. | Scope gating and built-in tool attribution need one identity per session that a client cannot change call by call. |
 | Invocations are logged without arguments or results. | The log exists to show which capability ran, when, for how long and with what outcome. Payloads may contain secrets. |
@@ -111,7 +111,7 @@ The `initialize` reply declares `tools`, `resources` and `prompts`, each with `l
 
 Parsing splits on the first `__`, so the kind refuses any server name that contains `__`. Because the server name is the prefix of every tool name an agent sees, and agents' permission rules and skills quote it, the name is fixed once registered (`name_fixed`): a change is refused with `409 NAME_IMMUTABLE`. A server carries no display title beside it; its description is the free note. A client adds its own prefix on top — Claude Code shows `mcp__coffer__<server>__<tool>` — and model provider APIs cap a tool name at 64 characters (Cursor drops tools above 60). So a new server name is capped at 24 characters, which leaves 25 for the upstream tool name, and each discovered capability row carries `client_name_length`, the length of `mcp__coffer__<server>__<tool>`; the **Tools** tab and `coffer mcp cap list` flag rows above 64. Names registered before the cap keep working. An upstream that answers `resources/list` or `prompts/list` with `-32601` (method not found) is treated as having none of that capability. It is not treated as failing.
 
-Each cold fetch also reconciles preferences in `mcp_capability_preferences`, keyed on the server's surrogate id. Newly seen keys are inserted as enabled. Existing keys get their `last_seen_at` updated. Keys that have disappeared are left in place, so a tool you disabled stays disabled if it vanishes and comes back. Preference rows are read fresh on every list, so a toggle takes effect immediately, whatever the cache holds.
+Each cold fetch also records when each capability was first and last seen, in `derived.db`, keyed on the server's uid. Your switches are a separate vault document, `state/mcp-preferences/<server>.json`, which lists only the capabilities you switched off, so a tool you disabled stays disabled if it vanishes and comes back, and the switch travels with vault sync. Preferences are read fresh on every list, so a toggle takes effect immediately, whatever the cache holds.
 
 When a discovery request fails for any reason other than a timeout or method-not-found, discovery evicts the connection, spawns a fresh one and retries once. A connection that dies silently is repaired on the next list, without a daemon restart.
 
@@ -236,7 +236,7 @@ sequenceDiagram
 The pipeline is `_invoke` in `application/mcp/gateway_handlers.py`, which `resources/read` and `prompts/get` share. It differs only in the parser and the upstream method:
 
 1. **Parse.** Split the namespaced name or URI. A malformed one is refused as `ToolDisabled` ("unrecognised tool name").
-2. **Resolve.** Look up the `mcp_server` row by the server name the client sent. From here on, everything stored or compared uses identity: the uid for the log, the scope for the gate, and the surrogate id for preferences.
+2. **Resolve.** Look up the `mcp_server` row by the server name the client sent. From here on, everything stored or compared uses identity: the uid for the log, the scope for the gate, and the uid for preferences.
 3. **Enabled gate.** A server whose `enabled` flag is off is refused on every call, logged as `denied` and raised as `ToolDisabled`. The listings already hide it, but a session that listed the server before it was disabled still holds its names.
 4. **Scope gate.** The call is re-checked with `is_active(resource.scope, session_agent_uid)`. The list already hid the server, but a client that knows the name could still call it. A refusal is logged as `denied` and raised as `ToolDisabled`, the same error a disabled capability gets.
 5. **Capability gate.** A preference row with `enabled = false` refuses the call the same way. A missing row counts as enabled.

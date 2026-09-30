@@ -1,49 +1,56 @@
 # Data Model — Credentials
 
-The ciphertext table, the master key, the secret boundary's three tables, and a
+The ciphertext files, the master key, the secret boundary's files, and a
 handful of error codes. None of them holds a plaintext value: anything this
 document listed beyond ciphertext, timestamps and where a value is allowed to
 go would be another place for a secret to be inferred from.
 
-## The table
+## The ciphertext files
 
-The `credentials` table arrived with the encrypted credential store (migration
-`0016`) and lives in the same `~/.coffer/coffer.db` as every other kind's state.
+One file per ref, written by `EncryptedCredentialStore`
+(`infrastructure/credentials/encrypted_store.py`):
 
-```sql
-CREATE TABLE credentials (
-    ref         TEXT PRIMARY KEY,
-    ciphertext  BLOB NOT NULL,                -- produced by EncryptedCredentialStore
-    created_at  TEXT NOT NULL,                -- ISO-8601, written by the sync store
-    updated_at  TEXT NOT NULL
-);
-```
+| Ref | File | Class |
+| --- | ---- | ----- |
+| any ref | `~/.coffer/vault/secret/<ref>.enc` | vault |
+| a machine-local ref (`proxy-token/…`: a proxy token unlocks only this machine's loopback model proxy) | `~/.coffer/local/secret/<ref>.enc` | local — never in the vault |
 
-| Column       | Notes                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `ref`        | The opaque reference. Slash-separated `[A-Za-z0-9_.-]` segments; the store reads no meaning into it. |
-| `ciphertext` | A Fernet token. Never logged, never audited; its plaintext leaves only through the desktop app's presence-gated reveal. |
-| `created_at` | Set on first write for the ref; a re-write keeps it.                                              |
-| `updated_at` | Set on every write, so rotation is visible without revealing anything.                            |
+The file holds the Fernet token and a trailing newline; its path *is* the ref:
+`/` separates directories, `.enc` is appended to the last segment, and each
+segment is made a safe file name by percent-encoding every byte outside
+`[A-Za-z0-9._-]` (and a leading `.`), so `channel/seatalk/app-secret` is
+`secret/channel/seatalk/app-secret.enc`. A ref with an empty, `.` or `..`
+segment is refused (`infrastructure/credentials/ref_paths.py`). Files are
+`0600`, the directories holding them `0700`.
 
-There is no `kind` column and no foreign key to `resources`. A reference is
-resolved by string, in the direction resource → credential only, which is why
-"who cites this ref" is answered by scanning resource configs (see "Refuse to
-delete a credential still in use") rather than by a join.
+| Field | Where it comes from |
+| ----- | ------------------- |
+| `ref` | the file's path under `secret/` |
+| ciphertext | the file's bytes. Never logged, never audited; its plaintext leaves only through the desktop app's presence-gated reveal |
+| `updated_at` | the token's own encryption time, which a Fernet token carries in clear, so it is right on every machine |
+| `created_at` | when *this machine* first stored the ref: `~/.coffer/local/secret-boundary/times.json`, `{ref: iso time}`. A ref that arrived from another machine by sync has none, and is never counted as a value a person here has just supplied |
 
-| ORM class         | Table         | Lives in                                 |
-| ----------------- | ------------- | ---------------------------------------- |
-| `CredentialModel` | `credentials` | `infrastructure/persistence/models.py`   |
+Whether `vault/secret/` is committed is the vault repository's business:
+`/secret/` is listed in `vault/.git/info/exclude` until the sync remote
+carries secrets (`include_secret` on `local/sync/remote.json`, spec
+vault-sync). When it does, a set or delete is one `daemon` commit naming the
+ref only (operations `credential-set` / `credential-delete`), through the
+vault's one writer with compare-and-swap. A ciphertext conflict in a sync round
+is settled by the fresher Fernet time and never asked about.
 
-The store itself (`infrastructure/credentials/encrypted_store.py`) deliberately
-uses stdlib `sqlite3` with a short-lived connection per call, because sync
-callers — the MCP spawn path, register-time probing — need a synchronous
-contract. Its `a*` facade is what async callers use (see "Keep blocking store
-calls off the event loop").
+There is no `kind` field and no link to any resource. A reference is resolved
+by string, in the direction resource → credential only, which is why "who cites
+this ref" is answered by scanning resource configs (see "Refuse to delete a
+credential still in use") rather than by a join.
+
+The store is synchronous, because sync callers — the MCP spawn path,
+register-time probing — need a synchronous contract. Its `a*` facade is what
+async callers use (see "Keep blocking store calls off the event loop"): a vault
+write runs git.
 
 ## The master key
 
-Not a table. Where it lives is chosen by how the build was made (see "Keep the
+Not a vault file. Where it lives is chosen by how the build was made (see "Keep the
 master key behind a storage port chosen by the build"):
 
 | Location                | Where                                                                 | Build |
@@ -62,41 +69,45 @@ reports and what `PUT` compares against before relocating.
 Relocation writes and verifies the destination, then removes the source, so the
 intermediate state is "both copies exist" rather than "neither does".
 
-## The secret boundary's tables
+## The secret boundary's files
 
-Migration `0112`. Written by the credentials package's sync store
-(`infrastructure/credentials/boundary_store.py`, stdlib `sqlite3` like the
-ciphertext store, because the gate is consulted from the synchronous resolve
-path).
+Machine-local: an approval happened here, in front of this machine's app, so
+the boundary's state is under `~/.coffer/local/secret-boundary/`, never in the
+vault and never synced. Written by `FileBoundaryStore`
+(`infrastructure/credentials/boundary_store.py`), each file read whole and
+changed atomically under its own lock; synchronous, because the gate is
+consulted from the synchronous resolve path.
 
-```sql
-CREATE TABLE secret_bindings (          -- a ref approved for one slot of one destination
-    ref TEXT, destination_kind TEXT, destination_uid TEXT, slot TEXT,
-    target_fingerprint TEXT NOT NULL,   -- sha256(target)[:32]; a new target is a new destination
-    approved_at TEXT NOT NULL,
-    approval_id TEXT,                   -- NULL when adopted, fresh or approved while protection was off
-    PRIMARY KEY (ref, destination_kind, destination_uid, slot)
-);
-CREATE TABLE secret_approvals (         -- what waits for the desktop app
-    id TEXT PRIMARY KEY,
-    op TEXT NOT NULL,                   -- bind | replace_value | disable_protection
-    status TEXT NOT NULL,               -- pending | approved | rejected | superseded
-    created_at TEXT NOT NULL, requested_by TEXT NOT NULL,
-    ref TEXT, destination_kind TEXT, destination_uid TEXT, destination_label TEXT,
-    slot TEXT, target TEXT, target_fingerprint TEXT,
-    pending_ciphertext BLOB,            -- a replacement value, Fernet-sealed; cleared on any decision
-    decided_at TEXT, decided_by TEXT
-);
-CREATE TABLE secret_boundary_settings ( -- require_approval, adopted_existing_bindings
-    key TEXT PRIMARY KEY, value TEXT NOT NULL
-);
-```
+| File | Shape |
+| ---- | ----- |
+| `bindings.json` | `{"bindings": [binding, ...]}` — a ref approved for one slot of one destination, unique on `(ref, destination_kind, destination_uid, slot)` |
+| `approvals.json` | `{"approvals": [approval, ...]}` — what waits for the desktop app |
+| `settings.json` | `{key: value}` — `require_approval`, `adopted_existing_bindings` |
+| `times.json` | `{ref: iso time}` — when this machine first stored each ref (the ciphertext's `created_at`, above) |
+
+| Binding field | Notes |
+| ------------- | ----- |
+| `ref`, `destination_kind`, `destination_uid`, `slot` | the key |
+| `target_fingerprint` | `sha256(target)[:32]`; a new target is a new destination |
+| `approved_at` | ISO time |
+| `approval_id` | `null` when adopted, fresh, or approved while protection was off |
+
+| Approval field | Notes |
+| -------------- | ----- |
+| `id` | the approval id |
+| `op` | `bind` \| `replace_value` \| `disable_protection` |
+| `status` | `pending` \| `approved` \| `rejected` \| `superseded` |
+| `created_at`, `requested_by` | when and by whom |
+| `ref`, `destination_kind`, `destination_uid`, `destination_label`, `slot`, `target`, `target_fingerprint` | what the approval is for, written out so a person can read it |
+| `pending_ciphertext` | a replacement value, already sealed with the store's key, base64; removed on any decision |
+| `decided_at`, `decided_by` | set by the decision |
 
 A destination is identified by `(destination_kind, destination_uid)` — a
 resource's kind and uid, or `sync_remote` / `remote` — and a slot names the
 place inside it (an environment variable, a header, `token`, `secret`). The
 target a binding is pinned to is written out in the approval so a person can
-read it; the binding keeps only its fingerprint.
+read it; the binding keeps only its fingerprint. No plaintext is ever written
+to any of these files.
 
 ## Credential references
 
@@ -128,8 +139,8 @@ credentials, is never probed at register time, and releases nothing on delete.
 
 ## Audit events
 
-Written by this spec into the shared `audit_log` table (whose shape is the
-framework's):
+Written by this spec into the shared `audit_log` table in `runs.db` (whose
+shape is the framework's):
 
 | Event                  | Payload                          |
 | ---------------------- | -------------------------------- |

@@ -92,6 +92,7 @@ def _vault_file(path: str) -> Path:
     return vault_root() / path
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a resource document is identity, description and config")
 async def test_a_resource_is_a_file_named_after_it_with_its_uid_inside() -> None:
     svc, _repo = _service(_kinds())
     created = await svc.register("widget", "blue", {"colour": "blue"}, actor="user")
@@ -136,6 +137,8 @@ async def test_rename_moves_the_file_in_one_commit() -> None:
     assert list(_head_files()) == ["resources/widget/new.json"]
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="reach stays on the machine it was set on")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a resource document is identity, description and config")
 async def test_reach_is_local_and_never_committed() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -226,6 +229,7 @@ async def test_a_config_the_schema_refuses_stays_out_of_head() -> None:
     assert (await svc.get(r.uid)).config["colour"] == "blue"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="machine-local files never reach the working tree")
 async def test_local_and_derived_kinds_are_filed_outside_git() -> None:
     svc, _repo = _service(_kinds())
     g = await svc.register("gadget", "g", {"colour": "blue"}, actor="user")
@@ -242,6 +246,7 @@ async def test_local_and_derived_kinds_are_filed_outside_git() -> None:
     assert not (derived_root() / "resources" / "gizmo" / "z.json").exists()
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a path under the home directory applies on a machine with a different home")
 async def test_a_path_under_home_is_written_portably_and_read_back_expanded() -> None:
     svc, _repo = _service(_kinds())
     home = os.environ["HOME"]
@@ -278,3 +283,38 @@ async def test_scope_is_reach_and_a_record_less_resource_gets_the_kind_default()
     (local_root() / "reach.json").unlink()
     again = await svc.get(r.uid)
     assert again.enabled is True and again.scope == Scope(agents=["agent-1"])
+
+
+@pytest.mark.acceptance(spec="vault-storage", scenario="moving a resource file keeps the resource")
+async def test_a_file_moved_by_hand_is_the_same_resource_with_its_reach() -> None:
+    svc, _repo = _service(_kinds())
+    r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
+    await svc.set_enabled(r.uid, False, actor="user")
+    os.rename(_vault_file("resources/widget/w.json"), _vault_file("resources/widget/moved.json"))
+    vault_writer().settle()
+    assert "resources/widget/moved.json" in _head_files()
+    assert "resources/widget/w.json" not in _head_files()
+    found = await svc.get(r.uid)
+    assert found.name == "w" and found.enabled is False
+    assert found.config["colour"] == "blue"
+
+
+@pytest.mark.acceptance(spec="vault-storage", scenario="deleting derived state loses nothing")
+async def test_deleting_derived_loses_no_resource() -> None:
+    import shutil
+
+    from coffer.infrastructure.persistence.derived_db import derived_db_path, open_derived_db
+
+    kinds = _kinds()
+    svc, _repo = _service(kinds)
+    kept = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
+    engine, _sm = await open_derived_db()
+    await engine.dispose()
+    assert derived_db_path().exists()
+    shutil.rmtree(derived_root())
+    again, _repo2 = _service(kinds)
+    found = await again.get(kept.uid)
+    assert found.name == "w" and found.config["colour"] == "blue"
+    engine, _sm = await open_derived_db()
+    await engine.dispose()
+    assert derived_db_path().exists()

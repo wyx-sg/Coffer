@@ -1,21 +1,23 @@
 # Data Model — Resource Framework
 
-Entities, fields, relationships, and the SQLite schema for the kind-agnostic
-resource model. ORM models follow these names exactly; the OpenAPI schemas in
+Entities, fields, relationships, and where each is stored for the
+kind-agnostic resource model. The OpenAPI schemas in
 [contracts/api.openapi.yaml](contracts/api.openapi.yaml) match the same field
-names. A kind's own tables are modelled by that kind's spec —
-`mcp_capability_preferences` and `mcp_invocations` by spec mcp-gateway, the
-`credentials` table by spec credentials, and so on for every other kind.
+names. A kind's own state is modelled by that kind's spec — the MCP capability
+switches and `mcp_invocations` by spec mcp-gateway, the ciphertext files by
+spec credentials, and so on for every other kind. The storage classes, the
+document encoding, `format_version` and the commit trailers every vault write
+carries are spec vault-storage's ([data-model](../vault-storage/data-model.md)).
 
-These three tables were created by the first Alembic revision
-(`20260520_0001_initial.py`: `resources`, `audit_log`, `retention_policies`).
-The lineage has grown well past it as later specs landed, so the head revision
-is whatever the newest file under
-`backend/coffer/infrastructure/persistence/migrations/versions/` declares rather
-than a number written down here. Three later revisions add columns the DDL below
-shows in place: `scope_json` on `resources` (migration `0046`),
-`resource_id` on `audit_log` (migration `0067`) and `title` on `resources`
-(migration `0106`).
+A resource is **a file**, not a row: one JSON document filed by its kind's
+storage class (`FileResourceRepo`, `infrastructure/vault/resource_store.py`).
+Its reach is machine-local JSON beside it, its revision counter a derived
+index, and its audit trail rows in `runs.db` keyed by its uid. There is no
+integer resource id: the uid inside the file is the identity. In the one-time
+upgrade to the vault layout (`coffer migrate`) every `resources` row became a
+resource file and its `enabled`/`scope_json` a record in `local/reach.json`;
+Alembic revision 0117 re-keyed `audit_log` from `resource_id` to
+`resource_uid` and dropped the table.
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -44,18 +46,17 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 
 | Field         | Type             | Notes                                                                      |
 | ------------- | ---------------- | -------------------------------------------------------------------------- |
-| `id`          | `int`            | DB surrogate; internal and per-machine. The FK four kind-owned tables hold. Never serialised externally, and NOT the identity — two machines allocate the same row number to different resources |
-| `uid`         | `str`            | **the identity**: `uuid4().hex`, minted once, never reused, the same value on every machine holding this resource. Every route, every cross-resource reference and the synced document's filename address this |
+| `uid`         | `str`            | **the identity**: `uuid4().hex`, minted once, never reused, the same value on every machine holding this resource. Stored inside the resource file (`uid` key), never derived from its path: every route, every cross-resource reference and every `runs.db` row that names a resource (`resource_uid`) address this. A file a person wrote without one is given one by a `daemon` commit; a second file claiming a uid another file already holds is refused and flagged |
 | `kind`        | `str`            | matches `Kind.name`                                                        |
 | `name`        | `str`            | a **label**, unique within its kind; mutable unless the kind declares it fixed (`Kind.name_fixed`) |
 | `description` | `str \| None`    | optional free text                                                         |
 | `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
-| `enabled`     | `bool`           | user-controlled enable/disable flag                                        |
-| `created_at`  | `datetime`       | UTC, set on insert, never updated                                          |
-| `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
-| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server` and `skill` (migration 0109 cleared them); travels in the synced resource document, as a `title` key present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
-| `rev`         | `int`            | monotonic revision: 1 at creation, grown by one on every write to the row (config, enabled, scope, name, title); every write emits an in-process `Changed(kind, uid, rev)` hint that brings the next reconcile pass forward (spec resource-framework "Carry a monotonic revision on every resource"). Not serialised to the synced document or the API |
-| `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
+| `enabled`     | `bool`           | user-controlled enable/disable flag. Reach, so machine-local: `local/reach.json`, never in the file; a resource with no record there is enabled |
+| `created_at`  | `datetime`       | UTC, the file's `created_at` key, written at creation and never updated; a file without one reads as when this machine first saw its uid (`first_seen` in the uid index) |
+| `updated_at`  | `datetime`       | UTC, when the file's bytes or this machine's reach for it last changed, from the derived uid index (`derived/index/resources.json`); not in the file |
+| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server` and `skill`; the file's `title` key, present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
+| `rev`         | `int`            | monotonic revision: a derived per-uid counter in `derived/index/resources.json`, 1 when the uid is first seen, grown by one whenever the file's blob id or this machine's reach for it changes (a person's hand edit and a sync round's checkout included); every change emits an in-process `Changed(kind, uid, rev)` hint that brings the next reconcile pass forward (spec resource-framework "Carry a monotonic revision on every resource"). Not in the file or the API; deleting `derived/` restarts every counter at 1, which only the in-process dedupe of hints reads |
+| `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local: the `agents` of the resource's record in `local/reach.json`, never in the file. A resource with no record has its kind's `default_scope` |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its
 `name` as three plain fields, and nothing combines them into a fourth.
@@ -79,20 +80,21 @@ any framework-level adapter.
 | `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
-| `validate_new_name`         | `Callable[[str], None] \| None`                                            | rule for the name of a resource created on this machine, run by `register` only when it mints the uid — never on load, and never for a row arriving from another machine with its uid. `mcp_server` caps new names at 24 characters |
+| `validate_new_name`         | `Callable[[str], None] \| None`                                            | rule for the name of a resource created on this machine, run by `register` only when it mints the uid — never on load, and never for a file arriving from another machine with its uid. `mcp_server` caps new names at 24 characters |
 | `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
 | `on_update_config`          | `Callable[[Resource, dict], Awaitable[None] \| None] \| None`               | pre-write hook for `update_config`, handed the resource as it stands and the proposed config             |
 | `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `knowledge` and `memory` supply one; `skill` keeps a directory too but its name is fixed, so it never renames |
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
-| `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
+| `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any write                             |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
 | `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
 | `validate_delete`           | `Callable[[Resource], None] \| None`                                       | pre-write guard for `delete`: raising refuses the deletion before anything is torn down, on the kind's own DELETE and the kind-agnostic one alike (spec resource-framework "Let a kind refuse a deletion before anything is torn down"). Only `skill` supplies one, refusing its builtin skill with `RESOURCE_PROTECTED` |
-| **Sync publication**        |                                                                            | read by spec vault-sync's exporter and applier                                                          |
-| `converges`                 | `bool`                                                                     | default True: the kind's rows travel to the user's other machines. False for a kind whose rows are derived from one machine's installs; only `memory` sets it |
-| `converges_row`             | `Callable[[dict], bool] \| None`                                           | per-row refinement of `converges`, consulted only when that is True, given a row's config; `skill` supplies one so Coffer's own generated builtin skill stays local |
+| **Storage**                 |                                                                            | read by the resource store (`FileResourceRepo`) when it files a resource                                |
+| `storage`                   | `StorageClass`                                                             | the class the kind's files are filed in: `vault` (default; `vault/resources/<kind>/`, committed, synced when a remote is set), `local` for `agent` (`local/resources/agent/`, never committed), `derived` for `memory` (`derived/resources/memory/`, rebuilt). The directory is the policy: nothing else decides whether a resource travels |
+| `storage_row`               | `Callable[[dict], StorageClass] \| None`                                   | per-row refinement of `storage`, given the config at creation; `skill` supplies one so Coffer's own `coffer-guide` is filed under `derived/` |
+| `exclusive_flags`           | `tuple[str, ...]`                                                          | config flags at most one resource of the kind may hold (`provider`'s `internal_default`); the vault validator refuses any commit — an API write, a hand edit, a sync merge — that would leave two |
 | **Post-write reactions**    |                                                                            | run AFTER persistence + audit; cannot reject                                                            |
-| `on_delete`                 | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | cleanup hook, awaited BEFORE the row is removed so it can still resolve it; a reaction, not a veto       |
+| `on_delete`                 | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | cleanup hook, awaited BEFORE the file is removed so it can still resolve it; a reaction, not a veto       |
 | `on_scope_changed`          | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | keeps delivery/reclaim in step with a scope edit; handed the row AFTER the write                        |
 | `on_enabled_changed`        | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | the exact mirror, for a kind whose `enabled` flag has an on-disk consequence (`skill`)                   |
 
@@ -104,8 +106,8 @@ the domain layer never references a surface.
 
 One allow-list. `None` on a `Resource` means unscoped — active for every agent;
 `agents=[]` matches nothing, i.e. dormant. There is no machine axis: reach is
-machine-local and is neither carried away by a converge round nor written over
-by one (spec vault-sync, "Keep reach machine-local"). An unknown property on the
+machine-local (`local/reach.json`), so no sync round carries it or writes over
+it (spec vault-sync, "Keep reach machine-local"). An unknown property on the
 wire is rejected rather than ignored, because dropping a withdrawn axis would
 widen the restriction the request was written to make.
 
@@ -115,10 +117,10 @@ Plain dataclass.
 
 | Field           | Type             | Notes                                                  |
 | --------------- | ---------------- | ------------------------------------------------------ |
-| `id`            | `int \| None`    | DB surrogate, `None` before insert                     |
+| `id`            | `int \| None`    | `runs.db` row id, `None` before insert                 |
 | `timestamp`     | `datetime`       | UTC, default `utcnow()`                                |
 | `event_type`    | `str`            | one of the enumerated `AuditEventType` strings (below) |
-| `resource_id`   | `int \| None`    | the resource's stable row id — what makes a trail survive a rename; `None` for an event naming no resource, and for rows written before the column existed |
+| `resource_uid`  | `str \| None`    | the resource's uid — what makes a trail survive a rename; `None` for an event naming no resource, and for a row whose resource was already deleted when revision 0117 re-keyed the trail to uids |
 | `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
 | `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
@@ -138,6 +140,8 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | `"resource_renamed"`       | After a rename — identity changed, config did not          |
 | `"resource_scope_updated"` | After `update_scope` persisted a new per-agent scope       |
 | `"retention_updated"`      | When a retention policy is changed                         |
+| `"vault_file_edited"`      | After a hand edit found on disk was committed as a `disk` write (actor `human`; `details` = `{path, version}`, one row per file) |
+| `"vault_file_restored"`    | After a vault file or folder was restored to an earlier version (a new commit carrying `Coffer-Restored-From`) |
 
 The enum is **shared**, which is the point of one audit log: spec mcp-gateway
 contributes `capability_enabled` / `capability_disabled`, spec credentials
@@ -152,7 +156,7 @@ Plain dataclass.
 
 | Field              | Type               | Notes                                             |
 | ------------------ | ------------------ | ------------------------------------------------- |
-| `table_name`       | `str`              | PK; must match a registered `PrunableTable.name`  |
+| `table_name`       | `str`              | the key in `local/retention.json`; must match a registered `PrunableTable.name` |
 | `retention_days`   | `int \| None`      | `None` = keep forever; `>0` = days; `0` forbidden |
 | `last_pruned_at`   | `datetime \| None` | last successful prune                             |
 | `last_pruned_rows` | `int`              | rows deleted in last prune                        |
@@ -169,7 +173,7 @@ timestamp column that appear in its allowlists.
 | ------------------------ | ------------- | ------------------------------------------------------------------------------ |
 | `name`                   | `str`         | DB table name; must appear in the SQL allowlist set                            |
 | `timestamp_column`       | `str`         | column name to compare against the cutoff; must appear in the column allowlist |
-| `default_retention_days` | `int \| None` | seeded into `retention_policies` on first daemon boot                          |
+| `default_retention_days` | `int \| None` | seeded into `local/retention.json` at daemon boot where the table has no policy |
 | `display_name`           | `str`         | UI label                                                                       |
 | `description`            | `str`         | UI tooltip                                                                     |
 
@@ -187,95 +191,116 @@ no runner left to release it.
 | `name`       | `str`      | the partition or collection being rewritten    |
 | `started_at` | `datetime` | when this daemon started the pass              |
 
-## SQLite schema
+## Storage
 
-The DDL below is the shape these tables have today, columns added by later
-revisions included.
+### The resource file
 
-```sql
--- Resources: kind-agnostic core
-CREATE TABLE resources (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,      -- internal, per-machine; the FK kinds hold
-    uid           TEXT      NOT NULL,                     -- THE IDENTITY (migration 0095)
-    kind          TEXT      NOT NULL,
-    name          TEXT      NOT NULL,                     -- a mutable label
-    description   TEXT,
-    config_json   TEXT      NOT NULL,                       -- validated JSON
-    enabled       BOOLEAN   NOT NULL DEFAULT 1,
-    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0096)
-    title         VARCHAR(80),       -- display text shown in place of the name; NULL = none (0106)
-    UNIQUE (kind, name)              -- the LABEL is unique within its kind; that is a constraint, not identity
-);
-CREATE UNIQUE INDEX uq_resources_uid      ON resources(uid);
-CREATE INDEX idx_resources_kind_enabled ON resources(kind, enabled);
+A resource is one JSON document (2-space indent, key order kept, trailing
+newline, unknown keys kept in place; spec vault-storage) at
+`resources/<kind>/<name>.json` under its class's directory:
 
--- Audit log: kind-agnostic
-CREATE TABLE audit_log (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    event_type      TEXT      NOT NULL,
-    resource_id     INTEGER,                                -- stable row id; survives a rename (migration 0067).
-                                                            -- Still the integer id, not the uid: a local join
-                                                            -- into a local table that never travels.
-    resource_kind   TEXT,                                   -- nullable; the label carried at the time
-    resource_name   TEXT,
-    actor           TEXT      NOT NULL,
-    details_json    TEXT                                    -- nullable JSON payload
-);
-CREATE INDEX idx_audit_resource    ON audit_log(resource_kind, resource_name, timestamp DESC);
-CREATE INDEX idx_audit_resource_id ON audit_log(resource_id, timestamp DESC);
-CREATE INDEX idx_audit_time      ON audit_log(timestamp DESC);
-CREATE INDEX idx_audit_eventtype ON audit_log(event_type, timestamp DESC);
+| Class   | Directory                            | Kinds                                                     | Written                                                               |
+| ------- | ------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------- |
+| vault   | `~/.coffer/vault/resources/<kind>/`   | `mcp_server`, `skill`, `channel`, `provider`, `knowledge` | through the vault's one writer, one commit per operation; read at `HEAD` |
+| local   | `~/.coffer/local/resources/<kind>/`   | `agent`                                                   | atomically, no history                                                |
+| derived | `~/.coffer/derived/resources/<kind>/` | `memory`, and the builtin skill `coffer-guide`            | atomically, no history; rebuilt                                       |
 
--- Retention policy: kind-agnostic
-CREATE TABLE retention_policies (
-    table_name        TEXT PRIMARY KEY,
-    retention_days    INTEGER,                              -- NULL = forever; >0 = days
-    last_pruned_at    TIMESTAMP,
-    last_pruned_rows  INTEGER NOT NULL DEFAULT 0,
-    updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (retention_days IS NULL OR retention_days > 0)
-);
+```json
+{
+  "uid": "3f2a9c0e8b1d4c6a9e7f0b2d4c6a8e0f",
+  "kind": "mcp_server",
+  "format_version": 1,
+  "name": "linear",
+  "description": null,
+  "config": { "transport": "stdio", "command": "${HOME}/bin/linear-mcp" },
+  "created_at": "2026-09-30T08:00:00+00:00"
+}
 ```
 
-## SQLAlchemy mapping (summary)
+| Key              | Notes                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uid`            | the identity (`uuid4().hex`; any opaque id of letters, digits, `-` and `_`, at most 64 characters, is kept). Absent only on a hand-made file, until the `daemon` commit that mints one |
+| `kind`           | required; the `Kind.name`                                                                                                                                    |
+| `format_version` | the resource document's format, 1 today; `format_compat` appears only on a file a newer build wrote additively                                             |
+| `name`           | required; the label, unique within its kind across every class                                                                                              |
+| `title`          | written only when set                                                                                                                                        |
+| `description`    | always written, `null` when empty, so a person editing the file sees where it goes                                                                           |
+| `config`         | required; the kind's config. A string under this machine's home is written as `${HOME}/...` and expanded on read; top-level keys the kind's schema does not declare are put back from the file on every write |
+| `created_at`     | ISO time, written at creation                                                                                                                                |
 
-ORM models live under `backend/coffer/infrastructure/persistence/models.py`,
-registered against the shared `Base.metadata` alongside every kind's own:
+`enabled`, `scope`, `rev` and `updated_at` are not in the file. The file name
+only follows the name: nothing keys on the path, a person may move the file,
+and a rename writes `<new name>.json` (or `<name>-<uid[:8]>.json` when that
+name is taken by an unrelated file) and removes the old one in the same commit.
 
-| ORM class              | Table                | Lives in                               |
-| ---------------------- | -------------------- | -------------------------------------- |
-| `ResourceModel`        | `resources`          | `infrastructure/persistence/models.py` |
-| `AuditLogModel`        | `audit_log`          | `infrastructure/persistence/models.py` |
-| `RetentionPolicyModel` | `retention_policies` | `infrastructure/persistence/models.py` |
+### Reach — `~/.coffer/local/reach.json`
 
-Each ORM model provides:
+```json
+{ "<uid>": { "enabled": true, "agents": ["<agent uid>"], "projects": null } }
+```
 
-- `to_domain() -> <DomainEntity>` for conversion outward
-- A module-level `from_domain(entity) -> <Model>` helper for inward conversion
+`agents: null` is unrestricted and `[]` dormant; `projects` is reserved and
+always `null`. A resource with no record has `enabled: true` and its kind's
+`default_scope`. `set_enabled` and `update_scope` write only this file and make
+no commit.
 
-## Cascade and integrity rules
+### Revision index — `~/.coffer/derived/index/resources.json`
 
-| Action                             | Effect                                                                                                                                                                                                                                                                 |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DELETE FROM resources WHERE id=?` | cascades to whatever a kind owns by FK (spec mcp-gateway's `mcp_capability_preferences`, for one). Does **not** cascade to `audit_log` or to any kind's invocation log — history outlives the resource it describes.                                                     |
-| `UPDATE resources SET kind=?`      | forbidden — the application layer never updates `kind`.                                                                                                                                                                                                                |
-| `UPDATE resources SET name=?`      | allowed, through `ResourceService.rename` only, which is reached by every kind through `PATCH /api/v1/resources/{uid}`. It writes one column and records `resource_renamed`. Nothing else is repointed, because nothing else holds the name: cross-resource references, the synced document and the audit trail all hold identity, so history follows the resource while each row keeps saying what it was called then. A kind with an on-disk artifact named after the resource moves it in its `on_rename` hook. |
-| `UPDATE resources SET uid=?`       | forbidden — the identity is minted once at creation and never changes. The only writer is migration 0095's one-time backfill.                                                                                                                                                                                                                                       |
-| `DELETE FROM retention_policies`   | forbidden — policies are upserted at startup, never deleted.                                                                                                                                                                                                           |
+`{uid: {path, blob, reach, rev, updated_at, first_seen}}`: where the uid was
+last found (`<class>/<path>`), the blob id of its bytes, a fingerprint of its
+reach, the counter and the two times. A full read drops every uid it no longer
+finds. Deleting the file is safe.
+
+### Audit log — `runs.db`
+
+```sql
+CREATE TABLE audit_log (
+    id              INTEGER PRIMARY KEY,
+    timestamp       TIMESTAMP NOT NULL,
+    event_type      VARCHAR   NOT NULL,
+    resource_kind   VARCHAR,                -- the label carried at the time
+    resource_name   VARCHAR,
+    actor           VARCHAR   NOT NULL,
+    details_json    TEXT,                   -- nullable JSON payload
+    resource_uid    VARCHAR                 -- the resource's uid; survives a rename (0117)
+);
+CREATE INDEX idx_audit_resource     ON audit_log(resource_kind, resource_name, timestamp DESC);
+CREATE INDEX idx_audit_time         ON audit_log(timestamp DESC);
+CREATE INDEX idx_audit_eventtype    ON audit_log(event_type, timestamp DESC);
+CREATE INDEX idx_audit_resource_uid ON audit_log(resource_uid, timestamp);
+```
+
+`AuditLogModel` (`infrastructure/persistence/models.py`) is on the shared
+`Base.metadata` of `runs.db`'s one Alembic lineage.
+
+### Retention policies — `~/.coffer/local/retention.json`
+
+`{table_name: {retention_days, last_pruned_at, last_pruned_rows, updated_at}}`,
+written atomically (`FileRetentionRepo`, `infrastructure/persistence/retention_repo.py`).
+`retention_days` is `null` (forever) or a positive integer. What a policy
+prunes is history, so the sweep stays SQL against `runs.db`, and it accepts
+only a table and a timestamp column in the allowlist built from the registry.
+
+## Integrity rules
+
+| Action               | Effect |
+| -------------------- | ------ |
+| create               | refused (`ResourceAlreadyExists`) when the uid, or the kind + name, is already held by a resource file of any class. A vault resource is written expecting its path absent, in one commit |
+| delete               | removes the file (one commit for a vault resource), its reach record and its index row; every state document that follows its owner (spec mcp-gateway's capability switches, spec channels' pairings) goes in the same commit. Does **not** touch `audit_log` or any kind's invocation log — history outlives the resource it describes |
+| change `kind`        | never — the application layer never rewrites `kind` |
+| change `name`        | through `ResourceService.rename` only (`PATCH /api/v1/resources/{uid}`): one commit moves the file and every following state document, and `resource_renamed` is recorded. Nothing else is repointed, because nothing else holds the name: cross-resource references and the audit trail hold the uid. A kind with an on-disk artifact named after the resource moves it in its `on_rename` hook |
+| change `uid`         | never — minted once, kept inside the file wherever it moves |
+| any structured write | read-modify-write under the vault lock against `HEAD`; a file whose bytes on disk differ from `HEAD` (an unsettled hand edit) is refused with `VAULT_FILE_STALE` (409) rather than overwritten |
+| a hand edit          | committed as a `disk` write once it validates; an invalid one stays uncommitted and flagged, and `HEAD` stays in effect |
 
 ## Default retention policy seed (run on first daemon startup)
 
 These defaults are seeded at the **composition root** (in `surfaces/http/app.py`,
-when `RetentionService.initialize_defaults()` is invoked at daemon startup) —
-**not** in Alembic migrations. Migrations create the `retention_policies` table
-but leave it empty; the daemon upserts the per-table defaults at boot so that a
-prunable table introduced by a later spec can register its own default without
-requiring a new migration.
+when `RetentionService.initialize_defaults()` is invoked at daemon startup) into
+`local/retention.json`, so a prunable table introduced by a later spec registers
+its own default without any migration.
 
-The seed is one row per registered `PrunableTable`, at that table's
+The seed is one entry per registered `PrunableTable`, at that table's
 `default_retention_days`, inserted only where no policy for the table exists
 yet. The registrations today (`surfaces/http/app_mcp_composition.py`):
 

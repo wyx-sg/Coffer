@@ -4,6 +4,8 @@ capability switches, channel pairings and the engine's settings, each read at
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from datetime import UTC, datetime
 
@@ -38,6 +40,7 @@ def _kinds() -> dict[str, Kind]:
     }
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
 async def test_capability_switches_are_a_vault_document_and_seen_times_are_derived() -> None:
     kinds = _kinds()
     repo = make_resource_repo(kinds)
@@ -83,6 +86,8 @@ async def test_a_switched_off_capability_never_seen_here_still_reads_off() -> No
         assert found is not None and found.enabled is False
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a channel's pairings travel with it")
+@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
 async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
     kinds = _kinds()
     repo = make_resource_repo(kinds)
@@ -109,6 +114,7 @@ async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
     assert [p.chat_id for p in await peers.list_by_resource(channel.uid)] == ["dm"]
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
 async def test_engine_settings_are_one_vault_document_and_absent_means_defaults() -> None:
     repo = VaultInternalEngineConfigRepo()
     assert await repo.get() is None
@@ -129,3 +135,34 @@ async def test_engine_settings_are_one_vault_document_and_absent_means_defaults(
     vault_writer().settle()
     await repo.set_transcribe_model("whisper")
     assert json.loads(path.read_text())["future"] is True
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="deleting a server's preference document re-enables everything on it",
+)
+async def test_a_deleted_preference_document_re_enables_the_server() -> None:
+    from coffer.domain.vault.writers import WRITER_SYNC, CommitMeta
+    from coffer.infrastructure.vault.instance import vault_writer
+
+    kinds = _kinds()
+    repo = make_resource_repo(kinds)
+    svc = ResourceService(kinds=kinds, repo=repo, audit=AuditService(_NullAudit()))  # type: ignore[arg-type]
+    linear = await svc.register("mcp_server", "linear", {}, actor="user")
+    github = await svc.register("mcp_server", "github", {}, actor="user")
+    async with derived_db() as sm:
+        prefs = MCPCapabilityPreferenceStore(sm, name_of=repo.name_of)
+        when = datetime.now(tz=UTC)
+        for server in (linear, github):
+            await prefs.reconcile(server.uid, "tool", ["a", "b"], default_enabled=True, when=when)
+            await prefs.set_enabled(server.uid, "tool", "b", False)
+        # Another machine re-enabled everything on linear: its document goes.
+        vault_writer().delete_file(
+            "state/mcp-preferences/linear.json",
+            meta=CommitMeta(writer=WRITER_SYNC, operation="sync", summary="merged"),
+        )
+        on = {p.capability_key: p.enabled for p in await prefs.list_for(linear.uid)}
+        assert on == {"a": True, "b": True}
+        still = {p.capability_key: p.enabled for p in await prefs.list_for(github.uid)}
+        assert still == {"a": True, "b": False}
+        assert "state/mcp-preferences/linear.json" not in vault_repository().tree("HEAD", "state/")

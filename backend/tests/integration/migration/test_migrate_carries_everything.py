@@ -4,6 +4,8 @@ directory it belongs to, in the bytes its store would write (plan q9 §3)."""
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import sqlite3
 import subprocess
@@ -65,6 +67,7 @@ def test_each_resource_is_its_stores_file_with_uid_and_no_created_at(legacy: Leg
         assert data == expected, f"{kind} {name} is not the store's own bytes"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="reach stays on the machine it was set on")
 def test_reach_is_local_and_keeps_enabled_and_scope(legacy: LegacyHome) -> None:
     _migrate(legacy)
     reach = ReachStore(reach_path(legacy.home)).all()
@@ -118,6 +121,7 @@ def test_state_documents_are_vault_files_keyed_by_the_owner_uid(legacy: LegacyHo
     assert engine["upkeep"]["distil"]["enabled"] is False
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="machine-local files never reach the working tree")
 def test_machine_local_settings_are_under_local(legacy: LegacyHome) -> None:
     _migrate(legacy)
     local = legacy.coffer / "local"

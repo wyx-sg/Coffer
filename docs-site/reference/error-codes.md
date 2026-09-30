@@ -71,7 +71,7 @@ give the status each code is actually sent with.
 | `CREDENTIAL_IN_USE` | 409 | The credential cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
 | `CREDENTIAL_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
 | `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Credentials](/guides/credentials). |
-| `MASTER_KEY_MISSING` | 503 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
+| `MASTER_KEY_MISSING` | 503 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `~/.coffer/master.key` (or import it with `coffer sync key import`), or re-enter your secrets. |
 | `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key. | Point the import at the key backup the desktop app wrote. |
 | `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer credentials reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `APPROVAL_PENDING` | 202 | The change was saved as a pending approval instead of being applied: a replaced value that is in use, or switching the protection off. | Approve it in the Coffer desktop app. |
@@ -202,18 +202,29 @@ give the status each code is actually sent with.
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer config set engine.provider <name>`. |
 | `NO_ACTIVE_PROVIDER` | 404 | No connection is active for the requested wire format. | Switch one on with `coffer provider switch <name>`. |
 
+## The vault
+
+| Code | HTTP | Meaning | Typical fix |
+| --- | --- | --- | --- |
+| `VAULT_FILE_STALE` | 409 | The file changed on disk since you read it (an edit in your editor, another save), so the write was refused rather than overwrite it. | Reload, then save again with the new fingerprint. |
+| `VAULT_FILE_INVALID` | 422 | The write would leave a vault file that fails validation. Nothing was written. | Fix what the message names. |
+| `VAULT_PATH_INVALID` | 400 | The path is not a vault file or folder history can be read for, or it is under `secret/`. | Use a vault-relative path such as `skills/pdf/`. |
+| `VAULT_VERSION_NOT_FOUND` | 404 | The version is not in this file's history. | Pick one from `coffer vault history`. |
+| `VAULT_GIT_FAILED` | 500 | A git operation on the vault repository failed. | Read the message and the daemon log. |
+
 ## Vault sync
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `BACKUP_REMOTE_INVALID` | 422 | The sync remote's configuration cannot be used as given. | Correct the remote URL or token. See [Vault sync](/guides/vault-sync). |
-| `GIT_MIRROR_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
-| `SYNC_BUNDLE_TOO_NEW` | 409 | The remote was written by a newer Coffer build. | Upgrade Coffer on this machine. |
-| `SYNC_BUNDLE_INVALID` | 422 | The sync working tree cannot hold the vault's layout. | Point the remote at an empty repository or one Coffer wrote. |
-| `SYNC_SERIALIZATION_INVALID` | 422 | A document in the sync tree is malformed. | Fix or remove the document the message names in the remote. |
-| `SYNC_NOTHING_PENDING` | 409 | You confirmed or rejected, but no round is waiting at the deletion guard. | Nothing to do. |
-| `SYNC_NOTHING_TO_ROLL_BACK` | 409 | There is no pre-apply snapshot to return to. | Nothing to do. |
-| `SYNC_JOIN_AMBIGUOUS` | 409 | This machine synced with the remote before, but its last commit is gone from the remote's history. | Rebuild this machine from the remote, or join as new. |
+| `SYNC_NO_REMOTE` | 409 | No sync remote is configured. | `coffer sync remote set <url>`. See [Vault sync](/guides/vault-sync). |
+| `SYNC_REMOTE_INVALID` | 422 | The URL or branch would be read by git as an option, or is not a name git accepts. | Correct the URL or branch. |
+| `SYNC_REMOTE_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
+| `SYNC_NOTHING_STOPPED` | 409 | You answered a conflict, a hold or a join choice, but no round is waiting for that answer. | Nothing to do. |
+| `SYNC_CONFLICT_MARKERS_LEFT` | 422 | The hand-merged copy still has conflict markers; the message names the line. | Remove them, save, then mark the file resolved. |
+| `SYNC_ROUND_NOT_FOUND` | 404 | No round with that id. | Pick one from `coffer sync history`. |
+| `SYNC_NOTHING_TO_ROLL_BACK` | 409 | The round applied nothing, or is itself a rollback. | Nothing to do. |
+| `SYNC_MACHINE_NOT_FOUND` | 404 | No machine with that id shares this vault. | List them with `coffer sync machine list`. |
+| `SYNC_MACHINE_NAME_INVALID` | 422 | The machine name is empty or too long. | Choose another name. |
 | `SYNC_CANNOT_RETIRE_SELF` | 422 | You tried to retire the machine you are on. | Retire it from another machine, or clear the sync remote here. |
 
 ## Experimental features
@@ -231,7 +242,11 @@ These are raised while the daemon starts, before it serves requests. They appear
 
 | Code | Meaning | Typical fix |
 | --- | --- | --- |
-| `DB_SCHEMA_TOO_NEW` | `~/.coffer/coffer.db` was migrated by a newer or different Coffer build. Mapped to HTTP 409 if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
+| `DB_SCHEMA_TOO_NEW` | `~/.coffer/runs.db` was migrated by a newer or different Coffer build. Mapped to HTTP 409 if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
+| `VAULT_MIGRATION_REQUIRED` | The home still keeps its state in `coffer.db`, from a Coffer before the vault layout. | Stop the daemon and run `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading). |
+| `VAULT_MIGRATION_ON_HOLD` | `coffer migrate --rollback` put the home back and left its hold marker. | Run the previous build, or `coffer migrate --resume` and then `coffer migrate`. |
+| `VAULT_MIGRATION_REFUSED` | `coffer migrate` will not touch the home as it stands, for example an upgrade stopped half-way. | Follow the message; after a half-done upgrade, `coffer migrate --rollback` first. |
+| `GIT_MISSING` | The vault needs `git` and none was found. | Install git (`xcode-select --install` on macOS). |
 | `MASTER_KEY_MISSING` | See [Credentials](#credentials). | |
 
 ## Chat turn errors

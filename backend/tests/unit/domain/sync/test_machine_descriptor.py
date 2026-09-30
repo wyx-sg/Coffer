@@ -3,6 +3,8 @@ descriptor fields", "Record plugins as an inventory, not a replicator")."""
 
 from __future__ import annotations
 
+import pytest
+
 import json
 
 from coffer.domain.sync.machine import (
@@ -15,6 +17,7 @@ from coffer.domain.sync.machine import (
 )
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a descriptor carries what the machines table shows")
 def test_a_descriptor_round_trips_through_its_file() -> None:
     d = MachineDescriptor(
         machine_id="a1b2c3d4e5f60718",
@@ -51,6 +54,7 @@ def test_a_descriptor_from_a_newer_build_still_reads() -> None:
     assert MachineDescriptor.parse("m1", b"not json") is None
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the raw host identifier never reaches the repository")
 def test_the_id_is_a_digest_and_names_one_path() -> None:
     mid = derive_machine_id("IOPlatformUUID-1234")
     assert len(mid) == 16 and "1234" not in mid

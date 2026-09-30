@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 from coffer.domain.sync.rounds import AppliedChange, PulledCommit, RoundRecord, RoundStatus
@@ -25,6 +27,7 @@ def _round(i: int, status: RoundStatus = RoundStatus.PULLED) -> RoundRecord:
     )
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="every round is recorded with what it moved")
 async def test_rounds_are_stored_and_read_back_newest_first(tmp_path: Path) -> None:
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}")
     async with engine.begin() as conn:

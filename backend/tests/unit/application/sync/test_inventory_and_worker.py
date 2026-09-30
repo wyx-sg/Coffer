@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -37,6 +39,7 @@ class _Plugins:
         )
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent")
 async def test_each_agent_is_listed_with_its_plugins_and_a_failure_lists_none() -> None:
     agents = _Agents(
         SimpleNamespace(uid="u1", name="codex", config={"type": "codex"}),
@@ -79,6 +82,7 @@ async def test_a_round_runs_on_the_remote_interval_and_says_when_the_next_is() -
     assert svc.next_at == NOW + timedelta(seconds=600)
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="sync stays off until a remote is configured")
 async def test_nothing_runs_without_a_remote_or_while_it_is_paused() -> None:
     for remote in (None, SyncRemote(url="https://example.com/v.git", enabled=False)):
         svc = _Service(remote)

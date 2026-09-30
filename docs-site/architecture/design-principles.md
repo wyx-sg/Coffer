@@ -26,7 +26,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 | [Pull, not push](#pull-not-push) | Coffer puts paths and a catalogue in front of the agent; it does not inject context behind your back. |
 | [Reach is machine-local](#reach-is-machine-local) | Whether a resource is enabled, and for which agents, is decided on the machine it applies to. |
 | [Each kind enforces reach at its own choke point](#each-kind-enforces-reach-at-its-own-choke-point) | One predicate, many enforcement points, no central gate. |
-| [Secrets are never plaintext at rest](#secrets-are-never-plaintext-at-rest) | Fernet ciphertext in SQLite, refs everywhere else. |
+| [Secrets are never plaintext at rest](#secrets-are-never-plaintext-at-rest) | Fernet ciphertext files in the vault, refs everywhere else. |
 | [Detect, never refuse](#detect-never-refuse) | On version skew, say so and carry on. |
 | [Off keeps data](#off-keeps-data) | Switching a feature off hides it; it never deletes anything. |
 | [Extract on second use](#extract-on-second-use) | A shared module is created when the second feature needs it, not before. |
@@ -37,15 +37,15 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 
 **Rationale.** The assets Coffer holds — API keys, private notes, everything your agents have learned about your environment — are exactly the assets you would not hand to a third party. A local store also has no availability dependency: an agent's first tool call of the day does not wait on anyone's service.
 
-**The bounded exception.** Coffer can converge the vault with a git remote *you* own, so your own machines hold one vault rather than several. The exception holds only while three conditions all hold:
+**The bounded exception.** Coffer can sync the vault with a git remote *you* own, so your own machines hold one vault rather than several. The exception holds only while three conditions all hold:
 
 1. **The remote is a rendezvous, never a system of record.** Every machine's local vault stays authoritative and complete, so the remote can be deleted and rebuilt from any one machine.
 2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer: a key backup the desktop app writes behind a presence check, installed on the other machine with `coffer sync key import`.
 3. **It is off by default** and pointed only at a repository you configure.
 
-Convergence is bidirectional but only under the sync spec's safety rules: git's three-way merge arbitrates, what is applied is a diff against the last state this vault provably held, and a round that would delete more than its configured share stops and asks.
+Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
 
-**In the code.** The daemon binds `127.0.0.1` in [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py). Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and credential ciphertext is carried only when you set `--with-credentials`.
+**In the code.** The daemon binds `127.0.0.1` in [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py). Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secret`.
 
 **Rules out.** A hosted Coffer endpoint; a "Coffer cloud" account; any design where losing the remote loses data; a sync that overwrites a vault wholesale; replicating vault state to a vendor-controlled service.
 
@@ -75,13 +75,13 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Identity is an immutable uid
 
-**Statement.** A resource's identity is its `uid`: an opaque `uuid4().hex` minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered, and an agent's name is its type (one agent per type). The kinds whose name is free — providers, channels, knowledge collections, memory partitions — also carry an optional `title` for display. The integer `id` is an internal surrogate key that never leaves the process.
+**Statement.** A resource's identity is its `uid`: an opaque `uuid4().hex` minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered, and an agent's name is its type (one agent per type). The kinds whose name is free — providers, channels, knowledge collections, memory partitions — also carry an optional `title` for display. The uid is written inside the resource's own file, so the file's path and name are only its location and label; there is no integer surrogate key.
 
-**Rationale.** Once a vault converges across machines, the question an identifier must answer is "is the thing on that machine the same thing as the thing on this one?" A name cannot answer it, because a name is exactly what you are allowed to change: a rename would cross the sync remote as a deletion plus a creation, cascading away everything attached to the old row. An autoincrement row number cannot answer it either, because two machines allocate the same number to different resources.
+**Rationale.** Once a vault syncs across machines, the question an identifier must answer is "is the thing on that machine the same thing as the thing on this one?" A name cannot answer it, because a name is exactly what you are allowed to change: a rename would cross the sync remote as a deletion plus a creation, cascading away everything attached to the old row. An autoincrement row number cannot answer it either, because two machines allocate the same number to different resources.
 
-**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the sync bundle is laid out as `resources/<kind>/<uid>.yaml`; rename is an ordinary field on `PATCH`, refused with `409 NAME_IMMUTABLE` for a kind that declares `name_fixed`, and `title` is editable on the kinds that carry one. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
+**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the vault files each resource as `resources/<kind>/<name>.json` with its uid inside, so a moved or renamed file is still the same resource; rename is an ordinary field on `PATCH`, refused with `409 NAME_IMMUTABLE` for a kind that declares `name_fixed`, and `title` is editable on the kinds that carry one. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
 
-**Rules out.** `<kind>:<name>` identifiers; cross-resource references by name; per-kind rename endpoints; exposing `resources.id` on any surface.
+**Rules out.** `<kind>:<name>` identifiers; cross-resource references by name; per-kind rename endpoints; keying anything on a file's path.
 
 ## Agent files are the source of truth
 
@@ -89,17 +89,17 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** A copy of someone else's state drifts the moment they change it, and the agent changes its own state constantly. Deriving at read time means Coffer is never wrong about what the agent has, and uninstalling Coffer leaves every agent exactly as functional as before.
 
-**In the code.** The `agent` kind stores only a config directory and install state; everything else is read through [`infrastructure/agent/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent) and [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never writes it; everything under `~/.coffer/memory/` is derived and rebuildable. See [Memory](/architecture/memory).
+**In the code.** The `agent` kind stores only a config directory and install state; everything else is read through [`infrastructure/agent/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent) and [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never writes it; everything under `~/.coffer/derived/memory/` is derived and rebuildable. See [Memory](/architecture/memory).
 
-**Rules out.** Mirroring an agent's config into the database; writing into an agent's memory files; editing undocumented internal files; any change an agent could not survive Coffer being removed.
+**Rules out.** Mirroring an agent's config into Coffer's own store; writing into an agent's memory files; editing undocumented internal files; any change an agent could not survive Coffer being removed.
 
 ## Files are the truth for bulk content
 
-**Statement.** SQLite is the system of record for control-plane state. Bulk user content — knowledge collections and memory partitions — is plain Markdown on disk, and those files are the only copy: nothing indexes, chunks or embeds them.
+**Statement.** The vault's files are the system of record for configuration, and `runs.db` for history. Bulk user content — knowledge collections and memory partitions — is plain Markdown on disk, and those files are the only copy: nothing indexes, chunks or embeds them.
 
 **Rationale.** A derived index has to be reconciled with its source, and every reconciliation is a place to be wrong. Plain files are live the moment you save them in your own editor, readable by every agent's own `Read` and `Grep`, diffable in git, and survive Coffer entirely. Measured usage showed agents never reached for a retrieval tool they had to remember to call, while they read files constantly.
 
-**In the code.** The knowledge layer owns no table: a collection is a `resources` row plus a directory. Retrieval is the agent's own file tools against absolute paths; ripgrep survives only as the in-process candidate selector the curation pass uses. An import contract bans vector-store and embedding libraries from the codebase. See [Knowledge](/architecture/knowledge) and [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md).
+**In the code.** The knowledge layer owns no table: a collection is a resource file plus a directory. Retrieval is the agent's own file tools against absolute paths; ripgrep survives only as the in-process candidate selector the curation pass uses. An import contract bans vector-store and embedding libraries from the codebase. See [Knowledge](/architecture/knowledge) and [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md).
 
 **Rules out.** A documents table; FTS or vector indexes; an embedding sidecar; a second copy of a document in any other store. Literal matching is a placeholder rather than a verdict: semantic retrieval may return, but not as a copy of the files.
 
@@ -115,11 +115,11 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Reach is machine-local
 
-**Statement.** A resource's **reach** is its `enabled` flag together with its agent `scope`. Reach is set on the machine it applies to and never converges: the sync bundle carries what a resource *is* and how it is configured, never what it reaches.
+**Statement.** A resource's **reach** is its `enabled` flag together with its agent `scope`. Reach is set on the machine it applies to and never syncs: the vault carries what a resource *is* and how it is configured, never what it reaches.
 
 **Rationale.** A synced reach would be set from wherever you happen to sit, about machines you cannot see, and two machines editing it would put a permission through a text merge where whichever round ran last silently decides what the other machine exposes. A machine-local reach has nothing to merge and can always be verified where it takes effect. The cost is honest: a resource arriving on a machine for the first time starts at that kind's default reach there.
 
-**In the code.** `domain/sync/serialization.py` leaves `enabled` and `scope` out of the resource document, and the applier leaves local reach untouched. The experimental-feature switches live in `~/.coffer/daemon-config.json` rather than the database for the same reason. Surfaces say so where reach is set: each kind's `scope` command (`coffer skill scope --help`, for example) states that the scope applies to this machine only.
+**In the code.** Reach is stored in `~/.coffer/local/reach.json`, outside the vault repository, so it cannot be committed or pushed at all; the resource file holds no `enabled` or `scope`. The experimental-feature switches live in `~/.coffer/daemon-config.json` for the same reason. Surfaces say so where reach is set: each kind's `scope` command (`coffer skill scope --help`, for example) states that the scope applies to this machine only.
 
 **Rules out.** Machine ids inside a scope; a "newest write wins" reach; any permission that changes because another machine's round ran.
 
@@ -135,7 +135,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches the database, logs, audit or any structured event. All other code holds credential **refs**. The master key is managed only by `coffer.infrastructure.credentials` — a `0600` file beside the database by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds credential **refs**. The master key is managed only by `coffer.infrastructure.credentials` — a `0600` file, `~/.coffer/master.key`, by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
 
 **Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
 
@@ -151,7 +151,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **In the code.** `GET /api/v1/daemon/status` reports `version` and `executable`; every CLI command and the shim compare it with their own build through [`infrastructure/daemon/version_skew.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/version_skew.py) and print a warning on stderr; the desktop shell shows a restart affordance. `coffer daemon restart` is the fix.
 
-The same stance governs other mismatches Coffer can detect but not safely resolve: a database migrated by a newer build fails fast with `DB_SCHEMA_TOO_NEW` rather than guessing, and a sync bundle laid out by a newer build is refused with an upgrade message.
+The same stance governs other mismatches Coffer can detect but not safely resolve: a database migrated by a newer build fails fast with `DB_SCHEMA_TOO_NEW` rather than guessing, and a sync remote laid out by a newer build is refused with an upgrade message.
 
 **Rules out.** Auto-update; auto-kill; silently running an old daemon.
 
@@ -163,7 +163,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
-**Rules out.** Wiring-time gates that need a restart; a switch stored in the synced database; deleting a feature's data when it is switched off.
+**Rules out.** Wiring-time gates that need a restart; a switch stored in the synced vault; deleting a feature's data when it is switched off.
 
 ## Extract on second use
 

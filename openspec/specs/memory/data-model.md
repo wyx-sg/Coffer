@@ -1,21 +1,24 @@
 # Data Model — Memory
 
 The memory layer's state is a directory of Markdown files plus the one
-Resource row each partition already has as a Resource. This document describes
-what is on disk, the frontmatter contract, and the handful of rows and values
-the surfaces answer with. Authority is [`spec.md`](spec.md) and
+resource file each partition has as a Resource. This document describes
+what is on disk, the frontmatter contract, and the handful of records and
+values the surfaces answer with. Authority is [`spec.md`](spec.md) and
 [Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md).
 
 ## There is no memory table
 
 **This layer adds no table of its own** ("Add no table of its own"). Notes,
-raw entries, the index and the retirement record are files; the only database
-presence a partition has is the row every Resource has, in the kind-agnostic
-`resources` table, carrying its name, an `enabled` flag that is always true and a two-field
-`config` — the repository it was learned in, and nothing else.
+raw entries, the index and the retirement record are files; besides them a
+partition has only the resource file every Resource has,
+`~/.coffer/derived/resources/memory/<name>.json` (the `memory` kind's storage
+class is `derived`, spec resource-framework), carrying its name and a
+two-field `config` — the repository it was learned in, and nothing else. It is
+always enabled.
 
-Everything under `~/.coffer/memory/` is **derived** ("Keep the memory tree
-derived and local"). Delete it, run aggregation and distil, and an
+Everything under `~/.coffer/derived/memory/` is **derived** ("Keep the memory
+tree derived and local"), and so are the partitions' resource files: nothing of
+it is in the vault repository, and deleting `derived/` is safe. Delete it, run aggregation and distil, and an
 **equivalent** set comes back: the same subjects from the same sources, not
 necessarily the same wording, because the product is a distillation rather
 than a copy. That is a weaker guarantee than this layer used to make, and it
@@ -25,7 +28,7 @@ is the price of the notes being Coffer's own writing. `.raw/` is the part that
 ## On-disk layout
 
 ```text
-~/.coffer/memory/
+~/.coffer/derived/memory/
 ├── .source_state.json            # {native_path: last-seen digest} — the skip cache
 ├── global/                       # notes about the person, delivered wherever they work
 │   ├── MEMORY.md                 # the index
@@ -54,8 +57,8 @@ trusting a comment:
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
 | `RETIRED.md` | the distil pass | **the next distil pass**, and a human |
 
-- `~/.coffer/memory/` is the root; `$COFFER_MEMORY_ROOT` overrides it for
-  tests. Path construction lives in exactly one module,
+- `~/.coffer/derived/memory/` is the root, resolved from `HOME` at every call;
+  there is no override. Path construction lives in exactly one module,
   `infrastructure/memory/paths.py`, which is also where the traversal guard
   "Confine reads to registered agents' memory paths" asks for lives
   (`check_segment` refuses an empty, hidden, all-dots or otherwise unsafe
@@ -271,18 +274,18 @@ partition's `notes/` changes.
 
 ## Settings this layer reads
 
-Its two unattended passes are switched and timed from the shared
-installation-wide singleton `internal_engine_config` (spec
-[internal-engine](../internal-engine/spec.md) carries that row's own description), read
+Its two unattended passes are switched and timed from the engine's settings
+document, `vault/state/settings/internal-engine.json` (spec
+[internal-engine](../internal-engine/spec.md) carries its own description), read
 **per pass** rather than at boot so a change takes effect without a daemon
 restart:
 
-| Column | Default | Meaning |
+| Setting | Default | Meaning |
 |---|---|---|
-| `auto_aggregate_enabled` | `true` | Whether the aggregate worker may run. On by default, because a pass only reads the agents' files and only writes derived ones ("Aggregate on an interval and on demand"). |
-| `aggregate_interval_s` | `NULL` | `NULL` means the worker's own default, so raising it later reaches every vault that never chose one. |
-| `auto_distil_enabled` | `true` | Whether the distil worker may run. Renamed from `auto_organise_enabled` with the pass itself. |
-| `distil_interval_s` | `NULL` | As above. |
+| `auto_aggregate_enabled` (`upkeep.aggregate.enabled`) | `true` | Whether the aggregate worker may run. On by default, because a pass only reads the agents' files and only writes derived ones ("Aggregate on an interval and on demand"). |
+| `aggregate_interval_s` (`upkeep.aggregate.interval_s`) | `null` | `null` means the worker's own default, so raising it later reaches every vault that never chose one. |
+| `auto_distil_enabled` (`upkeep.distil.enabled`) | `true` | Whether the distil worker may run. |
+| `distil_interval_s` (`upkeep.distil.interval_s`) | `null` | As above. |
 
 The one in-flight fact this layer keeps is per-daemon and deliberately does
 not outlive it: which partitions are being distilled right now, held in the
@@ -294,7 +297,7 @@ back empty, which is the truth rather than a lost record.
 ## Delivery state
 
 Per-agent delivery is **four entries in that agent's own settings file** — not a
-row here. Each of Coffer's entries is identified by a marker embedded as the
+record here. Each of Coffer's entries is identified by a marker embedded as the
 argument of a leading no-op shell command, so detection never depends on
 `argv[0]`, and every entry runs the same command,
 `<abs coffer> memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event
@@ -329,9 +332,9 @@ daemon restart forgets it.
 ## Trigger
 
 An authored guard on a known trap, one Markdown file per trigger in the vault:
-`~/.coffer/vault/memory-triggers/<id>.md` (`$COFFER_MEMORY_TRIGGERS_ROOT`
-overrides the directory). Not under the memory root, because a person wrote it,
-so a rebuild of the derived tree keeps it (spec memory "Keep triggers in the
+`~/.coffer/vault/memory-triggers/<id>.md`, in the vault repository, so every
+change to one is a commit. Not under the memory root, because a person wrote
+it, so a rebuild of the derived tree keeps it (spec memory "Keep triggers in the
 vault, armed only by a person").
 
 | Field (frontmatter) | Meaning |

@@ -43,21 +43,29 @@ If the holder is described as **another Coffer daemon**, it is most often your o
 tail -n 50 ~/.coffer/logs/daemon.log
 ```
 
-The most common entries are a taken port (above) and a database written by a newer build (below). The MCP shim reports the same situation as `coffer-mcp-shim: daemon did not come up within 10s; check ~/.coffer/logs/daemon.log`.
+The most common entries are a taken port (above), a database written by a newer build, and a home that still needs the one-time upgrade (below). The MCP shim reports the same situation as `coffer-mcp-shim: daemon did not come up within 10s; check ~/.coffer/logs/daemon.log`.
 
 ### The database schema is too new
 
 **Symptom.** The daemon stops at startup and the log says:
 
 ```text
-database schema revision '0105' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove ~/.coffer/coffer.db to start fresh.
+database schema revision '0118' is newer than this Coffer build understands — it was created by a newer or different version. Upgrade Coffer, or back up and remove sqlite+aiosqlite:////Users/you/.coffer/runs.db to start fresh.
 ```
 
 The error code is `DB_SCHEMA_TOO_NEW`.
 
-**Cause.** A newer build, or a development build with migrations this one does not ship, migrated the database. Typical after rolling back an upgrade or switching between source checkouts.
+**Cause.** A newer build, or a development build with migrations this one does not ship, migrated the history database, `runs.db`. Typical after rolling back an upgrade or switching between source checkouts.
 
-**Fix.** Run the newer build again. To stay on this build, stop the daemon and restore the copy taken before that migration, `~/.coffer/coffer.db.pre-<revision>` (see [Database migrations and automatic backups](/guides/daemon#database-migrations-and-automatic-backups)).
+**Fix.** Run the newer build again. To stay on this build, stop the daemon and restore the copy taken before that migration, `~/.coffer/runs.db.pre-<revision>` (see [Database migrations and automatic backups](/guides/daemon#database-migrations-and-automatic-backups)).
+
+### The daemon asks for `coffer migrate`
+
+**Symptom.** The daemon refuses to start and names `coffer migrate` (`VAULT_MIGRATION_REQUIRED`), or names `coffer migrate --resume` (`VAULT_MIGRATION_ON_HOLD`).
+
+**Cause.** The home was written by a Coffer from before the vault layout and still keeps its state in `coffer.db`, or a rollback of the upgrade left its hold marker.
+
+**Fix.** Stop the daemon, then `coffer migrate --rehearse` and `coffer migrate`; after a rollback, `coffer migrate --resume` first. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ### A command warns that the daemon is a different version
 
@@ -145,7 +153,7 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Fix.**
 
-- Move the master key back to a file beside the database:
+- Move the master key back to the file `~/.coffer/master.key`:
   ```sh
   coffer config set credentials.storage file
   ```
@@ -170,10 +178,11 @@ See [Credentials](/guides/credentials).
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `coffer sync status` exits 1 and shows `awaiting_confirmation` | The deletion guard held a round. | Read the list, then `coffer sync confirm`, `reject` or `rebuild`. Never confirm after a reinstall. |
-| `conflict: <path>` | Two machines edited the same lines. | Resolve it in `~/.coffer/sync` with git, commit, then `coffer sync now`. |
-| `awaiting_join` | This machine has not joined the remote. | `coffer sync adopt` |
-| `credential locked: <ref>` | This machine lacks the master key. | `coffer sync key import <file>` |
+| `coffer sync status` exits 1 and shows `deletions held` | The deletion breaker held a round. | Read the list (`coffer sync hold`), then `coffer sync hold --confirm` or `--restore`. After a reinstall, restore. |
+| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | `coffer sync conflicts`, answer each file with `coffer sync resolve <path> --mine\|--theirs\|--edited`, then `coffer sync continue`, or use the conflict card on the **Sync** page. |
+| `join required` | This machine has not joined the remote. | `coffer sync join` |
+| `remote too old` | The remote was written by a Coffer from before the vault layout. | Rebuild it: see [Upgrading an existing Coffer](/guides/upgrading#rebuild-your-sync-remote). |
+| Secrets cannot be decrypted | This machine lacks the master key. | `coffer sync key import <file>` |
 | Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--credential-ref`, or use an SSH key that needs no passphrase prompt. |
 
 The full list is in [Vault sync troubleshooting](/guides/vault-sync#troubleshooting).

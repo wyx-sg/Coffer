@@ -9,8 +9,8 @@ credentials, and on the kind-agnostic Resource framework.
 
 ### `ProviderConfig` (`domain/provider/config.py`)
 
-Pydantic v2 `BaseModel`, `extra="forbid"`. This is the synced `config` dict
-stored on the resource row. It MUST NOT hold the raw secret, and it holds no
+Pydantic v2 `BaseModel`, `extra="forbid"`. This is the `config` of the
+connection's resource file, `vault/resources/provider/<name>.json`. It MUST NOT hold the raw secret, and it holds no
 model the connection runs: a connection is a credentialed endpoint, and the
 model is chosen at the point of use.
 
@@ -22,11 +22,12 @@ model is chosen at the point of use.
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
-| `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Backed by a partial unique index, so a second flagged row is unrepresentable whatever writes it. |
-| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Upheld by `set_transcribe_default`'s clear-then-set; no partial unique index backs it yet. |
+| `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Declared in the kind's `exclusive_flags`, so the vault validator refuses any commit — an API write, a hand edit, a sync merge — that would leave two flagged connections. |
+| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Upheld by `set_transcribe_default`'s clear-then-set; the vault validator does not back it yet. |
 
 Reach — which agents the connection projects into — is deliberately NOT a field
-here. It is the resource row's framework-level per-agent `scope`
+here. It is the resource's framework-level per-agent `scope`, machine-local in
+`local/reach.json`
 ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)),
 shared by every scoped kind. The agent names stay plain strings outside this
 module, so the provider domain never imports the agent kind; the application
@@ -47,8 +48,8 @@ config function can derive (ADR resource-identity-is-an-immutable-uid).
 and can never be handed an embedding or image id, while an empty list keeps
 meaning "no restriction" for the caller to interpret.
 
-All fields are JSON-stable so `model_dump(mode="json")` serialises cleanly for
-SQLite and for sync.
+All fields are JSON-stable so `model_dump(mode="json")` serialises cleanly into
+the resource file.
 
 ### `Protocol` (`domain/provider/config.py`)
 
@@ -191,15 +192,14 @@ names the Coffer-owned filename.
 `set_internal_default(uid)` clears the flag on every other connection then sets
 it on the target (serialised by the single-process daemon), emits
 `provider_internal_default_set`, and notifies the engine that the connection
-moved. `internal_default` is a field on the provider row and the partial unique
-index `ux_provider_single_internal_default` is over the provider table, which is
-why both are here.
+moved. `internal_default` is a field in the provider's config and the kind
+declares it exclusive (`exclusive_flags`), which is why both are here.
 
 What the flagged connection is USED for — the model paired with it, the chat
-model built from the pair, the settings row, and the rule that drops a model the
-new connection does not curate — is spec
-[internal-engine](../internal-engine/spec.md). Nothing about that row is stored,
-read or migrated by this kind.
+model built from the pair, the settings document, and the rule that drops a
+model the new connection does not curate — is spec
+[internal-engine](../internal-engine/spec.md). Nothing about that document is
+stored, read or migrated by this kind.
 
 ### The speech-to-text default flag (`application/provider/transcribe_default_ops.py`)
 
@@ -257,12 +257,12 @@ so switches never interleave. There is no `ProviderRepo` and no
 
 ### Sync
 
+A connection's resource file is a vault file like any other, so a sync round
+carries it by merging commits; nothing in this kind serialises or applies it.
+
 | Component | Path | Used for |
 |---|---|---|
-| `ResourceDoc` / `resource_to_doc` | `backend/coffer/domain/sync/serialization.py` | serialise provider rows |
-| `SyncExporter` | `backend/coffer/application/sync/exporter.py` | step 1 of a converge round: write every kind's rows into the tree |
-| `ResourceApplier` | `backend/coffer/application/sync/appliers.py` | apply an incoming document by `(kind, name)` — identity, description and config, never the reach |
-| `ProviderProjectionTarget` | `backend/coffer/application/provider/projection_reconcile.py` | the reconciler's provider-projection target; the import's pass (`Trigger.IMPORT`) re-derives the projection from the converged rows |
+| `ProviderProjectionTarget` | `backend/coffer/application/provider/projection_reconcile.py` | the reconciler's provider-projection target; after a round that applied changes, the sync service runs one reconcile pass (`Trigger.IMPORT`) that re-derives the projection from the resources as they now are |
 
 ### Audit
 
@@ -271,12 +271,14 @@ so switches never interleave. There is no `ProviderRepo` and no
 | `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_INTERNAL_DEFAULT_SET`, `PROVIDER_TRANSCRIBE_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` |
 | `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / internal-default / transcribe-default / projection paths |
 
-## SQLite schema
+## Storage
 
-The `provider` kind reuses the shared `resources` table (rows with
-`kind='provider'`); `ProviderConfig` is stored in the existing `resources.config`
-JSON column — **no new tables**. Every schema change this kind has needed has
-been a data migration over those rows, one-shot, with no load-time shim:
+A connection is a resource file, `vault/resources/provider/<name>.json`, whose
+`config` is `ProviderConfig`; its reach is `local/reach.json` (spec
+resource-framework). **No tables.** Every shape change this kind needed while
+connections were rows of the pre-vault database was an Alembic data migration,
+one-shot, with no load-time shim; the one-time upgrade to the vault layout
+carried their result into the files:
 
 | Revision | What it did |
 |---|---|
@@ -284,7 +286,7 @@ been a data migration over those rows, one-shot, with no load-time shim:
 | `0037` | forced the then-connection-level `wire_api` to `responses` |
 | `0040` | slimmed the connection: `wire_format` → `protocol`, stripped `model` / `fast_model` / `wire_api` |
 | `0051` | stripped the retired agent types from connections' then-`compatible_agents` |
-| `0054` | added the partial unique index behind one global internal default |
+| `0054` | added the partial unique index behind one global internal default (now the kind's `exclusive_flags`) |
 | `0059` | wrote `models: []` into every existing row |
 | `0064` | converted plain-string curated entries into `{id, modality}` objects |
 | `0065` | pointed the embedding configuration at a connection, before it was removed |
@@ -315,7 +317,7 @@ kind declares no redactor because its config holds no secret).
 | Method | Purpose |
 |---|---|
 | `create(...) -> Resource` | Validate the credential source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
-| `list()` / `get(uid)` | The rows, as the surfaces read them. |
+| `list()` / `get(uid)` | The connections, as the surfaces read them. |
 | `update(uid, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
 | `delete(uid)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
@@ -357,29 +359,30 @@ lifecycle, and the refusal to write over content it did not read. It takes a
 `delete_with_backup`), so nothing below the application layer touches a path.
 
 There is no `infrastructure/provider/persistence.py` and no `ProviderRepo`: a
-connection is a plain resource row, so CRUD, audit and sync come from the
-framework. `infrastructure/provider/introspector.py` is the kind's only
+connection is a plain resource file, so CRUD, audit, history and sync come from
+the framework and the vault. `infrastructure/provider/introspector.py` is the kind's only
 infrastructure module — the single place that calls a third-party endpoint.
 
-## On-disk / sync layout
+## On-disk layout
 
-No new directories. Connections travel in the existing sync tree:
+No new directories. Connections are vault files:
 
 ```
-~/.coffer/sync/
+~/.coffer/vault/
   resources/
     provider/
-      <uid>.yaml       # one deterministic YAML per connection (no secret),
-                       # keyed on the uid so a rename modifies one file
-  credentials/
-    <credential_ref>.enc   # e.g. provider/<uuid4>/key.enc — Fernet
+      <name>.json          # one JSON document per connection (no secret);
+                           # the uid inside is the identity, so a rename is one file's move
+  secret/
+    <credential_ref>.enc   # e.g. secret/provider/<uuid4>/key.enc — Fernet
                            # ciphertext of the raw API key
 ```
 
-Ciphertext travels only when the remote is configured to carry it, and the
-reach a connection has on this machine does not travel at all. The only other
-on-disk side effects are the native config files projection writes, their `.bak`
-copies, and the Codex model catalogue.
+`vault/secret/` is committed and pushed only when the sync remote carries
+secrets (`include_secret`), and the reach a connection has on this machine
+(`local/reach.json`) never travels. The only other on-disk side effects are the
+native config files projection writes, their `.bak` copies, and the Codex model
+catalogue.
 
 ## Constraints summary
 
@@ -388,8 +391,9 @@ copies, and the Codex model catalogue.
 - Key resolution MUST NOT log the decrypted value.
 - The per-agent-type single-active invariant is enforced by sequential
   `ResourceService.update_config` calls serialised by the single-process daemon;
-  the single global internal default is additionally enforced by the database,
-  while the single global speech-to-text default rests on the operation alone
+  the single global internal default is additionally enforced by the vault
+  validator on every commit, while the single global speech-to-text default
+  rests on the operation alone
   (see "Keep an independent speech-to-text default").
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.
 
@@ -401,7 +405,7 @@ token_sha256}], routes: [ProxyRoute {agent_uid, wire, members: [ProxyMember
 {connection_uid, connection_name, upstream_root, auth, key, models, local}]}]}`.
 `key` is held only in the proxy's memory and never shown by `repr`. The
 per-agent tokens live in the credential store under `proxy-token/<agent_uid>`
-(machine-local; vault sync skips them). `~/.coffer/proxy.json` (mode `0600`)
+(machine-local ciphertext under `~/.coffer/local/secret/`, never in the vault). `~/.coffer/proxy.json` (mode `0600`)
 holds `{port, pid, started_at, version, control_token}`.
 
 ### Local runtime (`ProviderConfig.local_runtime`)
@@ -418,7 +422,7 @@ from the stored document when unset.
 cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
 omitted from the stored document while unknown.
 
-### Usage (`usage_requests`, `usage_daily`, `quota_snapshots`; migration 0111)
+### Usage (`usage_requests`, `usage_daily`, `quota_snapshots` in `runs.db`; migration 0111)
 
 - `usage_requests` — one row per proxied upstream attempt: every field of
   `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`

@@ -32,20 +32,20 @@ The framework takes the first half and refuses the second:
 
 ### Resource
 
-[`Resource`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) is a plain dataclass, one row of the `resources` table:
+[`Resource`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) is a plain dataclass. Each resource is one JSON file, `resources/<kind>/<name>.json`, in the storage class its kind declares (the vault for most kinds; see [Persistence](/architecture/persistence)):
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Integer surrogate primary key. Internal and per-machine: it is the foreign key kind-owned tables hold, and it is never serialized or returned by any route. |
-| `uid` | The identity. `uuid4().hex`, minted once in `ResourceService.register`, immutable, identical on every machine that holds the resource. |
+| `uid` | The identity, written inside the file. `uuid4().hex`, minted once in `ResourceService.register` (or into a hand-made file that lacks one), immutable, identical on every machine that holds the resource. Every reference, row and link keys on it. |
 | `kind` | The kind name, such as `mcp_server`. |
 | `name` | A label, unique within its kind. Mutable, except on a kind that declares it fixed (`name_fixed`). |
-| `title` | Optional display label, at most 80 characters of free text, on a kind that carries one (`titled`). Surfaces show it in place of the name when it is set. Carried in the synced resource document. |
+| `title` | Optional display label, at most 80 characters of free text, on a kind that carries one (`titled`). Surfaces show it in place of the name when it is set. Written in the resource file only when set. |
 | `description` | Optional free text. |
-| `config` | The kind's configuration, validated against the kind's Pydantic schema. Stored as JSON text in `config_json`. |
-| `enabled` | The on/off switch. Half of the resource's reach. Always true for a kind that is not `toggleable`. |
-| `created_at`, `updated_at` | Timestamps. |
-| `scope` | Optional agent allow-list (`Scope`), the other half of reach. `None` means every agent. |
+| `config` | The kind's configuration, validated against the kind's Pydantic schema. Fields this build does not know are kept in the file and reported as a warning. |
+| `enabled` | The on/off switch. Half of the resource's reach, stored in `~/.coffer/local/reach.json`, not in the file. Always true for a kind that is not `toggleable`. |
+| `created_at`, `updated_at` | Timestamps. `updated_at` comes from the derived uid index, not from the file. |
+| `scope` | Optional agent allow-list (`Scope`), the other half of reach, also in `local/reach.json`. `None` means every agent. |
+| `rev` | A per-uid counter in the derived index (`derived/index/resources.json`), bumped when the file's content or this machine's reach changes. The event stream and the reconciler carry it. |
 
 Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`validate_resource_name`), because three kinds — `skill`, `knowledge` and `memory` — turn the name into a directory. A kind may add a stricter rule of its own.
 
@@ -63,8 +63,8 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | `generic_create_allowed` | `True` | Whether `POST /api/v1/resources` (and a generic config update) may touch this kind. |
 | `supports_scope` | `False` | Whether the kind carries a per-agent scope. A kind without it rejects any non-null scope (`SCOPE_INVALID`, 422). |
 | `toggleable` | `True` | Whether the kind has an enabled switch at all. `knowledge` and `memory` set it to `False`: every one of their resources is enabled and served, and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
-| `converges` | `True` | Whether the kind's rows travel to the sync remote. |
-| `converges_row` | `None` | Per-row refinement of `converges`, a function of the config alone. |
+| `storage` | `vault` | The storage class the kind's resource files live in: `vault` (synced), `local` (`agent`) or `derived` (`memory`). The directory is the sync policy. |
+| `storage_row` | `None` | Per-row refinement of `storage`, a function of the config alone. The `skill` kind files the builtin `coffer-guide` as `derived`. |
 | `name_fixed` | `False` | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
 | `name_fixed_resets` | `""` | What deleting and registering again resets, named in the `NAME_IMMUTABLE` message. |
 | `name_from_config` | `None` | The one name a row may carry, derived from its config. `agent` sets it: an agent is named by its type (`claude_code` → `claude-code`), and registration refuses any other name. |
@@ -75,7 +75,7 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | Field | Called by | Meaning |
 | --- | --- | --- |
 | `validate_name` | register, rename | Kind-specific name rule on top of the framework's. |
-| `validate_new_name` | register, when it mints the uid | A rule for new names only, so rows registered before it keep loading and rows arriving from another machine with their uid still converge. |
+| `validate_new_name` | register, when it mints the uid | A rule for new names only, so resources registered before it keep loading and files arriving from another machine with their uid still apply. |
 | `validate_config` | register only | Semantic validation beyond the schema (sync or async). Not run on update, so editing an unrelated field never re-probes the filesystem. |
 | `on_update_config` | update | Sees the resource as it stands plus the proposed config; may reject. |
 | `on_rename` | rename | Moves whatever a renamable kind (`knowledge`, `memory`) keeps under the old name. Runs before the row changes; if a racing writer then takes the name, the service calls it again to move things back. |
@@ -98,17 +98,17 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | `on_scope_changed` | scope persisted | Reconcile with the new scope (for example, deliver or reclaim skills). |
 | `on_enabled_changed` | `enabled` flipped | Reconcile with the new flag. Not fired when the value did not change. |
 
-Import validation during a sync round is deliberately not a `Kind` field. It is an `ImportGate` port the sync slice declares and the composition root registers through `SyncContributions`, so the sync package imports no kind. Only the `agent` kind contributes one: an agent document whose config directory does not exist on this machine is held rather than applied. See [Vault sync](/architecture/vault-sync).
+Sync has no hook into a kind. A resource file that arrives by sync, like one you edit by hand, meets the same validator every write meets before it is checked out, and after the round the reconciler re-projects what changed. Agents never arrive by sync at all: the `agent` kind is machine-local. See [Vault sync](/architecture/vault-sync).
 
 ### What each kind sets
 
 | Kind | Hooks and flags it supplies |
 | --- | --- |
 | `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `titled=False`, `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
-| `agent` | `generic_create_allowed=False`, `name_from_config` and `name_fixed` (one agent per type, named by it), `titled=False`, `on_delete`, `on_enabled_changed` |
-| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `titled=False`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
+| `agent` | `generic_create_allowed=False`, `name_from_config` and `name_fixed` (one agent per type, named by it), `titled=False`, `storage=local`, `on_delete`, `on_enabled_changed` |
+| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `storage_row` (files `coffer-guide` as derived), `name_fixed` (the name is the folder an agent loads it from), `titled=False`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
 | `knowledge` | `generic_create_allowed=False`, `toggleable=False`, `on_rename` (moves the collection directory), `on_delete` |
-| `memory` | `generic_create_allowed=False`, `toggleable=False`, `converges=False`, `on_rename`, `on_delete` |
+| `memory` | `generic_create_allowed=False`, `toggleable=False`, `storage=derived`, `on_rename`, `on_delete` |
 | `channel` | `supports_scope` (inverted, see below), `credential_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
 | `provider` | `supports_scope`, `default_scope`, `credential_ref_extractor`, `validate_config`, `on_update_config` |
 
@@ -124,7 +124,7 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 | `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters, or any title on a kind that is not `titled`, is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation. |
 | `set_enabled` | Refuse a kind that is not `toggleable` (`RESOURCE_NOT_TOGGLEABLE`, 409) → no-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
 | `update_scope` | `validate_scope` against `supports_scope` → `validate_scope_for` → write → audit `resource_scope_updated` → `on_scope_changed`. |
-| `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
+| `delete` | Resolve → `validate_delete` → `on_delete` → remove the resource file in one vault commit → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
 
 The delete path, which shows the validator/reaction split most clearly:
 
@@ -133,15 +133,15 @@ sequenceDiagram
   participant C as Caller
   participant S as ResourceService
   participant K as Kind hooks
-  participant R as resources table
+  participant R as resource store
   participant A as audit_log
   C->>S: delete(uid, actor)
-  S->>R: load row
+  S->>R: load resource
   S->>K: validate_delete(resource)
   Note over K: may raise, nothing touched yet
   S->>K: on_delete(resource)
   Note over K: cleanup, awaited to completion
-  S->>R: delete row
+  S->>R: delete the file (one commit)
   S->>S: release orphaned credentials
   S->>A: resource_deleted with redacted snapshot
   S-->>C: done
@@ -184,16 +184,15 @@ REST and CLI are parity surfaces answering through the same services. Every muta
 
 ## Identity
 
-Three values name a resource, and each has one job:
+Three values name a resource, and each has one job. The file's path is none of them: it is only where Coffer filed the resource.
 
 | Value | Scope | Used for |
 | --- | --- | --- |
-| `uid` | Global and permanent | URLs (`/api/v1/resources/{uid}`, web detail pages), cross-resource references (a scope's agent list, a channel's `default_agent`), the sync bundle path `resources/<kind>/<uid>.yaml`. |
+| `uid` | Global and permanent | URLs (`/api/v1/resources/{uid}`, web detail pages), cross-resource references (a scope's agent list, a channel's `default_agent`), every row of `runs.db` and `derived.db` that refers to a resource. It is written inside the resource file, so moving or renaming the file keeps the resource. |
 | `name` | Unique within a kind; mutable unless the kind is `name_fixed` | What people type and what agents quote. The CLI resolves names to uids. An agent's name is its type. |
 | `title` | Optional, free text, on the kinds that carry one | What surfaces display in place of the name when it is set. Agents, MCP servers and skills have none. |
-| `id` | One machine's database | Foreign key for `skill_agent_bindings`, `mcp_capability_preferences`, `channel_peers`, `channel_thread_conversations`, and `audit_log.resource_id`. |
 
-A new resource always gets a random `uid`. The one exception is the sync applier, which registers a resource another machine created at the `uid` that machine already gave it. Because references hold uids and the audit log keys on `id`, renaming writes exactly one column and nothing else has to be repointed inside Coffer. What a uid cannot protect is a name quoted outside Coffer: an MCP server's name is the prefix of every tool name an agent sees (`mcp__coffer__<server>__<tool>` in Claude Code), and a skill's name is the directory an agent loads it from. Those two kinds set `name_fixed`; to use a different name you delete the resource and register it again, which resets the server's capability toggles and reach, or the skill's bindings. An agent's name is fixed for a different reason: there is one agent per type on a machine, so its type is its name. New MCP server names are capped at 24 characters so that tool names stay within the 64-character limit model provider APIs enforce; each capability row carries `client_name_length` and the **Tools** tab and `coffer mcp cap list` flag rows above 64. See [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md).
+A new resource always gets a random `uid`; a resource that arrives from another machine keeps the `uid` that machine gave it, because the uid is inside the file. Two files with one uid are refused: the newcomer is flagged and the original stays in effect. Because references and history rows hold uids, renaming changes the file's `name` (and moves it to `<new name>.json` in the same commit) and nothing else has to be repointed inside Coffer. What a uid cannot protect is a name quoted outside Coffer: an MCP server's name is the prefix of every tool name an agent sees (`mcp__coffer__<server>__<tool>` in Claude Code), and a skill's name is the directory an agent loads it from. Those two kinds set `name_fixed`; to use a different name you delete the resource and register it again, which resets the server's capability toggles and reach, or the skill's bindings. An agent's name is fixed for a different reason: there is one agent per type on a machine, so its type is its name. New MCP server names are capped at 24 characters so that tool names stay within the 64-character limit model provider APIs enforce; each capability row carries `client_name_length` and the **Tools** tab and `coffer mcp cap list` flag rows above 64. See [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md).
 
 ## Lifecycle events and audit
 
@@ -202,7 +201,7 @@ Every mutation writes one `audit_log` row through [`AuditService`](https://githu
 An audit row records:
 
 - the **actor**, from the `X-Coffer-Actor` header — a short lowercase identifier such as `cli`, `ui` or `system`, defaulting to `api` when absent and rejected with 400 when malformed;
-- the resource's `id` plus its **kind and name at the time**, so a history survives a rename and old rows keep saying what was true then;
+- the resource's `uid` plus its **kind and name at the time**, so a history survives a rename and old rows keep saying what was true then;
 - **details**, with config passed through the kind's `audit_redactor`. Scope carries only agent uids and is recorded verbatim.
 
 You read the log on the **Changes** tab of **Activity** in the web UI, with `coffer log audit`, or through `GET /api/v1/audit`.
@@ -242,9 +241,9 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | --- | --- | --- | --- |
 | `mcp_server` | Transport (stdio or HTTP), credential refs, per-server gateway policy. | Yes | The MCP gateway filters the server's tools by the session's agent uid (`application/mcp/gateway_scope.py`). |
 | `agent` | Agent type, config directory, Coffer-MCP install state. Everything else is read from the agent's own files. | No — it is the agent | — |
-| `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and `is_active(scope, agent)`; anything else is reclaimed. |
-| `knowledge` | One collection, a directory under `~/.coffer/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
-| `memory` | One partition (a repository, or `global`) under `~/.coffer/memory/`, derived from agents' native memory. Does not converge. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
+| `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/vault/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and `is_active(scope, agent)`; anything else is reclaimed. |
+| `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
+| `memory` | One partition (a repository, or `global`) under `~/.coffer/derived/memory/`, derived from agents' native memory. Derived, never synced. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
 | `channel` | Transport config, credential refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a dormant channel. |
 | `provider` | Wire protocol, base URL, one `credential_ref`. | Yes, pre-filled by `default_scope` from the wire | The projection seam `application/provider/targets.py`: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 

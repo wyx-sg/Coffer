@@ -1,6 +1,6 @@
 # Data Model — Skill Manager
 
-Entities, fields, relationships, and SQLite additions for the skill manager.
+Entities, fields, relationships, and where the skill manager stores them.
 Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
 framework from spec resource-framework.
 
@@ -43,9 +43,10 @@ Pydantic models recording where a managed skill came from.
 | ------ | -------------------- | ----- |
 | `type` | `Literal["builtin"]` | Coffer's own generated skill (see "Regenerate Coffer's builtin skill from the build"); carries no other field, because its master folder is regenerated from the running build |
 
-The discriminator is also what marks the row as derived output: the skill kind
-reads it (`domain/skill/builtin.py` `is_builtin`) to refuse a delete and to
-withhold the row from convergence.
+The discriminator is also what marks the skill as derived output: the skill
+kind reads it (`domain/skill/builtin.py` `is_builtin`) to refuse a delete and,
+through `Kind.storage_row`, to file its resource and master folder under
+`derived/` rather than in the vault.
 
 ### `SkillConfig` (`domain/skill/config.py`)
 
@@ -85,8 +86,8 @@ unrecognized field is tolerated under `extra='allow'`.
 
 The frontmatter `description` is stored on the skill kind's config as
 `SkillConfig.skill_md_description` (see above) — this is the authoritative
-copy. The `resources` row has
-its own `description` column inherited from the kind-agnostic Resource
+copy. The resource file has
+its own `description` key inherited from the kind-agnostic Resource
 framework; on import it is seeded from the frontmatter `description`
 for parity with other kinds, but it is not re-synced afterwards
 (treat it as a free-form human label after the initial write).
@@ -148,14 +149,14 @@ prints it.
 
 ### `BindingState` (`domain/skill/binding.py`)
 
-Plain dataclass; in-memory representation of one row from
-`skill_agent_bindings`. The row is internal delivery bookkeeping — it records
+Plain dataclass; in-memory representation of one row from the derived
+`skill_agent_bindings` table. The row is internal delivery bookkeeping — it records
 that this agent currently holds a delivered copy — not a user-facing axis.
 
 | Field               | Type               | Notes                                                                                                                 |
 | ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `skill_resource_id` | `int`              | FK                                                                                                                    |
-| `agent_resource_id` | `int`              | FK                                                                                                                    |
+| `skill_uid`         | `str`              | the skill's uid                                                                                                       |
+| `agent_uid`         | `str`              | the agent's uid                                                                                                       |
 | `enabled`           | `bool`             | still present in the table and in this dataclass; internal only — it marks a live delivered copy and no surface exposes it |
 | `last_linked_at`    | `datetime \| None` | last successful link op                                                                                               |
 | `last_link_path`    | `str \| None`      | absolute path where the link was created                                                                              |
@@ -171,7 +172,7 @@ String-valued enum.
 | `tampered_link`         | symlink target is not Coffer's master         | run the opt-in repair (backs up, then re-links) |
 | `replaced_with_regular` | path is a regular file/dir instead of a link  | manual: move the foreign file/dir away; the next reconcile or repair re-links (repair never touches it) |
 | `missing_master`        | binding refers to a master folder that's gone | re-import                             |
-| `orphan_master`         | master folder on disk has no DB record        | adopt or remove                       |
+| `orphan_master`         | master folder on disk has no skill resource   | adopt or remove                       |
 
 ### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
 
@@ -189,7 +190,7 @@ both types, plus `~/.agents/skills` for `codex`. The infrastructure layer
 `domain/skill/scan.py` turns those into `UnmanagedSkill` results:
 
 - entries that are Coffer-managed links (symlink resolving inside
-  `~/.coffer/skills/`) are excluded;
+  `~/.coffer/vault/skills/` or `~/.coffer/derived/skills/`) are excluded;
 - dot-entries (e.g. Codex's `.system`) and plain files are silently excluded;
 - symlinks pointing outside the master store are listed with
   `foreign_link=True` and are never adoptable;
@@ -222,14 +223,15 @@ delivered(skill, agent)  ⟺  skill.enabled
 `is_active` is the free function in `domain/scope.py`. There is no evaluator
 object to construct at the composition root and no machine id to bind into one;
 the delivery call sites call the predicate directly. The pair it reads is the
-skill's reach, and reach never leaves this machine (spec vault-sync
-"Keep reach machine-local") — so a skill dormant here and delivered on the laptop
-is two rows with two answers, not one scope with two axes.
+skill's reach, in `local/reach.json`, and reach never leaves this machine
+(spec vault-sync "Keep reach machine-local") — so a skill dormant here and
+delivered on the laptop is two machines' records with two answers, not one
+scope with two axes.
 
 The agent resource carries **no** skill-delivery policy: `follow_all_skills`
 and `skill_exclusions` are gone from `AgentConfig` (spec agent-registry's schema), and
-migration `0058` strips both keys from every stored agent row. There is no
-load-time shim and no back-compat default — a stored row simply no longer has
+migration `0058` stripped both keys from every stored agent. There is no
+load-time shim and no back-compat default — a stored agent simply no longer has
 them.
 
 `application/skill/link_reconcile.py` holds the skill-link target of the
@@ -265,42 +267,68 @@ and a row present at all means "this agent currently holds a delivered copy". Th
 `POST /skills/{name}/enable` and `/disable` routes (and their
 `SkillEnableRequest` / `SkillDisableRequest` bodies) are removed.
 
-## SQLite schema additions
+## Storage
 
-Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`) adds the skill binding table. Agents themselves live in the shared `resources` tables, so spec agent-registry needs no dedicated agent-tables migration.
+| What | Where | Class |
+| ---- | ----- | ----- |
+| the skill itself | `vault/resources/skill/<name>.json` (spec resource-framework) | vault |
+| its master folder | `vault/skills/<name>/` | vault |
+| Coffer's own `coffer-guide` (resource file and folder) | `derived/resources/skill/coffer-guide.json`, `derived/skills/coffer-guide/` | derived — rendered by the running build at every boot |
+| which copies are delivered into which agent | `derived/derived.db` `skill_agent_bindings` | derived |
+| what this machine last learned about a Git-imported skill's source | `local/skill-source-status.json` | local |
+| the skill's reach (`enabled`, scope) | `local/reach.json` (spec resource-framework) | local |
 
-### `skill_agent_bindings`
+In the one-time upgrade to the vault layout `skill_agent_bindings` rows were
+copied into `derived.db` (so delivered copies can still be reclaimed),
+`skill_source_status` became `local/skill-source-status.json`, and revision
+0117 dropped both tables.
 
-| Column              | Type                                     | Constraints                                                            |
-| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
-| `skill_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
-| `agent_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
-| `enabled`           | `bool`                                   | not null, default `0`; internal bookkeeping — `1` means this agent currently holds a delivered copy |
-| `last_linked_at`    | `timestamp`                              | nullable                                                               |
-| `last_link_path`    | `text`                                   | nullable                                                               |
-| `link_mode`         | `text`                                   | nullable; one of `symlink`, `junction`, `copy_fallback` when populated |
-| primary key         | `(skill_resource_id, agent_resource_id)` |                                                                        |
+### `skill_agent_bindings` (`derived/derived.db`)
 
-Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "which skills does this agent currently hold" queries.
+`SkillAgentBindingModel` (`infrastructure/persistence/derived_db.py`), read and
+written by `SkillBindingRepo` (`infrastructure/skill/persistence.py`). An
+observation this machine can make again, so it is derived: no Alembic lineage,
+recreated when the file's `user_version` differs.
 
-### `skill_source_status`
+| Column           | Type        | Constraints                                                            |
+| ---------------- | ----------- | ---------------------------------------------------------------------- |
+| `skill_uid`      | `str`       | not null                                                               |
+| `agent_uid`      | `str`       | not null                                                               |
+| `enabled`        | `bool`      | not null, default `0`; internal bookkeeping — `1` means this agent currently holds a delivered copy |
+| `last_linked_at` | `timestamp` | nullable                                                               |
+| `last_link_path` | `text`      | nullable                                                               |
+| `link_mode`      | `str`       | nullable; one of `symlink`, `junction`, `copy_fallback` when populated |
+| primary key      | `(skill_uid, agent_uid)` | `pk_skill_agent_bindings`                                 |
 
-Migration `20260930_0114_skill_source_status.py` (revision `0114`). One row per
-Git-imported skill: what this machine last learned about its repository (spec
-skill-manager "Update a Git-imported skill from its source"). Observation, not
-vault state — vault sync never carries it; the pin itself is in the skill's
-config.
+Index: `idx_bindings_agent` on `(agent_uid, enabled)` — supports "which skills
+does this agent currently hold" queries. No foreign key points at a resource
+(resources are files): a skill's and an agent's `on_delete` hooks remove their
+rows (`cleanup_bindings_for_skill`, `cleanup_bindings_for_agent`).
 
-| Column              | Type        | Constraints / notes                                                       |
-| ------------------- | ----------- | ------------------------------------------------------------------------- |
-| `skill_resource_id` | `int`       | PK, FK → `resources(id)` ON DELETE CASCADE                                |
-| `checked_at`        | `timestamp` | nullable; the last check, successful or not                               |
-| `last_success_at`   | `timestamp` | nullable; the last check that reached the repository                      |
-| `error`             | `text`      | nullable; git's message from the last check                               |
-| `latest_commit`     | `text`      | nullable; what the ref pointed at when the last check succeeded           |
-| `commits_ahead`     | `int`       | not null, default 0; commits after the pin that change the skill's folder |
-| `files_changed`     | `int`       | not null, default 0; files those commits change                           |
-| `dismissed_commit`  | `text`      | nullable; the commit the user chose Keep mine against                     |
+### `local/skill-source-status.json`
+
+One entry per Git-imported skill, keyed by the skill's uid: what this machine
+last learned about its repository (spec skill-manager "Update a Git-imported
+skill from its source"). Observation, not vault state — never committed or
+synced; the pin itself is in the skill's config. Written by
+`SkillSourceStatusRepo` (`infrastructure/skill/source_status_repo.py`); the
+skill kind removes an entry when its skill is deleted.
+
+```json
+{ "<skill uid>": { "checked_at": "<iso>", "last_success_at": "<iso>", "error": null,
+                   "latest_commit": "<sha>", "commits_ahead": 3, "files_changed": 2,
+                   "dismissed_commit": null } }
+```
+
+| Key                | Notes                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| `checked_at`       | nullable; the last check, successful or not                               |
+| `last_success_at`  | nullable; the last check that reached the repository                      |
+| `error`            | nullable; git's message from the last check                               |
+| `latest_commit`    | nullable; what the ref pointed at when the last check succeeded           |
+| `commits_ahead`    | commits after the pin that change the skill's folder (0 when absent)      |
+| `files_changed`    | files those commits change (0 when absent)                                |
+| `dismissed_commit` | nullable; the commit the user chose Keep mine against                     |
 
 An update is available when `latest_commit` differs from the pin and from
 `dismissed_commit` and `commits_ahead > 0`.
@@ -311,10 +339,10 @@ A staged folder, archive, Git checkout or update preview is held in the
 daemon's memory (`application/skill/staging.py`) with a directory under the
 system's temp space, for at most an hour. Nothing about a stage is persisted.
 
-### Reuse of existing tables
+### Also written
 
-- `resources`: new rows with `kind='skill'`. No schema change.
-- `audit_log`: new event types written (see below).
+- resource files with `kind: skill`;
+- `audit_log` in `runs.db`: new event types (see below).
 
 ## Audit event types added
 
@@ -344,21 +372,35 @@ Skill **removal** has no dedicated event — deleting a skill goes through
 
 ```
 ~/.coffer/
-  skills/
-    <skill-name>/           # canonical master, one per skill
+  vault/skills/
+    <skill-name>/           # canonical master, one per skill, in the vault repository
       SKILL.md
       scripts/ ...           # optional
       references/ ...        # optional
       assets/ ...            # optional
       .coffer.meta.json      # source provenance redundancy; not authoritative
+  derived/skills/
+    coffer-guide/            # Coffer's own skill, rendered by the running build
 ```
 
-`.coffer.meta.json` records provenance for forensic recovery if the DB is lost.
+The master folders are in the vault, so every change to one is a commit and has
+a history (the Skills page's History tab reads it through the vault's history
+routes). An in-app file save is one commit through the vault writer, refused
+when the caller's `expected_fingerprint` no longer matches (see "Save an
+existing skill file conditionally"); a folder written any other way — an
+import, an update, an adoption, a person's editor — is committed as found on
+disk (writer `disk`) by the vault's scanner. `MasterStore`
+(`infrastructure/skill/master_store.py`) is the one place that decides whether
+a name's folder is under `vault/skills/` or `derived/skills/`, so the seed,
+delivery and drift checks agree.
+
+`.coffer.meta.json` records provenance for forensic recovery if the resource
+file is lost.
 `MasterStore` writes it whenever the master folder is (re)created — `copy_in` /
 `atomic_replace` on import, overwrite re-import and the builtin seed. A rename
 or an in-app file edit never rewrites it.
-It is **not** read by Coffer at runtime; the DB is authoritative and wins on
-any disagreement.
+It is **not** read by Coffer at runtime; the resource file is authoritative and
+wins on any disagreement.
 
 Keys persisted:
 
@@ -374,7 +416,8 @@ The builtin seed writes only `name` and `source`.
 Per-agent symlink targets land at:
 
 ```
-<config_dir>/skills/<skill-name>  → symlink/junction to  ~/.coffer/skills/<skill-name>
+<config_dir>/skills/<skill-name>  → symlink/junction to  ~/.coffer/vault/skills/<skill-name>
+                                    (coffer-guide: ~/.coffer/derived/skills/coffer-guide)
 ```
 
 ### Per-agent delivery targets
@@ -402,11 +445,11 @@ Keyword-only arguments; skills and agents are addressed by uid.
 
 | Method | Purpose |
 | ------ | ------- |
-| `import_local(*, path, actor, overwrite=False) -> Resource` | Validate the folder (`SkillValidationError` → 422 `SKILL_INVALID`), copy to master, register the Resource (or, with `overwrite`, replace the master folder and update the same row, keeping its uid and deliveries), audit, then reconcile a new skill so it lands wherever its scope grants it. |
+| `import_local(*, path, actor, overwrite=False) -> Resource` | Validate the folder (`SkillValidationError` → 422 `SKILL_INVALID`), copy to master, register the Resource (or, with `overwrite`, replace the master folder and update the same resource, keeping its uid and deliveries), audit, then reconcile a new skill so it lands wherever its scope grants it. |
 | `reconcile_delivery() -> PassReport \| None` | Run the reconciler's skill-link pass now (`Trigger.CHANGE`); the composition root hands in the callable. What every front-door write that changes delivery calls before it answers. |
 | `remove(*, uid, actor) -> None` | Delegate to `ResourceService.delete`; the teardown runs in the skill kind's `on_delete`. |
 | `cleanup_bindings_for_skill(skill) -> None` | The skill kind's `on_delete` hook: remove every binding and link, then delete the master folder. |
-| `move_master_folder(skill, new_name) -> None` | The skill kind's rename hook: move the master folder and re-point every delivered link before the row is renamed. |
+| `move_master_folder(skill, new_name) -> None` | The skill kind's rename hook: move the master folder and re-point every delivered link before the resource is renamed. |
 | `cleanup_bindings_for_agent(agent: Resource) -> None` | Called by spec agent-registry's `agent.on_delete` hook; removes all bindings + symlinks for that agent. |
 
 Workspace-amendment additions (implemented as free functions in
@@ -418,7 +461,7 @@ skill subpackage, same style as `lifecycle_ops.py`):
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | Read-only scan ("List unmanaged skills in an agent's skill locations") over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
-| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/vault/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
 | `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | "Delete an unmanaged skill on explicit request": delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
 | skill-link target (`link_reconcile.py`) and drift view (`drift_view.py`) | "Reconcile deliveries from state on every pass": recompute every enabled agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted, relink what moved, repair broken links; `verify` / `repair` are read from the reconciler's plan and apply. |
 
@@ -436,8 +479,9 @@ endpoint, one code path. The conditional half of that write (comparing the
 caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
 lives one layer up in `content_ops.py`, so the containment helpers stay free of
 request semantics.
-No DB; a write is audited as `skill_updated` by `content_ops.py`, reads audit
-nothing. Containment is enforced by resolving every candidate path and
+The write itself is one vault commit in `content_ops.py` (the vault writer's
+compare-and-swap on the caller's fingerprint), audited as `skill_updated`
+with the new `version`; reads audit nothing. Containment is enforced by resolving every candidate path and
 requiring it to stay inside the resolved master folder, reusing the path-escape
 approach from `domain/skill/validator.py`.
 
@@ -518,7 +562,7 @@ in lockstep and returns an `AgentSkillWiring`. The wiring function:
    (`Trigger.CHANGE`), and registers the skill-link target.
 2. Builds the agent `Kind` fresh via `make_agent_kind(on_delete=...,
    on_enabled_changed=...)`, whose `on_delete` awaits
-   `skill_svc.cleanup_bindings_for_agent(agent)` before the agent row is removed,
+   `skill_svc.cleanup_bindings_for_agent(agent)` before the agent's file is removed,
    and whose `on_enabled_changed` runs the skill-link pass.
 3. Builds the skill `Kind` via `make_skill_kind(cleanup_bindings_for_skill,
    move_master_folder, on_scope_changed=..., on_enabled_changed=...)`, the two

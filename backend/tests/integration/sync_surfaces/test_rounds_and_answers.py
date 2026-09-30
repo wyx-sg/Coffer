@@ -18,6 +18,7 @@ from .harness import fleet, joined
 DOC = "knowledge/team/on-call.md"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="every round is recorded with what it moved")
 def test_a_round_is_recorded_and_the_status_shows_what_waits_to_push(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     mac.put("knowledge/team/deploy.md", "Deploy on Tuesdays.\n")
@@ -44,6 +45,7 @@ def test_a_round_is_recorded_and_the_status_shows_what_waits_to_push(tmp_path: P
     assert mini.run(mini.service.round(pulled.id)).status is RoundStatus.PULLED  # type: ignore[arg-type]
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a real conflict stops the round without touching the vault")
 def test_a_conflict_stops_the_round_and_each_file_is_answered(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     mac.put(DOC, "Mac rotates on Mondays.\n")
@@ -72,6 +74,7 @@ def test_a_conflict_stops_the_round_and_each_file_is_answered(tmp_path: Path) ->
     assert mini.run(mini.service.stopped()) is None
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a hand merge with conflict markers left is refused")
 def test_a_hand_merge_is_refused_while_markers_are_left(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     mac.put(DOC, "Mac rotates on Mondays.\n")
@@ -99,6 +102,7 @@ def _bulk(n: int) -> list[str]:
     return [f"knowledge/bulk/note-{i:02}.md" for i in range(n)]
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an oversized deletion is held for confirmation")
 def test_a_mass_deletion_is_held_both_ways_and_answered(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     for path in _bulk(25):
@@ -134,6 +138,7 @@ def test_a_mass_deletion_is_held_both_ways_and_answered(tmp_path: Path) -> None:
     assert all(mac.disk(p) is not None for p in _bulk(25))
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a new machine takes the union and deletes nothing")
 def test_a_join_leaves_differing_files_until_the_person_chooses(tmp_path: Path) -> None:
     mac, mini = fleet(tmp_path, "Mac", "Mini")
     mac.put("knowledge/a.md", "A from the Mac\n")
@@ -157,6 +162,7 @@ def test_a_join_leaves_differing_files_until_the_person_chooses(tmp_path: Path) 
     assert mac.disk("knowledge/b.md") == b"B\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a round can be rolled back")
 def test_a_round_is_rolled_back_and_later_edits_are_kept(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     mac.put(DOC, "Rotates on Tuesdays.\n")

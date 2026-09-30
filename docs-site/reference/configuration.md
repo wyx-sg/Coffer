@@ -7,13 +7,14 @@ description: Every environment variable, daemon-config.json key, experimental-fe
 
 This page lists every knob that changes how Coffer behaves: environment variables, the keys of `~/.coffer/daemon-config.json`, the experimental-feature switches, and the runtime settings you change from **Settings** or the CLI. It is for operators and contributors who need the exact name, default and effect of a setting.
 
-Coffer keeps configuration in four places, and each one exists for a reason:
+Coffer keeps configuration in five places, and each one exists for a reason:
 
 | Where | Holds | Why there |
 | --- | --- | --- |
 | Environment variables | Operator escape hatches, test and dev overrides | Read by one process at start-up; nothing persists them |
-| `~/.coffer/daemon-config.json` | Daemon and model-proxy ports, machine name and id, experimental features | Needed before the database is opened, and machine-local |
-| The database (`~/.coffer/coffer.db`) | Coffer's model, upkeep passes, retention policies | Ordinary settings; some travel with [vault sync](/guides/vault-sync) |
+| `~/.coffer/daemon-config.json` | Daemon and model-proxy ports, machine name and id, experimental features | Needed before anything else is opened, and machine-local |
+| The vault (`~/.coffer/vault/state/settings/internal-engine.json`) | Coffer's model, the curation owner, upkeep passes | Settings every machine shares; they travel with [vault sync](/guides/vault-sync) |
+| Local state (`~/.coffer/local/`) | Retention policies, the sync remote, reach | True of this machine only; never synced |
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
 ::: warning Environment variables and a detached daemon
@@ -58,18 +59,14 @@ Links point at the file that reads each variable on GitHub.
 
 ### Storage locations
 
-These move a tree away from `~/.coffer`. They exist mainly so tests never touch a real vault; set them for a daemon only if you mean to run it against a different vault.
+The vault, local state, content and derived state have no per-tree override: every one of them is resolved from `$HOME` when it is needed, and `coffer path` prints the roots. The variables below move only the history database, the model proxy's spool and the logs. They exist mainly so tests and development setups never touch a real home; to run a daemon against a different home, set `HOME`.
 
 | Name | Default | Effect | Where read |
 | --- | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/coffer.db` | SQLAlchemy URL of the database. The credential master key file (`master.key`) lives beside the database file. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
-| `COFFER_KNOWLEDGE_ROOT` | `~/.coffer/knowledge` | Root of the knowledge collections. | [`infrastructure/knowledge/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/knowledge/paths.py) |
-| `COFFER_MEMORY_ROOT` | `~/.coffer/memory` | Root of the derived memory tree. | [`infrastructure/memory/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/memory/paths.py) |
-| `COFFER_SKILLS_ROOT` | `~/.coffer/skills` | Root of the skill master store, and the tree vault sync mirrors. | [`infrastructure/skill/master_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/skill/master_store.py), [`infrastructure/sync/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/sync/paths.py) |
-| `COFFER_AGENT_STATE_ROOT` | `~/.coffer/cache/agent` | Where the agent layer keeps derived state such as the transcript summary cache. | [`infrastructure/agent/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent/paths.py) |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key file (`master.key`) stays in `~/.coffer` whatever this says. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
 | `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. | [`infrastructure/model_proxy/spool.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/spool.py), [`infrastructure/usage/spool_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/spool_reader.py) |
 | `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
-| `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME`, so an alternate `HOME` gives a fully separate vault. | many modules |
+| `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME` at the moment it is needed, so an alternate `HOME` gives a fully separate vault. | [`infrastructure/vault/home.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/home.py) |
 
 ### Installer
 
@@ -105,7 +102,7 @@ Coffer never reads these from its own environment; it sets them for child proces
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | Claude Code turns | Points Claude Code at a registered agent's config directory when it is not `~/.claude`. |
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
-| `COFFER_GIT_TOKEN` | `git` during vault sync | The sync remote's token, read by a credential helper at run time so it never appears in `argv` or on disk. |
+| `COFFER_GIT_TOKEN`, `COFFER_GIT_USERNAME` | `git` during vault sync | The sync remote's token and the username sent with it, read by a credential helper at run time so the token never appears in `argv` or on disk. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |
 
 The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~/.coffer` and to probe your login shell's `PATH`; it defines no variables of its own.
@@ -175,7 +172,7 @@ See [Experimental features](/guides/experimental-features) for the task-oriented
 
 ## Runtime settings
 
-These live in the database (or, where noted, elsewhere on disk) and are changed from **Settings** in the web UI or desktop app, or from the CLI. Settings marked *synced* travel to other machines through [vault sync](/guides/vault-sync).
+These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) and are changed from **Settings** in the web UI or desktop app, or from the CLI. Settings marked *synced* travel to other machines through [vault sync](/guides/vault-sync).
 
 ### Settings → General
 
@@ -188,7 +185,7 @@ These live in the database (or, where noted, elsewhere on disk) and are changed 
 
 ### Settings › General → Coffer's model
 
-The internal engine settings are one record, and all of them are *synced*. Each one is a `coffer config` key; `coffer config list engine.` prints them with their current values and defaults.
+The internal engine settings are one vault document, `state/settings/internal-engine.json`, and all of them are *synced*. You can also edit the file by hand; an absent file means every default. Each one is a `coffer config` key; `coffer config list engine.` prints them with their current values and defaults.
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
@@ -205,16 +202,19 @@ Upkeep intervals have a floor of 60 seconds; `coffer config unset engine.upkeep.
 
 ### Sync remote
 
-The sync remote is one record in the database, set on the **Sync** page (**Setup**) or with `coffer sync remote set`. See [Vault sync](/guides/vault-sync).
+The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, set on the **Sync** page (**Setup**) or with `coffer sync remote set`. See [Vault sync](/guides/vault-sync).
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused, and one stored before the floor existed loads as `60`. | `coffer sync remote set --interval <s>` |
-| **Converge automatically** | on | Off pauses the remote: every round reports `disabled`, and the remote and its history are kept. | `coffer sync remote pause`, `resume` |
+| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused. | `coffer sync remote set --interval <s>` |
+| **Push credential** | none | The secret holding the push token. | `coffer sync remote set --credential-ref <ref>` |
+| Username | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. | `coffer sync remote set --username <name>` |
+| **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). | `coffer sync remote set --with-secret`, `--without-secret` |
+| **Sync automatically** | on | Off pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. | `coffer sync remote pause`, `resume` |
 
 ### Settings → Data
 
-Retention policies decide how long rows are kept. The retention worker prunes once at start-up and then every 6 hours. Policies are local to this machine.
+Retention policies decide how long rows are kept. The retention worker prunes once at start-up and then every 6 hours. Policies are local to this machine, kept in `~/.coffer/local/retention.json`.
 
 | Policy | Key | Default | Effect |
 | --- | --- | --- | --- |
@@ -224,7 +224,7 @@ Retention policies decide how long rows are kept. The retention worker prunes on
 | **Auto-archive idle chats** | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 | **Delete archived chats** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
 
-The key is the suffix of the `coffer config` key `retention.<key>`; both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/channel-media` and `~/.coffer/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
+The key is the suffix of the `coffer config` key `retention.<key>`; both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/content/channel-media` and `~/.coffer/content/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
 
 ```sh
 coffer config list retention.

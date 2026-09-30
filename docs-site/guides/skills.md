@@ -11,7 +11,7 @@ Coffer keeps one master library of skills on your machine and links each skill i
 
 A skill is a folder an agent loads on demand: a `SKILL.md` with instructions, plus any scripts or reference files it needs. Claude Code and Codex both read skills natively from a `skills/` folder inside their config directory. Without Coffer, the same skill ends up copied into `~/.claude/skills/` and `~/.codex/skills/`, and the copies drift apart.
 
-Coffer keeps a single master copy of each skill under `~/.coffer/skills/<name>/` and places a directory link to it in each agent's skill folder. You edit the skill once and every agent reads the same bytes.
+Coffer keeps a single master copy of each skill under `~/.coffer/vault/skills/<name>/` and places a directory link to it in each agent's skill folder. You edit the skill once and every agent reads the same bytes.
 
 Coffer manages skills in the open [AgentSkills](https://agentskills.io) format. A folder that does not conform to it cannot be imported.
 
@@ -50,13 +50,13 @@ Coffer validates every folder before it accepts it:
 
 Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis). Any other frontmatter key is kept and ignored.
 
-A folder that breaks a rule is refused with the reason, and nothing is written to `~/.coffer/skills/` or the database.
+A folder that breaks a rule is refused with the reason, and nothing is written to the vault.
 
 ## Where skills live
 
 | Path | What it is |
 | --- | --- |
-| `~/.coffer/skills/<name>/` | The master folder. This is the only copy you edit. |
+| `~/.coffer/vault/skills/<name>/` | The master folder. This is the only copy you edit. |
 | `<config_dir>/skills/<name>` | The delivered link in each agent, for example `~/.claude/skills/release-checklist` or `~/.codex/skills/release-checklist`. It points at the master folder. |
 
 Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/skills/<name>/` edits the master, and every other agent sees the change on its next read. Deleting a file there deletes it from the master too.
@@ -74,7 +74,7 @@ Choosing a skill opens it on the right, at its own address (`/skills/<name>`), w
 | **Files** | The skill's files beside the open file, opening on `SKILL.md` rendered. **Preview / Source** switches a Markdown file between rendered and raw text, and **Edit** edits a file in place. A binary file offers **Open in default app** and **Reveal in Finder**; a very large file shows its start, read-only. A Git skill shows its source above the files. |
 | **Delivery** | Every agent and the state of its copy: **Linked**, **Copied, not linked** (where links are not allowed), a folder in the way (with **Review…**), or not delivered and why. **Check again** looks at every copy afresh. |
 | **Requires** | The commands the skill says it needs, each with its state and **Open in CLIs**. Installing and logging in happen on the CLIs page. |
-| **History** | The folder's past versions, once the vault records them; until then the tab says so. |
+| **History** | Every version of the skill's folder, newest first, with who wrote each (you, edited on disk, an agent, Coffer, sync), each version's changes file by file, and **Restore** to put a version back as a new one. |
 
 The Skills page lists only the skills Coffer manages. Skills an agent has that Coffer does not manage are on that agent's **Skills** tab, where you can adopt them (see [below](#adopt-skills-an-agent-already-has)).
 
@@ -96,7 +96,7 @@ Skills → Add skill → From a folder → paste the path, or Choose… → Add 
 
 :::
 
-Coffer reads the skill's name from its `SKILL.md` frontmatter and copies the folder to `~/.coffer/skills/release-checklist/`. It records the path it came from, but does not track it afterwards: a later change to the source folder is not picked up until you add it again. In the web UI, a folder whose top has no `SKILL.md` but whose subfolders do offers those subfolders as a choice. On the command line, naming the folder is the confirmation, so it is added at once.
+Coffer reads the skill's name from its `SKILL.md` frontmatter and copies the folder to `~/.coffer/vault/skills/release-checklist/`. It records the path it came from, but does not track it afterwards: a later change to the source folder is not picked up until you add it again. In the web UI, a folder whose top has no `SKILL.md` but whose subfolders do offers those subfolders as a choice. On the command line, naming the folder is the confirmation, so it is added at once.
 
 ### From an archive
 
@@ -234,7 +234,7 @@ The detail page has an **Overview** tab (the `SKILL.md` description, the folder'
 
 ### Adopt one
 
-Adopting moves the folder into `~/.coffer/skills/<name>/`, registers it as a skill, and puts a managed link where the agent expects it.
+Adopting moves the folder into `~/.coffer/vault/skills/<name>/`, registers it as a skill, and puts a managed link where the agent expects it.
 
 ::: code-group
 
@@ -346,7 +346,7 @@ If something that is not a Coffer link already sits at `<config_dir>/skills/<nam
 
 ## View and edit skill files
 
-The master folder is a normal directory, so the way to edit a skill is to open `~/.coffer/skills/<name>/` in your editor or shell. Changes take effect on the agent's next read, with no import step. `coffer path skill <name>` prints the folder's absolute path.
+The master folder is a normal directory, so the way to edit a skill is to open `~/.coffer/vault/skills/<name>/` in your editor or shell. Changes take effect on the agent's next read, with no import step. `coffer path skill <name>` prints the folder's absolute path.
 
 ::: code-group
 
@@ -366,7 +366,7 @@ Skills → choose the skill → Files tab → pick a file → Edit → Save
 
 The Files tab also offers **Open in editor** on a text file, and **Open in default app** and **Reveal in Finder** (your system's file manager) on a binary one; the skill's **⋯** menu opens or reveals the whole folder.
 
-Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Your text stays in the editor, marked **Not saved**, with three ways out: **Reload** (take what is on disk), **Compare** (the disk against your text) and **Copy my text**. `⌘S` saves while you edit. The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
+Saving in the Files tab is conditional. Each read returns a fingerprint of the file's bytes, and a save that carries it is refused if the file changed on disk in the meantime — for example, because you also edited it in your own editor. Your text stays in the editor, marked **Not saved**, with three ways out: **Reload** (take what is on disk), **Compare** (the disk against your text) and **Copy my text**. `⌘S` saves while you edit. Every save, and every edit you make in your editor, becomes a version on the **History** tab; `coffer vault history skills/<name>/` lists them from the terminal. See [Editing the vault by hand](/guides/vault-files). The Files tab edits existing text files only; to add a file to a skill, create it in the master folder with your editor or shell.
 
 ## Commands a skill needs
 
@@ -397,8 +397,8 @@ Drift is any disagreement between what Coffer recorded as delivered and what is 
 | `missing_link` | The link in the agent's skill folder was deleted. | Yes |
 | `tampered_link` | The link now points somewhere other than the master folder. | Yes |
 | `replaced_with_regular` | A real file or folder now occupies the link path. | No — Coffer never touches your content |
-| `missing_master` | The master folder under `~/.coffer/skills/` is gone. | No |
-| `orphan_master` | A folder in `~/.coffer/skills/` has no Coffer record. | No |
+| `missing_master` | The master folder under `~/.coffer/vault/skills/` is gone. | No |
+| `orphan_master` | A folder in `~/.coffer/vault/skills/` has no Coffer record. | No |
 
 ### Automatic repair at startup
 
@@ -462,7 +462,7 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 
 Its frontmatter description names Coffer's tools and the subjects of your collections (taken from each collection's `README.md`), so the model has something concrete to match against. The description stays within 1024 characters; if the collections do not fit, whole subjects are dropped from the end.
 
-In every other respect it is an ordinary skill. It lives at `~/.coffer/skills/coffer-guide/`, appears on the **Skills** page with a **Built-in** badge, and is delivered, reached, verified and repaired exactly like an imported skill.
+In every other respect it is an ordinary skill. It lives at `~/.coffer/derived/skills/coffer-guide/`, appears on the **Skills** page with a **Built-in** badge, and is delivered, reached, verified and repaired exactly like an imported skill.
 
 ### It is regenerated, so edits do not survive
 
@@ -499,7 +499,7 @@ Skills → the skill → ⋯ → Delete… → confirm "Delete release-checklist
 :::
 
 ::: danger The master folder is the only copy
-Removing a skill deletes `~/.coffer/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
+Removing a skill deletes `~/.coffer/vault/skills/<name>/`. Coffer does not keep the source folder you imported from. If you want to keep the skill but stop delivering it, disable it or set its reach to no agent instead.
 :::
 
 If an agent's copy is no longer Coffer's link, the delete is refused and nothing changes: the dialog names the folder, and you either restore it from master first or delete that folder yourself.

@@ -32,7 +32,7 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages, resolving a sync conflict), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), sync conflicts wait for you, and voice messages reach the agent as audio files.
+No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), and voice messages reach the agent as audio files.
 
 Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory notes with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 
@@ -67,11 +67,12 @@ In `~/.coffer` on each machine:
 
 | Path | Contents |
 | --- | --- |
-| `coffer.db` | Resources, settings, encrypted credentials, conversations, audit and invocation logs |
-| `master.key` | The key that decrypts credentials (unless moved to the OS keychain) |
-| `knowledge/` | Knowledge collections, as plain Markdown |
-| `skills/` | The master skill store |
-| `memory/` | Memory derived from your agents' own stores |
+| `vault/` | A git repository of your configuration and content: one JSON file per resource, knowledge collections, skill folders, memory triggers, encrypted secrets |
+| `local/` | Settings true of this machine only: agents, reach, retention, the sync remote |
+| `content/` | Attachments and the chat workspace |
+| `runs.db` | History: conversations, audit and invocation logs, sync rounds, usage |
+| `derived/` | What Coffer rebuilds, such as memory derived from your agents' own stores |
+| `master.key` | The key that decrypts secrets (unless moved to the OS keychain) |
 | `logs/` | Daemon, shim and MCP server logs |
 | `bin/` | Deployed binaries (release installs) |
 
@@ -79,11 +80,11 @@ The complete list is in [Files and directories](/reference/filesystem).
 
 ## How are my secrets stored?
 
-Credentials are encrypted with Fernet in `coffer.db`. The master key lives in `~/.coffer/master.key` (mode `0600`) by default, or in the macOS keychain if you opt in under **Settings → Security**. Resources name a credential by reference, never by value. See [Credentials](/guides/credentials).
+Credentials are encrypted with Fernet, one file per secret under `~/.coffer/vault/secret/`. The master key lives in `~/.coffer/master.key` (mode `0600`) by default, or in the macOS keychain if you opt in under **Settings → Security**. Resources name a credential by reference, never by value. See [Credentials](/guides/credentials).
 
 ## Can two machines share one vault?
 
-Yes, through [vault sync](/guides/vault-sync). Each machine converges with a private git repository you own. Knowledge, skills and resource definitions travel. Reach (whether a resource is enabled on a machine, and for which agents), conversations and logs stay on each machine.
+Yes, through [vault sync](/guides/vault-sync). Each machine pulls and pushes its vault repository to a private git repository you own. Knowledge, skills and resource definitions travel. Agents, reach (whether a resource is enabled on a machine, and for which agents), conversations and logs stay on each machine.
 
 ## Can I open the web UI from my phone or another computer?
 
@@ -95,7 +96,7 @@ A fixed port keeps bookmarks working and keeps the browser's stored preferences 
 
 ## How do I upgrade?
 
-Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
+Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. Coming from a Coffer that still keeps its state in `coffer.db`, run the one-time `coffer migrate`: see [Upgrading an existing Coffer](/guides/upgrading). See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
 
 ## How do I uninstall Coffer?
 

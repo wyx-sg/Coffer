@@ -296,6 +296,7 @@ async def test_the_sweep_waits_for_a_converge_round_to_release_the_lock(
     assert curated[0].material == "waiting.md"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="curation runs only on its owner machine")
 @pytest.mark.acceptance(
     spec="knowledge", scenario="curate only where the owner machine is this one"
 )

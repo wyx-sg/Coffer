@@ -427,6 +427,7 @@ def api_routes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[set[str]]:
         mp.undo()
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the command line covers every sync operation")
 @pytest.mark.acceptance(
     spec="resource-framework",
     scenario="command line covers every visual operation",

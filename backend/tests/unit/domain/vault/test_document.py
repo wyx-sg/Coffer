@@ -34,6 +34,7 @@ def test_the_encoding_is_deterministic_and_ends_in_a_newline() -> None:
     assert encode(decode(data)) == data
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an unchanged vault serializes to an identical tree")
 def test_a_document_round_trips_to_the_same_bytes() -> None:
     data = _raw()
     assert parse_resource(data).to_bytes() == data

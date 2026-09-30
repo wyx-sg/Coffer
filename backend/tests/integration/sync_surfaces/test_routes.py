@@ -3,6 +3,8 @@ board reads or acts through."""
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 from .conftest import client_for
@@ -17,6 +19,7 @@ def _conflict(mac: Box, mini: Box) -> None:
     mini.put(DOC, "Mini rotates on Fridays.\n")
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="every round is recorded with what it moved")
 def test_status_run_and_history(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
     mac.put("knowledge/team/deploy.md", "Deploy on Tuesdays.\n")
@@ -36,6 +39,7 @@ def test_status_run_and_history(pair: tuple[Box, Box]) -> None:
         assert missing.json()["error"]["code"] == "SYNC_ROUND_NOT_FOUND"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="keeping this machine's version continues the round")
 def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
     mac, mini = pair
     _conflict(mac, mini)
@@ -62,6 +66,7 @@ def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
     assert mini.disk(DOC) == b"Mini rotates on Fridays.\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an oversized deletion is held for confirmation")
 def test_a_hold_is_confirmed_through_the_route(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
     paths = [f"knowledge/bulk/n{i:02}.md" for i in range(22)]
@@ -77,6 +82,8 @@ def test_a_hold_is_confirmed_through_the_route(pair: tuple[Box, Box]) -> None:
         assert c.post("/sync/hold/confirm").json()["status"] == "pushed"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused")
+@pytest.mark.acceptance(spec="vault-sync", scenario="sync stays off until a remote is configured")
 def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Path) -> None:
     mac, _mini = pair
     with client_for(mac) as c:
@@ -109,6 +116,8 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
         assert no_remote.json()["error"]["code"] == "SYNC_NO_REMOTE"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="a round that applied nothing has nothing to roll back")
+@pytest.mark.acceptance(spec="vault-sync", scenario="a round can be rolled back")
 def test_a_round_is_rolled_back_through_the_route(pair: tuple[Box, Box]) -> None:
     mac, mini = pair
     mac.put(DOC, "Rotates on Tuesdays.\n")
