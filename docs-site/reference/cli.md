@@ -1823,7 +1823,6 @@ Create a collection. Nothing else creates one.
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Collection name (one path segment) |
 | `--description, -d` | option | text | `""` | Written as the opening paragraph of its README.md |
-| `--title` | option | text |  | Display title (≤80 chars) |
 
 ### knowledge edit
 
@@ -1831,14 +1830,13 @@ Create a collection. Nothing else creates one.
 coffer knowledge edit [OPTIONS] NAME
 ```
 
-Rename a collection (its directory moves with it) or set its title.
+Rename a collection (its directory moves with it) or rewrite its description.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
-| `--name` | option | text |  | New name |
-| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
-| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
+| `--name` | option | text |  | New name (the folder moves) |
+| `--description, -d` | option | text |  | Rewrite the opening paragraph of its README.md |
 
 ### knowledge rm
 
@@ -1846,7 +1844,7 @@ Rename a collection (its directory moves with it) or set its title.
 coffer knowledge rm [OPTIONS] NAME
 ```
 
-Remove a collection and its directory.
+Remove a collection and its directory (`restore --deleted` brings it back).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1916,15 +1914,16 @@ List a document's versions, newest first, with who wrote each.
 ### knowledge restore
 
 ```sh
-coffer knowledge restore [OPTIONS] PATH VERSION
+coffer knowledge restore [OPTIONS] [PATH] [VERSION]
 ```
 
-Put one version of a document back, as a new version.
+Put one version of a document back, as a new version — or, with `--deleted`, bring back a deleted document or collection.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | The document to restore |
-| `VERSION` | argument | text | required | The version to put back (from `history`) |
+| `PATH` | argument | text | `""` | The document to restore |
+| `VERSION` | argument | text | `""` | The version to put back (from `history`) |
+| `--deleted` | option | text | `""` | Bring back what this delete removed, a document or a whole collection (the delete's version, from `changes`) |
 
 ### knowledge changes
 

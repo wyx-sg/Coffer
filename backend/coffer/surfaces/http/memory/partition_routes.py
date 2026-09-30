@@ -52,6 +52,11 @@ async def list_partitions(
                 repository_path=p.repository_path,
                 note_count=p.note_count,
                 unresolvable=p.unresolvable,
+                distilled_at=p.distilled_at,
+                sample=p.sample,
+                sources=list(p.sources),
+                waiting_entries=p.waiting_entries,
+                waiting_agents=list(p.waiting_agents),
             )
             for p in found
         ]

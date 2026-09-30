@@ -42,6 +42,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
+from coffer.infrastructure.persistence.attention_ignore_repo import SqlAlchemyAttentionIgnoreRepo
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
@@ -325,6 +326,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             connection_service=connection,
             sync_service=workers.sync.service,
         ),
+        ignores=SqlAlchemyAttentionIgnoreRepo(sm),
+        audit=audit,
     )
     attention_watch_task = await start_attention_watch(events, attention)
 

@@ -207,3 +207,31 @@ class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
             "document": document,
             "later_version": later,
         }
+
+
+class KnowledgeNotADelete(KnowledgeError):  # noqa: N818
+    """A restore-a-delete aimed at a change that deleted nothing — only the
+    deletion of a document or of a collection is put back this way (spec
+    knowledge "Restore a deleted collection or document from Recent changes")."""
+
+    code = "KNOWLEDGE_NOT_A_DELETE"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(
+            f"{version!r} did not delete a document or a collection; "
+            "restore a document's version instead"
+        )
+        self.version = version
+
+
+class KnowledgeRestoreConflict(KnowledgeError):  # noqa: N818
+    """Putting a deleted document back would overwrite the file now at its
+    path. Refused, naming it; nothing is written."""
+
+    code = "KNOWLEDGE_RESTORE_CONFLICT"
+
+    def __init__(self, version: str, document: str) -> None:
+        super().__init__(f"cannot restore {document!r}: a document exists at that path again")
+        self.version = version
+        self.document = document
+        self.error_details: dict[str, object] = {"version": version, "document": document}

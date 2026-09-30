@@ -47,6 +47,7 @@ def _note_summary(note: Note) -> NoteSummaryOut:
         search_terms=list(note.search_terms),
         created_at=note.created_at,
         updated_at=note.updated_at,
+        agents=sorted({o.agent for o in note.origins if o.agent}),
     )
 
 

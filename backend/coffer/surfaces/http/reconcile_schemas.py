@@ -14,7 +14,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from coffer.application.attention import AttentionItem, AttentionReport
+from coffer.application.attention import (
+    AttentionItem,
+    AttentionReport,
+    attention_key,
+    ignorable,
+)
 from coffer.domain.reconcile import ItemResult, Outcome, PassReport
 
 
@@ -92,6 +97,11 @@ class AttentionActionOut(BaseModel):
 
 
 class AttentionItemOut(BaseModel):
+    key: str = Field(
+        description="`<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes."
+    )
+    #: Only an informational item can be ignored; a broken thing stays listed.
+    ignorable: bool
     kind: str
     uid: str | None
     title: str
@@ -108,9 +118,13 @@ class AttentionSourceErrorOut(BaseModel):
 
 
 class AttentionOut(BaseModel):
+    #: What needs a person, ignored items left out.
     items: list[AttentionItemOut]
     errors: list[AttentionSourceErrorOut]
+    #: ``items`` per kind — the sidebar's badges; ignored items do not count.
     counts_by_kind: dict[str, int]
+    #: The items ignored on this machine, still true but not asking.
+    ignored: list[AttentionItemOut] = Field(default_factory=list)
 
 
 # --- conversions ------------------------------------------------------------
@@ -156,6 +170,8 @@ def pass_out(report: PassReport | None) -> ReconcilePassOut | None:
 def attention_item_out(item: AttentionItem) -> AttentionItemOut:
     a = item.action
     return AttentionItemOut(
+        key=attention_key(item),
+        ignorable=ignorable(item),
         kind=item.kind,
         uid=item.uid,
         title=item.title,
@@ -172,4 +188,5 @@ def attention_out(report: AttentionReport) -> AttentionOut:
         items=[attention_item_out(i) for i in report.items],
         errors=[AttentionSourceErrorOut(source=e.source, error=e.error) for e in report.errors],
         counts_by_kind=dict(report.counts_by_kind),
+        ignored=[attention_item_out(i) for i in report.ignored],
     )

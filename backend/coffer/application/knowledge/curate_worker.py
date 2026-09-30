@@ -26,6 +26,7 @@ from collections.abc import Awaitable, Callable
 from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 from coffer.application.upkeep_schedule import (
     DEFAULT_INTERVALS,
@@ -82,8 +83,11 @@ class CurationWorker:
         lock: asyncio.Lock | None = None,
         runs: UpkeepRunRegistry = UPKEEP_RUNS,
         max_passes_per_sweep: int = MAX_PASSES_PER_SWEEP,
+        clock: PassClock = PASS_CLOCK,
     ) -> None:
         self._service = service
+        # Where the Automatic popover's "next in" comes from (``application.upkeep_clock``).
+        self._clock = clock
         self._curate = curate
         self._deliver = deliver
         self._is_enabled = is_enabled
@@ -107,8 +111,10 @@ class CurationWorker:
         self._cut_off: set[tuple[str, Pending]] = set()
 
     async def run_forever(self) -> None:
+        self._clock.waiting(CURATE, due_in_s=self._start_delay_s)
         await asyncio.sleep(self._start_delay_s)
         while True:
+            self._clock.running(CURATE)
             try:
                 await self.run_once()
             except asyncio.CancelledError:
@@ -120,6 +126,7 @@ class CurationWorker:
             # The operator's interval is re-read as the wait runs, so a change
             # in Settings lands within a slice rather than at the end of a wait
             # this worker committed to hours ago.
+            self._clock.waiting(CURATE)
             await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:

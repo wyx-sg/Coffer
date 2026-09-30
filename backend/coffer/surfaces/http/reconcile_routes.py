@@ -11,6 +11,8 @@ unified reconciler (ADR one-level-triggered-reconciler-compares-parameters).
   for them (the manual trigger): an id whose policy still will not repair it
   comes back ``planned`` with its reason, never written.
 - ``GET /attention`` — the cross-kind "needs you" list the Overview shows.
+- ``PUT /attention/ignored/{key}`` / ``DELETE …`` — ignore an informational
+  item on this machine, or stop ignoring it; audited.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from coffer.application.attention import AttentionService
 from coffer.application.reconcile.reconciler import Reconciler
@@ -116,3 +118,27 @@ async def get_attention(
     """What needs a person now, across every kind whose feature is on — each
     item with one action, the route its own page calls. Writes nothing."""
     return attention_out(await service.report())
+
+
+@attention_router.put("/ignored/{key:path}", status_code=204)
+async def ignore_attention_item(
+    key: str,
+    actor: str = Depends(get_actor),
+    service: AttentionService = Depends(get_attention_service),  # noqa: B008
+) -> Response:
+    """Ignore the informational item ``key`` on this machine: it leaves
+    ``items`` and the counts and is listed under ``ignored``. 409
+    ``ATTENTION_NOT_IGNORABLE`` when nothing informational is listed under it."""
+    await service.ignore(key, actor=actor)
+    return Response(status_code=204)
+
+
+@attention_router.delete("/ignored/{key:path}", status_code=204)
+async def unignore_attention_item(
+    key: str,
+    actor: str = Depends(get_actor),
+    service: AttentionService = Depends(get_attention_service),  # noqa: B008
+) -> Response:
+    """Stop ignoring ``key``; a key that is not ignored is a no-op."""
+    await service.unignore(key, actor=actor)
+    return Response(status_code=204)
