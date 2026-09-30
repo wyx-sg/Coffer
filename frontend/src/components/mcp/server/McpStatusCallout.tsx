@@ -1,63 +1,49 @@
-// src/components/mcp/server/McpStatusCallout.tsx — the "why, and what next" under the open server's header (design 4.1.01, 4.1.03–4.1.06, 4.1.08).
+// src/components/mcp/server/McpStatusCallout.tsx — the "why, and what next" at the top of the open server's Overview (design 4.1.01–4.1.06).
 //
-// A failing server's last error, since when, and its last successful call,
-// with View log; a missing launcher with the command that installs it; a
+// A test the user just ran speaks first (passed: what it listed; failed: why,
+// with its stderr one click away). Otherwise the state's own callout: a
+// failing server's last error, since when, who can't call it and its last
+// successful call, with View log; a missing launcher, with Open in CLIs; a
 // secret this Mac does not hold, with Replace secret; an Off server's
-// explanation; many tools behind search. A test the user just ran speaks
-// first. Nothing is shown for a healthy server with nothing to say.
-import type { ReactNode } from "react";
+// explanation; many tools behind search. Nothing for a healthy server with
+// nothing to say.
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  KeyRound,
+  Layers,
+  Power,
+  SquareTerminal,
+  TriangleAlert,
+} from "lucide-react";
 
 import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { Button } from "@/components/ui/button";
-import type { components } from "@/lib/api/types";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
-import { toneClass } from "@/lib/statusColors";
-import { STATUS_TONE, type StatusTone } from "@/components/status/statusTone";
-import { cn } from "@/lib/utils";
-import { installCommandFor, shortTime, type ServerState } from "./serverState";
+import { McpCallout as Callout } from "./McpCallout";
+import {
+  installCommandFor,
+  seconds,
+  shortTime,
+  type ServerState,
+  secretLabel,
+} from "./serverState";
+import type { TestResult } from "./testResult";
 
-type TestResult = components["schemas"]["McpTestResultOut"];
-
-function Callout({
-  tone,
-  title,
-  children,
-  action,
-  testId,
-}: {
-  tone: StatusTone;
-  title: ReactNode;
-  children?: ReactNode;
-  action?: ReactNode;
-  testId: string;
-}) {
-  return (
-    <div
-      role="status"
-      data-testid={testId}
-      className={cn(
-        "flex flex-col gap-2 rounded-xl px-4 py-3",
-        tone === "off" ? "bg-surface-sunken" : toneClass(STATUS_TONE[tone]),
-      )}
-    >
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="text-sm font-semibold">{title}</p>
-          {children ? <div className="text-xs leading-relaxed text-text">{children}</div> : null}
-        </div>
-        {action}
-      </div>
-    </div>
-  );
-}
+/** A clause that opens the sentence starts with a capital. */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 interface Props {
   state: ServerState;
   detail: McpStatusDetail | null | undefined;
   tiering: ToolTiering | null | undefined;
   toolCount: number;
+  /** The agents that reach it, already worded ("Claude Code and Codex"); "" when none. */
   agentNames: string;
   test: TestResult | null;
   onOpenLog: () => void;
@@ -75,67 +61,129 @@ export function McpStatusCallout({
   onReplaceSecret,
 }: Props) {
   const { t } = useTranslation();
+  const [stderr, setStderr] = useState(false);
   const viewLog = (
-    <Button size="sm" variant="outline" onClick={onOpenLog}>
-      {t("mcp.page.viewLog")}
+    <Button size="sm" variant="outline" className="bg-surface-raised" onClick={onOpenLog}>
+      <SquareTerminal aria-hidden /> {t("mcp.page.viewLog")}
     </Button>
   );
+  const tools =
+    toolCount > 0 ? t("mcp.page.itsTools", { count: toolCount }) : t("mcp.page.itsToolsAny");
+  const who = agentNames || t("mcp.page.agentsSubject");
 
   if (test) {
-    return test.ok ? (
+    const lines = test.stderr_tail ?? [];
+    const stderrButton =
+      lines.length > 0 ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="bg-surface-raised"
+          aria-expanded={stderr}
+          onClick={() => setStderr((v) => !v)}
+        >
+          <SquareTerminal aria-hidden />
+          {stderr ? t("mcp.page.hideStderr") : t("mcp.page.showStderr")}
+        </Button>
+      ) : test.ok ? null : (
+        viewLog
+      );
+    const tail =
+      stderr && lines.length > 0 ? (
+        <pre
+          className="mt-2 max-h-40 overflow-auto rounded-md bg-surface-raised p-2 font-mono text-2xs"
+          data-testid="mcp-test-stderr"
+        >
+          {lines.join("\n")}
+        </pre>
+      ) : null;
+    const took = seconds(test.latency_ms);
+    if (test.ok) {
+      const exit = test.exit_code != null ? t("mcp.page.testExit", { code: test.exit_code }) : "";
+      return (
+        <Callout
+          tint="ok"
+          icon={Check}
+          testId="mcp-test-result"
+          title={`${t("mcp.page.testPassed", { took })}${exit}`}
+          action={stderrButton}
+        >
+          {test.tool_count !== undefined
+            ? t("mcp.page.testListed", {
+                tools: test.tool_count,
+                resources: test.resource_count ?? 0,
+                prompts: test.prompt_count ?? 0,
+              })
+            : t("mcp.page.testPassedBody")}
+          {tail}
+        </Callout>
+      );
+    }
+    return (
       <Callout
-        tone="ok"
+        tint="err"
+        icon={CircleAlert}
         testId="mcp-test-result"
-        title={t("mcp.page.testPassed", { ms: test.latency_ms })}
-      >
-        {t("mcp.page.testPassedBody")}
-      </Callout>
-    ) : (
-      <Callout
-        tone="err"
-        testId="mcp-test-result"
-        title={t("mcp.page.testFailed", { ms: test.latency_ms })}
-        action={viewLog}
+        title={t("mcp.page.testFailed", { took })}
+        action={stderrButton}
       >
         {test.error_message}
+        {tail}
       </Callout>
     );
   }
   if (state.kind === "off") {
     return (
-      <Callout tone="off" testId="mcp-callout-off" title={t("mcp.page.offTitle")}>
-        {t("mcp.page.offBody")}
+      <Callout tint="off" icon={Power} testId="mcp-callout-off" title={t("mcp.page.offTitle")}>
+        {agentNames ? t("mcp.page.offBodyAgents", { agents: agentNames }) : t("mcp.page.offBody")}
       </Callout>
     );
   }
   if (state.kind === "launcherMissing" && detail?.missing_runner) {
-    const install = installCommandFor(detail.missing_runner);
+    const runner = detail.missing_runner;
+    const install = installCommandFor(runner);
     return (
       <Callout
-        tone="warn"
+        tint="warn"
+        icon={TriangleAlert}
         testId="mcp-callout-launcher"
-        title={t("mcp.page.launcherTitle", { runner: detail.missing_runner })}
+        title={t("mcp.page.launcherTitle", { runner })}
+        action={
+          <Button size="sm" variant="outline" className="bg-surface-raised" asChild>
+            <Link to="/clis">
+              <ArrowRight aria-hidden /> {t("mcp.page.openInClis")}
+            </Link>
+          </Button>
+        }
       >
-        <p>{t("mcp.page.launcherBody", { runner: detail.missing_runner, count: toolCount })}</p>
+        <p>{t("mcp.page.launcherBodyWho", { runner, who, tools })}</p>
         {install ? (
           <div className="mt-2 max-w-md">
             <CopyableCommand command={install} />
           </div>
         ) : (
-          <p className="mt-1">{t("mcp.missingRunnerHint", { runner: detail.missing_runner })}</p>
+          <p className="mt-1">{t("mcp.missingRunnerHint", { runner })}</p>
         )}
       </Callout>
     );
   }
   if (state.kind === "secretMissing") {
-    const secret = detail?.missing_secret_ref ?? detail?.missing_secret ?? "";
+    const secret = detail?.missing_secret_ref
+      ? secretLabel(detail.missing_secret_ref)
+      : (detail?.missing_secret ?? "");
     return (
       <Callout
-        tone="warn"
+        tint="warn"
+        icon={KeyRound}
         testId="mcp-callout-secret"
         title={t("mcp.page.secretTitle", { secret })}
         action={
-          <Button size="sm" variant="outline" onClick={onReplaceSecret}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-surface-raised"
+            onClick={onReplaceSecret}
+          >
             {t("mcp.page.replaceSecret")}
           </Button>
         }
@@ -152,18 +200,23 @@ export function McpStatusCallout({
       facts.push(t("mcp.page.failingSince", { at: shortTime(detail.failing_since) }));
     return (
       <Callout
-        tone="err"
+        tint="err"
+        icon={CircleAlert}
         testId="mcp-callout-failing"
         title={detail?.last_error ?? t("mcp.page.failingTitle")}
         action={viewLog}
       >
-        {facts.length > 0 ? `${facts.join(" · ")}. ` : ""}
-        {t("mcp.page.failingBody", { agents: agentNames, count: toolCount })}
+        {facts.length > 0 ? `${sentence(facts.join(" · "))}. ` : ""}
+        {t("mcp.page.failingBodyWho", { who, tools })}
         {detail?.last_ok_at
-          ? ` ${t("mcp.page.lastSuccess", {
-              at: shortTime(detail.last_ok_at),
-              tool: detail.last_ok_capability ?? "",
-            })}`
+          ? ` ${
+              detail.last_ok_capability
+                ? t("mcp.page.lastSuccess", {
+                    at: shortTime(detail.last_ok_at),
+                    tool: detail.last_ok_capability,
+                  })
+                : t("mcp.page.lastSuccessAt", { at: shortTime(detail.last_ok_at) })
+            }`
           : ""}
       </Callout>
     );
@@ -172,7 +225,8 @@ export function McpStatusCallout({
     const own = tiering.listed.length + tiering.behind_search.length;
     return (
       <Callout
-        tone="off"
+        tint="info"
+        icon={Layers}
         testId="mcp-callout-tiering"
         title={t("mcp.page.tieringTitle", {
           listed: tiering.listed.length,

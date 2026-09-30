@@ -1,108 +1,115 @@
-// src/components/custom-tools/ToolTestSection.tsx — Test: sample argument values, one run of the draft as
-// it stands (nothing is saved), and the response it got.
+// src/components/custom-tools/ToolTestSection.tsx — Test, at the bottom of every request form: a sample
+// value per argument, one run of the request as the form holds it (nothing is saved), and the result.
+// A saved group's request runs with its secret; a group not saved yet runs without one.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Play } from "lucide-react";
+import { RotateCw } from "lucide-react";
 
-import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolIn } from "@/lib/api/customTools";
 import { testArguments, type ArgRow } from "@/lib/customTools/schemaArgs";
-import { useTestCustomTool } from "@/lib/hooks/useCustomTools";
-import { formatBytes } from "@/lib/utils";
+import { useTestCustomTool, useTestUnsavedCustomTool } from "@/lib/hooks/useCustomTools";
+import { ToolTestResult } from "./ToolTestResult";
+
+/** Where the request runs: a saved group by name, or an unsaved group's settings. */
+export type TestTarget =
+  | { group: string }
+  | { unsaved: { name: string; base_url: string; headers: Record<string, string> } };
 
 interface Props {
-  group: string;
+  target: TestTarget;
   secret: string | null;
+  timeoutSeconds: number;
   args: ArgRow[];
   /** The draft as the form holds it now. */
   draft: () => CustomToolIn;
   ready: boolean;
+  /** What the form's save button says: "save" (Save) or "add" (Add to …). */
+  saveWord: "save" | "add";
 }
 
-function kindOf(contentType: string | null): string {
-  if (!contentType) return "";
-  if (contentType.includes("json")) return "JSON";
-  if (contentType.includes("html")) return "HTML";
-  if (contentType.includes("xml")) return "XML";
-  return contentType.split(";")[0];
-}
-
-export function ToolTestSection({ group, secret, args, draft, ready }: Props) {
+export function ToolTestSection(props: Props) {
+  const { target, secret, args, draft, ready } = props;
   const { t } = useTranslation();
-  const test = useTestCustomTool(group);
+  const saved = useTestCustomTool("group" in target ? target.group : "");
+  const unsaved = useTestUnsavedCustomTool();
+  const test = "group" in target ? saved : unsaved;
   const [values, setValues] = useState<Record<string, string>>({});
-  const result = test.data;
   const named = args.filter((row) => row.name);
-  const run = () => test.mutate({ tool: draft(), args: testArguments(args, values) });
+  const groupName = "group" in target ? target.group : target.unsaved.name;
+
+  const run = () => {
+    const tool = draft();
+    const argValues = testArguments(args, values);
+    if ("group" in target) return saved.mutate({ tool, args: argValues });
+    unsaved.mutate({
+      base_url: target.unsaved.base_url,
+      headers: target.unsaved.headers,
+      timeout_seconds: props.timeoutSeconds,
+      tool,
+      arguments: argValues,
+    });
+  };
+  const note =
+    "unsaved" in target
+      ? t(`customTools.test.noteUnsaved.${props.saveWord}`)
+      : secret
+        ? t(`customTools.test.noteSecret.${props.saveWord}`, { secret })
+        : t(`customTools.test.note.${props.saveWord}`);
 
   return (
-    <section aria-labelledby="ct-test" className="flex flex-col gap-2">
-      <h3 id="ct-test" className="text-sm font-semibold">
-        {t("customTools.test.title")}
-      </h3>
-      {named.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2">
-          {named.map((row) => (
-            <Input
-              key={row.name}
-              className="font-mono"
-              placeholder={row.name}
+    <section aria-label={t("customTools.test.title")} className="flex flex-col gap-2">
+      <div className="flex min-h-control-sm flex-wrap items-center gap-2">
+        <span className="text-xs font-label">{t("customTools.test.title")}</span>
+        {named.map((row, i) => (
+          <label
+            key={row.name}
+            className="inline-flex items-center gap-1 font-mono text-xs text-text-muted"
+          >
+            {i > 0 ? <span aria-hidden>·</span> : null}
+            {row.name} =
+            <input
+              className="h-control-sm w-24 rounded-sm border border-border-subtle bg-surface-raised px-1.5 font-mono text-xs text-text focus-visible:border-accent focus-visible:outline-none"
               aria-label={t("customTools.test.valueFor", { name: row.name })}
               value={values[row.name] ?? ""}
               onChange={(e) => setValues({ ...values, [row.name]: e.target.value })}
             />
-          ))}
-        </div>
-      ) : null}
-      <Button variant="outline" className="w-fit" disabled={!ready || test.isPending} onClick={run}>
-        <Play aria-hidden />
-        {test.isPending
-          ? t("customTools.test.running")
-          : result
-            ? t("customTools.test.runAgain")
-            : t("customTools.test.run")}
-      </Button>
+          </label>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={!ready || test.isPending}
+          onClick={run}
+        >
+          <RotateCw aria-hidden />
+          {test.isPending
+            ? t("customTools.test.running")
+            : test.data
+              ? t("customTools.test.runAgain")
+              : t("customTools.test.run")}
+        </Button>
+      </div>
       {test.error ? (
         <p role="alert" className="text-xs text-danger">
           {translateApiError(t, test.error)}
         </p>
-      ) : null}
-      {result ? (
-        <div className="space-y-1.5" data-testid="custom-tool-test-result">
-          <StatusWord tone={result.ok ? "ok" : "err"}>
-            {result.status_line
-              ? t("customTools.test.summary", {
-                  status: result.status_line,
-                  ms: result.duration_ms,
-                  size: formatBytes(new TextEncoder().encode(result.body).length),
-                  kind: kindOf(result.content_type),
-                })
-              : (result.error ?? t("customTools.test.failed"))}
-          </StatusWord>
-          {result.url ? (
-            <p className="truncate font-mono text-xs text-text-muted">
-              {draft().method ?? "GET"} {result.url}
-            </p>
-          ) : null}
-          {result.status_line && result.error ? (
-            <p className="text-xs text-danger">{result.error}</p>
-          ) : null}
-          {result.body ? (
-            <pre className="max-h-64 overflow-auto rounded-lg bg-code p-3 font-mono text-xs">
-              {result.body}
-            </pre>
-          ) : null}
-          {result.truncated ? (
-            <p className="text-xs text-text-muted">{t("customTools.test.truncated")}</p>
-          ) : null}
-        </div>
-      ) : null}
-      <p className="text-xs text-text-muted">
-        {secret ? t("customTools.test.noteSecret", { secret }) : t("customTools.test.note")}
-      </p>
+      ) : test.data ? (
+        <ToolTestResult
+          result={test.data}
+          method={draft().method ?? "GET"}
+          group={groupName}
+          secret={"group" in target ? secret : null}
+          timeoutSeconds={props.timeoutSeconds}
+        />
+      ) : (
+        <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-text-muted">
+          {t("customTools.test.notRun")}
+        </p>
+      )}
+      <p className="text-xs text-text-muted">{note}</p>
     </section>
   );
 }

@@ -4,8 +4,10 @@
 // this. Steps: the paste box → the prefilled form (one server) or the review
 // (several), plus Import from your agents. It adds MCP servers only.
 //
-// Adding registers each server, then writes its secrets, then its reach
-// (importMcpServers.ts). One server added → its page, where it is tested once;
+// The one-server form tests the unsaved config before Add server. Import from
+// your agents opens the change preview of the daemon's import plan instead of
+// this dialog. Adding registers each server, then writes its secrets, then its
+// reach (importMcpServers.ts). One server added → its page, where it is tested once;
 // several → stay, toast, test each in the background. A secret the daemon
 // holds for approval (202) is said before the dialog lets go.
 import { useEffect, useRef, useState } from "react";
@@ -27,7 +29,7 @@ import { useImportMcpServers, useTestAddedServers } from "@/lib/hooks/useMcpServ
 import { useResources } from "@/lib/hooks/useResources";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
 import { ApprovalStep } from "./add/ApprovalStep";
-import { ImportFromAgents } from "./add/ImportFromAgents";
+import { ImportFromAgents, toastImport } from "./add/ImportFromAgents";
 import { PasteStep } from "./add/PasteStep";
 import { ReviewStep } from "./add/ReviewStep";
 import { ServerForm } from "./add/ServerForm";
@@ -107,9 +109,9 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
     navigate(`/mcp-servers/${encodeURIComponent(added.name)}`);
     void testAdded([added.uid]).then(([r]) => {
       if (r.status === "fulfilled" && r.value.ok) {
-        const ms = r.value.latency_ms;
+        const tools = r.value.tool_count ?? 0;
         toast.success(
-          t("mcp.add.toastTested", { name: added.name, ms, reach: reachPhrase(reach) }),
+          t("mcp.add.toastTested", { name: added.name, count: tools, reach: reachPhrase(reach) }),
         );
       } else {
         const error =
@@ -173,15 +175,28 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
   const heading =
     step.kind === "review"
       ? { title: t("mcp.add.reviewTitle"), sub: t("mcp.add.reviewSub") }
-      : step.kind === "importAgents"
-        ? { title: t("mcp.import.title"), sub: t("mcp.import.sub") }
-        : step.kind === "approval"
-          ? { title: t("mcp.add.approvalTitle"), sub: t("mcp.add.subtitle") }
-          : { title: t("mcp.add.dialogTitle"), sub: t("mcp.add.subtitle") };
+      : step.kind === "approval"
+        ? { title: t("mcp.add.approvalTitle"), sub: t("mcp.add.subtitle") }
+        : { title: t("mcp.add.dialogTitle"), sub: t("mcp.add.subtitle") };
+
+  if (step.kind === "importAgents") {
+    return (
+      <ImportFromAgents
+        open={open}
+        onOpenChange={setOpen}
+        onDone={(result) => {
+          toastImport(toast, t, result);
+          onOpenChange(false);
+        }}
+      />
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[90vh] max-w-[640px] overflow-y-auto">
+      <DialogContent
+        className={`max-h-[90vh] overflow-y-auto ${step.kind === "review" ? "max-w-[700px]" : "max-w-[660px]"}`}
+      >
         <DialogHeader>
           <DialogTitle>{heading.title}</DialogTitle>
           <DialogDescription>{heading.sub}</DialogDescription>
@@ -219,15 +234,6 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
             pending={add.isPending}
             onBack={() => setStep({ kind: "paste" })}
             onSubmit={(batch, reach) => submit(batch, reach, false)}
-          />
-        ) : null}
-        {step.kind === "importAgents" ? (
-          <ImportFromAgents
-            onBack={() => setStep({ kind: "paste" })}
-            onDone={(r) => {
-              toast.success(t("mcp.import.done", { count: r.adopted.length }));
-              onOpenChange(false);
-            }}
           />
         ) : null}
         {step.kind === "approval" ? (

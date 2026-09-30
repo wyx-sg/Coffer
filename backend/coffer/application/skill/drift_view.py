@@ -68,7 +68,13 @@ async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | N
             target_path=str(observed.params["target"]),
             suggested_remedy=suggested_remedy(kind),
         )
-    if state == OK or not observed.params.get("bound"):
+    if state == OK:
+        return None
+    # A delivery never made is not drift — except one the rule wants that a
+    # folder Coffer did not put there is blocking ("Folder in the way"): that
+    # is the conflict "Report a foreign target instead of overwriting it"
+    # reports, and the one a person resolves (copy_ops).
+    if not observed.params.get("bound") and state != DriftKind.REPLACED_WITH_REGULAR.value:
         return None
     kind = _KIND_OF_STATE.get(state) or DriftKind(state)
     skill_uid, agent_uid = split_key(d.key)

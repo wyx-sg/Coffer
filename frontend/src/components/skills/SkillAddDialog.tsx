@@ -4,9 +4,7 @@
 // Spec skill-manager "Cover skill management on REST, the CLI and the web" (the
 // dialog), "Import a skill from a local path", "Add skills from an archive" and
 // "Add skills from a Git repository". The stage (useSkillAddStage) is cancelled
-// whenever it stops being on screen: the dialog closes, the source switches, or
-// another path, file or repository is looked at. There is no create-from-scratch
-// source: a skill is written in the user's own editor and added from where it lives.
+// whenever it leaves the screen; there is no create-from-scratch source.
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -21,7 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
+import { useApplySkillReach } from "@/lib/hooks/useSkillCopies";
+import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
+import { SkillAddReach } from "./SkillAddReach";
 import { SkillAddRefusal } from "./SkillAddRefusal";
 import {
   SkillAddArchiveField,
@@ -32,7 +33,7 @@ import {
 import { SkillAddSourceSwitch, type SkillAddSource } from "./SkillAddSourceSwitch";
 import { useSkillAddStage } from "./SkillAddStage";
 import { SkillFoundList } from "./SkillFoundList";
-import { cleanPath, isArchiveFile } from "./skillSourceHelpers";
+import { cleanPath, gitHost, isArchiveFile } from "./skillSourceHelpers";
 
 export type { SkillAddSource } from "./SkillAddSourceSwitch";
 
@@ -55,6 +56,8 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
   const [folder, setFolder] = useState("");
   const [archive, setArchive] = useState<File | null>(null);
   const [git, setGit] = useState<GitLocation>(NO_GIT);
+  const [reach, setReach] = useState<SkillReachDraft>(EVERY_AGENT);
+  const applyReach = useApplySkillReach();
   // The folder last looked at, so leaving the field after a pick does not look twice.
   const lookedFolder = useRef<string | null>(null);
 
@@ -65,6 +68,7 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
       setFolder("");
       setArchive(null);
       setGit(NO_GIT);
+      setReach(EVERY_AGENT);
       lookedFolder.current = null;
     } else {
       discard();
@@ -114,6 +118,11 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
   const confirm = async () => {
     const added = await s.confirm();
     if (!added) return;
+    if (reach.mode !== "everywhere") {
+      await applyReach
+        .mutateAsync({ uids: added.map((a) => a.uid), mode: reach.mode, scope: reach.scope })
+        .catch(() => undefined);
+    }
     handleOpenChange(false);
     if (added[0]) navigate(`/skills/${encodeURIComponent(added[0].name)}`);
   };
@@ -135,6 +144,10 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
         ? t("skillSources.add.addMany", { count: s.chosen.length })
         : t("skillSources.add.addOne");
   const gitNeedsClone = source === "git" && !s.stage;
+  const unreachable =
+    source === "git" &&
+    s.stageError instanceof ApiError &&
+    s.stageError.code === "SKILL_SOURCE_UNREACHABLE";
   const cloning = source === "git" && s.looking;
 
   return (
@@ -148,7 +161,11 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
       >
         <DialogHeader>
           <DialogTitle>{t("skillSources.add.title")}</DialogTitle>
-          <DialogDescription>{t(`skillSources.add.subtitle.${source}`)}</DialogDescription>
+          <DialogDescription>
+            {source === "archive" && (s.stage?.skills.length ?? 0) > 1
+              ? t("skillSources.add.subtitle.archiveMany")
+              : t(`skillSources.add.subtitle.${source}`)}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-4"
@@ -164,7 +181,14 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
           ) : source === "archive" ? (
             <SkillAddArchiveField file={archive} onPick={pickArchive} />
           ) : (
-            <SkillAddGitFields value={git} onChange={changeGit} disabled={cloning} />
+            <SkillAddGitFields
+              value={git}
+              onChange={changeGit}
+              disabled={cloning}
+              urlError={
+                unreachable ? t("skillSources.git.unreachable", { host: gitHost(git.url) }) : null
+              }
+            />
           )}
           {s.looking ? (
             <p role="status" className="flex items-center gap-2 text-xs text-text-muted">
@@ -174,7 +198,7 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
                 : t("skillSources.add.looking")}
             </p>
           ) : null}
-          {s.stageError ? (
+          {s.stageError && !unreachable ? (
             <SkillAddRefusal
               error={s.stageError}
               action={
@@ -194,6 +218,7 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
           {s.stage ? (
             <SkillFoundList stage={s.stage} selected={s.selected} onToggle={s.toggle} />
           ) : null}
+          <SkillAddReach value={reach} onChange={setReach} />
           {s.confirmError ? (
             <p role="alert" className="text-xs text-danger">
               {translateApiError(t, s.confirmError)}

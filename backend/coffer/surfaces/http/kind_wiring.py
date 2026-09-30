@@ -27,6 +27,7 @@ from coffer.domain.agent.facets import AgentCatalog
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
+from coffer.surfaces.http.builtin_server_wiring import wire_builtin_server
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledge_kind
 from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
@@ -140,6 +141,8 @@ async def wire_resource_kinds(
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     mcp = wire_mcp_kind(app, resource_svc, audit, sm, credential_store, builtin_tools, sync)
+    # Coffer's own `coffer` server, described for the MCP servers page.
+    wire_builtin_server(builtin_tools, agent_skill.agent_service, agent_skill.mcp_service)
 
     # Last, because it needs both ends: the knowledge kind's renderer and the
     # skill kind's seed. The lifespan refreshes it once every kind is up.

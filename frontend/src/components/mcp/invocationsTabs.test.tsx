@@ -1,51 +1,46 @@
 // frontend/src/components/mcp/invocationsTabs.test.tsx
-// A server's Invocations tab mounts InvocationsTable scoped to its uid. (What
-// the table then reads, and how Activity's MCP calls tab reads the same log
-// unscoped, is pinned in InvocationsTable.test.tsx.)
-import { expect, test, vi } from "vitest";
-import { render } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+// The server's tabs: the path names the open one, and each tab carries its
+// count (none for a kind the server has none of). What the Invocations tab
+// reads is pinned in InvocationsTable.test.tsx.
+import { expect, test } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { McpServerDetailTabs } from "./McpServerDetailTabs";
 
-const mounted = vi.fn();
-vi.mock("./InvocationsTable", () => ({
-  InvocationsTable: (props: { serverUid?: string; enabled?: boolean }) => {
-    mounted(props);
-    return <div>invocation table</div>;
-  },
-}));
-vi.mock("./CapabilityList", () => ({ CapabilityList: () => null }));
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn(() => ({ GET: vi.fn() })) }));
-
-function renderAt(path: string, ui: React.ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderAt(path: string) {
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path="/mcp-servers/:name/:tab?"
+          element={
+            <McpServerDetailTabs
+              basePath="/mcp-servers/srv"
+              counts={{ tools: 26, resources: 0, prompts: 3 }}
+              overview={<p>overview pane</p>}
+              tools={<p>tools pane</p>}
+              resources={<p>resources pane</p>}
+              prompts={<p>prompts pane</p>}
+              invocations={<p>invocations pane</p>}
+            />
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
   );
 }
 
-test("a server's Invocations tab mounts the invocation table scoped to its uid", () => {
-  renderAt(
-    "/mcp-servers/srv/invocations",
-    <Routes>
-      <Route
-        path="/mcp-servers/:name/:tab?"
-        element={
-          <McpServerDetailTabs
-            serverUid="u-1"
-            basePath="/mcp-servers/srv"
-            capabilities={undefined}
-            overview={null}
-            tools={null}
-          />
-        }
-      />
-    </Routes>,
-  );
-  expect(mounted).toHaveBeenCalled();
-  expect(mounted.mock.lastCall![0]).toEqual({ serverUid: "u-1" });
+test("the Invocations tab in the path shows the invocations pane", () => {
+  renderAt("/mcp-servers/srv/invocations");
+  expect(screen.getByText("invocations pane")).toBeInTheDocument();
+  expect(screen.queryByText("overview pane")).not.toBeInTheDocument();
+});
+
+test("each tab carries its count, and none for a kind the server has none of", () => {
+  renderAt("/mcp-servers/srv");
+  expect(screen.getByRole("tab", { name: "Tools" })).toHaveTextContent("Tools· 26");
+  expect(screen.getByRole("tab", { name: "Resources" })).toHaveTextContent(/^Resources$/);
+  expect(screen.getByRole("tab", { name: "Prompts" })).toHaveTextContent("· 3");
+  expect(screen.getByText("overview pane")).toBeInTheDocument();
 });

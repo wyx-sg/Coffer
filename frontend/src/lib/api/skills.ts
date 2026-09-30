@@ -48,6 +48,8 @@ export type SkillUpdateApply = Schemas["SkillUpdateApplyRequest"];
 export type SkillDriftReport = Schemas["DriftReportOut"];
 export type SkillDriftEntry = Schemas["DriftEntryOut"];
 export type SkillRepairReport = Schemas["RepairReportOut"];
+export type SkillCopyCompare = Schemas["SkillCopyCompareOut"];
+export type SkillOrphanList = Schemas["SkillOrphanListOut"];
 
 export const skillsApi = {
   list: () => call<SkillListOut>("/skills"),
@@ -96,7 +98,25 @@ export const skillsApi = {
       body: { commit },
     }),
 
+  changeSource: (uid: string, body: SkillStageGit) =>
+    call<SkillUpdatePreview>(`/skills/${enc(uid)}/source/change`, { method: "POST", body }),
+
   // ----- agents' copies (spec skill-manager "Report skill drift on request") -----
   verify: () => call<SkillDriftReport>("/skills/verify", { method: "POST" }),
   repair: () => call<SkillRepairReport>("/skills/repair", { method: "POST" }),
+  /** One agent's folder in the way of the skill's link, against master. */
+  compareCopy: (uid: string, agentUid: string) =>
+    call<SkillCopyCompare>(`/skills/${enc(uid)}/copies/${enc(agentUid)}`),
+  /** Keep master (the folder is backed up and linked) or the agent's version. */
+  resolveCopy: (uid: string, agentUid: string, keep: "master" | "agent") =>
+    call<SkillOut>(`/skills/${enc(uid)}/copies/${enc(agentUid)}/resolve`, {
+      method: "POST",
+      body: { keep },
+    }),
+
+  // ----- folders in the store no skill claims -----
+  orphans: () => call<SkillOrphanList>("/skills/orphans"),
+  adoptOrphan: (name: string) =>
+    call<SkillOut>(`/skills/orphans/${enc(name)}/adopt`, { method: "POST" }),
+  removeOrphan: (name: string) => call<void>(`/skills/orphans/${enc(name)}`, { method: "DELETE" }),
 };

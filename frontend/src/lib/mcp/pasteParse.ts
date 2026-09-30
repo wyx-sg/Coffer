@@ -13,12 +13,7 @@ import { unreadable } from "./pasteTypes";
 import { finaliseNames, nameFromUrl } from "./serverNames";
 
 export type { ParsedEnvVar, ParsedServer, PasteResult } from "./pasteTypes";
-export {
-  MCP_SERVER_NAME_MAX,
-  isValidServerName,
-  normaliseServerName,
-  serverNameTooLong,
-} from "./serverNames";
+export { MCP_SERVER_NAME_MAX, isValidServerName, serverNameTooLong } from "./serverNames";
 
 /**
  * One URL on its own. Credentials in its query (`?token=`, `?api_key=`) are

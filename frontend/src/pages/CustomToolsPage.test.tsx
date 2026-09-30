@@ -1,39 +1,35 @@
 // src/pages/CustomToolsPage.test.tsx — the Custom tools page: groups by health, one Add custom tool action,
-// the group page with no tabs, the tool drawer over it, import, re-import and a hand-made request.
+// the group page with no tabs, the tool drawer over it, and a hand-made request into an existing or a
+// new group (import and re-import: CustomToolsImport.test.tsx).
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
-import { makeGroup, makeTool } from "@/components/custom-tools/testFixtures";
-import { CustomToolsPage } from "./CustomToolsPage";
+import { api, billing, location, renderAt, resetCustomToolMocks } from "./customToolsTestHarness";
 
-vi.mock("@/lib/api/customTools", async (orig) => {
-  const actual = await orig<typeof import("@/lib/api/customTools")>();
-  return {
-    ...actual,
-    customToolsApi: {
-      list: vi.fn(),
-      get: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      remove: vi.fn(),
-      addTool: vi.fn(),
-      updateTool: vi.fn(),
-      removeTool: vi.fn(),
-      setToolReach: vi.fn(),
-      test: vi.fn(),
-      readOpenApi: vi.fn(),
-      previewReimport: vi.fn(),
-      applyReimport: vi.fn(),
-    },
-  };
-});
+vi.mock("@/lib/api/customTools", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/customTools")>()),
+  customToolsApi: Object.fromEntries(
+    [
+      "list",
+      "get",
+      "create",
+      "update",
+      "remove",
+      "addTool",
+      "updateTool",
+      "removeTool",
+      "setToolReach",
+      "test",
+      "testUnsaved",
+      "readOpenApi",
+      "previewReimport",
+      "applyReimport",
+    ].map((name) => [name, vi.fn()]),
+  ),
+}));
 vi.mock("@/lib/api/credentials", () => ({
   credentialsApi: {
-    list: vi.fn(async () => ({
-      refs: [{ ref: "secret/billing-token", present: true }],
-    })),
+    list: vi.fn(async () => ({ refs: [{ ref: "secret/billing-token", present: true }] })),
   },
 }));
 vi.mock("@/lib/api/resources", () => ({
@@ -49,77 +45,10 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   })),
 }));
 
-const { customToolsApi } = await import("@/lib/api/customTools");
-const api = customToolsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-
-const grafana = makeGroup({
-  name: "grafana",
-  health: "attention",
-  health_reason: "secret_missing",
-  secret_state: "missing",
-  auth: {
-    header: "Authorization",
-    prefix: "Bearer ",
-    secret: "grafana-token",
-    secret_state: "missing",
-  },
-  tools: [makeTool({ name: "search_dashboards", path: "/search" })],
-});
-const deploy = makeGroup({ name: "deploy-api", health: "failing" });
-const billing = makeGroup({
-  name: "billing",
-  source: {
-    kind: "url",
-    location: "https://billing.internal.example/openapi.json",
-    title: null,
-    version: "2.3.0",
-    fetched_at: "2026-09-27T10:12:00Z",
-    skipped: [],
-  },
-  tools: [
-    makeTool({ name: "get_invoice", calls_24h: 31, failures_24h: 1 }),
-    makeTool({
-      name: "create_invoice",
-      method: "POST",
-      path: "/invoices",
-      changes_data: true,
-      reach_override: ["ag-cc"],
-    }),
-  ],
-});
-const status = makeGroup({ name: "status-page", enabled: false, health: "off" });
-const ALL = [billing, status, grafana, deploy];
-
-let location = "";
-function LocationProbe() {
-  const loc = useLocation();
-  location = loc.pathname;
-  return null;
-}
-
-function renderAt(path: string) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/custom-tools" element={<CustomToolsPage />} />
-          <Route path="/custom-tools/:group" element={<CustomToolsPage />} />
-        </Routes>
-        <LocationProbe />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  api.list.mockResolvedValue(ALL);
-  api.get.mockImplementation(async (name: string) => ALL.find((g) => g.name === name));
-});
+beforeEach(resetCustomToolMocks);
 
 describe("CustomToolsPage", () => {
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "the Custom tools page lists groups by health with one Add custom tool action"
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "the custom tools page lists groups by health"
   test("lists groups by health, failing first, under one Add custom tool action with no script type", async () => {
     renderAt("/custom-tools");
     const attention = await screen.findByRole("region", { name: "Needs attention" });
@@ -142,36 +71,49 @@ describe("CustomToolsPage", () => {
     fireEvent.click(adds[0]);
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("combobox", { name: "Group" })).toBeInTheDocument();
-    const ways = within(dialog)
-      .getAllByRole("radio")
-      .map((r) => r.textContent ?? "");
-    expect(ways.some((w) => w.includes("Import an OpenAPI spec"))).toBe(true);
-    expect(ways.some((w) => w.includes("Add one request by hand"))).toBe(true);
+    const putItIn = within(dialog).getByRole("radiogroup", { name: "Put it in" });
+    expect(within(putItIn).getByRole("radio", { name: /billing/ })).toBeInTheDocument();
+    fireEvent.click(within(putItIn).getByRole("radio", { name: /New group/ }));
+    const ways = within(dialog).getByRole("radiogroup", { name: "How to add it" });
+    expect(within(ways).getByRole("radio", { name: /Import an OpenAPI spec/ })).toBeInTheDocument();
+    expect(
+      within(ways).getByRole("radio", { name: /Add one request by hand/ }),
+    ).toBeInTheDocument();
     expect(within(dialog).queryByText(/script/i)).not.toBeInTheDocument();
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a group's page is one page with its definition, reach, 24-hour summary and tools"
+  // scenario (web-ui, revise-web-ui-ia): "the custom tools page with no group shows the first-run panel"
+  test("with no group the page is the first-run panel: no list, Add custom tool in header and body", async () => {
+    api.list.mockResolvedValue([]);
+    renderAt("/custom-tools");
+    expect(await screen.findByText("Turn any HTTP API into tools")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Filter groups")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add custom tool" })).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /Add one request by hand/ }));
+    expect(await screen.findByRole("dialog", { name: "New group" })).toBeInTheDocument();
+  });
+
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "a group's page is one page with a tool drawer"
   test("a group page is one page with definition, secret, reach, 24 h line and tools; a row opens the drawer with Test", async () => {
     api.test.mockResolvedValue({
       ok: true,
       duration_ms: 180,
       url: "https://billing.internal.example/v2/invoices/7",
       status: 200,
-      status_line: "200 OK",
+      status_line: "HTTP 200 OK",
       body: '{"id":"7"}',
       truncated: false,
       content_type: "application/json",
       error: null,
+      failure: null,
     });
     renderAt("/custom-tools/billing");
     const tools = await screen.findByRole("region", { name: /Tools · 2 of 2 on/ });
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     const definition = screen.getByRole("region", { name: "Definition" });
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
-    expect(
-      within(definition).getByText("Authorization: Bearer ← secret billing-token"),
-    ).toBeInTheDocument();
+    expect(within(definition).getByText("Authorization: Bearer")).toBeInTheDocument();
+    expect(within(definition).getByText("billing-token")).toBeInTheDocument();
     expect(within(definition).getByTestId("scope-control")).toHaveTextContent("Every agent");
     expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
     expect(screen.getByText(/58 calls/)).toBeInTheDocument();
@@ -181,7 +123,8 @@ describe("CustomToolsPage", () => {
 
     fireEvent.click(within(tools).getByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");
-    expect(within(drawer).getByText("Test")).toBeInTheDocument();
+    expect(within(drawer).getByRole("region", { name: "Test" })).toBeInTheDocument();
+    expect(within(drawer).getByText(/Not run yet/)).toBeInTheDocument();
     fireEvent.change(within(drawer).getByLabelText("Value for id"), { target: { value: "7" } });
     fireEvent.click(within(drawer).getByRole("button", { name: "Run" }));
     expect(await within(drawer).findByText(/200 OK in 180 ms/)).toBeInTheDocument();
@@ -190,10 +133,11 @@ describe("CustomToolsPage", () => {
       expect.objectContaining({ name: "get_invoice", method: "GET" }),
       { id: "7" },
     );
-    expect(location).toBe("/custom-tools/billing");
+    expect(within(drawer).getByText(/Runs once with billing-token/)).toBeInTheDocument();
+    expect(location()).toBe("/custom-tools/billing");
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a tool's reach override is set from its drawer"
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "a tool's reach override narrows one tool"
   test("saving a tool with a reach override PUTs the override", async () => {
     api.updateTool.mockResolvedValue(billing);
     api.setToolReach.mockResolvedValue(billing);
@@ -201,11 +145,13 @@ describe("CustomToolsPage", () => {
     const tools = await screen.findByRole("region", { name: /Tools/ });
     fireEvent.click(within(tools).getByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");
-    fireEvent.click(within(drawer).getByRole("radio", { name: "Only selected agents" }));
-    fireEvent.click(within(drawer).getByRole("checkbox", { name: "codex" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Only for this tool" }));
+    // Narrowing starts from what the group gives (every agent); the panel's
+    // checklist is covered by DraftReachField.test.tsx.
+    expect(within(drawer).getByRole("button", { name: "2 of 2 agents" })).toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "get_invoice", ["ag-cx"]),
+      expect(api.setToolReach).toHaveBeenCalledWith("billing", "get_invoice", ["ag-cc", "ag-cx"]),
     );
     expect(api.updateTool).toHaveBeenCalledWith(
       "billing",
@@ -215,29 +161,27 @@ describe("CustomToolsPage", () => {
   });
 
   // scenario (web-ui, revise-web-ui-ia 7.14d): "a hand-made request joins an existing group"
-  test("a request made by hand joins the existing group it names", async () => {
+  test("a request made by hand joins the existing group it names, and no import is offered there", async () => {
     api.addTool.mockResolvedValue(billing);
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.keyDown(within(dialog).getByRole("combobox", { name: "Group" }), {
-      key: "ArrowDown",
-    });
-    fireEvent.click(await screen.findByRole("option", { name: "billing" }));
-    fireEvent.click(within(dialog).getByRole("radio", { name: /Add one request by hand/ }));
+    let dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^billing/ }));
+    expect(within(dialog).queryByRole("radio", { name: /Import an OpenAPI spec/ })).toBeNull();
+    expect(within(dialog).getByText(/uses its base URL and secret/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
-    await waitFor(() => expect(location).toBe("/custom-tools/billing"));
-    const drawer = await screen.findByRole("dialog", { name: "New request" });
-    fireEvent.change(within(drawer).getByLabelText("Tool name"), {
+    dialog = await screen.findByRole("dialog", { name: "Add a request" });
+    fireEvent.change(within(dialog).getByLabelText(/Tool name/), {
       target: { value: "list_refunds" },
     });
-    fireEvent.change(within(drawer).getByLabelText("Tool description"), {
+    fireEvent.change(within(dialog).getByLabelText(/Tool description/), {
       target: { value: "List refunds" },
     });
-    const path = within(drawer).getByRole("textbox", { name: "Request" });
-    fireEvent.change(path, { target: { value: "/refunds" } });
-    fireEvent.click(within(drawer).getByRole("button", { name: "Save" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Request/ }), {
+      target: { value: "/refunds" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to billing" }));
     await waitFor(() =>
       expect(api.addTool).toHaveBeenCalledWith(
         "billing",
@@ -245,137 +189,73 @@ describe("CustomToolsPage", () => {
       ),
     );
     expect(api.create).not.toHaveBeenCalled();
+    await waitFor(() => expect(location()).toBe("/custom-tools/billing"));
   });
-});
 
-describe("CustomToolsPage import", () => {
-  const reading = {
-    title: "Billing API",
-    version: "2.3.0",
-    base_url: "https://billing.internal.example/v2",
-    auth_header: "Authorization",
-    auth_prefix: "Bearer ",
-    source_kind: "url" as const,
-    location: "https://billing.internal.example/openapi.json",
-    warnings: [],
-    operations: [
-      {
-        key: "GET /invoices",
-        summary: null,
-        tool: { name: "list_invoices", method: "GET" as const, path: "/invoices" },
-      },
-      {
-        key: "GET /invoices/{id}",
-        summary: null,
-        tool: { name: "get_invoice", method: "GET" as const, path: "/invoices/{id}" },
-      },
-      {
-        key: "POST /invoices",
-        summary: null,
-        tool: { name: "create_invoice", method: "POST" as const, path: "/invoices" },
-      },
-      {
-        key: "DELETE /invoices/{id}",
-        summary: null,
-        tool: { name: "void_invoice", method: "DELETE" as const, path: "/invoices/{id}" },
-      },
-      {
-        key: "GET /charges",
-        summary: null,
-        tool: { name: "list_charges", method: "GET" as const, path: "/charges" },
-      },
-    ],
-  };
-
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "importing an OpenAPI spec creates a group with the chosen operations"
-  test("import reads the spec, picks operations and posts only the chosen tools", async () => {
-    api.readOpenApi.mockResolvedValue(reading);
-    api.create.mockImplementation(async (body: { name: string }) => makeGroup({ name: body.name }));
+  // scenario (web-ui, revise-web-ui-ia): "a new group made by hand is saved with its first request"
+  test("a new group made by hand is saved only with its first request, tested without the secret", async () => {
+    api.testUnsaved.mockResolvedValue({
+      ok: false,
+      duration_ms: 0,
+      url: "https://search.internal.example/v1",
+      status: null,
+      status_line: null,
+      body: "",
+      truncated: false,
+      content_type: null,
+      error: "SSRF: refusing host search.internal.example",
+      failure: "blocked",
+    });
+    api.create.mockImplementation(async (body: { name: string }) => ({
+      ...billing,
+      name: body.name,
+    }));
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
     let dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Group name"), {
-      target: { value: "invoices" },
-    });
-    fireEvent.click(within(dialog).getByRole("radio", { name: /Import an OpenAPI spec/ }));
+    fireEvent.click(within(dialog).getByRole("radio", { name: /New group/ }));
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Add one request by hand/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
-    dialog = await screen.findByRole("dialog", { name: "Import an OpenAPI spec" });
-    expect(within(dialog).getByLabelText("Group name")).toHaveValue("invoices");
-    fireEvent.change(within(dialog).getByLabelText("Spec"), {
-      target: { value: "https://billing.internal.example/openapi.json" },
+    dialog = await screen.findByRole("dialog", { name: "New group" });
+    fireEvent.change(within(dialog).getByLabelText(/Group name/), {
+      target: { value: "search-api" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Load" }));
-    expect(await within(dialog).findByText("Loaded · 5 operations")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Base URL")).toHaveValue(
-      "https://billing.internal.example/v2",
+    fireEvent.change(within(dialog).getByLabelText(/Base URL/), {
+      target: { value: "https://search.internal.example/v1" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create group" }));
+
+    dialog = await screen.findByRole("dialog", { name: "Add a request" });
+    expect(api.create).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/Tool name/), { target: { value: "find" } });
+    fireEvent.change(within(dialog).getByLabelText(/Tool description/), {
+      target: { value: "Find things" },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /Request/ }), {
+      target: { value: "/find" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Run" }));
+    expect(
+      await within(dialog).findByText(/isn't tested before the group is saved/),
+    ).toBeInTheDocument();
+    expect(api.testUnsaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        base_url: "https://search.internal.example/v1",
+        tool: expect.objectContaining({ name: "find", path: "/find" }),
+      }),
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Review tools" }));
+    expect(api.test).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(/Runs once without the secret/)).toBeInTheDocument();
+    expect(api.create).not.toHaveBeenCalled();
 
-    // GET operations start picked; untick one GET and pick one POST.
-    expect(within(dialog).getByRole("checkbox", { name: "list_invoices" })).toBeChecked();
-    expect(within(dialog).getByRole("checkbox", { name: "create_invoice" })).not.toBeChecked();
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "list_charges" }));
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "create_invoice" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create group with 3 tools" }));
-
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to search-api" }));
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    const body = api.create.mock.calls[0][0] as {
-      name: string;
-      tools: { name: string }[];
-      source: { kind: string; location: string; skipped: string[] };
-      auth: unknown;
-    };
-    expect(body.name).toBe("invoices");
-    expect(body.tools.map((tool) => tool.name).sort()).toEqual([
-      "create_invoice",
-      "get_invoice",
-      "list_invoices",
-    ]);
-    expect(body.source).toMatchObject({
-      kind: "url",
-      location: "https://billing.internal.example/openapi.json",
+    expect(api.create.mock.calls[0][0]).toMatchObject({
+      name: "search-api",
+      base_url: "https://search.internal.example/v1",
+      tools: [expect.objectContaining({ name: "find", path: "/find" })],
     });
-    expect(body.source.skipped.sort()).toEqual(["DELETE /invoices/{id}", "GET /charges"]);
-    await waitFor(() => expect(location).toBe("/custom-tools/invoices"));
-  });
-
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "re-importing a spec previews the operations it adds and removes"
-  test("re-import previews what it adds and removes and applies only on confirm", async () => {
-    api.previewReimport.mockResolvedValue({
-      title: "Billing API",
-      version: "2.4.0",
-      added: [
-        {
-          key: "GET /refunds",
-          summary: null,
-          tool: { name: "list_refunds", method: "GET", path: "/refunds" },
-        },
-        {
-          key: "POST /refunds",
-          summary: null,
-          tool: { name: "create_refund", method: "POST", path: "/refunds" },
-        },
-      ],
-      removed: ["create_invoice"],
-      kept: ["get_invoice"],
-      warnings: [],
-    });
-    api.applyReimport.mockResolvedValue(billing);
-    renderAt("/custom-tools/billing");
-    fireEvent.click(await screen.findByRole("button", { name: "Re-import" }));
-    const dialog = await screen.findByRole("dialog", { name: "Re-import billing" });
-    const preview = await within(dialog).findByTestId("reimport-preview");
-    expect(within(preview).getByText("GET /refunds")).toBeInTheDocument();
-    expect(within(preview).getByText("create_invoice (removed)")).toBeInTheDocument();
-    expect(within(preview).getByText(/1 tool kept/)).toBeInTheDocument();
-    expect(within(preview).getByRole("checkbox", { name: "Add list_refunds" })).toBeChecked();
-    expect(within(preview).getByRole("checkbox", { name: "Add create_refund" })).not.toBeChecked();
-    expect(api.applyReimport).not.toHaveBeenCalled();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
-    await waitFor(() =>
-      expect(api.applyReimport).toHaveBeenCalledWith("billing", ["GET /refunds"], undefined),
-    );
+    await waitFor(() => expect(location()).toBe("/custom-tools/search-api"));
   });
 });

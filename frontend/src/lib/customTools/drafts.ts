@@ -51,6 +51,25 @@ export function authLine(header: string, prefix: string): string {
   return p ? `${header}: ${p}` : `${header}:`;
 }
 
+/** The auth headers the Auth header select offers; anything else is Custom. */
+export const AUTH_PRESETS = [
+  { key: "bearer", header: "Authorization", prefix: "Bearer" },
+  { key: "token", header: "Authorization", prefix: "Token" },
+  { key: "basic", header: "Authorization", prefix: "Basic" },
+  { key: "apiKey", header: "X-API-Key", prefix: "" },
+] as const;
+
+export type AuthPreset = (typeof AUTH_PRESETS)[number]["key"] | "custom";
+
+/** Which preset a draft's header and prefix are, or `custom`. */
+export function presetOf(draft: Pick<AuthDraft, "header" | "prefix">): AuthPreset {
+  const prefix = draft.prefix.trim();
+  const found = AUTH_PRESETS.find(
+    (p) => p.header.toLowerCase() === draft.header.trim().toLowerCase() && p.prefix === prefix,
+  );
+  return found ? found.key : "custom";
+}
+
 /** A saved tool as the draft its editor starts from. */
 export function draftOf(tool: CustomTool): CustomToolIn {
   return {

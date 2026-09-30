@@ -89,21 +89,17 @@ export function McpServerLogView({ serverUid, isHttp }: Props) {
         </p>
       ) : (
         <pre
-          className="min-h-0 flex-1 overflow-auto rounded-md border border-border-subtle bg-surface-sunken p-3 font-mono text-2xs leading-relaxed"
+          className="min-h-0 flex-1 overflow-auto rounded-lg border border-border-subtle bg-surface-sunken p-3 font-mono text-xs leading-relaxed"
           data-testid="mcp-server-log"
         >
           {lines.map((l, i) => (
-            <div key={i} className="flex gap-3">
-              <span className="w-24 shrink-0 text-text-subtle">{l.at ? shortTime(l.at) : ""}</span>
-              <span
-                className={cn(
-                  "w-12 shrink-0",
-                  l.source === "coffer" ? "text-accent" : "text-text-muted",
-                )}
-              >
-                {l.source}
-              </span>
-              <span className="min-w-0 whitespace-pre-wrap break-all text-text">{l.text}</span>
+            <div
+              key={i}
+              className={cn("flex gap-3", ERROR_LINE.test(l.text) ? "text-danger" : "text-text")}
+            >
+              <span className="w-24 shrink-0">{l.at ? shortTime(l.at) : ""}</span>
+              <span className="w-14 shrink-0">{l.source}</span>
+              <span className="min-w-0 whitespace-pre-wrap break-all">{l.text}</span>
             </div>
           ))}
         </pre>

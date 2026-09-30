@@ -1,7 +1,7 @@
 // src/components/custom-tools/ToolArgumentsField.tsx — the tool's arguments: the top-level properties of its
 // input schema, one row each (name, type, required, the description agents read).
 import { useTranslation } from "react-i18next";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,8 +30,8 @@ export function ToolArgumentsField({ args, onChange }: Props) {
     <div className="flex flex-col gap-1.5">
       <Label>{t("customTools.editor.arguments")}</Label>
       {args.length > 0 ? (
-        <div className="rounded-lg border border-border-subtle">
-          <div className="grid grid-cols-[1fr_7rem_4rem_1.5fr_2rem] gap-2 border-b border-border-subtle px-2 py-1.5 text-2xs font-semibold text-text-subtle">
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-[1fr_7rem_4rem_1.5fr_2rem] gap-2 text-2xs font-semibold text-text-muted">
             <span>{t("customTools.editor.argName")}</span>
             <span>{t("customTools.editor.argType")}</span>
             <span>{t("customTools.editor.argRequired")}</span>
@@ -39,10 +39,7 @@ export function ToolArgumentsField({ args, onChange }: Props) {
             <span />
           </div>
           {args.map((row, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[1fr_7rem_4rem_1.5fr_2rem] items-center gap-2 border-b border-border-subtle px-2 py-1.5 last:border-b-0"
-            >
+            <div key={i} className="grid grid-cols-[1fr_7rem_4rem_1.5fr_2rem] items-center gap-2">
               <Input
                 className="font-mono"
                 value={row.name}
@@ -105,16 +102,13 @@ export function ToolArgumentsField({ args, onChange }: Props) {
           ))}
         </div>
       ) : null}
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="sm"
-        className="w-fit"
+        className="w-fit text-xs font-label text-accent-text hover:underline"
         onClick={() => onChange([...args, emptyArg()])}
       >
-        <Plus aria-hidden />
         {t("customTools.editor.addArgument")}
-      </Button>
+      </button>
     </div>
   );
 }

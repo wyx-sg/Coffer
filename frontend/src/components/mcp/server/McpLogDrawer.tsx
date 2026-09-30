@@ -46,10 +46,10 @@ export function McpLogDrawer({ resource, agents, summary, tab, onTabChange, onCl
                 {t("mcp.page.log.title", { name: resource.name })}
               </DialogPrimitive.Title>
               <p className="text-xs text-text-muted">
-                {isHttp
-                  ? t("mcp.page.log.subtitleHttp")
-                  : summary
-                    ? t("mcp.page.log.subtitle", { calls: summary.calls, errors: summary.errors })
+                {tab !== "log" && summary
+                  ? t("mcp.page.log.subtitle", { calls: summary.calls, errors: summary.errors })
+                  : isHttp
+                    ? t("mcp.page.log.subtitleHttp")
                     : t("mcp.page.log.subtitleStdio")}
               </p>
             </div>
@@ -71,10 +71,16 @@ export function McpLogDrawer({ resource, agents, summary, tab, onTabChange, onCl
               </TabsTrigger>
               <TabsTrigger value="log">{t("mcp.page.log.logTab")}</TabsTrigger>
             </TabsList>
-            <TabsContent value="calls" className="flex min-h-0 flex-1 flex-col pt-4">
+            <TabsContent
+              value="calls"
+              className="flex min-h-0 flex-1 flex-col pt-4 data-[state=inactive]:hidden"
+            >
               <McpCallsLog serverUid={resource.uid} agents={agents} />
             </TabsContent>
-            <TabsContent value="log" className="flex min-h-0 flex-1 flex-col pt-4">
+            <TabsContent
+              value="log"
+              className="flex min-h-0 flex-1 flex-col pt-4 data-[state=inactive]:hidden"
+            >
               <McpServerLogView serverUid={resource.uid} isHttp={isHttp} />
             </TabsContent>
           </Tabs>

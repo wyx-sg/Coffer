@@ -33,12 +33,12 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
-.venv
-.venv/
-venv/
-env/
-ENV/
+# Virtual environments (repo root only: a source folder named env/ must not vanish)
+/.venv
+/venv/
+/env/
+/ENV/
+/backend/.venv
 
 # Pytest / coverage
 .pytest_cache/

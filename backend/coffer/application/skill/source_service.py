@@ -16,7 +16,7 @@ import contextlib
 import logging
 from typing import IO
 
-from coffer.application.skill import source_stage_ops, update_ops
+from coffer.application.skill import source_change_ops, source_stage_ops, update_ops
 from coffer.application.skill.ports import ArchiveReaderPort, GitSourcePort, SourceStatusRepoPort
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.staging import ImportStage, StagingRegistry
@@ -81,6 +81,13 @@ class SkillSourceService:
 
     async def preview(self, uid: str) -> update_ops.UpdatePreview:
         return await update_ops.preview(self, await self.skills.get_skill(uid))
+
+    async def change_source(
+        self, uid: str, url: str, ref: str | None, path: str | None
+    ) -> update_ops.UpdatePreview:
+        return await source_change_ops.preview_change(
+            self, await self.skills.get_skill(uid), url, ref, path
+        )
 
     async def compare(self, uid: str, stage_id: str, path: str) -> update_ops.CompareView:
         return update_ops.compare(self, await self.skills.get_skill(uid), stage_id, path)

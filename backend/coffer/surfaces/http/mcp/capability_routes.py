@@ -13,9 +13,10 @@ The transient upstream health-check route (POST /{uid}/test) lives in
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
@@ -138,6 +139,14 @@ async def _capability_list(
 @router.get("/{uid}/capabilities", response_model=CapabilityListOut)
 async def list_capabilities(
     uid: str,
+    saved: bool = Query(
+        default=False,
+        description=(
+            "Answer from the saved switches only, without reaching the server: the "
+            "list a failing, off or not-yet-answering server's page shows at once "
+            "(``from_cache`` true; empty lists when nothing was ever discovered)."
+        ),
+    ),
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
     prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
@@ -150,6 +159,16 @@ async def list_capabilities(
     by an opaque uid would be unreadable.
     """
     resource = await require_mcp_server(uid, resource_service)
+    if saved:
+        cached = await cached_capability_list(resource, prefs)
+        return cached or CapabilityListOut(
+            server_name=resource.name,
+            tools=[],
+            resources=[],
+            prompts=[],
+            fetched_at=datetime.now(tz=UTC),
+            from_cache=True,
+        )
     return await _capability_list(resource, discovery, prefs)
 
 

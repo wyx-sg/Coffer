@@ -1,7 +1,12 @@
-// frontend/src/components/mcp/add/KeyValueRows.tsx — editable KEY / value rows
-// with an optional Secret toggle: a stdio server's environment, an HTTP
-// server's headers. Used by the Add server form and by the edit dialog (which
-// keeps stored secrets in CredentialRowEditor and so turns the toggle off).
+// frontend/src/components/mcp/add/KeyValueRows.tsx — editable KEY / value rows,
+// each marked Secret or Plain: a stdio server's environment, an HTTP server's
+// headers (boards Mcp-EditStdio / Mcp-Edit / Mcp-Add-TestPassed). Shared by the
+// Add server form and the edit dialog.
+//
+// A Plain row holds its value. A Secret row holds a typed value for a new
+// secret — or, with `storedSecrets` on (the edit dialog), may cite a stored
+// secret instead (`ParsedEnvVar.ref`, see `components/mcp/env/SecretValueCell`).
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -9,8 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Switch } from "@/components/ui/switch";
+import { Segmented } from "@/components/ui/segmented";
+import { useSecretNames } from "@/lib/hooks/useSecretNames";
 import type { ParsedEnvVar } from "@/lib/mcp/pasteParse";
+import { SecretValueCell } from "../env/SecretValueCell";
+
+type Kind = "secret" | "plain";
 
 interface Props {
   idPrefix: string;
@@ -18,90 +27,143 @@ interface Props {
   label: string;
   rows: ParsedEnvVar[];
   onChange: (rows: ParsedEnvVar[]) => void;
-  /** Offer the Secret toggle (the add form); off in the edit dialog. */
-  secretToggle?: boolean;
   keyPlaceholder: string;
+  /** Let a Secret row cite a stored secret (its own, or one on the Secrets
+   *  page) instead of a typed value. Off in the Add form. */
+  storedSecrets?: boolean;
+  /** Index of a row whose value input takes focus when first shown. */
+  focusRow?: number;
+  /** The add button's label; defaults to "Add variable". */
+  addLabel?: string;
 }
 
-export function KeyValueRows({
-  idPrefix,
-  label,
-  rows,
-  onChange,
-  secretToggle = true,
-  keyPlaceholder,
-}: Props) {
+export function KeyValueRows(props: Props) {
+  const { idPrefix, label, rows, onChange, keyPlaceholder, storedSecrets = false } = props;
   const { t } = useTranslation();
+  const [focusRow, setFocusRow] = useState<number | undefined>(props.focusRow);
   const update = (i: number, patch: Partial<ParsedEnvVar>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const kinds = [
+    { value: "secret" as const, label: t("mcp.add.secret") },
+    { value: "plain" as const, label: t("mcp.env.plain") },
+  ];
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      {rows.map((row, i) => (
-        <div key={`${idPrefix}-${i}`} className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Input
-              aria-label={t("mcp.add.rowKey", { label })}
-              value={row.key}
-              placeholder={keyPlaceholder}
-              className="flex-1 font-mono text-xs"
-              spellCheck={false}
-              onChange={(e) => update(i, { key: e.target.value })}
-            />
-            {row.isSecret ? (
-              <PasswordInput
-                aria-label={t("mcp.add.rowValue", { key: row.key || label })}
-                containerClassName="flex-1"
-                value={row.value}
-                placeholder={t("mcp.add.secretValue")}
-                onChange={(e) => update(i, { value: e.target.value })}
-              />
-            ) : (
+      <Label className="block">{label}</Label>
+      {rows.map((row, i) => {
+        const key = row.key || label;
+        return (
+          <div key={`${idPrefix}-${i}`} className="space-y-1">
+            <div className="flex items-center gap-2">
               <Input
-                aria-label={t("mcp.add.rowValue", { key: row.key || label })}
-                value={row.value}
-                className="flex-1 font-mono text-xs"
+                aria-label={t("mcp.add.rowKey", { label })}
+                value={row.key}
+                placeholder={keyPlaceholder}
+                className="min-w-0 flex-1 font-mono text-xs"
                 spellCheck={false}
-                onChange={(e) => update(i, { value: e.target.value })}
+                onChange={(e) => update(i, { key: e.target.value })}
               />
-            )}
-            {secretToggle ? (
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-text-muted">
-                <Switch
-                  checked={row.isSecret}
-                  aria-label={t("mcp.add.secretFor", { key: row.key || label })}
-                  onCheckedChange={(on) => update(i, { isSecret: on })}
-                />
-                {t("mcp.add.secret")}
-              </label>
+              <Segmented<Kind>
+                label={t("mcp.env.kindFor", { key })}
+                value={row.isSecret ? "secret" : "plain"}
+                options={kinds}
+                className="h-control-md items-center"
+                onChange={(k) => update(i, { isSecret: k === "secret" })}
+              />
+              <ValueCell
+                row={row}
+                label={label}
+                storedSecrets={storedSecrets}
+                autoFocus={focusRow === i}
+                onChange={(patch) => update(i, patch)}
+                onReplace={() => setFocusRow(i)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("mcp.add.removeRow", { key })}
+                onClick={() => onChange(rows.filter((_, j) => j !== i))}
+              >
+                <Trash2 />
+              </Button>
+            </div>
+            {row.isSecret &&
+            row.key.trim() !== "" &&
+            row.value === "" &&
+            !row.ref &&
+            !row.storedRef ? (
+              <p className="text-xs text-text-muted">
+                {t("mcp.add.secretMissing", { key: row.key })}
+              </p>
             ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("mcp.add.removeRow", { key: row.key || label })}
-              onClick={() => onChange(rows.filter((_, j) => j !== i))}
-            >
-              <Trash2 />
-            </Button>
           </div>
-          {row.isSecret && secretToggle ? (
-            <p className="text-xs text-text-muted">
-              {row.value === ""
-                ? t("mcp.add.secretMissing", { key: row.key })
-                : t("mcp.add.secretHint")}
-            </p>
-          ) : null}
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange([...rows, { key: "", value: "", isSecret: false }])}
-      >
-        <Plus /> {t("mcp.add.addRow")}
-      </Button>
+        );
+      })}
+      <div className="space-y-1">
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="h-auto px-0 py-0.5"
+          onClick={() => onChange([...rows, { key: "", value: "", isSecret: false }])}
+        >
+          <Plus /> {props.addLabel ?? t("mcp.env.addVariable")}
+        </Button>
+        <p className="text-xs text-text-muted">{t("mcp.env.hint")}</p>
+      </div>
     </div>
   );
+}
+
+interface CellProps {
+  row: ParsedEnvVar;
+  label: string;
+  storedSecrets: boolean;
+  autoFocus: boolean;
+  onChange: (patch: Partial<ParsedEnvVar>) => void;
+  onReplace: () => void;
+}
+
+function ValueCell({ row, label, storedSecrets, autoFocus, onChange, onReplace }: CellProps) {
+  const { t } = useTranslation();
+  const key = row.key || label;
+  if (!row.isSecret) {
+    return (
+      <Input
+        aria-label={t("mcp.add.rowValue", { key })}
+        value={row.value}
+        className="min-w-0 flex-[1.3] font-mono text-xs"
+        spellCheck={false}
+        onChange={(e) => onChange({ value: e.target.value })}
+      />
+    );
+  }
+  if (storedSecrets) {
+    return (
+      <StoredCell
+        row={row}
+        label={label}
+        autoFocus={autoFocus}
+        onChange={onChange}
+        onReplace={onReplace}
+      />
+    );
+  }
+  return (
+    <PasswordInput
+      aria-label={t("mcp.add.rowValue", { key })}
+      containerClassName="min-w-0 flex-[1.3]"
+      value={row.value}
+      placeholder={t("mcp.add.secretValue")}
+      onChange={(e) => onChange({ value: e.target.value })}
+    />
+  );
+}
+
+/** The picker cell, with the Secrets-page list — fetched only where it is on. */
+function StoredCell(props: Omit<CellProps, "storedSecrets">) {
+  const { names, data } = useSecretNames();
+  const present = data ? new Set(data.refs.filter((r) => r.present).map((r) => r.ref)) : undefined;
+  return <SecretValueCell {...props} secretNames={names} present={present} />;
 }

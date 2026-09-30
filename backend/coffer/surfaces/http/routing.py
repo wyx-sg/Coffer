@@ -24,6 +24,7 @@ from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.agent_connection_routes import router as agent_connection_router
 from coffer.surfaces.http.agent_hooks_routes import router as agent_hooks_router
+from coffer.surfaces.http.agent_mcp_import_routes import router as agent_mcp_import_router
 from coffer.surfaces.http.agent_native_memory_routes import (
     router as agent_native_memory_router,
 )
@@ -50,7 +51,9 @@ from coffer.surfaces.http.fs_routes import router as fs_router
 from coffer.surfaces.http.internal_engine_routes import router as internal_engine_router
 from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
+from coffer.surfaces.http.mcp.builtin_routes import router as mcp_builtin_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
+from coffer.surfaces.http.mcp.config_test_routes import router as mcp_config_test_router
 from coffer.surfaces.http.mcp.custom_tool_routes import router as custom_tool_router
 from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as mcp_invocation_aggregate_router,
@@ -68,6 +71,7 @@ from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
 from coffer.surfaces.http.settings_routes import router as settings_router
+from coffer.surfaces.http.skill_copy_routes import router as skill_copy_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.skill_source_routes import router as skill_source_router
@@ -99,6 +103,8 @@ def include_all_routers(app: FastAPI) -> None:
         sync_router,  # spec vault-sync
         internal_engine_router,  # spec internal-engine
         # agent + skill (specs agent-registry/skill-manager)
+        # Before agent_router: its `/{uid}` routes would otherwise see `mcp-import`.
+        agent_mcp_import_router,
         agent_router,
         agent_config_router,
         agent_connection_router,
@@ -108,6 +114,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_transcript_router,
         agent_unmanaged_skill_router,
         fs_router,
+        skill_copy_router,  # before skill_router: /skills/orphans is not a uid
         skill_router,
         skill_source_router,
         skill_file_router,
@@ -116,6 +123,8 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_protocol_router,
         mcp_capability_router,
         mcp_server_test_router,
+        mcp_config_test_router,  # testing a config before it is added (nothing saved)
+        mcp_builtin_router,  # Coffer's own `coffer` server, read-only
         custom_tool_router,  # spec mcp-gateway: custom-tool groups
         mcp_invocation_router,
         mcp_invocation_aggregate_router,

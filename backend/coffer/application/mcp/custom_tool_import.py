@@ -32,6 +32,50 @@ from coffer.domain.mcp.openapi_import import (
 
 
 @dataclass(frozen=True)
+class ToolChange:
+    """A kept tool whose request a re-import would refresh."""
+
+    name: str
+    method: str
+    path: str
+    new_required: list[str]
+    request_changed: bool
+
+
+def _required(schema: dict[str, object]) -> set[str]:
+    required = schema.get("required")
+    return {r for r in required if isinstance(r, str)} if isinstance(required, list) else set()
+
+
+def changed_tools(transport: HttpApiTransport, reading: OpenApiReading) -> list[ToolChange]:
+    """The kept tools whose operation the spec now describes differently: a new
+    required argument, or a moved method, path or body template."""
+    in_doc = reading.by_key()
+    out: list[ToolChange] = []
+    for tool in transport.tools:
+        fresh = in_doc.get(tool.operation) if tool.operation else None
+        if fresh is None:
+            continue
+        new_required = sorted(_required(fresh.tool.input_schema) - _required(tool.input_schema))
+        request_changed = (fresh.tool.method, fresh.tool.path, fresh.tool.body_template) != (
+            tool.method,
+            tool.path,
+            tool.body_template,
+        )
+        if new_required or request_changed:
+            out.append(
+                ToolChange(
+                    name=tool.name,
+                    method=fresh.tool.method,
+                    path=fresh.tool.path,
+                    new_required=new_required,
+                    request_changed=request_changed,
+                )
+            )
+    return out
+
+
+@dataclass(frozen=True)
 class ImportReading:
     reading: OpenApiReading
     kind: Literal["url", "file"]
@@ -85,11 +129,11 @@ class CustomToolImporter:
 
     async def preview(
         self, name: str, *, document: str | None
-    ) -> tuple[OpenApiReading, ReimportPlan]:
-        """What a re-import would add, remove and keep — nothing is written."""
+    ) -> tuple[OpenApiReading, ReimportPlan, list[ToolChange]]:
+        """What a re-import would add, remove, keep and change — nothing is written."""
         _, transport = await self._service.group(name)
         reading = await self._reread(transport, name, document)
-        return reading, plan_reimport(transport, reading)
+        return reading, plan_reimport(transport, reading), changed_tools(transport, reading)
 
     async def apply(
         self, name: str, *, document: str | None, add_keys: set[str], actor: str
@@ -105,4 +149,4 @@ class CustomToolImporter:
         return await self._service.view(name)
 
 
-__all__ = ["CustomToolImporter", "ImportReading"]
+__all__ = ["CustomToolImporter", "ImportReading", "ToolChange", "changed_tools"]

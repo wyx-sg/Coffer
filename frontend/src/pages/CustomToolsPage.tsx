@@ -1,18 +1,20 @@
 // src/pages/CustomToolsPage.tsx — the Custom tools page (/custom-tools, /custom-tools/:group): the groups of
-// HTTP API tools sectioned by health beside the selected group, one Add custom tool action.
+// HTTP API tools sectioned by health beside the selected group, one Add custom tool action. With no
+// group yet it is the first-run panel alone, no list.
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Wrench } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddCustomToolDialog } from "@/components/custom-tools/AddCustomToolDialog";
 import { CustomToolsFirstRun } from "@/components/custom-tools/CustomToolsFirstRun";
 import { GroupList } from "@/components/custom-tools/GroupList";
 import { GroupPane } from "@/components/custom-tools/GroupPane";
-import type { AddWay } from "@/components/custom-tools/addFlow";
+import type { AddStart } from "@/components/custom-tools/addFlow";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
@@ -22,33 +24,37 @@ export function CustomToolsPage() {
   const navigate = useNavigate();
   const { group: selected } = useParams<{ group?: string }>();
   const { data, isPending, error, refetch } = useCustomToolGroups();
-  const [adding, setAdding] = useState<AddWay | null>(null);
+  const [adding, setAdding] = useState<AddStart | null>(null);
   const groups = data ?? [];
   const firstRun = !isPending && !error && groups.length === 0;
   const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
 
-  const addButton = (
-    <Button onClick={() => setAdding("import")}>
-      <Plus aria-hidden />
-      {t("customTools.add.action")}
-    </Button>
-  );
-
   return (
     <div className="relative -mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="border-b border-border-subtle px-6 py-5 md:px-8">
+      <div className="shrink-0 border-b border-border-subtle px-6 py-3">
         <PageHeader
-          icon={Wrench}
           title={t("customTools.title")}
-          subtitle={
-            data && groups.length > 0
-              ? t("customTools.list.counts", {
-                  groups: t("customTools.list.groupCount", { count: groups.length }),
-                  tools: t("customTools.list.toolCount", { count: toolCount }),
-                })
-              : undefined
+          badges={
+            <>
+              {groups.length > 0 ? (
+                <span className="text-sm text-text-muted">
+                  {t("customTools.list.counts", {
+                    groups: t("customTools.list.groupCount", { count: groups.length }),
+                    tools: t("customTools.list.toolCount", { count: toolCount }),
+                  })}
+                </span>
+              ) : null}
+              <HelpTip>
+                <p className="text-xs text-text-muted">{t("customTools.pageHelp")}</p>
+              </HelpTip>
+            </>
           }
-          actions={addButton}
+          actions={
+            <Button onClick={() => setAdding({})}>
+              <Plus aria-hidden />
+              {t("customTools.add.action")}
+            </Button>
+          }
         />
       </div>
       {error ? (
@@ -64,7 +70,7 @@ export function CustomToolsPage() {
           }
         />
       ) : firstRun ? (
-        <div className="overflow-y-auto">
+        <div className="flex flex-1 items-center overflow-y-auto">
           <CustomToolsFirstRun onAdd={setAdding} />
         </div>
       ) : (
@@ -84,7 +90,11 @@ export function CustomToolsPage() {
           }
           detail={
             selected ? (
-              <GroupPane key={selected} name={selected} />
+              <GroupPane
+                key={selected}
+                name={selected}
+                onAddRequest={() => setAdding({ target: selected, step: "request" })}
+              />
             ) : (
               <EmptyState
                 icon={Wrench}
@@ -98,8 +108,8 @@ export function CustomToolsPage() {
       <AddCustomToolDialog
         open={adding !== null}
         onOpenChange={(open) => !open && setAdding(null)}
-        groups={groups.map((g) => g.name)}
-        initialWay={adding ?? "import"}
+        groups={groups}
+        start={adding ?? undefined}
       />
     </div>
   );

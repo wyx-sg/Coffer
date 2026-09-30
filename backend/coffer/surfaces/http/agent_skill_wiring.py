@@ -18,6 +18,8 @@ from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
+from coffer.application.agent.mcp_import import McpImportService
+from coffer.application.agent.mcp_import_plan import McpImportPlanner
 from coffer.application.agent.mcp_reconcile import McpEntryTarget
 from coffer.application.agent.mcp_service import AgentMcpService, default_shim_resolver
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
@@ -56,6 +58,7 @@ from coffer.surfaces.http.agent_dependencies import (
     set_agent_service,
     set_auto_detect_service,
 )
+from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
 from coffer.surfaces.http.skill_dependencies import set_skill_service
 from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
@@ -208,6 +211,22 @@ def wire_agent_and_skill_kinds(
         store=config_file_store,
         resource_service=resource_svc,
         credentials=credential_store,
+    )
+    # Import from your agents: a dry-run plan (with the reconciler's pending
+    # coffer-entry changes) and the apply that performs it.
+    import_planner = McpImportPlanner(
+        entries=agent_mcp_entry_svc,
+        store=config_file_store,
+        resources=resource_svc,
+        reconciler=reconciler,
+    )
+    set_mcp_import_service(
+        McpImportService(
+            planner=import_planner,
+            entries=agent_mcp_entry_svc,
+            resources=resource_svc,
+            reconciler=reconciler,
+        )
     )
     agent_plugin_svc = AgentPluginService(
         agent_service=agent_svc,

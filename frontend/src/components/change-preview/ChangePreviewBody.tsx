@@ -1,6 +1,6 @@
 // src/components/change-preview/ChangePreviewBody.tsx
 // The body of the change preview for each state: computing, empty, ready (targets + diffs), applying, applied, failed.
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -56,9 +56,13 @@ function Empty() {
 function Review({
   items,
   summaries,
+  lead,
+  diffNote,
 }: {
   items: readonly ChangeItem[];
   summaries: readonly ChangeSummaryLine[];
+  lead?: ReactNode;
+  diffNote?: string;
 }) {
   const { t } = useTranslation();
   const diffs = items.filter((item) => item.diff && item.diff.length > 0);
@@ -73,6 +77,7 @@ function Review({
       <ChangeSummary items={items} />
       <div className="grid grid-cols-[330px_minmax(0,1fr)] items-start gap-5">
         <div className="flex min-w-0 flex-col gap-3">
+          {lead}
           <WhatWillHappen summaries={summaries} />
           <span className={LABEL}>
             {t("changePreview.changesHeading", { count: items.length })}
@@ -97,6 +102,7 @@ function Review({
               }}
             />
           ))}
+          {diffNote ? <p className="text-xs text-text-muted">{diffNote}</p> : null}
         </div>
       </div>
     </>
@@ -142,16 +148,20 @@ interface Props {
   state: ChangePreviewState;
   items: readonly ChangeItem[];
   summaries: readonly ChangeSummaryLine[];
+  /** Shown above "What will happen" while reviewing (a list of what was found, say). */
+  lead?: ReactNode;
+  /** A line under the diffs while reviewing. */
+  diffNote?: string;
 }
 
-export function ChangePreviewBody({ state, items, summaries }: Props) {
+export function ChangePreviewBody({ state, items, summaries, lead, diffNote }: Props) {
   switch (state) {
     case "computing":
       return <Computing />;
     case "empty":
       return <Empty />;
     case "ready":
-      return <Review items={items} summaries={summaries} />;
+      return <Review items={items} summaries={summaries} lead={lead} diffNote={diffNote} />;
     case "applying":
       return <ChangeTargetList items={items} mode="progress" />;
     case "applied":
