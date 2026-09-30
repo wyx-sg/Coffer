@@ -1,0 +1,202 @@
+---
+title: 设计理念
+description: Coffer 代码库遵守的规则——本地优先、规格即真相、统一的资源模型、派生状态、拉取式投递、生效范围归本机、密钥加密——每条都附上理由、在代码中的体现以及它排除了什么。
+---
+
+# 设计理念 {#design-philosophy}
+
+本页把 Coffer 背后的设计理念写成一组原则。具有约束力的规则本身——原则、约束、质量门禁和治理——在[原则](/zh/architecture/principles)页；本页解释它们背后的道理。每条都给出规则、它存在的原因、它在代码中的体现，以及它刻意排除了什么。在提出跨越边界的改动之前先读一读：代码里看起来随意的限制，大多是这些原则中的某一条在起作用。
+
+不变式本身归[原则](/zh/architecture/principles)页和 [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs) 下的能力规格管；具体决策背后的理由在[决策记录](/zh/architecture/decisions)里。
+
+## 一段话说清理念 {#the-philosophy-in-one-paragraph}
+
+Coffer 是**保管者，而不是所有者**。它把你的资产保存在你的机器上，通过智能体本来就会用的渠道交给它们，并确保卸掉 Coffer、关掉某个功能或丢了远端都不会让你损失任何东西。它偏好**一套机制、多处执行**，而不是多套机制：一个资源模型、一个生效范围判定、一把锁、一个日志读取器。它还把**契约当作产品**：规格怎么说，代码就必须怎么做，由构建中的门禁来检查。下面每条原则，都是这三个想法之一在系统某个部分上的应用。
+
+## 一览 {#at-a-glance}
+
+| 原则 | 一句话 |
+| --- | --- |
+| [本地优先](#local-first) | 你的机器是记录系统；唯一的远端是你自己拥有的，而且只是一个汇合点。 |
+| [规格即真相](#spec-as-truth) | OpenSpec 规格就是契约；和它不一致的代码是错的。 |
+| [所有用户管理的东西都是资源](#everything-user-managed-is-a-resource) | 每种类型共用同一套身份、生命周期、审计和生效范围；行为仍按类型各自实现。 |
+| [身份是不可变的 uid](#identity-is-an-immutable-uid) | 名字只是标签；引用存的是 uid。 |
+| [智能体的文件是真相来源](#agent-files-are-the-source-of-truth) | Coffer 在智能体状态所在的地方读取它，从不保留会偏移的副本。 |
+| [大块内容以文件为真相](#files-are-the-truth-for-bulk-content) | 知识和记忆都是普通 Markdown；没有任何东西为它们建索引、切块或做 embedding。 |
+| [拉取，而不是推送](#pull-not-push) | Coffer 把路径和目录摆在智能体面前；不在你背后注入上下文。 |
+| [生效范围归本机](#reach-is-machine-local) | 一个资源是否启用、对哪些智能体启用，由它生效的那台机器决定。 |
+| [每种类型在自己的咽喉点执行生效范围](#each-kind-enforces-reach-at-its-own-choke-point) | 一个判定函数，多个执行点，没有中央关卡。 |
+| [密钥静态存储时绝不是明文](#secrets-are-never-plaintext-at-rest) | 保险库里是 Fernet 密文文件，其他地方都只存引用。 |
+| [只检测，不拒绝](#detect-never-refuse) | 遇到版本不一致，说出来然后继续工作。 |
+| [关闭不删数据](#off-keeps-data) | 关掉一个功能只是把它藏起来；从不删除任何东西。 |
+| [第二次使用时再抽取](#extract-on-second-use) | 共享模块在第二个功能需要它时才创建，不提前。 |
+
+## 本地优先 {#local-first}
+
+**规则。** Coffer 保存的一切都在你的机器上，每台机器都持有完整的保险库。云服务只是模型和工具的提供方，从来不是保险库状态的记录系统。HTTP API 绑定在 `127.0.0.1`。
+
+**理由。** Coffer 保存的资产——API 密钥、私人笔记、你的智能体对你的环境学到的一切——恰恰是你不会交给第三方的东西。本地存储也没有可用性依赖：智能体每天的第一次工具调用不必等任何人的服务。
+
+**有边界的例外。** Coffer 可以把保险库同步到一个*你自己*拥有的 git 远端，让你自己的几台机器共用一个保险库，而不是各有一个。这个例外只在下面三个条件同时成立时才成立：
+
+1. **远端只是汇合点，从来不是记录系统。** 每台机器的本地保险库始终是权威且完整的，所以远端可以被删掉，再从任意一台机器重建。
+2. **密钥只以密文传输。** 主密钥离开一台机器的唯一途径，是一次明确的带外传输：桌面应用在在场验证之后写出一份密钥备份，在另一台机器上用 `coffer sync key import` 安装。
+3. **默认关闭**，并且只指向你配置的仓库。
+
+同步是双向的，但只在同步规格的安全规则下进行：git 在保险库之外计算合并，只应用干净的合并，任何冲突都会让这一轮停下来等你处理且不做任何改动，会丢失太多内容的一轮会停下来询问，每一轮都可以从它的快照回滚。
+
+**在代码中。** 守护进程在 [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py) 里绑定 `127.0.0.1`。消息渠道只通过守护进程主动发起的连接访问 Telegram 和 SeaTalk，所以回环 socket 是 Coffer 唯一监听的端口。同步远端默认不存在，密钥密文只有在你设置 `--with-secrets` 时才会被带上。
+
+**排除了。** 托管的 Coffer 端点；「Coffer 云」账号；任何丢了远端就丢数据的设计；整体覆盖保险库的同步；把保险库状态复制到厂商控制的服务上。
+
+## 规格即真相 {#spec-as-truth}
+
+**规则。** `openspec/specs/<capability>/spec.md` 下的规格就是产品契约。对外可见行为的改动，从 `openspec/changes/<id>/` 下的一个 OpenSpec 变更开始，和让它成立的代码一起合入，再归档进规格。如果代码和规格不一致，错的是代码。
+
+**理由。** Coffer 由人和 AI 编程智能体共同开发。智能体的水平取决于它能读到的契约，而写在 PR 描述或聊天记录里的契约，会话一结束就没了。由构建强制执行的规格，是每个未来的贡献者——人或智能体——都能依赖的契约。
+
+**在代码中。** 每条需求至少要有一个场景（`openspec validate --strict`），每个场景都必须被一个带 `acceptance` 标记的测试覆盖（[`scripts/audit_acceptance.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/audit_acceptance.py)）。线上契约是单向的：后端的 Pydantic 模型是对线上格式唯一的手写描述，生成器据此写出每份规格的 `contracts/api.openapi.yaml`，让线上格式的改动以一份经过评审的 diff 出现，前端的类型化客户端和线上类型再从这个文件生成。两边都没有手写的线上类型，所以编译器比较的是类型，而两份手写文档之间的门禁只能比较名字。按标题引用需求的地方由 [`scripts/check_spec_citations.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_spec_citations.py) 检查。
+
+**排除了。** 只存在于代码里的行为；描述意图而不是义务的「文档型」规格；契约没有声明的线上格式。见[规格驱动的工作流](/zh/contributing/spec-workflow)。
+
+## 所有用户管理的东西都是资源 {#everything-user-managed-is-a-resource}
+
+**规则。** 你管理的每个实体——MCP 服务器、智能体、技能、知识集、记忆分区、消息渠道、模型提供商——都是某种**类型**的一个**资源**。框架统一了身份、生命周期、审计、schema 校验和生效范围。它不统一行为：MCP 服务器怎么调用、技能怎么投递，完全留在各自的类型内部。
+
+**理由。** 每种类型都需要同样的东西：被命名、列出、编辑、启用、禁用、删除、审计和限定范围。把这些做七遍，代码更多，也多了七次偏移的机会。但如果框架连行为也想管——所有东西共用一个 `invoke()`——那就是在毫无共同点的东西上搭一个漏洞百出的抽象。
+
+**在代码中。** 每种类型一个冻结的 [`Kind`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) 描述符，一个与类型无关的 `ResourceService`，保险库里每个资源一个 JSON 文件（`resources/<kind>/<name>.json`），一个 `/api/v1/resources` 路由，一张 `audit_log`。与类型无关的核心用一个假类型来测试，并有一条导入契约禁止它导入任何真实类型。见[资源框架](/zh/architecture/resource-framework)。
+
+**排除了。** 通用的 `invoke` 方法；第三方插件系统（插件契约需要好几个具体实现来对照设计，而 Coffer 只服务一个用户）；按类型各自实现的增删改查、审计或范围。
+
+::: info 为什么这条原则是提前建好的
+Coffer 的一般规则是共享代码只在第二次使用时才抽取。资源框架是有意的例外：它是核心领域，不是横切的辅助工具；如果以后再从 MCP 专用代码里抽出来，就得同时重新建模审计表、路由和保留策略。见 [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)。
+:::
+
+## 身份是不可变的 uid {#identity-is-an-immutable-uid}
+
+**规则。** 资源的身份是它的 `uid`：一个不透明的 `uuid4().hex`，创建时生成一次，永不复用，在持有该资源的每台机器上都是同一个值。`name` 是标签，在类型内唯一，可以修改，除非智能体会引用它：MCP 服务器的名字（每个工具名的前缀）和技能的名字（智能体加载它的文件夹）一经注册就固定，智能体的名字就是它的类型（每种类型一个智能体）。名字可以自由修改的类型——提供商、消息渠道、知识集、记忆分区——还带一个可选的 `title` 用于显示。uid 写在资源自己的文件里，所以文件的路径和名字只是它的位置和标签；没有整数代理键。
+
+**理由。** 一旦保险库在多台机器间同步，标识符要回答的问题就是「那台机器上的这个东西，和这台机器上的那个东西是不是同一个？」名字回答不了，因为名字恰恰是你可以改的：一次改名会以「删除 + 创建」的形式穿过同步远端，把挂在旧记录上的一切都连带删掉。自增行号也回答不了，因为两台机器会把同一个号分给不同的资源。
+
+**在代码中。** `/api/v1/resources/{uid}` 定位每个资源；资源的 `scope` 和消息渠道的 `default_agent` 存的是智能体 uid；保险库把每个资源存成 `resources/<kind>/<name>.json`，uid 写在里面，所以被移动或改名的文件仍是同一个资源；改名只是 `PATCH` 上的一个普通字段，对声明了 `name_fixed` 的类型会以 `409 NAME_IMMUTABLE` 拒绝，带 `title` 的类型可以编辑 `title`。命令行仍然接受名字，由它自己解析成 uid，所以没人需要输入 UUID。
+
+**排除了。** `<kind>:<name>` 形式的标识符；按名字的跨资源引用；按类型各自的改名端点；用文件路径做任何东西的键。
+
+## 智能体的文件是真相来源 {#agent-files-are-the-source-of-truth}
+
+**规则。** 智能体自己的文件是这个智能体的真相来源。Coffer 在读取时，到智能体存放的位置读取配置文件、MCP 条目、插件、原生记忆和对话记录，从不把它们复制进 SQLite。它只写智能体有文档说明的那些接口，按白名单定位，原子写入并留一份 `.bak`。
+
+**理由。** 别人状态的副本，在对方改动的那一刻就偏移了，而智能体一直在改自己的状态。在读取时派生，意味着 Coffer 对智能体拥有什么永远不会搞错，卸载 Coffer 后每个智能体都和之前一样能用。
+
+**在代码中。** `agent` 类型只存一个配置目录和安装状态；其他一切都通过 [`infrastructure/agent/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent) 和 [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) 读取。Codex 的 TOML 用 `tomlkit` 编辑，保留注释和顺序。智能体的内部状态（例如 Claude Code 的 `installed_plugins.json`）只读；必须改到它的变更，交给智能体自己的命令行去做。记忆层读取每个智能体的原生记忆但从不写入；`~/.coffer/derived/memory/` 下的一切都是派生的、可重建的。见[记忆](/zh/architecture/memory)。
+
+**排除了。** 把智能体的配置镜像到 Coffer 自己的存储里；写入智能体的记忆文件；编辑没有文档的内部文件；任何在 Coffer 被移除后智能体就扛不住的改动。
+
+## 大块内容以文件为真相 {#files-are-the-truth-for-bulk-content}
+
+**规则。** 保险库的文件是配置的记录系统，`runs.db` 是历史的记录系统。大块用户内容——知识集和记忆分区——是磁盘上的普通 Markdown，这些文件是唯一的一份：没有任何东西为它们建索引、切块或做 embedding。
+
+**理由。** 派生索引必须和它的源头调和，而每次调和都是一个可能出错的地方。普通文件在你用自己的编辑器保存的那一刻就生效，每个智能体自己的 `Read` 和 `Grep` 都能读，能在 git 里 diff，Coffer 整个没了它们也还在。实测用量显示，智能体从不去用一个需要记着调用的检索工具，却一直在读文件。
+
+**在代码中。** 知识层不拥有任何表：一个知识集就是一个资源文件加一个目录。检索就是智能体自己的文件工具对绝对路径的操作；ripgrep 只作为一轮整理所用的进程内候选筛选器保留下来。一条导入契约禁止代码库引入向量存储和 embedding 库。见[知识](/zh/architecture/knowledge)和 [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)。
+
+**排除了。** 文档表；全文检索或向量索引；embedding 旁路服务；在任何其他存储里放一份文档副本。字面匹配只是占位，不是定论：语义检索可能会回来，但不会以文件副本的形式。
+
+## 拉取，而不是推送 {#pull-not-push}
+
+**规则。** Coffer 不会自动往智能体的会话里注入上下文。它把正确的路径和一份目录摆在模型面前，让模型自己读需要的东西。这份目录是一个技能：Coffer 自带的 `coffer-guide`，它常驻的描述写明了 Coffer、它的内置工具以及你的知识涵盖的主题，正文则包含使用手册和每篇知识文档的路径、标题和描述。
+
+**理由。** MCP 握手或会话启动 Hook 里的任何内容，不管需不需要，都要算到每个会话头上。技能的成本结构正好相反：它的简短描述始终在上下文里，正文在模型打开之前不花任何成本。所以常驻预算只花一次，花在一段模型可以用来匹配的描述上。
+
+**在代码中。** 网关握手的 `instructions` 上限为 800 个字符（[`application/mcp/gateway_instructions.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_instructions.py)）：Coffer 是什么、内置工具名、每个会话中被隐藏的上游工具数量，以及一个指向该技能的指针。`coffer-guide` 是一个普通的 `skill` 资源，由 [`application/knowledge/guide_render.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/guide_render.py) 渲染，由技能类型投递。Coffer 提供的唯一一项会话启动投递——记忆索引——是一个你按智能体显式安装、同样方式移除的 Hook，它每次触发都是一条审计事件。
+
+**排除了。** 悄悄安装的 Hook；没有审计记录就注入会话的上下文；把 Coffer 的输出写进智能体自己的记忆；分散在好几个常驻技能里的目录。
+
+## 生效范围归本机 {#reach-is-machine-local}
+
+**规则。** 一个资源的**生效范围**是它的 `enabled` 标志加上它的智能体 `scope`。生效范围在它生效的那台机器上设置，从不同步：保险库携带的是资源*是什么*、怎么配置，从不携带它对谁生效。
+
+**理由。** 同步的生效范围，会在你碰巧坐着的那台机器上，替你看不见的机器做设置；两台机器同时编辑它，会让一项权限经过文本合并，最后跑的那一轮悄悄决定另一台机器暴露什么。归本机的生效范围没有东西需要合并，也总能在它生效的地方验证。代价是明摆着的：一个资源第一次到达某台机器时，从该类型在那台机器上的默认生效范围开始。
+
+**在代码中。** 生效范围存在 `~/.coffer/local/reach.json`，在保险库仓库之外，所以根本不可能被提交或推送；资源文件里没有 `enabled` 或 `scope`。实验功能开关出于同样原因放在 `~/.coffer/daemon-config.json`。设置生效范围的地方都会写明这一点：每种类型的 `scope` 命令（例如 `coffer skill scope --help`）都说明范围只作用于本机。
+
+**排除了。** scope 里带机器 id；「最新写入者胜」的生效范围；任何因为另一台机器跑了一轮就改变的权限。
+
+## 每种类型在自己的咽喉点执行生效范围 {#each-kind-enforces-reach-at-its-own-choke-point}
+
+**规则。** 框架存储生效范围；每种类型在知道请求者身份的地方执行它。每个执行点都用同一个函数问同一个问题：[`domain/scope.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/scope.py) 里的 `is_active(scope, agent_uid)`。
+
+**理由。** 中央关卡必须挂在每种类型的读取路径上，还要懂每种类型对「使用」的理解。网关本来就知道是哪个智能体在要工具；技能投递本来就在遍历智能体；提供商投射本来就知道自己在写哪个配置文件。把检查放在这些地方，只多一次函数调用，不需要新机制。
+
+**在代码中。** `mcp_server` 在网关里过滤，`skill` 在投递调和里过滤，`provider` 在 `application/provider/targets.py` 里过滤，`channel`——它的 scope 是反过来的，列出它可以*驱动*的智能体——在它的智能体路由和运行时里过滤。身份不明的会话只匹配不受限的 scope，所以它看到的只会更少，不会更多。见[类型表](/zh/architecture/resource-framework#the-seven-kinds)。
+
+**排除了。** 生效范围求值器对象；黑名单（新智能体会悄悄获得访问权）；某种类型自己发明一个「哪些智能体」字段。
+
+## 密钥静态存储时绝不是明文 {#secrets-are-never-plaintext-at-rest}
+
+**规则。** 密钥只以 Fernet 密文存在，每个密钥一个文件，放在 `~/.coffer/vault/secret/` 下。明文只在内存中存在，从解密到消费它的进程启动或请求头注入之间，从不进入文件、日志、审计或任何结构化事件。其他所有代码持有的都是密钥**引用**。主密钥只由 `coffer.infrastructure.secret` 管理——默认是一个 `0600` 权限的文件 `~/.coffer/master.key`，你选择启用时则放在操作系统钥匙串里——这个模块也是唯一导入 `keyring` 的地方。
+
+**理由。** 信封加密让一个未签名、频繁重新构建的二进制完全不会弹出钥匙串提示，而钥匙串选项仍能防止有人离线复制 `~/.coffer/`。引用让每份配置文档都可以放心地审计、同步和显示。
+
+**在代码中。** 一条导入契约把 `keyring` 关在一处；另一条禁止命令行导入密钥存储，所以守护进程是唯一读取主密钥的进程。MCP 服务器的 schema 会拒绝看起来像令牌的静态 `env` 和请求头值。各类型提供一个 `audit_redactor`，让写进审计日志的配置不带任何含密钥的映射。见[安全模型](/zh/architecture/security)。
+
+**排除了。** 资源配置里放密钥；命令行在进程内解密；主密钥出现在保险库发布的任何东西里；为切换密钥存储方式而重新加密数据（移动的是主密钥，密文不动）。
+
+## 只检测，不拒绝 {#detect-never-refuse}
+
+**规则。** 客户端发现守护进程来自另一个构建时，说出来然后继续工作。它从不拒绝工作，也从不擅自杀掉或升级正在运行的守护进程。
+
+**理由。** 守护进程比附着在它上面的命令行和 shim 进程活得更久，所以升级之后版本不一致是正常状态。拒绝工作会让每个智能体的工具都坏掉，直到用户注意到；杀掉守护进程可能打断进行中的工作。一行同时写明两边版本和守护进程可执行文件的警告，让用户在自己选择的时刻重启。
+
+**在代码中。** `GET /api/v1/daemon/status` 报告 `version` 和 `executable`；每条命令行命令和 shim 都通过 [`infrastructure/daemon/version_skew.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/version_skew.py) 与自己的构建比较，并在 stderr 上打印警告；桌面壳显示一个重启入口。修复方法是 `coffer daemon restart`。
+
+同样的立场也用于 Coffer 能检测但不能安全解决的其他不匹配：被更新的构建迁移过的数据库会以 `DB_SCHEMA_TOO_NEW` 快速失败，而不是去猜；由更新的构建布局的同步远端会被拒绝，并提示升级。
+
+**排除了。** 自动更新；自动杀进程；悄悄继续用旧守护进程。
+
+## 关闭不删数据 {#off-keeps-data}
+
+**规则。** `main` 带着全部能力。还没准备好的功能被声明为实验功能，在 `stable` 构建中默认关闭。关掉一个功能会在所有界面上隐藏它；从不删除、迁移或改写它的数据，重新打开后从停下的地方继续。
+
+**理由。** 第二条发布分支会偏移，每次 rebase 都会冲突。运行时开关让维护者可以继续测试一切，同时只发布准备好的部分——而一个会毁掉数据的开关，会让试用一个功能变成单行道。
+
+**在代码中。** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) 为每个实验功能登记它拥有的路由前缀和资源类型；目前它是空的，因为同步、知识和记忆已在 1.0 转正。门禁在请求时执行：被关的路由返回 `404 FEATURE_DISABLED`，通用资源路由拒绝并隐藏该功能的类型，内置工具从 `tools/list` 中消失，后台任务跳过自己的这一轮。类型仍然注册，迁移始终运行。开关按机器设置，放在 `~/.coffer/daemon-config.json`。见[实验功能](/zh/guides/experimental-features)。
+
+**排除了。** 需要重启才生效的装配期门禁；存在同步保险库里的开关；功能关闭时删除其数据。
+
+## 第二次使用时再抽取 {#extract-on-second-use}
+
+**规则。** 横切模块只在第二个功能需要它时才抽取。两种类型都需要的代码，移到层根下一个与类型无关的包里；只有一种类型需要的代码，留在那个类型里面。
+
+**理由。** 只针对一个用例设计的抽象，要么过度贴合它，要么过于通用而约束不了任何东西。等到第二个调用方出现，共享的形状是被发现的，而不是被猜出来的。
+
+**在代码中。** 共享包恰好存在于两种类型交汇的地方：[`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net)（SSRF 防护）、[`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files)（智能体和记忆共用的对话记录读取器），以及 [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py)（智能体是否会运行某个 Hook，记忆会报告这一点，智能体类型的 Hook 列表也会显示）。跨类型的导入契约让任何其他共享都无法通过构建。资源框架是唯一声明过的例外，见上文。
+
+**排除了。** 投机性的「common」包；比调用方长得还快的工具模块；一种类型导入另一种类型的服务。
+
+## 这些原则如何组合在一起 {#how-the-principles-fit-together}
+
+这些原则分成三组，它们之间互相拉扯的地方都有明确的解决办法，而不是留给个人判断。
+
+| 组别 | 原则 | 保护的是什么 |
+| --- | --- | --- |
+| 保管 | 本地优先、智能体的文件是真相来源、大块内容以文件为真相、关闭不删数据、只检测不拒绝 | 无论 Coffer 发生什么——被卸载、功能被关、远端丢失、版本不一致——你的数据和智能体都照常工作。 |
+| 一套机制 | 一切都是资源、身份是 uid、生效范围归本机、每种类型在自己的咽喉点执行生效范围、第二次使用时再抽取 | 所有类型共有的行为只建一次，不会在类型之间偏移；各不相同的行为留在它该在的地方。 |
+| 契约优先 | 规格即真相、密钥静态存储时绝不是明文、拉取而不是推送 | Coffer 承诺什么、绝不会在你背后做什么，都写下来并由构建检查。 |
+
+有三处张力是靠一个声明过的、有边界的例外来解决的，而不是悄悄变通规则：
+
+- **本地优先与多台机器。** 保险库同步只以你自己拥有的汇合点形式允许，默认关闭，密钥以密文传输。见[本地优先](#local-first)。
+- **拉取而不是推送，与会话启动时的记忆。** 记忆索引是会话唯一会被递到手上的东西，通过一个你按智能体安装、同样方式移除、并能在审计日志里看到触发记录的 Hook。见[拉取，而不是推送](#pull-not-push)。
+- **第二次使用时再抽取，与共享的资源模型。** 资源框架在第二种类型出现之前就设计好了，因为以后再抽取就得同时重新建模审计、路由和保留策略。见[所有用户管理的东西都是资源](#everything-user-managed-is-a-resource)。
+
+如果一个提案需要第四个例外，那就是信号：应该用一个单独的 pull request 修订[原则](/zh/architecture/principles)，而不是在代码里加特例。
+
+## 相关页面 {#related}
+
+- [资源框架](/zh/architecture/resource-framework)
+- [分层与代码布局](/zh/architecture/layering)
+- [安全模型](/zh/architecture/security)
+- [决策记录](/zh/architecture/decisions)
+- [原则](/zh/architecture/principles)

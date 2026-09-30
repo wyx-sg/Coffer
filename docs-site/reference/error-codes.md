@@ -27,7 +27,7 @@ Every management API error has the same body, and every error response carries a
 
 `details` is empty unless the error has structured context: `reason` (a short
 machine-readable cause), `feature` (for `FEATURE_DISABLED`), or route-specific fields such
-as `doc_type`. See the [REST API reference](/reference/rest-api#errors).
+as `doc_type`.
 
 A code not listed in the daemon's status table falls back to HTTP `500`. The tables below
 give the status each code is actually sent with.
@@ -42,7 +42,7 @@ give the status each code is actually sent with.
 | `ORIGIN_NOT_ALLOWED` | 403 | The request carries an `Origin` that is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin. Defends against requests from other sites. | Open the UI from the daemon or the desktop app. To serve it from a dev origin, start the daemon with `COFFER_DEV_CORS=1` or list the origin in `COFFER_CORS_ORIGINS`. |
 | `BAD_REQUEST` | 400 | A route rejected the request (for example an invalid `X-Coffer-Actor` value or malformed JSON on `/mcp`). | Read `message`; fix the request. |
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's transcript sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
-| `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path against the [REST API reference](/reference/rest-api). |
+| `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json`. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
 | `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json`. |
 | `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
@@ -311,6 +311,5 @@ Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context 
 
 ## Related
 
-- [REST API reference](/reference/rest-api)
 - [Troubleshooting](/guides/troubleshooting)
 - [Observability](/architecture/observability) — trace ids, the daemon log and `coffer log`

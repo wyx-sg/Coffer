@@ -158,7 +158,7 @@ Run `make help` for the same list.
 | `make lock` | Refresh `backend/uv.lock` from `pyproject.toml` |
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
-| `make docs-reference` | Regenerate the CLI and REST API reference pages of this site |
+| `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
 | `make desktop-lint` | `cargo check` and `cargo clippy -D warnings` on the desktop crate |

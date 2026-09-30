@@ -1,0 +1,143 @@
+---
+title: 自定义工具
+description: 把 HTTP API 变成智能体可调用的工具——导入 OpenAPI 规范或手动定义一个请求，绑定密钥，选择每个工具对哪些智能体生效，并在保存前测试。
+---
+
+# 自定义工具 {#custom-tools}
+
+**自定义工具**就是 Coffer 替智能体发出的一个 HTTP 请求。不需要编写或运行 MCP 服务器：你描述这个请求——方法、路径、请求头、请求体和参数——每当智能体调用该工具时，Coffer 的网关就发出它，并在发出时加上你的 API 密钥。在智能体看来，自定义工具和任何 MCP 服务器的工具完全一样。
+
+自定义工具放在**分组**里。一个分组就是一个 API：它有一个智能体看作前缀的名字、一个 base URL、一个用于认证的密钥，以及一个默认生效范围。分组里的每个工具在 base URL 后面接上自己的路径。
+
+```mermaid
+flowchart LR
+    A["智能体"] -->|"billing__list_invoices"| G["Coffer 网关"]
+    G -->|"GET https://billing.example/v2/invoices<br/>Authorization: Bearer ••••"| API["Billing API"]
+    S[("密钥<br/>billing-token")] -.->|由网关添加| G
+```
+
+## 前提 {#prerequisites}
+
+- 守护进程正在运行，并且至少有一个智能体已接入 Coffer（见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)）。
+- 如果 API 需要 key，先把它存到[密钥页面](/zh/guides/secrets)。分组按名字引用它的密钥；除了 Coffer 发出的请求本身，值从不离开密钥存储。
+
+## 从 OpenAPI 规范添加分组 {#add-a-group-from-an-openapi-spec}
+
+在**自定义工具**页面，选择**添加自定义工具**。先选分组：选**新分组**，然后选**导入 OpenAPI 规范**，再点**继续**。（OpenAPI 导入总是创建新分组；已有分组只接受手动添加的请求。）
+
+1. 给分组起名——智能体看到的工具名是 `<group>__<tool>`，分组一旦创建，名字就固定了。
+2. 以 **URL** 或**文件**提供规范（JSON 或 YAML，OpenAPI 3.0 或 3.1，最大 5 MB），然后点**加载**。Coffer 会按规范的 tag 分组列出找到的每个操作。
+3. 勾选要变成工具的**操作**。读取类操作默认勾选；会修改数据的操作默认不勾选。**只选读取**会回到这个默认选择；筛选框可以缩短长列表。
+4. 检查**认证**（取自规范的 security scheme，例如 Bearer token），选择放进去的**密钥**，然后是**可用于**：分组默认对哪些智能体生效。base URL 来自规范的 `servers`；规范没写时，表单会让你填。
+5. 可选地**试运行一个操作**：在任何东西创建之前，对规范的 base URL 运行一次某个已勾选的操作（见[保存前测试](#test-before-you-save)）。
+6. **检查 N 个工具**会展示将要创建的分组：勾选的操作作为它的工具，其余标为**已跳过**。点**创建分组（N 个工具）**之前什么都不会保存。
+
+每个操作变成一个以其 `operationId` 命名的工具——`listInvoices` 变成 `billing__list_invoices`。路径参数和查询参数变成工具参数；JSON 请求体变成一个 `body` 参数。
+
+规范 URL 只从公网地址获取：Coffer 拒绝代你从回环、私有或链路本地地址的主机获取（见[安全 → 出站请求](/zh/architecture/security#outbound-requests)）。内部主机上的规范，请下载后以文件导入。
+
+命令行：
+
+```sh
+coffer tool add billing --openapi https://billing.example/openapi.json \
+  --secret billing-token                      # the GET operations
+coffer tool add billing --openapi ./billing.yaml --all-operations \
+  --base-url https://billing.example/v2 --secret billing-token
+coffer tool add billing --openapi ./billing.yaml \
+  --operation "GET /invoices" --operation "POST /refunds"
+```
+
+### 规范变化时重新导入 {#re-import-when-the-spec-changes}
+
+通过导入创建的分组会显示它的规范和获取时间，并提供**重新导入**（分组的 **⋯** 菜单里也有）。重新导入会再读一次规范，先列出所有变化：要**添加**的操作——读取类操作变成工具并开启；修改数据的操作会列出但不添加——规范**改动了**的工具（新增了必填参数、路径变了），以及因为操作已不存在而要**移除**的工具。点**应用 N 项改动**之前什么都不会变。没变的工具保留它们的开关、修改数据标记和生效范围覆盖；你手动添加的工具永远不会被移除。从文件导入的分组会再次要求提供文件。
+
+```sh
+coffer tool reimport billing                    # preview, then confirm
+coffer tool reimport billing --add-all --yes    # take every new operation
+coffer tool reimport billing --file ./billing.yaml --add "GET /charges"
+```
+
+## 手动添加请求 {#add-a-request-by-hand}
+
+选择**添加自定义工具**，再选它所属的分组：
+
+- **已有分组**——**继续**会打开**添加请求**，使用该分组的 base URL 和密钥。分组自己的**添加请求**按钮打开同一个表单。
+- **新分组**——选**手动添加一个请求**，然后填写分组：名字、base URL、认证请求头、密钥和默认生效范围。**创建分组**会进入它的第一个请求；分组和这个请求一起保存。
+
+请求表单需要填写：
+
+- **工具名称**——智能体看到的是 `<group>__<tool>`；添加后固定。
+- **请求**——方法和一个接在分组 base URL 后面的路径模板。花括号里的空位由参数填充：`/services/{service}/deploys?env={env}`。值总是会被编码，所以它永远改不了路径或主机；参数没给出的查询对会被省略。
+- **工具说明**——智能体读它来决定何时调用。
+- **修改数据**——POST、PUT、PATCH 和 DELETE 默认开启（见[下文](#tools-that-change-data)）。
+- **请求头**——分组的认证请求头从分组继承并显示；可为这个请求添加请求头，其中也可以用空位。
+- **请求体模板**——用于 POST、PUT 或 PATCH，是带空位的 JSON：`{"service": {service}, "note": "rollback by {user}"}`。引号外的空位变成参数的 JSON 值；引号内的变成文本。没有模板时，路径和请求头没用到的参数会以一个 JSON 对象发送。
+- **参数**——名字、类型、是否必填，以及给智能体看的描述。每个空位都必须是一个参数。
+
+点**添加到 `<group>`**之前什么都不会保存。保存后的工具会在分组页面的抽屉里打开，在那里编辑同样的字段（名字除外），以及它的**可用于**、一个**开关**和**删除工具**；点**保存**之前什么都不会变。
+
+```sh
+coffer tool op add deploy rollback --method POST \
+  --path "/services/{service}/rollback" \
+  --arg service:string:required:"Service name, e.g. web"
+```
+
+## 保存前测试 {#test-before-you-save}
+
+每个请求表单的最后都是**测试**：为每个参数填一个示例值，然后点**运行**。它按表单当前的内容运行一次请求，显示状态码、耗时、大小和响应体——或者 API 的错误响应体、超时（使用分组的超时设置）、连接失败，或在 1 MiB 处截断的响应，这些也正是智能体会拿到的。401 或 403 表示 API 拒绝了密钥。不保存任何东西，也不会记为智能体的调用。`coffer tool op test <group> <tool> --arg-value key=value` 在终端里做同样的事。
+
+**尚未保存**的分组里的请求测试时不带密钥：已存储的密钥只会发给已保存的分组，而且要在你批准之后（见下文）。它的 base URL 是在表单里填的，所以 Coffer 只在它是能解析的公网地址时才测试；回环、私有或无法解析的主机会报告为未测试——先添加工具，再从分组里测试。
+
+## 密钥与批准 {#secrets-and-approval}
+
+认证请求头的值就是你选择的密钥；Coffer 在工具自己的请求头之后把它加到每个请求上，所以没有工具能替换它。密钥从不出现在工具的描述或参数里，从不出现在智能体收到的内容里——响应里回显的密钥会显示为 `***`——也从不出现在任何日志里。
+
+把已存储的密钥发给一个分组，等于把它发到一个新地方，所以分组第一次使用它时，该密钥**会等待你在 Coffer 桌面应用里批准**（见[密钥 → 审批](/zh/guides/secrets#approvals)）。批准之前，分组显示*等待批准*，它的调用什么都不发送。修改分组的 base URL 或认证请求头会再次请求批准。`coffer tool add` 和 `coffer tool edit` 会打印 "waiting for approval in the Coffer app" 并以 `9` 退出，或用 `--wait` 等待。
+
+## 修改数据的工具 {#tools-that-change-data}
+
+每个工具都带有一个**修改数据**标记，除 GET 外的所有方法默认开启。Coffer 把它作为工具的 MCP annotations 传给智能体——只读的工具是 `readOnlyHint: true`，会写入的是 `readOnlyHint: false` 加 `destructiveHint: true`——这样每个智能体自己的审批提示都会作用于那些会改动东西的工具。对只做搜索的 POST 关掉它；对有副作用的 GET 打开它。
+
+## 选择每个工具对哪些智能体生效 {#choose-which-agents-reach-each-tool}
+
+分组和任何 MCP 服务器一样有生效范围：在它页面上的**可用于**，或用 `coffer tool scope <group> --agents claude-code`。每个工具都跟随它，除非你在工具编辑器里**覆盖**它（或用 `coffer tool op scope <group> <tool> --agents …`）。覆盖只为那一个工具缩小分组的生效范围——适合一堆无害操作里那一个危险操作——而且和所有生效范围一样，只保存在本机。
+
+每个工具还有一个开关（**全部开启 · 全部关闭**会切换分组里所有工具）。关闭的工具，或不在某个智能体生效范围内的工具，不会向那个智能体列出，调用也会被拒绝。
+
+## 自定义工具页面 {#the-custom-tools-page}
+
+还没有分组时，页面只展示自定义工具是怎么工作的以及两种添加方式，头部和页面里都有**添加自定义工具**。有了分组之后，列表把**需要处理**的分组放在最前——最近一次调用失败、密钥缺失或正在等待批准的分组——然后是正常的，最后是已关闭的。分组页面在一页里展示：
+
+- 带**编辑分组**和 **⋯** 菜单的头部：编辑分组、重新导入（导入创建的分组才有）、关闭和删除分组；
+- 它的**定义**——智能体看到什么（`billing__<tool>`）、生效范围、base URL、带密钥名字的认证请求头，以及它来自哪份规范；
+- 一行最近 24 小时的汇总：调用数、错误数和指向活动页面的链接；
+- **工具表**——每个工具的开关、方法和路径、修改数据标记、生效范围（分组默认值或覆盖值），以及它 24 小时内的调用和错误。选中一个工具会在抽屉里打开它的编辑器。
+
+## 调用是怎么发出的 {#how-a-call-is-made}
+
+智能体调用工具时，网关用参数渲染出请求，按分组的超时发送（默认 30 秒，最多 300 秒），**不跟随重定向**——重定向会连同它的 location 返回给智能体，这样密钥永远不会被带到你没配置的主机——并最多读取 1 MiB 的响应。智能体收到 `HTTP <status> <reason>`，后面跟着响应体；400 及以上的状态码作为工具错误返回。每次调用都会连同工具、时间、耗时和结果记在活动页面，从不记录参数或响应。
+
+## 命令参考 {#command-reference}
+
+| 命令 | 作用 |
+| --- | --- |
+| `coffer tool list [--json]` | 列出所有分组，失败的在前 |
+| `coffer tool show <group> [--json]` | 一个分组，含它的工具和最近 24 小时情况 |
+| `coffer tool add <group> …` | 创建分组，空的或带 `--openapi` |
+| `coffer tool edit <group> …` | 修改它的描述、base URL、请求头、认证或超时 |
+| `coffer tool rm <group>` | 删除分组及其工具（密钥保留） |
+| `coffer tool enable\|disable <group>` | 开启或关闭分组 |
+| `coffer tool scope <group>` | 查看或设置分组的生效范围 |
+| `coffer tool reimport <group>` | 预览并应用重新导入 |
+| `coffer tool op add\|edit\|rm <group> <tool>` | 管理单个工具 |
+| `coffer tool op enable\|disable <group> <tool>…` | 开启或关闭工具 |
+| `coffer tool op scope <group> <tool>` | 查看、缩小或清除单个工具的生效范围 |
+| `coffer tool op test <group> <tool>` | 用示例参数调用一次工具 |
+
+所有选项见 [CLI 参考](/zh/reference/cli#coffer-tool)。
+
+## 相关 {#related}
+
+- [MCP 服务器](/zh/guides/mcp-servers)——每个自定义工具都经过的网关。
+- [密钥](/zh/guides/secrets)——存放分组使用的 API 密钥。
+- [MCP 网关 → 自定义工具](/zh/architecture/mcp-gateway#custom-tools-the-http-api-transport)——这种传输如何工作。

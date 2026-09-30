@@ -5033,7 +5033,7 @@
       "title": "还没有技能需要命令",
       "description": "技能在 SKILL.md 的 requires: 里列出命令后，它们会带着版本和登录状态显示在这里。",
       "docs": "requires: 的用法",
-      "docsUrl": "https://wyx-sg.github.io/Coffer/guides/clis#declare-what-a-skill-needs"
+      "docsUrl": "https://wyx-sg.github.io/Coffer/zh/guides/clis#declare-what-a-skill-needs"
     },
     "detail": {
       "subtitle_one": "{{title}} · {{count}} 个技能需要",

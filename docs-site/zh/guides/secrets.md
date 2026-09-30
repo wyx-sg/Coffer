@@ -1,0 +1,257 @@
+---
+title: 密钥
+description: Coffer 如何让密钥远离它服务的智能体——明文只在桌面应用中出现，密钥发往新去处前需要批准——以及如何使用密钥页面、存入独立密钥、通过 coffer run 带着密钥运行命令、处理审批、查看谁在用某个密钥、把明文密钥文件移入存储，以及备份主密钥。
+---
+
+# 密钥 {#secrets}
+
+Coffer 替你的智能体保管密钥，而你的智能体以你的身份运行。本页解释 Coffer 在两者之间划的那条线，以及日常如何与它配合：存入不属于任何资源的密钥、带着它运行命令、处理 Coffer 发来的审批、查找谁在用某个密钥、把明文密钥文件移入存储，以及备份主密钥。
+
+资源自己的密钥——MCP 服务器的令牌、提供商的 Key——如何存入、引用、轮换和删除，见[密钥存储](/zh/guides/secret-store)。这一切背后的威胁模型见[安全模型](/zh/architecture/security)。
+
+## 用大白话说 {#the-idea-in-plain-words}
+
+编程智能体可能读到一个恶意的网页、issue 或 README，然后开始照着里面的指令做。这样的智能体用的是你的 shell：它能读你的文件、运行 `coffer`、调用 Coffer 的 API，和你完全一样。Coffer 不去阻止它配置 Coffer——替你把 Coffer 配好本来就是智能体的活。Coffer 保护的是**密钥**本身：
+
+1. **只有你，在桌面应用前，才能看到密钥的值。** 没有任何命令、REST 路由或 MCP 工具会返回已存储的值或主密钥。显示或复制一个值、备份主密钥，都只能在桌面应用里进行，而且每次都要单独通过 Touch ID 或登录密码验证。下一次显示会再问一遍。
+2. **密钥要去新的地方，必须先经你批准。** 把一个已有的密钥发往它从未去过的地方——新的 MCP 服务器、改过的命令行、另一个 git 远端——要等你在桌面应用里批准。批准之前，什么都不会发出去。
+3. **关掉这些保护，同样需要你在桌面应用前操作。** 没有任何环境变量、配置文件或参数能做到。
+4. **智能体拿到的是能力，不是钥匙。** 网关把 HTTP 服务器的令牌直接放进请求里，所以智能体看到的是工具的结果，从来看不到令牌。
+
+写入资源的密钥对所有入口都开放：能提供值的人本来就拥有它。新增独立密钥，或给正在使用的密钥换新值，则要等你批准。
+
+::: danger 只有签名发行版才守得住这条边界
+Coffer 目前还没有发布用 Apple Developer ID 签名的二进制。在此之前，每个构建都是**开发版**：主密钥就是 `~/.coffer/master.key` 这个文件，以你身份运行的任何程序都能读取，拿到它就能伪造桌面应用的批准。本页的命令和审批在开发版中照常工作，桌面应用也会在每个提示上标明“开发版”，但它们挡不住一个铁了心的智能体。见[安全模型 → 开发版](/zh/architecture/security#development-builds)。
+:::
+
+## 密钥页面 {#the-secrets-page}
+
+侧边栏系统分组中的 **密钥**（`/secrets`）是 Web 界面里唯一一个列出并管理已存储密钥的地方。资源自己对话框里的密钥字段——MCP 服务器的令牌、提供商的 Key——仍留在那里；这个页面让你把它们放在一起看，并知道每个是做什么用的。
+
+列表分两组：
+
+- **使用中**——所有被引用的密钥。**名称** 列对独立密钥显示其名称，对其他密钥显示 ref，例如 `mcp_server/…/GITHUB_TOKEN`。**等待批准** 标记的是新值或新去处正在桌面应用里等你批准的密钥；终端图标标记的是：以你身份运行的其他程序，能在 Coffer 放置它的地方读到它。
+- **未被使用**——没有任何东西引用的密钥，标记为可以安全删除。
+
+每一行还会显示密钥在这台 Mac 上 **上次使用** 的时间——即上次为了使用而解密它的时间，比如服务器启动或 `coffer run`；显示值不算——以及 **创建于** 的时间。在这里从未用过的密钥显示为 **从未**。
+
+### 这台 Mac 上缺失 {#missing-on-this-mac}
+
+当这台 Mac 没有值可以交出去时，该行显示 **这台 Mac 上缺失**：某个资源或技能引用了它，但它从未在这里存过；或者它的加密值是随保险库从另一台 Mac 同步来的，而这台 Mac 没有那台的主密钥（加密密钥默认不同步）。用到它的东西在拿到值之前都无法启动。该行的 **添加值** 可以存入一个值；和任何写入一样，它可能需要[等你批准](#approvals)。只要有密钥缺失，页面顶部就会出现横幅，统计缺失的数量，并提供 **导入主密钥…**，打开设置 › 安全：导入另一台 Mac 的主密钥，它加密过的所有密钥一下子就都能打开了。Coffer 判断一个密钥是否打不开，靠的是用这台 Mac 的主密钥校验加密值的签名，不解密任何东西。
+
+**使用方** 显示有多少东西在用这个密钥以及它们的名称。点开它会得到列表，每一项按类型（MCP 服务器、模型提供商、消息渠道、技能……）和当前名称列出；点名称即可打开对应的页面。**查找密钥** 按名称筛选两个分组。
+
+每一行的 **⋯** 菜单：
+
+| 菜单项 | 作用 |
+| --- | --- |
+| **替换值…** | 接收一个新值，从不显示旧值。对话框会列出使用该密钥的东西。已经有去处在接收的值，以及任何独立密钥的值，都要[等你批准](#replacing-a-value-in-use)；此时页面会显示“已保存，等待批准”，而不会声称已经生效。对于[这台 Mac 上缺失](#missing-on-this-mac)的密钥，该项显示为 **添加值…**。 |
+| **显示值…** | 只在桌面应用中可用——见[查看或复制一个值](#see-or-copy-a-value)。浏览器中它显示为禁用的 **在 Coffer 应用中显示**。 |
+| **复制引用（…）** | 复制文件或配置里要引用的内容，菜单项里会显示出来：独立密钥是 `coffer://secret/<name>`，其他密钥是 ref。 |
+| **在活动中查看** | 打开[活动](/zh/guides/activity)的变更标签页，每一次存入、替换、显示和删除都记录在那里。 |
+| **删除…** | 对没有任何东西在用的密钥，询问一次（并说明上次使用时间），然后删除——在这台 Mac 上删除；如果加密密钥开启了同步，你的其他 Mac 也会在下一轮同步时删除。对仍在使用的密钥，它什么都不删：对话框列出仍在用它的每一项，附带 **打开** 跳过去，该行保留。 |
+
+**添加密钥** 用来新增一个独立密钥：一个名称（字母、数字、`.`、`_` 和 `-`，最多 64 个字符，添加后不能修改）和一个值，值不会再显示出来。名称已存在的话，发送前就会被拦下，并给出一个链接，让你改为替换那个密钥的值。对话框会显示要引用的引用写法。新密钥在存在之前要[等你批准](#approvals)：值先加密保存着，审批窗口会问“批准新密钥 …？”。
+
+页面标题旁的 **?** 解释了如何带着密钥运行命令，即 `coffer run --secret`——见[带着密钥运行命令](#run-a-command-with-a-secret)。
+
+**查找明文密钥** 在页面上运行[明文扫描](#move-plaintext-secret-files-into-the-store)。它按文件、行号、键以及将会得到的密钥名称列出找到的每个 key——从不显示值——并默认勾选所有发现。取消勾选要保留原样的项，然后点 **查看改动**：Coffer 在不写入任何东西的情况下算出导入会做什么，显示将要新增的密钥和将要修改的文件。**应用** 执行迁移。已经存有不同值的名称会被跳过，其文件不动。Coffer 无法改写的文件——比如位于只读文件夹里——会保留它的 key：值照样存成了密钥，但文件里仍以明文保留着它，对话框会显示“已移入 2/3 个 key”，指出是哪个文件，并提供 **重试**。扫描一无所获时，会告诉你读了多少个文件。仍指向 `~/.coffer/secrets/` 的技能也会列出来，由你手动更新——或者用列表旁的 **复制提示词** 或 **交给智能体** 交给你的智能体。提示词会列出每个技能、文件和行号，以及那些 key 将变成的密钥名称，要求智能体把命令改写成使用 `coffer run` 并把 diff 给你看，而且从不携带任何值。
+
+只要有改动在等待批准，页面顶部就有一条横幅显示数量（“1 项改动等待批准”），并说明在这里批准需要什么——桌面应用里是 Touch ID 或登录密码；浏览器里则需要去桌面应用——另附 **查看** 重新打开审批窗口。一个密钥都没有时，页面提供 **添加密钥** 和 **查找明文密钥**。
+
+## 独立密钥 {#standalone-secrets}
+
+大多数密钥属于某个资源，由注册该资源的对话框存入。**独立密钥**不属于任何资源：比如某个技能脚本需要的数据库密码，或你在终端里用的内部 API 令牌。它和其他密钥放在同一个加密存储里，位于 `secret/<name>` 下，文件中以 `coffer://secret/<name>` 引用它。
+
+名称是单独一段，由字母、数字、`.`、`_` 和 `-` 组成，最多 64 个字符。名称一经创建就固定不变，因为它会被写进 Coffer 看不到的文件里：要改名，就用新名称存一份，再删掉旧的。
+
+### 存入一个 {#store-one}
+
+```sh
+# From stdin, so the value never reaches your shell history
+printf '%s' "$ORDERS_DB_PASSWORD" | coffer secret set secret/orders-db
+
+# Or at a hidden prompt
+coffer secret set secret/orders-db
+```
+
+在[密钥页面](#the-secrets-page)上，**添加密钥** 效果相同。新名称要[等你批准](#approvals)：在你于桌面应用里批准之前，这个名称下什么都没存，`coffer run` 也解析不了它；`coffer secret set` 会打印正在等待并以 `9` 退出（或加 `--wait` 等待）。替换一个已存在的独立密钥的值，同样要[等你批准](#replacing-a-value-in-use)。
+
+### 引用它 {#cite-it}
+
+在技能或项目需要这个密钥的地方，写它的引用而不是值：
+
+```sh
+# connection.env, next to a skill's script
+DB_HOST=db.internal
+DB_USER=orders_ro
+DB_PASSWORD=coffer://secret/orders-db
+```
+
+技能的 `connection.md` 也用同样的方式写。只含引用的文件可以放心提交，也可以放心同步。它本身不会被任何东西读取：[`coffer run`](#run-a-command-with-a-secret) 在命令启动时解析其中的引用。
+
+资源也可以引用独立密钥，在它的 secret refs 里写 `secret/<name>`，和其他 ref 一样。
+
+## 带着密钥运行命令 {#run-a-command-with-a-secret}
+
+`coffer run` 通过守护进程解析独立密钥，然后启动一个命令，并且**只在这个命令的环境里**设置这些值：
+
+```sh
+coffer run --secret orders-db -- psql -h db.internal orders          # $ORDERS_DB
+coffer run --secret PGPASSWORD=orders-db -- psql -h db.internal orders
+coffer run --env-file connection.env -- ./query.sh
+```
+
+| 选项 | 含义 |
+| --- | --- |
+| `--secret NAME` | 把 `secret/NAME` 设为变量 `NAME`，转成大写，并把 `-` 和 `.` 换成 `_`（`orders-db` 变成 `ORDERS_DB`）。可重复。 |
+| `--secret ENV=NAME` | 把 `secret/NAME` 设为变量 `ENV`。 |
+| `--env-file FILE` | 读取 `KEY=VALUE` 行。普通值原样传递；每个 `coffer://secret/<name>` 值都会被解析。 |
+| `--no-masking` | 原样透传命令的输出，用于需要真实终端的工具。 |
+
+`coffer run` 自己环境里已有的 `coffer://secret/<name>` 值也会被解析，所以包装脚本可以一次性导出这些引用。`--` 之后的所有内容都是命令及其参数。
+
+具体行为：
+
+- **只解析独立密钥。** 名称必须存在 `secret/` 下；资源的密钥永远不能通过这种方式取出。未知名称会以 `SECRET_NOT_FOUND` 失败，命令不会启动。
+- **值只给子进程。** 运行 `coffer run` 的 shell 拿不到它们，这个 shell 的其他子进程也拿不到。
+- **输出会被遮蔽。** 命令的标准输出和标准错误中，每一处与值完全相同的内容都显示为 `***`，即使它被拆在两次写入里。短于 8 个字符的值不遮蔽——遮蔽短值会把正常输出搅得支离破碎——跳过时 `coffer run` 会告诉你。
+- **退出状态原样传回**，所以 `coffer run` 可以放进脚本里用。被信号杀死的命令以 `128 + signal` 退出；无法启动的命令以 `127` 退出。`Ctrl-C` 和 `SIGTERM` 会转发给命令。
+- **每次解析都记入审计**，事件为 `secret_resolved`，记录密钥名称、程序和工作目录——从不记录值，也不记录命令行的其余部分，因为那里可能带着别的密钥。用 `coffer log audit --event-type secret_resolved` 查看。
+
+::: warning `coffer run` 防的是失误，不是智能体
+`coffer run` 能让密钥**不至于因为失误**进入文件、git、智能体自己的环境和对话记录。它**不能**对运行这个命令的智能体隐藏密钥：智能体是命令的父进程，所以它可以读子进程的环境（`ps eww`），运行 `coffer run --secret orders-db -- env`，或者把值用 base64 编码后打印出来，而遮蔽认不出编码后的值。遮蔽也看不到命令写进文件的内容。正因为如此，每个独立密钥都被列为本机进程可读。
+:::
+
+## 查看或复制一个值 {#see-or-copy-a-value}
+
+在**桌面应用**中打开[密钥页面](#the-secrets-page)，在对应行选择 **显示值…**。先会弹出警告：任何能看到你屏幕的人都能读到这个值。然后 macOS 要求 Touch ID 或登录密码，提示中会写明是哪个密钥。值显示 30 秒，附带 **复制** 和 **隐藏**，然后再次隐藏；关闭对话框会立即丢弃它。每次显示都会重新询问；不存在一个“第二次免验证”的时间窗口。显示以 `secret_revealed` 记入审计，只记录 ref。
+
+浏览器界面不提供显示：菜单项显示为 **在 Coffer 应用中显示** 且处于禁用状态。`coffer secret get <ref>` 只确认值是否已存储。
+
+## 审批 {#approvals}
+
+审批是一个会扩大密钥去向的改动，它会被扣住，直到你在桌面应用里回应。
+
+### 哪些操作需要审批 {#what-asks-for-approval}
+
+| 你或智能体做了这件事 | 等待的是什么 |
+| --- | --- |
+| 注册一个资源，它引用了一个已经发往别处的密钥，比如第二个使用同一令牌的 MCP 服务器。 | 在你批准前，新服务器拿不到密钥。第一个照常工作。 |
+| 改变某个资源发送密钥的去处：stdio 服务器的命令、参数、工作目录或其他环境变量；HTTP 服务器的 URL；SeaTalk 消息渠道的应用。 | 在你批准新目标前，该资源拿不到密钥。 |
+| 把同步远端的推送令牌指向另一个 URL。 | 在你批准前，远端不会被保存。 |
+| 为一个已经有去处在接收的 ref、或任何独立密钥存入新值。 | 旧值继续使用；新值加密后等待。 |
+| 新增一个独立密钥。 | 在你批准前，这个名称下什么都不存；值加密后等待。 |
+| `coffer config set secrets.require_approval off` | 在你批准前，保护保持开启。 |
+
+关键在于**目标**——真正接收这个值的东西，写成你能据以判断的样子：stdio 服务器的完整命令行，连同它的工作目录和其他环境变量（像 `NODE_OPTIONS=--require …` 这样的变量会改变进程的行为）、HTTP 服务器的 URL、git 远端的 URL、消息渠道的机器人或应用。一条审批读起来像这样：
+
+```text
+send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -y @modelcontextprotocol/server-github
+```
+
+只批准你认得的目标。一条不是你写的、指向临时目录里某个脚本的命令行，正是被注入的智能体会注册的东西。
+
+### 哪些操作不需要审批 {#what-needs-no-approval}
+
+- **你刚为它提供的密钥。** 在最近五分钟内存入、且所在 ref 从未发往任何地方的值，会立即使用。每个“添加”对话框，以及粘贴了令牌的 `coffer mcp add`，都是在几秒内先存后用。这一条不适用于独立密钥，也不适用于较早的密钥。
+- **升级时本来就在工作的一切。** 带审批功能的守护进程第一次启动时，每个已在使用的密钥都会针对它当前的目标自动批准一次。
+- **保护关闭期间的任何操作。**
+
+绑定关系在使用时才检查——服务器启动时、消息渠道连接时、一轮同步推送时——所以绕开 Coffer 发生的改动，比如手工编辑的保险库文件，或另一台机器同步过来的服务器，也会被拦住。
+
+### 如何处理一条审批 {#answering-one}
+
+有东西在等待时，桌面应用会发一条通知 **Coffer needs your approval**，写明是什么改动，并打开一个窗口，把改动以问题的形式呈现——“批准 github-token 的新值？”、“批准新密钥 npm-publish-token？”——同时显示改动的类型（**新的值**、**新密钥**、**新的使用处**、**关闭保护**）、涉及的密钥、谁在何时发起，以及谁在使用它。**批准…** 会发起 Touch ID 或登录密码验证，提示中写明是什么改动，然后应用改动；服务器、消息渠道或远端会在下一次尝试时取到密钥，无需重启。**拒绝** 不需要在场验证，因为拒绝只会收窄 Coffer 的行为。
+
+在浏览器中，**批准** 是禁用的——“请在 Coffer 桌面应用中批准”——只有 **拒绝** 可用。
+
+在终端里，你可以列出和拒绝，但永远不能批准：
+
+```sh
+coffer secret approvals              # what waits now
+coffer secret approvals --all        # decided ones too; --json for scripts
+coffer secret reject <id>
+```
+
+一条审批最终的状态是 `approved`、`rejected` 或 `superseded`——后者表示它针对的资源被删除了，或已经换了目标，而新目标会另外发起一条新的审批。
+
+### 在命令行上 {#on-the-command-line}
+
+改动需要等待的命令——`coffer mcp add`、任何 `coffer <kind> edit`（包括 `coffer provider edit --secret` 或 `--base-url`）、`coffer channel add`、`coffer provider add`、`coffer sync remote set`、`coffer secret set`、`coffer config set secrets.require_approval off`——会保存能保存的部分，打印正在等待的内容，并以 `9` 退出：
+
+```text
+$ coffer mcp add gh-work --stdio "npx -y @modelcontextprotocol/server-github" --secret GITHUB_TOKEN=github/token
+waiting for approval in the Coffer app: send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -y @modelcontextprotocol/server-github (approval 3f9c0a7d12e45b68)
+$ echo $?
+9
+```
+
+加上 `--wait`，命令会一直运行到你在应用里回应为止：批准后以 `0` 退出，拒绝后以非零退出；十分钟后放弃等待，审批仍留在应用里。`coffer config set` 没有 `--wait`；在应用里批准后，用 `coffer config get secrets.require_approval` 检查。
+
+智能体遇到退出码 `9` 时，应该告诉你它注册了什么、正在等你批准，而不是重试。
+
+### 替换正在使用的值 {#replacing-a-value-in-use}
+
+对一个有已批准去处在接收的 ref、或任何独立密钥执行 `coffer secret set`，得到的是一条待批准的审批，而不是直接替换值。批准之前，所有地方都继续使用旧值；新值加密保存，你拒绝的话它会被丢弃。新的 ref、或者没有任何去处接收的 ref，会立即存入。
+
+### 关闭保护 {#switching-the-protection-off}
+
+`secrets.require_approval` 默认开启。打开它立即生效。关闭它则要在桌面应用里等一条审批；关闭期间，每个新去处都会不经询问直接批准。除此之外——没有任何环境变量、文件或参数——能把它关掉。
+
+```sh
+coffer config get secrets.require_approval      # on
+coffer config set secrets.require_approval off  # exits 9 until approved in the app
+coffer config set secrets.require_approval on   # at once
+```
+
+## 列出你的密钥 {#list-your-secrets}
+
+```sh
+coffer secret list
+```
+
+[密钥页面](#the-secrets-page)显示同一份列表，按使用中和未被使用分组。`--json` 还会为每个密钥附带 `locked`（已存储，但这台 Mac 的主密钥打不开它）、`created_at` 和 `last_used_at`。列表包含存储中保存的每个 ref 和每个资源引用的每个 ref，以及各自的使用方——资源、文件中引用了 `coffer://secret/<name>` 的技能、等待审批的去处——没有任何东西在用的密钥标为 `(unreferenced)`。**Readable by local processes** 为 `yes` 表示：以你身份运行的其他程序，能在 Coffer 放置该值的地方读到它——每个独立密钥都是（它会进入 `coffer run` 的子进程），stdio MCP 服务器环境中的每个密钥也是。各列的含义见[密钥存储 → 列出与查看](/zh/guides/secret-store#list-and-inspect)。
+
+只要还有资源引用某个独立密钥，或还有技能文件引用它的 URI，删除就会被拒绝；报错会列出它们。
+
+## 把明文密钥文件移入存储 {#move-plaintext-secret-files-into-the-store}
+
+早先的建议是把技能的密钥放在明文文件里，比如 `~/.coffer/secrets/<name>.env`。任何遍历你主目录的程序都能读到它们——备份工具、网盘客户端、智能体的文件搜索。`coffer secret scan` 负责找出它们，`coffer secret import` 负责把它们移入存储。[密钥页面](#the-secrets-page)上的 **查找明文密钥** 运行同样的扫描、试运行和导入：
+
+```sh
+coffer secret scan
+```
+
+扫描读取 `~/.coffer/secrets/*.env`（`KEY=VALUE` 行）和 `*.json`（扁平的字符串映射），以及你所有托管技能中的每个文本文件（名称里含 password、secret、token 或 key 的赋值，以及常见的令牌格式）。对每个发现，它打印文件、行号、键以及将会得到的独立密钥名称，比如 `coffer://secret/db.PASSWORD`——从不打印值。它还会列出仍在读取 `~/.coffer/secrets/` 下文件的每个技能，方便你把它的命令改成 `coffer run --secret` 或 `coffer run --env-file`；`coffer secret scan --prompt` 会打印一段提示词，把这项改写交给你的智能体。
+
+```sh
+coffer secret import --dry-run     # print the plan, write nothing
+coffer secret import               # move every finding (asks first; --yes skips)
+coffer secret import --id <id>     # only this finding (repeatable)
+```
+
+对每个发现，导入会把值存为 `secret/<name>`，读回并比对，然后才把文件中的值替换为 `coffer://secret/<name>`——原子写入，并保留文件权限。已经存有不同值的名称会被跳过，其文件不动。无法改写的文件会报告为已跳过，但值已经存入——存储里有了，文件里也还在——其他文件照常改写；再次导入同一项发现会重试这个文件。不保留任何明文备份。每个存入的值都以 `secret_imported` 记入审计。
+
+然后把技能的命令改成在 `coffer run` 下运行，例如 `coffer run --env-file ~/.coffer/secrets/db.env -- ./query.sh`。
+
+## 主密钥及其备份 {#the-master-key-and-its-backup}
+
+每个密钥都用同一把主密钥加密。它如何保管取决于构建方式：
+
+- **签名发行版**把它放在一个只有 Coffer 签名二进制能读的钥匙串条目里。其他程序既拿不到访问权限，也不会弹出可点击的对话框。守护进程读取时不询问，所以在崩溃后或登录时能无人值守地启动。
+- **开发版**把它放在 `~/.coffer/master.key`（或系统钥匙串，需手动开启），以你身份运行的任何程序都能读取。
+
+在场验证守护的是“让明文出去”的操作，而不是主密钥本身：这就是守护进程从不等你的原因。
+
+**在桌面应用中备份主密钥**（设置 › 安全）：选一个口令，用 Touch ID 或登录密码确认，选一个文件夹，应用就会把受口令保护的 `coffer-master-key.cfk` 以权限 `0600` 写进去，并以 `master_key_exported` 记入审计。任何命令或浏览器页面都做不到这一点。在另一台机器上用 `coffer sync key import <file>` 安装备份——见[密钥存储 → 把主密钥带到另一台机器](/zh/guides/secret-store#carry-the-key-to-another-machine)。在签名发行版中，钥匙串是唯一的副本，所以一定要做备份。
+
+## 相关 {#related}
+
+- [密钥存储](/zh/guides/secret-store)——存入、引用、轮换和删除资源的密钥
+- [安全模型](/zh/architecture/security)——威胁模型，以及仍然暴露的部分
+- [桌面应用](/zh/guides/desktop-app)——显示值、备份主密钥和审批都在这里进行
+- [编写技能库](/zh/guides/writing-skill-libraries)——在技能中引用密钥
+- [智能体可以配置 Coffer；只有在场的人能看到密钥明文或把它发往新去处](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
+- [独立密钥是具名的 `coffer://secret/` 引用，只注入一个子进程](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
+- 规格：[secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)

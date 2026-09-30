@@ -141,7 +141,7 @@ Code style: named exports only, and one component per file. The first line of ea
 
 ## Internationalisation
 
-The UI ships English and Simplified Chinese from `src/i18n/locales/en.json` and `zh.json`. English is the fallback language. This is a product feature. The repository's docs, this site included, are English only.
+The UI ships English and Simplified Chinese from `src/i18n/locales/en.json` and `zh.json`. English is the fallback language. This is a product feature. The docs site and the README are bilingual too; every other repository doc is English only (see [Contributing](/contributing/#docs-site-in-two-languages)).
 
 - Every user-facing string goes through `t(...)`, including `aria-label`s.
 - Keys are nested camelCase paths under the feature's top-level key, for example `chat.composer.placeholder`.
@@ -168,5 +168,5 @@ Browser-level flows belong in the Playwright `web` project under `e2e/web/specs/
 
 - [Web UI guide](/guides/web-ui)
 - [Testing](/contributing/testing)
-- [Development setup](/contributing/development#frontend-api-codegen)
+- [Development setup](/contributing/development#wire-contracts-and-frontend-codegen)
 - [`web-ui` spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md)

@@ -68,7 +68,7 @@ help:
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
 	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
-	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
+	@echo "  make docs-reference        regenerate the docs site's CLI reference pages (en and zh)"
 	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; not in verify)"
 	@echo "  make refresh-prices        refresh the bundled model price list from pydantic/genai-prices (release time; network)"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
@@ -166,6 +166,7 @@ lint:
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
 	$(PY) scripts/check_cli_reference.py
+	$(PY) scripts/check_docs_locales.py
 	$(PY) scripts/check_removed_commands.py
 	$(PY) scripts/check_platform_calls.py
 	$(PY) scripts/check_agent_type_branches.py
@@ -394,11 +395,10 @@ frontend-codegen:
 		cd $(FRONTEND) && npm run codegen; \
 	fi
 
-# The CLI and REST reference pages are generated from the code;
+# The CLI reference page (English and Chinese) is generated from the code;
 # scripts/check_cli_reference.py (in `lint`) fails when they drift.
 docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
-	$(PY) docs-site/scripts/gen_rest_reference.py
 
 # The bundled model price list shipped in each build is refreshed once per
 # release; the daemon keeps a daily cached copy on top of it (spec

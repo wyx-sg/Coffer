@@ -1,0 +1,62 @@
+---
+title: 技能依赖
+description: Coffer 如何读取技能声明的命令行工具，在智能体运行的地方检查它们，并在缺失时把它以提示词的形式交给这个人的智能体，而不是自己去安装。
+---
+
+# 技能依赖 {#skill-requirements}
+
+驱动某个命令行工具的技能，在工具缺失、版本太旧或没登录时，会在调用它的那一步失败。技能依赖让这种失败在智能体撞上之前就有地方被看到：每个技能在 `SKILL.md` 里声明它的命令，Coffer 在本机对每个命令检查一次，命令行工具页面、技能的**依赖**标签页、待处理列表和 `coffer cli` 会报告检查结果。面向用户的说明见[命令行工具指南](/zh/guides/clis)。
+
+## 原则 {#principles}
+
+- **技能来声明；文件就是真相。** `requires:` 写在技能自己的 `SKILL.md` 里，每次检查都从主文件夹读取，所以它永远不会与用户编辑的内容偏移。数据库里什么都不存。
+- **在智能体运行的地方检查。** 查找用的是智能体真实的 `PATH`：登录 shell 的 `PATH`，与守护进程继承的 `PATH` 合并——和智能体探测用的是同一个 `UserPath`，这也是它放在与类型无关的 `infrastructure/platform/user_path.py` 中的原因。
+- **声明只能指向它所声明的工具。** 命令是一个裸名字，登录检查的第一个词必须是这个命令，而且什么都不在 shell 里运行。技能无法通过声明让 Coffer 运行任意程序。
+- **检查打印的任何东西都不保留。** 登录检查的 stdout 和 stderr 都送进 `/dev/null`；只使用它的退出码，因为这类输出可能包含账号名或令牌。
+- **Coffer 负责检查；智能体负责安装。** 安装取决于机器——用哪个包管理器、什么架构、是否涉及 `sudo`——而这个人的智能体能弄清楚这些。Coffer 不运行任何安装程序，也不做登录。它把掌握的事实写进一段提示词，即[智能体交接](#the-agent-hand-off)，由这个人交给智能体。
+- **每个命令一行。** 缺了 `gh` 就是一个问题，不管有多少技能需要它。
+- **MCP 服务器的启动器也是依赖。** 已启用的 stdio MCP 服务器需要它的启动器，所以检查会把它列在提供它的命令之下（`uvx` 对应 `uv`，`npx` 对应 `node`，`bunx` 对应 `bun`），不设最低版本，也没有登录检查。这两种类型只在组合根处交汇：`application/mcp/stdio_launchers.py` 读取服务器，`agent_skill_wiring.py` 通过 `McpLaunchersPort` 把它们交给检查，技能类型从不导入 MCP 类型。
+
+## 组成部分 {#the-pieces}
+
+| 部分 | 位置 | 作用 |
+| --- | --- | --- |
+| 声明 | `domain/skill/requirements.py` | 宽松地解析 `requires:`：用不了的条目带警告跳过，绝不会让技能导入失败。 |
+| 版本 | `domain/versions.py` | 从 `--version` 输出中读出点分版本号并比较两个版本，与智能体探测共用。 |
+| 状态 | `domain/skill/cli_status.py` | `missing`、`outdated`、`logged_out` 或 `ready`，问题优先的排序，以及 `launcher_cli`（一个 stdio 启动器按哪个命令来检查）。 |
+| 汇总与缓存 | `application/skill/cli_requirements.py` | 在所有托管技能和已启用的 stdio MCP 服务器之间，每个命令一行：最高的最低版本要求、第一个技能的标题、登录检查和登录命令、所有需要它的技能以及所有用它启动的服务器。结果会缓存，直到点「重新检查」或守护进程重启；探测在工作线程中运行。 |
+| 探测 | `infrastructure/skill/command_probe.py` | 在 `UserPath` 上定位命令，关闭 `stdin` 并丢弃输出，运行 `--version`（5 秒）和登录检查（10 秒）。 |
+| 交接 | `application/skill/cli_handoff.py`、`domain/handoff.py` | 针对缺失、过旧或未登录命令的提示词，作为 `handoff.prompt` 附在路由返回的每个命令上。 |
+| 机器 | `infrastructure/platform/host.py`（`machine_label`） | 提示词里写明的操作系统和 CPU 架构，例如 `macOS 15.6, arm64`，每个守护进程只读取一次。 |
+| 待处理 | `application/skill/cli_attention.py` | 类型为 `cli`，以命令作为 uid：`cli_missing`、`cli_outdated`、`cli_logged_out`，每一项都提供 `check`。只有 MCP 服务器需要的命令不会产生待处理项：服务器自己的 `mcp_missing_launcher` 项已经点名了它。 |
+| 接口 | `surfaces/http/cli_routes.py`、`surfaces/cli/cli_cmd.py` | `/api/v1/clis…` 和 `coffer cli list|show|check|prompt`。 |
+
+## 智能体交接 {#the-agent-hand-off}
+
+Coffer 是 AI 原生的：依赖机器的杂事——安装、配置、排障——交给这个人的智能体，而不是由守护进程写成脚本。交接是任何功能都能用的一块积木：
+
+- **`domain/handoff.py`** 包含 `Handoff(task, facts, steps)` 和 `render_handoff()`。功能提供它掌握的信息；渲染器写出一句任务说明、以 `-` 开头的事实行、每行一个的步骤，最后附上每次交接都有的规则——做任何需要 `sudo` 或修改系统设置的事之前先问这个人，把任何登录都留给这个人，不经手他们的凭据。
+- **提示词在守护进程上生成**，通过功能自己的 REST 响应以 `handoff: {prompt}`（共享的 `HandoffOut` schema）提供，也由它的命令行提供，所以复制出来的提示词和打印出来的是同样的文字。
+- **Web 界面用一个组件显示它**，即 `AgentHandoff`：**复制提示词**，以及**交给智能体**——后者会打开一个与 Coffer 托管智能体的新对话，提示词已放在输入框里。由这个人按下「发送」；不会替他们发出，因为托管智能体以完全权限运行。没有可用的托管智能体时——缺失的正是本该被询问的那个智能体，或者还没添加任何智能体——只提供「复制提示词」。
+- **待处理列表也携带它。** 修复方式是一件杂事的 `AttentionItem` 带一个可选的 `handoff`，与其类型页面提供的提示词相同，原因说明里不点名任何命令。总览页的「需要你处理」行在该行的 ⋯ 菜单中提供它，`coffer attention --prompt <key>` 会把它打印出来。
+
+对于一个被依赖的命令，事实如下：
+
+| 状态 | 提示词要求智能体 | 它写明的事实 |
+| --- | --- | --- |
+| `missing` | 安装它，为这台机器选择安装方式，并运行 `<command> --version` | 需要它的技能及各自的最低版本；用它启动的 MCP 服务器及其启动器；机器 |
+| `outdated` | 按原来的安装方式更新它，并运行 `<command> --version` | 找到的版本和路径与最低版本的对比；技能；机器 |
+| `logged_out` | 告诉这个人要运行什么来登录，之后再运行登录检查 | 失败的登录检查；声明的登录命令；技能；机器 |
+
+`ready` 的命令不带提示词。当杂事是开放式的、依赖环境时用交接；当 Coffer 自己能确定地完成——再探测一次、连接一个智能体——就是一个普通按钮。
+
+## 权衡 {#trade-offs}
+
+- **登录检查会在用户机器上运行一个声明的子命令。** 那本来就是技能让智能体去运行的工具，而且限定在该工具上、不经 shell 运行；另一种做法——从不检查登录——会让最常见的失败完全不可见。
+- **智能体以完全权限安装。** 提示词要求它在做任何提权操作前先问这个人，而**交给智能体**只是填好输入框，所以这个人会在请求发出前先读一遍。
+- **在 YAML 里不加引号写的最低版本**（`2.40`）会被解析成数字，比较时变成 `2.4`；Coffer 会带警告拒绝它，而不是去猜。
+
+## 相关内容 {#related}
+
+- 规格：[skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)，以及 [web-ui](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md) 中的页面
+- 页面：[智能体切面](/zh/architecture/agent-facets)（与本页共用 `PATH` 的依赖探测）、[平台端口](/zh/architecture/platform)、[安全模型](/zh/architecture/security)、[命令行工具指南](/zh/guides/clis)

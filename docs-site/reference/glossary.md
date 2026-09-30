@@ -15,7 +15,7 @@ entry links to the page that explains the concept in depth.
 
 Who performed an action, as recorded in the [audit log](#audit-log): `cli`, `ui`, `api`,
 `system`, or an agent's name for a write made through an MCP tool. HTTP clients set it with
-the `X-Coffer-Actor` header. See [REST API](/reference/rest-api#authentication).
+the `X-Coffer-Actor` header. See the [security model](/architecture/security).
 
 ### Adopt
 

@@ -405,7 +405,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 
 ## Related
 
-- [Secrets guide](/guides/secret-store)
+- [Secrets guide](/guides/secrets)
 - [Secret store guide](/guides/secret-store)
 - [Security policy](/contributing/security) — how to report a vulnerability.
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)

@@ -1,10 +1,10 @@
 """Make the daemon's OpenAPI document say what the daemon really answers.
 
 The document FastAPI derives from the routes is the source of every checked-in
-contract (``make contracts``) and of the docs-site REST reference, so what it
-gets wrong, both of them get wrong. FastAPI gets one thing wrong about Coffer:
-errors. It declares a ``422`` answering ``HTTPValidationError`` (``{"detail":
-[...]}``) on every route that takes input, while :func:`errors.register`
+contract (``make contracts``), so what it gets wrong, the contracts get wrong.
+FastAPI gets one thing wrong about Coffer: errors. It declares a ``422``
+answering ``HTTPValidationError`` (``{"detail": [...]}``) on every route that
+takes input, while :func:`errors.register`
 answers every failure — a validation failure included — with Coffer's own
 envelope ``{"error": {"code", "message", "details"}}``, and it declares no
 other error at all although any route can answer one.
