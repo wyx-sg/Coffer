@@ -31,15 +31,37 @@ channel as `channel`, and `coffer daemon status` MUST print it.
 
 ### Requirement: Declare the experimental features in one registry
 Coffer MUST declare its experimental features in one registry, and every
-surface MUST take the list from it. The features are `vault_sync` (spec
-[vault-sync](../vault-sync/spec.md)), `knowledge` (spec
-[knowledge](../knowledge/spec.md)) and `memory` (spec
-[memory](../memory/spec.md)). A capability outside the registry is always on.
+surface MUST take the list from it. The registry names no feature today: Sync
+(spec [vault-sync](../vault-sync/spec.md)), Knowledge (spec
+[knowledge](../knowledge/spec.md)) and Memory (spec [memory](../memory/spec.md))
+graduated and are always on. A capability outside the registry is always on.
 
-#### Scenario: the registry names the three features
-- **GIVEN** a running daemon
-- **WHEN** `GET /api/v1/daemon/features` is requested
-- **THEN** it lists exactly `vault_sync`, `knowledge` and `memory`, each with its state and the layer that decided it
+A feature MUST join the registry by adding one entry that names its route
+prefixes and the kinds it owns, and by tagging its other surfaces — built-in
+tools, agent directories, attention sources, sidebar entries and background
+passes — with its key. A feature MUST leave the registry by deleting its entry
+and every gate and tag that names it, together with a migration that strips its
+stored setting from the `features` object of `~/.coffer/daemon-config.json`,
+keeping every other key. A stored setting for a key the registry does not name
+MUST be ignored by every read — logged, never listed — and MUST NOT fail
+anything.
+
+#### Scenario: an empty registry lists no features
+- **GIVEN** a running daemon whose registry names no feature
+- **WHEN** `GET /api/v1/daemon/features` is requested and `coffer config list feature.` runs
+- **THEN** the route lists no feature
+- **AND** the command prints nothing and exits 0
+
+#### Scenario: a stored setting for a feature the registry does not name is ignored
+- **GIVEN** a daemon config whose `features` object holds a key the registry does not name
+- **WHEN** the daemon starts and the features and the daemon status are read
+- **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
+
+#### Scenario: graduating a feature strips its stored setting
+- **GIVEN** a daemon config whose `features` object holds `vault_sync`, `knowledge`, `memory` and one other key
+- **WHEN** the upgrade's migrations run
+- **THEN** the `features` object holds only the other key, and the rest of the file is unchanged
+- **AND** a missing or unreadable daemon config is left alone
 
 ### Requirement: Decide a feature's state per machine
 A feature's state MUST be decided in this order: a pin in `COFFER_FEATURES`,
@@ -49,22 +71,23 @@ machine it was made on and MUST NOT sync. A write to a pinned feature MUST be
 refused with 409 `FEATURE_PINNED`.
 
 #### Scenario: a stable build starts with every experimental feature off
-- **GIVEN** a `stable` build and no setting and no pin
+- **GIVEN** a `stable` build with a registered feature `f`, and no setting and no pin
 - **WHEN** the features are listed
-- **THEN** every experimental feature is off, decided by the channel
+- **THEN** `f` is off, decided by the channel
 
 #### Scenario: a machine setting overrides the channel default
-- **GIVEN** a `stable` build whose daemon config switches `memory` on
+- **GIVEN** a `stable` build with registered features `f` and `g` whose daemon config switches `f` on
 - **WHEN** the features are listed
-- **THEN** `memory` is on, decided by the setting, and the other two are off
+- **THEN** `f` is on, decided by the setting, and `g` is off, decided by the channel
 
 #### Scenario: a pinned feature cannot be switched
-- **GIVEN** `COFFER_FEATURES=knowledge=off`
-- **WHEN** a request switches `knowledge` on
-- **THEN** it answers 409 `FEATURE_PINNED` and `knowledge` stays off
+- **GIVEN** a registered feature `f` and `COFFER_FEATURES=f=off`
+- **WHEN** a request switches `f` on
+- **THEN** it answers 409 `FEATURE_PINNED` and `f` stays off
 
 ### Requirement: Switch a feature from the settings page or the command line
-A feature MUST be switchable from Settings → General, from
+A feature MUST be switchable from Settings → General while the registry names
+any feature (see "List and switch the features on the General tab"), from
 `coffer config set feature.<key> on|off`, and from
 `PUT /api/v1/daemon/features/{key}`. `coffer config unset feature.<key>` MUST
 remove the machine's own setting, so the feature returns to its channel
@@ -74,134 +97,113 @@ The switch MUST take effect at once, with no daemon restart, and MUST be
 written to the daemon config before the request answers.
 
 #### Scenario: switching a feature on opens its surfaces without a restart
-- **GIVEN** a running daemon with `vault_sync` off
-- **WHEN** `coffer config set feature.vault_sync on` runs
-- **THEN** `GET /api/v1/sync/status` answers 200 on the same daemon process
-- **AND** the daemon config holds `vault_sync: true`
+- **GIVEN** a running daemon with a registered feature `f` that owns route prefix `p`, switched off
+- **WHEN** `coffer config set feature.f on` runs
+- **THEN** a route under `p` answers on the same daemon process instead of 404 `FEATURE_DISABLED`
+- **AND** the daemon config holds `f: true`
 
 #### Scenario: unsetting a feature returns it to the channel default
-- **GIVEN** a `dev` build whose daemon config switches `memory` off
-- **WHEN** `coffer config unset feature.memory` runs and then `coffer config list feature.`
-- **THEN** the daemon config no longer holds a setting for `memory`
-- **AND** the listing names every registered feature, with `memory` on and decided by the channel
+- **GIVEN** a `dev` build whose daemon config switches a registered feature `f` off
+- **WHEN** `coffer config unset feature.f` runs and then `coffer config list feature.`
+- **THEN** the daemon config no longer holds a setting for `f`
+- **AND** the listing names every registered feature, with `f` on and decided by the channel
 
 ### Requirement: Close every surface of a switched-off feature
-While a feature is off: its REST routes MUST answer 404 with code
-`FEATURE_DISABLED` naming the feature; its MCP tools MUST be absent from the
-tool list and a call to one MUST answer as a call to an unknown tool; its CLI
-commands, including `coffer path knowledge` for `knowledge` and
-`coffer path memory` for `memory`, MUST print one line naming
+While a feature is off: every REST route under a route prefix it names MUST
+answer 404 with code `FEATURE_DISABLED` naming the feature; its MCP tools MUST
+be absent from the tool list and a call to one MUST answer as a call to an
+unknown tool; its CLI commands MUST print one line naming
 `coffer config set feature.<key> on` and exit 1; its sidebar entry MUST be
-absent and its pages MUST show a notice that links to Settings → General; its
+absent, its pages and objects MUST be absent from the command palette, and its
+pages MUST show a notice that says the feature is switched off; its own
 background passes MUST skip their rounds. A resource whose kind the feature
-owns — `knowledge` owns the `knowledge` kind, `memory` the `memory` kind — MUST
-be out of reach of the kind-agnostic resource routes too: a route naming such a
-kind, or a uid whose resource is of it, MUST answer 404 `FEATURE_DISABLED`, and
-a list MUST leave those resources out. While `vault_sync` is off the vault MUST
-be treated as a single-machine one: the curation pass MUST NOT wait on a
-curation owner machine or on a held or conflicted sync round.
+owns MUST be out of reach of the kind-agnostic resource routes too: a route
+naming such a kind, or a uid whose resource is of it, MUST answer 404
+`FEATURE_DISABLED`, and a list MUST leave those resources out.
 
 #### Scenario: a switched-off feature's routes answer feature disabled
-- **GIVEN** `knowledge` off
-- **WHEN** `GET /api/v1/knowledge/collections` is requested
-- **THEN** it answers 404 with code `FEATURE_DISABLED` and the key `knowledge`
+- **GIVEN** a registered feature `f` that owns route prefix `p`, switched off
+- **WHEN** a route under `p` is requested
+- **THEN** it answers 404 with code `FEATURE_DISABLED` and the key `f`
 
 #### Scenario: a switched-off feature's resources are out of reach of the resource routes
-- **GIVEN** a knowledge collection and `knowledge` off
-- **WHEN** the collection is read, changed or deleted through `/api/v1/resources/{uid}`, or the resources of kind `knowledge` are listed
-- **THEN** each answers 404 with code `FEATURE_DISABLED` and the key `knowledge`
-- **AND** an unfiltered list leaves the collection out and its folder stays in place
+- **GIVEN** a registered feature `f` that owns kind `k`, a resource of kind `k`, and `f` off
+- **WHEN** the resource is read, changed or deleted through `/api/v1/resources/{uid}`, or the resources of kind `k` are listed
+- **THEN** each answers 404 with code `FEATURE_DISABLED` and the key `f`
+- **AND** an unfiltered list leaves the resource out and what it holds on disk stays in place
 
 #### Scenario: a switched-off feature's tool leaves the tool list
-- **GIVEN** `knowledge` off
+- **GIVEN** a built-in tool tagged with a registered feature `f`, and `f` off
 - **WHEN** an agent lists the gateway's tools
-- **THEN** `coffer__write` is absent
-- **AND** a call to `coffer__write` answers as an unknown tool
+- **THEN** the tool is absent
+- **AND** a call to it answers as an unknown tool
 
 #### Scenario: a switched-off feature's command says how to switch it on
-- **GIVEN** `vault_sync` off
-- **WHEN** `coffer sync status` runs
-- **THEN** it prints a line naming `coffer config set feature.vault_sync on` and exits 1
+- **GIVEN** a registered feature `f` that owns route prefix `p`, switched off
+- **WHEN** a `coffer` command that reads a route under `p` runs
+- **THEN** it prints a line naming `coffer config set feature.f on` and exits 1
 
-#### Scenario: a switched-off feature's pass skips its round
-- **GIVEN** `memory` off
-- **WHEN** the aggregation worker reaches its interval
-- **THEN** no aggregation pass runs
-
-#### Scenario: curation does not wait on sync while vault sync is off
-- **GIVEN** curation switched on, a curation owner naming another machine or an unresolved sync round, and `vault_sync` off
-- **WHEN** the curation worker asks whether it may run
-- **THEN** it may
+#### Scenario: a switched-off feature's page says it is switched off
+- **GIVEN** a registered feature `f` whose sidebar entry opens a page, and `f` off
+- **WHEN** the user follows a link to that page
+- **THEN** the page shows a notice that `f` is switched off, in place of the page
 
 ### Requirement: Keep what a switched-off feature holds
 Switching a feature off MUST NOT delete, move or rewrite anything it holds —
 resources, files, a configured remote, history. Switching it back on MUST resume
 from that state.
 
-#### Scenario: switching knowledge off and on keeps the collections
-- **GIVEN** a collection with documents and `knowledge` on
-- **WHEN** `knowledge` is switched off and then on
-- **THEN** the collection and its documents are listed exactly as before
+#### Scenario: switching a feature off and on keeps what it holds
+- **GIVEN** a registered feature `f` that owns kind `k`, a resource of kind `k`, and `f` on
+- **WHEN** `f` is switched off and then on
+- **THEN** the resource is listed exactly as before, and nothing it held was deleted
 
 ### Requirement: Withdraw what a switched-off feature put in front of agents
-Switching `memory` off MUST remove the memory delivery hook from every agent it
-was installed in, and switching it on MUST install it into every agent connected
-to Coffer — every agent carrying Coffer's gateway MCP entry (spec agent-registry
-"Connect an agent to Coffer in one action") — and into no other. A daemon that
-boots with `memory` off MUST likewise leave no hook in any agent. Switching
-`knowledge` off MUST rewrite the `coffer-guide` skill without its knowledge
-catalogue, and a channel `/save` MUST answer that knowledge is switched off
-without saving; switching it on MUST restore the catalogue. Switching
-`vault_sync` off MUST stop every sync attention mark — the web sidebar's and the
-desktop shell's, which are the menu bar's dot and the sync problem its "needs
-you" entry names, and the Dock badge. The MCP handshake
-instructions and the `coffer-guide` skill MUST name only the tools the tool
-list carries and only the directories a switched-on feature serves: while
-`knowledge` is off neither names `coffer__write` nor the knowledge root, and
-while `memory` is off neither names the memory root.
-
-#### Scenario: switching memory off removes the delivery hook
-- **GIVEN** an agent connected to Coffer with the memory delivery hook installed, and a second agent that is not connected
-- **WHEN** `memory` is switched off
-- **THEN** the hook is no longer in the connected agent's configuration
-- **AND** switching `memory` on installs it again in the connected agent and puts none in the agent that is not connected
-
-#### Scenario: switching knowledge off drops the catalogue from the guide
-- **GIVEN** an enabled collection catalogued in `coffer-guide`
-- **WHEN** `knowledge` is switched off
-- **THEN** the delivered `coffer-guide` carries no knowledge catalogue
-
-#### Scenario: a channel save while knowledge is off saves nothing
-- **GIVEN** a paired channel and `knowledge` off
-- **WHEN** the owner sends `/save` with text
-- **THEN** the reply says knowledge is switched off and nothing reaches any inbox
+Anything a feature puts in front of agents or the user outside its own routes —
+a hook it installs in an agent, a section of the `coffer-guide` skill, a channel
+command, an attention mark on the web sidebar or the desktop shell — MUST leave
+while the feature is off and come back when it is switched on. An attention
+source tagged with the feature MUST NOT be asked while the feature is off. The
+MCP handshake instructions MUST NOT name a built-in tool the tool list does not
+carry.
 
 #### Scenario: agents are told only about the tools they have
-- **GIVEN** `knowledge` and `memory` off
-- **WHEN** an agent opens a gateway session and reads the delivered `coffer-guide`
-- **THEN** neither the handshake instructions nor the guide name `coffer__write`, the knowledge root or the memory root
-- **AND** switching `memory` on puts the memory root back in the guide, and switching `knowledge` on puts `coffer__write` back in both
+- **GIVEN** a built-in tool that the session's tool list does not carry
+- **WHEN** an agent opens a gateway session
+- **THEN** the handshake instructions do not name that tool
+
+#### Scenario: a switched-off feature's attention source is not asked
+- **GIVEN** an attention source tagged with a registered feature `f`, and `f` off
+- **WHEN** the attention list is read
+- **THEN** the source is not asked, none of its items is listed, and it is not reported as a failing source
 
 ### Requirement: List and switch the features on the General tab
-Settings → General MUST carry an Experimental features card listing every
-registered feature with a switch, the current state, and whether a pin or the
-channel decided it. A pinned feature's switch MUST be disabled. A switch MUST
-move at once and settle on what the daemon answers; a failed write MUST put it
-back and show the error beside it.
+While the registry names any feature, Settings → General MUST carry an
+Experimental features card listing every registered feature with a switch, the
+current state, and whether a pin or the channel decided it. A pinned feature's
+switch MUST be disabled. A switch MUST move at once and settle on what the
+daemon answers; a failed write MUST put it back and show the error beside it.
+While no feature is registered the card MUST render nothing at all — no card
+and no heading.
 
 #### Scenario: the general tab switches a feature
-- **GIVEN** the daemon reports `knowledge` off and unpinned
+- **GIVEN** the daemon reports a registered feature `f` off and unpinned
 - **WHEN** the user turns its switch on
-- **THEN** one request switches `knowledge` on and the Knowledge sidebar entry appears without a reload
+- **THEN** one request switches `f` on and its sidebar entry appears without a reload
+
+#### Scenario: the general tab shows nothing while no feature is registered
+- **GIVEN** a daemon whose registry names no feature
+- **WHEN** the user opens Settings → General
+- **THEN** the tab carries no Experimental features card and no heading for one
 
 ### Requirement: Mark an experimental feature's sidebar entry
 While an experimental feature is switched on, its web sidebar entry MUST carry
 a marker that says the feature is experimental, beside the label on an expanded
-rail and in the tooltip on a collapsed one. An entry outside the registry MUST
-NOT carry it.
+rail and in the tooltip on a collapsed one. An entry no registered feature owns
+MUST NOT carry it.
 
 #### Scenario: a switched-on feature's entry says it is experimental
-- **GIVEN** the daemon reports `vault_sync`, `knowledge` and `memory` on
+- **GIVEN** a sidebar entry owned by a registered feature that is switched on
 - **WHEN** the expanded sidebar renders
-- **THEN** the Sync, Knowledge and Memory entries each carry the experimental marker
-- **AND** no other entry carries it
+- **THEN** that entry carries the experimental marker and no other entry does
+- **AND** with a registry that names no feature, no entry carries it

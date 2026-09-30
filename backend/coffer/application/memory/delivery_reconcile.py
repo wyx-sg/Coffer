@@ -8,14 +8,12 @@ is the rule PR #413 taught: when ``coffer memory context`` dropped ``--agent``
 for ``--agent-uid``, every hook on disk kept the dead option and still read as
 installed, because detection matched the marker and never read the arguments.
 
-**What is wanted.** With the ``memory`` feature on, a current hook in every
-agent connected to Coffer — every agent carrying the gateway MCP entry (spec
-agent-registry "Connect an agent to Coffer in one action") — and in every agent
-that already carries one, since installing it was that user's explicit act.
-Which agents are connected is the agent kind's answer, handed in as
-:data:`ConnectedAgents`, because this kind may not import that one. With
-``memory`` off, no hook anywhere (spec experimental-features "Withdraw what a
-switched-off feature put in front of agents").
+**What is wanted.** A current hook in every agent connected to Coffer — every
+agent carrying the gateway MCP entry (spec agent-registry "Connect an agent to
+Coffer in one action") — and in every agent that already carries one, since
+installing it was that user's explicit act. Which agents are connected is the
+agent kind's answer, handed in as :data:`ConnectedAgents`, because this kind
+may not import that one.
 
 **Direction policy** (:meth:`DeliveryHookTarget.decide`):
 
@@ -27,12 +25,11 @@ switched-off feature put in front of agents").
   ``trusted``) is only reported (``hook_untrusted``, ``hook_disabled``,
   ``hook_trust_unknown``): approving a hook is the user's act in the agent,
   and Coffer never writes the agent's trust record;
-- a hook with ``memory`` off is withdrawn (``feature_off``);
-- a connected agent missing its hook gets one when ``memory`` was just
-  switched on or a person asked (``Trigger.SWITCH`` / ``Trigger.MANUAL``), and
-  is only reported otherwise: a boot or a period does not install a hook the
-  user did not just ask for (spec memory "Install delivery hooks explicitly and
-  removably"); the agent's page reports the connection as partial;
+- a connected agent missing its hook gets one when a person asked
+  (``Trigger.MANUAL``), and is only reported otherwise: a boot or a period
+  does not install a hook the user did not just ask for (spec memory "Install
+  delivery hooks explicitly and removably"); the agent's page reports the
+  connection as partial;
 - an agent whose settings file does not parse is blocked
   (``unreadable_config``): nothing is guessed and nothing is written.
 
@@ -44,7 +41,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol
 
 from coffer.application.memory.delivery import DeliveryService, DeliveryWrite, HookSite
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
@@ -66,40 +62,12 @@ from coffer.domain.reconcile import (
 _log = logging.getLogger(__name__)
 
 TARGET = "delivery_hook"
-MEMORY_FEATURE = "memory"
 
 #: The uids of the agents connected to Coffer.
 ConnectedAgents = Callable[[], Awaitable[list[str]]]
 
 #: The triggers on which a connected agent missing its hook is given one.
-_INSTALL_TRIGGERS = frozenset({Trigger.SWITCH, Trigger.MANUAL})
-
-
-class FeatureStatePort(Protocol):
-    """Reads a feature's state as it is now (``FeatureService`` is one)."""
-
-    def is_enabled(self, key: str) -> bool: ...
-
-
-#: Called with the feature key and the value the switch set it to.
-MemorySwitchSubscriber = Callable[[str, bool], Awaitable[None]]
-
-
-def memory_switch_subscriber(
-    features: FeatureStatePort, reconcile: Callable[[bool], Awaitable[None]]
-) -> MemorySwitchSubscriber:
-    """A feature subscriber that reconciles the hook whenever ``memory`` switches.
-
-    It reconciles to the state ``memory`` is in when it runs, not to the value
-    the switch passed: a subscriber that runs late — after a second switch has
-    already landed — then converges on what is true now instead of undoing it.
-    """
-
-    async def _on_switch(key: str, _enabled: bool) -> None:
-        if key == MEMORY_FEATURE:
-            await reconcile(features.is_enabled(MEMORY_FEATURE))
-
-    return _on_switch
+_INSTALL_TRIGGERS = frozenset({Trigger.MANUAL})
 
 
 def _subject(site: HookSite) -> Subject:
@@ -116,22 +84,15 @@ class DeliveryHookTarget:
         self,
         *,
         delivery: DeliveryService,
-        features: FeatureStatePort,
         connected: ConnectedAgents,
     ) -> None:
         self._delivery = delivery
-        self._features = features
         self._connected = connected
         #: Agents whose file did not parse on the last observe, by uid. Read by
         #: the ``decide`` that follows it in the same (serialised) pass.
         self._unreadable: dict[str, str] = {}
 
-    def _memory_on(self) -> bool:
-        return self._features.is_enabled(MEMORY_FEATURE)
-
     async def desired(self) -> Sequence[Item]:
-        if not self._memory_on():
-            return []
         connected = set(await self._connected())
         items: list[Item] = []
         for site in await self._delivery.sites():
@@ -193,10 +154,9 @@ class DeliveryHookTarget:
         return items
 
     def decide(self, differences: Sequence[Difference], trigger: Trigger) -> Sequence[Decision]:
-        memory_on = self._memory_on()
-        return [self._decide_one(d, trigger, memory_on=memory_on) for d in differences]
+        return [self._decide_one(d, trigger) for d in differences]
 
-    def _decide_one(self, d: Difference, trigger: Trigger, *, memory_on: bool) -> Decision:
+    def _decide_one(self, d: Difference, trigger: Trigger) -> Decision:
         if d.key in self._unreadable:
             return Decision(
                 Disposition.BLOCKED,
@@ -215,14 +175,8 @@ class DeliveryHookTarget:
                 "it is rewritten in place.",
             )
         if d.op is Op.REMOVE:
-            if not memory_on:
-                return Decision(
-                    Disposition.REPAIR,
-                    "feature_off",
-                    "Memory is switched off, so Coffer's hook is withdrawn from this agent.",
-                )
-            # Memory on: every carried hook is wanted, so only a hook that
-            # appeared between this pass's two reads lands here.
+            # Every carried hook is wanted, so only a hook that appeared
+            # between this pass's two reads lands here.
             return Decision(
                 Disposition.REPORT,
                 "hook_unexpected",
@@ -232,14 +186,12 @@ class DeliveryHookTarget:
             return Decision(
                 Disposition.REPAIR,
                 "hook_missing",
-                "The agent is connected and memory is on, but its hook is missing; "
-                "it is installed.",
+                "The agent is connected, but its hook is missing; it is installed.",
             )
         return Decision(
             Disposition.REPORT,
             "hook_missing",
-            "The agent is connected and memory is on, but its hook is missing; "
-            "reconnecting the agent installs it.",
+            "The agent is connected, but its hook is missing; reconnecting the agent installs it.",
         )
 
     @staticmethod
@@ -297,11 +249,7 @@ class DeliveryHookTarget:
 
 
 __all__ = [
-    "MEMORY_FEATURE",
     "TARGET",
     "ConnectedAgents",
     "DeliveryHookTarget",
-    "FeatureStatePort",
-    "MemorySwitchSubscriber",
-    "memory_switch_subscriber",
 ]

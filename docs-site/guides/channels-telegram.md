@@ -124,7 +124,7 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 | Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb`, `/help` |
 | Groups | `/new`, `/stop`, `/model`, `/status`, `/resume`, `/help` |
 
-Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. `/kb` is listed only while the Knowledge feature is on; switching the feature re-registers the menus. The hidden `/start` is never listed.
+Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
 
 A command tapped from a group's menu arrives as `/status@my_coffer_bot`. Coffer treats it as `/status` addressed to the bot, so it answers even when the group requires a mention. A command naming another bot, such as `/status@some_other_bot`, is not for this one and is ignored.
 

@@ -9,7 +9,7 @@
 
 Every capability lands on `main`, and a release is a tagged `main`. Three of
 them — vault sync, the knowledge layer and the memory layer — were redesigned
-several times in one month and are not ready for anyone but the owner, yet the
+several times in one month and were not ready for anyone but the owner, yet the
 owner keeps them for good (the principles' governance rule: shipped capabilities
 are not removed to shrink scope). He wants to keep testing everything, in the
 installed app, while a release hands users only what is ready.
@@ -36,14 +36,15 @@ Forces on the answer:
 ### Option A — Runtime feature gates keyed on a stamped release channel (chosen)
 
 `main` keeps every feature. A registry (`backend/coffer/domain/features.py`)
-names the experimental ones — `vault_sync`, `knowledge`, `memory` — with the
-REST prefixes and resource kinds each owns. A build carries a channel,
+names the experimental ones with the REST prefixes and resource kinds each
+owns. It held `vault_sync`, `knowledge` and `memory` until all three graduated
+at 1.0, and is empty now. A build carries a channel,
 `CHANNEL` in `backend/coffer/build_channel.py`: `dev` in the repository, and
 rewritten to `stable` by `scripts/stamp_channel.py` in the release workflow on a
 tag, before PyInstaller freezes the module. Each feature's state is resolved per
 read (`backend/coffer/application/features.py`):
 
-1. a pin in `COFFER_FEATURES` (`vault_sync=on,memory=off`), read once at start;
+1. a pin in `COFFER_FEATURES` (`<key>=on,<other-key>=off`), read once at start;
    a write to a pinned feature answers 409 `FEATURE_PINNED`;
 2. the machine's own setting in the `features` object of
    `~/.coffer/daemon-config.json`, the pre-database file the daemon already
@@ -65,14 +66,16 @@ Gates act at request time, on every surface:
   distillation read the switch at the top of each round and skip it.
 - **CLI**: groups stay registered; a `FEATURE_DISABLED` answer becomes one line
   naming `coffer config set feature.<key> on`.
-- **Web and desktop**: `/api/v1/daemon/status` carries `features`; the sidebar
-  filters on it, a gated page links to Settings → General, and the desktop tray
-  drops its Sync entry (`desktop/src/sync_gate.rs`).
-- **Agent-facing side effects** follow the switch through subscribers: `memory`
-  off removes the memory delivery hook from every agent and on reinstalls it;
-  `knowledge` off rewrites `coffer-guide` without its catalogue and makes a
-  channel `/kb` answer that knowledge is off (spec experimental-features
-  "Withdraw what a switched-off feature put in front of agents").
+- **Web**: `/api/v1/daemon/status` carries `features`; the sidebar filters on
+  it and labels a switched-on feature's entry Experimental, and a gated page
+  links to Settings → General. Until Sync graduated, the desktop tray dropped
+  its Sync entry the same way.
+- **Agent-facing side effects** follow the switch through subscribers: a
+  feature that put something in front of agents withdraws it when switched off
+  and puts it back when switched on (spec experimental-features "Withdraw what a
+  switched-off feature put in front of agents"). Before 1.0 that was `memory`'s
+  delivery hook, and `knowledge`'s catalogue in `coffer-guide` and its channel
+  `/kb`.
 
 Pros: one branch; the owner's installed `dev` build has everything and a tagged
 build hides the unready; a switch is immediate and per machine; the contract is
@@ -142,17 +145,17 @@ request time on every surface.** Rules a change must respect:
 - Migrations always run, whatever the switches say, so switching a feature on
   never needs a schema change.
 - A new unfinished capability lands on `main` behind a registry entry, not on a
-  side branch. A feature leaves the registry once it is ready, and its gates are
-  deleted with it.
+  side branch. A feature leaves the registry once it is ready: its entry and
+  every gate that names it are deleted, and a migration strips its stored
+  switch from `daemon-config.json`.
 
 ## Consequences
 
 - A tagged release shows only stable features; the owner's own frozen build is
   `dev` and shows everything.
-- Experimental is not removal. The three features stay part of the product; the
-  gate only decides who sees them by default.
+- Experimental is not removal. The three features stayed part of the product
+  while gated, and graduated at 1.0 (migration 0116 stripped their stored
+  switches); the gate only decided who saw them by default.
 - Every surface a gated feature touches carries a gate, and a surface added
   later must add one; the spec's "Close every surface of a switched-off feature"
   is the checklist.
-- Sync's machinery is still constructed while `vault_sync` is off, because
-  curation takes its lock; only its rounds are skipped.

@@ -4,7 +4,7 @@ Spec agent-registry "Connect an agent to Coffer in one action", "Report an
 agent's Coffer connection part by part" and "Disconnect an agent from Coffer".
 
 Connecting installs every *part* Coffer writes into the agent's own
-configuration that applies to it right now; disconnecting takes every one of
+configuration that exists for its type; disconnecting takes every one of
 them out again. A part is one marker-scoped entry with its own install,
 removal, audit event and status, owned by the kind that knows how to write it:
 
@@ -12,11 +12,10 @@ removal, audit event and status, owned by the kind that knows how to write it:
   written by :class:`~coffer.application.agent.mcp_service.AgentMcpService`.
   It applies to every agent type, and it is the *anchor*: an agent carrying it
   is the one Coffer treats as connected when something later has to decide
-  where a newly applicable part goes (the ``memory`` switch turned on).
+  where a part goes (the memory hook's reconcile pass).
 - ``memory_hook`` — the memory delivery hook, which the memory kind owns. The
   agent kind cannot import the memory kind, so the composition root adapts it
-  to :class:`ConnectionPart` and hands it in; it applies only while the
-  ``memory`` experimental feature is on.
+  to :class:`ConnectionPart` and hands it in.
 
 This service owns no write of its own: each part keeps its own atomic write,
 ``.bak`` and audit event, so a connect is recorded as the part installs it
@@ -77,12 +76,7 @@ class ConnectionPart(Protocol):
     def key(self) -> str: ...
 
     def supports(self, agent_type: AgentType) -> bool:
-        """Whether this part exists for the type at all. A part that does is
-        removed on disconnect whether or not it currently applies."""
-        ...
-
-    def enabled(self) -> bool:
-        """Whether the part applies right now (its feature is switched on)."""
+        """Whether this part exists for the type at all."""
         ...
 
     async def status(self, agent_uid: str) -> PartStatus: ...
@@ -107,9 +101,6 @@ class McpConnectionPart:
 
     def supports(self, agent_type: AgentType) -> bool:
         return descriptor_for(agent_type).mcp is not None
-
-    def enabled(self) -> bool:
-        return True
 
     async def status(self, agent_uid: str) -> PartStatus:
         st = await self._mcp.status(agent_uid)
@@ -149,7 +140,7 @@ class AgentConnectionService:
         return AgentConfig.model_validate(resource.config).type
 
     def _applicable(self, agent_type: AgentType) -> tuple[ConnectionPart, ...]:
-        return tuple(p for p in self._parts if p.supports(agent_type) and p.enabled())
+        return tuple(p for p in self._parts if p.supports(agent_type))
 
     async def status(self, agent_uid: str) -> ConnectionStatus:
         """Read from the agent's own files, never stored; writes nothing."""
@@ -172,13 +163,11 @@ class AgentConnectionService:
         return await self.status(agent_uid)
 
     async def disconnect(self, agent_uid: str, *, actor: str) -> ConnectionStatus:
-        """Remove every part the type has, applicable now or not — a part whose
-        feature is off may still have been left behind — each taking out only
-        Coffer's own entry."""
+        """Remove every part the type has, each taking out only Coffer's own
+        entry."""
         agent_type = await self._type(agent_uid)
-        for part in self._parts:
-            if part.supports(agent_type):
-                await part.remove(agent_uid, actor=actor)
+        for part in self._applicable(agent_type):
+            await part.remove(agent_uid, actor=actor)
         return await self.status(agent_uid)
 
     async def connected_agents(self) -> list[str]:

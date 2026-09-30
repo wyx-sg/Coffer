@@ -24,8 +24,8 @@ use crate::tray_locale::{self, Lang};
 /// The event the page listens for to open its approval sheet.
 pub const APPROVALS_EVENT: &str = "coffer://approvals";
 
-/// A pending approval is someone waiting, so this is the same short tick the
-/// sync watcher reads the feature flag on, not its slow sync poll.
+/// A pending approval is someone waiting, so this is a short tick, not the
+/// sync watcher's slow poll.
 const TICK: Duration = Duration::from_secs(15);
 /// Let the launch handshake's detect-or-spawn go first.
 const FIRST_TICK_DELAY: Duration = Duration::from_secs(5);

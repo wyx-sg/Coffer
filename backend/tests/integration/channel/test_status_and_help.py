@@ -59,7 +59,7 @@ async def test_help_is_a_card_with_the_five_actions(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", "/help"))
 
     [(_chat, text, buttons)] = adapter.cards
-    assert text == help_text(knowledge=True)
+    assert text == help_text()
     assert [b.value for b in buttons] == HELP
     assert [b.label for b in buttons] == ["New", "Stop", "Model", "Status", "Resume"]
 
@@ -69,7 +69,7 @@ async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> No
 
     await env.processor.on_message(inbound("tg", "owner", "/start"))
 
-    assert adapter.texts() == [help_text(knowledge=True)]
+    assert adapter.texts() == [help_text()]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="the help card follows pairing")
@@ -85,5 +85,5 @@ async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
     assert len(adapter.sent) == 2
     [(chat, text, buttons)] = adapter.cards
     assert chat == "chat-1"
-    assert text == help_text(knowledge=True)
+    assert text == help_text()
     assert [b.value for b in buttons] == HELP

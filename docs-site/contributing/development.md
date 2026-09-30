@@ -99,7 +99,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `COFFER_DB_URL` | SQLAlchemy URL of the database (default `sqlite+aiosqlite:///~/.coffer/coffer.db`) |
 | `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_AGENT_STATE_ROOT` | Move the knowledge tree, the memory tree or the agent-state cache |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
-| `COFFER_FEATURES` | Pin experimental features for this daemon, for example `knowledge=on,vault_sync=off` |
+| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. The registry is empty right now, so there is nothing to pin |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
 
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.

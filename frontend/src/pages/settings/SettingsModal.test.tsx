@@ -15,23 +15,30 @@ import { routes } from "@/router";
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
 
+// The daemon's experimental-feature registry; empty (as it ships) unless a
+// test registers the test-only `fake_feature`.
+let registered: { key: string; enabled: boolean; source: string }[] = [];
+
 beforeEach(() => {
-  const get = vi.fn().mockImplementation(() =>
-    Promise.resolve({
-      data: {
-        resources: [],
-        agents: [],
-        candidates: [],
-        entries: [],
-        items: [],
-        status: "ready",
-        version: "0.0.0",
-        port: 8000,
-        started_at: "2026-01-01T00:00:00Z",
-        features: {},
-      },
-      error: undefined,
-    }),
+  registered = [];
+  const get = vi.fn().mockImplementation((path: string) =>
+    path === "/daemon/features"
+      ? Promise.resolve({ data: { channel: "stable", features: registered }, error: undefined })
+      : Promise.resolve({
+          data: {
+            resources: [],
+            agents: [],
+            candidates: [],
+            entries: [],
+            items: [],
+            status: "ready",
+            version: "0.0.0",
+            port: 8000,
+            started_at: "2026-01-01T00:00:00Z",
+            features: {},
+          },
+          error: undefined,
+        }),
   );
   vi.mocked(getApiClient).mockReturnValue({
     GET: get,
@@ -148,11 +155,22 @@ describe("the Settings modal", () => {
     expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument();
   });
 
-  test("the General tab holds Coffer's model and no Experimental features card", async () => {
+  test("with an empty registry the General tab has no Experimental features section", async () => {
     renderAt("/settings/general");
     const pane = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
+    await waitFor(() =>
+      expect(vi.mocked(getApiClient)().GET).toHaveBeenCalledWith("/daemon/features"),
+    );
     expect(within(pane).queryByText(/experimental features/i)).not.toBeInTheDocument();
     // Start at login moved to the Daemon tab.
     expect(within(pane).queryByText(/start at login/i)).not.toBeInTheDocument();
+  });
+
+  test("a registered feature puts the Experimental features section on the General tab", async () => {
+    registered = [{ key: "fake_feature", enabled: false, source: "channel" }];
+    renderAt("/settings/general");
+    const pane = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
+    expect(await within(pane).findByText("Experimental features")).toBeInTheDocument();
+    expect(within(pane).getByRole("switch", { name: "fake_feature" })).not.toBeChecked();
   });
 });

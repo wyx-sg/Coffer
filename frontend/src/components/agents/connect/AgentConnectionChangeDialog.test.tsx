@@ -77,19 +77,21 @@ describe("AgentConnectionChangeDialog", () => {
     expect(await screen.findByText("Nothing to change")).toBeInTheDocument();
   });
 
-  test("with memory off, adding writes only the MCP entry", async () => {
+  test("adding an agent writes the MCP entry and the memory hook", async () => {
     const codex = typeRow({ type: "codex" });
-    use(fakeDaemon({ types: [codex], memoryOn: false }));
+    use(fakeDaemon({ types: [codex] }));
     renderWithDaemon(
       <AgentConnectionChangeDialog request={{ kind: "add", rows: [codex] }} onClose={() => {}} />,
     );
     const dialog = await screen.findByRole("dialog");
     await waitFor(() =>
-      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent("1 change in 1 agent"),
+      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent(
+        "2 changes in 1 agent",
+      ),
     );
     expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
-    expect(within(dialog).queryByText("~/.codex/hooks.json")).not.toBeInTheDocument();
-    // Before registration the uid is not known, and the preview says so.
-    expect(within(dialog).getByText(/<assigned on add>/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText("~/.codex/hooks.json").length).toBeGreaterThan(0);
+    // Before registration the uid is not known, and both previews say so.
+    expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(2);
   });
 });

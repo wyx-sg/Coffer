@@ -55,8 +55,6 @@ class ChannelCommand:
     #: Whether the command is offered in a group's menu (spec channels/telegram
     #: "Register command menus per chat scope and language").
     in_group_menu: bool = False
-    #: Offered only while the knowledge feature is on.
-    needs_knowledge: bool = False
 
 
 COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
@@ -112,7 +110,6 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
         "[collection]",
         "Save the document you just sent into a knowledge collection",
         "把刚发送的文档存入知识库集合",
-        needs_knowledge=True,
     ),
     ChannelCommand(
         "help", "", "List the commands", "列出所有命令", group_private=True, in_group_menu=True
@@ -130,13 +127,9 @@ EFFORT_LEVELS: frozenset[str] = frozenset({"minimal", "low", "medium", "high", "
 _HEAD = re.compile(r"^/([A-Za-z0-9_]+)$")
 
 
-def _entries(*, knowledge: bool) -> tuple[ChannelCommand, ...]:
-    return tuple(c for c in COMMAND_ROSTER if knowledge or not c.needs_knowledge)
-
-
-def names(*, knowledge: bool = True) -> frozenset[str]:
+def names() -> frozenset[str]:
     """Every handled command as its typed form (``"/help"``)."""
-    return frozenset(f"/{c.name}" for c in _entries(knowledge=knowledge))
+    return frozenset(f"/{c.name}" for c in COMMAND_ROSTER)
 
 
 def command_name(text: str) -> str | None:
@@ -211,16 +204,16 @@ def is_group_private(command: str) -> bool:
     return True
 
 
-def menu_entries(*, group: bool, knowledge: bool) -> tuple[ChannelCommand, ...]:
+def menu_entries(*, group: bool) -> tuple[ChannelCommand, ...]:
     """The commands a menu offers: every one in a private chat, the group subset
-    in a group; ``/kb`` only while knowledge is on."""
-    entries = _entries(knowledge=knowledge)
-    return tuple(c for c in entries if c.in_group_menu) if group else entries
+    in a group."""
+    return tuple(c for c in COMMAND_ROSTER if c.in_group_menu) if group else COMMAND_ROSTER
 
 
-def help_text(*, knowledge: bool = True) -> str:
+def help_text() -> str:
     """The ``/help`` body, rendered from the roster: every command with its
     arguments on one line, then what anything else is. The one-line
     descriptions live in the platform's own command menu (Telegram)."""
-    heads = [f"/{c.name} {c.args}".rstrip() for c in _entries(knowledge=knowledge)]
-    return " · ".join(heads) + "\nAnything else is a message to the agent."
+    heads = [f"/{c.name} {c.args}".rstrip() for c in COMMAND_ROSTER]
+    return " · ".join(heads) + "
+Anything else is a message to the agent."

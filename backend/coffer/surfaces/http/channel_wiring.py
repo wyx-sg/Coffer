@@ -84,7 +84,6 @@ def wire_channel_kind(
     # the life of the daemon — so it is resolved once here rather than on every
     # reconcile tick and every status read.
     machine_id = resolve_identity().machine_id
-    features = app.state.feature_service
 
     async def local_machine_id() -> str:
         return machine_id
@@ -112,9 +111,6 @@ def wire_channel_kind(
         # (import-linter contract 5f).
         collections=knowledge.service,
         ingest=knowledge.ingest_service,
-        # While knowledge is switched off `/kb` answers that and saves
-        # nothing (spec experimental-features).
-        knowledge_enabled=lambda: features.is_enabled("knowledge"),
     )
 
     # ``materialize_async`` is the resolver's own off-the-loop path;
@@ -130,7 +126,7 @@ def wire_channel_kind(
         if parsed.channel_type == "telegram":
             dest = channel_destination(uid, name, "telegram")
             token = (await materialize({"token": parsed.bot_token_ref}, dest))["token"]
-            return TelegramAdapter(name, token, knowledge_enabled=features.is_enabled("knowledge"))
+            return TelegramAdapter(name, token)
         dest = channel_destination(uid, name, "seatalk", parsed.app_id)
         secret = (await materialize({"secret": parsed.app_secret_ref}, dest))["secret"]
         return SeaTalkAdapter(name, parsed.app_id, secret)
@@ -166,7 +162,6 @@ def wire_channel_kind(
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         machine_id=local_machine_id,
-        knowledge_enabled=lambda: features.is_enabled("knowledge"),
         # Each tick delivers what a running channel still owes its chats.
         on_tick=mirror.flush,
     )

@@ -11,7 +11,7 @@ import pytest
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.feature_settings import DaemonConfigFeatureSettings
 
-_KNOWN = ("vault_sync", "knowledge", "memory")
+_KNOWN = ("fake_a", "fake_b", "fake_c")
 
 
 @pytest.fixture(autouse=True)
@@ -33,45 +33,45 @@ def test_no_file_means_no_settings() -> None:
 
 
 def test_write_keeps_the_other_settings_and_the_other_features() -> None:
-    _write_raw({"port": 9123, "features": {"knowledge": False, "from_newer_build": True}})
-    daemon_config.write_feature_setting("memory", True)
+    _write_raw({"port": 9123, "features": {"fake_b": False, "from_newer_build": True}})
+    daemon_config.write_feature_setting("fake_c", True)
     payload = json.loads(daemon_config.config_path().read_text())
     assert payload == {
         "port": 9123,
-        "features": {"knowledge": False, "from_newer_build": True, "memory": True},
+        "features": {"fake_b": False, "from_newer_build": True, "fake_c": True},
     }
     assert daemon_config.read_feature_settings() == {
-        "knowledge": False,
+        "fake_b": False,
         "from_newer_build": True,
-        "memory": True,
+        "fake_c": True,
     }
 
 
 def test_a_non_boolean_value_is_ignored_with_a_warning(caplog: pytest.LogCaptureFixture) -> None:
-    _write_raw({"features": {"memory": "yes", "knowledge": True}})
+    _write_raw({"features": {"fake_c": "yes", "fake_b": True}})
     with caplog.at_level(logging.WARNING):
-        assert daemon_config.read_feature_settings() == {"knowledge": True}
-    assert "memory" in caplog.text
+        assert daemon_config.read_feature_settings() == {"fake_b": True}
+    assert "fake_c" in caplog.text
 
 
 def test_a_features_value_that_is_not_an_object_is_ignored() -> None:
-    _write_raw({"features": ["memory"]})
+    _write_raw({"features": ["fake_c"]})
     assert daemon_config.read_feature_settings() == {}
-    daemon_config.write_feature_setting("memory", False)
-    assert daemon_config.read_feature_settings() == {"memory": False}
+    daemon_config.write_feature_setting("fake_c", False)
+    assert daemon_config.read_feature_settings() == {"fake_c": False}
 
 
 def test_the_adapter_round_trips_through_the_file() -> None:
     adapter = DaemonConfigFeatureSettings()
-    adapter.write("vault_sync", True)
-    assert adapter.read() == {"vault_sync": True}
-    assert json.loads(daemon_config.config_path().read_text()) == {"features": {"vault_sync": True}}
+    adapter.write("fake_a", True)
+    assert adapter.read() == {"fake_a": True}
+    assert json.loads(daemon_config.config_path().read_text()) == {"features": {"fake_a": True}}
 
 
 def test_pins_parse_on_and_off() -> None:
-    assert daemon_config.parse_feature_pins("vault_sync=on, memory=OFF", _KNOWN) == {
-        "vault_sync": True,
-        "memory": False,
+    assert daemon_config.parse_feature_pins("fake_a=on, fake_c=OFF", _KNOWN) == {
+        "fake_a": True,
+        "fake_c": False,
     }
 
 
@@ -85,13 +85,13 @@ def test_unknown_and_malformed_pins_are_skipped_with_a_warning(
 ) -> None:
     with caplog.at_level(logging.WARNING):
         pins = daemon_config.parse_feature_pins(
-            "workflow=on,knowledge,memory=maybe,knowledge=off", _KNOWN
+            "workflow=on,fake_b,fake_c=maybe,fake_b=off", _KNOWN
         )
-    assert pins == {"knowledge": False}
+    assert pins == {"fake_b": False}
     assert "workflow" in caplog.text
-    assert "memory=maybe" in caplog.text
+    assert "fake_c=maybe" in caplog.text
 
 
 def test_pins_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(daemon_config.FEATURES_ENV, "knowledge=off")
-    assert daemon_config.read_feature_pins(_KNOWN) == {"knowledge": False}
+    monkeypatch.setenv(daemon_config.FEATURES_ENV, "fake_b=off")
+    assert daemon_config.read_feature_pins(_KNOWN) == {"fake_b": False}

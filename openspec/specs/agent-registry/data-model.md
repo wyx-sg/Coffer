@@ -348,21 +348,21 @@ Connects an agent to Coffer, or disconnects it, by installing or removing each
 **part** Coffer writes into the agent's own configuration ("Connect an agent to
 Coffer in one action", "Report an agent's Coffer connection part by part",
 "Disconnect an agent from Coffer"). A part is a `ConnectionPart` — a key,
-`supports(agent_type)`, `enabled()`, and `status` / `install` / `remove` by
+`supports(agent_type)`, and `status` / `install` / `remove` by
 agent uid — and owns its own atomic write, `.bak` and audit event; the service
 writes nothing itself and records no audit event of its own.
 
 | Part          | Owner                                         | Applies when                          | Audit events                                            |
 | ------------- | --------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
 | `mcp`         | `AgentMcpService` (via `McpConnectionPart`)   | always (every type declares one)      | `agent_mcp_installed` / `agent_mcp_uninstalled`         |
-| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the `memory` feature is on | `memory_delivery_installed` / `memory_delivery_removed` |
+| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the type has a hook adapter | `memory_delivery_installed` / `memory_delivery_removed` |
 
 | Method                                   | Purpose |
 | ---------------------------------------- | ------- |
 | `status(uid) -> ConnectionStatus`        | Each applicable part's `PartStatus(key, installed, detail)`, and a `state`: `connected` (all installed), `partial`, or `disconnected` (none). Read on demand, never stored. |
 | `connect(uid, *, actor)`                 | (Re)install every applicable part, the `mcp` part first so a missing shim refuses before anything is written. |
-| `disconnect(uid, *, actor)`              | Remove every part the type supports, applicable now or not. |
-| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — where switching `memory` on installs the hook. |
+| `disconnect(uid, *, actor)`              | Remove every part the type supports. |
+| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones the hook's reconcile pass treats as connected. |
 
 The memory kind's part is adapted at the composition root because the agent
 kind may not import the memory kind; the HTTP shape is `CofferConnectionOut`

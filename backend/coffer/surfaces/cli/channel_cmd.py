@@ -57,7 +57,7 @@ def _this_machine_id(client: Any, *, verbose: bool) -> str:
     cached beside the database, and a CLI deriving its own would be a second
     answer to an identity question that must have exactly one. Read off the
     daemon's status rather than the sync surface: a channel is bound to a
-    machine whether or not ``vault_sync`` is switched on.
+    machine whether or not the vault syncs with anything.
     """
     r = client.get("/daemon/status")
     _cli_client.check(r, verbose=verbose)
