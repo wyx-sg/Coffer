@@ -22,6 +22,15 @@ vi.mock("@/lib/api/call", async (importOriginal) => {
   return { ...actual, call: (...args: unknown[]) => call(...args) };
 });
 
+// No real page carries an experimental feature, so the gate is tested on a
+// test-only entry flagged with one; it is off unless a test says otherwise.
+vi.mock("@/lib/navigation", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/navigation")>();
+  const { FlaskConical } = await import("lucide-react");
+  const fake = { to: "/fake", labelKey: "Fake page", icon: FlaskConical, feature: "fake_feature" };
+  return { ...real, NAV_ENTRIES: [...real.NAV_ENTRIES, fake] };
+});
+
 type Row = { uid: string; name: string; title: string | null };
 
 const MCP: Row[] = [{ uid: "u-gh", name: "github-mcp", title: "Octo bridge" }];
@@ -38,7 +47,7 @@ function never(): Promise<unknown> {
 }
 
 beforeEach(() => {
-  features = { knowledge: true, memory: true, vault_sync: true };
+  features = { fake_feature: false };
   daemonUp = true;
   callAnswers = {
     "/agents": async () => ({ items: [] }),
@@ -164,15 +173,19 @@ describe("CommandPalette", () => {
   });
 
   // revise-web-ui-ia: web-ui "the palette leaves out switched-off features"
-  test("with knowledge switched off neither its page nor a collection is listed", async () => {
-    features = { knowledge: false, memory: true, vault_sync: true };
+  test("a switched-off feature's page is not listed", async () => {
     renderPalette();
     await settled();
-    type("knowledge");
+    type("fake page");
     expect(options()).toEqual([]);
-    type("team-notes");
-    expect(options()).toEqual([]);
-    expect(call).not.toHaveBeenCalledWith("/knowledge/collections");
+  });
+
+  test("a switched-on feature's page is listed", async () => {
+    features = { fake_feature: true };
+    renderPalette();
+    await settled();
+    type("fake page");
+    expect(options()).toEqual(["Fake page"]);
   });
 
   // revise-web-ui-ia: web-ui "the palette lists pages while objects load"

@@ -7,10 +7,6 @@ description: Let Coffer read what each of your agents has learned, distil it int
 
 Coffer reads the memory your agents already keep — Claude Code's per-project notes, Codex's task groups and profile — distils it into one set of notes per repository plus one global set, and makes those notes available to every agent. It never writes back into an agent's own memory. This page covers what Coffer reads, where the notes live, how agents receive them, how to see delivery working, how to guard a known trap with a trigger, and how to browse, switch off and rebuild the notes.
 
-::: warning Experimental feature
-Memory is an [experimental feature](/guides/experimental-features) with the key `memory`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.memory on`. While it is off, the Memory page and the `/api/v1/memory` routes are unavailable, and Coffer removes its memory hook from every agent that had one; switching memory back on reinstalls the hook in those same agents. Nothing already distilled is deleted.
-:::
-
 ## What memory aggregation is for
 
 Every agent keeps its own memory, and none can see another's. What Claude Code learned about a repository this morning, Codex has to be taught again this afternoon.
@@ -208,7 +204,7 @@ Triggers are yours: you write them, or you accept the ones Coffer proposes. Noth
 
 ### In channel turns
 
-A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. It stops on the next turn after you switch the `memory` feature off, and a turn gets no memory header at all when the index is empty. Prompt-time retrieval and triggers are not part of this append.
+A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. A turn gets no memory header at all when the index is empty. Prompt-time retrieval and triggers are not part of this append.
 
 A turn you send from the [Conversations](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
 
@@ -353,7 +349,7 @@ A partition has no on/off switch and no per-agent reach. Every partition is serv
 
 This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/memory/`.
 
-To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)). To stop memory entirely, switch the `memory` [experimental feature](/guides/experimental-features) off.
+To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)).
 
 ## Rebuild a partition
 
@@ -410,7 +406,6 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 - [Knowledge](/guides/knowledge)
 - [Skills](/guides/skills) — the `coffer-guide` skill tells agents how memory works
 - [Agents](/guides/agents)
-- [Experimental features](/guides/experimental-features)
 - [Memory architecture](/architecture/memory)
 - [MCP tools reference](/reference/mcp-tools)
 - [Memory spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)

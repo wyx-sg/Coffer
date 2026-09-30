@@ -96,7 +96,7 @@ On `initialize`, the session records the client's declared capabilities, the lau
 The identity is self-reported, not verified. Any local process that holds the token can open `/mcp` and claim any uid. This is acceptable under the loopback-only, single-user posture described in [Security model](/architecture/security).
 :::
 
-The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools (while the `memory` feature is on) and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
+The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
 
 ## Discovery and namespacing
 
@@ -185,10 +185,10 @@ The results are real upstream schemas under the names the agent calls directly. 
 
 | Tool | Declared in | Experimental feature |
 | --- | --- | --- |
-| `coffer__write` | `application/knowledge/builtin_tools.py` | `knowledge` |
+| `coffer__write` | `application/knowledge/builtin_tools.py` | none |
 | `coffer__search_tools` | `application/mcp/gateway_tool_search.py` (gateway-owned) | none |
 
-The registry checks the feature on every read. While a feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
+No built-in tool belongs to an experimental feature right now. For one that does, the registry checks the feature on every read: while the feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
 
 Before a built-in handler runs, `inject_session_context` sets `agent` as described above. It also fills `cwd` when the tool's schema declares that property and the client left it empty. The handler's return value is wrapped as a `CallToolResult`: JSON text in `content`, the same object in `structuredContent`, and `isError: false`. An exception inside a handler becomes an in-band `isError: true` result, not a JSON-RPC error, so the model can read it and correct itself. The text shows Coffer-authored and `ValueError` messages, and only the class name for any other exception. For tool behaviour, see [MCP tools](/reference/mcp-tools).
 

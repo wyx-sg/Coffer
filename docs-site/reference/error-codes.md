@@ -204,7 +204,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | `coffer config set feature.<feature> on`. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. | List keys with `coffer config list feature.`. |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature, for example a feature that has graduated. | List keys with `coffer config list feature.`. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors

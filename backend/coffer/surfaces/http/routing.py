@@ -89,7 +89,7 @@ def include_all_routers(app: FastAPI) -> None:
         credential_boundary_router,
         credential_router,
         settings_router,
-        sync_router,  # spec vault-sync (experimental: vault_sync)
+        sync_router,  # spec vault-sync
         internal_engine_router,  # spec internal-engine
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,

@@ -193,9 +193,8 @@ class MCPGatewaySession:
         # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
         # hidden_count is 0 and the tiering paragraph is omitted. It names only
-        # the built-ins the tool list carries now, and the memory root only
-        # while the memory feature is on: a switched-off feature's tools and
-        # directories are neither listed nor advertised.
+        # the built-ins the tool list carries now: a switched-off feature's
+        # tools are neither listed nor advertised.
         return build_initialize_result(
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._builtin.list()],

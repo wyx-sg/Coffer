@@ -48,8 +48,8 @@ acceptance(
     // This list is the whole inventory, and the count assertion below is what
     // makes "and only those" true: a fence with no upper bound is not a fence.
     // Adding a sidebar entry means adding it here. See
-    // `frontend/src/lib/navigation.ts`. An experimental feature's entry
-    // carries its marker in its name.
+    // `frontend/src/lib/navigation.ts`. No entry is experimental while the
+    // daemon registers no feature, so no name carries the marker.
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
       [null, [/^Overview$/i]],
       ["Agents", [/^Agents$/i, /^Model providers$/i]],
@@ -58,11 +58,8 @@ acceptance(
         "Capabilities",
         [/^MCP servers$/i, /^Custom tools$/i, /^Skills$/i, /^CLIs$/i],
       ],
-      ["Context", [/^Knowledge Experimental$/i, /^Memory Experimental$/i]],
-      [
-        "System",
-        [/^Secrets$/i, /^Activity$/i, /^Usage$/i, /^Sync Experimental$/i],
-      ],
+      ["Context", [/^Knowledge$/i, /^Memory$/i]],
+      ["System", [/^Secrets$/i, /^Activity$/i, /^Usage$/i, /^Sync$/i]],
     ];
     const nav = page.getByRole("navigation", { name: /Primary navigation/i });
     for (const [heading, labels] of SIDEBAR_GROUPS) {

@@ -68,7 +68,7 @@ A resource's **reach** decides where it takes effect. Reach has two parts:
 - **`enabled`**: the on/off switch. Knowledge collections and memory partitions have none: they are always on.
 - **scope**: an optional allow-list of agents. No scope means every agent, `--agents a,b` means only those agents, and an empty list means none.
 
-Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent, and only the `knowledge` or `memory` experimental feature switches the whole layer. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
+Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
 Set scope with `coffer <kind> scope <name> --agents <types>` (an agent is named by its type, such as `claude-code`) (`--all` for every agent, `--none` for none), or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -143,7 +143,7 @@ Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/ar
 
 ## Experimental features
 
-Three capabilities are switched on or off on each machine: **Sync** (`vault_sync`), **Knowledge** (`knowledge`) and **Memory** (`memory`). Their default comes from the build's channel: off on a `stable` release, on on a `dev` build. Switching one off hides its pages, commands and `coffer__` tools but deletes nothing. Switching it back on continues where it stopped. You can switch them under **Settings → General** or with `coffer config set feature.<key> on|off`.
+A capability that is not ready for everyone yet ships as an experimental feature: it can be switched on or off on each machine, and its default comes from the build's channel (off on a `stable` release, on on a `dev` build). Switching one off hides its pages, commands and `coffer__` tools but deletes nothing. When a feature is ready it graduates and loses its switch. No feature is experimental right now: Sync, Knowledge and Memory graduated at 1.0 and are always on.
 
 Guide: [Experimental features](/guides/experimental-features).
 

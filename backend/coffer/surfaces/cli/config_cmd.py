@@ -19,7 +19,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from coffer.surfaces.cli._config_keys import listing, lookup
+from coffer.surfaces.cli._config_keys import is_family, listing, lookup
 from coffer.surfaces.cli._config_registry import Session, Setting, SettingValueError, show
 from coffer.surfaces.cli._options import ExitCode
 
@@ -69,12 +69,15 @@ def list_cmd(
     """List every key with its value, its default, its type and its help."""
     with _session(ctx) as s:
         settings = listing(s, prefix)
-        if not settings:
+        # A family with no members lists nothing, and that is no error.
+        if not settings and not is_family(prefix):
             typer.echo(f"no setting key starts with {prefix!r}", err=True)
             raise typer.Exit(int(ExitCode.NOT_FOUND))
         rows = [_row(s, st) for st in settings]
     if output_json:
         typer.echo(_json.dumps({"settings": rows}, indent=2))
+        return
+    if not rows:
         return
     table = Table(title="Settings")
     for col in ("Key", "Value", "Default", "Type", "Help"):

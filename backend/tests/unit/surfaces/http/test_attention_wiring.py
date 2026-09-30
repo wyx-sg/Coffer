@@ -24,7 +24,7 @@ def test_every_source_when_every_dependency_is_wired() -> None:
         ("mcp_server", None),
         ("agent", None),
         ("channel", None),
-        ("sync", "vault_sync"),
+        ("sync", None),
     ]
 
 

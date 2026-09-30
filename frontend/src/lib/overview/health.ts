@@ -36,9 +36,9 @@ export const AREAS: readonly Area[] = [
   { id: "channels", to: "/channels", kinds: ["channel"] },
   { id: "mcpServers", to: "/mcp-servers", kinds: ["mcp_server"] },
   { id: "skills", to: "/skills", kinds: ["skill"] },
-  { id: "knowledge", to: "/knowledge", kinds: ["knowledge"], feature: "knowledge" },
-  { id: "memory", to: "/memory", kinds: ["memory"], feature: "memory" },
-  { id: "sync", to: "/sync", kinds: ["sync"], feature: "vault_sync" },
+  { id: "knowledge", to: "/knowledge", kinds: ["knowledge"] },
+  { id: "memory", to: "/memory", kinds: ["memory"] },
+  { id: "sync", to: "/sync", kinds: ["sync"] },
 ];
 
 /** @ui-only An area's problems as the attention list reports them. */

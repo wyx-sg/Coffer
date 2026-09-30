@@ -433,8 +433,8 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 
 - Coffer's own MCP tools and when to reach for each.
 - That tools hidden from the agent's tool list are still callable through `coffer__search_tools`.
-- When [Knowledge](/guides/knowledge) is switched on: where the knowledge root is, how to read it with the agent's own file tools, how to add to it with `coffer__write`, and a catalogue of every document in every collection, with its path, title and description.
-- When [Memory](/guides/memory) is switched on: that Coffer reads the agent's memory and never writes it, and that Coffer's notes are Markdown under the memory root, which the agent greps with its own file tools.
+- [Knowledge](/guides/knowledge): where the knowledge root is, how to read it with the agent's own file tools, how to add to it with `coffer__write`, and a catalogue of every document in every collection, with its path, title and description.
+- [Memory](/guides/memory): that Coffer reads the agent's memory and never writes it, and that Coffer's notes are Markdown under the memory root, which the agent greps with its own file tools.
 - That no Coffer tool waits on a human approval.
 
 Its frontmatter description names Coffer's tools and the subjects of your collections (taken from each collection's `README.md`), so the model has something concrete to match against. The description stays within 1024 characters; if the collections do not fit, whole subjects are dropped from the end.

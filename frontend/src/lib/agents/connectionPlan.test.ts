@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import { connectionFiles, planConnect, planDisconnect, type PlanAgent } from "./connectionPlan";
 
-const OPTS = { memoryOn: true, placeholders: { uid: "<uid>", shim: "<shim>" } };
+const OPTS = { placeholders: { uid: "<uid>", shim: "<shim>" } };
 
 const claude: PlanAgent["row"] = {
   type: "claude_code",
@@ -54,11 +54,6 @@ describe("planConnect", () => {
     expect(items[0].diff![0]).toEqual({ kind: "hunk", text: "mcpServers" });
     expect(items[0].added).toBe(4);
     expect(items[2].diff!.map((l) => l.text)).toContain("[mcp_servers.coffer]");
-  });
-
-  test("without the memory feature only the entry is written", () => {
-    const items = planConnect([{ row: codex }], { ...OPTS, memoryOn: false });
-    expect(items.map((i) => i.id)).toEqual(["codex:mcp"]);
   });
 
   test("a never-run agent also gets its directory created", () => {

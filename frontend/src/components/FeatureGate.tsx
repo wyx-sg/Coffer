@@ -2,10 +2,10 @@
 //
 // What a page of an experimental feature renders while the feature is
 // switched off on this machine (spec experimental-features "Close every
-// surface of a switched-off feature"): a notice that says so. It links to no
-// Settings tab — Settings lists no features; a feature is switched on the
-// command line (`coffer config set feature.<key> on`). The page itself is not
-// mounted, so none of its requests are made.
+// surface of a switched-off feature"): a notice that says so. The feature is
+// switched on Settings → General or on the command line (`coffer config set
+// feature.<key> on`). The page itself is not mounted, so none of its requests
+// are made.
 //
 // A bookmark or a typed URL is how anyone gets here — the sidebar entry is
 // already gone — so the notice names the feature rather than answering "page
@@ -29,7 +29,7 @@ export function FeatureGate({ feature, children }: { feature: FeatureKey; childr
   if (enabled === undefined && !status.isError) return <PageFallback />;
   if (enabled !== false) return <>{children}</>;
 
-  const name = t(`settings.features.names.${feature}`);
+  const name = t(`settings.features.names.${feature}`, { defaultValue: feature });
   return (
     <EmptyState
       icon={FlaskConical}

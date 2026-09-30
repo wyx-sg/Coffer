@@ -316,7 +316,6 @@ def make_telegram_adapter(
     *,
     poll_timeout: int = 1,
     media_dir: Any = None,
-    knowledge_enabled: bool = True,
 ) -> TelegramAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
     return TelegramAdapter(
@@ -326,7 +325,6 @@ def make_telegram_adapter(
         base_url="http://fake",
         poll_timeout=poll_timeout,
         media_dir=media_dir,
-        knowledge_enabled=knowledge_enabled,
     )
 
 

@@ -8,7 +8,8 @@
 // runs on, speech to text and the unattended passes — moved here unchanged
 // from its old tab (spec web-ui "Choose Coffer's model in Settings › General";
 // its redesign is change revise-web-ui-ia task 3.4). When the daemon runs is on
-// the Daemon tab now, and Settings lists no experimental features.
+// the Daemon tab now. Last come the experimental features, a section that
+// renders only while the daemon registers at least one.
 //
 // Every row uses the same shadcn Select. The editor picker lists "system
 // default" plus the editors the daemon detected as installed, and a "Custom…"
@@ -20,6 +21,7 @@ import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EngineSettings } from "./EngineSettings";
+import { ExperimentalFeaturesSettings } from "./ExperimentalFeaturesSettings";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -172,6 +174,7 @@ export function GeneralSettings() {
         </CardContent>
       </Card>
       <EngineSettings />
+      <ExperimentalFeaturesSettings />
     </div>
   );
 }
