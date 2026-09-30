@@ -190,7 +190,7 @@ Coffer memory: notes recorded for this user that may apply to this request. …
 - (/Users/you/.coffer/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
 ```
 
-- A note is given **once per session**. A later prompt that names the same note does not bring it in again.
+- A note is given **once per session**. A later prompt that names the same note does not bring it in again, even after the daemon restarts.
 - A short prompt — under three words — and a nudge such as `continue`, `ok` or `继续` bring in nothing, so a conversation that is just moving along costs nothing.
 - The whole addition stays under 1.5 KB.
 - The ranking is plain word matching over the note files. Nothing is embedded, and nothing leaves your machine.

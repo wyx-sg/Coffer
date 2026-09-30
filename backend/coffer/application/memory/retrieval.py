@@ -118,6 +118,7 @@ class RetrievalService:
         if not partitions:
             return Retrieved("", project, ())
         cached = await self._index(partitions)
+        await self._ledger.ready()
         exclude = self._ledger.delivered(session_id) if session_id else frozenset()
         picked = ranking.select(cached.index.rank(prompt), exclude=exclude)
         lines: list[str] = []

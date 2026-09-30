@@ -528,7 +528,7 @@ A partition MUST NOT carry the Resource framework's per-agent reach or an enable
 - **AND** the answer names that partition among the distilled ones
 
 ### Requirement: Retrieve the notes a prompt names
-For every prompt the developer sends a hook-driven session, Coffer MUST rank the notes of the session's repository partition and of `global` against the prompt — each note's title, description, search terms and body — with a lexical ranker (BM25, CJK text as bigrams), and MUST add to the session the **top three** notes that score at or above a **relevance floor** and that this session has not already been given. Each is delivered as the absolute path of its file and its substance (see "Word delivered notes as provenance plus fact"), and the whole delivery MUST stay within **1,500 UTF-8 bytes**. A prompt of fewer than three words, or a bare nudge such as `continue`, `ok` or `继续`, MUST retrieve nothing. What a session was already given is remembered per `session_id` — the id the agent hands its hook, never a process id — for the daemon's lifetime.
+For every prompt the developer sends a hook-driven session, Coffer MUST rank the notes of the session's repository partition and of `global` against the prompt — each note's title, description, search terms and body — with a lexical ranker (BM25, CJK text as bigrams), and MUST add to the session the **top three** notes that score at or above a **relevance floor** and that this session has not already been given. Each is delivered as the absolute path of its file and its substance (see "Word delivered notes as provenance plus fact"), and the whole delivery MUST stay within **1,500 UTF-8 bytes**. A prompt of fewer than three words, or a bare nudge such as `continue`, `ok` or `继续`, MUST retrieve nothing. What a session was already given is remembered per `session_id` — the id the agent hands its hook, never a process id — and survives a daemon restart (see "Remember what a session was given across daemon restarts").
 
 The ranking index is derived: it is held in memory, rebuilt from the note files when a partition's `notes/` changes, and never written. Nothing chunks or embeds a note.
 
@@ -647,3 +647,12 @@ A **channel-driven turn** runs no hook of Coffer's, so Coffer MUST retrieve for 
 - **WHEN** each sends the prompt "why does make verify fail with undici AbortSignal under node", and the channel conversation sends it again
 - **THEN** the channel turn's agent receives the prompt followed by the same text the `UserPromptSubmit` hook would add, naming the Node 20 note's file, and one `memory_delivery_fired` event names moment `prompt`, the conversation and the note
 - **AND** the second channel turn is given nothing new, and the developer-driven turn's prompt reaches its agent unchanged
+
+### Requirement: Remember what a session was given across daemon restarts
+What each session was given — the notes delivered at its prompts, and the triggers that held or annotated one of its commands — MUST survive a daemon restart, so a restart neither brings a note into a session again nor lets a trigger hold a second command in it. The record MUST be the audit log's delivery fires (see "Audit every delivery fire"), which already name each fire's session, notes and trigger: the daemon MUST rebuild the per-session record from the fires of the last **seven days** before it answers its first prompt or command, and MUST add no table for it (see "Add no table of its own"). A session idle for longer than that is treated as new. A rebuild that fails MUST be logged and leave the record empty rather than stop delivery.
+
+#### Scenario: a daemon restart gives a session nothing twice
+- **GIVEN** a session that was given a note at a prompt and had a command held by a trigger, and then the daemon is restarted
+- **WHEN** the same session sends the same prompt and runs the same command, and a new session does both too
+- **THEN** the first session is given nothing and its command passes
+- **AND** the new session is given the note and its command is held
