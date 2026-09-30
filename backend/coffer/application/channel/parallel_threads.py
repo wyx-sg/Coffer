@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.command_text import agent_display, settings_in_effect
 from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
     open_conversation,
@@ -128,31 +127,27 @@ async def _open_thread(ctx: CommandContext, title: str) -> str:
 
 
 async def thread_lines(ctx: CommandContext) -> list[str]:
-    """The `/status` lines for a direct chat's parallel threads: a count, then
-    one ``🧵#N title — agent — state`` line each (at most 20; the count stays
-    exact). Empty when the chat has none."""
+    """The `/status` line for a direct chat's parallel threads:
+    ``Parallel threads: 🧵#2 title (idle) · 🧵#3 title (running)`` — at most 20
+    named, with the rest counted. Empty when the chat has none."""
     rows = await ctx.commands._threads.list_parallel(ctx.resource_uid, ctx.chat_id)
     if not rows:
         return []
-    noun = "conversation" if len(rows) == 1 else "conversations"
-    lines = [f"{len(rows)} parallel {noun}:"]
-    lines += [await _thread_line(ctx, row) for row in rows[:_LIST_MAX]]
-    return lines
+    named = [await _thread_entry(ctx, row) for row in rows[:_LIST_MAX]]
+    if len(rows) > _LIST_MAX:
+        named.append(f"+{len(rows) - _LIST_MAX} more")
+    return ["Parallel threads: " + " · ".join(named)]
 
 
-async def _thread_line(ctx: CommandContext, row: ChannelThreadConversation) -> str:
+async def _thread_entry(ctx: CommandContext, row: ChannelThreadConversation) -> str:
     commands = ctx.commands
-    settings = await settings_in_effect(
-        commands, ctx.binding, ctx.peer, row.thread_id, chat_kind=ctx.chat_kind
-    )
-    agent = agent_display(commands._agents, settings.agent)
     running = commands.running_in(ctx.binding.resource.name, ctx.chat_id, row.thread_id)
     bound = row.active_conversation_id
     waiting = len(commands._turns.pending(bound)) if bound is not None else 0
     if running is not None:
         state = "running"
     elif waiting:
-        state = f"{waiting} queued"
+        state = f"{waiting} waiting"
     else:
         state = "idle"
-    return f"{row.parallel_mark} — {agent} — {state}"
+    return f"{row.parallel_mark} ({state})"

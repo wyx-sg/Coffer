@@ -1,8 +1,8 @@
 """One row per required command, and what state it is in.
 
 Rows aggregate every managed skill that declares the command: the minimum is
-the highest any of them asks for; the title, login check, login command and
-formula come from the first skill (by name) that declares each. The status is
+the highest any of them asks for; the title, login check and login command
+come from the first skill (by name) that declares each. The status is
 problem-first — ``missing``, ``outdated``, ``logged_out``, ``ready`` — and a
 version that cannot be read is reported as unknown, never as outdated.
 """
@@ -61,7 +61,6 @@ class RequiredCommand:
     min_version: str | None
     login_check: tuple[str, ...] | None
     login: str | None
-    brew: str | None
     needed_by: tuple[NeededBy, ...]
 
 
@@ -96,7 +95,6 @@ def _row(command: str, entries: Sequence[tuple[str, str, CommandRequirement]]) -
         min_version=highest_minimum(r.min_version for r in reqs),
         login_check=next((r.login_check for r in reqs if r.login_check), None),
         login=next((r.login for r in reqs if r.login), None),
-        brew=next((r.brew for r in reqs if r.brew), None),
         needed_by=tuple(
             NeededBy(skill_uid=uid, skill_name=name, min_version=r.min_version, why=r.why)
             for uid, name, r in entries

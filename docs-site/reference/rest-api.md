@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 248 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 252 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -115,11 +115,12 @@ The daemon mounts 248 operations in 26 groups. Groups follow the order the daemo
 | [credentials](#credentials) | 15 |
 | [settings](#settings) | 4 |
 | [sync](#sync) | 26 |
+| [vault](#vault) | 6 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 19 |
-| [clis](#clis) | 6 |
+| [clis](#clis) | 4 |
 | [mcp](#mcp) | 13 |
 | [custom-tools](#custom-tools) | 13 |
 | [knowledge](#knowledge) | 15 |
@@ -258,6 +259,17 @@ The daemon mounts 248 operations in 26 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/sync/key/fingerprint` | Key Fingerprint |
 | `POST` | `/api/v1/sync/key/import` | Import Key |
 
+### vault
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/vault/history` | The versions of a file or folder, newest first, each naming its writer. |
+| `GET` | `/api/v1/vault/diff` | What one version did to one file, as a unified diff. |
+| `GET` | `/api/v1/vault/content` | A file's content as a version left it, or as it is now, with its fingerprint. |
+| `POST` | `/api/v1/vault/restore` | Write a version back as a new commit naming the writer and the version it restored; a stale ``expected_fingerprint`` is 409 and changes nothing. |
+| `GET` | `/api/v1/vault/changes` | Recent commits across the vault, or under one prefix, newest first. |
+| `GET` | `/api/v1/vault/problems` | Hand edits validation refused: still on disk, uncommitted, with ``HEAD`` in effect until each is fixed. |
+
 ### internal-engine
 
 | Method | Path | Summary |
@@ -350,10 +362,8 @@ The daemon mounts 248 operations in 26 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/clis` | Every command a managed skill requires, problems first. |
 | `POST` | `/api/v1/clis/check` | Probe every required command again. |
-| `GET` | `/api/v1/clis/{command}` | One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
+| `GET` | `/api/v1/clis/{command}` | One required command, with the hand-off prompt when it needs the person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it. |
 | `POST` | `/api/v1/clis/{command}/check` | Probe one required command again. |
-| `GET` | `/api/v1/clis/{command}/install` | The latest install job for the command: its state, exit code and output. |
-| `POST` | `/api/v1/clis/{command}/install` | Start ``brew install\|upgrade <formula>``; refused unless the command is missing or outdated, ``formula`` is the declared one and Homebrew is found. |
 
 ### mcp
 

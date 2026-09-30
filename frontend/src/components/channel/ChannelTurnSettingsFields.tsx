@@ -1,8 +1,10 @@
 // frontend/src/components/channel/ChannelTurnSettingsFields.tsx
-// The half of a channel's Settings that shapes its turns: when it answers in
-// a group, how long it waits for a burst of messages to end, how a running
-// turn shows itself (the step list, the completion ping), and the folders
-// /dir may switch into. Switches save at once; typed values save a moment
+// The parts of a channel's Settings that shape its turns, in the two places
+// the tab shows them: `ChannelBatchingFields` — when it answers in a group and
+// how long it waits for a burst of messages to end — near the top, and
+// `ChannelReplyDirectoryFields` — how a running turn shows itself (the
+// completion ping, the step lines) and its working directories — after the
+// machine. Switches and list edits save at once; typed values save a moment
 // after typing stops, and only when valid (useSettingDraft).
 import { useState } from "react";
 
@@ -15,9 +17,9 @@ import {
   storedShowSteps,
 } from "./channelTurnSettings";
 import {
-  directoriesDraftValid,
   honoursRequireMention,
-  parseDirectories,
+  normaliseDirectory,
+  storedDefaultDirectory,
   storedDirectories,
   type ChannelEditValues,
 } from "./editChannel";
@@ -34,10 +36,15 @@ function boolField(config: Record<string, unknown>, key: string, fallback: boole
   return typeof v === "boolean" ? v : fallback;
 }
 
-const parseDirs = (text: string) =>
-  directoriesDraftValid(text) ? parseDirectories(text).directories : null;
+/** A typed default folder: blank clears it, an absolute path sets it, anything
+ *  else is invalid (`null`) and is not saved. */
+const parseDefault = (text: string): { path: string | null } | null => {
+  if (text.trim() === "") return { path: null };
+  const path = normaliseDirectory(text);
+  return path === null ? null : { path };
+};
 
-export function ChannelTurnSettingsFields({ channel, save }: { channel: ResourceOut; save: Save }) {
+export function ChannelBatchingFields({ channel, save }: { channel: ResourceOut; save: Save }) {
   const config = channel.config;
   const channelType = typeof config.channel_type === "string" ? config.channel_type : "telegram";
 
@@ -45,8 +52,6 @@ export function ChannelTurnSettingsFields({ channel, save }: { channel: Resource
     requireMention: boolField(config, "require_mention", true),
     ignoreOtherMentions: boolField(config, "ignore_other_mentions", false),
   }));
-  const [showSteps, setShowSteps] = useState(() => storedShowSteps(config));
-
   const afterText = useSettingDraft(
     String(storedBurstWait(config, "wait_after_text_seconds")),
     parseBurstWait,
@@ -56,12 +61,6 @@ export function ChannelTurnSettingsFields({ channel, save }: { channel: Resource
     String(storedBurstWait(config, "wait_after_forward_seconds")),
     parseBurstWait,
     (v) => save({ wait_after_forward_seconds: v }),
-  );
-  const notifyAfter = useSettingDraft(String(storedNotifyAfter(config)), parseNotifyAfter, (v) =>
-    save({ notify_after_seconds: v }),
-  );
-  const dirs = useSettingDraft(storedDirectories(config).join("\n"), parseDirs, (v) =>
-    save({ directories: v }),
   );
 
   return (
@@ -85,6 +84,29 @@ export function ChannelTurnSettingsFields({ channel, save }: { channel: Resource
           if (patch.waitAfterForward !== undefined) afterForward.change(patch.waitAfterForward);
         }}
       />
+    </>
+  );
+}
+
+export function ChannelReplyDirectoryFields({
+  channel,
+  save,
+}: {
+  channel: ResourceOut;
+  save: Save;
+}) {
+  const config = channel.config;
+  const [showSteps, setShowSteps] = useState(() => storedShowSteps(config));
+  const [directories, setDirectories] = useState(() => storedDirectories(config));
+  const notifyAfter = useSettingDraft(String(storedNotifyAfter(config)), parseNotifyAfter, (v) =>
+    save({ notify_after_seconds: v }),
+  );
+  const defaultDir = useSettingDraft(storedDefaultDirectory(config) ?? "", parseDefault, (v) =>
+    save({ default_directory: v.path }),
+  );
+
+  return (
+    <>
       <EditChannelReplyFields
         draft={{ showSteps, notifyAfter: notifyAfter.text }}
         onChange={(patch) => {
@@ -95,7 +117,17 @@ export function ChannelTurnSettingsFields({ channel, save }: { channel: Resource
           if (patch.notifyAfter !== undefined) notifyAfter.change(patch.notifyAfter);
         }}
       />
-      <EditChannelDirectoriesField value={dirs.text} onChange={dirs.change} />
+      <div onBlur={defaultDir.flush}>
+        <EditChannelDirectoriesField
+          defaultText={defaultDir.text}
+          onDefaultChange={defaultDir.change}
+          directories={directories}
+          onDirectoriesChange={(next) => {
+            setDirectories(next);
+            save({ directories: next });
+          }}
+        />
+      </div>
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,9 @@ interface Props {
   /** Fired on Enter when the (trimmed) value is non-empty — for inputs that
    *  trigger an explicit action (e.g. a server search) rather than live-filter. */
   onSearch?: () => void;
+  /** A key that focuses the field from anywhere on the page (not while
+   *  typing elsewhere), hinted at the right edge while the field is empty. */
+  shortcut?: string;
 }
 
 /**
@@ -31,8 +35,22 @@ export function SearchInput({
   ariaLabel,
   className,
   onSearch,
+  shortcut,
 }: Props) {
   const { t } = useTranslation();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!shortcut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== shortcut || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      e.preventDefault();
+      input.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [shortcut]);
   return (
     <div className={cn("relative", className)}>
       <Search
@@ -40,6 +58,7 @@ export function SearchInput({
         aria-hidden
       />
       <Input
+        ref={input}
         id={id}
         aria-label={ariaLabel}
         placeholder={placeholder}
@@ -63,6 +82,13 @@ export function SearchInput({
         >
           <X className="size-4" />
         </button>
+      ) : shortcut ? (
+        <kbd
+          aria-hidden
+          className="pointer-events-none absolute right-2 top-1/2 inline-flex h-[18px] -translate-y-1/2 items-center rounded-xs border border-border px-1 font-sans text-2xs text-text-subtle"
+        >
+          {shortcut}
+        </kbd>
       ) : null}
     </div>
   );

@@ -1476,6 +1476,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
 | `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
+| `--default-dir` | option | text |  | The directory new conversations start in (default: the agent's own) |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
@@ -1486,7 +1487,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 coffer channel edit [OPTIONS] NAME
 ```
 
-Change a channel's name, title, description, group gating, quiet windows, live status, completion ping or `/dir` directories.
+Change a channel's name, title, description, group gating, quiet windows, live status, completion ping, default directory or `/dir` directories.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1503,6 +1504,8 @@ Change a channel's name, title, description, group gating, quiet windows, live s
 | `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--no-dirs` | option | flag |  | Allow no directories for `/dir` (clears the list) |
+| `--default-dir` | option | text |  | The directory new conversations start in (default: the agent's own) |
+| `--no-default-dir` | option | flag |  | Clear the default directory (the agent's own applies) |
 
 ### channel rm
 
@@ -1782,18 +1785,18 @@ Probe the required commands again (or one of them).
 | `[COMMAND]` | argument | text |  | One command only |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### cli install
+### cli prompt
 
 ```sh
-coffer cli install [OPTIONS] COMMAND
+coffer cli prompt [OPTIONS] COMMAND
 ```
 
-Install or upgrade a required command through Homebrew, after asking.
+Print the prompt to give your agent for a command that needs you.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `COMMAND` | argument | text | required | The command, e.g. jq |
-| `--yes, -y` | option | flag |  | Run without asking |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ## coffer knowledge
 
@@ -2612,6 +2615,7 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `--interval` | option | integer |  | Seconds between automatic rounds (default 3600) |
 | `--with-secret / --without-secret` | option | boolean |  | Carry the encrypted secrets (ciphertext, never the master key); default off |
 | `--credential-ref` | option | text |  | Name of the push token in the secret store ('' removes it) |
+| `--username` | option | text |  | Username sent with an HTTPS token (default coffer; Bitbucket and Azure DevOps need a real one) |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### sync remote clear

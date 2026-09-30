@@ -56,7 +56,7 @@ async def test_dir_switches_to_an_allowed_directory_in_a_fresh_conversation(
     assert fresh not in (None, before)
     assert env.provider.last_agent_config == {"cwd": lib}
     assert adapter.texts()[-1] == (
-        f"📁 Directory set to {lib} — new conversation started (the previous one is in /resume)."
+        f"📁 Now in {lib} — started a fresh conversation (the previous one is in /resume)."
     )
     # …and by a path under an allowed one.
     await env.processor.on_message(inbound("tg", "owner", f"/dir {app}/sub"))
@@ -64,7 +64,7 @@ async def test_dir_switches_to_an_allowed_directory_in_a_fresh_conversation(
     # /new keeps it.
     await env.processor.on_message(inbound("tg", "owner", "/new"))
     assert env.provider.last_agent_config == {"cwd": f"{app}/sub"}
-    assert adapter.texts()[-1].endswith(" · sub")
+    assert adapter.texts()[-1].endswith(f" · {app}/sub")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/dir refuses a directory outside the allow-list")
@@ -113,10 +113,10 @@ async def test_bare_dir_offers_the_allow_list_and_a_tap_switches(
     await env.processor.on_message(inbound("tg", "owner", "/dir"))
 
     [(_chat, text, buttons)] = adapter.cards
-    assert "Current directory: default" in text
+    assert text.startswith("Current: Default directory\n")
     assert [(b.label, b.value) for b in buttons] == [
-        ("app", "dir:0"),
-        ("lib", "dir:1"),
+        (app, "dir:0"),
+        (lib, "dir:1"),
         ("Default ✓", "dir:default"),
     ]
 
@@ -139,6 +139,6 @@ async def test_bare_dir_without_buttons_lists_them(env: ChannelEnv, tmp_path: Pa
     await env.processor.on_message(inbound("tg", "owner", "/dir"))
 
     assert adapter.texts() == [
-        f"📁 Directory: default\nAllowed:\n1. {app}\n2. {lib}\n"
+        f"📁 Working directory: Default directory\nAllowed:\n1. {app}\n2. {lib}\n"
         "Send /dir <path|name> or /dir default."
     ]

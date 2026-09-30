@@ -112,15 +112,9 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "SKILL_FILE_STALE": 409,
-    # The commands skills require (spec skill-manager "Install a required
-    # command only through Homebrew and only when asked"): every refusal runs
-    # nothing.
+    # The commands skills require (spec skill-manager "Serve required
+    # commands on REST, the command line and the web").
     "CLI_NOT_REQUIRED": 404,
-    "CLI_INSTALL_NOT_FOUND": 404,
-    "CLI_FORMULA_MISMATCH": 422,
-    "CLI_NOT_INSTALLABLE": 409,
-    "HOMEBREW_NOT_FOUND": 409,
-    "CLI_INSTALL_RUNNING": 409,
     # skill sources (spec skill-manager "Add skills from an archive", "Add
     # skills from a Git repository", "Update a Git-imported skill from its
     # source"): an expired stage is a missing thing; git failing to fetch is

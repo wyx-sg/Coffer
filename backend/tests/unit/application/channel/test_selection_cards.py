@@ -10,20 +10,26 @@ nothing at all. So a long list is paged, and a short one is not paged at all.
 
 from __future__ import annotations
 
+import os
+
+from coffer.application.channel.command_cards import (
+    HELP_ACTIONS,
+    STATUS_ACTIONS,
+    command_card,
+)
 from coffer.application.channel.selection_cards import (
     CALLBACK_MAX_BYTES,
-    COMMAND_ACTIONS,
     KEEP_EFFORT,
     MAX_CARD_BUTTONS,
     PAGE_SIZE,
     SelectionCard,
     collection_card,
-    command_card,
     dir_card,
     effort_card,
     is_page_turn,
     model_card,
     parse_page_turn,
+    path_label,
     resume_card,
 )
 
@@ -45,7 +51,7 @@ class TestShortListsAreNotPaged:
         card = dir_card(current="/src/app", directories=["/src/app", "/src/lib"])
 
         assert _values(card) == ["dir:0", "dir:1", "dir:default"]
-        assert [b.label for b in card.buttons] == ["app ✓", "lib", "Default"]
+        assert [b.label for b in card.buttons] == ["/src/app ✓", "/src/lib", "Default"]
         assert card.pages == 1
         assert "Page" not in card.text
 
@@ -218,8 +224,9 @@ class TestNavigationPayloads:
         assert parse_page_turn("page:collection:2") == ("collection", 2)
         assert parse_page_turn("page:resume:1") == ("resume", 1)
         assert parse_page_turn("page:dir:0") == ("dir", 0)
-        # The agent card is gone, and so is its page namespace.
-        assert parse_page_turn("page:agent:0") is None
+        assert parse_page_turn("page:agent:0") == ("agent", 0)
+        # A kind no card renders has no page namespace.
+        assert parse_page_turn("page:thread:0") is None
 
     def test_a_choice_never_parses_as_navigation(self):
         # Including a model whose own id starts with the navigation word.
@@ -258,12 +265,17 @@ class TestTheEffortStep:
 
 
 class TestTheCommandCard:
-    def test_it_carries_the_five_actions(self):
-        card = command_card(title="Deploy check", text="Agent: Codex")
+    def test_the_help_card_carries_its_five_actions(self):
+        card = command_card(title="Coffer", text="/new")
 
-        assert _values(card) == [f"cmd:{name}" for _label, name in COMMAND_ACTIONS]
+        assert _values(card) == [f"cmd:{name}" for _label, name in HELP_ACTIONS]
+        assert [b.label for b in card.buttons] == ["New", "Stop", "Model", "Status", "Resume"]
+        assert card.title == "Coffer"
+
+    def test_the_status_card_carries_its_actions(self):
+        card = command_card(title="Status", text="Idle", actions=STATUS_ACTIONS)
+
         assert [b.label for b in card.buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
-        assert card.title == "Deploy check"
 
 
 def test_a_resume_button_is_cut_to_fit_and_ticks_the_current_one() -> None:
@@ -271,3 +283,17 @@ def test_a_resume_button_is_cut_to_fit_and_ticks_the_current_one() -> None:
 
     assert len(card.buttons[0].label) <= 32
     assert card.buttons[1].label == "2. short ✓"
+
+
+def test_the_dir_card_names_paths_under_home_with_a_tilde_and_folds_in_the_default() -> None:
+    home = os.path.expanduser("~")
+    listed = [f"{home}/src/app", "/srv/lib"]
+
+    card = dir_card(current=f"{home}/src/app", directories=listed, default=f"{home}/src/app")
+
+    # The default is a listed entry, so it needs no Default button of its own.
+    assert [b.label for b in card.buttons] == ["~/src/app ✓", "/srv/lib"]
+    assert card.title == "Working directory"
+    assert card.text.startswith("Current: ~/src/app\n")
+    assert path_label(None) == "Default directory"
+    assert path_label(home) == "~"

@@ -279,7 +279,7 @@ def wire_agent_and_skill_kinds(
     set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
-    wire_cli_requirements(skill_svc, audit)
+    wire_cli_requirements(skill_svc)
 
     return AgentSkillWiring(
         skill_sources=skill_sources,

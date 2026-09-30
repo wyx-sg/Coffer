@@ -43,14 +43,39 @@ from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
 
-__all__ = ["QUEUE_MAX", "ConversationPort", "QueuedInbound", "Session", "TurnDriver", "TurnPort"]
+__all__ = [
+    "DROPPED_NOTICE",
+    "QUEUE_MAX",
+    "ConversationPort",
+    "QueuedInbound",
+    "Session",
+    "TurnDriver",
+    "TurnPort",
+    "queued_notice",
+]
 
 _logger = logging.getLogger(__name__)
 
-#: How many messages may wait behind a running turn before the channel says "busy" (see
-#: "Answer the conversation commands from any paired chat"). The web composer is not
+#: How many messages may wait behind a running turn (see "Answer the conversation
+#: commands from any paired chat"): up to this many are queued and told "Queued (n)";
+#: only one arriving past it is dropped, with the reason. The web composer is not
 #: bounded; a chat's flood is.
 QUEUE_MAX = 10
+
+
+def queued_notice(waiting: int) -> str:
+    """What a message that joined the queue behind a running turn is told."""
+    return (
+        f"⏳ Queued ({waiting}) — it runs after the current turn. "
+        f"Past {QUEUE_MAX} waiting, new messages are dropped and I say so."
+    )
+
+
+#: What a message arriving with the queue already full is told: dropped, and why.
+DROPPED_NOTICE = (
+    f"⚠️ Not queued — {QUEUE_MAX} messages are already waiting behind the current turn, "
+    "so this one was dropped. Send it again once they have run, or /stop."
+)
 
 #: Sends one reply back through a channel binding, matching
 #: ``ephemeral.safe_send``'s signature (buttons omitted — turn driving never
@@ -173,9 +198,10 @@ class TurnDriver:
 
         The turn starts now when the conversation is idle, else waits its turn behind
         the messages already pending — web and channel alike, in arrival order (spec
-        chat "Queue messages sent during a turn"). Past ``QUEUE_MAX`` pending the
-        message is dropped and the chat told (see "Answer the conversation commands from
-        any paired chat"): a flood must not pile up forever.
+        chat "Queue messages sent during a turn"). A message that waits is told its
+        place ("Queued (n)"); past ``QUEUE_MAX`` pending the message is dropped and the
+        chat told why (see "Answer the conversation commands from any paired chat"): a
+        flood must not pile up forever.
         """
 
         async def _say(text: str) -> None:
@@ -198,7 +224,7 @@ class TurnDriver:
             await _say(explain_conversation_error(e))
             return
         if len(self._turns.pending(conversation_id)) >= QUEUE_MAX:
-            await _say("⚠️ Busy — message dropped, try again.")
+            await _say(DROPPED_NOTICE)
             return
 
         def on_start(queue: asyncio.Queue[Any]) -> None:
@@ -210,7 +236,7 @@ class TurnDriver:
             # message, so a conversation still under its placeholder title is
             # named after what the person asked and not after a header every
             # channel turn shares (spec chat "Persist conversations and messages in SQLite").
-            await self._turns.enqueue_message(
+            queued = await self._turns.enqueue_message(
                 conversation_id,
                 item.text,
                 attachments=item.attachments,
@@ -219,6 +245,9 @@ class TurnDriver:
             )
         except CofferError as e:
             await _say(f"⚠️ {e} [{e.code}]")
+            return
+        if queued:
+            await _say(queued_notice(len(self._turns.pending(conversation_id))))
 
     def render_sink(
         self,

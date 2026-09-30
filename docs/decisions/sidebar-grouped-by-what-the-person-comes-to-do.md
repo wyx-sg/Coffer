@@ -265,7 +265,7 @@ tools looks for "custom tools", not for a transport option inside a list of serv
 wrote, and its add flow (import an OpenAPI spec and pick operations, or define one request) is
 unlike adding a server from a README. CLIs is an entry because it has
 data of its own — whether each command a skill requires is installed, which version, whether it
-is logged in — and actions shown nowhere else: install through Homebrew after a confirmation,
+is logged in — and actions shown nowhere else: a prompt that hands the install to an agent,
 the login command, check again. Folded into Skills it would repeat per skill what is one fact
 per command, and a command several skills need would show its problem in several places. Both
 sit under Capabilities, because both are about what agents can do.

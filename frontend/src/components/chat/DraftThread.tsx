@@ -2,7 +2,8 @@
 // The draft New conversation opens (`/conversations/new`): a header with the
 // chosen agent, its model and effort and the folder it will work in, an empty
 // thread, and the composer whose first send creates the conversation (see
-// useChatController.sendDraft) — no welcome or suggestions. When no managed
+// useChatController.sendDraft) — no welcome or suggestions. A hand-off opens it
+// with a prompt already in the composer (`restore`), waiting for Send. When no managed
 // agent is available, a state saying how to get one replaces the composer.
 import { useTranslation } from "react-i18next";
 import { Folder, MessageSquareOff } from "lucide-react";
@@ -16,8 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
+import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -38,6 +42,9 @@ interface Props {
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
+  /** Text to type into the composer once (a hand-off's prompt); never sent by itself. */
+  restore?: ComposerRestore | null;
+  onRestored?: () => void;
 }
 
 export function DraftThread({
@@ -52,9 +59,24 @@ export function DraftThread({
   onEffortChange,
   onSend,
   creating = false,
+  restore,
+  onRestored,
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
+  const models = useAgentModels(agentKey).data;
+  const modelLabel = modelValue
+    ? models?.find((m) => m.id === modelValue)?.label || modelValue
+    : null;
+  // What the first turn will run with — only the parts that were chosen; an
+  // unset model or effort is the agent's own default, which it never names.
+  const details = [
+    cwd ? abbreviateHomePath(cwd) : t("conversations.draft.workspace"),
+    modelLabel,
+    effortValue ? t("conversations.draft.effort", { effort: effortValue }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (noManagedAgent) {
     return (
@@ -110,14 +132,17 @@ export function DraftThread({
         />
       </div>
 
-      <div className="flex flex-1 items-end justify-center px-8 pb-2">
-        <p className="text-xs text-text-subtle">
-          {t("conversations.draft.guide", { agent: agentName })}
+      <div className="flex flex-1 flex-col items-center justify-center gap-1.5 p-6 text-center">
+        <p className="text-md font-semibold text-text">
+          {t("conversations.draft.title", { agent: agentName })}
         </p>
+        <p className="text-xs text-text-muted">{t("conversations.draft.details", { details })}</p>
       </div>
       <Composer
         onSend={onSend}
         disabled={creating}
+        restore={restore}
+        onRestored={onRestored}
         placeholder={t("conversations.composer.placeholder", { agent: agentName })}
       />
     </div>

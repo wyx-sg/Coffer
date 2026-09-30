@@ -6,9 +6,11 @@
 // Addresses: `/conversations` is the list, `/conversations/:id` an open
 // conversation, `/conversations/new` the draft New conversation opens (spec chat
 // "Create the conversation on the first send": the draft is not a row, its first
-// send creates one). The list's filters ride along as search params.
+// send creates one). The list's filters ride along as search params. A
+// hand-off (lib/conversations/handoff.ts) opens the draft with an agent, a
+// folder and a prompt already in the composer; it is never sent for the person.
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
   useConversations,
@@ -24,8 +26,10 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
 import { filterConversations } from "@/lib/conversations/filters";
+import { readHandoffState } from "@/lib/conversations/handoff";
 import { rememberWorkingDir } from "@/lib/conversations/lastWorkingDir";
 import type { ChatAttachment } from "@/lib/api/chat";
+import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 
 /** The draft's route segment: `/conversations/new`. */
 const DRAFT_ID = "new";
@@ -49,12 +53,12 @@ export interface DraftConfig {
 
 export function useChatController() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id: routeParam } = useParams<{ id?: string }>();
   const isDraft = routeParam === DRAFT_ID;
   const routeId = isDraft ? undefined : routeParam;
   const { filters, setFilters, search } = useConversationFilters();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [archivingId, setArchivingId] = useState<string | null>(null);
   // The draft's choices, null until New conversation (or a selector) sets them —
   // the defaults are derived below. They are carried into the create call rather
   // than set after the fact because the FIRST turn is the one a user most wants
@@ -67,6 +71,21 @@ export function useChatController() {
   // conversation existed: its text and chips go to the new conversation's composer.
   const [refusedFirst, setRefusedFirst] = useState<FirstMessage | null>(null);
   const clearRefusedFirst = useCallback(() => setRefusedFirst(null), []);
+  // A hand-off's prompt, typed into the draft's composer once it mounts.
+  const [draftPrefill, setDraftPrefill] = useState<ComposerRestore | null>(null);
+  const clearDraftPrefill = useCallback(() => setDraftPrefill(null), []);
+
+  // Apply a hand-off once, then drop it from the history entry so a reload or
+  // Back does not type the prompt again.
+  const handoffState: unknown = isDraft ? location.state : null;
+  const { pathname, search: locationSearch } = location;
+  useEffect(() => {
+    const handoff = readHandoffState(handoffState);
+    if (!handoff) return;
+    setDraftConfig({ agentKey: handoff.agentKey, cwd: handoff.cwd, model: null, effort: null });
+    setDraftPrefill({ text: handoff.prompt, attachments: [] });
+    navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
+  }, [handoffState, pathname, locationSearch, navigate]);
 
   const { data: conversations = [], isPending: convLoading } = useConversations();
   const { data: archivedConversations = [], isPending: archivedLoading } = useArchivedConversations(
@@ -128,6 +147,7 @@ export function useChatController() {
   /** New conversation's Start: open the draft with the agent and folder chosen. */
   const startDraft = (config: { agentKey: string; cwd: string | null }) => {
     setDraftConfig({ ...config, model: null, effort: null });
+    setDraftPrefill(null);
     navigate(pathFor(DRAFT_ID));
   };
 
@@ -169,12 +189,10 @@ export function useChatController() {
     });
   };
 
-  const confirmArchive = () => {
-    if (!archivingId) return;
-    const id = archivingId;
+  // Archive asks nothing first: it loses nothing, and Restore brings it back.
+  const archiveConversation = (id: string) => {
     archiveConv.mutate(id, {
       onSuccess: () => {
-        setArchivingId(null);
         if (routeId === id) navigate(listPath);
       },
     });
@@ -215,18 +233,24 @@ export function useChatController() {
     sendDraft,
     refusedFirst: refusedFirst?.convId === activeConv?.id ? refusedFirst : null,
     clearRefusedFirst,
+    /** A hand-off's prompt for the draft's composer; nothing sends it. */
+    draftPrefill,
+    clearDraftPrefill,
     creating: createConv.isPending,
     createError: createConv.isError ? createConv.error : null,
     resetCreateError: () => createConv.reset(),
     renameConversation: (id: string, title: string) => renameConv.mutate({ id, title }),
     deletingId,
+    /** The conversation the delete confirmation names, when it is loaded. */
+    deletingConversation: deletingId
+      ? ([...conversations, ...archivedConversations, activeConv].find(
+          (c) => c?.id === deletingId,
+        ) ?? null)
+      : null,
     requestDelete: setDeletingId,
     confirmDelete,
     deletePending: deleteConv.isPending,
-    archivingId,
-    requestArchive: setArchivingId,
-    confirmArchive,
-    archivePending: archiveConv.isPending,
+    archiveConversation,
     restoreConversation: (id: string) => unarchiveConv.mutate(id),
     restorePending: unarchiveConv.isPending,
   };

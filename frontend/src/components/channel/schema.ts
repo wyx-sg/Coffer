@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import type { ChannelType } from "@/lib/api/channels";
 import { mintCredentialRef } from "@/lib/credentialRef";
+import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 
 // There is no DEFAULT_AGENT constant any more. `default_agent` holds an agent
 // RESOURCE UID, which is minted per vault, so no constant can name one — and
@@ -28,11 +29,39 @@ import { mintCredentialRef } from "@/lib/credentialRef";
 // that agent's uid.
 
 const ERR = "channels.dialog.errors";
+// A channel's name is any display name (spec channels "Name a channel by any
+// display name"): it is stored as the resource's title, and the resource's own
+// name — a label with the framework's character rules — is derived from it
+// (`channelSlug`).
 const channelNameSchema = z
   .string()
+  .trim()
   .min(1, `${ERR}.name`)
-  .max(64, `${ERR}.nameTooLong`)
-  .regex(/^[a-zA-Z0-9_-]+$/, `${ERR}.nameFormat`);
+  .max(TITLE_MAX_LENGTH, `${ERR}.nameTooLong`);
+
+/**
+ * The resource name derived from a display name: lowercase, every run of
+ * characters the name rules refuse becomes one "-", trimmed of dashes, at most
+ * 64 characters; "channel" when nothing is left. `taken` are the names already
+ * used, and a clash gets "-2", "-3", … so the add never fails on a label the
+ * person never typed.
+ */
+export function channelSlug(displayName: string, taken: Iterable<string> = []): string {
+  const base =
+    displayName
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]+/g, "-")
+      .replace(/^[-.]+|[-.]+$/g, "")
+      .slice(0, 60)
+      .replace(/[-.]+$/, "") || "channel";
+  const used = new Set(taken);
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${base}-${n}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
 
 /**
  * The add-channel form. A SeaTalk channel carries its app id and app secret
@@ -57,6 +86,8 @@ export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
 export type AddChannelFormValues = z.output<typeof addChannelFormSchema>;
 
 export interface ChannelPlan {
+  /** For a new channel, the display name the person typed: it becomes the
+   *  title, and the resource name is derived from it at registration. */
   name: string;
   config: Record<string, unknown>;
   /** Credential-store writes to perform BEFORE registering the resource. */
