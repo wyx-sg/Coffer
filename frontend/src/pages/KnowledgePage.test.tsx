@@ -37,7 +37,10 @@ vi.mock("@/lib/api/knowledge", () => ({
   undoPass: vi.fn(),
   getHistory: vi.fn(),
   getVersionDiff: vi.fn(),
+  getVersionBody: vi.fn(),
   restoreVersion: vi.fn(),
+  restoreDeleted: vi.fn(),
+  describeCollection: vi.fn(),
 }));
 vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
@@ -66,17 +69,16 @@ describe("the collection tree and the document pane", () => {
     expect(within(nav).queryByRole("tab")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
-    // Both documents — the root one and the one in a folder, opened on the way.
-    expect(await within(nav).findByRole("button", { name: "Account Gateway" })).toBeInTheDocument();
+    // Both documents — the root one and the one in a folder, opened on the way —
+    // each named by its file, as it is on disk.
+    expect(await within(nav).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "account" }));
-    expect(
-      await within(nav).findByRole("button", { name: "Session ownership" }),
-    ).toBeInTheDocument();
+    expect(await within(nav).findByRole("button", { name: "session.md" })).toBeInTheDocument();
     // The inbox is its own node, holding the waiting item.
     expect(within(nav).getByRole("button", { name: /Inbox/ })).toHaveTextContent("1");
 
     // A document offers Edit, open-in-editor, reveal and delete.
-    fireEvent.click(within(nav).getByRole("button", { name: "Account Gateway" }));
+    fireEvent.click(within(nav).getByRole("button", { name: "gateway.md" }));
     expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: `More actions for ${GATEWAY.path}` }));
     expect(screen.getByRole("menuitem", { name: "Open in editor" })).toBeInTheDocument();
@@ -96,7 +98,7 @@ describe("the collection tree and the document pane", () => {
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(SESSION.path)}`);
     const row = await within(
       await screen.findByRole("navigation", { name: "Collections and documents" }),
-    ).findByRole("button", { name: "Session ownership" });
+    ).findByRole("button", { name: "session.md" });
     expect(row).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("Login state is owned by account.session.")).toBeInTheDocument();
   });
@@ -147,7 +149,9 @@ describe("with Coffer's model not set", () => {
     answerFromFixtures({ modelSet: false });
     renderKnowledge(`/knowledge/${UID}`);
     const link = await screen.findByRole("button", { name: "Settings › General" });
-    expect(screen.getByText(/Items become documents as they arrive/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Set Coffer's model to curate new items into your documents/),
+    ).toBeInTheDocument();
     expect(within(tree()).queryByRole("button", { name: /Inbox/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
     expect(screen.getByTestId("knowledge-stats")).not.toHaveTextContent("Waiting");
@@ -260,6 +264,64 @@ describe("delete a document", () => {
     await waitFor(() =>
       expect(screen.getByTestId("where")).toHaveTextContent(new RegExp(`/knowledge/${UID}$`)),
     );
+  });
+});
+
+describe("a collection has no title", () => {
+  acceptance("knowledge", "a collection carries no title", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    // The heading and the tree name the collection by its folder.
+    expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
+    expect(
+      within(tree()).getByRole("button", { name: new RegExp(`^${NAME}`) }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
+  });
+
+  acceptance("knowledge", "edit a collection's description in place", async () => {
+    api.describeCollection.mockResolvedValue({ ...COLLECTION, description: "Shops and owners." });
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit description" }));
+    const field = screen.getByRole("textbox", { name: "What belongs in this collection" });
+    expect(field).toHaveValue(COLLECTION.description);
+    fireEvent.change(field, { target: { value: "  Shops and owners.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.describeCollection).toHaveBeenCalledWith(UID, "Shops and owners."),
+    );
+    await waitFor(() => expect(screen.queryByRole("textbox")).toBeNull());
+  });
+
+  test("an empty description cannot be saved", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit description" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "What belongs in this collection" }), {
+      target: { value: "   " },
+    });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});
+
+describe("the reader", () => {
+  test("carries the document's outline and properties beside it", async () => {
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
+    const rail = await screen.findByRole("complementary", { name: "About this document" });
+    expect(within(rail).getByText("On this page")).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Account Gateway" })).toBeInTheDocument();
+    expect(within(rail).getByText("Properties")).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Delete document…" })).toBeInTheDocument();
+  });
+
+  test("after a delete the pane says no document is open and where to restore it", async () => {
+    api.deleteFile.mockResolvedValue(undefined);
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Delete document…" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete document" }));
+    expect(await screen.findByText("No document open")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Recent changes lists the delete and can restore it/),
+    ).toBeInTheDocument();
   });
 });
 

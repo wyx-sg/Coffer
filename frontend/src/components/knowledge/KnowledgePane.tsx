@@ -3,10 +3,12 @@
 // The right side of the Knowledge page: which view the address names
 // (lib/knowledge/routes.ts). One change → its diffs; a collection's Inbox;
 // an open document with its Document and History tabs; a collection with no
-// document open → its overview; nothing chosen → Recent changes.
+// document open → its overview; nothing chosen → Recent changes. Right after
+// a document is deleted the pane says so instead — no document open, and
+// where the delete can be undone (board 5.1.21).
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-import { Library } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { FileX, Library } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { KnowledgeChangeView } from "@/components/knowledge/KnowledgeChangeView";
@@ -27,7 +29,6 @@ interface Props {
   collections: CollectionOut[];
   collectionsLoading: boolean;
   tab: KnowledgeTab;
-  setTab: (tab: string) => void;
   file: string | null;
   modelSet: boolean | undefined;
   onAdd: () => void;
@@ -36,6 +37,8 @@ interface Props {
 
 export function KnowledgePane(props: Props) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const deleted = (location.state as { deleted?: unknown } | null)?.deleted;
 
   if (props.version) {
     return <KnowledgeChangeView version={props.version} collections={props.collections} />;
@@ -46,23 +49,25 @@ export function KnowledgePane(props: Props) {
   if (!props.collection) {
     if (props.collectionsLoading) {
       return (
-        <div className="space-y-3" aria-busy>
+        <div className="space-y-3 p-6" aria-busy>
           <Skeleton className="h-6 w-1/3" />
           <Skeleton className="h-4 w-2/3" />
         </div>
       );
     }
     return (
-      <EmptyState
-        icon={Library}
-        title={t("knowledge.notFound.title")}
-        description={t("knowledge.notFound.body")}
-        action={
-          <Button asChild variant="outline">
-            <Link to={KNOWLEDGE_ROOT}>{t("knowledge.recent.title")}</Link>
-          </Button>
-        }
-      />
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <EmptyState
+          icon={Library}
+          title={t("knowledge.notFound.title")}
+          description={t("knowledge.notFound.body")}
+          action={
+            <Button asChild variant="outline">
+              <Link to={KNOWLEDGE_ROOT}>{t("knowledge.recent.title")}</Link>
+            </Button>
+          }
+        />
+      </div>
     );
   }
   if (props.tab === "inbox") {
@@ -80,8 +85,25 @@ export function KnowledgePane(props: Props) {
         collection={props.collection}
         path={props.file}
         tab={props.tab === "history" ? "history" : "document"}
-        setTab={props.setTab}
       />
+    );
+  }
+  if (typeof deleted === "string") {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <EmptyState
+          icon={FileX}
+          title={t("knowledge.deleteDocument.goneTitle")}
+          description={t("knowledge.deleteDocument.goneBody", {
+            name: deleted.split("/").pop() ?? deleted,
+          })}
+          action={
+            <Button asChild variant="outline">
+              <Link to={KNOWLEDGE_ROOT}>{t("knowledge.recent.title")}</Link>
+            </Button>
+          }
+        />
+      </div>
     );
   }
   return (

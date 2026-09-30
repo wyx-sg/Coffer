@@ -93,8 +93,8 @@ export function useSetCurationOwner() {
       void qc.invalidateQueries({ queryKey: internalEngineKey });
       toast.success(
         machineId === null
-          ? t("settings.upkeep.owner.clearedToast")
-          : t("settings.upkeep.owner.claimedToast"),
+          ? t("knowledge.automatic.owner.clearedToast")
+          : t("knowledge.automatic.owner.claimedToast"),
       );
     },
     onError: (error) => toast.error(translateApiError(t, error)),

@@ -23,7 +23,9 @@ import { NoModelNotice } from "@/components/memory/NoModelNotice";
 import { SplitView } from "@/components/SplitView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import type { MemoryFileNode } from "@/lib/api/memoryTypes";
+import { agentTypeLabel } from "@/lib/agents/display";
+import type { MemoryFileNode, PartitionOut } from "@/lib/api/memoryTypes";
+import { agentTypeOfOrigin } from "./memoryAgents";
 import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useMemoryNotes, useMemoryRetired, usePartitionFiles } from "@/lib/hooks/useMemory";
 
@@ -36,6 +38,9 @@ interface Props {
   name: string;
   /** A distil pass over this partition is running. */
   running: boolean;
+  /** The partition's row: its sources decide "All agents", and entries read
+   *  but not distilled yet are what an empty list says it is waiting on. */
+  partition?: PartitionOut;
 }
 
 /** The node at `path` (relative to the partition directory), if any. */
@@ -49,7 +54,7 @@ function findNode(node: MemoryFileNode | undefined, path: string): MemoryFileNod
   return null;
 }
 
-export function PartitionMemoriesTab({ uid, name, running }: Props) {
+export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const notes = useMemoryNotes(uid);
@@ -97,7 +102,16 @@ export function PartitionMemoriesTab({ uid, name, running }: Props) {
         <EmptyState
           icon={Brain}
           title={t("memory.memories.emptyTitle", { name })}
-          description={t("memory.memories.emptyBody")}
+          description={
+            partition && partition.waiting_entries > 0
+              ? t("memory.memories.emptyWaiting", {
+                  count: partition.waiting_entries,
+                  agents: [...new Set(partition.waiting_agents.map(agentTypeOfOrigin))]
+                    .map(agentTypeLabel)
+                    .join(", "),
+                })
+              : t("memory.memories.emptyBody")
+          }
           action={<MemoryUpdateButton running={running} />}
         />
       </div>
@@ -121,6 +135,7 @@ export function PartitionMemoriesTab({ uid, name, running }: Props) {
                 retired={retired.data ?? []}
                 selected={selected}
                 onSelect={select}
+                sources={partition?.sources ?? []}
               />
             </div>
           }

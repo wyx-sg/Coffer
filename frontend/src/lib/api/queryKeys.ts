@@ -195,6 +195,8 @@ export const knowledgeChangeKey = (version: string) =>
 export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
+export const knowledgeVersionBodyKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "body", version] as const;
 
 // --- memory — partitions, their memories, what is delivered ---------------
 
@@ -209,6 +211,7 @@ export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "
 export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
 export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
+export const memoryReadingKey = ["memory", "reading"] as const;
 
 // --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
 

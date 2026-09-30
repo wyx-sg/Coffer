@@ -17,16 +17,23 @@
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
 // only deliberately"), so an empty list is the first-run welcome.
+//
+// The page is a workspace (boards 5.1.01–5.1.29): full-bleed like Skills, a
+// header over a hairline — the title, the Automatic control (curation's
+// switch, interval and Curate now; absent while Coffer's model is not set) and
+// Upload / Add a document — then the tree and the pane, each scrolling on its
+// own down to the bottom of the window.
 import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Library, Plus, Upload } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { useFillToBottom } from "@/components/filePane";
 import { KnowledgeAddDocumentDialog } from "@/components/knowledge/KnowledgeAddDocumentDialog";
+import { KnowledgeAutomaticPopover } from "@/components/knowledge/KnowledgeAutomaticPopover";
 import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
+import { KnowledgeNoModelLine } from "@/components/knowledge/KnowledgeNoModelLine";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
 import { KnowledgeUploadDialog } from "@/components/knowledge/KnowledgeUploadDialog";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
@@ -58,9 +65,8 @@ export function KnowledgePage() {
   const collections = useKnowledgeCollections();
   const modelSet = useCofferModelSet();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const fill = useFillToBottom();
 
-  const [tab, setTab] = useDetailTab(
+  const [tab] = useDetailTab(
     KNOWLEDGE_TABS,
     DEFAULT_KNOWLEDGE_TAB,
     uid ? collectionBasePath(uid) : KNOWLEDGE_ROOT,
@@ -75,22 +81,26 @@ export function KnowledgePage() {
   };
 
   const header = (
-    <PageHeader
-      icon={Library}
-      title={t("knowledge.title")}
-      actions={
-        list.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setDialog("upload")}>
-              <Upload aria-hidden /> {t("knowledge.upload.button")}
-            </Button>
-            <Button onClick={() => setDialog("add")}>
-              <Plus aria-hidden /> {t("knowledge.add.button")}
-            </Button>
-          </div>
-        ) : null
-      }
-    />
+    <div className="shrink-0 border-b border-border px-6 pb-4 pt-[18px]">
+      <PageHeader
+        icon={Library}
+        title={t("knowledge.title")}
+        badges={list.length > 0 && modelSet ? <KnowledgeAutomaticPopover /> : null}
+        subtitle={list.length > 0 && modelSet === false ? <KnowledgeNoModelLine /> : null}
+        actions={
+          list.length > 0 ? (
+            <>
+              <Button variant="outline" onClick={() => setDialog("upload")}>
+                <Upload aria-hidden /> {t("knowledge.upload.button")}
+              </Button>
+              <Button onClick={() => setDialog("add")}>
+                <Plus aria-hidden /> {t("knowledge.add.button")}
+              </Button>
+            </>
+          ) : null
+        }
+      />
+    </div>
   );
 
   const dialogs = (
@@ -116,70 +126,78 @@ export function KnowledgePage() {
     </>
   );
 
+  // Full-bleed like Skills: Layout pads every page, and this one is a
+  // workspace whose panes each scroll on their own.
+  const shell = "-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10";
+
   if (collections.error) {
     return (
-      <div className="space-y-6">
+      <div className={shell}>
         {header}
-        <EmptyState
-          tone="error"
-          title={t("knowledge.loadFailed")}
-          description={translateApiError(t, collections.error)}
-          action={<Button onClick={() => void collections.refetch()}>{t("common.retry")}</Button>}
-        />
+        <div className="p-6">
+          <EmptyState
+            tone="error"
+            title={t("knowledge.loadFailed")}
+            description={translateApiError(t, collections.error)}
+            action={<Button onClick={() => void collections.refetch()}>{t("common.retry")}</Button>}
+          />
+        </div>
       </div>
     );
   }
 
   if (empty) {
     return (
-      <div className="space-y-6">
+      <div className={shell}>
         {header}
-        <KnowledgeWelcomePanel onCreate={() => setDialog("create")} />
+        <div className="min-h-0 flex-1 overflow-auto">
+          <KnowledgeWelcomePanel
+            onCreate={() => setDialog("create")}
+            onUpload={() => setDialog("create")}
+          />
+        </div>
         {dialogs}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className={shell}>
       {header}
-      <div ref={fill.ref} style={fill.style} className="flex min-h-0">
-        <SplitView
-          storageKey="knowledge"
-          label={t("splitView.resizeList")}
-          defaultListWidth={280}
-          className="min-h-0 flex-1"
-          listClassName="min-h-0 overflow-auto pr-2"
-          detailClassName="min-h-0 pl-4"
-          list={
-            <KnowledgeNav
-              collections={list}
-              isLoading={collections.isPending}
-              currentUid={uid ?? null}
-              tab={tab}
-              file={file}
-              atRecent={!uid && !version}
-              modelSet={modelSet}
-              onCreate={() => setDialog("create")}
-            />
-          }
-          detail={
-            <KnowledgePane
-              uid={uid ?? null}
-              version={version ?? null}
-              collection={current}
-              collections={list}
-              collectionsLoading={collections.isPending}
-              tab={tab}
-              setTab={setTab}
-              file={file}
-              modelSet={modelSet}
-              onAdd={() => setDialog("add")}
-              onUpload={() => setDialog("upload")}
-            />
-          }
-        />
-      </div>
+      <SplitView
+        storageKey="knowledge"
+        label={t("splitView.resizeList")}
+        defaultListWidth={260}
+        className="min-h-0 flex-1"
+        listClassName="flex min-h-0 flex-col bg-surface-sidebar"
+        detailClassName="flex min-h-0 min-w-0 flex-col"
+        list={
+          <KnowledgeNav
+            collections={list}
+            isLoading={collections.isPending}
+            currentUid={uid ?? null}
+            tab={tab}
+            file={file}
+            atRecent={!uid && !version}
+            modelSet={modelSet}
+            onCreate={() => setDialog("create")}
+          />
+        }
+        detail={
+          <KnowledgePane
+            uid={uid ?? null}
+            version={version ?? null}
+            collection={current}
+            collections={list}
+            collectionsLoading={collections.isPending}
+            tab={tab}
+            file={file}
+            modelSet={modelSet}
+            onAdd={() => setDialog("add")}
+            onUpload={() => setDialog("upload")}
+          />
+        }
+      />
       {dialogs}
     </div>
   );

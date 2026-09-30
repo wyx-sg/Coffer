@@ -133,10 +133,27 @@
     "backTo": "Back to {{label}}",
     "emptyValue": "—",
     "search": "Search",
-    "moreInfo": "More info"
+    "moreInfo": "More info",
+    "working": "Working…",
+    "tryAgain": "Try again",
+    "actionFailed": "Couldn’t finish that",
+    "undo": "Undo",
+    "details": "Details",
+    "lessDetails": "Less",
+    "earlierToasts": "{{count}} more",
+    "unsaved": {
+      "badge": "Unsaved changes",
+      "title": "Leave without saving?",
+      "body": "You edited <mono>{{file}}</mono> in <mono>{{name}}</mono>. If you leave now, those edits are lost.",
+      "bodyGeneric": "If you leave now, your edits are lost.",
+      "discard": "Discard changes",
+      "keep": "Keep editing",
+      "saveAndLeave": "Save and leave",
+      "saveFailed": "Couldn’t save"
+    }
   },
   "picker": {
-    "browse": "Browse…"
+    "browse": "Choose…"
   },
   "folderPicker": {
     "title": "Choose a folder",
@@ -193,7 +210,38 @@
       "outOfDate": "Daemon on port {{port}} is from a different app version",
       "stopping": "Daemon stopping",
       "offline": "Daemon offline",
-      "runningShort": "Running on port {{port}}"
+      "runningShort": "Daemon running",
+      "outOfDateShort": "Daemon out of date",
+      "reconnecting": "Reconnecting…"
+    },
+    "attentionCount": {
+      "danger": "{{count}} failing",
+      "warning_one": "{{count}} needs you",
+      "warning_other": "{{count}} need you"
+    },
+    "versionMenu": {
+      "label": "Version menu",
+      "title": "Coffer v{{version}}",
+      "daemonOn": "Daemon on",
+      "theme": "Theme",
+      "themes": {
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "localeIn": {
+        "en": "English",
+        "zh": "Chinese"
+      },
+      "documentation": "Documentation",
+      "checkUpdates": "Check for updates"
+    },
+    "update": {
+      "title": "Update ready",
+      "body": "is available. Restart downloads it, checks its signature and reopens Coffer.",
+      "restart": "Restart",
+      "whatsNew": "What’s new",
+      "dismiss": "Dismiss"
     }
   },
   "resources": {
@@ -661,6 +709,8 @@
       "resource_scope_updated": "Updated reach for {{resource}}",
       "resource_updated": "Reconfigured {{resource}}",
       "retention_updated": "Updated a data-retention policy",
+      "attention_ignored": "Ignored an item on Overview",
+      "attention_unignored": "Stopped ignoring an item on Overview",
       "skill_adopted": "Adopted skill {{resource}}",
       "skill_bound": "Bound skill {{resource}} to {{key}}",
       "skill_drift_remediated": "Re-delivered drifted skill {{resource}} from master",
@@ -1097,47 +1147,6 @@
       "modelPlaceholder": "Select a model",
       "modelOff": "Off — do not transcribe"
     },
-    "upkeep": {
-      "title": "Automatic upkeep",
-      "subtitle": "The passes Coffer runs on its own, without being asked. Each one can be switched off and re-timed.",
-      "interval": "How often {{pass}} runs",
-      "defaultInterval": "Default ({{interval}})",
-      "everyHours": "Every {{count}}h",
-      "everyMinutes": "Every {{count}} min",
-      "owner": {
-        "label": "Runs on:",
-        "thisMachine": "This machine",
-        "everyMachine": "Every machine",
-        "unknownMachine": "Unknown machine ({{id}})",
-        "self": "Curation runs here. The other machines sharing this vault leave the derived documents to this one.",
-        "other": "Curation runs on {{machine}}. This machine reads what that one derives and never rewrites it.",
-        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both curate the same items into their own documents and the vault ends up holding the same knowledge twice.",
-        "fault": "Curation is assigned to {{id}}, which no machine in the registry claims. It is running on no machine at all — the switch above still reads on, and nothing else in Coffer reports this. Take it over here to start it again.",
-        "takeOver": "Run curation on this machine",
-        "takeOverHint": "Names this machine as the owner. Whichever machine held it stops curating after the next sync round brings the change over; this one starts at its next pass.",
-        "noMachineId": "This machine has no id yet, so it cannot be named as the owner.",
-        "clear": "Clear owner",
-        "clearTitle": "Let every machine curate?",
-        "clearBody": "With no owner, every machine sharing this vault curates the same items into documents. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
-        "claimedToast": "Curation now runs on this machine",
-        "clearedToast": "Curation is no longer tied to one machine"
-      },
-      "passes": {
-        "aggregate": {
-          "name": "Read from agents",
-          "writes": "Reads your agents' own memory files and writes only Coffer's derived tree. No model involved."
-        },
-        "distil": {
-          "name": "Distil memory",
-          "writes": "The model turns the entries read from your agents into Coffer's own notes and rewrites the index. Deleting the tree and re-running reproduces an equivalent set."
-        },
-        "curate": {
-          "name": "Curate new knowledge into documents",
-          "writes": "Coffer's model curates new items — uploads and what agents write down — into a collection's documents, and carries a document you edited through to the others.",
-          "caution": "Switch this off and new items wait in the inbox until you curate by hand, and edits are not carried through."
-        }
-      }
-    },
     "close": "Close settings",
     "sections": "Settings sections",
     "daemonTab": {
@@ -1146,6 +1155,7 @@
       "state": {
         "connecting": "Connecting…",
         "stopping": "Stopping",
+        "reconnecting": "Reconnecting…",
         "offline": "Offline — the daemon isn't answering"
       },
       "runningOn": "Running on 127.0.0.1:{{port}}",
@@ -1238,23 +1248,36 @@
   },
   "daemon": {
     "offline": {
-      "title": "Daemon offline",
-      "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
-      "notReadyTitle": "Daemon not running",
-      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own and this notice clears itself once it does; if the problem continues, restart Coffer.",
       "outOfDateTitle": "Daemon out of date",
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
+    },
+    "reconnect": {
+      "title": "Reconnecting to the daemon…",
+      "connectingTitle": "Connecting to the daemon…",
+      "detail": "Attempt {{attempt}} · next try in {{seconds}}s · changes are paused, nothing is lost",
+      "retryNow": "Retry now",
+      "reconnected": "Reconnected"
+    },
+    "offlineState": {
+      "title": "Coffer’s daemon isn’t running",
+      "body": "This window talks to a background service on <mono>{{address}}</mono>. Your vault is safe on disk — agents just can’t reach their MCP servers until it’s back.",
+      "bodyNoAddress": "This window talks to Coffer’s background service. Your vault is safe on disk — agents just can’t reach their MCP servers until it’s back.",
+      "start": "Start daemon",
+      "starting": "Starting…",
+      "retry": "Retry",
+      "checkingIn": "Checking again in {{seconds}}s",
+      "lastReply": "last reply {{time}}"
     }
   },
   "notFound": {
-    "title": "Page not found",
-    "subtitle": "No route matches {{path}}.",
-    "bodyTitle": "You might have followed a stale link",
-    "body": "If you typed the URL by hand, double-check it. Otherwise head back home — every Coffer page is reachable from the sidebar.",
-    "cta": "Back to home"
+    "title": "Nothing lives at this address",
+    "body": "No page matches <mono>{{path}}</mono>. The link may be stale, or the page was renamed.",
+    "didYouMean": "Did you mean",
+    "cta": "Back to Overview",
+    "search": "Search Coffer"
   },
   "errors": {
     "AGENT_CONFIG_DIR_MISSING": "This agent's config directory doesn't exist on this machine",
@@ -1379,6 +1402,7 @@
     "APPROVAL_PENDING": "This change is waiting for approval in the Coffer app.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",
+    "ATTENTION_NOT_IGNORABLE": "Only an item that is worth knowing but not broken can be ignored, and this one isn't listed any more.",
     "APPROVAL_NOT_PENDING": "That approval has already been answered.",
     "SECRET_NAME_INVALID": "That secret name isn't valid.",
     "SECRET_NOT_FOUND": "No secret is stored under that name.",
@@ -1394,13 +1418,18 @@
     "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
     "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
     "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
-    "PORT_IN_USE": "That port is in use by another program. Pick another one."
+    "PORT_IN_USE": "That port is in use by another program. Pick another one.",
+    "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
+    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
     "perPage": "Per page",
     "prev": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "showing": "Showing {{shown}} of {{total}}",
+    "loadMore": "Load {{count}} more",
+    "loadingMore": "Loading more…"
   },
   "agents": {
     "title": "Agents",
@@ -2449,13 +2478,17 @@
       "never": "not yet"
     },
     "noModel": {
-      "line": "Items become documents as they arrive. Set Coffer's model to curate new items into your documents:",
+      "line": "Set Coffer's model to curate new items into your documents ·",
       "link": "Settings › General"
     },
     "collection": {
       "emptyTitle": "{{name}} is empty",
       "emptyBody": "Write the first document, upload one you already have, or drop Markdown files into the folder. Agents already see the collection and can write to its inbox.",
-      "pickDocument": "Choose a document in the tree to read it."
+      "editDescription": "Edit description",
+      "descriptionLabel": "What belongs in this collection",
+      "descriptionHint": "The opening paragraph of the folder's README.md; every agent reads it through the coffer-guide skill.",
+      "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
+      "revealFolder": "Reveal folder"
     },
     "create": {
       "title": "New collection",
@@ -2465,7 +2498,8 @@
       "description": "What belongs in here",
       "descriptionHint": "One sentence: what belongs in this collection",
       "everyAgent": "Every agent sees it through the coffer-guide skill.",
-      "submit": "Create collection"
+      "submit": "Create collection",
+      "created": "Created {{name}}"
     },
     "deleteCollection": {
       "zone": "Danger zone",
@@ -2473,15 +2507,14 @@
       "hint_other": "Removes the folder and all {{count}} documents from disk.",
       "button": "Delete…",
       "title": "Delete {{name}}?",
-      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. This can't be undone.",
+      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. It stays in the vault's history, so Recent changes can restore it.",
       "typeToConfirm": "Type {{name}} to confirm",
       "confirm": "Delete collection"
     },
     "add": {
       "button": "Add a document",
-      "here": "Add a document here",
       "title": "Add a document",
-      "hint": "It goes to the collection's Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
+      "hint": "It goes to {{collection}}'s Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
       "hintNoModel": "Coffer's model isn't set, so it is written as a document as it is.",
       "collection": "Collection",
       "titleField": "Title",
@@ -2494,15 +2527,25 @@
     "upload": {
       "button": "Upload",
       "title": "Upload a document",
-      "body": "Coffer converts it to Markdown and curates it into the collection. The original file is not kept.",
-      "choose": "Choose a file",
+      "body": "Coffer converts it to Markdown; it lands in the collection's Inbox and is curated within the hour. The original file is not kept.",
+      "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
       "into": "Into collection",
       "converting": "Converting to Markdown…",
       "uploading": "Uploading…",
-      "pending": "Uploaded “{{title}}” — it waits in the Inbox and will be curated shortly.",
-      "written": "Uploaded “{{title}}” — saved as {{path}}."
+      "pending": "{{name}} is in {{collection}}'s Inbox · curated within the hour",
+      "written": "{{name}} is saved as {{path}}",
+      "zipTitle": "ZIP files can't be converted",
+      "zipBody": "Unzip it and upload the files inside one at a time.",
+      "tooLargeTitle": "Larger than 20 MB",
+      "tooLargeBody": "Split it, or export the part that matters as PDF.",
+      "noTextTitle": "No text in this PDF",
+      "noTextBody": "It is scanned pages. Coffer reads text, not images — paste the text into a document instead. Nothing was added to the Inbox.",
+      "noTextAnyTitle": "No text found",
+      "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added to the Inbox.",
+      "unsupportedTitle": "{{kind}} files can't be converted",
+      "failedTitle": "Couldn't upload this file"
     },
     "curate": {
       "now": "Curate now",
@@ -2516,7 +2559,9 @@
         "too_large": "That item is too large for one pass, so it was kept as its own document.",
         "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and it will try again.",
         "truncatedGaveUp": "The curation pass was cut off three times in a row, so the item was kept as its own document and won't be run again.",
-        "failed": "Curation didn't finish. Nothing was lost — it will try again."
+        "failed": "Curation didn't finish. Nothing was lost — it will try again.",
+        "ok_one": "Curated {{count}} item into your documents",
+        "ok_other": "Curated {{count}} items into your documents"
       }
     },
     "inbox": {
@@ -2526,27 +2571,34 @@
       "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "empty": "Nothing waiting. New items from agents and uploads show up here first.",
-      "back": "All items",
-      "writtenBy": "Written by {{who}} · {{when}}",
-      "waitingSince": "Written by {{who}} · {{when}} · waiting to be curated",
-      "readOnly": "An item is read-only: curation files it into the right document, and it leaves the Inbox then."
+      "writtenBy": "written by {{who}} {{when}}",
+      "readOnly": "Items open read-only. Curation folds each one into the documents and removes it from the Inbox.",
+      "heading": "Inbox · {{name}}",
+      "writtenWithWrite": "Written by {{who}} with coffer__write · {{when}}",
+      "writtenByYou": "Written by you · {{when}}"
     },
     "document": {
       "tab": "Document",
       "where": "Where this document is",
-      "meta": "Edited {{updated}} · Created {{created}} by {{actor}}",
       "more": "More actions for {{path}}",
-      "curatedBanner": "Curation last changed this document from {{agent}}'s item, {{when}}.",
-      "seePass": "See what this pass changed"
+      "curatedBanner": "Curated {{agent}}'s item into this document {{when}}.",
+      "seePass": "See what this pass changed",
+      "views": "Document views",
+      "rail": "About this document",
+      "onThisPage": "On this page",
+      "properties": "Properties",
+      "edited": "Edited",
+      "created": "Created",
+      "curatedFrom": "Curated from",
+      "byWhen": "{{who}} · {{when}}",
+      "passes_one": "{{count}} inbox item",
+      "passes_other": "{{count}} inbox items"
     },
     "editor": {
       "label": "Edit {{path}}",
       "title": "Title",
       "description": "Description",
-      "frontmatterNote": "Frontmatter · read-only here · curation keeps it current",
-      "footer": "Markdown · ⌘S save · esc cancel",
-      "footerUnsaved": "Markdown · Unsaved changes · ⌘S save · esc cancel",
-      "footerNotSaved": "Markdown · Not saved",
+      "frontmatterNote": "Read-only here · curation keeps it current",
       "conflictTitle": "This document changed on disk while you were editing",
       "conflictBody": "Your text was not saved: the file is newer than the copy you opened. Reload to get the current version, or compare first; copy your text if you want to keep it.",
       "compare": "Compare",
@@ -2554,28 +2606,50 @@
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
       "compareTitle": "On disk now, against your text",
-      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text."
+      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text.",
+      "frontmatter": "Frontmatter",
+      "editStands": "Your edit stands: items curated later go around it, never over it.",
+      "markdown": "Markdown",
+      "unsaved": "Unsaved changes",
+      "notSaved": "Not saved",
+      "saveKey": "save",
+      "cancelKey": "cancel",
+      "copied": "Your text is on the clipboard",
+      "reloaded": "Reloaded the version on disk"
     },
     "deleteDocument": {
       "menu": "Delete document…",
       "title": "Delete {{name}}?",
       "body": "Coffer deletes this file from disk:",
       "afterwards": "Agents stop finding it from their next read. It stays in the vault's History, so it can be restored as a new version.",
-      "confirm": "Delete document"
+      "confirm": "Delete document",
+      "deletedToast": "Deleted {{name}}",
+      "goneTitle": "No document open",
+      "goneBody": "{{name}} was deleted. Its versions stay in the vault's history — Recent changes lists the delete and can restore it."
     },
     "history": {
       "tab": "History",
-      "count_one": "{{count}} version · newest first",
-      "count_other": "{{count}} versions · newest first",
       "current": "Current",
       "none": "No versions recorded yet.",
       "versionLabel": "The chosen version",
       "wholePass": "See the whole pass",
       "restore": "Restore this version",
-      "restored": "Restored as a new version.",
+      "restored": "Restored as a new version",
       "failedTitle": "Couldn't read this document's history",
       "failedFine": "The document itself is fine.",
-      "openActivity": "Open Activity"
+      "openActivity": "Open Activity",
+      "versions": "Versions",
+      "countLabel_one": "{{count}} version",
+      "countLabel_other": "{{count}} versions",
+      "newestFirst": "newest first",
+      "oneOfPass_one": "The only document this curation pass changed.",
+      "oneOfPass_other": "One of {{count}} documents changed in this curation pass.",
+      "restoreHint": "Restoring it saves a new version; later versions stay in the list.",
+      "restoredToast": "Restored the {{when}} version as a new version",
+      "diffMode": "Which diff",
+      "changesInVersion": "Changes in this version",
+      "compareCurrent": "Compare with current",
+      "removedVersion": "This version removed the document; there is nothing to compare."
     },
     "diff": {
       "none": "No changes to the text."
@@ -2603,6 +2677,37 @@
         "rename": "moved {{document}}",
         "remove": "removed {{document}}",
         "baseline": "recorded the collection as it was"
+      },
+      "version": {
+        "pass": "Curated {{agent}}'s item",
+        "save": "Edited in Coffer",
+        "delete": "Deleted",
+        "promote": "Added as written",
+        "submit": "Submitted as an item",
+        "restore": "Restored an earlier version",
+        "undo": "Undid a curation pass",
+        "edit": "Edited on disk",
+        "sync": "Pulled from another Mac",
+        "create": "Created",
+        "rename": "Moved",
+        "remove": "Removed with its collection",
+        "baseline": "Recorded as it was"
+      },
+      "verb": {
+        "pass": "curated {{agent}}'s item into",
+        "save": "edited",
+        "delete": "deleted",
+        "promote": "added as written",
+        "submit": "submitted an item",
+        "restore": "restored",
+        "undo": "undid the pass that changed",
+        "edit": "edited on disk",
+        "sync": "pulled from another Mac",
+        "create": "created the collection",
+        "rename": "moved",
+        "remove": "deleted the collection",
+        "baseline": "recorded the collection as it was",
+        "restoreCollection": "restored the collection"
       }
     },
     "recent": {
@@ -2619,12 +2724,31 @@
       "waitingTitle": "Waiting to be curated",
       "waitingCount_one": "{{count}} item",
       "waitingCount_other": "{{count}} items",
-      "waitingMeta": "{{collection}} · written by {{who}} · {{when}}",
+      "waitingMeta": "{{collection}} · written by {{who}} {{when}}",
       "nothingWaiting": "Nothing waiting. New items from agents and uploads show up here first.",
       "today": "Today",
       "yesterday": "Yesterday",
       "empty": "No changes in the last 7 days.",
-      "failed": "Couldn't read recent changes"
+      "failed": "Couldn't read recent changes",
+      "open": "Open",
+      "openItem": "Open {{title}}",
+      "seePass": "See the pass",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "restored": "Restored",
+      "restoredToast": "Restored {{name}}",
+      "detail": {
+        "delete": "Removed from the collection; its versions stay in the vault's history.",
+        "remove_one": "The collection and its {{count}} file were deleted; they stay in the vault's history.",
+        "remove_other": "The collection and its {{count}} files were deleted; they stay in the vault's history.",
+        "undo": "The pass was undone as a whole, as one new version by you.",
+        "restore": "Put back as a new version; the history before it stays.",
+        "sync_one": "{{count}} line changed on another Mac.",
+        "sync_other": "{{count}} lines changed on another Mac.",
+        "pass": "From one inbox item"
+      }
     },
     "pass": {
       "title": "Curation pass · {{when}}",
@@ -2635,19 +2759,26 @@
         "modified": "Modify",
         "removed": "Remove"
       },
-      "itemsLeft": "The items this pass curated left the Inbox. Their text stays in each document's History.",
+      "itemsLeft": "The inbox items this pass curated left the Inbox. Their text stays in each document's History.",
       "undoTitle": "Undo this curation pass?",
-      "undoBody": "Puts every document this pass changed back to how it was before {{when}}.",
+      "undoBody": "Puts the documents this pass changed back to how they were before {{when}}.",
       "undoEffect": {
         "added": "removed",
-        "modified": "back to its version before the pass",
-        "removed": "restored"
+        "modified": "back to before the pass",
+        "removed": "put back"
       },
-      "undoNote": "Each document gets a new version by you, so this can be undone from its History too. The items are not queued again.",
+      "undoNote": "All or nothing: if a document changed after this pass, nothing is undone. Each document gets a new version by you. The inbox items are not queued again.",
       "undoConfirm": "Undo pass",
       "undoing": "Undoing…",
-      "undoRefused": "Nothing was undone: {{document}} was changed after this pass, and undoing would overwrite that change.",
-      "undoneToast": "Undid the pass."
+      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History instead.",
+      "undoneToast": "Undid the pass.",
+      "heading": "What this curation pass changed",
+      "meta": "one new version per document · from one inbox item",
+      "notUndone": "Not undone",
+      "changedSince": "changed after this pass",
+      "undoRefusedTitle": "Couldn't undo this pass",
+      "undoneBy": "Undone by {{who}} at {{when}}",
+      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again."
     },
     "welcome": {
       "title": "Nothing written down yet",
@@ -2658,13 +2789,38 @@
       },
       "upload": {
         "title": "Bring in what you have",
-        "body": "Upload PDF, Word or Markdown into a collection; Coffer turns it into documents."
+        "body": "Upload PDF, Word or Markdown; Coffer turns it into documents."
       },
       "agents": {
         "title": "Let agents write",
-        "body": "Agents file what they learn with coffer__write; it lands in the Inbox.",
+        "body": "Agents file what they learn with <code>coffer__write</code>; it lands in the inbox.",
         "automatic": "Automatic"
       }
+    },
+    "automatic": {
+      "title": "Automatic curation",
+      "description": "Curates new Inbox items into your documents, one pass at a time.",
+      "last": "Last pass {{when}}",
+      "never": "No pass yet",
+      "curating": "Curating…",
+      "owner": {
+        "label": "Curation runs on",
+        "thisMac": "{{name}} · this Mac",
+        "thisMacFallback": "This Mac",
+        "none": "Not chosen",
+        "unknown": "Unknown Mac ({{id}})",
+        "hint": "One Mac curates; the others get the result through sync.",
+        "unbound": "No Mac is chosen, so every Mac curates and the same knowledge can be written twice. Choose one.",
+        "fault": "No Mac in this vault has that id, so curation runs nowhere. Choose a Mac.",
+        "claimedToast": "Curation now runs on the chosen Mac",
+        "clearedToast": "Curation is no longer tied to one Mac",
+        "runsElsewhere": "Runs on {{machine}}",
+        "pillFault": "runs on no Mac"
+      }
+    },
+    "when": {
+      "today": "Today {{time}}",
+      "yesterday": "Yesterday {{time}}"
     }
   },
   "memory": {
@@ -2704,7 +2860,10 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide."
+      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide.",
+      "sample": "Sample memory",
+      "sources": "Sources",
+      "distil": "Distil"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -2715,7 +2874,17 @@
     },
     "welcome": {
       "title": "Nothing distilled yet",
-      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository."
+      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository.",
+      "noAgentsTitle": "No agent memory to read",
+      "noAgentsBody": "Memory is read from each connected agent's own memory. No agent is connected to Coffer yet, so there is nothing to distil.",
+      "connect": "Connect an agent",
+      "found": "Found on this Mac",
+      "foundMeta": "Coffer also reads on its own on a timer",
+      "foundNone": "No memory yet",
+      "foundCount_one": "{{count}} file in {{projects}}",
+      "foundCount_other": "{{count}} files in {{projects}}",
+      "projects_one": "{{count}} project",
+      "projects_other": "{{count}} projects"
     },
     "detail": {
       "notFound": "This partition no longer exists.",
@@ -2727,7 +2896,8 @@
         "label": "More actions for {{name}}",
         "reveal": "Reveal partition folder",
         "copyPath": "Copy path",
-        "delete": "Delete partition…"
+        "delete": "Delete partition…",
+        "history": "Distil history in Activity"
       }
     },
     "memories": {
@@ -2739,7 +2909,9 @@
       "select": "Select a memory to read it.",
       "loadFailed": "Couldn't load the memories.",
       "emptyTitle": "No memories for {{name}} yet",
-      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours."
+      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repository but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repository but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
     },
     "noModel": {
       "title": "Coffer's model isn't set, so each agent's entry becomes its own memory",
@@ -2755,6 +2927,35 @@
       "characters_other": "{{count}} characters",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
       "loadFailed": "Couldn't load what is delivered."
+    },
+    "automatic": {
+      "title": "Read memory automatically",
+      "description": "Reads each agent’s own memory and distils it. Coffer never writes to it.",
+      "last": "Last read {{when}}",
+      "never": "Not read yet"
+    },
+    "allAgents": "All agents",
+    "waiting_one": "{{count}} entry read from {{agents}}, waiting to distil",
+    "waiting_other": "{{count}} entries read from {{agents}}, waiting to distil",
+    "distil": {
+      "done": "Distilled {{when}}",
+      "never": "Not distilled yet",
+      "running": "Distilling…"
+    },
+    "status": {
+      "read": "Read {{when}}",
+      "failed_one": "{{count}} agent failed",
+      "failed_other": "{{count}} agents failed",
+      "reading": "Reading agents’ memory…",
+      "distilling": "Distilling {{current}} of {{total}} partitions"
+    },
+    "failure": {
+      "title": "Couldn't read {{agent}}'s memory:",
+      "anAgent": "an agent",
+      "kept": "{{agent}}'s memories stay as its last full read left them.",
+      "keptSince": "{{agent}}'s memories stay as they were after its last full read on {{date}}.",
+      "retry": "Retry",
+      "openActivity": "Open Activity"
     }
   },
   "conversations": {
@@ -3554,6 +3755,14 @@
       "actionFor": "{{action}}: {{name}}",
       "sourceFailed": "{{area}} couldn't be checked, so anything it needs from you is missing from this list.",
       "error": "Couldn't check what needs you",
+      "moreFor": "More for {{name}}",
+      "ignore": "Ignore",
+      "restore": "Stop ignoring",
+      "ignored_one": "{{count}} ignored",
+      "ignored_other": "{{count}} ignored",
+      "showIgnored": "Show",
+      "hideIgnored": "Hide",
+      "ignoredList": "Ignored",
       "empty": {
         "title": "Nothing needs you",
         "body": "Anything that needs you shows up here.",
@@ -3568,6 +3777,7 @@
       "run": "Review",
       "review": "Review",
       "repair": "Repair drift",
+      "repairHook": "Repair hook",
       "open": "Open"
     },
     "kinds": {
@@ -3597,6 +3807,8 @@
       "open": "Open {{area}}",
       "failing_one": "{{count}} failing",
       "failing_other": "{{count}} failing",
+      "attention_one": "{{count}} needs attention",
+      "attention_other": "{{count}} need attention",
       "agents": {
         "ok": "All connected",
         "warn_one": "{{count}} to connect",
@@ -3606,7 +3818,7 @@
         "unitRegistered_other": "registered"
       },
       "providers": {
-        "ok": "Ready",
+        "ok": "Answering",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
         "unit_one": "provider",
@@ -3630,7 +3842,7 @@
         "calls": "{{calls}} calls · {{errors}} errors in the last 24 h"
       },
       "skills": {
-        "ok": "Up to date",
+        "ok": "In sync",
         "warn_one": "{{count}} drifted",
         "warn_other": "{{count}} drifted",
         "unit_one": "skill",
@@ -3674,6 +3886,41 @@
           "awaiting_join": "Waiting to join",
           "none": "No round yet"
         }
+      },
+      "customTools": {
+        "ok": "All answering",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "group",
+        "unit_other": "groups",
+        "calls": "{{calls}} requests · {{errors}} errors in the last 24 h",
+        "none": "No tool groups yet"
+      },
+      "clis": {
+        "ok": "All ready",
+        "warn_one": "{{count}} not ready",
+        "warn_other": "{{count}} not ready",
+        "unit_one": "CLI",
+        "unit_other": "CLIs",
+        "neededBy_one": "Needed by {{count}} skill · {{names}}",
+        "neededBy_other": "Needed by {{count}} skills · {{names}}",
+        "none": "No skill needs a CLI yet"
+      },
+      "secrets": {
+        "ok": "All in use",
+        "missing_one": "{{count}} missing here",
+        "missing_other": "{{count}} missing here",
+        "unused_one": "{{count}} unused",
+        "unused_other": "{{count}} unused",
+        "unit_one": "secret",
+        "unit_other": "secrets",
+        "referencedBy_one": "Referenced by {{count}} server, tool or skill",
+        "referencedBy_other": "Referenced by {{count}} servers, tools and skills",
+        "none": "No secrets yet"
+      },
+      "usage": {
+        "period": "Today",
+        "unit": "tokens"
       }
     },
     "activity": {
@@ -3686,10 +3933,23 @@
       "title": "Connect your coding agents",
       "body": "Connecting an agent adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
       "preview": "You'll see every file change before Coffer writes it.",
+      "foundBody_one": "Coffer found {{count}} agent on this Mac. Connecting it adds Coffer's gateway to its config, so it gets the same MCP servers and skills as every agent you add.",
+      "foundBody_other": "Coffer found {{count}} agents on this Mac. Connecting one adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
+      "noneTitle": "No coding agents found",
+      "noneBody": "Coffer looked in your home folder for {{names}} and found none of them. Install one and scan again, or point Coffer at an agent's config folder by hand.",
+      "and": " and ",
+      "confirmOnly": "Coffer only connects agents you confirm.",
       "found": "Found on this Mac",
-      "notInstalled": "Not installed",
-      "connect": "Review and connect",
+      "notFound": "Not found",
+      "tick": "Connect {{name}}",
+      "connect_one": "Review and connect {{count}} agent",
+      "connect_other": "Review and connect {{count}} agents",
+      "byHand": "Add an agent by hand",
+      "scan": "Scan again",
+      "looked": "Looked in your home folder",
+      "lastScanned": "Last scanned",
       "thenTitle": "Then add what they share",
+      "thenHint": "Each can wait until you need it",
       "shared": {
         "mcpServers": {
           "body": "No servers yet",
@@ -3697,19 +3957,19 @@
         },
         "skills": {
           "body": "No skills yet",
-          "cta": "Add skill"
+          "cta": "Add a skill"
         },
         "knowledge": {
-          "body": "No collections yet",
-          "cta": "Add knowledge"
+          "body": "No documents yet",
+          "cta": "Open Knowledge"
         },
         "providers": {
           "body": "Agents use their own login",
-          "cta": "Add provider"
+          "cta": "Add a provider"
         },
         "channels": {
           "body": "No channels yet",
-          "cta": "Add channel"
+          "cta": "Connect a chat app"
         }
       }
     }
@@ -4376,9 +4636,8 @@
   },
   "palette": {
     "label": "Command palette",
-    "placeholder": "Search pages and objects…",
+    "placeholder": "Search pages, servers, skills, secrets…",
     "pages": "Pages",
-    "objects": "Objects",
     "loading": "Loading…",
     "failed": "{{kind}}: couldn't load the list",
     "offline": "Objects need the daemon. Only pages are listed.",
@@ -4387,7 +4646,27 @@
     "open": "Open",
     "close": "Close",
     "settingsTab": "Settings › {{tab}}",
+    "bestMatch": "Best match",
+    "recent": "Recent",
+    "noResultsHint": "Check the spelling. {{shortcut}} finds pages, servers, skills, secrets and conversations by name.",
+    "footerNote": "Jumps to pages and objects; actions live on their page",
+    "untitled": "Untitled conversation",
+    "usedBy_one": "used by {{name}}",
+    "usedBy_other": "used by {{name}} +{{more}}",
+    "status": {
+      "off": "Off",
+      "failing": "Failing",
+      "attention": "Needs attention",
+      "missing": "Missing",
+      "notFound": "Not found",
+      "outdated": "Too old",
+      "loggedOut": "Not logged in",
+      "running": "Running"
+    },
     "kind": {
+      "page": "Page",
+      "conversation": "Conversation",
+      "secret": "Secret",
       "agent": "Agent",
       "mcpServer": "MCP server",
       "skill": "Skill",
@@ -4829,6 +5108,26 @@
       "binary": "Binary file",
       "missing": "Not in this version",
       "truncated": "cut short"
+    }
+  },
+  "upkeep": {
+    "every": "Every",
+    "next": "next {{when}}",
+    "interval": {
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "default": "Default ({{interval}})"
+    },
+    "pill": {
+      "label": "Automatic · {{state}}",
+      "hourly": "hourly",
+      "daily": "daily",
+      "every": "every {{interval}}",
+      "off": "off"
     }
   }
 }

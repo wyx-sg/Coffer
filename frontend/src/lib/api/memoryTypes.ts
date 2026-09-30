@@ -44,3 +44,7 @@ export type MemoryFileNode = Schemas["FileNodeOut"];
 export type MemoryFileTreeOut = Schemas["FileTreeOut"];
 
 export type AggregationResultOut = Schemas["AggregationResultOut"];
+
+/** When Coffer last read the agents' memory, and whose it could not read. */
+export type ReadingOut = Schemas["ReadingOut"];
+export type ReadFailureOut = Schemas["ReadFailureOut"];

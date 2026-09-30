@@ -38,11 +38,14 @@ vi.mock("@/lib/api/memory", () => ({
   listPartitionFiles: vi.fn(),
   getDelivered: vi.fn(),
   getDeliveries: vi.fn(),
+  getReading: vi.fn(async () => ({ read_at: null, failures: [] })),
   sync: vi.fn(),
 }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
+// The first-run welcome lists the connected agents; none here.
+vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn(async () => ({ items: [] })) } }));
 
 const api = await import("@/lib/api/memory");
 const { listUpkeepRuns } = await import("@/lib/api/upkeep");
@@ -139,7 +142,7 @@ describe("MemoryDetailPage", () => {
     expect(within(pane).getByText("Node 20")).toBeInTheDocument();
     expect(pane).not.toHaveTextContent(/origins:|native_path|---/);
     // The header: repository path and the memory count; open / reveal on the file.
-    expect(screen.getByText("~/work/coffer · 2 memories")).toBeInTheDocument();
+    expect(screen.getByText(/^~\/work\/coffer · 2 memories · distilled /)).toBeInTheDocument();
     expect(within(pane).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(within(pane).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     assertNoAgentOwnMemory();
@@ -283,7 +286,7 @@ acceptance("memory", "browse a partition as a file tree with a read-only preview
   // With no partitions: the first-run welcome, no table.
   stub({ partitions: [] });
   const first = renderAt("/memory");
-  expect(await screen.findByText("Nothing distilled yet")).toBeInTheDocument();
+  expect(await screen.findByText("No agent memory to read")).toBeInTheDocument();
   expect(screen.queryByRole("table")).toBeNull();
   first.unmount();
 

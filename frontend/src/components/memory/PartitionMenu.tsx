@@ -50,6 +50,12 @@ export function PartitionMenu({ partition }: Props) {
           .catch(() => undefined);
       },
     },
+    {
+      // Every distil pass is audited; the Changes tab is where they read.
+      key: "history",
+      label: t("memory.detail.menu.history"),
+      onSelect: () => navigate("/activity?tab=changes"),
+    },
   ];
   if (partition.unresolvable) {
     actions.push({

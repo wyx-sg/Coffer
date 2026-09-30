@@ -5,7 +5,10 @@
 // one memory per subject, in partitions — `global` plus one per repository
 // (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created,
 // so the header's one action is Update memory: read every agent's latest
-// memory and distil what is new (spec memory "Update memory in one action").
+// memory and distil what is new (spec memory "Update memory in one action"),
+// beside the Automatic control that does the same on a timer and a quiet line
+// saying when the agents' memory was last read, or how far Update memory is.
+// When the last read left an agent unread, a banner above the blocks says so.
 //
 // Two blocks. "Delivered at session start" shows, per agent and over the last
 // seven days, how often memory was delivered and how many memories were read —
@@ -16,7 +19,13 @@ import { useTranslation } from "react-i18next";
 import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { MemoryDeliveriesSection } from "@/components/memory/MemoryDeliveriesSection";
+import {
+  MemoryHeaderStatus,
+  useMemoryUpdateRunning,
+} from "@/components/memory/MemoryHeaderStatus";
+import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
 import { MemorySection } from "@/components/memory/MemorySection";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
@@ -31,6 +40,7 @@ export function MemoryPage() {
   const rows = partitions ?? [];
   const memories = rows.reduce((sum, p) => sum + p.note_count, 0);
   const firstRun = !isPending && !error && rows.length === 0;
+  const updating = useMemoryUpdateRunning();
 
   return (
     <div className="space-y-6">
@@ -41,12 +51,23 @@ export function MemoryPage() {
         actions={
           // On the first run the welcome carries the same button; two of them
           // would be the page asking twice.
-          firstRun ? null : <MemoryUpdateButton variant="outline" />
+          firstRun ? null : (
+            <>
+              <MemoryHeaderStatus />
+              <MemoryAutomaticPopover />
+              <MemoryUpdateButton variant="outline" running={updating} />
+            </>
+          )
         }
       />
 
-      <MemoryDeliveriesSection />
+      {firstRun ? null : <MemoryReadFailures />}
 
+      {firstRun ? null : <MemoryDeliveriesSection />}
+
+      {firstRun ? (
+        <MemoryWelcomePanel />
+      ) : (
       <MemorySection
         title={t("memory.partitions.title")}
         meta={
@@ -66,12 +87,11 @@ export function MemoryPage() {
             title={t("memory.loadFailed")}
             description={translateApiError(t, error)}
           />
-        ) : firstRun ? (
-          <MemoryWelcomePanel />
         ) : (
           <MemoryPartitionsTable rows={rows} isLoading={isPending} />
         )}
       </MemorySection>
+      )}
     </div>
   );
 }

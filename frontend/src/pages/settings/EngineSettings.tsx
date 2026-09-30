@@ -7,8 +7,9 @@
 //
 // Two pickers — Coffer's engine and Speech to text — each a provider then a
 // model from that provider's list, with a Test and a state line; the bound on
-// one call to the engine sits under the engine picker. Below them, the passes
-// Coffer runs unattended on that model (UpkeepSettings).
+// one call to the engine sits under the engine picker. The passes Coffer runs
+// unattended on that model are switched on the pages they upkeep — Knowledge's
+// and Memory's Automatic popovers — not here.
 //
 // Speech to text is a picker of its own rather than a row borrowed from the
 // engine's, because it runs on a SECOND connection flag with no fallback to the
@@ -23,7 +24,6 @@ import { useProviders } from "@/lib/hooks/useProviders";
 
 import { InternalEngineSettings } from "./InternalEngineSettings";
 import { SpeechToTextSettings } from "./SpeechToTextSettings";
-import { UpkeepSettings } from "./UpkeepSettings";
 
 export function EngineSettings() {
   const { t } = useTranslation();
@@ -49,7 +49,6 @@ export function EngineSettings() {
           </>
         )}
       </SettingsSection>
-      <UpkeepSettings />
     </div>
   );
 }
