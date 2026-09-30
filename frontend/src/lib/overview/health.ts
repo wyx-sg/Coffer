@@ -9,7 +9,7 @@ import type { FeatureKey } from "@/lib/hooks/useFeatures";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import type { StatusTone } from "@/components/status/statusTone";
 
-type AreaId =
+export type AreaId =
   | "agents"
   | "providers"
   | "mcpServers"
@@ -17,7 +17,11 @@ type AreaId =
   | "channels"
   | "knowledge"
   | "memory"
-  | "sync";
+  | "sync"
+  | "customTools"
+  | "clis"
+  | "secrets"
+  | "usage";
 
 export interface Area {
   id: AreaId;
@@ -29,17 +33,27 @@ export interface Area {
   feature?: FeatureKey;
 }
 
-/** Every area with a backend, in sidebar order. Custom tools and CLIs have none yet, so no tile. */
+/** Every sidebar area but Overview, Conversations (they show in Recent
+ *  activity) and Activity, in the board's order (Overview 1.3.01): what agents
+ *  use first, then the system areas. */
 export const AREAS: readonly Area[] = [
   { id: "agents", to: "/agents", kinds: ["agent"] },
-  { id: "providers", to: "/model-providers", kinds: ["provider"] },
-  { id: "channels", to: "/channels", kinds: ["channel"] },
   { id: "mcpServers", to: "/mcp-servers", kinds: ["mcp_server"] },
   { id: "skills", to: "/skills", kinds: ["skill"] },
   { id: "knowledge", to: "/knowledge", kinds: ["knowledge"] },
   { id: "memory", to: "/memory", kinds: ["memory"] },
+  { id: "providers", to: "/model-providers", kinds: ["provider"] },
+  { id: "channels", to: "/channels", kinds: ["channel"] },
   { id: "sync", to: "/sync", kinds: ["sync"] },
+  { id: "customTools", to: "/custom-tools", kinds: ["custom_tool"] },
+  { id: "clis", to: "/clis", kinds: ["cli"] },
+  { id: "secrets", to: "/secrets", kinds: [] },
+  { id: "usage", to: "/usage", kinds: [] },
 ];
+
+/** Agent items that are only about connecting — the rest (a hook changed by
+ *  hand, a missing program) are problems of another sort. */
+const CONNECT_REASONS = new Set(["agent_not_connected", "agent_partial"]);
 
 /** @ui-only An area's problems as the attention list reports them. */
 export interface AreaProblems {
@@ -103,7 +117,12 @@ export function tileStatus(
     return { tone: "err", text: t("overview.health.failing", { count: status.count }) };
   }
   if (status.tone === "warn") {
-    return { tone: "warn", text: t(`overview.health.${area.id}.warn`, { count: status.count }) };
+    // "1 to connect" only while connecting is all the agents need.
+    const other =
+      area.id === "agents" &&
+      items.some((i) => area.kinds.includes(i.kind) && !CONNECT_REASONS.has(i.reason_code));
+    const key = other ? "overview.health.attention" : `overview.health.${area.id}.warn`;
+    return { tone: "warn", text: t(key, { count: status.count }) };
   }
   return { tone: "ok", text: t(`overview.health.${area.id}.ok`) };
 }

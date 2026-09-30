@@ -31,7 +31,9 @@ const fmt = formatLocalDateTime;
 const parse = parseLocalDate;
 
 /**
- * Styled to match the project's Select controls. The panel is three columns
+ * Foundations-Pickers "Time range": the trigger is a md secondary button — a
+ * 14px calendar icon, the range as its label, a 13px chevron — and the presets
+ * are menu items. The panel is three columns
  * (presets · calendar · typed bounds) from the `sm` breakpoint and stacks to
  * one column below it, so it never forces the page to scroll sideways.
  */
@@ -100,20 +102,17 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex h-9 w-auto min-w-[10rem] items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <span className="flex items-center gap-2 truncate">
-            <CalendarDays className="size-4 shrink-0 opacity-60" />
-            {triggerLabel}
+        <Button type="button" variant="outline" className="min-w-[10rem] justify-between">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <CalendarDays aria-hidden className="text-text-subtle" />
+            <span className="truncate">{triggerLabel}</span>
           </span>
-          <ChevronDown className="size-4 shrink-0 opacity-50" />
-        </button>
+          <ChevronDown aria-hidden className="text-text-subtle" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto max-w-[calc(100vw-2rem)] p-0" align="start">
         <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_auto]">
-          <div className="flex flex-col gap-0.5 border-b border-border p-2 sm:border-b-0 sm:border-r">
+          <div className="flex flex-col gap-px border-b border-border-subtle p-1 sm:border-b-0 sm:border-r">
             {TIME_PRESETS.map((p) => (
               <button
                 key={p}
@@ -123,10 +122,9 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
                   setOpen(false);
                 }}
                 className={cn(
-                  "rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
-                  timeRange === p
-                    ? "bg-surface-selected font-medium text-text"
-                    : "text-text-muted hover:bg-surface-hover",
+                  "flex h-control-md items-center rounded-item px-2 text-left text-sm text-text outline-none transition-colors duration-fast",
+                  "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
+                  timeRange === p ? "bg-surface-selected font-label" : "hover:bg-surface-hover",
                 )}
               >
                 {t(`timeRange.${p}`)}
@@ -142,28 +140,30 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
               onSelect={pickRange}
             />
           </div>
-          <div className="flex flex-col gap-3 border-t border-border p-3 sm:w-56 sm:border-l sm:border-t-0">
-            <div className="space-y-1">
+          <div className="flex flex-col gap-3 border-t border-border-subtle p-3 sm:w-56 sm:border-l sm:border-t-0">
+            <div className="space-y-1.5">
               <Label htmlFor="tr-from">{t("timeRange.from")}</Label>
               <Input
                 id="tr-from"
                 value={draftFrom}
                 placeholder={formatHint}
                 onChange={(e) => setDraftFrom(e.target.value)}
-                className={cn(fromInvalid && "border-destructive")}
+                aria-invalid={fromInvalid || undefined}
+                className="font-mono text-xs"
               />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label htmlFor="tr-to">{t("timeRange.to")}</Label>
               <Input
                 id="tr-to"
                 value={draftTo}
                 placeholder={formatHint}
                 onChange={(e) => setDraftTo(e.target.value)}
-                className={cn(toInvalid && "border-destructive")}
+                aria-invalid={toInvalid || undefined}
+                className="font-mono text-xs"
               />
             </div>
-            <p className="text-xs text-muted-foreground">{formatHint}</p>
+            <p className="text-xs text-text-subtle">{formatHint}</p>
             <Button
               size="sm"
               onClick={applyCustom}

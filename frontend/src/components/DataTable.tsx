@@ -1,11 +1,13 @@
 // frontend/src/components/DataTable.tsx
 // The one reusable list table for every resource surface (Agents, MCP servers,
-// Skills, …): search + filters + pagination, optional row click→detail, and an
-// optional `selection` prop (checkbox column + select-all + bulk bar over the
-// filtered rows — see DataTableSelection.tsx). Two pagination modes: client
-// (default — caller passes ALL rows; filter/slice in memory) and server (caller
-// passes ONE page + a `serverPagination` descriptor and drives search through
-// `search.value`/`search.onChange`) for large lists that page on demand.
+// Skills, …): search + filters, "Load N more" (Foundations-Tables — never
+// numbered pages), optional row click→detail, and an optional `selection` prop
+// (checkbox column + select-all + bulk bar over the filtered rows — see
+// DataTableSelection.tsx). N is `pageSize`, else the Settings default. Two
+// modes: client (default — caller passes ALL rows; filter and grow in memory)
+// and server (caller passes ONE page + a `serverPagination` descriptor and
+// drives search through `search.value`/`search.onChange`; each page it hands
+// over is kept and shown under the ones before — DataTableLoadMore.tsx).
 // Row rendering (data rows, skeleton rows, the empty state) lives in
 // DataTableBody.tsx.
 import { useMemo, useState, type ReactNode } from "react";
@@ -15,7 +17,7 @@ import { DataTableHead } from "@/components/DataTableHead";
 import { DataRows, EmptyRow, SkeletonRows } from "@/components/DataTableBody";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { TableBulkBar, usePageSelectAll } from "@/components/DataTableBulk";
-import { Pagination } from "@/components/Pagination";
+import { DataTableLoadMore, useLoadMore } from "@/components/DataTableLoadMore";
 import { useDefaultPageSize } from "@/lib/preferences";
 import { Table, TableBody } from "@/components/ui/table";
 import {
@@ -30,8 +32,8 @@ import {
 export type { Column, FilterDef };
 
 // Cap the body at 20 rows (row ≈ 3rem) — beyond that the container scrolls
-// vertically under the sticky header (#227), so a 50- or 100-row page keeps
-// its pager and toolbar on screen. Tailwind's max-h scale stops at 24rem, so
+// vertically under the sticky header (#227), so a long list keeps its
+// Load more and toolbar on screen. Tailwind's max-h scale stops at 24rem, so
 // the value has to be arbitrary; it lives here, named, rather than inline.
 const BODY_MAX_HEIGHT = "max-h-[60rem]";
 
@@ -59,6 +61,7 @@ interface Props<T> extends ListLoading {
   selection?: TableSelection<T>;
   /** Rows returning false get no checkbox + are excluded from bulk (default: all). */
   isSelectable?: (row: T) => boolean;
+  /** How many rows show at first and each "Load N more" adds (default: Settings). */
   pageSize?: number;
   /** When set, page on demand against the server instead of slicing in memory. */
   serverPagination?: ServerPagination;
@@ -96,10 +99,8 @@ export function DataTable<T>({
   };
 
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
-  const [page, setPage] = useState(1);
-  // Page size: Settings default → `pageSize` prop → in-table override (reactive to Settings).
+  // N: the `pageSize` prop, else the Settings default (reactive to Settings).
   const globalDefault = useDefaultPageSize();
-  const [override, setOverride] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const expandable = Boolean(getRowDetail);
   const colCount = columns.length + (expandable ? 1 : 0) + (selection ? 1 : 0);
@@ -127,27 +128,27 @@ export function DataTable<T>({
 
   const filtered = server ? rows : clientFiltered;
 
-  // Selection derives from the *filtered* set so bulk actions only touch visible
-  // rows (in server mode that is the current page).
-  const sel = useTableSelection(filtered, rowKey);
-
-  const size = server ? server.pageSize : (override ?? pageSize ?? globalDefault);
-  const total = server ? server.total : filtered.length;
-  const pageCount = Math.max(1, Math.ceil(total / size));
-  const safePage = server ? server.page : Math.min(page, pageCount);
-  const pageRows = server ? filtered : filtered.slice((safePage - 1) * size, safePage * size);
+  const size = server ? server.pageSize : (pageSize ?? globalDefault);
+  const resetKey = `${query}␟${JSON.stringify(filterVals)}␟${size}`;
+  const loadMore = useLoadMore({ rows: filtered, rowKey, size, server, resetKey });
+  const pageRows = loadMore.shown;
+  const total = loadMore.total;
+  // Selection derives from the *filtered* set so bulk actions only touch
+  // matching rows (in server mode: the rows loaded so far).
+  const selectable = server ? pageRows : filtered;
+  const sel = useTableSelection(selectable, rowKey);
 
   const canSelect = (r: T) => (isSelectable ? isSelectable(r) : true);
   // Header checkbox selects the CURRENT PAGE; TableBulkBar escalates to "all".
   const ps = usePageSelectAll({
     sel,
     pageRows,
-    filtered,
+    filtered: selectable,
     rowKey,
     canSelect,
     total,
     server: Boolean(server),
-    resetKey: `${query}␟${JSON.stringify(filterVals)}`,
+    resetKey,
   });
   const hasToolbar = Boolean(search) || filters.length > 0;
 
@@ -159,14 +160,12 @@ export function DataTable<T>({
           onQueryChange={(v) => {
             setQuery(v);
             if (server) server.onPageChange(1);
-            else setPage(1);
           }}
           searchPlaceholder={search?.placeholder}
           filters={filters}
           filterVals={filterVals}
           onFilterChange={(key, v) => {
             setFilterVals((prev) => ({ ...prev, [key]: v }));
-            setPage(1);
           }}
         />
       ) : null}
@@ -175,7 +174,7 @@ export function DataTable<T>({
         <TableBulkBar selection={selection} ps={ps} selectedRows={sel.selectedRows} />
       ) : null}
 
-      <div className="rounded-md border bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
         <Table containerClassName={BODY_MAX_HEIGHT} aria-busy={isLoading || undefined}>
           <DataTableHead
             columns={columns}
@@ -213,20 +212,13 @@ export function DataTable<T>({
         </Table>
       </div>
 
-      <Pagination
-        page={safePage}
-        pageCount={pageCount}
+      <DataTableLoadMore
+        shown={pageRows.length}
         total={total}
-        pageSize={size}
-        onPageChange={server ? server.onPageChange : setPage}
-        onPageSizeChange={
-          server
-            ? server.onPageSizeChange
-            : (s) => {
-                setOverride(s);
-                setPage(1);
-              }
-        }
+        size={size}
+        hasMore={loadMore.hasMore}
+        loading={Boolean(server) && isLoading}
+        onMore={loadMore.more}
       />
     </div>
   );

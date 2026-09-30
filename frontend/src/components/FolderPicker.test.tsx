@@ -36,7 +36,7 @@ describe("FolderPicker", () => {
     const onChange = vi.fn();
     render(<FolderPicker value={null} onChange={onChange} />, { wrapper: wrap(null) });
 
-    fireEvent.click(screen.getByRole("button", { name: /browse/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose/i }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("/home/u/picked"));
     // Native dialog handled it — the in-app browser never opened.
@@ -52,7 +52,7 @@ describe("FolderPicker", () => {
     const onChange = vi.fn();
     render(<FolderPicker value={null} onChange={onChange} />, { wrapper: wrap(null) });
 
-    fireEvent.click(screen.getByRole("button", { name: /browse/i }));
+    fireEvent.click(screen.getByRole("button", { name: /choose/i }));
 
     // The browser lists the home directory's subfolders.
     expect(await screen.findByText(".codex")).toBeInTheDocument();

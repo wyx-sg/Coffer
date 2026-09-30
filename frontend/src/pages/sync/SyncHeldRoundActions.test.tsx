@@ -82,7 +82,8 @@ describe("SyncHeldRoundActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
     const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^confirm$/i }));
+    // The error is there from the start, so the confirm already reads "Try again".
+    fireEvent.click(within(dialog).getByRole("button", { name: /^(confirm|try again)$/i }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent(

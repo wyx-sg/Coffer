@@ -47,7 +47,7 @@ export function DataTableToolbar<T>({
           value={filterVals[f.key] ?? "all"}
           onValueChange={(v) => onFilterChange(f.key, v)}
         >
-          <SelectTrigger aria-label={f.label} className="h-9 w-auto min-w-[8rem]">
+          <SelectTrigger aria-label={f.label} className="w-auto min-w-[8rem]">
             <SelectValue placeholder={f.label} />
           </SelectTrigger>
           <SelectContent>

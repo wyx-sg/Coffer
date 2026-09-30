@@ -135,9 +135,15 @@ export default {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
         },
+        "spinner-show": { to: { opacity: "1" } },
       },
       animation: {
         shimmer: "shimmer 1200ms linear 300ms infinite",
+        // The inline spinner (Foundations-Feedback): one turn every 700ms.
+        spinner: "spin 700ms linear infinite",
+        // The same, held invisible for its first 300ms (an answer that comes
+        // back quickly never flashes a spinner).
+        "spinner-delayed": "spin 700ms linear infinite, spinner-show 1ms linear 300ms forwards",
       },
       transitionDuration: {
         fast: "120ms",

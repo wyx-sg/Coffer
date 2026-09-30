@@ -66,14 +66,6 @@ export function useCheckCli(command: string) {
   });
 }
 
-/** Whether the sidebar's CLIs entry carries a dot: any required command that
- *  is missing, too old or not logged in — the same rows the attention list
- *  reports as kind `cli`. `false` while loading or after a failed read. */
-export function useClisAttention(): boolean {
-  const { data } = useClis();
-  return (data?.items ?? []).some((cli) => cli.status !== "ready");
-}
-
 export interface CliInstallRun {
   /** The job as last reported, `null` before one is started or attached. */
   job: CliInstall | null;

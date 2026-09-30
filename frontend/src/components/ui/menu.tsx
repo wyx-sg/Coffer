@@ -22,6 +22,8 @@ export interface MenuAction {
   disabled?: boolean;
   /** Draw a separator above this item. */
   separated?: boolean;
+  /** The key that runs it elsewhere on the page (e.g. "⌘E"), shown right. */
+  shortcut?: string;
 }
 
 interface Props {
@@ -72,7 +74,7 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
       </PopoverTrigger>
       <PopoverContent
         align={align}
-        className="w-auto min-w-[220px] p-1"
+        className="w-auto min-w-[180px] p-1"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           items()[0]?.focus();
@@ -101,14 +103,30 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
                     setOpen(false);
                     action.onSelect();
                   }}
+                  // Foundations-Overlays "Menu": item 30 high, 8 across, r6,
+                  // 13/400, a 14px text-muted icon 9 before the label, the
+                  // shortcut 11 text-muted on the right; danger reads danger.
                   className={cn(
-                    "flex h-8 items-center gap-2 rounded-sm px-2.5 text-left text-sm outline-none transition-colors duration-fast",
+                    "flex h-control-md items-center gap-[9px] rounded-item px-2 text-left text-sm font-normal outline-none transition-colors duration-fast",
                     "hover:bg-surface-hover focus-visible:bg-surface-hover disabled:pointer-events-none disabled:opacity-disabled",
                     action.destructive ? "text-danger" : "text-text",
                   )}
                 >
-                  {Icon ? <Icon className="size-3.5 shrink-0" aria-hidden /> : null}
-                  {action.label}
+                  {Icon ? (
+                    <Icon
+                      className={cn(
+                        "size-3.5 shrink-0",
+                        action.destructive ? "text-danger" : "text-text-muted",
+                      )}
+                      aria-hidden
+                    />
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                  {action.shortcut ? (
+                    <span aria-hidden className="ml-3 shrink-0 text-2xs text-text-muted">
+                      {action.shortcut}
+                    </span>
+                  ) : null}
                 </button>
               </React.Fragment>
             );
