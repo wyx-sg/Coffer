@@ -89,6 +89,10 @@ class AuditEventType(StrEnum):
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
+    # spec vault-storage: a person's edit found on disk and committed as a
+    # ``disk`` write, and a version of a vault file or folder put back.
+    VAULT_FILE_EDITED = "vault_file_edited"
+    VAULT_FILE_RESTORED = "vault_file_restored"
     # spec vault-sync
     MASTER_KEY_EXPORTED = "master_key_exported"
     MASTER_KEY_IMPORTED = "master_key_imported"

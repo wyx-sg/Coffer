@@ -149,11 +149,17 @@ def test_a_remote_at_a_newer_layout_is_refused(pair: tuple[Machine, Machine]) ->
     assert mini.repo.head() == head
 
 
-def test_a_remote_at_an_older_layout_waits_for_its_upgrade(pair: tuple[Machine, Machine]) -> None:
+def test_a_remote_at_an_older_layout_is_refused_until_rebuilt(
+    pair: tuple[Machine, Machine],
+) -> None:
     mac, mini = pair
     mac.put("manifest.json", '{\n  "schema_version": 2\n}\n')
     mac.round()
-    assert mini.round().status is RoundStatus.WAITING_FOR_LAYOUT
+    head = mini.repo.head()
+    got = mini.round()
+    assert got.status is RoundStatus.REMOTE_TOO_OLD
+    assert got.detail is not None and "rebuild" in got.detail
+    assert mini.repo.head() == head
 
 
 def test_an_unreachable_remote_is_reported_and_nothing_changes(tmp_path: Path) -> None:

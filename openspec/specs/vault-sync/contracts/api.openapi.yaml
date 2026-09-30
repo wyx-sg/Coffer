@@ -8,18 +8,187 @@ info:
 servers:
 - url: http://127.0.0.1:8000
 paths:
-  /api/v1/sync/adopt:
+  /api/v1/sync/continue:
     post:
       description: |-
-        Join the configured remote.
-
-        The same round as any other, and the only one allowed to join: ``/run``
-        on a machine with no pointer reports ``awaiting_join``. Whether this is a
-        join, and of which kind, is still read from the pointer and the registry,
-        so configuring a remote on a machine that forgot its pointer cannot route
-        around the new-versus-returning distinction. The surfaces call
-        ``GET /join`` first and show its answer.
-      operationId: adopt_api_v1_sync_adopt_post
+        Continue the stopped round once every file is answered: the resolved
+        tree is validated, guarded, snapshotted, checked out and pushed.
+      operationId: continue_round_api_v1_sync_continue_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Continue Round
+      tags:
+      - sync
+  /api/v1/sync/hold/confirm:
+    post:
+      description: Apply the held deletions, and continue the round.
+      operationId: confirm_hold_api_v1_sync_hold_confirm_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Confirm Hold
+      tags:
+      - sync
+  /api/v1/sync/hold/restore:
+    post:
+      description: Keep the held files, and continue the round (it pushes them back).
+      operationId: restore_hold_api_v1_sync_hold_restore_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restore Hold
+      tags:
+      - sync
+  /api/v1/sync/join:
+    post:
+      description: 'Join as the preview said: nothing is deleted on either side.'
+      operationId: join_api_v1_sync_join_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Join
+      tags:
+      - sync
+  /api/v1/sync/join-choices:
+    get:
+      operationId: join_choices_api_v1_sync_join_choices_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinChoicesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Join Choices
+      tags:
+      - sync
+    post:
+      description: |-
+        Keep this machine's version (pushed by the next round) or take the
+        remote's, for one or several of a join's differing files.
+      operationId: choose_api_v1_sync_join_choices_post
       parameters:
       - in: header
         name: x-coffer-token
@@ -33,16 +202,14 @@ paths:
         content:
           application/json:
             schema:
-              anyOf:
-              - $ref: '#/components/schemas/AdoptIn'
-              - type: 'null'
-              title: Body
+              $ref: '#/components/schemas/JoinChoicesIn'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoundOut'
+                $ref: '#/components/schemas/JoinChoicesOut'
           description: Successful Response
         '422':
           content:
@@ -56,61 +223,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Adopt
+      summary: Choose
       tags:
       - sync
-  /api/v1/sync/confirm:
-    post:
-      operationId: confirm_api_v1_sync_confirm_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Confirm
-      tags:
-      - sync
-  /api/v1/sync/join:
+  /api/v1/sync/join/preview:
     get:
-      description: |-
-        State the join ``/adopt`` would make, applying nothing.
-
-        The surfaces call this first so the user sees the case, the day this
-        machine last converged and the counts before a single document moves.
-      operationId: preview_join_api_v1_sync_join_get
+      description: What joining the remote would do; nothing is applied.
+      operationId: join_preview_api_v1_sync_join_preview_get
       parameters:
-      - in: query
-        name: choice
-        required: false
-        schema:
-          anyOf:
-          - const: keep-local
-            type: string
-          - type: 'null'
-          title: Choice
       - in: header
         name: x-coffer-token
         required: false
@@ -138,7 +258,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Preview Join
+      summary: Join Preview
       tags:
       - sync
   /api/v1/sync/key/fingerprint:
@@ -251,11 +371,7 @@ paths:
       - sync
   /api/v1/sync/machines/self:
     patch:
-      description: |-
-        Rename this machine.
-
-        Free: nothing keys on the label — a channel's binding and the curation
-        owner name the derived id — so nothing else has to change.
+      description: 'Rename this machine. Free: nothing keys on the label.'
       operationId: rename_self_api_v1_sync_machines_self_patch
       parameters:
       - in: header
@@ -296,6 +412,7 @@ paths:
       - sync
   /api/v1/sync/machines/{machine_id}:
     delete:
+      description: 'Retire another machine: its descriptor goes, in a commit of yours.'
       operationId: retire_machine_api_v1_sync_machines__machine_id__delete
       parameters:
       - in: path
@@ -334,83 +451,9 @@ paths:
       summary: Retire Machine
       tags:
       - sync
-  /api/v1/sync/rebuild:
-    post:
-      description: |-
-        Rebuild this machine from the remote, discarding local-only documents.
-
-        The answer for a machine whose vault is gone. Such a machine rejoins with a
-        valid base and nothing to publish but the loss, so neither ordinary answer
-        serves it: confirming spreads the loss and rejecting refuses the same round
-        forever. Destructive on purpose.
-      operationId: rebuild_api_v1_sync_rebuild_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Rebuild
-      tags:
-      - sync
-  /api/v1/sync/reject:
-    post:
-      operationId: reject_api_v1_sync_reject_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncRemoteClearedOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Reject
-      tags:
-      - sync
   /api/v1/sync/remote:
     delete:
+      description: 'Stop syncing: forget the remote. The vault and its history stay.'
       operationId: delete_remote_api_v1_sync_remote_delete
       parameters:
       - in: header
@@ -515,9 +558,10 @@ paths:
       summary: Put Remote
       tags:
       - sync
-  /api/v1/sync/restore:
+  /api/v1/sync/remote/check:
     post:
-      operationId: restore_api_v1_sync_restore_post
+      description: 'What a remote holds, before it is saved: nothing is kept.'
+      operationId: check_remote_api_v1_sync_remote_check_post
       parameters:
       - in: header
         name: x-coffer-token
@@ -531,16 +575,14 @@ paths:
         content:
           application/json:
             schema:
-              anyOf:
-              - $ref: '#/components/schemas/RestoreIn'
-              - type: 'null'
-              title: Body
+              $ref: '#/components/schemas/RemoteCheckIn'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoundOut'
+                $ref: '#/components/schemas/RemoteCheckOut'
           description: Successful Response
         '422':
           content:
@@ -554,45 +596,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Restore
-      tags:
-      - sync
-  /api/v1/sync/rollback:
-    post:
-      operationId: rollback_api_v1_sync_rollback_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoundOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Rollback
+      summary: Check Remote
       tags:
       - sync
   /api/v1/sync/run:
     post:
+      description: |-
+        One round now. Never an error for what the round ran into: an
+        unreachable remote or a conflict is the round's recorded status.
       operationId: run_round_api_v1_sync_run_post
       parameters:
       - in: header
@@ -627,22 +638,25 @@ paths:
       - sync
   /api/v1/sync/runs:
     get:
-      description: |-
-        Every round this vault has run, newest first.
-
-        Read-only and unfiltered. The surface searches, filters and pages in the
-        browser over the window it is handed, the same way the Activity page does,
-        so this route stays one query with one knob.
+      description: Every round this machine ran, newest first.
       operationId: list_runs_api_v1_sync_runs_get
       parameters:
       - in: query
         name: limit
         required: false
         schema:
-          default: 500
+          default: 50
           maximum: 500
           minimum: 1
           title: Limit
+          type: integer
+      - in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          title: Offset
           type: integer
       - in: header
         name: x-coffer-token
@@ -672,6 +686,129 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Runs
+      tags:
+      - sync
+  /api/v1/sync/runs/{run_id}:
+    get:
+      operationId: get_run_api_v1_sync_runs__run_id__get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Run
+      tags:
+      - sync
+  /api/v1/sync/runs/{run_id}/rollback:
+    post:
+      description: |-
+        Put back what the round changed, as a new commit here; edits made
+        since are kept.
+      operationId: rollback_api_v1_sync_runs__run_id__rollback_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Rollback
+      tags:
+      - sync
+  /api/v1/sync/runs/{run_id}/rollback-plan:
+    get:
+      operationId: rollback_plan_api_v1_sync_runs__run_id__rollback_plan_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RollbackPlanOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Rollback Plan
       tags:
       - sync
   /api/v1/sync/status:
@@ -708,100 +845,634 @@ paths:
       summary: Status
       tags:
       - sync
+  /api/v1/sync/stop:
+    get:
+      operationId: stop_api_v1_sync_stop_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopStateOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Stop
+      tags:
+      - sync
+  /api/v1/sync/stop/files/answer:
+    post:
+      description: |-
+        Record an answer for one file; ``edited`` reads the saved editor copy
+        and refuses it while a conflict marker is left in it.
+      operationId: answer_api_v1_sync_stop_files_answer_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileAnswerIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopStateOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Answer
+      tags:
+      - sync
+  /api/v1/sync/stop/files/editor:
+    post:
+      description: |-
+        Write (once) git's marked-up merge of the file outside the vault and
+        answer where it is.
+      operationId: open_editor_api_v1_sync_stop_files_editor_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilePathIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditorCopyOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Open Editor
+      tags:
+      - sync
+  /api/v1/sync/stop/files/versions:
+    get:
+      operationId: file_versions_api_v1_sync_stop_files_versions_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileVersionsOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: File Versions
+      tags:
+      - sync
+  /api/v1/vault/changes:
+    get:
+      description: Recent commits across the vault, or under one prefix, newest first.
+      operationId: vault_changes_api_v1_vault_changes_get
+      parameters:
+      - description: 'Only commits under this path (default: the whole vault)'
+        in: query
+        name: prefix
+        required: false
+        schema:
+          default: ''
+          description: 'Only commits under this path (default: the whole vault)'
+          title: Prefix
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultChangesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault Changes
+      tags:
+      - vault
+  /api/v1/vault/content:
+    get:
+      description: A file's content as a version left it, or as it is now, with its fingerprint.
+      operationId: vault_content_api_v1_vault_content_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - description: Omit for the file as it is on disk now
+        in: query
+        name: version
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Omit for the file as it is on disk now
+          title: Version
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault Content
+      tags:
+      - vault
+  /api/v1/vault/diff:
+    get:
+      description: What one version did to one file, as a unified diff.
+      operationId: vault_diff_api_v1_vault_diff_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          minLength: 4
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault Diff
+      tags:
+      - vault
+  /api/v1/vault/history:
+    get:
+      description: The versions of a file or folder, newest first, each naming its writer.
+      operationId: vault_history_api_v1_vault_history_get
+      parameters:
+      - description: A file, or a folder ending in /
+        in: query
+        name: path
+        required: true
+        schema:
+          description: A file, or a folder ending in /
+          minLength: 1
+          title: Path
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultHistoryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault History
+      tags:
+      - vault
+  /api/v1/vault/problems:
+    get:
+      description: |-
+        Hand edits validation refused: still on disk, uncommitted, with ``HEAD``
+        in effect until each is fixed.
+      operationId: vault_problems_api_v1_vault_problems_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultProblemsOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault Problems
+      tags:
+      - vault
+  /api/v1/vault/restore:
+    post:
+      description: |-
+        Write a version back as a new commit naming the writer and the version
+        it restored; a stale ``expected_fingerprint`` is 409 and changes nothing.
+      operationId: vault_restore_api_v1_vault_restore_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultRestoreIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRestoreOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Vault Restore
+      tags:
+      - vault
 components:
   schemas:
-    AdoptIn:
+    AgentInventoryOut:
       properties:
-        choice:
-          anyOf:
-          - const: keep-local
-            type: string
-          - type: 'null'
-          title: Choice
-      title: AdoptIn
+        name:
+          title: Name
+          type: string
+        plugins:
+          items:
+            $ref: '#/components/schemas/SyncPluginOut'
+          title: Plugins
+          type: array
+        type:
+          title: Type
+          type: string
+      required:
+      - type
+      - name
+      - plugins
+      title: AgentInventoryOut
+      type: object
+    Answer:
+      enum:
+      - mine
+      - theirs
+      - edited
+      title: Answer
+      type: string
+    AreaCountOut:
+      properties:
+        area:
+          title: Area
+          type: string
+        files:
+          title: Files
+          type: integer
+      required:
+      - area
+      - files
+      title: AreaCountOut
+      type: object
+    AreaCountsOut:
+      properties:
+        knowledge_documents:
+          title: Knowledge Documents
+          type: integer
+        resources:
+          title: Resources
+          type: integer
+        secrets:
+          title: Secrets
+          type: integer
+        secrets_synced:
+          title: Secrets Synced
+          type: boolean
+        skills:
+          title: Skills
+          type: integer
+      required:
+      - knowledge_documents
+      - skills
+      - resources
+      - secrets
+      - secrets_synced
+      title: AreaCountsOut
       type: object
     BreachOut:
       properties:
         area:
           title: Area
           type: string
-        deleted:
-          title: Deleted
+        lost:
+          title: Lost
           type: integer
         total:
           title: Total
           type: integer
       required:
       - area
-      - deleted
+      - lost
       - total
       title: BreachOut
       type: object
-    ChangeStatus:
-      enum:
-      - added
-      - modified
-      - deleted
-      title: ChangeStatus
-      type: string
-    ConvergeStatus:
-      enum:
-      - ok
-      - no_change
-      - conflict
-      - awaiting_confirmation
-      - push_failed
-      - failed
-      - disabled
-      - awaiting_join
-      title: ConvergeStatus
-      type: string
-    DiffCountsOut:
-      description: |-
-        What a round moved, as a tally AND as the list behind it.
-
-        The tally alone is what a row can show; the list is what the reader opens
-        the row to find out. A round reporting `+1 ~1` and then "nothing further to
-        report" is the surface refusing to answer the only question the row raises,
-        and the paths were in the payload the whole time.
+    ConflictFileOut:
       properties:
-        added:
-          default: 0
-          title: Added
-          type: integer
-        changes:
-          default: []
-          items:
-            $ref: '#/components/schemas/DocChangeOut'
-          title: Changes
-          type: array
-        deleted:
-          default: 0
-          title: Deleted
-          type: integer
-        modified:
-          default: 0
-          title: Modified
-          type: integer
-      required:
-      - added
-      - modified
-      - deleted
-      - changes
-      title: DiffCountsOut
-      type: object
-    DocChangeOut:
-      description: 'One document''s fate in one round: what moved, and which way.'
-      properties:
+        answer:
+          anyOf:
+          - $ref: '#/components/schemas/Answer'
+          - type: 'null'
+        area:
+          title: Area
+          type: string
+        editor_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Editor Path
+        other_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Other Path
+        ours_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ours Time
         path:
           title: Path
           type: string
-        status:
-          $ref: '#/components/schemas/ChangeStatus'
+        reason:
+          $ref: '#/components/schemas/ConflictReason'
+        theirs_machine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Theirs Machine
+        theirs_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Theirs Time
       required:
       - path
-      - status
-      title: DocChangeOut
+      - area
+      - reason
+      - ours_time
+      - theirs_time
+      - theirs_machine
+      - other_path
+      - answer
+      - editor_path
+      title: ConflictFileOut
+      type: object
+    ConflictReason:
+      enum:
+      - both_changed
+      - changed_and_deleted
+      - same_name_different_uid
+      - duplicate_uid
+      - invalid_merge
+      - join_differs
+      title: ConflictReason
+      type: string
+    EditorCopyOut:
+      properties:
+        editor_path:
+          title: Editor Path
+          type: string
+        path:
+          title: Path
+          type: string
+      required:
+      - path
+      - editor_path
+      title: EditorCopyOut
       type: object
     ErrorDetail:
       properties:
@@ -833,68 +1504,252 @@ components:
       - error
       title: ErrorResponse
       type: object
-    FailureOut:
+    FileAnswerIn:
       properties:
+        answer:
+          $ref: '#/components/schemas/Answer'
         path:
+          minLength: 1
           title: Path
-          type: string
-        reason:
-          title: Reason
           type: string
       required:
       - path
-      - reason
-      title: FailureOut
+      - answer
+      title: FileAnswerIn
       type: object
-    JoinPreviewOut:
-      description: |-
-        The join a round would make, stated before anything is applied.
-
-        ``joining`` is False for a machine that already converged here: adopting
-        is then an ordinary round with nothing to announce. ``case`` is
-        ``ambiguous`` for a returning machine whose base is gone, which still
-        needs the explicit ``keep-local`` choice (or a rebuild) before it joins.
+    FilePathIn:
+      properties:
+        path:
+          minLength: 1
+          title: Path
+          type: string
+      required:
+      - path
+      title: FilePathIn
+      type: object
+    FileVersionsOut:
       properties:
         base:
           anyOf:
           - type: string
           - type: 'null'
           title: Base
-        case:
-          anyOf:
-          - enum:
-            - new
-            - returning
-            - ambiguous
-            type: string
-          - type: 'null'
-          title: Case
-        joining:
-          title: Joining
+        binary:
+          title: Binary
           type: boolean
-        last_converged_on:
+        ours:
           anyOf:
-          - format: date
-            type: string
+          - type: string
           - type: 'null'
-          title: Last Converged On
-        remote_changed:
+          title: Ours
+        path:
+          title: Path
+          type: string
+        take_theirs:
+          title: Take Theirs
+          type: string
+        theirs:
           anyOf:
-          - type: integer
+          - type: string
           - type: 'null'
-          title: Remote Changed
-        vault_documents:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Vault Documents
+          title: Theirs
       required:
-      - joining
-      - case
+      - path
+      - ours
+      - theirs
       - base
-      - last_converged_on
-      - remote_changed
-      - vault_documents
+      - take_theirs
+      - binary
+      title: FileVersionsOut
+      type: object
+    HoldGroupOut:
+      description: The held files under one folder, and how many files it held.
+      properties:
+        folder:
+          title: Folder
+          type: string
+        paths:
+          items:
+            type: string
+          title: Paths
+          type: array
+        total:
+          title: Total
+          type: integer
+      required:
+      - folder
+      - paths
+      - total
+      title: HoldGroupOut
+      type: object
+    HoldOut:
+      properties:
+        breaches:
+          items:
+            $ref: '#/components/schemas/BreachOut'
+          title: Breaches
+          type: array
+        confirmed:
+          title: Confirmed
+          type: boolean
+        direction:
+          enum:
+          - incoming
+          - outgoing
+          title: Direction
+          type: string
+        groups:
+          items:
+            $ref: '#/components/schemas/HoldGroupOut'
+          title: Groups
+          type: array
+        machines:
+          items:
+            type: string
+          title: Machines
+          type: array
+        paths:
+          items:
+            type: string
+          title: Paths
+          type: array
+      required:
+      - direction
+      - breaches
+      - paths
+      - groups
+      - machines
+      - confirmed
+      title: HoldOut
+      type: object
+    JoinChoiceIn:
+      properties:
+        answer:
+          enum:
+          - mine
+          - theirs
+          title: Answer
+          type: string
+        path:
+          minLength: 1
+          title: Path
+          type: string
+      required:
+      - path
+      - answer
+      title: JoinChoiceIn
+      type: object
+    JoinChoicesIn:
+      properties:
+        choices:
+          items:
+            $ref: '#/components/schemas/JoinChoiceIn'
+          minItems: 1
+          title: Choices
+          type: array
+      required:
+      - choices
+      title: JoinChoicesIn
+      type: object
+    JoinChoicesOut:
+      properties:
+        files:
+          items:
+            $ref: '#/components/schemas/ConflictFileOut'
+          title: Files
+          type: array
+      required:
+      - files
+      title: JoinChoicesOut
+      type: object
+    JoinPreviewOut:
+      description: |-
+        What joining would do. ``empty``: the remote is empty and this vault is
+        pushed whole; ``new``: the union is taken, nothing deleted, differing
+        files left here until chosen; ``returning``: a three-way merge from the
+        commit this machine last converged at.
+      properties:
+        conflicts:
+          items:
+            type: string
+          title: Conflicts
+          type: array
+        deleted:
+          items:
+            type: string
+          title: Deleted
+          type: array
+        differ:
+          items:
+            type: string
+          title: Differ
+          type: array
+        kind:
+          enum:
+          - empty
+          - new
+          - returning
+          title: Kind
+          type: string
+        pulled:
+          items:
+            $ref: '#/components/schemas/AreaCountOut'
+          title: Pulled
+          type: array
+        pulled_files:
+          title: Pulled Files
+          type: integer
+        pushed:
+          items:
+            $ref: '#/components/schemas/AreaCountOut'
+          title: Pushed
+          type: array
+        pushed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pushed At
+        pushed_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pushed By
+        pushed_files:
+          title: Pushed Files
+          type: integer
+        refused:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refused
+        remote_tip:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Remote Tip
+        same:
+          title: Same
+          type: integer
+        same_name:
+          items:
+            type: string
+          title: Same Name
+          type: array
+      required:
+      - kind
+      - remote_tip
+      - pushed_by
+      - pushed_at
+      - pulled
+      - same
+      - differ
+      - pushed
+      - deleted
+      - conflicts
+      - same_name
+      - refused
+      - pulled_files
+      - pushed_files
       title: JoinPreviewOut
       type: object
     KeyFingerprintOut:
@@ -922,6 +1777,7 @@ components:
     KeyMaterialIn:
       properties:
         material:
+          minLength: 1
           title: Material
           type: string
       required:
@@ -943,7 +1799,7 @@ components:
       properties:
         agents:
           items:
-            type: string
+            $ref: '#/components/schemas/AgentInventoryOut'
           title: Agents
           type: array
         coffer_version:
@@ -955,17 +1811,31 @@ components:
         is_self:
           title: Is Self
           type: boolean
+        key_fingerprint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Key Fingerprint
         key_matches:
           anyOf:
           - type: boolean
           - type: 'null'
           title: Key Matches
-        last_converged_on:
+        last_converged_commit:
           anyOf:
-          - format: date
-            type: string
+          - type: string
           - type: 'null'
-          title: Last Converged On
+          title: Last Converged Commit
+        last_round:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Round
+        last_round_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Round At
         machine_id:
           title: Machine Id
           type: string
@@ -981,10 +1851,13 @@ components:
       - os
       - hostname
       - coffer_version
-      - last_converged_on
+      - last_round_at
+      - last_converged_commit
+      - key_fingerprint
       - key_matches
-      - agents
       - is_self
+      - last_round
+      - agents
       title: MachineOut
       type: object
     MachineRemovedOut:
@@ -999,231 +1872,398 @@ components:
     MachineRenameIn:
       properties:
         name:
+          maxLength: 64
+          minLength: 1
           title: Name
           type: string
       required:
       - name
       title: MachineRenameIn
       type: object
-    PendingConfirmationOut:
-      description: |-
-        A round the deletion guard held.
-
-        ``direction`` says which way it tripped: ``apply`` means the remote would
-        delete too much of this vault, ``publish`` means this vault would delete
-        too much of the remote — the case where this machine is the damaged one.
+    ProblemOut:
       properties:
-        breaches:
-          items:
-            $ref: '#/components/schemas/BreachOut'
-          title: Breaches
-          type: array
-        direction:
-          enum:
-          - apply
-          - publish
-          title: Direction
-          type: string
-        paths:
-          items:
-            type: string
-          title: Paths
-          type: array
-        raised_at:
-          format: date-time
-          title: Raised At
-          type: string
-      required:
-      - direction
-      - breaches
-      - paths
-      - raised_at
-      title: PendingConfirmationOut
-      type: object
-    RestoreIn:
-      properties:
-        at:
+        credential_ref:
           anyOf:
           - type: string
           - type: 'null'
-          title: At
-      title: RestoreIn
+          title: Credential Ref
+        kind:
+          enum:
+          - unreachable
+          - auth_failed
+          - push_failed
+          - cloud_folder
+          - layout
+          - failed
+          title: Kind
+          type: string
+        message:
+          title: Message
+          type: string
+        since:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Since
+      required:
+      - kind
+      - message
+      - credential_ref
+      - since
+      title: ProblemOut
+      type: object
+    PulledCommitOut:
+      properties:
+        files:
+          title: Files
+          type: integer
+        machine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Machine
+        time:
+          title: Time
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - version
+      - time
+      - machine
+      - files
+      title: PulledCommitOut
+      type: object
+    RemoteCheckIn:
+      properties:
+        branch:
+          default: main
+          pattern: ^[^-\s~^:?*\[\\\x00-\x1f\x7f][^\s~^:?*\[\\\x00-\x1f\x7f]*$
+          title: Branch
+          type: string
+        credential_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Credential Ref
+        url:
+          minLength: 1
+          pattern: ^[^-\s]\S*$
+          title: Url
+          type: string
+        username:
+          default: coffer
+          maxLength: 128
+          minLength: 1
+          pattern: ^[^\s:@/]+$
+          title: Username
+          type: string
+      required:
+      - url
+      title: RemoteCheckIn
+      type: object
+    RemoteCheckOut:
+      description: |-
+        What the remote holds: ``empty`` (the first push fills it), ``vault``
+        (a Coffer vault, with its layout), ``other`` (a repository that is not
+        one), ``unreachable``, ``auth_failed`` or ``failed`` (with git's
+        message).
+      properties:
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+        layout:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Layout
+        result:
+          enum:
+          - empty
+          - vault
+          - other
+          - unreachable
+          - auth_failed
+          - failed
+          title: Result
+          type: string
+        tip:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tip
+      required:
+      - result
+      - tip
+      - layout
+      - detail
+      title: RemoteCheckOut
+      type: object
+    RollbackPlanOut:
+      properties:
+        kept:
+          items:
+            type: string
+          title: Kept
+          type: array
+        reverses:
+          items:
+            $ref: '#/components/schemas/SyncChangeOut'
+          title: Reverses
+          type: array
+        snapshot:
+          title: Snapshot
+          type: string
+        snapshot_commit:
+          title: Snapshot Commit
+          type: string
+        snapshot_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snapshot Time
+      required:
+      - snapshot
+      - snapshot_commit
+      - snapshot_time
+      - reverses
+      - kept
+      title: RollbackPlanOut
       type: object
     RoundOut:
-      description: One converge round's outcome.
-      properties:
-        agent_resolved:
-          default: []
-          items:
-            type: string
-          title: Agent Resolved
-          type: array
-        applied:
-          $ref: '#/components/schemas/DiffCountsOut'
-        commit:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Commit
-        conflicts:
-          default: []
-          items:
-            type: string
-          title: Conflicts
-          type: array
-        error:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Error
-        failures:
-          default: []
-          items:
-            $ref: '#/components/schemas/FailureOut'
-          title: Failures
-          type: array
-        join:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Join
-        join_report:
-          anyOf:
-          - $ref: '#/components/schemas/JoinPreviewOut'
-          - type: 'null'
-        locked_refs:
-          default: []
-          items:
-            type: string
-          title: Locked Refs
-          type: array
-        not_applicable:
-          default: []
-          items:
-            type: string
-          title: Not Applicable
-          type: array
-        pending:
-          anyOf:
-          - $ref: '#/components/schemas/PendingConfirmationOut'
-          - type: 'null'
-        published:
-          $ref: '#/components/schemas/DiffCountsOut'
-        status:
-          $ref: '#/components/schemas/ConvergeStatus'
-      required:
-      - status
-      - join
-      - applied
-      - published
-      - commit
-      - conflicts
-      - agent_resolved
-      - failures
-      - not_applicable
-      - locked_refs
-      - pending
-      - join_report
-      - error
-      title: RoundOut
-      type: object
-    RunRecordOut:
       description: |-
-        One round as the history holds it: the same report, plus when.
-
-        A superset of ``RoundOut`` rather than a shape of its own, so the two
-        surfaces that show a round — the status page and the history table — can
-        never drift into describing it differently. The timestamps are what the
-        last-round view never needed and a history cannot do without.
+        One recorded round: what it pulled, applied and pushed, and why it
+        stopped or failed.
       properties:
-        agent_resolved:
-          default: []
-          items:
-            type: string
-          title: Agent Resolved
-          type: array
         applied:
-          $ref: '#/components/schemas/DiffCountsOut'
-        commit:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Commit
+          items:
+            $ref: '#/components/schemas/SyncChangeOut'
+          title: Applied
+          type: array
         conflicts:
-          default: []
-          items:
-            type: string
           title: Conflicts
-          type: array
-        error:
+          type: integer
+        detail:
           anyOf:
           - type: string
           - type: 'null'
-          title: Error
-        failures:
-          default: []
-          items:
-            $ref: '#/components/schemas/FailureOut'
-          title: Failures
-          type: array
+          title: Detail
         finished_at:
-          format: date-time
           title: Finished At
           type: string
-        id:
-          title: Id
+        from_commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From Commit
+        held:
+          title: Held
           type: integer
+        id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Id
         join:
           anyOf:
           - type: string
           - type: 'null'
           title: Join
-        join_report:
+        path:
           anyOf:
-          - $ref: '#/components/schemas/JoinPreviewOut'
+          - type: string
           - type: 'null'
-        locked_refs:
-          default: []
+          title: Path
+        pulled:
           items:
-            type: string
-          title: Locked Refs
+            $ref: '#/components/schemas/PulledCommitOut'
+          title: Pulled
           type: array
-        not_applicable:
-          default: []
+        pulled_files:
+          title: Pulled Files
+          type: integer
+        pushed:
           items:
-            type: string
-          title: Not Applicable
+            $ref: '#/components/schemas/SyncChangeOut'
+          title: Pushed
           type: array
-        pending:
+        pushed_files:
+          title: Pushed Files
+          type: integer
+        snapshot:
           anyOf:
-          - $ref: '#/components/schemas/PendingConfirmationOut'
+          - type: string
           - type: 'null'
-        published:
-          $ref: '#/components/schemas/DiffCountsOut'
+          title: Snapshot
         started_at:
-          format: date-time
           title: Started At
           type: string
         status:
-          $ref: '#/components/schemas/ConvergeStatus'
+          $ref: '#/components/schemas/RoundStatus'
+        to_commit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Commit
+        trigger:
+          title: Trigger
+          type: string
+        with_machines:
+          items:
+            type: string
+          title: With Machines
+          type: array
       required:
-      - status
-      - join
-      - applied
-      - published
-      - commit
-      - conflicts
-      - agent_resolved
-      - failures
-      - not_applicable
-      - locked_refs
-      - pending
-      - join_report
-      - error
       - id
+      - status
       - started_at
       - finished_at
-      title: RunRecordOut
+      - trigger
+      - from_commit
+      - to_commit
+      - snapshot
+      - pulled
+      - applied
+      - pushed
+      - with_machines
+      - conflicts
+      - held
+      - detail
+      - path
+      - join
+      - pulled_files
+      - pushed_files
+      title: RoundOut
+      type: object
+    RoundStatus:
+      enum:
+      - nothing_to_do
+      - pulled
+      - pushed
+      - pulled_and_pushed
+      - push_failed
+      - stopped
+      - held
+      - waiting_on_edit
+      - join_required
+      - joined
+      - unreachable
+      - auth_failed
+      - paused_cloud_folder
+      - remote_too_new
+      - remote_too_old
+      - rolled_back
+      - failed
+      title: RoundStatus
+      type: string
+    StopStateOut:
+      properties:
+        round:
+          anyOf:
+          - $ref: '#/components/schemas/StoppedRoundOut'
+          - type: 'null'
+        stopped:
+          title: Stopped
+          type: boolean
+      required:
+      - stopped
+      - round
+      title: StopStateOut
+      type: object
+    StoppedRoundOut:
+      properties:
+        files:
+          items:
+            $ref: '#/components/schemas/ConflictFileOut'
+          title: Files
+          type: array
+        hold:
+          anyOf:
+          - $ref: '#/components/schemas/HoldOut'
+          - type: 'null'
+        join:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Join
+        kind:
+          enum:
+          - conflicts
+          - hold
+          title: Kind
+          type: string
+        local:
+          title: Local
+          type: string
+        raised_at:
+          title: Raised At
+          type: string
+        remote:
+          title: Remote
+          type: string
+        unanswered:
+          title: Unanswered
+          type: integer
+      required:
+      - kind
+      - raised_at
+      - local
+      - remote
+      - join
+      - files
+      - unanswered
+      - hold
+      title: StoppedRoundOut
+      type: object
+    SyncChangeOut:
+      description: One file a round (or a commit) changed.
+      properties:
+        path:
+          title: Path
+          type: string
+        status:
+          enum:
+          - added
+          - modified
+          - removed
+          title: Status
+          type: string
+      required:
+      - path
+      - status
+      title: SyncChangeOut
+      type: object
+    SyncPluginOut:
+      properties:
+        enabled:
+          title: Enabled
+          type: boolean
+        id:
+          title: Id
+          type: string
+        marketplace:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Marketplace
+        name:
+          title: Name
+          type: string
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - id
+      - name
+      - marketplace
+      - enabled
+      - version
+      title: SyncPluginOut
       type: object
     SyncRemoteClearedOut:
       properties:
@@ -1235,17 +2275,6 @@ components:
       title: SyncRemoteClearedOut
       type: object
     SyncRemoteIn:
-      description: |-
-        The remote as the user configures it.
-
-        Every field but the URL carries the spec's default, so a ``PUT`` with a
-        bare URL is a complete configuration rather than a half-set one.
-
-        The URL and the branch become arguments to ``git``. Neither may begin with
-        ``-`` — git would read it as an option, and ``--receive-pack=<cmd>`` is a
-        command — and the branch is held to ``git check-ref-format --branch``. The
-        ``pattern`` catches the shape at the wire; the validators run the domain's
-        full rule, so a bad name is a 422 here rather than a git error later.
       properties:
         branch:
           default: main
@@ -1261,9 +2290,9 @@ components:
           default: true
           title: Enabled
           type: boolean
-        include_credentials:
+        include_secret:
           default: false
-          title: Include Credentials
+          title: Include Secret
           type: boolean
         interval_seconds:
           default: 3600
@@ -1271,13 +2300,16 @@ components:
           title: Interval Seconds
           type: integer
         url:
+          minLength: 1
           pattern: ^[^-\s]\S*$
           title: Url
           type: string
-        worktree_path:
-          default: ~/.coffer/sync
+        username:
+          default: coffer
+          maxLength: 128
           minLength: 1
-          title: Worktree Path
+          pattern: ^[^\s:@/]+$
+          title: Username
           type: string
       required:
       - url
@@ -1296,8 +2328,8 @@ components:
         enabled:
           title: Enabled
           type: boolean
-        include_credentials:
-          title: Include Credentials
+        include_secret:
+          title: Include Secret
           type: boolean
         interval_seconds:
           title: Interval Seconds
@@ -1305,17 +2337,17 @@ components:
         url:
           title: Url
           type: string
-        worktree_path:
-          title: Worktree Path
+        username:
+          title: Username
           type: string
       required:
       - url
       - branch
       - credential_ref
-      - include_credentials
+      - username
+      - include_secret
       - interval_seconds
       - enabled
-      - worktree_path
       title: SyncRemoteOut
       type: object
     SyncRemoteStateOut:
@@ -1333,52 +2365,394 @@ components:
       title: SyncRemoteStateOut
       type: object
     SyncRunListOut:
+      description: A page of the history, newest first, and how many rounds it holds.
       properties:
-        runs:
+        rounds:
           items:
-            $ref: '#/components/schemas/RunRecordOut'
-          title: Runs
+            $ref: '#/components/schemas/RoundOut'
+          title: Rounds
           type: array
+        total:
+          title: Total
+          type: integer
       required:
-      - runs
+      - rounds
+      - total
       title: SyncRunListOut
       type: object
     SyncStatusOut:
       properties:
+        areas:
+          $ref: '#/components/schemas/AreaCountsOut'
         configured:
           title: Configured
           type: boolean
+        conflicts:
+          title: Conflicts
+          type: integer
+        held:
+          title: Held
+          type: integer
+        join_choices:
+          title: Join Choices
+          type: integer
         joined:
-          default: false
           title: Joined
           type: boolean
-        last_run:
+        last_round:
           anyOf:
           - $ref: '#/components/schemas/RoundOut'
           - type: 'null'
         machine_id:
           title: Machine Id
           type: string
-        machine_id_is_derived:
-          title: Machine Id Is Derived
-          type: boolean
-        not_applicable:
-          default: []
-          items:
-            type: string
-          title: Not Applicable
-          type: array
+        machine_name:
+          title: Machine Name
+          type: string
+        machines:
+          title: Machines
+          type: integer
+        next_round_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Round At
+        problem:
+          anyOf:
+          - $ref: '#/components/schemas/ProblemOut'
+          - type: 'null'
         remote:
           anyOf:
           - $ref: '#/components/schemas/SyncRemoteOut'
           - type: 'null'
+        running_since:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Running Since
+        synchroniser:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Synchroniser
+        vault_path:
+          title: Vault Path
+          type: string
+        waiting:
+          items:
+            $ref: '#/components/schemas/WaitingCommitOut'
+          title: Waiting
+          type: array
       required:
       - configured
       - remote
-      - last_run
       - machine_id
-      - machine_id_is_derived
+      - machine_name
       - joined
-      - not_applicable
+      - running_since
+      - last_round
+      - next_round_at
+      - machines
+      - areas
+      - waiting
+      - vault_path
+      - synchroniser
+      - problem
+      - conflicts
+      - held
+      - join_choices
       title: SyncStatusOut
+      type: object
+    VaultChangesOut:
+      properties:
+        changes:
+          items:
+            $ref: '#/components/schemas/VaultVersionOut'
+          title: Changes
+          type: array
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      required:
+      - changes
+      - next_cursor
+      title: VaultChangesOut
+      type: object
+    VaultContentOut:
+      properties:
+        binary:
+          title: Binary
+          type: boolean
+        content:
+          title: Content
+          type: string
+        fingerprint:
+          title: Fingerprint
+          type: string
+        path:
+          title: Path
+          type: string
+        size:
+          title: Size
+          type: integer
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - path
+      - version
+      - content
+      - binary
+      - size
+      - fingerprint
+      title: VaultContentOut
+      type: object
+    VaultDiffOut:
+      properties:
+        added:
+          title: Added
+          type: integer
+        diff:
+          title: Diff
+          type: string
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+        status:
+          title: Status
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - path
+      - version
+      - status
+      - diff
+      - added
+      - removed
+      title: VaultDiffOut
+      type: object
+    VaultHistoryOut:
+      properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+        path:
+          title: Path
+          type: string
+        versions:
+          items:
+            $ref: '#/components/schemas/VaultVersionOut'
+          title: Versions
+          type: array
+      required:
+      - path
+      - versions
+      - next_cursor
+      title: VaultHistoryOut
+      type: object
+    VaultPathChangeOut:
+      description: One file a version touched, with its line counts (0/0 for binary).
+      properties:
+        added:
+          title: Added
+          type: integer
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+        status:
+          title: Status
+          type: string
+      required:
+      - path
+      - status
+      - added
+      - removed
+      title: VaultPathChangeOut
+      type: object
+    VaultProblemOut:
+      description: 'A hand edit validation refused: on disk, uncommitted, not in effect.'
+      properties:
+        code:
+          title: Code
+          type: string
+        message:
+          title: Message
+          type: string
+        path:
+          title: Path
+          type: string
+        severity:
+          title: Severity
+          type: string
+        uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uid
+      required:
+      - path
+      - code
+      - message
+      - uid
+      - severity
+      title: VaultProblemOut
+      type: object
+    VaultProblemsOut:
+      properties:
+        problems:
+          items:
+            $ref: '#/components/schemas/VaultProblemOut'
+          title: Problems
+          type: array
+      required:
+      - problems
+      title: VaultProblemsOut
+      type: object
+    VaultRestoreIn:
+      properties:
+        expected_fingerprint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expected Fingerprint
+        path:
+          minLength: 1
+          title: Path
+          type: string
+        version:
+          minLength: 4
+          title: Version
+          type: string
+      required:
+      - path
+      - version
+      - expected_fingerprint
+      title: VaultRestoreIn
+      type: object
+    VaultRestoreOut:
+      properties:
+        path:
+          title: Path
+          type: string
+        paths:
+          items:
+            type: string
+          title: Paths
+          type: array
+        restored_from:
+          title: Restored From
+          type: string
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - path
+      - version
+      - restored_from
+      - paths
+      title: VaultRestoreOut
+      type: object
+    VaultVersionOut:
+      description: 'One version of a file or folder: the commit that produced it.'
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        display_writer:
+          title: Display Writer
+          type: string
+        machine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Machine
+        operation:
+          title: Operation
+          type: string
+        paths:
+          items:
+            $ref: '#/components/schemas/VaultPathChangeOut'
+          title: Paths
+          type: array
+        removed:
+          default: false
+          title: Removed
+          type: boolean
+        restored_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Restored From
+        summary:
+          title: Summary
+          type: string
+        time:
+          format: date-time
+          title: Time
+          type: string
+        version:
+          title: Version
+          type: string
+        writer:
+          title: Writer
+          type: string
+      required:
+      - version
+      - time
+      - writer
+      - display_writer
+      - actor
+      - machine
+      - summary
+      - operation
+      - restored_from
+      - removed
+      - paths
+      title: VaultVersionOut
+      type: object
+    WaitingCommitOut:
+      description: One commit the remote does not have yet.
+      properties:
+        changes:
+          items:
+            $ref: '#/components/schemas/SyncChangeOut'
+          title: Changes
+          type: array
+        summary:
+          title: Summary
+          type: string
+        time:
+          title: Time
+          type: string
+        version:
+          title: Version
+          type: string
+        writer:
+          title: Writer
+          type: string
+      required:
+      - version
+      - time
+      - writer
+      - summary
+      - changes
+      title: WaitingCommitOut
       type: object

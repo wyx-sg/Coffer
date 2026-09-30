@@ -271,6 +271,11 @@ MOVED_OUT_TABLES = {
     "secret_boundary_settings",
     "skill_source_status",
     "mcp_tool_reach",
+    # The sync remote moved to ``local/sync/remote.json``; the pointer and the
+    # retry set are retired (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
+    "sync_remotes",
+    "sync_convergence_state",
+    "sync_held_paths",
 }
 EXPECTED_TABLES = PRE_LAYOUT_TABLES - MOVED_OUT_TABLES
 

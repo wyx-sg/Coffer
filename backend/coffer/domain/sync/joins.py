@@ -52,6 +52,9 @@ class JoinPreview:
     #: on them and asks which to keep, or to rename one.
     same_name: tuple[str, ...] = ()
     base: str | None = None
+    #: Why this remote cannot be joined at all (its layout is not this
+    #: build's), in words a person can act on; ``None`` when it can.
+    refused: str | None = None
 
     @property
     def pulled_files(self) -> int:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -207,6 +208,11 @@ def checkout(repo: VaultRepository, old: str, new: str, *, branch: str = "main")
 
 
 def _first_path(detail: str) -> str | None:
+    """The path git names: ``Entry '<path>' not uptodate`` (``read-tree``),
+    or the first indented line of a "would be overwritten" list."""
+    quoted = re.search(r"Entry '([^']+)'", detail)
+    if quoted:
+        return quoted.group(1)
     for line in detail.splitlines():
         line = line.strip()
         if line and not line.startswith(("error", "Please", "Aborting", "fatal")):

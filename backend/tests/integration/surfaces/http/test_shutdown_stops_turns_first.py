@@ -42,7 +42,7 @@ async def test_turns_are_stopped_before_the_engine_is_disposed(
     engine.dispose = dispose
     monkeypatch.setattr(app_shutdown, "stop_all_turns", fake_stop_all_turns)
     for name in (
-        "stop_converge_worker",
+        "stop_sync_worker",
         "stop_curation_worker",
         "stop_distil_worker",
         "stop_aggregate_worker",

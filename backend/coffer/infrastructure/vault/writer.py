@@ -158,6 +158,11 @@ class VaultWriter:
     def set_validator(self, validator: Validator) -> None:
         self._validator = validator
 
+    @property
+    def validator(self) -> Validator:
+        """The one validator every write passes (a sync round's merged tree too)."""
+        return self._validator
+
     def add_listener(self, listener: Listener) -> None:
         self._listeners.append(listener)
 

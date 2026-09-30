@@ -26,7 +26,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import pathlib
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 
@@ -95,8 +94,8 @@ from coffer.surfaces.http.reconcile_wiring import (
 )
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.vault_composition import build_vault_stores
+from coffer.surfaces.http.vault_wiring import start_vault_scanning
 
 
 def _db_url() -> str:
@@ -148,28 +147,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # validator every vault write passes (ADR storage-is-five-classes-by-nature).
     vault = await build_vault_stores(app.state.kinds)
 
-    db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
     credentials = await init_credential_store(resource_repo=vault.resources)
     credential_store = credentials.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # ingest, the curation pass, the memory distil pass, the sync conflict
-    # resolver) shares one resolver rather than each re-wrapping the store.
+    # ingest, the curation pass, the memory distil pass) shares one resolver
+    # rather than each re-wrapping the store.
     credential_resolver = make_credential_resolver(credential_store)
 
     # ``AuditService.record`` is handed the ``Resource`` the event is about, so
     # the uid it stores is read off it, never looked back up by label.
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    # What each kind contributes to vault convergence (spec vault-sync),
-    # collected as wiring proceeds and handed to ``start_sync`` at the end.
-    sync_contributions = SyncContributions()
     # The unified reconciler (ADR one-level-triggered-reconciler-compares-
     # parameters) and the event stream: built first, so every resource write
     # hints both, and so each kind below can register the targets it supplies.
-    reconciler = build_reconciler(audit, sync_contributions)
+    reconciler = build_reconciler(audit)
     events = build_event_stream(reconciler)
     # A change another writer makes to a resource file (a hand edit settled,
     # a sync checkout, a restore) is hinted exactly like an API write.
     vault.resources.set_change_sink(events.hint_sink)
+    # Hand edits: the boot scan, then a watcher and periodic scans, each
+    # settled commit audited (spec vault-storage "Keep the last valid version
+    # when a hand edit is invalid").
+    vault_scanning = await start_vault_scanning(audit)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=HintingResourceRepo(vault.resources, events.hint_sink),
@@ -215,7 +214,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         builtin_tools=builtin_tools,
         credential_store=credential_store,
         credential_resolver=credential_resolver,
-        sync=sync_contributions,
         platform=platform,
         agent_catalog=agent_catalog,
         reconciler=reconciler,
@@ -292,19 +290,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,
-        internal_connection=kinds.provider.internal_connection,
-        credential_resolver=credential_resolver,
-        db_path=db_path,
         sm=sm,
         credential_store=credential_store,
         master_key=credentials.master_key,
-        sync_contributions=sync_contributions,
         platform=platform,
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started
     # a worker needs a seam to reach it through.
     app.state.background_workers = workers
-    app.state.sync_contributions = sync_contributions
 
     # Channel adapter reconciler (spec channels): Telegram polling and the
     # SeaTalk websocket connections converge from its first tick.
@@ -315,12 +308,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     attention = wire_attention(
         reconciler,
         features.is_enabled,
-        lifespan_attention_sources(
-            resource_svc=resource_svc,
-            credential_store=credential_store,
-            connection_service=connection,
-            sync_service=workers.sync.service,
-        ),
+        [
+            *lifespan_attention_sources(
+                resource_svc=resource_svc,
+                credential_store=credential_store,
+                connection_service=connection,
+                sync_service=workers.sync.service,
+            ),
+            vault_scanning.attention,
+        ],
     )
     attention_watch_task = await start_attention_watch(events, attention)
 
@@ -347,6 +343,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 engine=engine,
             )
         )
+        await _best_effort("vault_scanner", vault_scanning.stop())
         await _best_effort("derived_db", vault.derived_engine.dispose())
 
 

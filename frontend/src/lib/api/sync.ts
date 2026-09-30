@@ -1,80 +1,86 @@
 // frontend/src/lib/api/sync.ts — wire types + requests for /api/v1/sync/*
 // (spec vault-sync). Every wire type is an alias of the vault-sync contract's
-// generated schemas (`generated/vault-sync.ts`), which is generated from
-// `backend/coffer/surfaces/http/sync_schemas.py`.
+// generated schemas (`generated/vault-sync.ts`), generated from
+// `backend/coffer/surfaces/http/sync_schemas.py` and `sync_stop_schemas.py`.
 //
-// `POST /sync/restore` is deliberately absent, and the absence is the honest
-// answer rather than a gap: it takes a point in the REMOTE's history (a sha, a
-// ref, or a date) and no route exposes that history, so a browser could only
-// offer a blind date box. There is no preview of what would come back and no
-// way to tell "that date holds nothing" from "the wrong date" — and the
-// recovery it performs is asymmetric (it re-adds, never deletes), which is
-// exactly the nuance a blind box cannot convey. Restoring stays `coffer sync
-// restore`, where the user has `git log` on the working tree beside it. Undo
-// (`/rollback`) has none of that trouble: it names no revision.
+// Sync is thin: a round fetches, merges with git, and stops for a person on
+// anything it cannot decide alone — a conflicting file, a large deletion, a
+// join that finds differing files. Each of those has its own routes here, and
+// each answers the one situation the daemon is holding rather than a round
+// named in the request, except rollback, which names the round it undoes.
 //
 // Nothing here ever carries the push credential or the master key into a
 // stored shape: a remote names its credential by REFERENCE, which the daemon
 // resolves at push time and nowhere else, so a fully configured remote is safe
-// to render in a browser. No route here returns the master key: a backup is
-// written by the desktop shell after a presence check (`@/lib/tauri`). Import
-// is the one transient exception — the material the user picked crosses the
-// loopback origin in a request body, into the daemon, never back out.
+// to render in a browser. Import is the one transient exception — the material
+// the user picked crosses the loopback origin in a request body, into the
+// daemon, never back out.
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/vault-sync";
 
 type Schemas = components["schemas"];
 
-/** Per-round change counts for one direction of the diff. */
-export type DiffCounts = Schemas["DiffCountsOut"];
-
 /**
- * A round the deletion guard held.
- *
- * `direction` is the whole point: `apply` means the remote would delete too
- * much of THIS vault, `publish` means this vault would delete too much of the
- * REMOTE — the case where this machine is the damaged one and confirming would
- * take every other machine down with it.
+ * The outcomes a round can end in, from the generated contract rather than
+ * restated, so a status renamed or added on the backend fails typecheck in
+ * every surface that decides something from it.
  */
-export type PendingConfirmation = Schemas["PendingConfirmationOut"];
+export type RoundStatus = Schemas["RoundStatus"];
 
-/**
- * The outcomes a round can end in, taken from the generated contract rather
- * than restated. Every surface that decides something from a round's status
- * narrows this union, so a status renamed or added on the backend fails
- * `npm run typecheck` here instead of being silently carried by one surface.
- */
-export type RoundStatus = Schemas["RoundOut"]["status"];
+/** One round's report (`RoundOut`), from a status, the history or an action. */
+export type SyncRound = Schemas["RoundOut"];
 
-/** One converge round's outcome (`RoundOut`). */
-export type ConvergeRound = Schemas["RoundOut"];
+/** One file a round changed, in one direction. */
+export type SyncChange = Schemas["SyncChangeOut"];
 
-/**
- * One round as the HISTORY holds it (`RunRecordOut`) — the same report a
- * status round carries, plus when it ran and the id its row is keyed on.
- */
-export type RunRecord = Schemas["RunRecordOut"];
-
-/** `GET /sync/runs` — every round, newest first. */
+/** `GET /sync/runs` — rounds, newest first. */
 export type SyncRunList = Schemas["SyncRunListOut"];
 
-/**
- * The join `/adopt` would make, stated before anything is applied
- * (`GET /sync/join`). `joining: false` means this machine already converged
- * here and converging is an ordinary round; `case: "ambiguous"` is a returning
- * machine whose base is gone, which joins only on the explicit `keep-local`
- * choice.
- */
-export type JoinPreview = Schemas["JoinPreviewOut"];
+/** `GET /sync/status` — the remote, the last round, what waits, what is wrong. */
+export type SyncStatus = Schemas["SyncStatusOut"];
 
-/** The one answer an ambiguous join takes. */
-export type JoinChoice = "keep-local";
+/** One local commit the remote does not have yet. */
+export type WaitingCommit = Schemas["WaitingCommitOut"];
 
-/** The one remote this vault converges with. `credential_ref` is a NAME. */
+/** Why sync is not working right now, when it is not. */
+export type SyncProblem = Schemas["ProblemOut"];
+
+/** The one remote this vault syncs with. `credential_ref` is a NAME. */
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
-/** `GET /sync/status` — the remote, its last round, and this machine's id. */
-export type SyncStatus = Schemas["SyncStatusOut"];
+/** The remote as it is written: every field but the URL carries a default. */
+export type SyncRemoteInput = Schemas["SyncRemoteIn"];
+
+export type RemoteCheckInput = Schemas["RemoteCheckIn"];
+
+/** What a repository holds, asked before it is saved as the remote. */
+export type RemoteCheck = Schemas["RemoteCheckOut"];
+
+/** What joining would do, stated before anything is applied. */
+export type JoinPreview = Schemas["JoinPreviewOut"];
+
+/** A file a stopped round (or a join) left for a person to answer. */
+export type ConflictFile = Schemas["ConflictFileOut"];
+
+export type ConflictAnswer = Schemas["Answer"];
+
+export type JoinChoice = Schemas["JoinChoiceIn"];
+
+/** `GET /sync/stop` — whether a round is stopped, and on what. */
+export type StopState = Schemas["StopStateOut"];
+
+export type StoppedRound = Schemas["StoppedRoundOut"];
+
+/** The deletion breaker's hold on a stopped round. */
+export type SyncHold = Schemas["HoldOut"];
+
+/** Both sides of one conflicting file, and what taking theirs changes. */
+export type FileVersions = Schemas["FileVersionsOut"];
+
+export type EditorCopy = Schemas["EditorCopyOut"];
+
+/** What rolling a round back would put back, and what it leaves alone. */
+export type RollbackPlan = Schemas["RollbackPlanOut"];
 
 /** One row of the registry (`GET /sync/machines`). */
 export type Machine = Schemas["MachineOut"];
@@ -83,44 +89,37 @@ export type MachineList = Schemas["MachineListOut"];
 
 export type MachineRemoved = Schemas["MachineRemovedOut"];
 
-/** The remote as it is written: every field but the URL carries a default. */
-export type SyncRemoteInput = Schemas["SyncRemoteIn"];
-
 export const syncApi = {
+  status: () => call<SyncStatus>("/sync/status"),
+  runs: (limit = 500) => call<SyncRunList>(`/sync/runs?limit=${limit}`),
+  run: () => call<SyncRound>("/sync/run", { method: "POST" }),
+
   putRemote: (remote: SyncRemoteInput) =>
     call<SyncRemote>("/sync/remote", { method: "PUT", body: remote }),
-  status: () => call<SyncStatus>("/sync/status"),
+  /** Stop syncing: forget the remote. The vault and its history stay. */
+  clearRemote: () => call<{ cleared: boolean }>("/sync/remote", { method: "DELETE" }),
+  checkRemote: (body: RemoteCheckInput) =>
+    call<RemoteCheck>("/sync/remote/check", { method: "POST", body }),
 
-  /** Every round this vault has run, newest first. Unfiltered on purpose:
-   *  the rounds that changed nothing are what make a GAP in the record
-   *  visible, and a history without them reads as an idle vault. */
-  runs: (limit = 500) => call<SyncRunList>(`/sync/runs?limit=${limit}`),
+  joinPreview: () => call<JoinPreview>("/sync/join/preview"),
+  join: () => call<SyncRound>("/sync/join", { method: "POST" }),
+  joinChoices: () => call<{ files: ConflictFile[] }>("/sync/join-choices"),
+  chooseJoin: (choices: JoinChoice[]) =>
+    call<{ files: ConflictFile[] }>("/sync/join-choices", { method: "POST", body: { choices } }),
 
-  run: () => call<ConvergeRound>("/sync/run", { method: "POST" }),
-  /** What joining would do, applying nothing. Asked before every join. */
-  previewJoin: (choice?: JoinChoice) =>
-    call<JoinPreview>(choice ? `/sync/join?choice=${enc(choice)}` : "/sync/join"),
-  /** Join the remote — only after the preview has been shown. */
-  adopt: (choice?: JoinChoice) =>
-    call<ConvergeRound>("/sync/adopt", { method: "POST", body: choice ? { choice } : {} }),
-  confirm: () => call<ConvergeRound>("/sync/confirm", { method: "POST" }),
-  reject: () => call<{ cleared: boolean }>("/sync/reject", { method: "POST" }),
-  /** Replace this vault with the remote's, discarding what only it holds.
-   *  The third answer for a machine whose files are gone: confirming a held
-   *  round would publish the loss, rejecting would refuse it forever. */
-  rebuild: () => call<ConvergeRound>("/sync/rebuild", { method: "POST" }),
-  /**
-   * Undo the last applied round, from the pre-apply snapshot it left behind.
-   *
-   * Takes no argument on purpose: the daemon reverses the round that left the
-   * NEWEST snapshot, so there is no round to name. A surface that offers this
-   * has to point at that one round itself (`rollbackTargetId`) rather than
-   * letting a user pick — every other choice would run this same call.
-   *
-   * 409 `SYNC_NOTHING_TO_ROLL_BACK` when no snapshot survives: the pruning
-   * keeps ten, and a vault with no remote has none.
-   */
-  rollback: () => call<ConvergeRound>("/sync/rollback", { method: "POST" }),
+  stop: () => call<StopState>("/sync/stop"),
+  answerFile: (path: string, answer: ConflictAnswer) =>
+    call<StopState>("/sync/stop/files/answer", { method: "POST", body: { path, answer } }),
+  /** Write a copy with conflict markers for the person to edit by hand. */
+  editorCopy: (path: string) =>
+    call<EditorCopy>("/sync/stop/files/editor", { method: "POST", body: { path } }),
+  fileVersions: (path: string) => call<FileVersions>(`/sync/stop/files/versions?path=${enc(path)}`),
+  continueRound: () => call<SyncRound>("/sync/continue", { method: "POST" }),
+  confirmHold: () => call<SyncRound>("/sync/hold/confirm", { method: "POST" }),
+  restoreHold: () => call<SyncRound>("/sync/hold/restore", { method: "POST" }),
+
+  rollbackPlan: (runId: number) => call<RollbackPlan>(`/sync/runs/${runId}/rollback-plan`),
+  rollback: (runId: number) => call<SyncRound>(`/sync/runs/${runId}/rollback`, { method: "POST" }),
 
   machines: () => call<MachineList>("/sync/machines"),
   renameSelf: (name: string) =>

@@ -4,6 +4,7 @@ and the round waiting for a person (implements ``RemoteStorePort`` and
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -94,9 +95,12 @@ class ConflictScratch:
         target = self._path(path)
         return target.read_bytes() if target.is_file() else None
 
-    def clear(self) -> None:
-        import shutil
+    def where(self, path: str) -> str | None:
+        """The copy's absolute path, once it has been written."""
+        target = self._path(path)
+        return str(target) if target.is_file() else None
 
+    def clear(self) -> None:
         shutil.rmtree(self._root(), ignore_errors=True)
 
 

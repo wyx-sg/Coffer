@@ -37,7 +37,7 @@ vi.mock("@/lib/hooks/useMachines", () => ({
           os: "darwin",
           hostname: "laptop",
           coffer_version: "0.5.0",
-          last_converged_on: null,
+          last_round_at: null,
           key_matches: true,
           agents: [],
           is_self: true,

@@ -19,6 +19,7 @@ from coffer.surfaces.cli import (
     knowledge_cmd,
     log_cmd,
     memory_cmd,
+    migrate_cmd,
     open_cmd,
     path_cmd,
     provider_cmd,
@@ -29,6 +30,7 @@ from coffer.surfaces.cli import (
     sync_cmd,
     tool_cmd,
     usage_cmd,
+    vault_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
@@ -76,8 +78,10 @@ app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(proxy_cmd.app, name="proxy")
 app.add_typer(usage_cmd.app, name="usage")
 app.add_typer(sync_cmd.app, name="sync")
+app.add_typer(vault_cmd.app, name="vault")
 app.add_typer(drift_cmd.app, name="drift")
 app.command("attention")(drift_cmd.attention)
+app.command("migrate")(migrate_cmd.migrate_command)
 
 
 def run() -> None:

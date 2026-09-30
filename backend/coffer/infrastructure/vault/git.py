@@ -35,8 +35,14 @@ _TOKEN_ENV = "COFFER_GIT_TOKEN"
 #: Answers ``get`` with the token from the environment; ignores ``store`` and
 #: ``erase``, so nothing persists the secret. Safe in argv: it names the
 #: variable, not its value.
+_USERNAME_ENV = "COFFER_GIT_USERNAME"
+#: The username a token is paired with when the remote names none. GitHub and
+#: GitLab ignore it for a token (GitLab: any non-blank value); Bitbucket and
+#: Azure DevOps need a real one, which the remote settings carry.
+DEFAULT_USERNAME = "coffer"
 _CREDENTIAL_HELPER = (
-    '!f() { test "$1" = get && printf "username=coffer\\npassword=%s\\n" "$COFFER_GIT_TOKEN"; }; f'
+    '!f() { test "$1" = get && printf "username=%s\\npassword=%s\\n" '
+    '"$COFFER_GIT_USERNAME" "$COFFER_GIT_TOKEN"; }; f'
 )
 _PINNED = (
     "-c",
@@ -84,13 +90,16 @@ def redact(text: str, secret: str | None) -> str:
     return text.replace(secret, "***") if secret else text
 
 
-def _env(root: Path, writer: str | None, token: str | None) -> dict[str, str]:
+def _env(
+    root: Path, writer: str | None, token: str | None, username: str | None = None
+) -> dict[str, str]:
     env = dict(os.environ)
     for leftover in (
         "GIT_ASKPASS",
         "SSH_ASKPASS",
         "SSH_ASKPASS_REQUIRE",
         _TOKEN_ENV,
+        _USERNAME_ENV,
         "GIT_INDEX_FILE",
     ):
         env.pop(leftover, None)
@@ -107,6 +116,7 @@ def _env(root: Path, writer: str | None, token: str | None) -> dict[str, str]:
         env[f"GIT_{role}_EMAIL"] = _EMAIL
     if token:
         env[_TOKEN_ENV] = token
+        env[_USERNAME_ENV] = username or DEFAULT_USERNAME
     return env
 
 
@@ -118,6 +128,7 @@ def run(
     writer: str | None = None,
     literal: bool = False,
     token: str | None = None,
+    username: str | None = None,
     timeout: float = LOCAL_TIMEOUT_S,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
@@ -132,7 +143,7 @@ def run(
     if literal:
         argv.append("--literal-pathspecs")
     argv += list(args)
-    env = _env(root, writer, token)
+    env = _env(root, writer, token, username)
     if extra_env:
         env.update(extra_env)
     try:

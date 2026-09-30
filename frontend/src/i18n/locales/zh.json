@@ -685,7 +685,9 @@
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
       "secret_imported": "导入了密钥",
-      "storage_cache_cleared": "清除了可重建的缓存"
+      "storage_cache_cleared": "清除了可重建的缓存",
+      "vault_file_edited": "在磁盘上编辑了一个保险库文件",
+      "vault_file_restored": "恢复了一个保险库文件的早期版本"
     },
     "capType": {
       "tool": "工具",
@@ -1211,8 +1213,13 @@
         "title": "保险库",
         "size_one": "{{size}} · {{versions}} 个版本",
         "size_other": "{{size}} · {{versions}} 个版本",
-        "description": "会同步 — 一个 git 仓库。包含配置、技能、知识和加密的密钥。",
-        "notRepository": "你的配置、技能和知识。设置同步后会以 git 仓库保存每个版本。"
+        "description": "一个保存每个版本的 git 仓库。包含配置、技能、知识和加密的密钥。",
+        "notRepository": "你的配置、技能和知识。Coffer 第一次启动时会把它建成 git 仓库。",
+        "latest": "最新版本",
+        "latestValue": "{{when}} · {{writer}}",
+        "sync": "同步",
+        "syncOn": "已同步到你的远端",
+        "syncOff": "仅本机"
       },
       "local": {
         "title": "本地内容",
@@ -1262,7 +1269,6 @@
     "AGENT_TYPE_REGISTERED": "这种类型的智能体已经注册过了。请修改它的配置目录，而不是再添加一个。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该智能体的配置文件",
     "AGENT_CONFIG_REJECTED": "该智能体配置被拒绝",
-    "BACKUP_REMOTE_INVALID": "无法使用该远端——请检查地址、分支，以及间隔是否为正数秒。",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
     "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号——请生成配对码并发给机器人",
     "CHANNEL_NOT_RUNNING": "消息渠道适配器未在运行——请启用该消息渠道以启动它",
@@ -1292,7 +1298,6 @@
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
     "FS_PATH_NOT_OPENABLE": "该路径在这台机器上无法打开",
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
-    "GIT_MIRROR_FAILED": "Git 推送失败。改动已在本地提交；请检查远端地址、分支和推送凭据。",
     "GREP_PATTERN_INVALID": "无效的 grep 模式",
     "HOMEBREW_NOT_FOUND": "智能体的 PATH 上没有 Homebrew（brew），未执行任何操作。",
     "HOST_NOT_ALLOWED": "Coffer 只响应发往它自己回环地址和端口的请求。",
@@ -1349,13 +1354,8 @@
     "SKILL_DIR_NOT_WRITABLE": "技能目录不可写——请检查目录权限",
     "SKILL_FILE_STALE": "技能文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "SKILL_INVALID": "该技能无效",
-    "SYNC_BUNDLE_INVALID": "该文件夹无法作为同步工作区使用",
-    "SYNC_BUNDLE_TOO_NEW": "该同步远端由更新版本的 Coffer 写入，请先升级本机再同步",
     "SYNC_CANNOT_RETIRE_SELF": "机器不能把自己下线",
-    "SYNC_JOIN_AMBIGUOUS": "这台机器此前与该远端收敛过，但它当时到达的提交已经不在远端历史里了——请重新发起加入，并选择保留本机金库自己的文档，还是用远端重建这台机器",
-    "SYNC_NOTHING_PENDING": "没有任何一轮收敛在等待确认",
     "SYNC_NOTHING_TO_ROLL_BACK": "没有可以回滚到的轮次",
-    "SYNC_SERIALIZATION_INVALID": "无法读取该导出包的内容",
     "TARGET_CONFLICT": "目标位置已存在一个技能",
     "TOOL_DISABLED": "该功能已被禁用——请在该服务器页面启用它",
     "TURN_IN_PROGRESS": "该对话已有一轮正在进行中",
@@ -1394,7 +1394,25 @@
     "SKILL_UPDATE_CONFLICT": "该技能在固定的提交之后被修改过。请保留你的修改，或接受更新并丢弃修改。",
     "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。",
     "PORT_OUT_OF_RANGE": "请选择 1024 到 65535 之间的端口。",
-    "PORT_IN_USE": "该端口已被其他程序占用，请换一个。"
+    "PORT_IN_USE": "该端口已被其他程序占用，请换一个。",
+    "ADOPT_SECRET_UNRESOLVED": "无法解析此服务器需要的密钥。请先在「密钥」中保存，再重新接管。",
+    "GIT_MISSING": "未安装 git。Coffer 用 git 保存 vault 的历史；在 macOS 上运行 xcode-select --install 后重启 Coffer。",
+    "SYNC_CONFLICT_MARKERS_LEFT": "文件中仍有冲突标记。删除标记并保存后，再标记为已解决。",
+    "SYNC_MACHINE_NAME_INVALID": "无法使用这个机器名。请使用简短、非空的名字。",
+    "SYNC_MACHINE_NOT_FOUND": "没有使用该 id 与此远端同步的机器。",
+    "SYNC_NOTHING_STOPPED": "没有等待这个回答的同步轮次。",
+    "SYNC_NO_REMOTE": "这台机器尚未设置同步远端。",
+    "SYNC_REMOTE_FAILED": "远端无法连接、拒绝了凭据，或拒绝了推送。",
+    "SYNC_REMOTE_INVALID": "无法使用这个仓库地址或分支。",
+    "SYNC_ROUND_NOT_FOUND": "这台机器的历史中没有该轮次。",
+    "VAULT_FILE_INVALID": "修改被拒绝：文件将不再有效。未写入任何内容。",
+    "VAULT_FILE_STALE": "文件在你加载后已被修改。请重新加载后再试。",
+    "VAULT_GIT_FAILED": "读写 vault 时 git 出错。",
+    "VAULT_MIGRATION_ON_HOLD": "vault 升级已回滚。重新启动 Coffer 前请运行 coffer migrate --resume。",
+    "VAULT_MIGRATION_REFUSED": "现在无法进行 vault 升级。请停止 Coffer 后重试。",
+    "VAULT_MIGRATION_REQUIRED": "此目录仍使用旧布局。请停止 Coffer 并运行一次 coffer migrate。",
+    "VAULT_PATH_INVALID": "这不是 vault 内的路径。",
+    "VAULT_VERSION_NOT_FOUND": "该文件的这个版本不存在。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -2405,8 +2423,31 @@
       "loadFailed": "无法检查这个技能需要的命令"
     },
     "history": {
-      "title": "尚未记录版本",
-      "body": "等 vault 开始保存历史后，这个技能的过往版本会显示在这里。"
+      "title": "还没有版本",
+      "none": "这个技能文件的每次改动——你的、智能体的、在磁盘上改的——都会作为一个版本列在这里，可以对比和恢复。",
+      "builtinTitle": "Coffer 自带的技能没有历史",
+      "builtinBody": "它的文件每次启动都按当前版本重建，没有更早的版本可以回退。",
+      "failedTitle": "读取这个技能的历史失败",
+      "listLabel": "版本",
+      "count_one": "{{count}} 个版本",
+      "count_other": "{{count}} 个版本",
+      "current": "当前",
+      "filesChanged_one": "改动了 {{count}} 个文件",
+      "filesChanged_other": "改动了 {{count}} 个文件",
+      "versionLabel": "所选版本",
+      "restoredFrom": "恢复自 {{version}}",
+      "noFiles": "这个版本没有改动技能的任何文件。",
+      "noTextChange": "没有文本改动（二进制文件，或只改了权限）。",
+      "restore": "恢复这个版本",
+      "confirmTitle": "恢复这个版本？",
+      "confirmBody": "技能文件夹会回到版本 {{version}}：每个文件恢复成当时的样子，之后新增的文件会被删除。恢复会保存为一个新版本，之后仍可以再恢复到现在这个版本。",
+      "restored": "已恢复版本 {{version}}",
+      "unchanged": "技能已经和这个版本一致",
+      "status": {
+        "added": "新增",
+        "modified": "修改",
+        "removed": "删除"
+      }
     },
     "copies": {
       "title": "检查智能体的副本",
@@ -2423,6 +2464,16 @@
       "needsYou": "需要你处理",
       "library": "技能库",
       "repairHint": "修复只放回 Coffer 能自行恢复的内容；它不会覆盖不是它创建的文件夹，这些会继续列在这里等你处理。"
+    }
+  },
+  "vault": {
+    "writer": {
+      "user": "你",
+      "disk": "在磁盘上编辑",
+      "agent": "某个智能体",
+      "daemon": "Coffer",
+      "curation": "整理",
+      "sync": "同步"
     }
   },
   "knowledge": {
@@ -3324,70 +3375,226 @@
     "bulkReach": "所选项的生效范围"
   },
   "sync": {
-    "areas": {
-      "knowledge": "知识",
-      "skills": "技能",
-      "resources": "资源",
-      "state": "共享状态",
-      "credentials": "凭据",
+    "title": "同步",
+    "subtitle": "把本机金库与一个你自己的 git 仓库同步，让你用的每一台机器都持有同样的知识、技能与配置。",
+    "tabs": {
+      "runs": "记录",
+      "setup": "配置",
+      "machines": "机器"
+    },
+    "status": {
+      "title": "状态",
+      "syncNow": "立即同步",
+      "syncing": "同步中…",
+      "notConfigured": "尚未配置远端——在「配置」里设置一个，本机金库就会开始与它同步。",
+      "lastRound": "上一轮",
+      "never": "从未",
+      "moved": "变动",
+      "movedValue": "拉取 {{pulled}} · 推送 {{pushed}}",
+      "nextRound": "下一轮",
       "machines": "机器",
-      "other": "其他"
+      "knowledge": "知识文档",
+      "skills": "技能",
+      "resources": "资源定义",
+      "secrets": "加密密钥",
+      "secretsSynced": "{{count}} 个随同步",
+      "secretsLocal": "{{count}} 个只留本机"
     },
-    "attention": {
-      "heldBody": "有一轮已暂停，等待你确认：在你答复之前，金库既不会收敛，也不会被备份。",
-      "conflictBody": "上一轮因冲突中止，在你解决冲突之前，什么都不会被应用，也不会被发布。",
-      "pushFailedBody": "上一轮在本机已应用，但没能推送到远端，其他机器和你的备份都还停在旧版本。",
-      "failedBody": "上一轮失败了，这个金库已经不再收敛，也不再被备份。"
-    },
-    "conflict": {
-      "title": "本轮因冲突中止",
-      "body": "两台机器改动了同一个文档的同一段。什么都没有应用，也什么都没有发布——金库和指针都停在原地。",
-      "paths": "冲突路径",
-      "resolve": "请在下面这个工作区里用你自己的 git 工具解决，下一轮会从那里继续。",
-      "worktree": "工作区：{{path}}"
-    },
-    "history": {
-      "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",
-      "searchPlaceholder": "搜索轮次…",
-      "empty": "还没有执行过任何一轮。先保存远端，再加入它，开始收敛。",
-      "nothingFurther": "这一轮没有更多可报告的内容。",
-      "ran": "运行于 {{from}} → {{to}}",
-      "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
-      "joinShort": {
-        "new": "以新机器加入",
-        "returning": "重新加入"
+    "problem": {
+      "noCredential": "未设凭据",
+      "cloudTool": "某个云同步工具",
+      "since": "自 {{when}} 起",
+      "auth_failed": {
+        "title": "远端拒绝登录",
+        "body": "git 无法用凭据 {{ref}} 登录。请确认该条目仍在 Coffer 凭据库中，并且仍有这个仓库的权限。"
       },
-      "filter": {
-        "outcome": "结果"
+      "unreachable": {
+        "title": "无法连接远端",
+        "body": "git 连不上这个仓库。不会丢失任何东西：改动会留在本机，等下一轮连上时一起推送。"
       },
-      "table": {
-        "when": "时间",
-        "outcome": "结果",
-        "applied": "应用到本机",
-        "published": "发布到远端",
-        "commit": "提交"
+      "push_failed": {
+        "title": "推送被拒绝",
+        "body": "这一轮在本机完成了，但远端不接受推送。在推送成功之前，其他机器会落后。"
+      },
+      "cloud_folder": {
+        "title": "同步已暂停：金库位于云同步文件夹中",
+        "body": "位于 {{path}} 的金库在 {{tool}} 也会同步的文件夹里。两个工具同时同步一个 git 仓库会把它损坏，因此在把金库移出之前同步保持暂停。"
+      },
+      "layout": {
+        "title": "远端使用了另一种金库布局",
+        "body": "这个仓库是由不同金库布局的 Coffer 写入的。请先升级落后那台机器上的 Coffer，再重新同步。"
+      },
+      "failed": {
+        "title": "上一轮失败了",
+        "body": "这一轮在完成之前停下了，git 的原始信息如下。"
       }
     },
-    "join": {
-      "title": "加入这个远端？",
-      "case": {
-        "new": "这台机器第一次接入这个远端。它会取并集：拿到远端已有的内容，同时保留自己的全部内容，不会删除任何东西。",
-        "returning": "这台机器之前在这里同步过，会从上次收敛的基点继续，并接收远端自那以后的改动——包括删除。",
-        "ambiguous": "这台机器之前在这里同步过，但它到达的提交已不在远端历史中，基点无法恢复。保留本机文档会把它们作为新增发布，可能让其他机器删除过的内容重新出现。若要改用远端的状态，请运行 'coffer sync rebuild'。"
+    "round": {
+      "status": {
+        "nothing_to_do": "无需同步",
+        "pulled": "已拉取",
+        "pushed": "已推送",
+        "pulled_and_pushed": "已拉取并推送",
+        "push_failed": "推送失败",
+        "stopped": "因冲突停下",
+        "held": "删除被拦下",
+        "waiting_on_edit": "等待编辑完成",
+        "join_required": "需要加入",
+        "joined": "已加入",
+        "unreachable": "远端不可达",
+        "auth_failed": "登录被拒",
+        "paused_cloud_folder": "已暂停（云同步文件夹）",
+        "remote_too_new": "远端版本过新",
+        "remote_too_old": "远端版本过旧",
+        "rolled_back": "已回滚",
+        "failed": "失败"
+      }
+    },
+    "change": {
+      "added": "新增",
+      "modified": "修改",
+      "removed": "删除"
+    },
+    "toast": {
+      "roundDone": "本轮完成：{{status}}（拉取 {{pulled}}，推送 {{pushed}}）",
+      "needs": {
+        "stopped": "同步因两台机器都改过的文件而停下——请到同步页面逐个回答。",
+        "held": "同步拦下了一次大量删除——请到同步页面查看。",
+        "waiting_on_edit": "同步在等待：本轮要改的文件正在被编辑。",
+        "join_required": "本机尚未加入这个远端——请到同步页面加入。"
+      }
+    },
+    "runs": {
+      "table": {
+        "when": "时间",
+        "status": "状态",
+        "pulled": "拉取",
+        "pushed": "推送",
+        "commits": "提交"
       },
-      "lastConverged": "上次在此收敛",
-      "never": "从未",
-      "remoteChanged": "远端自那以后改动的文档",
-      "vaultDocuments": "本机保险库中的文档",
-      "confirm": "加入",
-      "keepLocal": "保留本机文档",
-      "joining": "正在加入…",
-      "action": "加入这个远端",
-      "notJoined": "这台机器尚未加入这个远端。加入之前，同步轮次不会应用或发布任何内容——加入时会先告诉你加入会做什么。",
-      "detected": {
-        "new": "检测结果：这台机器会以新机器身份加入，并取并集。",
-        "returning": "检测结果：这台机器之前在这里同步过，会从上次收敛的基点继续。",
-        "ambiguous": "检测结果：这台机器之前在这里同步过，但基点已不在远端历史中——加入需要你来选择。"
+      "filter": "状态",
+      "searchPlaceholder": "搜索同步轮次…",
+      "empty": "还没有运行过任何一轮。保存远端并加入后即开始同步。",
+      "folded": "×{{count}}",
+      "foldedDetail": "{{from}} 到 {{to}} 之间的 {{count}} 轮，结果都一样。",
+      "ran": "开始于 {{from}} · 用时 {{seconds}} 秒 · {{trigger}}",
+      "snapshot": "检出前的快照：{{name}}",
+      "pulledCommits": "拉取的提交",
+      "pulledCommit": "{{sha}}，来自 {{machine}} · {{files}} 个文件 · {{when}}",
+      "unknownMachine": "未知机器",
+      "applied": "本机变动",
+      "pushed": "已推送",
+      "withMachines": "同步对象：{{names}}",
+      "nothingFurther": "这一轮没有更多可报告的内容。"
+    },
+    "rollback": {
+      "action": "回滚",
+      "title": "回滚这一轮？",
+      "description": "把在 {{when}} 结束的这一轮在本机改动的内容恢复回去，作为一个新提交，由下一轮推送。",
+      "snapshot": "来自快照 {{name}}（{{when}}）",
+      "reverses": "会恢复的内容",
+      "morePaths": "……另有 {{count}} 项",
+      "keptNote": "你之后做的修改会保留。",
+      "kept": "之后被修改过、保持原样的文件",
+      "confirm": "回滚本轮",
+      "rollingBack": "回滚中…"
+    },
+    "conflicts": {
+      "title_one": "同步因 {{count}} 个两台机器都改过的文件而停下",
+      "title_other": "同步因 {{count}} 个两台机器都改过的文件而停下",
+      "body": "没有检出任何内容，也没有推送。请为每个文件选择要保留的版本，然后继续。",
+      "columns": {
+        "file": "文件",
+        "area": "区域",
+        "mine": "本机",
+        "theirs": "另一台机器",
+        "answer": "选择",
+        "actions": ""
+      },
+      "unanswered": "未选择",
+      "answer": {
+        "mine": "保留本机的",
+        "theirs": "采用另一台的",
+        "edited": "手动编辑"
+      },
+      "keepMine": "保留本机的",
+      "takeTheirs": "采用另一台的",
+      "openEditor": "在编辑器中打开",
+      "markResolved": "标记为已解决",
+      "takeTheirsTitle": "采用另一台机器的版本？",
+      "takeTheirsBody": "这会用另一台机器的版本替换本机的 {{path}}。本机会发生的变化：",
+      "binary": "这是二进制文件，没有逐行差异可以显示。",
+      "noDiff": "没有差异。",
+      "progress": "已解决 {{resolved}} / {{total}}",
+      "later": "可以稍后再处理——本机金库会保持原样。",
+      "continue": "继续",
+      "continuing": "继续中…"
+    },
+    "hold": {
+      "title_one": "{{who}} 删除了 {{count}} 个文件",
+      "title_other": "{{who}} 删除了 {{count}} 个文件",
+      "thisMac": "本机",
+      "anotherMachine": "另一台机器",
+      "body": {
+        "incoming": "这一轮要删除的某个区域的内容，超过了同步不经询问就会删除的上限。可以在本机删除这些文件，或者恢复它们并推送回去。",
+        "outgoing": "本机要推送的删除超过了同步不经询问就会发送的上限。可以在所有机器上删除它们，或者在本机恢复。"
+      },
+      "share_one": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
+      "share_other": "{{count}} 个文件 · 占该文件夹 {{percent}}%",
+      "more": "……另有 {{count}} 个",
+      "delete_one": "删除 {{count}} 个文件",
+      "delete_other": "删除 {{count}} 个文件",
+      "deleting": "删除中…",
+      "restore_one": "恢复 {{count}} 个文件",
+      "restore_other": "恢复 {{count}} 个文件",
+      "restoring": "恢复中…",
+      "confirmTitle_one": "删除 {{count}} 个文件？",
+      "confirmTitle_other": "删除 {{count}} 个文件？",
+      "confirmBody_one": "该文件会在所有同步的机器上被删除。删除前会先做快照，这一轮之后仍可回滚。",
+      "confirmBody_other": "这些文件会在所有同步的机器上被删除。删除前会先做快照，这一轮之后仍可回滚。"
+    },
+    "join": {
+      "title": "加入这个远端",
+      "notJoined": "本机尚未加入这个远端。在加入之前，每一轮都不会移动任何内容。加入会做的事如下：",
+      "kind": {
+        "empty": "远端是空的，加入会把本机整个金库推送上去。",
+        "new": "本机是这个远端的新机器。加入会取并集：只有一方有的文件会同步到另一方，不会删除任何东西。",
+        "returning": "本机以前在这里同步过，加入会从它上次到达的提交继续。"
+      },
+      "lastPushed": "最近一次由 {{who}} 推送，{{when}}",
+      "pulled": "会拉取",
+      "same_one": "两边已有 {{count}} 个文件完全相同。",
+      "same_other": "两边已有 {{count}} 个文件完全相同。",
+      "differ": "不一致——留在本机等你选择",
+      "pushed": "会推送",
+      "nothingDeleted": "不会删除任何东西。",
+      "deleted": "会删除",
+      "join": "加入",
+      "joining": "加入中…"
+    },
+    "joinChoices": {
+      "title_one": "{{count}} 个文件与远端不一致",
+      "title_other": "{{count}} 个文件与远端不一致",
+      "body": "加入时这些文件保持了本机的样子。请选择保留本机的版本，或采用远端的版本。",
+      "keepMine": "保留我的",
+      "takeTheirs": "采用远端的",
+      "keepAllMine": "全部保留我的",
+      "takeAllTheirs": "全部采用远端的"
+    },
+    "waiting": {
+      "title_one": "{{count}} 项改动等待推送",
+      "title_other": "{{count}} 项改动等待推送",
+      "columns": {
+        "file": "文件",
+        "change": "改动",
+        "writer": "来源",
+        "time": "时间"
+      },
+      "writer": {
+        "you": "你",
+        "coffer": "Coffer",
+        "disk": "在磁盘上编辑",
+        "agent": "智能体"
       }
     },
     "key": {
@@ -3408,131 +3615,65 @@
     },
     "machines": {
       "title": "机器",
-      "description": "所有与这个远端收敛过的 Coffer 安装。机器的标识由宿主机派生而来，所以改名不花任何代价，重装 Coffer 也不会多出一台。",
-      "empty": "还没有任何机器——本机金库尚未与远端收敛过。",
+      "description": "所有与这个远端同步的 Coffer 安装。机器的标识由宿主机派生而来，所以改名不花任何代价，重装 Coffer 也不会多出一台。",
+      "empty": "还没有任何机器——本机金库尚未与远端同步过。",
       "columns": {
-        "name": "名称",
+        "name": "机器",
         "system": "系统",
-        "hostname": "主机名",
+        "lastSeen": "最近出现",
+        "lastRound": "上一轮",
         "version": "Coffer 版本",
-        "lastConverged": "最近收敛",
         "key": "主密钥",
         "agents": "智能体",
         "actions": ""
       },
       "thisMachine": "本机",
       "renameLabel": "机器名称",
-      "lastConvergedHint": "这是「哪一天」而不是「哪一刻」：一台在跑但空闲的机器刻意不会每轮都打时间戳。",
       "never": "从未",
       "keyMatches": "同一把主密钥",
-      "keyDiffers": "它的凭据在本机无法解密",
+      "keyDiffers": "它的密钥在本机无法解密",
       "keyUnknown": "未知——有一方还没有发布过指纹",
       "noAgents": "无",
+      "agent_one": "{{type}} · {{count}} 个插件",
+      "agent_other": "{{type}} · {{count}} 个插件",
       "retire": "下线",
       "retireTitle": "下线 {{name}}？",
-      "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。",
-      "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
-    },
-    "pending": {
-      "bodyApply": "把远端的改动应用到本机，会删掉超过删除保护阈值的文档数量。只有当你确信另一台机器真的删了这么多时才确认。",
-      "bodyPublish": "本机这一轮会把这些删除发布到远端，之后其他每一台机器都会照做。",
-      "breach": "{{area}}：{{total}} 个文档中的 {{deleted}} 个",
-      "breaches": "将要删除的内容",
-      "confirm": "确认",
-      "confirming": "确认中…",
-      "morePaths": "…另有 {{count}} 条",
-      "paths": "路径",
-      "raisedAt": "暂停于 {{when}}",
-      "rebuild": "以远端重建本机",
-      "rebuildTitle": "从远端重建本机金库？",
-      "rebuildConfirm": "这会用远端的内容替换本机金库，并丢弃只有这台机器持有的东西。只在本机文件确实已经丢失时使用。继续？",
-      "rebuilding": "正在重建…",
-      "reinstallWarning": "如果这台机器刚刚重装过，或刚从备份恢复，诚实的答案是「拒绝」：这些文档是本机缺失，不是被删除，确认会连累其他所有机器。",
-      "reject": "拒绝",
-      "rejecting": "拒绝中…",
-      "titleApply": "本轮已暂停：远端会删掉本机金库的很大一部分",
-      "titlePublish": "本轮已暂停：本机金库会删掉远端的很大一部分"
+      "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。"
     },
     "remote": {
       "title": "远端",
-      "description": "一个你自己的 git 仓库。每一轮先把本机金库的内容提交下来，交给 git 与仓库里的内容做三方合并，再把差异应用回来——包括删除。这个仓库只是交汇点，不是事实来源：删掉它，任何一台机器都能重建。",
-      "enabled": "自动收敛",
+      "description": "一个你自己的 git 仓库。每一轮先拉取它，与本机金库合并，再推送结果——遇到两边都改过的文件就停下等你决定。",
+      "vaultPath": "金库：",
+      "cloudFolder": "{{tool}} 也在同步本机金库所在的文件夹（{{path}}）。两个工具同时同步一个 git 仓库会把它损坏，因此在把金库移出之前同步保持暂停。",
+      "enabled": "自动同步",
+      "enabledHint": "请先保存远端。",
       "url": "仓库 URL",
       "branch": "分支",
       "interval": "间隔（秒）",
       "save": "保存远端",
-      "enabledHint": "请先保存远端。",
       "errors": {
         "url": "请输入 git 远端地址（https://… 或 git@…）",
         "interval": "间隔至少 60 秒"
       },
       "credentialRef": "推送凭据",
       "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
-      "includeCredentials": "包含凭据",
-      "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，主密钥都不会被推送。持有密文却没有主密钥的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
-      "worktree": "工作区：{{path}}",
-      "convergeNow": "立即收敛",
-      "converging": "收敛中…",
-      "notConfigured": "尚未配置远端。在上方填入一个仓库，本机金库就会开始与它收敛。"
-    },
-    "rollback": {
-      "action": "撤销这一轮",
-      "title": "撤销这一轮？",
-      "description": "这会把本机金库恢复到 {{when}} 结束的那一轮开始写入之前的状态。撤销本身是一次普通的本地改动：下一轮会把它发布到远端，其他机器随之跟上。",
-      "willUndo": "这一轮在本机写入的内容——撤销会把每一条都反向还原",
-      "morePaths": "…还有 {{count}} 条",
-      "confirm": "撤销这一轮",
-      "undoing": "正在撤销…",
-      "done": "已撤销这一轮（回退 +{{added}} ~{{modified}} −{{deleted}}）。"
-    },
-    "round": {
-      "statusLabel": {
-        "ok": "已收敛",
-        "no_change": "没有变化",
-        "conflict": "因冲突中止",
-        "awaiting_confirmation": "已暂停，等你确认",
-        "awaiting_confirmation_past": "已暂停",
-        "push_failed": "本地已应用，推送失败",
-        "failed": "失败",
-        "disabled": "已关闭",
-        "awaiting_join": "等待加入"
+      "includeSecret": "包含加密密钥",
+      "includeSecretHint_one": "将推送 {{count}} 个加密密钥。密钥以密文形式随行；主密钥绝不会被推送。",
+      "includeSecretHint_other": "将推送 {{count}} 个加密密钥。密钥以密文形式随行；主密钥绝不会被推送。",
+      "check": "检查仓库",
+      "checking": "检查中…",
+      "checkResult": {
+        "empty": "空仓库——第一次推送会填满它。",
+        "vault": "一个 Coffer 金库（布局 {{layout}}）。",
+        "other": "一个不是 Coffer 金库的仓库。",
+        "unreachable": "无法连接。",
+        "auth_failed": "登录被拒。",
+        "failed": "检查失败。"
       },
-      "join": {
-        "new": "以新机器身份加入——远端持有的内容全部添加过来，本机金库原有的内容也全部保留。",
-        "returning": "以回归机器身份重新加入——基线从它自己的描述文件恢复，所以它离线期间被删掉的东西不会复活。"
-      },
-      "agentResolved": "由智能体代为合并",
-      "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
-      "failures": "本机无法应用",
-      "failure": "{{path}}——{{reason}}",
-      "notApplicable": "在本机不适用",
-      "notApplicableHint": "这些内容在本机永远无法应用——例如配置目录在本机不存在的智能体。它们保留在共享树中，不会重试，也不算错误。",
-      "awaitingJoin": "这台机器尚未加入这个远端，因此没有应用或发布任何内容。请在「配置」页使用「加入这个远端」，先查看加入会做什么，再加入。",
-      "lockedRefs": "本机无法解密的凭据",
-      "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
-      "applied": "应用到本机",
-      "appliedHint": "这一轮往本机金库里写了什么。",
-      "published": "发布到远端",
-      "publishedHint": "这一轮往共享树里写了什么。",
-      "change": {
-        "added": "新增 · {{path}}",
-        "modified": "修改 · {{path}}",
-        "deleted": "删除 · {{path}}"
-      }
-    },
-    "runs": {
-      "folded": "×{{count}}",
-      "quietDetail": "{{from}} 到 {{to}} 之间的 {{count}} 轮。本机和远端都没有任何变化。"
-    },
-    "subtitle": "把本机金库与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
-    "tabs": {
-      "runs": "记录",
-      "setup": "配置",
-      "machines": "机器"
-    },
-    "title": "同步",
-    "toast": {
-      "roundDone": "本轮已完成：{{status}}（+{{added}} ~{{modified}} −{{deleted}}）"
+      "stop": "停止同步",
+      "stopTitle": "停止与这个远端同步？",
+      "stopBody": "本机会忘掉这个远端。金库、它的历史和仓库本身都保持原样；再次同步需要重新加入。",
+      "notConfigured": "尚未配置远端。在上方填入一个仓库，本机金库就会开始与它同步。"
     }
   },
   "overview": {
@@ -3664,15 +3805,24 @@
         "notSetUp": "未设置",
         "noRemote": "还没有设置远端",
         "round": {
-          "ok": "已同步",
-          "no_change": "已同步",
-          "conflict": "有冲突",
-          "awaiting_confirmation": "已暂扣",
+          "nothing_to_do": "已同步",
+          "pulled": "已同步",
+          "pushed": "已同步",
+          "pulled_and_pushed": "已同步",
+          "joined": "已同步",
+          "rolled_back": "已同步",
           "push_failed": "推送失败",
+          "stopped": "有冲突",
+          "held": "已拦下",
+          "waiting_on_edit": "等待编辑完成",
+          "join_required": "等待加入",
+          "unreachable": "不可达",
+          "auth_failed": "登录被拒",
+          "paused_cloud_folder": "已暂停",
+          "remote_too_new": "远端版本过新",
+          "remote_too_old": "远端版本过旧",
           "failed": "失败",
-          "disabled": "已暂停",
-          "awaiting_join": "等待加入",
-          "none": "还没有同步过"
+          "none": "尚未同步过"
         }
       }
     },

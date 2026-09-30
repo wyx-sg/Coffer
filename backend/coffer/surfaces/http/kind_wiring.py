@@ -32,7 +32,6 @@ from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledg
 from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
 from coffer.surfaces.http.provider_wiring import ProviderWiring, wire_provider_kind
 from coffer.surfaces.http.secret_boundary_wiring import register_destination_source
-from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import sync_remote_secret_source
 from coffer.surfaces.http.usage_wiring import UsageWiring, wire_model_usage
 from coffer.surfaces.http.vault_composition import VaultStores
@@ -65,7 +64,6 @@ async def wire_resource_kinds(
     builtin_tools: BuiltinToolRegistry,
     credential_store: EncryptedCredentialStore,
     credential_resolver: Callable[[str], str],
-    sync: SyncContributions,
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -73,7 +71,7 @@ async def wire_resource_kinds(
     # The sync remote's push token is a secret destination too; the secret
     # boundary reads it from here to adopt and list it (spec vault-sync "Hold a
     # push token pointed at a new URL until approved").
-    register_destination_source(sync_remote_secret_source(sm))
+    register_destination_source(sync_remote_secret_source())
     # Agent + skill kinds (004/005), lockstep: on_delete cascade + skill tools → gateway.
     agent_skill = wire_agent_and_skill_kinds(
         app,
@@ -95,7 +93,6 @@ async def wire_resource_kinds(
         audit,
         credential_store,
         agent_skill.agent_service,
-        sync,
         agent_catalog,
         reconciler,
     )

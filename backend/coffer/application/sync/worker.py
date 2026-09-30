@@ -1,20 +1,13 @@
-"""The background worker that converges on an interval (spec vault-sync).
+"""Rounds on the remote's interval (spec vault-sync "Allow at most one
+user-owned sync remote").
 
-Shaped like ``RetentionWorker``: one catch-up round shortly after boot, then on
-the remote's interval; a failing round is logged and never kills the loop.
-
-Two things it deliberately does not do. It does not decide what is survivable —
-``ConvergeService.run_once`` returns a status rather than raising, so the loop
-has no judgement to make. And it does not skip a tick because the last round
-was held at the deletion guard: the round re-derives its diff and releases a
-hold whose breach has gone, which is how a vault stuck on a question that no
-longer applies unsticks itself. Having the worker track that state would be a
-second place for it to go stale — and would keep the vault stuck.
-
-What it does not do *again* is say so. A hold the round reports as already
-reported is logged at debug, because the warning belongs to the round that
-first raised it: one outstanding confirmation, one line in the daemon log,
-however long it stands.
+One round shortly after the daemon starts, then one every
+``interval_seconds`` of the configured remote, re-read before each wait so a
+changed interval is believed without a restart. Nothing runs while no remote
+is configured or the remote is paused. A round that raises is logged and never
+ends the loop; every other outcome is a recorded round the service already
+reported. The round shares the vault's one lock with the curation pass, so
+the timer waits for a pass rather than running beside it.
 """
 
 from __future__ import annotations
@@ -22,34 +15,40 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Protocol
 
-from coffer.application.sync.ports import SyncRemoteRepoPort
-from coffer.application.sync.service import ConvergeService
-from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus
+from coffer.domain.sync.remote import DEFAULT_INTERVAL_SECONDS, SyncRemote
+from coffer.domain.sync.rounds import RoundRecord
 
-_logger = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
 #: Long enough that a boot storm has settled before the first round.
-DEFAULT_START_DELAY_S = 30.0
-#: Fifteen minutes. Short enough that moving between machines rarely means
-#: waiting, long enough that an idle vault is not committing noise — which it
-#: cannot anyway, because an unchanged vault serializes to an unchanged tree.
-DEFAULT_INTERVAL_S = 15 * 60.0
+START_DELAY_S = 30.0
+#: How often a vault with no remote (or a paused one) looks again.
+IDLE_POLL_S = 60.0
 
 
-class ConvergeWorker:
+class _Rounds(Protocol):
+    def remote(self) -> SyncRemote | None: ...
+    def set_next_round(self, when: datetime | None) -> None: ...
+    async def run(self, *, trigger: str = ...) -> RoundRecord: ...
+
+
+class SyncWorker:
     def __init__(
         self,
-        service: ConvergeService,
-        remotes: SyncRemoteRepoPort,
+        service: _Rounds,
         *,
-        start_delay_s: float = DEFAULT_START_DELAY_S,
-        default_interval_s: float = DEFAULT_INTERVAL_S,
+        start_delay_s: float = START_DELAY_S,
+        idle_poll_s: float = IDLE_POLL_S,
+        clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
     ) -> None:
         self._service = service
-        self._remotes = remotes
         self._start_delay = start_delay_s
-        self._default_interval = default_interval_s
+        self._idle_poll = idle_poll_s
+        self._clock = clock
         self._stop = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
@@ -66,48 +65,31 @@ class ConvergeWorker:
             self._task = None
 
     async def _loop(self) -> None:
+        self._service.set_next_round(self._clock() + timedelta(seconds=self._start_delay))
         await self._sleep(self._start_delay)
         while not self._stop.is_set():
-            interval = await self._interval()
-            await self.tick()
-            await self._sleep(interval)
+            wait = await self.tick()
+            await self._sleep(wait)
 
-    async def tick(self) -> None:
-        """One scheduled round."""
-        try:
-            run = await self._service.run_once()
-        except Exception:  # the loop outlives any single round
-            _logger.exception("converge: round raised")
-        else:
-            self._log(run)
-
-    async def _interval(self) -> float:
-        remote = await self._remotes.get()
+    async def tick(self) -> float:
+        """One scheduled round when a remote is on; answers how long to wait."""
+        remote = self._service.remote()
         if remote is None or not remote.enabled:
-            return self._default_interval
-        return float(remote.interval_seconds or self._default_interval)
+            self._service.set_next_round(None)
+            return self._idle_poll
+        try:
+            await self._service.run(trigger="timer")
+        except Exception:  # the loop outlives any single round
+            _log.exception("sync.round_raised")
+        interval = float(
+            (self._service.remote() or remote).interval_seconds or DEFAULT_INTERVAL_SECONDS
+        )
+        self._service.set_next_round(self._clock() + timedelta(seconds=interval))
+        return interval
 
     async def _sleep(self, seconds: float) -> None:
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._stop.wait(), timeout=seconds)
 
-    @staticmethod
-    def _log(run: ConvergeRun) -> None:
-        quiet = run.status in (
-            ConvergeStatus.OK,
-            ConvergeStatus.NO_CHANGE,
-            ConvergeStatus.DISABLED,
-            # Waiting for the user to join is a state, not news: the Sync
-            # page and ``coffer sync status`` say so; the log need not, every
-            # interval.
-            ConvergeStatus.AWAITING_JOIN,
-        )
-        if quiet or run.hold_already_reported:
-            # A confirmation this vault has already reported is not news. It
-            # was warned about when it was raised, and the user answers it on
-            # the Sync page, not by reading the log an eleventh time.
-            _logger.debug("converge: %s", run.status.value)
-        else:
-            # A conflict, or a situation that has just arisen, is waiting on
-            # the user and worth saying out loud.
-            _logger.warning("converge: %s", run.status.value)
+
+__all__ = ["IDLE_POLL_S", "START_DELAY_S", "SyncWorker"]

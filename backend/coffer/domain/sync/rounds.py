@@ -29,8 +29,6 @@ class RoundStatus(StrEnum):
     HELD = "held"
     #: A person's uncommitted edit is on a path the round would change.
     WAITING_ON_EDIT = "waiting_on_edit"
-    #: The remote's layout needs the owner machine's upgrade first.
-    WAITING_FOR_LAYOUT = "waiting_for_layout"
     #: This machine has never converged with the remote: join first.
     JOIN_REQUIRED = "join_required"
     JOINED = "joined"
@@ -40,6 +38,8 @@ class RoundStatus(StrEnum):
     PAUSED_CLOUD_FOLDER = "paused_cloud_folder"
     #: The remote was written by a newer Coffer's layout.
     REMOTE_TOO_NEW = "remote_too_new"
+    #: The remote is at an older layout: rebuild it from a migrated machine.
+    REMOTE_TOO_OLD = "remote_too_old"
     ROLLED_BACK = "rolled_back"
     FAILED = "failed"
 
@@ -54,6 +54,7 @@ NEEDS_PERSON = frozenset(
         RoundStatus.AUTH_FAILED,
         RoundStatus.PAUSED_CLOUD_FOLDER,
         RoundStatus.REMOTE_TOO_NEW,
+        RoundStatus.REMOTE_TOO_OLD,
     }
 )
 

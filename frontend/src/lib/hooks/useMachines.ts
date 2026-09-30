@@ -2,7 +2,7 @@
 //
 // The machine registry (spec vault-sync "Derive the registry from the
 // descriptors"): every installation of Coffer that has converged with this
-// remote, read as a derived view of `machines/*.yaml` in the working tree.
+// remote, read from the descriptors under `machines/` in the vault.
 //
 // The list is not only the Machines tab's data — it is also the pick-list the
 // channel binding control offers (spec channels, "Bind each channel to the one machine that runs it"),
@@ -68,8 +68,8 @@ export function useRenameSelf() {
  */
 export function useRetireMachine() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  // No error toast: this is reached only from a ConfirmDialog, which shows the
+  // refusal in place and stays open.
   return useMutation({
     mutationFn: (machineId: string) => syncApi.retire(machineId),
     onSuccess: () => {
@@ -78,6 +78,5 @@ export function useRetireMachine() {
       void qc.invalidateQueries({ queryKey: skillsKey });
       void qc.invalidateQueries({ queryKey: scopeKey });
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

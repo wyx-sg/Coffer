@@ -84,7 +84,7 @@ class RoundEngine:
         if where:
             return rec(RoundStatus.PAUSED_CLOUD_FOLDER, detail=where)
         d.git.ensure()
-        d.git.set_remote(remote.url)
+        d.git.set_remote(remote.url, remote.username)
         d.git.set_carry_secret(remote.include_secret)
         d.writer.settle()
         local = d.git.head()
@@ -110,23 +110,9 @@ class RoundEngine:
             if not d.state.joined():
                 return rec(RoundStatus.JOIN_REQUIRED, detail="the remote is empty")
             return self._push(rec, remote, token, local, None)
-        layout = d.layout_of(tip)
-        if layout is not None and layout > d.layout:
-            return rec(
-                RoundStatus.REMOTE_TOO_NEW,
-                detail=f"the remote's layout {layout} is newer than this build's {d.layout}",
-            )
-        if layout is not None and layout < d.layout:
-            upgraded = d.upgrade_layout(tip) if d.upgrade_layout else None
-            if upgraded is None:
-                return rec(
-                    RoundStatus.WAITING_FOR_LAYOUT, detail=f"the remote is at layout {layout}"
-                )
-            try:
-                d.git.push(upgraded, remote.branch, token)
-            except RemoteFailed as exc:
-                return rec(PROBLEM_STATUS[exc.problem], detail=exc.detail)
-            tip = upgraded
+        refused = layout_refusal(d, tip)
+        if refused is not None:
+            return rec(refused[0], detail=refused[1])
         base = d.git.merge_base(local, tip)
         if base is None:
             d.state.set_joined(False)
@@ -162,7 +148,7 @@ class RoundEngine:
             merged = d.git.merge(local, tip, base=base if explicit_base else None)
             tree, entries = merged.tree, list(merged.conflicts)
         tree, entries = settle_secrets(d.git, tree, entries)
-        tree = settle_machines(d.git, tree, tip, d.machine.descriptor_path())
+        tree = settle_machines(d.git, tree, tip, d.machine.descriptor_path(), base=base)
         found = conflict_files(entries) + identity_conflicts(d.trees, tree, local, tip)
         if not found:
             found = invalid_files(d.git, d.validate, d.history, local=local, merged=tree)
@@ -357,6 +343,30 @@ class RoundEngine:
         return version or commit
 
 
+def layout_refusal(d: RoundDeps, tip: str) -> tuple[RoundStatus, str] | None:
+    """Why a remote at ``tip`` cannot be converged with, or ``None``.
+
+    A remote carries exactly this build's layout or it is refused, in either
+    direction: a newer one is another Coffer's, and an older one is rebuilt
+    from a migrated machine rather than converted here (ADR
+    every-vault-file-carries-its-format-version)."""
+    layout = d.layout_of(tip)
+    if layout is None or layout == d.layout:
+        return None
+    if layout > d.layout:
+        return (
+            RoundStatus.REMOTE_TOO_NEW,
+            f"the remote's layout {layout} is newer than this build's {d.layout}; "
+            "upgrade Coffer on this machine",
+        )
+    return (
+        RoundStatus.REMOTE_TOO_OLD,
+        f"the remote is at layout {layout}, older than this build's {d.layout}; rebuild it "
+        "from a machine that has been upgraded (clear it and let that machine push), "
+        "then join it from here",
+    )
+
+
 def _summary(machines: tuple[str, ...]) -> str:
     return (
         f"Merged changes from {', '.join(machines)}"
@@ -365,4 +375,4 @@ def _summary(machines: tuple[str, ...]) -> str:
     )
 
 
-__all__ = ["PROBLEM_STATUS", "Recorder", "RoundEngine"]
+__all__ = ["PROBLEM_STATUS", "Recorder", "RoundEngine", "layout_refusal"]

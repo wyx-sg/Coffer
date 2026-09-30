@@ -1,397 +1,388 @@
-"""Vault sync service (spec vault-sync; ADR vault-sync).
+"""The sync service: the thin round behind the daemon's surfaces
+(ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
-Owns the remote's configuration, the lock, the audit trail and the master-key
-bootstrap, and delegates the algorithm to :class:`ConvergeRound`. The split is
-deliberate: the round can then be tested against a fake mirror with no database
-anywhere near it, and this file stays about *policy* — when a round may run,
-what a held round means, what gets recorded.
+The round itself (``round_engine``) is synchronous git work over the vault;
+this service is the policy around it: one round at a time, off the event loop,
+never beside a curation pass, and every round recorded. Three rules:
 
-One lock guards everything that writes the vault or the working tree. The
-knowledge curation pass takes the same one (spec vault-sync "Never overlap a
-curation pass and a round"): both rewrite vault content, and an export taken half-way through
-a rewrite is a torn snapshot that git would read as a deliberate change.
+- **One lock over every rewriter of vault content.** A round holds
+  :attr:`SyncService.lock` from its first git call to its record, and the
+  curation pass takes the same lock (spec vault-sync "Never overlap a curation
+  pass and a round"), so a merge is never computed over a half-rewritten
+  collection.
+- **Off the event loop.** Every engine call runs in a worker thread
+  (``asyncio.to_thread``); the thread takes the engine's own lock too, so an
+  answer recorded from the CLI never interleaves with a round from the timer.
+- **Never raises for what a person can be told.** A round that cannot reach
+  the remote, cannot use its token, or trips over git is a recorded round with
+  a status and a message, never an exception: the worker has no judgement to
+  make, and the Sync page shows the same record the history holds.
 """
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
-from coffer.application.sync.convergence import ConvergeRound
-from coffer.application.sync.convergence_ops import refuse_newer_layout
-from coffer.application.sync.joining import JoinPreview
-from coffer.application.sync.ports import (
-    BundlePort,
-    ConvergenceStatePort,
-    CredentialSyncPort,
-    GitMirrorPort,
-    MasterKeyPort,
-    SyncRemoteRepoPort,
-)
-from coffer.application.sync.service_history import HistoryMixin
+from coffer.application.sync import round_answers, round_join, round_resume, round_rollback
+from coffer.application.sync.round_engine import RoundEngine
+from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
 from coffer.application.sync.service_machines import MachinesMixin
+from coffer.application.sync.service_ports import (
+    AgentInventoryPort,
+    HostMachinePort,
+    MasterKeyPort,
+    RemoteProbePort,
+    SecretFilesPort,
+)
 from coffer.application.sync.service_remote import RemoteMixin
+from coffer.application.sync.service_status import StatusMixin
+from coffer.application.sync.views import RollbackView, RoundPage
 from coffer.domain.audit import AuditEventType
+from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.error_base import CofferError
-from coffer.domain.secrets import sync_remote_destination
-from coffer.domain.sync.backup import BackupRemote
-from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
-from coffer.domain.sync.errors import MasterKeyFileInvalid
+from coffer.domain.errors import CredentialMissing
+from coffer.domain.sync.errors import MasterKeyFileInvalid, SyncNoRemote, SyncRoundNotFound
+from coffer.domain.sync.joins import JoinPreview
+from coffer.domain.sync.remote import SyncRemote
+from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+from coffer.domain.sync.stops import Answer, ConflictFile, Stop
 
-#: Materialised for the length of one push and never written anywhere.
-_TOKEN_KEY = "token"
+_log = logging.getLogger(__name__)
 
 
-class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
-    """Configure the remote, run a round, resolve a held one."""
+#: Statuses a round records quietly; everything else is news worth a warning.
+_QUIET = frozenset(
+    {
+        RoundStatus.NOTHING_TO_DO,
+        RoundStatus.PULLED,
+        RoundStatus.PUSHED,
+        RoundStatus.PULLED_AND_PUSHED,
+        RoundStatus.JOINED,
+        RoundStatus.JOIN_REQUIRED,
+    }
+)
 
+
+class SyncService(RemoteMixin, MachinesMixin, StatusMixin):
     def __init__(
         self,
         *,
-        remotes: SyncRemoteRepoPort,
-        state: ConvergenceStatePort,
-        round_factory: Callable[[GitMirrorPort, str], ConvergeRound],
-        mirror_factory: Callable[[Path], GitMirrorPort],
-        bundle_factory: Callable[[Path], BundlePort],
-        set_machine_name: Callable[[str], None],
-        credentials: CredentialResolver,
-        credential_store: CredentialSyncPort,
+        engine: RoundEngine,
+        remotes: RemoteStorePort,
+        history: RoundHistoryPort,
+        token: TokenPort,
+        machine: HostMachinePort,
         master_key: MasterKeyPort,
+        secrets: SecretFilesPort,
+        probe: RemoteProbePort,
         audit: AuditService,
+        set_machine_name: Callable[[str], None],
+        vault_path: Callable[[], Path],
+        inventory: AgentInventoryPort | None = None,
+        after_apply: Callable[[], Awaitable[object]] | None = None,
         lock: asyncio.Lock | None = None,
-        protected_roots: Sequence[Path] = (),
-        coffer_dir: Path | None = None,
+        clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
     ) -> None:
+        self._engine = engine
         self._remotes = remotes
-        self._state = state
-        self._round_factory = round_factory
-        # A factory because the working tree is part of the remote's config and
-        # can change under the user without a daemon restart.
-        self._mirror_factory = mirror_factory
-        self._bundle_factory = bundle_factory
-        self._set_machine_name = set_machine_name
-        self._credentials = credentials
-        self._credential_store = credential_store
+        self._history = history
+        self._token = token
+        self._machine = machine
         self._master_key = master_key
+        self._secrets = secrets
+        self._probe = probe
         self._audit = audit
-        # Shared with the curation worker, which is why it is injectable.
+        self._set_machine_name = set_machine_name
+        self._vault_path = vault_path
+        self._inventory = inventory
+        self._after_apply = after_apply
         self._lock = lock or asyncio.Lock()
-        # The live directories a working tree may not overlap: the mirrored
-        # roots and Coffer's own directory. Empty means "no check", which is
-        # only right for a test that pins every root under ``tmp_path``.
-        self._protected_roots = [Path(r).expanduser() for r in protected_roots]
-        self._coffer_dir = Path(coffer_dir).expanduser() if coffer_dir is not None else None
+        self._clock = clock
+        self._running_since: str | None = None
+        self._next_round_at: str | None = None
+
+    # --- what other parts of the daemon share ---------------------------------
 
     @property
     def lock(self) -> asyncio.Lock:
-        """The vault-write lock, for anything else that rewrites vault content."""
+        """The one lock over every rewriter of vault content; curation takes it."""
         return self._lock
 
-    # --- rounds -------------------------------------------------------------
+    @property
+    def machine_id(self) -> str:
+        return self._machine.machine_id()
 
-    async def run_once(
-        self,
-        *,
-        join_choice: str | None = None,
-        confirmed: PendingConfirmation | None = None,
-        adopt: bool = False,
-    ) -> ConvergeRun:
-        """One converge round. Never raises for something the user can be told.
+    def set_next_round(self, when: datetime | None) -> None:
+        """The worker says when it will run next (for the status)."""
+        self._next_round_at = when.astimezone(UTC).isoformat(timespec="seconds") if when else None
 
-        The worker calls this on a timer and a surface calls it on demand; both
-        get a ``ConvergeRun`` back, so neither has to decide what is survivable.
-        Only ``adopt`` may join: on a machine with no pointer any other round
-        reports ``awaiting_join`` and does nothing else.
-        """
-        started = datetime.now(tz=UTC)
-        remote = await self._remotes.get()
-        if remote is None or not remote.enabled:
-            return ConvergeRun(
-                status=ConvergeStatus.DISABLED, started_at=started, finished_at=started
-            )
-        async with self._lock:
-            try:
-                run = await self._run(
-                    remote, join_choice=join_choice, confirmed=confirmed, adopt=adopt
-                )
-            except CofferError as e:
-                run = ConvergeRun(
-                    status=ConvergeStatus.FAILED,
-                    started_at=started,
-                    finished_at=datetime.now(tz=UTC),
-                    error=_redact(str(e), await self._token(remote)),
-                )
-        await self._record(run)
-        return run
+    def remote(self) -> SyncRemote | None:
+        return self._remotes.get()
 
-    async def preview_join(self, *, choice: str | None = None) -> JoinPreview:
-        """State the join a round would make, applying nothing (spec vault-sync
-        "Report a join before applying it"). Under the lock: it fetches and
-        serializes into the working tree, as a round does."""
-        remote = await self._remotes.get()
-        if remote is None or not remote.enabled:
-            return JoinPreview(joining=False)
-        async with self._lock:
-            mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-            await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-            round_ = self._round_factory(mirror, remote.branch)
-            return await round_.preview_join(token=await self._token(remote), choice=choice)
-
-    async def _run(
-        self,
-        remote: BackupRemote,
-        *,
-        join_choice: str | None,
-        confirmed: PendingConfirmation | None,
-        adopt: bool,
-    ) -> ConvergeRun:
-        mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-        await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-        round_ = self._round_factory(mirror, remote.branch)
-        return await round_.run(
-            token=await self._token(remote),
-            join_choice=join_choice,
-            confirmed=confirmed,
-            adopt=adopt,
+    async def divergence_outstanding(self) -> bool:
+        """Whether a round waits for a person — a stop, a hold, or a join's
+        differing files. An unattended rewriter consults this before it runs:
+        a rewrite piled onto an open question changes the very files the
+        person is deciding between."""
+        state = self._engine.d.state
+        return await asyncio.to_thread(
+            lambda: state.stop() is not None or bool(state.join_choices())
         )
 
-    async def confirm(self) -> ConvergeRun:
-        """Accept a round the deletion guard held, and let it finish.
+    # --- running engine calls ---------------------------------------------------
 
-        The round is re-derived rather than resumed. Serialization is
-        deterministic, so an unchanged vault against an unchanged remote yields
-        exactly the diff the user was shown — and the guard is waived only for
-        the remote tip the hold was raised against. If the remote moved in the
-        meantime the guard runs again and the round is held afresh, because a
-        confirmation is an answer about a specific set of documents, not a
-        standing permission to delete.
-        """
-        pending = await self._state.pending()
-        if pending is None:
-            raise SyncNothingPendingError()
-        await self._state.set_pending(None)
-        await self._audit.record(
-            AuditEventType.SYNC_CONFIRMED.value,
-            actor="user",
-            details={"direction": pending.direction.value, "paths": len(pending.paths)},
-        )
-        return await self.run_once(confirmed=pending)
+    def _now(self) -> str:
+        return self._clock().astimezone(UTC).isoformat(timespec="seconds")
 
-    async def reject(self) -> None:
-        """Discard a held round, returning the working tree to the pointer.
+    async def _locked[T](self, fn: Callable[[], T]) -> T:
+        """``fn`` in a worker thread, under both locks."""
 
-        The vault was never touched — the guard runs before the apply — so
-        rejecting only has to undo the tree.
-        """
-        pending = await self._state.pending()
-        if pending is None:
-            raise SyncNothingPendingError()
-        remote = await self._remotes.get()
-        pointer = await self._state.pointer()
-        # Under the lock: this moves the working tree, and the appliers read
-        # every document out of that tree. Landing mid-apply would hand them
-        # pre-merge content for paths the round is about to mark absorbed.
+        def call() -> T:
+            with self._engine.d.lock:
+                return fn()
+
         async with self._lock:
-            if remote is not None and pointer is not None:
-                mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-                await mirror.reset_hard(pointer)
-            await self._state.set_pending(None)
-        await self._audit.record(
-            AuditEventType.SYNC_REJECTED.value,
-            actor="user",
-            details={"direction": pending.direction.value},
-        )
+            return await asyncio.to_thread(call)
 
-    async def rollback(self) -> ConvergeRun:
-        """Undo the last applied round from its pre-apply snapshot.
-
-        The snapshot's tree is by construction the vault's state immediately
-        before the apply, so this is the same machinery run backwards: diff
-        from where the vault is now to where it was, and apply that.
-        """
-        remote = await self._remotes.get()
-        pointer = await self._state.pointer()
-        if remote is None or pointer is None:
-            raise SyncNothingToRollBackError()
-        async with self._lock:
-            mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-            snapshots = await mirror.tags("coffer/pre-apply/")
-            if not snapshots:
-                raise SyncNothingToRollBackError()
-            target = await mirror.resolve_revision(snapshots[0])
-            round_ = self._round_factory(mirror, remote.branch)
-            # The pointer does not move. ``reverse_to`` leaves the working
-            # tree where it was, so the reverted vault is now an ordinary local
-            # change: the next round publishes the undo instead of re-deriving
-            # the diff that caused it.
-            run = await round_.reverse_to(pointer, target)
-        await self._audit.record(
-            AuditEventType.SYNC_ROLLED_BACK.value, actor="user", details={"to": target[:12]}
-        )
-        return run
-
-    async def restore(self, *, at: str | None = None) -> ConvergeRun:
-        """Bring the vault to an earlier point in the remote's history.
-
-        The history is the backup: a document deleted last week returns by
-        naming a revision or a date, and everything the vault gained since is
-        untouched — which is why the deletions in that diff are dropped rather
-        than applied. "Bring back last week's note" is not also "throw away this
-        week's".
-
-        The pointer does **not** move. It names the commit this vault has
-        provably absorbed, and a restore does not un-absorb anything: the vault
-        now holds everything it held a moment ago *plus* what came back. Moving
-        it to the older commit would make the next round read the re-added
-        documents as unchanged since the base and let the remote's deletion of
-        them win all over again, quietly undoing the restore. Left where it is,
-        the next round publishes the recovered documents as the ordinary
-        additions they are.
-        """
-        remote = await self._remotes.get()
-        pointer = await self._state.pointer()
-        if remote is None or pointer is None:
-            raise SyncNothingToRollBackError()
-        async with self._lock:
-            mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-            await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-            await mirror.fetch(token=await self._token(remote))
-            target = await mirror.resolve_revision(at or f"origin/{remote.branch}")
-            # A restore reads its documents out of ``target``, so ``target`` is
-            # the tree whose layout must be legible here.
-            await refuse_newer_layout(mirror, target)
-            round_ = self._round_factory(mirror, remote.branch)
-            run = await round_.reverse_to(pointer, target, delete=False)
-        return run
-
-    async def rebuild(self) -> ConvergeRun:
-        """Rebuild this machine from the remote, discarding local-only documents.
-
-        Offered where the publish-side guard holds a round (spec vault-sync
-        "Tell a new machine from a returning one"): a vault that lost its files has no other
-        honest answer, since confirming would publish the loss and rejecting
-        would refuse the same round forever. Destructive on purpose, and never
-        reached without the user asking for it by name.
-        """
-        remote = await self._remotes.get()
+    def _required_remote(self) -> SyncRemote:
+        remote = self._remotes.get()
         if remote is None:
-            raise SyncNothingToRollBackError()
+            raise SyncNoRemote()
+        return remote
+
+    async def _round(
+        self, name: str, run: Callable[[SyncRemote, str | None], RoundRecord], *, trigger: str
+    ) -> RoundRecord:
+        """One recorded round: the inventory refreshed, the token resolved,
+        ``run`` in a worker thread, and whatever it ended in stored."""
+        remote = self._required_remote()
         async with self._lock:
-            mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-            await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-            await mirror.fetch(token=await self._token(remote))
-            tip = await mirror.resolve_revision(f"origin/{remote.branch}")
-            # The most destructive read of the remote there is — this vault
-            # becomes that tree — so it is the last place to skip the layout
-            # check. Unlike a round, this raises out to the surface: a rebuild
-            # is a user asking for something now, and the answer is 409 and
-            # "upgrade this machine first", not a silent partial vault.
-            await refuse_newer_layout(mirror, tip)
-            run = await self._round_factory(mirror, remote.branch).rebuild_to(tip)
-            await self._state.set_pointer(tip)
-            await self._state.set_pending(None)
+            self._running_since = self._now()
+            try:
+                record = await self._attempt(remote, run, trigger)
+            finally:
+                self._running_since = None
+            stored = await self._history.append(record)
+        await self._record(name, stored)
+        if stored.applied and self._after_apply is not None:
+            # What another machine changed is this machine's warrant to bring
+            # its own side effects in step (an active provider's projection,
+            # a skill's links): one reconcile pass with the import's warrant.
+            try:
+                await self._after_apply()
+            except Exception:
+                _log.warning("sync.after_apply_failed", exc_info=True)
+        return stored
+
+    async def _attempt(
+        self,
+        remote: SyncRemote,
+        run: Callable[[SyncRemote, str | None], RoundRecord],
+        trigger: str,
+    ) -> RoundRecord:
+        started = self._now()
+
+        def failed(status: RoundStatus, detail: str) -> RoundRecord:
+            return RoundRecord(
+                status=status,
+                started_at=started,
+                finished_at=self._now(),
+                trigger=trigger,
+                detail=detail,
+            )
+
+        if self._inventory is not None:
+            try:
+                self._machine.set_agents(await self._inventory.inventory())
+            except Exception:
+                _log.warning("sync.inventory_failed", exc_info=True)
+        try:
+            token = await self._token.token_for(remote)
+        except SecretBindingPending:
+            return failed(
+                RoundStatus.AUTH_FAILED,
+                f"the push token {remote.credential_ref} is waiting for approval in the "
+                "Coffer desktop app before it may be sent to this remote",
+            )
+        except CredentialMissing:
+            return failed(
+                RoundStatus.AUTH_FAILED,
+                f"the push token {remote.credential_ref} is not stored on this machine",
+            )
+
+        try:
+            # ``run`` takes the engine's lock itself (every round entry point does).
+            return await asyncio.to_thread(run, remote, token)
+        except CofferError as exc:
+            message = str(exc).replace(token, "***") if token else str(exc)
+            return failed(RoundStatus.FAILED, message)
+
+    async def _record(self, name: str, record: RoundRecord) -> None:
+        level = logging.DEBUG if record.status in _QUIET else logging.WARNING
+        _log.log(level, "sync.%s", name, extra={"status": record.status.value})
         await self._audit.record(
-            AuditEventType.SYNC_ROLLED_BACK.value,
-            actor="user",
-            details={"rebuild": True, "to": tip[:12]},
+            AuditEventType.SYNC_ROLLED_BACK.value
+            if record.status is RoundStatus.ROLLED_BACK
+            else AuditEventType.SYNC_RUN.value,
+            actor="user" if record.trigger == "manual" else "sync",
+            details={
+                "round": record.id,
+                "status": record.status.value,
+                "trigger": record.trigger,
+                "pulled": record.pulled_files,
+                "pushed": record.pushed_files,
+                "conflicts": record.conflicts,
+                "held": record.held,
+                "join": record.join,
+            },
         )
-        return run
 
-    # --- credentials --------------------------------------------------------
+    # --- rounds -----------------------------------------------------------------
 
-    async def _token(self, remote: BackupRemote) -> str | None:
-        """Resolve the push credential, for the one call that needs it.
-
-        Never stored on this service, never audited, and the caller re-redacts
-        any error text even though the adapter already did.
-        """
-        if not remote.credential_ref:
-            return None
-        # The remote's URL is the target the token is approved for: pointing an
-        # existing token at a new URL waits for the desktop app (spec
-        # credentials "Hold a secret for a new destination until a person
-        # approves it").
-        resolved = await asyncio.to_thread(
-            self._credentials.materialize,
-            {_TOKEN_KEY: remote.credential_ref},
-            sync_remote_destination(remote.url),
+    async def run(self, *, trigger: str = "manual") -> RoundRecord:
+        """One round now ("Sync now", or the worker's timer)."""
+        engine = self._engine
+        return await self._round(
+            "round", lambda r, t: engine.run(r, t, trigger=trigger), trigger=trigger
         )
-        token = resolved.get(_TOKEN_KEY)
-        return str(token) if token is not None else None
+
+    async def join_preview(self) -> JoinPreview:
+        """What joining the remote would do, with nothing applied (spec
+        vault-sync "Report a join before applying it")."""
+        remote = self._required_remote()
+        token = await self._token.token_for(remote)
+        return await self._locked(lambda: round_join.preview(self._engine, remote, token))
+
+    async def join(self) -> RoundRecord:
+        """Join as the preview said: nothing deleted on either side."""
+        engine = self._engine
+        return await self._round(
+            "join", lambda r, t: round_join.join(engine, r, t), trigger="manual"
+        )
+
+    async def continue_round(self) -> RoundRecord:
+        """Continue a stopped or held round once it is answered."""
+        engine = self._engine
+        return await self._round(
+            "continue", lambda r, t: round_resume.resume(engine, r, t), trigger="manual"
+        )
+
+    # --- answers ----------------------------------------------------------------
+
+    async def stop(self) -> Stop | None:
+        return await asyncio.to_thread(self._engine.d.state.stop)
+
+    async def answer(self, path: str, choice: Answer) -> Stop:
+        return await self._locked(lambda: round_answers.answer(self._engine, path, choice))
+
+    async def open_editor(self, path: str) -> str:
+        """The absolute path of ``path``'s hand-merge copy, written when first
+        asked for; the OS-open action opens it."""
+        return await self._locked(lambda: round_answers.editor_copy(self._engine, path))
+
+    async def confirm_hold(self) -> Stop:
+        return await self._locked(lambda: round_answers.confirm_hold(self._engine))
+
+    async def restore_hold(self, *, actor: str) -> str | None:
+        return await self._locked(lambda: round_answers.restore_held(self._engine, actor=actor))
+
+    async def join_choices(self) -> tuple[ConflictFile, ...]:
+        return await asyncio.to_thread(self._engine.d.state.join_choices)
+
+    async def choose(
+        self, choices: list[tuple[str, Answer]], *, actor: str
+    ) -> tuple[ConflictFile, ...]:
+        """Settle a join's differing files, one or several at once."""
+
+        def apply() -> tuple[ConflictFile, ...]:
+            remaining = self._engine.d.state.join_choices()
+            for path, choice in choices:
+                remaining = round_answers.choose_join(self._engine, path, choice, actor=actor)
+            return remaining
+
+        return await self._locked(apply)
+
+    # --- history and rollback ----------------------------------------------------
+
+    async def last_round(self) -> RoundRecord | None:
+        found = await self._history.recent(1)
+        return found[0] if found else None
+
+    async def rounds(self, *, limit: int, offset: int = 0) -> RoundPage:
+        rows = await self._history.recent(limit, offset)
+        return RoundPage(tuple(rows), await self._history.count())
+
+    async def round(self, round_id: int) -> RoundRecord:
+        found = await self._history.get(round_id)
+        if found is None:
+            raise SyncRoundNotFound(round_id)
+        return found
+
+    async def _rollable(self, round_id: int) -> RoundRecord:
+        record = await self.round(round_id)
+        if record.status is RoundStatus.ROLLED_BACK:
+            raise round_rollback.SyncNothingToRollBack(
+                "this round is itself a rollback; its snapshot is already in place"
+            )
+        return record
+
+    async def rollback_plan(self, round_id: int) -> RollbackView:
+        record = await self._rollable(round_id)
+        shown = await self._locked(lambda: round_rollback.plan(self._engine, record))
+        times = {name: when for name, _commit, when in self._engine.d.git.snapshots()}
+        when = times.get(shown.snapshot)
+        return RollbackView(
+            snapshot=shown.snapshot,
+            snapshot_commit=shown.snapshot_commit,
+            snapshot_time=datetime.fromtimestamp(when, tz=UTC).isoformat(timespec="seconds")
+            if when
+            else None,
+            reverses=shown.reverses,
+            kept=shown.kept,
+        )
+
+    async def rollback(self, round_id: int, *, actor: str) -> RoundRecord:
+        """Put back what round ``round_id`` changed, as a new commit here; the
+        next round pushes it (spec vault-sync "Snapshot before applying and
+        roll back from it")."""
+        record = await self._rollable(round_id)
+        async with self._lock:
+            done = await asyncio.to_thread(
+                _with_lock,
+                self._engine,
+                lambda: round_rollback.rollback(self._engine, record, actor=actor),
+            )
+            stored = await self._history.append(done)
+        await self._record("rollback", stored)
+        return stored
+
+    # --- the master key ------------------------------------------------------------
 
     def key_fingerprint(self) -> str | None:
-        """A short SHA-256 fingerprint of the master key, never the key.
-
-        Two machines showing the same fingerprint hold the same key. It rides
-        in each machine's descriptor, so the machines table can say outright
-        that another machine's credentials will not decrypt here.
-        """
-        key = self._master_key.export_key()
-        return hashlib.sha256(key).hexdigest()[:12] if key else None
+        return self._master_key.fingerprint()
 
     async def import_key(self, material: str) -> list[str]:
+        """Install a master key carried from another machine; answer the refs
+        it still does not open."""
         raw = material.strip().encode("utf-8")
         if not raw:
             raise MasterKeyFileInvalid("<import>", "no key material supplied")
         try:
             await asyncio.to_thread(self._master_key.install_key, raw)
-        except ValueError as e:
-            raise MasterKeyFileInvalid("<import>", "not a valid Fernet key") from e
-        await self._audit.record(AuditEventType.MASTER_KEY_IMPORTED.value, actor="sync")
-        return await asyncio.to_thread(self._credential_store.locked_refs)
-
-    # --- recording ----------------------------------------------------------
-
-    async def _record(self, run: ConvergeRun) -> None:
-        waiting = run.hold_already_reported or run.status is ConvergeStatus.AWAITING_JOIN
-        if waiting and await self._remotes.refresh_run(run):
-            # The same confirmation the user has not answered yet. It is one situation,
-            # and the timer re-deriving it every interval is not a new one: the row that
-            # first reported it is re-stamped, and no audit event is written either, so
-            # a vault waiting a week is a single entry everywhere a person might read it
-            # (see "Record one outstanding confirmation once").
-            return
-        await self._remotes.record_run(run)
-        if run.status is ConvergeStatus.DISABLED:
-            return
-        await self._audit.record(
-            AuditEventType.SYNC_RUN.value,
-            actor="sync",
-            details={
-                "status": run.status.value,
-                "join": run.join.value if run.join else None,
-                "applied": run.applied.counts(),
-                "published": run.published.counts(),
-                "conflicts": len(run.conflicts),
-                "agent_resolved": len(run.agent_resolved),
-                "failures": len(run.failures),
-                "guard": run.pending.direction.value if run.pending else None,
-            },
-        )
+        except ValueError as exc:
+            raise MasterKeyFileInvalid("<import>", "not a valid Fernet key") from exc
+        await self._audit.record(AuditEventType.MASTER_KEY_IMPORTED.value, actor="user")
+        return await asyncio.to_thread(self._secrets.locked_refs)
 
 
-def _redact(text: str, token: str | None) -> str:
-    return text.replace(token, "***") if token else text
+def _with_lock[T](engine: RoundEngine, fn: Callable[[], T]) -> T:
+    with engine.d.lock:
+        return fn()
 
 
-class SyncNothingPendingError(CofferError):
-    """Nothing is held at the deletion guard. Maps to 409."""
-
-    code = "SYNC_NOTHING_PENDING"
-
-    def __init__(self) -> None:
-        super().__init__("no converge round is waiting for confirmation")
-
-
-class SyncNothingToRollBackError(CofferError):
-    """No pre-apply snapshot to return to. Maps to 409."""
-
-    code = "SYNC_NOTHING_TO_ROLL_BACK"
-
-    def __init__(self) -> None:
-        super().__init__("no pre-apply snapshot to roll back to")
+__all__ = ["SyncService"]

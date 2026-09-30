@@ -1,8 +1,8 @@
 // frontend/src/pages/sync/SyncSetupTab.tsx — Sync → Setup.
 //
 // Everything you configure once and then stop thinking about: which repository
-// this vault converges with, and the master key another machine needs to
-// decrypt what this one publishes. The machine registry is its own tab.
+// this vault syncs with, and the master key another machine needs to decrypt
+// the secrets this one pushes. The machine registry is its own tab.
 //
 // The master key is here and not in the app's Settings for the same reason: its
 // whole purpose is making another machine able to read what this one syncs, so

@@ -50,35 +50,31 @@ def machine_list(
         if output_json:
             typer.echo(_json.dumps({"machines": machines}, indent=2))
             return
-        if not machines:
-            s = c.get("/sync/status")
-            _cli_client.check(s, verbose=verbose)
-            joined = bool(s.json().get("joined"))
-    if not machines:
-        # Only a round publishes this machine's descriptor, and only a joined
-        # machine runs one: until then the step is ``adopt``.
-        step = "coffer sync now" if joined else "coffer sync adopt"
-        _console.print(f"no machines yet — run '{step}' to publish this one")
-        return
     table = Table(show_header=True, header_style="bold")
-    for column in ("Name", "Id", "System", "Last converged", "Key", "Agents"):
+    for column in ("Name", "Id", "System", "Coffer", "Last seen", "Last round", "Key", "Agents"):
         table.add_column(column)
     for m in machines:
         key = {True: "✓", False: "✗ different", None: "—"}[m.get("key_matches")]
+        agents = ", ".join(
+            f"{a['type']} ({len(a.get('plugins') or [])} plugins)" for a in m.get("agents") or []
+        )
         table.add_row(
             f"{m['name']}  (this machine)" if m.get("is_self") else m["name"],
             m["machine_id"][:8],
             m.get("os") or "—",
-            m.get("last_converged_on") or "never",
+            m.get("coffer_version") or "—",
+            m.get("last_round_at") or "never",
+            m.get("last_round") or "—",
             key,
-            ", ".join(m.get("agents") or []) or "—",
+            agents or "—",
         )
     _console.print(table)
 
 
 @machine_app.command("rename")
 def machine_rename(ctx: typer.Context, name: str = typer.Argument(...)) -> None:
-    """Rename this machine. Costs nothing: scope references the id, not the name."""
+    """Rename this machine. Free: nothing keys on the label; the next round
+    carries the new one."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -90,7 +86,8 @@ def machine_rename(ctx: typer.Context, name: str = typer.Argument(...)) -> None:
 
 @machine_app.command("rm")
 def machine_remove(ctx: typer.Context, machine_id: str = typer.Argument(...)) -> None:
-    """Remove a retired machine's descriptor from the registry."""
+    """Retire another machine: its descriptor goes, in a commit of yours that
+    the next round pushes. A machine that syncs again comes back."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -119,7 +116,7 @@ def key_import(
     if locked:
         _console.print(f"[yellow]still locked[/yellow]: {', '.join(locked)}")
     else:
-        _console.print("[green]installed[/green] — every credential decrypts here")
+        _console.print("[green]installed[/green] — every secret decrypts here")
 
 
 @key_app.command("fingerprint")

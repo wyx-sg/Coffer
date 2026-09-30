@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
 from alembic import command
 
+from coffer.infrastructure.vault.migration.errors import PreVaultDatabase
 from coffer.surfaces.http import migrations_runner
 from tests.integration.infrastructure.persistence.test_migrations_roundtrip import (
     _alembic_config,
@@ -28,6 +30,9 @@ _DROPPED = {
     "skill_agent_bindings",
     "mcp_server_health",
     "mcp_tool_reach",
+    "sync_remotes",
+    "sync_convergence_state",
+    "sync_held_paths",
 }
 
 
@@ -65,6 +70,10 @@ def _seed(conn: sqlite3.Connection) -> None:
         " conversation_id, kind, text, created_at) VALUES (7, 1, 'c1', '', 'direct', 'conv-1',"
         " 'reply', 'hi', '2026-09-02')"
     )
+    conn.execute(
+        "INSERT INTO sync_runs (started_at, finished_at, status, payload_json)"
+        " VALUES ('2026-09-02', '2026-09-02', 'ok', '{\"applied\": {}}')"
+    )
     conn.commit()
 
 
@@ -98,44 +107,34 @@ def test_history_is_rekeyed_to_uids_and_every_row_is_kept(tmp_path, monkeypatch)
             assert "resource_id" not in columns and "resource_uid" in columns
         indexes = {r[1] for r in conn.execute("PRAGMA index_list(audit_log)")}
         assert "idx_audit_resource_uid" in indexes
-        assert "sync_remotes" in _tables(conn)
+        # The old rounds' payloads do not parse as round records: they go,
+        # the table stays for the thin sync's rounds.
+        assert conn.execute("SELECT count(*) FROM sync_runs").fetchone() == (0,)
     command.downgrade(cfg, "0116")
     with sqlite3.connect(db_path) as conn:
         assert _tables(conn) >= _DROPPED
         assert conn.execute("SELECT count(*) FROM audit_log").fetchone() == (4,)
 
 
-def test_the_runner_stops_at_the_pre_layout_revision_for_its_hooks(  # type: ignore[no-untyped-def]
+def test_the_runner_refuses_a_database_from_before_the_layout(  # type: ignore[no-untyped-def]
     tmp_path, monkeypatch
 ) -> None:
+    """The daemon never moves the pre-vault tables out itself (that is
+    ``coffer migrate``): upgrading such a database to head would drop them."""
     db_path = tmp_path / "runs.db"
     url = f"sqlite+aiosqlite:///{db_path}"
     monkeypatch.setenv("COFFER_DB_URL", url)
     command.upgrade(_alembic_config(), "0110")
-    seen: list[set[str]] = []
-
-    def hook(hook_url: str) -> None:
-        assert hook_url == url
-        with sqlite3.connect(db_path) as conn:
-            seen.append(_tables(conn))
-            revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-        assert revision == migrations_runner.PRE_LAYOUT_REVISION
-
-    monkeypatch.setattr(migrations_runner, "_PRE_LAYOUT_HOOKS", [])
-    migrations_runner.register_pre_layout_hook(hook)
-    backup = migrations_runner.run_migrations(url)
-    assert len(seen) == 1 and "resources" in seen[0]
-    assert backup is not None and backup.name == "runs.db.pre-0110"
+    with pytest.raises(PreVaultDatabase):
+        migrations_runner.run_migrations(url)
     with sqlite3.connect(db_path) as conn:
+        assert "resources" in _tables(conn)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0110",)
+
+
+def test_a_fresh_database_goes_straight_to_head(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    db_path = tmp_path / "runs.db"
+    migrations_runner.run_migrations(f"sqlite+aiosqlite:///{db_path}")
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0117",)
         assert "resources" not in _tables(conn)
-    # Already past the layout: no hook runs again.
-    migrations_runner.run_migrations(url)
-    assert len(seen) == 1
-
-
-def test_a_fresh_database_goes_straight_to_head_without_hooks(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    url = f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}"
-    calls: list[str] = []
-    monkeypatch.setattr(migrations_runner, "_PRE_LAYOUT_HOOKS", [calls.append])
-    migrations_runner.run_migrations(url)
-    assert calls == []

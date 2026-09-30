@@ -1,73 +1,60 @@
 // frontend/src/pages/sync/SyncRunDetail.test.tsx
 //
-// A path that can never apply on this machine is said to be not applicable
-// here — its own list, not a failure the user has to chase (spec vault-sync
-// "Record inapplicable paths as not applicable here").
+// A round opened up names what its row could only count: the snapshot it took,
+// each commit it pulled and from whom, each file it changed here and pushed.
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-import type { RunRecord } from "@/lib/api/sync";
 import { SyncRunDetail } from "./SyncRunDetail";
-
-const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
-
-function run(overrides: Partial<RunRecord> = {}): RunRecord {
-  return {
-    id: 1,
-    started_at: "2026-09-13T09:00:00Z",
-    finished_at: "2026-09-13T09:00:04Z",
-    status: "ok",
-    join: null,
-    applied: NO_COUNTS,
-    published: NO_COUNTS,
-    commit: null,
-    conflicts: [],
-    agent_resolved: [],
-    failures: [],
-    not_applicable: [],
-    locked_refs: [],
-    pending: null,
-    join_report: null,
-    error: null,
-    ...overrides,
-  };
-}
+import { makeRound } from "./syncTestKit";
 
 describe("SyncRunDetail", () => {
-  test("lists not-applicable paths apart from failures", () => {
-    render(<SyncRunDetail run={run({ not_applicable: ["resources/agent/abc.yaml"] })} />);
-
-    const list = screen.getByTestId("sync-run-not-applicable");
-    expect(list).toHaveTextContent("resources/agent/abc.yaml");
-    expect(list).toHaveTextContent(/not applicable on this machine/i);
-    expect(screen.queryByTestId("sync-run-failures")).not.toBeInTheDocument();
-    expect(screen.queryByText(/nothing further/i)).not.toBeInTheDocument();
-  });
-
-  test("a round waiting to join says how to join, and what it detected", () => {
+  test("names the snapshot, the pulled commits and the files moved each way", () => {
     render(
       <SyncRunDetail
-        run={run({
-          status: "awaiting_join",
-          join: "returning",
-          join_report: {
-            joining: true,
-            case: "returning",
-            base: "0123456789abcdef",
-            last_converged_on: "2026-09-01",
-            remote_changed: 7,
-            vault_documents: 42,
-          },
+        run={makeRound({
+          status: "pulled_and_pushed",
+          snapshot: "sync/pre-round/42",
+          pulled: [
+            {
+              version: "0123456789abcdef",
+              machine: "Mac mini",
+              files: 2,
+              time: "2026-09-13T08:00:00Z",
+            },
+          ],
+          applied: [
+            { path: "knowledge/notes/a.md", status: "modified" },
+            { path: "skills/old/SKILL.md", status: "removed" },
+          ],
+          pushed: [{ path: "resources/channel/seatalk.yaml", status: "added" }],
         })}
       />,
     );
 
-    expect(screen.getByText(/has not joined this remote yet/i)).toBeInTheDocument();
-    // Detected, not done: never "Rejoined as a returning machine".
-    expect(screen.queryByText(/rejoined/i)).not.toBeInTheDocument();
-    const report = screen.getByTestId("sync-join");
-    expect(report).toHaveTextContent("2026-09-01");
-    expect(report).toHaveTextContent(/changed since\s*7/i);
-    expect(report).toHaveTextContent(/holds\s*42/i);
+    expect(screen.getByTestId("sync-run-snapshot")).toHaveTextContent("sync/pre-round/42");
+    const pulled = screen.getByTestId("sync-run-pulled");
+    expect(pulled).toHaveTextContent("0123456");
+    expect(pulled).toHaveTextContent("Mac mini");
+    expect(screen.getByTestId("sync-run-applied")).toHaveTextContent("~ knowledge/notes/a.md");
+    expect(screen.getByTestId("sync-run-applied")).toHaveTextContent("− skills/old/SKILL.md");
+    expect(screen.getByTestId("sync-run-pushed")).toHaveTextContent(
+      "+ resources/channel/seatalk.yaml",
+    );
+    expect(screen.queryByText(/nothing further/i)).not.toBeInTheDocument();
+  });
+
+  test("a failed round shows git's own words", () => {
+    render(
+      <SyncRunDetail
+        run={makeRound({ status: "push_failed", detail: "rejected (fetch first)" })}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("rejected (fetch first)");
+  });
+
+  test("a quiet round says there is nothing further", () => {
+    render(<SyncRunDetail run={makeRound()} />);
+    expect(screen.getByText(/nothing further/i)).toBeInTheDocument();
   });
 });

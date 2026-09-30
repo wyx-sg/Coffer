@@ -74,18 +74,27 @@ class TreeReader:
         return self._git.files(tree, path).get(path)
 
 
-def settle_machines(git: SyncGitPort, tree: str, tip: str, own: str) -> str:
+def settle_machines(
+    git: SyncGitPort, tree: str, tip: str, own: str, *, base: str | None = None
+) -> str:
     """Each machine writes only its own descriptor (spec vault-sync "Write only
     this machine's descriptor"): in the merged tree every other machine's
     descriptor is the remote's, whatever this vault holds — a fresh vault that
-    never had them must not publish their deletion."""
+    never had them must not publish their deletion.
+
+    The one exception is a person retiring another machine here: a descriptor
+    the base had, this vault deleted and the remote left as the base had it
+    stays deleted, so the retirement reaches the remote. If that machine wrote
+    its descriptor again meanwhile, it is back, and the remote's copy wins."""
     theirs = git.files(tip, MACHINES)
     merged = git.files(tree, MACHINES)
+    before = git.files(base, MACHINES) if base else {}
     overrides: dict[str, str | None] = {}
     for path in set(theirs) | set(merged):
-        if path == own:
+        if path == own or merged.get(path) == theirs.get(path):
             continue
-        if merged.get(path) != theirs.get(path):
+        retired = path not in merged and path in before and theirs.get(path) == before[path]
+        if not retired:
             overrides[path] = theirs.get(path)
     return git.build_tree(tree, overrides) if overrides else tree
 

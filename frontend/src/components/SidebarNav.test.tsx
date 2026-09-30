@@ -260,20 +260,22 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
 // still gets noticed — without the one that did not: arguing on every page
 // until the underlying state changes.
 
-/** A configured remote that is switched on — a paused one never raises the dot. */
-const ON = { enabled: true };
-
-const HELD = {
-  status: "awaiting_confirmation",
-  conflicts: [],
-  error: null,
-  pending: { direction: "publish", breaches: [] },
+/** A configured, joined remote that is switched on — a paused one never raises the dot. */
+const ON = {
+  remote: { enabled: true },
+  joined: true,
+  conflicts: 0,
+  held: 0,
+  join_choices: 0,
+  problem: null,
 };
+
+const HELD = { status: "held", conflicts: 0, held: 3, detail: null };
 
 describe("the Sync attention dot", () => {
   test("is absent while the vault is converging", () => {
     syncStatus.mockReturnValue({
-      data: { remote: ON, last_run: { status: "ok", conflicts: [], error: null, pending: null } },
+      data: { ...ON, last_round: { status: "pulled", conflicts: 0, held: 0, detail: null } },
       isError: false,
     } as never);
     const { queryByTestId } = renderNav();
@@ -281,14 +283,20 @@ describe("the Sync attention dot", () => {
   });
 
   test("appears when the last round needs answering", async () => {
-    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: false,
+    } as never);
     const { findByTestId } = renderNav();
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });
 
   // revise-web-ui-ia: web-ui "an entry without a signal never carries a dot"
   test("only an entry whose kind declares a signal carries the dot, with an accessible name", async () => {
-    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: false,
+    } as never);
     const { findByTestId } = renderNav();
     const dot = await findByTestId("nav-dot-sync");
     expect(dot).toHaveAccessibleName("Needs your attention");
@@ -296,7 +304,10 @@ describe("the Sync attention dot", () => {
   });
 
   acceptance("vault-sync", "a held vault says so where the user already is", async () => {
-    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: false,
+    } as never);
     // On /sync the user is looking at the thing itself: no dot over their own
     // reading, and the situation is marked seen.
     const onPage = renderNav("/sync");
@@ -312,13 +323,19 @@ describe("the Sync attention dot", () => {
   test("a daemon that cannot answer raises no sync dot", () => {
     // That is the offline banner's job, and a stale cached round must not
     // outlive it into a second claim on the same screen.
-    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: true } as never);
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: true,
+    } as never);
     const { queryByTestId } = renderNav();
     expect(queryByTestId("nav-dot-sync")).toBeNull();
   });
 
   test("survives a collapsed rail, where the label is gone", async () => {
-    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: false,
+    } as never);
     const { findByTestId } = renderNav("/", true);
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });

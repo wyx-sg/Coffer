@@ -685,7 +685,9 @@
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
       "secret_imported": "Imported secrets",
-      "storage_cache_cleared": "Cleared the rebuildable cache"
+      "storage_cache_cleared": "Cleared the rebuildable cache",
+      "vault_file_edited": "Edited a vault file on disk",
+      "vault_file_restored": "Restored an earlier version of a vault file"
     },
     "capType": {
       "tool": "tool",
@@ -1211,8 +1213,13 @@
         "title": "Vault",
         "size_one": "{{size}} · {{versions}} version",
         "size_other": "{{size}} · {{versions}} versions",
-        "description": "Synced — a git repository. Config, skills, knowledge and encrypted secrets.",
-        "notRepository": "Your configuration, skills and knowledge. Set up Sync to keep it as a git repository with every version."
+        "description": "A git repository with every version. Config, skills, knowledge and encrypted secrets.",
+        "notRepository": "Your configuration, skills and knowledge. Coffer makes it a git repository the first time it starts.",
+        "latest": "Latest version",
+        "latestValue": "{{when}} · {{writer}}",
+        "sync": "Sync",
+        "syncOn": "Synced to your remote",
+        "syncOff": "This machine only"
       },
       "local": {
         "title": "Local content",
@@ -1262,7 +1269,6 @@
     "AGENT_TYPE_REGISTERED": "An agent of this type is already registered. Change its config directory instead of adding a second one.",
     "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
     "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
-    "BACKUP_REMOTE_INVALID": "That remote can't be used — check the URL, the branch, and that the interval is a positive number of seconds.",
     "BAD_REQUEST": "The request was rejected as malformed.",
     "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet — generate a pairing code and send it to the bot",
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running — enable the channel to start it",
@@ -1292,7 +1298,6 @@
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
     "FS_PATH_NOT_OPENABLE": "That path cannot be opened on this machine",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
-    "GIT_MIRROR_FAILED": "Git couldn't push. Your changes are committed locally; check the remote URL, branch and push credential.",
     "GREP_PATTERN_INVALID": "Invalid grep pattern",
     "HOMEBREW_NOT_FOUND": "Homebrew (brew) is not on the agent's PATH. Nothing was run.",
     "HOST_NOT_ALLOWED": "Coffer only answers requests addressed to its own loopback address and port.",
@@ -1349,13 +1354,8 @@
     "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable — check its permissions",
     "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
-    "SYNC_BUNDLE_INVALID": "That folder cannot be used as the sync working tree",
-    "SYNC_BUNDLE_TOO_NEW": "The sync remote was written by a newer Coffer; upgrade this machine before it can converge",
     "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
-    "SYNC_JOIN_AMBIGUOUS": "This machine has converged with this remote before, but the commit it reached is gone from the remote's history — re-run the join and choose whether to keep this vault's own documents or rebuild this machine from the remote",
-    "SYNC_NOTHING_PENDING": "No converge round is waiting for confirmation",
     "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
-    "SYNC_SERIALIZATION_INVALID": "That bundle's contents could not be read",
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "TOOL_DISABLED": "This capability is disabled — enable it on the server's page",
     "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
@@ -1394,7 +1394,25 @@
     "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
     "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
     "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
-    "PORT_IN_USE": "That port is in use by another program. Pick another one."
+    "PORT_IN_USE": "That port is in use by another program. Pick another one.",
+    "ADOPT_SECRET_UNRESOLVED": "A secret this server needs could not be resolved. Store it in Secrets, then adopt again.",
+    "GIT_MISSING": "git is not installed. Coffer keeps the vault's history with git; on macOS run xcode-select --install, then restart Coffer.",
+    "SYNC_CONFLICT_MARKERS_LEFT": "The file still has conflict markers. Remove them, save, then mark it resolved.",
+    "SYNC_MACHINE_NAME_INVALID": "That machine name can't be used. Use a short, non-empty name.",
+    "SYNC_MACHINE_NOT_FOUND": "No machine with that id syncs with this remote.",
+    "SYNC_NOTHING_STOPPED": "No round is waiting for this answer.",
+    "SYNC_NO_REMOTE": "No sync remote is set up on this machine.",
+    "SYNC_REMOTE_FAILED": "The remote could not be reached, refused the credential, or refused the push.",
+    "SYNC_REMOTE_INVALID": "That repository URL or branch can't be used.",
+    "SYNC_ROUND_NOT_FOUND": "That round is not in this machine's history.",
+    "VAULT_FILE_INVALID": "The change was refused: the file would not be valid. Nothing was written.",
+    "VAULT_FILE_STALE": "The file changed since you loaded it. Reload and try again.",
+    "VAULT_GIT_FAILED": "git failed while reading or writing the vault.",
+    "VAULT_MIGRATION_ON_HOLD": "The vault upgrade was rolled back. Run coffer migrate --resume before starting Coffer again.",
+    "VAULT_MIGRATION_REFUSED": "The vault upgrade can't run now. Stop Coffer and try again.",
+    "VAULT_MIGRATION_REQUIRED": "This home still uses the old layout. Stop Coffer and run coffer migrate once.",
+    "VAULT_PATH_INVALID": "That is not a path inside the vault.",
+    "VAULT_VERSION_NOT_FOUND": "That version of the file does not exist."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -2405,8 +2423,31 @@
       "loadFailed": "Couldn't check the commands this skill requires"
     },
     "history": {
-      "title": "Versions are not recorded yet",
-      "body": "This skill’s past versions will appear here once the vault keeps its history."
+      "title": "No versions yet",
+      "none": "Every change to this skill’s files — yours, an agent’s, one made on disk — will be listed here as a version you can compare and restore.",
+      "builtinTitle": "Coffer’s own skill has no history",
+      "builtinBody": "Its files are rebuilt from the running build at every start, so there is no earlier version to go back to.",
+      "failedTitle": "Couldn’t read this skill’s history",
+      "listLabel": "Versions",
+      "count_one": "{{count}} version",
+      "count_other": "{{count}} versions",
+      "current": "Current",
+      "filesChanged_one": "{{count}} file changed",
+      "filesChanged_other": "{{count}} files changed",
+      "versionLabel": "The chosen version",
+      "restoredFrom": "restored {{version}}",
+      "noFiles": "This version changed no file of the skill.",
+      "noTextChange": "No text change (a binary file, or only its mode).",
+      "restore": "Restore this version",
+      "confirmTitle": "Restore this version?",
+      "confirmBody": "The skill’s folder goes back to version {{version}}: every file as it was then, and files added since are removed. It is saved as a new version, so you can restore the current one again afterwards.",
+      "restored": "Restored version {{version}}",
+      "unchanged": "The skill already matches this version",
+      "status": {
+        "added": "added",
+        "modified": "modified",
+        "removed": "removed"
+      }
     },
     "copies": {
       "title": "Check agents’ copies",
@@ -2423,6 +2464,16 @@
       "needsYou": "Needs you",
       "library": "Library",
       "repairHint": "Repair puts back what Coffer can on its own. It never overwrites a folder it didn’t make; those stay listed for you."
+    }
+  },
+  "vault": {
+    "writer": {
+      "user": "You",
+      "disk": "Edited on disk",
+      "agent": "An agent",
+      "daemon": "Coffer",
+      "curation": "Curation",
+      "sync": "Sync"
     }
   },
   "knowledge": {
@@ -3324,70 +3375,226 @@
     "bulkReach": "Reach for the selected"
   },
   "sync": {
-    "areas": {
-      "knowledge": "Knowledge",
-      "skills": "Skills",
-      "resources": "Resources",
-      "state": "Shared state",
-      "credentials": "Credentials",
+    "title": "Sync",
+    "subtitle": "Sync this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
+    "tabs": {
+      "runs": "Runs",
+      "setup": "Setup",
+      "machines": "Machines"
+    },
+    "status": {
+      "title": "Status",
+      "syncNow": "Sync now",
+      "syncing": "Syncing…",
+      "notConfigured": "No remote yet — set one up under Setup and this vault starts syncing with it.",
+      "lastRound": "Last round",
+      "never": "Never",
+      "moved": "Moved",
+      "movedValue": "{{pulled}} pulled · {{pushed}} pushed",
+      "nextRound": "Next round",
       "machines": "Machines",
-      "other": "Other"
+      "knowledge": "Knowledge documents",
+      "skills": "Skills",
+      "resources": "Resource definitions",
+      "secrets": "Encrypted secrets",
+      "secretsSynced": "{{count}} synced",
+      "secretsLocal": "{{count}} kept on this machine"
     },
-    "attention": {
-      "heldBody": "A round was held for your confirmation: nothing is converging and nothing is being backed up until you answer it.",
-      "conflictBody": "The last round stopped on a conflict, so nothing is being applied or published until you resolve it.",
-      "pushFailedBody": "The last round applied here but could not reach the remote, so the other machines and your backup are behind.",
-      "failedBody": "The last round failed, so this vault is no longer converging or being backed up."
-    },
-    "conflict": {
-      "title": "A conflict stopped this round",
-      "body": "Two machines changed the same lines of the same document. Nothing was applied and nothing was published — the vault and the pointer are exactly where they were.",
-      "paths": "Conflicted paths",
-      "resolve": "Resolve them with your own git tools in the working tree below, and the next round carries on from there.",
-      "worktree": "Working tree: {{path}}"
-    },
-    "history": {
-      "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
-      "searchPlaceholder": "Search rounds…",
-      "empty": "No round has run yet. Save a remote, then join it to start converging.",
-      "nothingFurther": "This round reported nothing further.",
-      "ran": "Ran {{from}} → {{to}}",
-      "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
-      "joinShort": {
-        "new": "Joined as new",
-        "returning": "Rejoined"
+    "problem": {
+      "noCredential": "no credential",
+      "cloudTool": "a cloud sync tool",
+      "since": "Since {{when}}",
+      "auth_failed": {
+        "title": "The remote refused to sign in",
+        "body": "Git could not sign in with the credential {{ref}}. Check that the entry exists in Coffer's credential store and still has access to the repository."
       },
-      "filter": {
-        "outcome": "Outcome"
+      "unreachable": {
+        "title": "The remote cannot be reached",
+        "body": "Git could not reach the repository. Nothing is lost: changes wait here and go up with the next round that gets through."
       },
-      "table": {
-        "when": "When",
-        "outcome": "Outcome",
-        "applied": "Applied here",
-        "published": "Published",
-        "commit": "Commit"
+      "push_failed": {
+        "title": "The push was rejected",
+        "body": "The round finished here but the remote would not take the push. The other machines are behind until it goes through."
+      },
+      "cloud_folder": {
+        "title": "Sync is paused: the vault is in a cloud-synced folder",
+        "body": "The vault at {{path}} is inside a folder {{tool}} also syncs. Two tools syncing one git repository corrupt it, so sync stays paused until the vault is moved."
+      },
+      "layout": {
+        "title": "The remote uses another vault layout",
+        "body": "The repository was written by a Coffer with a different vault layout. Update Coffer on the machine that is behind, then sync again."
+      },
+      "failed": {
+        "title": "The last round failed",
+        "body": "The round stopped before it finished. Git's message is below."
       }
     },
-    "join": {
-      "title": "Join this remote?",
-      "case": {
-        "new": "This machine is new to this remote. It takes the union: it gains what the remote holds and keeps everything it has. Nothing is deleted.",
-        "returning": "This machine synced here before, so it resumes from the base it last converged on and takes what the remote changed since — deletions included.",
-        "ambiguous": "This machine synced here before, but the commit it reached is gone from the remote's history, so its base cannot be recovered. Keeping this vault's documents publishes them as additions, which may bring back what other machines deleted. To take the remote's state instead, run 'coffer sync rebuild'."
+    "round": {
+      "status": {
+        "nothing_to_do": "nothing to do",
+        "pulled": "pulled",
+        "pushed": "pushed",
+        "pulled_and_pushed": "pulled and pushed",
+        "push_failed": "push failed",
+        "stopped": "stopped on conflicts",
+        "held": "deletions held",
+        "waiting_on_edit": "waiting on an edit",
+        "join_required": "join required",
+        "joined": "joined",
+        "unreachable": "remote unreachable",
+        "auth_failed": "sign-in refused",
+        "paused_cloud_folder": "paused (cloud folder)",
+        "remote_too_new": "remote too new",
+        "remote_too_old": "remote too old",
+        "rolled_back": "rolled back",
+        "failed": "failed"
+      }
+    },
+    "change": {
+      "added": "added",
+      "modified": "changed",
+      "removed": "removed"
+    },
+    "toast": {
+      "roundDone": "Round finished: {{status}} ({{pulled}} pulled, {{pushed}} pushed)",
+      "needs": {
+        "stopped": "Sync stopped on files both machines changed — answer them on the Sync page.",
+        "held": "Sync held a large deletion — review it on the Sync page.",
+        "waiting_on_edit": "Sync is waiting: a file the round would change has an edit in progress.",
+        "join_required": "This machine has not joined the remote yet — join it on the Sync page."
+      }
+    },
+    "runs": {
+      "table": {
+        "when": "When",
+        "status": "Status",
+        "pulled": "Pulled",
+        "pushed": "Pushed",
+        "commits": "Commits"
       },
-      "lastConverged": "Last converged here",
-      "never": "never",
-      "remoteChanged": "Documents the remote changed since",
-      "vaultDocuments": "Documents this vault holds",
-      "confirm": "Join",
-      "keepLocal": "Keep this vault's documents",
-      "joining": "Joining…",
-      "action": "Join this remote",
-      "notJoined": "This machine has not joined this remote yet. Until it does, rounds apply and publish nothing — join to see what joining would do first.",
-      "detected": {
-        "new": "Detected: this machine would join as a new machine and take the union.",
-        "returning": "Detected: this machine has synced here before and would resume from the base it last converged on.",
-        "ambiguous": "Detected: this machine synced here before, but its base is gone from the remote's history — joining needs your choice."
+      "filter": "Status",
+      "searchPlaceholder": "Search rounds…",
+      "empty": "No round has run yet. Save a remote and join it to start syncing.",
+      "folded": "×{{count}}",
+      "foldedDetail": "{{count}} rounds between {{from}} and {{to}}, each ending the same way.",
+      "ran": "Started {{from}} · took {{seconds}} s · {{trigger}}",
+      "snapshot": "Snapshot before checkout: {{name}}",
+      "pulledCommits": "Pulled commits",
+      "pulledCommit": "{{sha}} from {{machine}} · {{files}} files · {{when}}",
+      "unknownMachine": "unknown machine",
+      "applied": "Changed here",
+      "pushed": "Pushed",
+      "withMachines": "Synced with: {{names}}",
+      "nothingFurther": "This round reported nothing further."
+    },
+    "rollback": {
+      "action": "Roll back",
+      "title": "Roll back this round?",
+      "description": "This puts back what the round that finished {{when}} changed here, as a new commit the next round pushes.",
+      "snapshot": "From snapshot {{name}} ({{when}})",
+      "reverses": "What comes back",
+      "morePaths": "…and {{count}} more",
+      "keptNote": "Edits you made after are kept.",
+      "kept": "Edited since, left as they are",
+      "confirm": "Roll back round",
+      "rollingBack": "Rolling back…"
+    },
+    "conflicts": {
+      "title_one": "Sync stopped on {{count}} file both machines changed",
+      "title_other": "Sync stopped on {{count}} files both machines changed",
+      "body": "Nothing was checked out and nothing was pushed. Choose which version to keep for each file, then continue.",
+      "columns": {
+        "file": "File",
+        "area": "Area",
+        "mine": "This Mac",
+        "theirs": "Other machine",
+        "answer": "Answer",
+        "actions": ""
+      },
+      "unanswered": "Not answered",
+      "answer": {
+        "mine": "Keeping this Mac's",
+        "theirs": "Taking the other's",
+        "edited": "Edited by hand"
+      },
+      "keepMine": "Keep this Mac's",
+      "takeTheirs": "Take the other's",
+      "openEditor": "Open in editor",
+      "markResolved": "Mark resolved",
+      "takeTheirsTitle": "Take the other machine's version?",
+      "takeTheirsBody": "This replaces this Mac's {{path}} with the other machine's. What changes here:",
+      "binary": "This is a binary file, so there is no line-by-line difference to show.",
+      "noDiff": "No difference.",
+      "progress": "{{resolved}} of {{total}} resolved",
+      "later": "You can leave this for later — the vault stays as it is here.",
+      "continue": "Continue",
+      "continuing": "Continuing…"
+    },
+    "hold": {
+      "title_one": "{{who}} deleted {{count}} file",
+      "title_other": "{{who}} deleted {{count}} files",
+      "thisMac": "This Mac",
+      "anotherMachine": "Another machine",
+      "body": {
+        "incoming": "The round would delete more of an area than sync removes without asking. Delete the files here, or restore them and push them back.",
+        "outgoing": "This machine would push more deletions than sync sends without asking. Delete them everywhere, or restore them here."
+      },
+      "share_one": "{{count}} file · {{percent}}% of the folder",
+      "share_other": "{{count}} files · {{percent}}% of the folder",
+      "more": "…and {{count}} more",
+      "delete_one": "Delete {{count}} file",
+      "delete_other": "Delete {{count}} files",
+      "deleting": "Deleting…",
+      "restore_one": "Restore {{count}} file",
+      "restore_other": "Restore {{count}} files",
+      "restoring": "Restoring…",
+      "confirmTitle_one": "Delete {{count}} file?",
+      "confirmTitle_other": "Delete {{count}} files?",
+      "confirmBody_one": "The file is deleted on every machine that syncs. A snapshot is taken first, so the round can still be rolled back.",
+      "confirmBody_other": "The files are deleted on every machine that syncs. A snapshot is taken first, so the round can still be rolled back."
+    },
+    "join": {
+      "title": "Join this remote",
+      "notJoined": "This machine has not joined this remote yet. Until it does, rounds move nothing. Here is what joining would do:",
+      "kind": {
+        "empty": "The remote is empty, so joining pushes this whole vault to it.",
+        "new": "This machine is new to the remote. Joining takes the union: files only one side has go to the other, and nothing is deleted.",
+        "returning": "This machine synced here before, so joining resumes from the commit it last reached."
+      },
+      "lastPushed": "Last pushed by {{who}}, {{when}}",
+      "pulled": "Comes down",
+      "same_one": "{{count}} file is already the same on both sides.",
+      "same_other": "{{count}} files are already the same on both sides.",
+      "differ": "Differ — left here for you to choose",
+      "pushed": "Goes up",
+      "nothingDeleted": "Nothing is deleted.",
+      "deleted": "Deleted",
+      "join": "Join",
+      "joining": "Joining…"
+    },
+    "joinChoices": {
+      "title_one": "{{count}} file differs from the remote",
+      "title_other": "{{count}} files differ from the remote",
+      "body": "Joining left these as they are here. Keep this Mac's version, or take the remote's.",
+      "keepMine": "Keep mine",
+      "takeTheirs": "Take theirs",
+      "keepAllMine": "Keep mine for all",
+      "takeAllTheirs": "Take theirs for all"
+    },
+    "waiting": {
+      "title_one": "{{count}} change waiting to push",
+      "title_other": "{{count}} changes waiting to push",
+      "columns": {
+        "file": "File",
+        "change": "Change",
+        "writer": "By",
+        "time": "When"
+      },
+      "writer": {
+        "you": "You",
+        "coffer": "Coffer",
+        "disk": "Edited on disk",
+        "agent": "Agent"
       }
     },
     "key": {
@@ -3408,131 +3615,65 @@
     },
     "machines": {
       "title": "Machines",
-      "description": "Every installation of Coffer that has converged with this remote. A machine is identified by an id derived from its host, so renaming one costs nothing and reinstalling Coffer does not create a second.",
-      "empty": "No machines yet — this vault has not converged with a remote.",
+      "description": "Every installation of Coffer that syncs with this remote. A machine is identified by an id derived from its host, so renaming one costs nothing and reinstalling Coffer does not create a second.",
+      "empty": "No machines yet — this vault has not synced with a remote.",
       "columns": {
-        "name": "Name",
+        "name": "Machine",
         "system": "System",
-        "hostname": "Hostname",
+        "lastSeen": "Last seen",
+        "lastRound": "Last round",
         "version": "Coffer version",
-        "lastConverged": "Last converged",
         "key": "Key",
         "agents": "Agents",
         "actions": ""
       },
       "thisMachine": "This machine",
       "renameLabel": "Machine name",
-      "lastConvergedHint": "A day, not a moment: a machine that is running but idle deliberately does not stamp every round.",
       "never": "Never",
       "keyMatches": "Same key",
-      "keyDiffers": "Its credentials cannot be decrypted here",
+      "keyDiffers": "Its secrets cannot be decrypted here",
       "keyUnknown": "Unknown — one side has published no fingerprint yet",
       "noAgents": "None",
+      "agent_one": "{{type}} · {{count}} plugin",
+      "agent_other": "{{type}} · {{count}} plugins",
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
-      "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another.",
-      "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
-    },
-    "pending": {
-      "bodyApply": "Applying the remote's changes here would remove more documents than the deletion guard allows. Confirm only if you know another machine really did delete this much.",
-      "bodyPublish": "This machine's own round would publish these deletions to the remote, and every other machine would then apply them.",
-      "breach": "{{area}}: {{deleted}} of {{total}} documents",
-      "breaches": "What it would remove",
-      "confirm": "Confirm",
-      "confirming": "Confirming…",
-      "morePaths": "…and {{count}} more",
-      "paths": "Paths",
-      "raisedAt": "Held {{when}}",
-      "rebuild": "Rebuild from remote",
-      "rebuildTitle": "Rebuild this vault from the remote?",
-      "rebuildConfirm": "This replaces this machine's vault with the remote's and discards anything only this machine has. Use it when this machine's files are genuinely gone. Continue?",
-      "rebuilding": "Rebuilding…",
-      "reinstallWarning": "If this machine was just reinstalled, or restored from a backup, the honest answer is Reject: the documents are missing here, not deleted, and confirming would take the other machines down with it.",
-      "reject": "Reject",
-      "rejecting": "Rejecting…",
-      "titleApply": "A round was held: the remote would delete a large part of this vault",
-      "titlePublish": "A round was held: this vault would delete a large part of the remote"
+      "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another."
     },
     "remote": {
       "title": "Remote",
-      "description": "One git repository you own. Each round commits what this vault holds, lets git merge it against what the repository holds, and applies the difference back — deletions included. The repository is a rendezvous, not a system of record: delete it and any machine can rebuild it.",
-      "enabled": "Converge automatically",
+      "description": "One git repository you own. Each round fetches it, merges it with this vault, and pushes the result — stopping for you on any file both sides changed.",
+      "vaultPath": "Vault:",
+      "cloudFolder": "{{tool}} also syncs the folder this vault is in ({{path}}). Two tools syncing one git repository corrupt it, so sync is paused until the vault is moved out.",
+      "enabled": "Sync automatically",
+      "enabledHint": "Save the remote first.",
       "url": "Repository URL",
       "branch": "Branch",
       "interval": "Interval (seconds)",
       "save": "Save remote",
-      "enabledHint": "Save the remote first.",
       "errors": {
         "url": "Enter a git remote URL (https://… or git@…)",
         "interval": "Interval must be at least 60 seconds"
       },
       "credentialRef": "Push credential",
       "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
-      "includeCredentials": "Include credentials",
-      "includeCredentialsHint": "Credentials travel as encrypted ciphertext; the master key is never pushed under any setting. A machine holding ciphertext without the key reports those references locked instead of failing quietly.",
-      "worktree": "Working tree: {{path}}",
-      "convergeNow": "Converge now",
-      "converging": "Converging…",
-      "notConfigured": "No remote configured yet. Name a repository above and this vault starts converging with it."
-    },
-    "rollback": {
-      "action": "Undo this round",
-      "title": "Undo this round?",
-      "description": "This puts the vault back to the state it was in immediately before the round that finished {{when}} applied anything. The undo is an ordinary local change: the next round publishes it to the remote, so the other machines follow.",
-      "willUndo": "What this round applied here — the undo reverses each of these",
-      "morePaths": "…and {{count}} more",
-      "confirm": "Undo round",
-      "undoing": "Undoing…",
-      "done": "Round undone (+{{added}} ~{{modified}} −{{deleted}} reversed)."
-    },
-    "round": {
-      "statusLabel": {
-        "ok": "converged",
-        "no_change": "nothing changed",
-        "conflict": "stopped on a conflict",
-        "awaiting_confirmation": "held, waiting for you",
-        "awaiting_confirmation_past": "Paused",
-        "push_failed": "applied here, push failed",
-        "failed": "failed",
-        "disabled": "turned off",
-        "awaiting_join": "waiting to join"
+      "includeSecret": "Include encrypted secrets",
+      "includeSecretHint_one": "{{count}} encrypted secret would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
+      "includeSecretHint_other": "{{count}} encrypted secrets would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
+      "check": "Check repository",
+      "checking": "Checking…",
+      "checkResult": {
+        "empty": "Empty — the first push fills it.",
+        "vault": "A Coffer vault (layout {{layout}}).",
+        "other": "A repository that is not a Coffer vault.",
+        "unreachable": "Cannot be reached.",
+        "auth_failed": "Sign-in refused.",
+        "failed": "The check failed."
       },
-      "join": {
-        "new": "Joined as a new machine — everything the remote held was added, and everything this vault held was kept.",
-        "returning": "Rejoined as a returning machine — its base was recovered from its own descriptor, so nothing deleted while it was away came back."
-      },
-      "agentResolved": "Merged for you by an agent",
-      "agentResolvedHint": "An internal model resolved the conflict on these paths in the working tree. Worth reading if they are your own notes.",
-      "failures": "Could not be applied here",
-      "failure": "{{path}} — {{reason}}",
-      "notApplicable": "Not applicable on this machine",
-      "notApplicableHint": "These can never apply here — an agent whose config directory does not exist on this machine. They are kept in the shared tree, not retried, and not errors.",
-      "awaitingJoin": "This machine has not joined this remote yet, so nothing was applied or published. Use “Join this remote” on the Setup tab to see what joining would do, and join.",
-      "lockedRefs": "Credentials this machine cannot decrypt",
-      "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below.",
-      "applied": "Applied here",
-      "appliedHint": "What this round wrote into this vault.",
-      "published": "Published to the remote",
-      "publishedHint": "What this round wrote into the shared tree.",
-      "change": {
-        "added": "added · {{path}}",
-        "modified": "changed · {{path}}",
-        "deleted": "deleted · {{path}}"
-      }
-    },
-    "runs": {
-      "folded": "×{{count}}",
-      "quietDetail": "{{count}} rounds between {{from}} and {{to}}. None of them changed anything, here or on the remote."
-    },
-    "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
-    "tabs": {
-      "runs": "Runs",
-      "setup": "Setup",
-      "machines": "Machines"
-    },
-    "title": "Sync",
-    "toast": {
-      "roundDone": "Round finished: {{status}} (+{{added}} ~{{modified}} −{{deleted}})"
+      "stop": "Stop syncing",
+      "stopTitle": "Stop syncing with this remote?",
+      "stopBody": "This machine forgets the remote. The vault, its history and the repository itself are left as they are; syncing again means joining again.",
+      "notConfigured": "No remote configured yet. Name a repository above and this vault starts syncing with it."
     }
   },
   "overview": {
@@ -3664,14 +3805,23 @@
         "notSetUp": "Not set up",
         "noRemote": "No remote set up",
         "round": {
-          "ok": "In sync",
-          "no_change": "In sync",
-          "conflict": "Conflict",
-          "awaiting_confirmation": "Held",
+          "nothing_to_do": "In sync",
+          "pulled": "In sync",
+          "pushed": "In sync",
+          "pulled_and_pushed": "In sync",
+          "joined": "In sync",
+          "rolled_back": "In sync",
           "push_failed": "Push failed",
+          "stopped": "Conflicts",
+          "held": "Held",
+          "waiting_on_edit": "Waiting on an edit",
+          "join_required": "Waiting to join",
+          "unreachable": "Unreachable",
+          "auth_failed": "Sign-in refused",
+          "paused_cloud_folder": "Paused",
+          "remote_too_new": "Remote too new",
+          "remote_too_old": "Remote too old",
           "failed": "Failed",
-          "disabled": "Paused",
-          "awaiting_join": "Waiting to join",
           "none": "No round yet"
         }
       }

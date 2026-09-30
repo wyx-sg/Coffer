@@ -1,36 +1,28 @@
-"""Composition root for vault convergence (spec vault-sync, ADR vault-sync).
+"""Composition root for sync (spec vault-sync; ADR
+sync-applies-clean-merges-and-stops-on-any-conflict).
 
-Builds the whole object graph one round needs, in the order the dependencies
-run::
+Builds the thin round over the process's one vault writer and hands it to the
+service the surfaces call::
 
-    machine identity → MachineRegistry
-                     → Bundle (held paths fed from convergence state)
-                     → appliers → ConflictArbiter → JoinResolver
-                     → round_factory → ConvergeService → ConvergeWorker
+    vault writer (+ its validator, + the join's held paths)
+        → VaultSyncGit, JsonRoundState, ConflictScratch, HostMachine
+        → RoundDeps → RoundEngine
+        → SyncService (remote file, runs.db history, push token through the
+          secret boundary, master key, plugin inventory)
+        → SyncWorker
 
-Everything that depends on **which** working tree is in play is built inside
-``round_factory`` rather than here, because the working tree is part of the
-remote's configuration and the user can move it without restarting the daemon.
-That is the same reason ``ConvergeService`` takes a mirror *factory*.
-
-The one subtlety worth stating: the ``serialize`` callable a round is given
-does two things as one step — it exports the vault into the tree and writes
-this machine's descriptor. They belong together because the descriptor names
-the commit this machine has absorbed, and a descriptor published in a different
-commit from the state it describes is how a returning machine recovers the
-wrong base.
+The service's lock is the vault-write lock the curation pass takes too, so a
+round never runs beside a pass (spec vault-sync "Never overlap a curation pass
+and a round").
 """
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
-import pathlib
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime
-from typing import NamedTuple
+from pathlib import Path
+from typing import Any, NamedTuple
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -38,319 +30,184 @@ import coffer
 from coffer.application.audit_service import AuditService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.appliers import (
-    CredentialApplier,
-    StateApplier,
-    TreeApplier,
-)
-from coffer.application.sync.appliers_resource import ResourceApplier
-from coffer.application.sync.conflicts import ConflictArbiter
-from coffer.application.sync.convergence import ConvergeRound
-from coffer.application.sync.exporter import SyncExporter
-from coffer.application.sync.joining import JoinResolver
-from coffer.application.sync.machines import MachineRegistry
-from coffer.application.sync.ports import (
-    GitMirrorPort,
-    ImportGate,
-    ImportNormaliser,
-    PostImportHook,
-    SyncedStatePort,
-)
-from coffer.application.sync.service import ConvergeService
-from coffer.application.sync.worker import ConvergeWorker
+from coffer.application.sync.inventory import AgentPluginInventory
+from coffer.application.sync.round_deps import RoundDeps
+from coffer.application.sync.round_engine import RoundEngine
+from coffer.application.sync.service import SyncService
+from coffer.application.sync.token import BoundaryToken
+from coffer.application.sync.worker import SyncWorker
 from coffer.domain.secrets import SecretDestination, sync_remote_destination
-from coffer.domain.sync.backup import DEFAULT_WORKTREE
-from coffer.domain.sync.diff import DeletionGuard
-from coffer.domain.sync.models import ExportSummary
+from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.config import write_machine_name
-from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
-from coffer.infrastructure.memory.paths import memory_root
-from coffer.infrastructure.persistence.convergence_state_repo import SqlAlchemyConvergenceStateRepo
-from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
-from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.conflict_resolver import (
-    AgenticConflictResolver,
-    InternalModelPort,
-)
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
-from coffer.infrastructure.sync.git_mirror import GitMirror
-from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
-from coffer.infrastructure.sync.paths import (
-    knowledge_root,
-    memory_triggers_root,
-    non_converging_tree_paths,
-    skills_root,
-)
-from coffer.surfaces.http.credential_composition import boundary_resolver
+from coffer.infrastructure.persistence.sync_runs_repo import SyncRunRepo
+from coffer.infrastructure.sync.cloud_folder import synchroniser_of
+from coffer.infrastructure.sync.identity import machine_name, resolve_identity
+from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
+from coffer.infrastructure.sync.machine_descriptor import HostMachine
+from coffer.infrastructure.sync.master_key import ResolvedMasterKey, SecretFiles
+from coffer.infrastructure.sync.vault_git import VaultSyncGit
+from coffer.infrastructure.vault.home import vault_root
+from coffer.infrastructure.vault.instance import vault_writer
+from coffer.infrastructure.vault.writer import VaultWriter
 from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
-from coffer.surfaces.http.sync_contributions import SyncContributions
-from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
+from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
+from coffer.surfaces.http.sync_dependencies import set_sync_service
 
 _log = logging.getLogger(__name__)
 
 
 class SyncWiring(NamedTuple):
-    """What the composition root hands back: the service the surfaces call
-    (and the curation worker asks whether a divergence is outstanding), the
-    registry the machines table reads, and the convergence state."""
+    """The service the surfaces call; the curation worker reads its lock,
+    this machine's id and whether a round waits for a person."""
 
-    service: ConvergeService
-    registry: MachineRegistry
-    state: SqlAlchemyConvergenceStateRepo
+    service: SyncService
 
 
-def _key_fingerprint(master_key: ResolvedMasterKey) -> str | None:
-    """The short hash that rides in this machine's descriptor, never the key.
+def _validator_of(writer: VaultWriter) -> Validator:
+    """The writer's own validator, read at each call: a merged tree meets the
+    same checks a person's edit and a daemon write meet (spec vault-storage
+    "Admit every vault write through one compare-and-swap path")."""
 
-    Read once at wiring: a key imported later reaches the descriptor at the
-    next daemon start, which is when the credentials it unlocks become usable
-    anyway.
-    """
-    key = master_key.export_key()
-    return hashlib.sha256(key).hexdigest()[:12] if key else None
+    def validate(changes: Sequence[Change], history: TreeReader) -> Verdict:
+        return writer.validator(changes, history)
+
+    return validate
+
+
+def _plugins() -> Any:
+    """The agent plugin service, once the agent kind has published it."""
+    from coffer.surfaces.http.workspace_dependencies import get_agent_plugin_service
+
+    try:
+        return get_agent_plugin_service()
+    except RuntimeError:
+        return None
+
+
+async def _reconcile_imported() -> None:
+    """One reconcile pass with the import's warrant, after a round applied
+    another machine's changes here."""
+    from coffer.domain.reconcile import Trigger
+    from coffer.surfaces.http.reconcile_dependencies import get_reconciler
+
+    await get_reconciler().run(trigger=Trigger.IMPORT)
 
 
 def wire_sync(
-    resource_svc: ResourceService,
-    audit: AuditService,
-    db_path: pathlib.Path,
-    master_key: MasterKeyManager,
-    sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
     *,
-    models: InternalModelPort,
-    credential_resolver: Callable[[str], str],
+    resources: ResourceService,
+    audit: AuditService,
+    sm: async_sessionmaker[AsyncSession],
+    master_key: MasterKeyManager,
+    credential_store: EncryptedCredentialStore,
     platform: PlatformPort,
-    state_providers: Sequence[SyncedStatePort] = (),
-    import_gates: Sequence[ImportGate] = (),
-    import_normalisers: Sequence[ImportNormaliser] = (),
-    post_import_hooks: Sequence[PostImportHook] = (),
-    apply_guard: Callable[[], AbstractAsyncContextManager[object]] | None = None,
 ) -> SyncWiring:
-    # Resolved once and shared — the fingerprint, every round's locked-ref check
-    # and the key export/import all read this one — so a key kept in the
-    # keychain costs one prompt per daemon start, not one per round.
-    resolved_key = ResolvedMasterKey(master_key)
-    cred_sync = CredentialSyncAdapter(db_path, resolved_key)
-    home = str(pathlib.Path.home())
-    remotes = SqlAlchemySyncRemoteRepo(sm)
-    state = SqlAlchemyConvergenceStateRepo(sm)
-    providers = list(state_providers)
-    gates = list(import_gates)
-    normalisers = list(import_normalisers)
-    hooks = list(post_import_hooks)
-
     identity = resolve_identity()
-    registry = MachineRegistry(
+    key = ResolvedMasterKey(master_key)
+    writer = vault_writer()
+    state = JsonRoundState()
+    # A join's differing files stay as they are here, never settled, until
+    # the person chooses (spec vault-sync "Join a new machine by taking the union").
+    writer.set_held(lambda: {c.path for c in state.join_choices()})
+    machine = HostMachine(
         machine_id=identity.machine_id,
-        machine_name=machine_name(),
-        derived=identity.derived,
+        name=machine_name,
+        os_label=platform.os_label,
         coffer_version=coffer.__version__,
-        resources=resource_svc,
-        key_fingerprint=_key_fingerprint(resolved_key),
-        platform=platform,
+        key_fingerprint=key.fingerprint,
     )
-    exporter = SyncExporter(resource_svc, cred_sync, state_providers=providers, home=home)
-
-    async def _serialize(worktree: pathlib.Path) -> ExportSummary:
-        """Step 1 of a round: the vault, and this machine's row, into the tree.
-
-        The held paths are read once here and handed to the bundle as a view
-        that resolves at write time. They are what stops a document this vault
-        failed to absorb from being published as a deletion — the retry set's
-        whole purpose (spec vault-sync "Never export a retry-set path as a deletion").
-        """
-        retry, not_applicable = await state.held_paths()
-        held = retry | not_applicable
-        bundle = Bundle(worktree, held_paths=lambda: held)
-        remote = await remotes.get()
-        summary = await exporter.export(
-            bundle, with_credentials=bool(remote and remote.include_credentials)
-        )
-        # The empty tree is the base a machine joining as new diffs against,
-        # not a commit it absorbed. Publishing it as ``last_converged_commit``
-        # would hand a returning machine a base git cannot resolve, and the
-        # join would be refused as unrecoverable rather than recovered.
-        pointer = await state.pointer()
-        commit = pointer if pointer and pointer != GitMirror.EMPTY_TREE else None
-        await registry.publish_self(bundle, commit=commit, today=datetime.now(tz=UTC).date())
-        return summary
-
-    def _round(mirror: GitMirrorPort, branch: str) -> ConvergeRound:
-        worktree = _worktree_of(mirror)
-        resolver = AgenticConflictResolver(
-            worktree=worktree,
-            completion=LangchainLlmCompletion(),
-            models=models,
-            credential_resolver=credential_resolver,
-        )
-        return ConvergeRound(
-            mirror=mirror,
-            state=state,
-            appliers=[
-                TreeApplier("knowledge/", worktree=worktree, live_root=knowledge_root()),
-                # The skills tree carries one folder this machine generates for
-                # itself and therefore never receives from another (spec
-                # vault-sync "Withhold derived output in both halves"). ``Bundle``
-                # defaults to the same set on
-                # the publish side; the applier is handed it explicitly because
-                # the application layer may not read infrastructure.
-                TreeApplier(
-                    "skills/",
-                    worktree=worktree,
-                    live_root=skills_root(),
-                    excluded=non_converging_tree_paths(),
-                ),
-                # Authored memory triggers (spec memory "Keep triggers in the
-                # vault, armed only by a person").
-                TreeApplier(
-                    "memory-triggers/", worktree=worktree, live_root=memory_triggers_root()
-                ),
-                ResourceApplier(
-                    resource_svc,
-                    worktree=worktree,
-                    gates=gates,
-                    normalisers=normalisers,
-                    home=home,
-                ),
-                StateApplier(providers, worktree=worktree, home=home),
-                CredentialApplier(cred_sync, worktree=worktree),
-            ],
-            arbiter=ConflictArbiter(resolver),
-            joining=JoinResolver(machine_id=identity.machine_id, branch=branch),
-            serialize=lambda: _serialize(worktree),
-            guard=DeletionGuard(),
-            branch=branch,
-            # Asked after the apply which refs it now holds without a key.
-            credentials=cred_sync,
-            # A kind owns more than its row: a native config file, a shim, a
-            # delivered skill. The applier writes the row; these put this
-            # machine's side of it back in step (spec vault-sync
-            # "Re-run post-import hooks after applying").
-            post_import=hooks,
-            apply_guard=apply_guard,
-        )
-
-    service = ConvergeService(
-        remotes=remotes,
+    git = VaultSyncGit(writer.repo)
+    deps = RoundDeps(
+        git=git,
         state=state,
-        round_factory=_round,
-        # A factory rather than one mirror, because the working tree is part of
-        # the remote's config and the user can move it without a restart.
-        mirror_factory=lambda worktree: GitMirror(worktree),
-        # The machines page reads the registry straight out of the working
-        # tree, so it needs a bundle over it without running a round.
-        bundle_factory=lambda worktree: Bundle(worktree),
-        set_machine_name=write_machine_name,
-        credentials=boundary_resolver(credential_store),
-        credential_store=cred_sync,
-        master_key=resolved_key,
-        audit=audit,
-        # A working tree may not sit at, inside or above any of these: the
-        # round mirrors the first three *into* the tree and ``reset --hard``s
-        # it, and the last holds the database and the master key.
-        protected_roots=[knowledge_root(), skills_root(), memory_triggers_root(), memory_root()],
-        coffer_dir=coffer_dir(),
+        writer=writer,
+        machine=machine,
+        scratch=ConflictScratch(),
+        validate=_validator_of(writer),
+        cloud_folder=lambda: synchroniser_of(vault_root(), home=Path.home()),
     )
-    return SyncWiring(service=service, registry=registry, state=state)
-
-
-def _worktree_of(mirror: GitMirrorPort) -> pathlib.Path:
-    """Where the round's appliers read the merged documents from.
-
-    The port deliberately exposes no path — it is an interface over git
-    operations, not over a directory — so the composition root, which knows it
-    injected a :class:`GitMirror`, is the right place to recover one. A mirror
-    from anywhere else falls back to the configured default rather than
-    guessing.
-    """
-    if isinstance(mirror, GitMirror):
-        return mirror.worktree
-    return pathlib.Path(DEFAULT_WORKTREE).expanduser()
+    service = SyncService(
+        engine=RoundEngine(deps),
+        remotes=JsonRemoteStore(),
+        history=SyncRunRepo(sm),
+        token=BoundaryToken(boundary_resolver(credential_store)),
+        machine=machine,
+        master_key=key,
+        secrets=SecretFiles(key),
+        probe=git,
+        audit=audit,
+        set_machine_name=write_machine_name,
+        vault_path=vault_root,
+        inventory=AgentPluginInventory(resources, _plugins),
+        after_apply=_reconcile_imported,
+    )
+    return SyncWiring(service=service)
 
 
 def start_sync(
-    resource_svc: ResourceService,
-    audit: AuditService,
-    db_path: pathlib.Path,
-    master_key: MasterKeyManager,
-    sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
-    contributions: SyncContributions,
     *,
-    models: InternalModelPort,
-    credential_resolver: Callable[[str], str],
+    resources: ResourceService,
+    audit: AuditService,
+    sm: async_sessionmaker[AsyncSession],
+    master_key: MasterKeyManager,
+    credential_store: EncryptedCredentialStore,
     platform: PlatformPort,
 ) -> SyncWiring:
-    """Wire convergence over what the kinds contributed during composition
-    (their shared-state providers, import gates and normalisers, and post-import
-    hooks).
-
-    Returns the graph so the caller can start a worker over it — wiring and
-    starting stay separate, because a test wants the graph without a timer.
-    """
+    """Wire sync and publish it: the routes' service, and the vault-write lock
+    the curation pass takes (timer and button alike)."""
     wiring = wire_sync(
-        resource_svc,
-        audit,
-        db_path,
-        master_key,
-        sm,
-        credential_store,
-        models=models,
-        credential_resolver=credential_resolver,
+        resources=resources,
+        audit=audit,
+        sm=sm,
+        master_key=master_key,
+        credential_store=credential_store,
         platform=platform,
-        state_providers=tuple(contributions.state_providers),
-        import_gates=tuple(contributions.import_gates),
-        import_normalisers=tuple(contributions.import_normalisers),
-        post_import_hooks=tuple(contributions.post_import_hooks),
-        apply_guard=contributions.apply_guard,
     )
-    # The routes hold module-level singletons, matching every other surface
-    # in this package.
     set_sync_service(wiring.service)
-    # The curation pass — timer and button alike — takes the round's own lock.
     set_vault_write_lock(wiring.service.lock)
-    set_machine_registry(wiring.registry)
     return wiring
 
 
-def start_converge_worker(
-    wiring: SyncWiring, sm: async_sessionmaker[AsyncSession]
-) -> ConvergeWorker:
-    """Start the timer that converges the vault, shaped like ``RetentionWorker``.
-
-    No interval is passed: the worker re-reads the configured remote's interval
-    on every tick, so a user who shortens it in the UI is believed without a
-    daemon restart, and a vault with no remote configured ticks harmlessly on
-    the default cadence until one appears.
-    """
-    worker = ConvergeWorker(wiring.service, SqlAlchemySyncRemoteRepo(sm))
+def start_sync_worker(wiring: SyncWiring) -> SyncWorker:
+    """Rounds on the remote's interval; the first 30 s after start."""
+    worker = SyncWorker(wiring.service)
     worker.start()
     return worker
 
 
-async def stop_converge_worker(worker: ConvergeWorker) -> None:
-    """Best-effort teardown, mirroring the retention worker's: a round that
-    does not yield within the grace period is abandoned, and said so."""
+async def stop_sync_worker(worker: SyncWorker) -> None:
+    """Best-effort teardown: a round that does not yield within the grace
+    period is abandoned, and said so."""
     try:
         await asyncio.wait_for(worker.stop(), timeout=2.0)
     except TimeoutError:
-        _log.warning("sync.converge_worker.stop_timed_out", extra={"timeout_s": 2.0})
+        _log.warning("sync.worker.stop_timed_out", extra={"timeout_s": 2.0})
     except asyncio.CancelledError:
-        _log.debug("sync.converge_worker.stop_cancelled")
+        _log.debug("sync.worker.stop_cancelled")
 
 
-def sync_remote_secret_source(
-    sm: async_sessionmaker[AsyncSession],
-) -> Callable[[], Awaitable[list[tuple[SecretDestination, Mapping[str, str], str]]]]:
-    """Where the push token goes right now, for the secret boundary's listing."""
+def sync_remote_secret_source() -> Callable[
+    [], Awaitable[list[tuple[SecretDestination, Mapping[str, str], str]]]
+]:
+    """Where the push token goes right now, for the secret boundary's listing
+    (spec vault-sync "Hold a push token pointed at a new URL until approved")."""
 
     async def current() -> list[tuple[SecretDestination, Mapping[str, str], str]]:
-        remote = await SqlAlchemySyncRemoteRepo(sm).get()
+        remote = await asyncio.to_thread(JsonRemoteStore().get)
         if remote is None or not remote.credential_ref:
             return []
         return [(sync_remote_destination(remote.url), {"token": remote.credential_ref}, "user")]
 
     return current
+
+
+__all__ = [
+    "SyncWiring",
+    "start_sync",
+    "start_sync_worker",
+    "stop_sync_worker",
+    "sync_remote_secret_source",
+    "wire_sync",
+]

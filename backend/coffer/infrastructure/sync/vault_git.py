@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -11,12 +12,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from coffer.domain.vault.history import Commit
+from coffer.domain.vault.layout import MANIFEST
+from coffer.domain.vault.remote_errors import RemoteFailed
 from coffer.domain.vault.trees import MergeResult, TreeChange
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.vault import git, merge, remote
 from coffer.infrastructure.vault.repository import VaultRepository
 
 SNAPSHOT_PREFIX = "coffer/pre-apply/"
+_PROBE_REF = "refs/coffer/probe"
 SNAPSHOTS_KEPT = 10
 
 
@@ -30,6 +34,7 @@ class VaultSyncGit:
         self._repo = repo
         self._clock = clock
         self._branch = "main"
+        self._username: str | None = None
 
     @property
     def repo(self) -> VaultRepository:
@@ -41,8 +46,9 @@ class VaultSyncGit:
     def head(self) -> str | None:
         return self._repo.head()
 
-    def set_remote(self, url: str) -> None:
+    def set_remote(self, url: str, username: str | None = None) -> None:
         remote.set_remote(self._repo, url)
+        self._username = username
 
     def clear_remote(self) -> None:
         remote.clear_remote(self._repo)
@@ -52,10 +58,48 @@ class VaultSyncGit:
 
     def fetch(self, branch: str, token: str | None) -> str | None:
         self._branch = branch
-        return remote.fetch(self._repo, branch, token).tip
+        return remote.fetch(self._repo, branch, token, self._username).tip
 
     def push(self, commit: str, branch: str, token: str | None) -> None:
-        remote.push(self._repo, commit, branch, token)
+        remote.push(self._repo, commit, branch, token, self._username)
+
+    def probe(
+        self, url: str, branch: str, token: str | None, username: str | None = None
+    ) -> str | None:
+        """The tip of ``branch`` at ``url`` without fetching (``None``: empty)."""
+        self._repo.ensure()
+        return remote.probe(self._repo, url, branch, token, username)
+
+    def probe_layout(
+        self, url: str, branch: str, token: str | None, username: str | None = None
+    ) -> int | None:
+        """The layout the vault at ``url`` carries, or ``None`` when what is
+        there is not a Coffer vault. Fetched into a scratch ref that is
+        deleted again; the objects stay, which a later join fetches anyway."""
+        self._repo.ensure()
+        args = ("fetch", "--no-tags", "--quiet", url, f"+refs/heads/{branch}:{_PROBE_REF}")
+        done = git.run(
+            self._repo.root,
+            *args,
+            token=token,
+            username=username,
+            timeout=git.NETWORK_TIMEOUT_S,
+            check=False,
+        )
+        if done.returncode != 0:
+            detail = git.failure_message(args, done, token)
+            raise RemoteFailed(remote.classify(detail), detail)
+        try:
+            raw = self._repo.read(_PROBE_REF, MANIFEST)
+        finally:
+            git.run(self._repo.root, "update-ref", "-d", _PROBE_REF, check=False)
+        if raw is None:
+            return None
+        try:
+            value = json.loads(raw.decode("utf-8")).get("schema_version")
+        except (ValueError, AttributeError):
+            return None
+        return value if isinstance(value, int) else None
 
     def remote_tip(self, branch: str) -> str | None:
         return self._repo.resolve(remote.tracking_ref(branch))

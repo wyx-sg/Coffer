@@ -34,7 +34,7 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.curation_wiring import stop_curation_worker
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
-from coffer.surfaces.http.sync_wiring import stop_converge_worker
+from coffer.surfaces.http.sync_wiring import stop_sync_worker
 from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
 
 _logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ async def shutdown(running: Running) -> None:
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await running.attention_watch_task
     running.workers.retention_worker.stop()
-    await stop_converge_worker(running.workers.converge_worker)
+    await stop_sync_worker(running.workers.sync_worker)
     await stop_curation_worker(running.workers.curation_task)
     await stop_distil_worker(running.workers.distil_task)
     await stop_aggregate_worker(running.workers.aggregate_task)

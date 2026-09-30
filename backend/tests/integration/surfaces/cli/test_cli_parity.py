@@ -46,6 +46,7 @@ _SWITCH = {"enable", "disable"}
 #: keyed by their full path ("mcp cap"), so a group's own subcommands are
 #: covered too.
 _EXPECTED_GROUPS: dict[str, set[str]] = {
+    "migrate": set(),
     # The daemon's own lifecycle. Its port is the key `daemon.port`, changed
     # through `config` with no daemon running; the passes in flight are a
     # section of `status` (spec daemon "Manage the daemon from the command line").
@@ -167,19 +168,23 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.
     "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "detect-local"},
-    # `restore` with no `--at` undoes the last applied round; `status`
+    # A round stops on any conflict and is answered here file by file
+    # (ADR sync-applies-clean-merges-and-stops-on-any-conflict); `status`
     # includes the remote (spec vault-sync).
     "sync": {
-        "adopt",
-        "confirm",
+        "choose",
+        "conflicts",
+        "continue",
+        "edit",
         "history",
+        "hold",
+        "join",
         "key",
         "machine",
         "now",
-        "rebuild",
-        "reject",
         "remote",
-        "restore",
+        "resolve",
+        "rollback",
         "status",
     },
     # No `export`: a key backup is written only by the desktop app, behind a
@@ -205,13 +210,20 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # is POST /proxy/tokens/{uid}/rotate, `status` is GET /proxy/status.
     "proxy": {"token", "rotate", "status"},
     "sync machine": {"list", "rename", "rm"},
-    "sync remote": {"set", "clear", "pause", "resume"},
+    "sync remote": {"set", "clear", "pause", "resume", "check"},
+    # Any vault file's history (spec vault-storage "Show, compare and restore
+    # any version of a vault file"): GET /vault/history, /vault/diff,
+    # /vault/content, POST /vault/restore, and GET /vault/problems — the hand
+    # edits validation kept out of HEAD.
+    "vault": {"history", "diff", "show", "restore", "problems"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is
 #: claimed by the long options a caller can pass, since an empty subcommand
 #: set would otherwise assert nothing about them.
 _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
+    # The one-time upgrade into the vault layout (spec vault-storage).
+    "migrate": {"--rollback", "--resume", "--rehearse", "--home"},
     "open": {"--json", "--no-browser"},
     # --ref shows one row in full: a direct MCP entry (spec agent-registry "Show
     # one direct MCP entry's full configuration without its secrets") or an
@@ -337,6 +349,10 @@ _FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
     "PUT /agents/{uid}/config-files/{key}": "agent config edit",
     "PUT /agents/{uid}/config-files/{key}/files/{relpath}": "agent config edit",
     "DELETE /agents/{uid}/config-files/{key}/files/{relpath}": "agent config rm",
+    # A stopped sync round's files: answered and hand-merged from the CLI too.
+    "POST /sync/stop/files/answer": "sync resolve",
+    "POST /sync/stop/files/editor": "sync edit",
+    "GET /sync/stop/files/versions": "sync conflicts",
 }
 
 #: What makes a route file-backed: a path segment naming a file, a tree of

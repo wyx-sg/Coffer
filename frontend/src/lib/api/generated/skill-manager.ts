@@ -413,11 +413,12 @@ export interface paths {
         get: operations["read_skill_file_api_v1_skills__uid__files_content_get"];
         /**
          * Write Skill File
-         * @description Overwrite one existing text file in the skill's master folder.
+         * @description Overwrite one existing text file in the skill's master folder, as one
+         *     vault commit naming the writer.
          *
-         *     A body carrying ``expected_fingerprint`` makes the write conditional:
-         *     ``SkillFileStale`` propagates to the shared error handler as 409
-         *     ``SKILL_FILE_STALE`` with the file left untouched.
+         *     The write is conditional on ``expected_fingerprint``: ``SkillFileStale``
+         *     propagates to the shared error handler as 409 ``SKILL_FILE_STALE`` with
+         *     the file left untouched.
          */
         put: operations["write_skill_file_api_v1_skills__uid__files_content_put"];
         post?: never;
@@ -899,7 +900,7 @@ export interface components {
             /** Content */
             content: string;
             /** Expected Fingerprint */
-            expected_fingerprint?: string | null;
+            expected_fingerprint: string;
             /** Path */
             path: string;
         };

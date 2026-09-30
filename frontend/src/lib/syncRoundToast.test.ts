@@ -1,57 +1,39 @@
 // frontend/src/lib/syncRoundToast.test.ts
 //
 // A finished round's toast says what actually happened: a round that stopped,
-// failed, was held or is waiting to join is not a "success".
+// was held, failed or is waiting to join is not a "success".
 import { describe, expect, test } from "vitest";
 import i18next from "@/i18n";
 import type { TFunction } from "i18next";
 
-import type { ConvergeRound, RoundStatus } from "@/lib/api/sync";
+import { makeRound } from "@/pages/sync/syncTestKit";
 import { roundToast } from "./syncRoundToast";
 
 const t = i18next.t.bind(i18next) as TFunction;
-const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
-
-function round(status: RoundStatus, over: Partial<ConvergeRound> = {}): ConvergeRound {
-  return {
-    status,
-    join: null,
-    applied: NO_COUNTS,
-    published: NO_COUNTS,
-    commit: null,
-    conflicts: [],
-    agent_resolved: [],
-    failures: [],
-    not_applicable: [],
-    locked_refs: [],
-    pending: null,
-    join_report: null,
-    error: null,
-    ...over,
-  };
-}
 
 describe("roundToast", () => {
-  test("a round that converged is a success naming what it moved", () => {
-    const toast = roundToast(t, round("ok"));
+  test("a round that moved files is a success naming both directions", () => {
+    const toast = roundToast(
+      t,
+      makeRound({ status: "pulled_and_pushed", pulled_files: 3, pushed_files: 2 }),
+    );
     expect(toast.variant).toBe("success");
-    expect(toast.message).toMatch(/converged/);
+    expect(toast.message).toMatch(/3/);
+    expect(toast.message).toMatch(/2/);
   });
 
-  test.each([
-    ["conflict", "error", /conflict/i],
-    ["push_failed", "error", /could not reach the remote/i],
-    ["awaiting_confirmation", "info", /held for your confirmation/i],
-    ["awaiting_join", "info", /has not joined this remote yet/i],
-  ] as const)("%s is not reported as a success", (status, variant, message) => {
-    const toast = roundToast(t, round(status));
-    expect(toast.variant).toBe(variant);
-    expect(toast.message).toMatch(message);
-  });
+  test.each(["stopped", "held", "waiting_on_edit", "join_required"] as const)(
+    "%s asks for an answer rather than reporting success",
+    (status) => {
+      const toast = roundToast(t, makeRound({ status }));
+      expect(toast.variant).toBe("info");
+      expect(toast.message).not.toMatch(/^sync\./);
+    },
+  );
 
-  test("a failed round carries its own error", () => {
-    const toast = roundToast(t, round("failed", { error: "remote unreachable" }));
+  test("a failed round carries git's own words", () => {
+    const toast = roundToast(t, makeRound({ status: "auth_failed", detail: "HTTP 403" }));
     expect(toast.variant).toBe("error");
-    expect(toast.message).toMatch(/remote unreachable/);
+    expect(toast.message).toBe("HTTP 403");
   });
 });

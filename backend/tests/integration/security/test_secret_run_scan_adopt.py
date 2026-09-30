@@ -232,10 +232,10 @@ def test_bindings_in_use_at_upgrade_keep_working(
     # Rewind to a vault from before the boundary: no bindings, no marker, and
     # a secret stored long ago.
     old = (datetime.now(tz=UTC) - timedelta(days=90)).isoformat()
-    secrets_dir = local_root(tmp_path) / "secrets"
+    secrets_dir = local_root(tmp_path) / "secret-boundary"
     for name in ("bindings", "approvals", "settings"):
         (secrets_dir / f"{name}.json").unlink(missing_ok=True)
-    (secrets_dir / "credential-times.json").write_text(json.dumps({"gh/token": old}))
+    (secrets_dir / "times.json").write_text(json.dumps({"gh/token": old}))
 
     with running_daemon(tmp_path, db) as upgraded:
         assert upgraded.resolve_for(first) == {"TOKEN": "ghp_from_before"}

@@ -98,6 +98,11 @@ export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file
 export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
   ["skills", uid, "compare", stagingId, path] as const;
 
+// vault history: any vault file or folder, e.g. a skill's `skills/<name>/`
+export const vaultKey = ["vault"] as const;
+export const vaultHistoryKey = (path: string) => ["vault", "history", path] as const;
+export const vaultDiffKey = (path: string, v: string) => ["vault", "diff", path, v] as const;
+
 // --- mcp — per-server discovery, health and invocation log -----------------
 
 export const mcpCapabilitiesKey = (serverUid: string) =>

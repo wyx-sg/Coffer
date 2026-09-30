@@ -19,68 +19,72 @@
 // person's attention, not about the vault.
 import { useEffect } from "react";
 
-import type { ConvergeRound, RoundStatus, SyncStatus } from "@/lib/api/sync";
+import type { RoundStatus, SyncRound, SyncStatus } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import { usePageLocation } from "@/lib/settingsModal";
 
 const SEEN_KEY = "coffer.sync.attentionSeen";
 
 /**
- * The round statuses that mean the user has something to do — the same set the
- * CLI exits non-zero on (`_NEEDS_ATTENTION` in `surfaces/cli/sync_cmd.py`).
- * Kept as one list rather than four call sites so a status added there is
- * added here too, and not silently carried by one surface only.
+ * The round statuses that leave the vault needing a person — the backend's
+ * `NEEDS_PERSON` (`domain/sync/rounds.py`) plus the two failures that stop
+ * every other machine from seeing this one's work. Kept as one list so a
+ * status added there is added here too.
  */
 const NEEDS_ATTENTION: readonly RoundStatus[] = [
-  "conflict",
-  "awaiting_confirmation",
+  "stopped",
+  "held",
+  "waiting_on_edit",
+  "join_required",
+  "auth_failed",
+  "paused_cloud_folder",
+  "remote_too_new",
+  "remote_too_old",
   "push_failed",
+  "unreachable",
   "failed",
-  "awaiting_join",
 ];
 
 /**
- * What this situation is, for the purpose of "have I seen it?", or `null`
- * when there is nothing to see.
+ * What a round's situation is, for the purpose of "have I seen it?", or
+ * `null` when there is nothing to see.
  *
  * The SITUATION, not the round. A timer re-raises the same broken thing every
- * hour, and a marker keyed on the round — its time, its id — would call each
- * repeat news and put the dot back every hour over a problem the user has
- * already read. Keyed on what is actually wrong, a repeat is the same marker
- * and stays quiet, while a *different* failure, a hold raised in the other
- * direction, or one whose breaches have changed mints a new one and asks
- * again. That is the difference between telling someone something and
- * nagging them.
+ * few minutes, and a marker keyed on the round — its time, its id — would call
+ * each repeat news and put the dot back over a problem the user has already
+ * read. Keyed on what is wrong, a repeat is the same marker and stays quiet,
+ * while a different failure, or a stop with a different number of files,
+ * mints a new one and asks again.
  *
- * Cheap to compute and small to store: the fields a reader would use to say
- * "same problem", never the whole payload — `pending.paths` alone can be
- * hundreds of entries.
+ * Small on purpose: this goes into localStorage, so it carries the counts a
+ * reader would use to say "same problem", never the paths.
  */
-export function attentionMarker(round: ConvergeRound | null | undefined): string | null {
+export function attentionMarker(round: SyncRound | null | undefined): string | null {
   if (!round || !NEEDS_ATTENTION.includes(round.status)) return null;
-  const breaches = (round.pending?.breaches ?? [])
-    .map((b) => `${b.area}:${b.deleted}/${b.total}`)
-    .join(",");
-  return [
-    round.status,
-    round.error ?? "",
-    round.conflicts.join(","),
-    round.pending?.direction ?? "",
-    breaches,
-  ].join("|");
+  return [round.status, round.detail ?? "", round.conflicts, round.held].join("|");
 }
 
 /**
- * The marker for a whole `GET /sync/status` body: `attentionMarker` of its last
- * round, but only while the remote is switched ON. A paused remote makes a round
- * return `disabled` WITHOUT recording it, so `last_run` keeps whatever it last
- * was; the CLI (`coffer sync status`) and the desktop shell both stay quiet
- * then, and so does the dot (spec vault-sync "Pause a configured remote without
+ * The marker for a whole `GET /sync/status` body, only while the remote is
+ * switched ON: a paused remote runs no round, so whatever it last said is not
+ * a question any more (spec vault-sync "Pause a configured remote without
  * forgetting it").
+ *
+ * The status says more than its last round: a machine that has not joined, a
+ * stopped round and a join with unanswered files all ask for a person whatever
+ * the newest round's outcome was.
  */
 export function syncStatusMarker(status: SyncStatus | null | undefined): string | null {
   if (status?.remote?.enabled !== true) return null;
-  return attentionMarker(status.last_run);
+  const parts: string[] = [];
+  if (!status.joined) parts.push("join_required");
+  if (status.conflicts > 0) parts.push(`conflicts:${status.conflicts}`);
+  if (status.held > 0) parts.push(`held:${status.held}`);
+  if (status.join_choices > 0) parts.push(`join_choices:${status.join_choices}`);
+  if (status.problem) parts.push(`${status.problem.kind}:${status.problem.message}`);
+  const round = attentionMarker(status.last_round);
+  if (round) parts.push(round);
+  return parts.length > 0 ? parts.join("|") : null;
 }
 
 function readSeen(): string | null {

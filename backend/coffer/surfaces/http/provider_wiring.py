@@ -15,9 +15,6 @@ from fastapi import FastAPI
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.engine.resolve import InternalEngineConnection
-from coffer.application.provider.internal_default_guard import (
-    ProviderInternalDefaultNormaliser,
-)
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projection_reconcile import ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
@@ -46,7 +43,6 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     on_approval_applied,
     register_resource_destination,
 )
-from coffer.surfaces.http.sync_contributions import SyncContributions
 
 
 @dataclass(frozen=True)
@@ -68,7 +64,6 @@ def wire_provider_kind(
     audit: AuditService,
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
-    sync: SyncContributions,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
 ) -> ProviderWiring:
@@ -103,13 +98,10 @@ def wire_provider_kind(
     provider_svc.set_secret_boundary(get_secret_boundary())
     register_resource_destination("provider", _provider_secret_destination)
 
-    # A synced document flagging a second internal default is applied with the
-    # flag cleared and reported, never left to fail every round.
-    sync.import_normalisers.append(ProviderInternalDefaultNormaliser(resource_svc))
     # The projection into each agent's own config (ADR
     # one-level-triggered-reconciler-compares-parameters): judged by every key
-    # Coffer owns there, on every pass — boot, period, hint, and the import
-    # pass the reconciler's own post-import hook asks for.
+    # Coffer owns there, on every pass — boot, period, and each hint (a sync
+    # checkout hints every resource it changed, like an API write).
     reconciler.register(
         ProviderProjectionTarget(
             providers=provider_svc,

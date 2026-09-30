@@ -20,6 +20,10 @@ from typing import Any
 from coffer.domain.error_base import CofferError
 
 DEFAULT_BRANCH = "main"
+#: The username an HTTPS token is sent with when none is set. GitHub and
+#: GitLab ignore it (GitLab: any non-blank value); Bitbucket and Azure DevOps
+#: need a real one, or a fixed one such as ``x-token-auth``.
+DEFAULT_USERNAME = "coffer"
 DEFAULT_INTERVAL_SECONDS = 3600
 MIN_INTERVAL_SECONDS = 60
 
@@ -72,6 +76,7 @@ class SyncRemote:
     url: str
     branch: str = DEFAULT_BRANCH
     credential_ref: str | None = None
+    username: str = DEFAULT_USERNAME
     include_secret: bool = False
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS
     enabled: bool = True
@@ -79,6 +84,12 @@ class SyncRemote:
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", validate_url(self.url))
         object.__setattr__(self, "branch", validate_branch(self.branch))
+        name = self.username.strip()
+        if not name or any(ch.isspace() or ch in ":@/" for ch in name) or len(name) > 128:
+            raise SyncRemoteInvalid(
+                "username must be a non-blank name without spaces, ':', '@' or '/'"
+            )
+        object.__setattr__(self, "username", name)
         if self.interval_seconds <= 0:
             raise SyncRemoteInvalid("interval_seconds must be positive")
         if self.interval_seconds < MIN_INTERVAL_SECONDS:
@@ -97,6 +108,7 @@ __all__ = [
     "BRANCH_PATTERN",
     "DEFAULT_BRANCH",
     "DEFAULT_INTERVAL_SECONDS",
+    "DEFAULT_USERNAME",
     "MIN_INTERVAL_SECONDS",
     "URL_PATTERN",
     "SyncRemote",

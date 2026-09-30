@@ -80,7 +80,9 @@ def tracking_ref(branch: str) -> str:
     return f"refs/remotes/{REMOTE}/{branch}"
 
 
-def fetch(repo: VaultRepository, branch: str, token: str | None) -> FetchResult:
+def fetch(
+    repo: VaultRepository, branch: str, token: str | None, username: str | None = None
+) -> FetchResult:
     args = (
         "fetch",
         "--no-tags",
@@ -89,7 +91,9 @@ def fetch(repo: VaultRepository, branch: str, token: str | None) -> FetchResult:
         REMOTE,
         f"+refs/heads/{branch}:{tracking_ref(branch)}",
     )
-    done = git.run(repo.root, *args, token=token, timeout=git.NETWORK_TIMEOUT_S, check=False)
+    done = git.run(
+        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
+    )
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         if "couldn't find remote ref" in detail.lower():
@@ -99,9 +103,13 @@ def fetch(repo: VaultRepository, branch: str, token: str | None) -> FetchResult:
     return FetchResult(repo.resolve(tracking_ref(branch)))
 
 
-def push(repo: VaultRepository, commit: str, branch: str, token: str | None) -> None:
+def push(
+    repo: VaultRepository, commit: str, branch: str, token: str | None, username: str | None = None
+) -> None:
     args = ("push", "--quiet", REMOTE, f"{commit}:refs/heads/{branch}")
-    done = git.run(repo.root, *args, token=token, timeout=git.NETWORK_TIMEOUT_S, check=False)
+    done = git.run(
+        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
+    )
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         problem = classify(detail)
@@ -111,11 +119,15 @@ def push(repo: VaultRepository, commit: str, branch: str, token: str | None) -> 
     git.run(repo.root, "update-ref", tracking_ref(branch), commit, check=False)
 
 
-def probe(repo: VaultRepository, url: str, branch: str, token: str | None) -> str | None:
+def probe(
+    repo: VaultRepository, url: str, branch: str, token: str | None, username: str | None = None
+) -> str | None:
     """The remote branch's tip without fetching (``ls-remote``); ``None`` for
     an empty remote. For the setup form's "Check repository"."""
     args = ("ls-remote", "--heads", "--", url, f"refs/heads/{branch}")
-    done = git.run(repo.root, *args, token=token, timeout=git.NETWORK_TIMEOUT_S, check=False)
+    done = git.run(
+        repo.root, *args, token=token, username=username, timeout=git.NETWORK_TIMEOUT_S, check=False
+    )
     if done.returncode != 0:
         detail = git.failure_message(args, done, token)
         raise RemoteFailed(classify(detail), detail)

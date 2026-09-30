@@ -22,11 +22,6 @@ from coffer.domain.vault.layout import MACHINES, MANIFEST
 from coffer.domain.vault.writers import OP_SYNC, WRITER_SYNC, CommitMeta
 from coffer.domain.vault.writes import Validator
 
-#: Returns the upgraded commit for a remote at an older layout, or ``None``
-#: when this machine is not the one that upgrades it (spec vault-sync "Run an
-#: unattended rewriter on one owner machine").
-LayoutUpgrade = Callable[[str], str | None]
-
 _STATUS = {"A": "added", "M": "modified", "D": "removed"}
 
 
@@ -57,9 +52,10 @@ class RoundDeps:
     validate: Validator | None = None
     cloud_folder: Callable[[], str | None] = lambda: None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)
-    upgrade_layout: LayoutUpgrade | None = None
-    #: The layout the remote may carry; below it asks for an upgrade, above
-    #: it is a newer Coffer's.
+    #: The one layout a remote may carry. Above it is a newer Coffer's; below
+    #: it is a remote no migrated machine has rebuilt yet. Both are refused:
+    #: a remote is never converted in place, it is rebuilt from the first
+    #: migrated machine and the others join it as new.
     layout: int = 3
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -117,4 +113,4 @@ class RoundDeps:
         return value if isinstance(value, int) else None
 
 
-__all__ = ["LayoutUpgrade", "RoundDeps", "now_iso"]
+__all__ = ["RoundDeps", "now_iso"]

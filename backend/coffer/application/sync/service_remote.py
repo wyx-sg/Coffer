@@ -1,151 +1,138 @@
-"""The remote-configuration half of ``ConvergeService`` (spec vault-sync).
+"""The remote half of ``SyncService`` (spec vault-sync "Allow at most one
+user-owned sync remote").
 
-Split out for the file-size tier, the same way ``service_machines.py`` and
-``service_history.py`` were, and along a real seam: the rest of the service
-runs rounds against a remote, while this decides which remote there is. Kept
-as a mixin rather than a second service because configuring the remote takes
-the round's lock, probes it through the same mirror factory and resolves the
-same push credential — a second object holding all three would be the service
-under another name.
-
-Two refusals live here besides reachability. A working tree that would overlap
-the vault's own directories is refused before any git runs (the round mirrors
-the vault *into* the tree and ``reset --hard``s it), and the domain has already
-refused a URL or branch that git would read as an option.
+The remote is machine-local configuration (``local/sync/remote.json``): which
+repository this machine converges with, on which branch, how often, and
+whether ``secret/`` travels. Setting it adds ``origin`` to the vault
+repository and sets whether ciphertext is committed; clearing it removes both
+and forgets the round waiting for a person, which was a question about that
+remote's history. Checking a remote looks at it without keeping anything, so
+the setup form can say what it holds before it is saved.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import dataclasses
 from collections.abc import Callable
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from coffer.domain.credential_errors import SecretBindingPending
-from coffer.domain.error_base import CofferError
-from coffer.domain.sync.backup import DEFAULT_WORKTREE, BackupRemote, worktree_conflict
-from coffer.domain.sync.errors import BackupRemoteInvalid
+from coffer.domain.errors import CredentialMissing
+from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote
+from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from coffer.application.sync.convergence import ConvergeRound
-    from coffer.application.sync.ports import (
-        ConvergenceStatePort,
-        GitMirrorPort,
-        SyncRemoteRepoPort,
-    )
-    from coffer.domain.sync.convergence import ConvergeRun
+    from coffer.application.sync.round_engine import RoundEngine
+    from coffer.application.sync.round_ports import RemoteStorePort, TokenPort
+    from coffer.application.sync.service_ports import RemoteProbePort
+    from coffer.application.sync.views import RemoteCheck
 
 
 class RemoteMixin:
-    """Declares what it borrows from the service it is mixed into.
+    """Declares what it borrows from ``SyncService``, which assigns each."""
 
-    The annotations below are the contract, not state: ``ConvergeService``
-    assigns every one of them in its constructor. Spelling them here is what
-    lets this half be type-checked on its own instead of trusting that the
-    other half happens to provide them.
-    """
-
-    _remotes: SyncRemoteRepoPort
-    _state: ConvergenceStatePort
+    _engine: RoundEngine
+    _remotes: RemoteStorePort
+    _token: TokenPort
+    _probe: RemoteProbePort
     _lock: asyncio.Lock
-    _mirror_factory: Callable[[Path], GitMirrorPort]
-    _protected_roots: list[Path]
-    _coffer_dir: Path | None
-    _round_factory: Callable[[GitMirrorPort, str], ConvergeRound]
 
-    async def _token(self, remote: BackupRemote) -> str | None:
-        raise NotImplementedError  # pragma: no cover - provided by ConvergeService
+    async def _locked(self, fn: Callable[[], Any]) -> Any:
+        raise NotImplementedError  # pragma: no cover - provided by SyncService
 
-    async def get_remote(self) -> BackupRemote | None:
-        return await self._remotes.get()
+    async def get_remote(self) -> SyncRemote | None:
+        return await asyncio.to_thread(self._remotes.get)
 
-    async def set_remote(self, remote: BackupRemote) -> BackupRemote:
-        """Store the remote, having first proved it is reachable.
+    async def set_remote(self, remote: SyncRemote) -> SyncRemote:
+        """Keep ``remote`` and point the vault's ``origin`` at it.
 
-        A remote that cannot be reached is rejected at the front door rather
-        than discovered by a worker tick an hour later: the user is here now,
-        with the URL and the credential in front of them, and that is the only
-        moment the fix is cheap.
-
-        Under the round's lock, because it prepares the working tree — an
-        ``ensure_repo`` landing mid-round could repoint ``origin`` between a
-        fetch and a push, and a stored remote that changed under a running
-        round would have that round push to a repository it never merged.
+        The push token is resolved here once, so a token pointed at a URL it
+        was never approved for is held for the person now rather than at the
+        next round (spec vault-sync "Hold a push token pointed at a new URL
+        until approved"): the remote is kept, the approval names it, and the
+        error says so.
         """
-        worktree = Path(remote.worktree_path).expanduser()
-        if not worktree.is_absolute():
-            raise BackupRemoteInvalid(f"worktree_path must be absolute: {remote.worktree_path}")
-        self._check_worktree(worktree)
-        async with self._lock:
-            mirror = self._mirror_factory(worktree)
-            try:
-                token = await self._token(remote)
-            except SecretBindingPending:
-                # An existing push token pointed at a URL it was never approved
-                # for (spec vault-sync "Hold a push token pointed at a new URL
-                # until approved"): the remote is kept, unproven, so the
-                # approval has a destination to name, and no round sends the
-                # token until a person approves it in the desktop app.
-                await self._remotes.set(remote)
-                raise
-            try:
-                await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-                await mirror.fetch(token=token)
-            except CofferError as e:
-                # The adapter has already redacted the push credential out of
-                # the message, and this one is never audited.
-                raise BackupRemoteInvalid(str(e)) from e
-            await self._remotes.set(remote)
+
+        def apply() -> None:
+            d = self._engine.d
+            before = self._remotes.get()
+            if before is None or (before.url, before.branch) != (remote.url, remote.branch):
+                # A stop, a hold and "joined" are facts about one remote's
+                # history; another remote starts from the join again.
+                d.state.set_stop(None)
+                d.state.set_confirmed(None)
+                d.state.set_joined(False)
+            self._remotes.put(remote)
+            d.git.ensure()
+            d.git.set_remote(remote.url, remote.username)
+            d.git.set_carry_secret(remote.include_secret)
+
+        await self._locked(apply)
+        # A token not stored here yet is reported by the first round, with the
+        # ref it names.
+        with contextlib.suppress(CredentialMissing):
+            await self._token.token_for(remote)
         return remote
 
-    def _check_worktree(self, worktree: Path) -> None:
-        """Refuse a working tree that would mirror the vault into itself or
-        take Coffer's own directory with it on the next ``reset --hard``."""
-        if self._coffer_dir is None and not self._protected_roots:
-            return
-        coffer_dir = self._coffer_dir or Path(DEFAULT_WORKTREE).expanduser().parent
-        reason = worktree_conflict(
-            worktree,
-            mirrored_roots=self._protected_roots,
-            coffer_dir=coffer_dir,
-            default_worktree=coffer_dir / Path(DEFAULT_WORKTREE).name,
-        )
-        if reason is not None:
-            raise BackupRemoteInvalid(reason)
+    async def pause(self, enabled: bool) -> SyncRemote | None:
+        current = await self.get_remote()
+        if current is None:
+            return None
+        changed = dataclasses.replace(current, enabled=enabled)
+        await asyncio.to_thread(self._remotes.put, changed)
+        return changed
 
     async def clear_remote(self) -> bool:
-        """Forget the remote. Idempotent, and it leaves the vault alone.
+        """Forget the remote. The vault and its history stay as they are."""
 
-        The pointer goes with it: a remote configured again later must run the
-        join detection rather than assume the old base still means anything.
-
-        Under the round's lock: a round in flight ends by writing the pointer,
-        and a clear that slipped in before that write would be undone by it —
-        the next ``adopt`` would then skip the join detection on the strength
-        of a base the user had asked to forget.
-        """
-        async with self._lock:
-            if await self._remotes.get() is None:
+        def apply() -> bool:
+            d = self._engine.d
+            if self._remotes.get() is None:
                 return False
-            await self._remotes.clear()
-            await self._state.set_pending(None)
-            # The pointer and the held paths go with it. Both describe a
-            # position in one remote's history; kept across a clear, they
-            # would let a later `adopt` skip the join detection entirely — the
-            # route-around that detection exists to prevent.
-            await self._state.clear_pointer()
-            await self._state.clear_holds()
-        return True
+            self._remotes.clear()
+            d.git.clear_remote()
+            d.git.set_carry_secret(False)
+            d.state.set_stop(None)
+            d.state.set_confirmed(None)
+            d.state.set_join_choices([])
+            d.state.set_joined(False)
+            if d.scratch is not None:
+                d.scratch.clear()
+            return True
 
-    async def last_run(self) -> ConvergeRun | None:
-        return await self._remotes.last_run()
+        done: bool = await self._locked(apply)
+        return done
 
-    async def joined(self) -> bool:
-        """Whether this machine has joined the remote — by the round's own
-        predicate (``ConvergeRound.is_joining``), so the status surface and
-        the next round can never disagree."""
-        remote = await self._remotes.get()
-        if remote is None or await self._state.pointer() is None:
-            return False
-        mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-        return not await self._round_factory(mirror, remote.branch).is_joining()
+    async def check_remote(
+        self, url: str, branch: str, credential_ref: str | None, username: str = DEFAULT_USERNAME
+    ) -> RemoteCheck:
+        """What the remote at ``url`` holds on ``branch``, without keeping it."""
+        from coffer.application.sync.views import RemoteCheck
+
+        candidate = SyncRemote(
+            url=url, branch=branch, credential_ref=credential_ref, username=username
+        )
+        try:
+            token = await self._token.token_for(candidate)
+        except CredentialMissing as exc:
+            return RemoteCheck("auth_failed", detail=str(exc))
+        try:
+            tip = await asyncio.to_thread(
+                self._probe.probe, candidate.url, candidate.branch, token, candidate.username
+            )
+            if tip is None:
+                return RemoteCheck("empty")
+            layout = await asyncio.to_thread(
+                self._probe.probe_layout, candidate.url, candidate.branch, token, candidate.username
+            )
+        except RemoteFailed as exc:
+            result = {
+                RemoteProblem.UNREACHABLE: "unreachable",
+                RemoteProblem.AUTH_FAILED: "auth_failed",
+            }.get(exc.problem, "failed")
+            return RemoteCheck(result, detail=exc.detail)
+        return RemoteCheck("vault" if layout is not None else "other", tip=tip, layout=layout)
+
+
+__all__ = ["RemoteMixin"]

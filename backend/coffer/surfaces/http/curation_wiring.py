@@ -71,14 +71,12 @@ async def curation_may_run(engine_config: InternalEngineConfigService, sync: Syn
 
     """
     config = await engine_config.get()
-    if not config.curate_runs_on(sync.registry.machine_id):
+    if not config.curate_runs_on(sync.service.machine_id):
         return False
-    # And not while a round is waiting on the user — a held confirmation or
-    # an unresolved conflict (spec vault-sync "Never overlap a curation pass and a
-    # round"). A confirmation is answered on the promise that re-deriving the
-    # round yields the diff the user was shown, and a conflict is a choice
-    # between two versions; a rewriter that moves documents underneath either
-    # breaks exactly that.
+    # And not while a round is waiting on the user — a stop on conflicts, a
+    # hold or a join's differing files (spec vault-sync "Never overlap a
+    # curation pass and a round"). Each is a question about specific files,
+    # and a rewriter that moves them underneath the person breaks exactly that.
     return not await sync.service.divergence_outstanding()
 
 
@@ -134,9 +132,8 @@ def start_curation_worker(
         is_enabled=is_enabled,
         read_interval=read_interval,
         list_collections=list_collections,
-        # The same lock a converge round takes. Both rewrite vault content, and
-        # an export caught half-way through a pass is a torn snapshot that git
-        # reads as a deliberate change.
+        # The same lock a sync round takes: a merge computed over a collection
+        # half-way through a pass would carry a torn rewrite to other machines.
         lock=sync.service.lock,
     )
     return asyncio.create_task(worker.run_forever())

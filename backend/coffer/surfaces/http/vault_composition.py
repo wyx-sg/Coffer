@@ -63,10 +63,7 @@ async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
     try:
         vault_repository().ensure()
     except GitMissing as exc:
-        raise RuntimeError(
-            "Coffer keeps its vault in a git repository and could not find git on "
-            "this machine; install git and start Coffer again"
-        ) from exc
+        raise RuntimeError(str(exc)) from exc
     machine = _machine_id()
     set_machine(lambda: machine)
     resources = FileResourceRepo(kinds)

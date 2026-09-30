@@ -10,6 +10,7 @@ CLI writing somewhere else entirely.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import subprocess
 from collections.abc import Iterator
@@ -19,6 +20,8 @@ import pytest
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
+from coffer.domain.vault.writers import WRITER_DAEMON, CommitMeta
+from coffer.infrastructure.vault.instance import vault_writer
 from coffer.surfaces.cli.main import app as cli_app
 
 from ._real_app import audit, boot, extract_json
@@ -223,21 +226,19 @@ def test_curation_owner_is_shown_set_and_cleared(daemon: TestClient) -> None:
 
 
 def _publish_machines(http: TestClient, home: pathlib.Path, *extra: str) -> None:
-    """Give the vault a remote (which is what makes a registry exist) and put
-    this machine plus ``extra`` in it by writing the files the registry is."""
+    """Give the vault a remote and put this machine plus ``extra`` in the
+    registry, by committing the descriptor files the registry is."""
     bare = home / "curate-owner-remote.git"
     subprocess.run(
         ["git", "init", "--bare", "-b", "main", str(bare)], check=True, capture_output=True
     )
     r = _run("sync", "remote", "set", str(bare))
     assert r.exit_code == 0, r.output
-    machines = home / ".coffer" / "sync" / "machines"
-    machines.mkdir(parents=True, exist_ok=True)
-    for machine_id in (_machine_id(http), *extra):
-        (machines / f"{machine_id}.yaml").write_text(
-            f"name: {machine_id}\nos: Linux\nhostname: h\ncoffer_version: 0\nagents: []\n",
-            encoding="utf-8",
-        )
+    meta = CommitMeta(writer=WRITER_DAEMON, operation="update", summary="Described machines")
+    with vault_writer().begin(meta) as txn:
+        for machine_id in (_machine_id(http), *extra):
+            doc = {"machine_id": machine_id, "format_version": 1, "name": machine_id, "agents": []}
+            txn.write(f"machines/{machine_id}.json", (json.dumps(doc) + "\n").encode(), None)
 
 
 def test_an_owner_no_machine_claims_is_reported_as_a_fault(

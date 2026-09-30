@@ -1,8 +1,9 @@
 // frontend/src/pages/sync/SyncRemoteFields.tsx
 //
-// The remote's form fields: where it converges, on what branch, how often,
-// which credential-store reference holds the push token, and whether
-// credential ciphertext rides along.
+// The remote's form fields: where it syncs, on what branch, how often, which
+// credential-store reference holds the push token, and whether the encrypted
+// secrets ride along — with how many that is, since that is the question the
+// switch really asks.
 //
 // Presentational — it owns no state and saves nothing. The card above it keeps
 // the draft, validates it, and persists it behind one Save button; this
@@ -19,12 +20,14 @@ import { MIN_INTERVAL_SECONDS, type FormErrors, type FormState } from "./syncRem
 
 interface Props {
   form: FormState;
+  /** How many encrypted secrets this vault holds — what the switch would push. */
+  secrets: number;
   setForm: (next: FormState) => void;
   errors: FormErrors;
   busy: boolean;
 }
 
-export function SyncRemoteFields({ form, setForm, errors, busy }: Props) {
+export function SyncRemoteFields({ form, secrets, setForm, errors, busy }: Props) {
   const { t } = useTranslation();
 
   return (
@@ -92,15 +95,17 @@ export function SyncRemoteFields({ form, setForm, errors, busy }: Props) {
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <Label htmlFor="sync-with-credentials">{t("sync.remote.includeCredentials")}</Label>
+        <Label htmlFor="sync-with-secret">{t("sync.remote.includeSecret")}</Label>
         <Switch
-          id="sync-with-credentials"
-          checked={form.includeCredentials}
+          id="sync-with-secret"
+          checked={form.includeSecret}
           disabled={busy}
-          onCheckedChange={(checked) => setForm({ ...form, includeCredentials: checked })}
+          onCheckedChange={(checked) => setForm({ ...form, includeSecret: checked })}
         />
       </div>
-      <p className="text-xs text-muted-foreground">{t("sync.remote.includeCredentialsHint")}</p>
+      <p className="text-xs text-muted-foreground">
+        {t("sync.remote.includeSecretHint", { count: secrets })}
+      </p>
     </>
   );
 }

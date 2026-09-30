@@ -13,8 +13,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     TIMESTAMP,
-    Boolean,
-    CheckConstraint,
     Index,
     Integer,
     String,
@@ -47,78 +45,14 @@ class AuditLogModel(Base):
     )
 
 
-class SyncRemoteModel(Base):
-    """The one sync remote, and the last converge round against it (spec vault-sync).
-
-    Single row by construction: ``id`` is pinned to 1 by a check constraint, so
-    "at most one sync remote" is a schema fact rather than a convention the
-    application has to remember. ``credential_ref`` holds a reference into the
-    credential store — never a secret, so this row is safe to read into an API
-    response or a log line without redaction.
-
-    The ``last_*`` columns are the most recent round, denormalised onto the
-    remote so a status surface reads it without touching the history: what a
-    user needs at a glance is whether it worked and what to do next. Every
-    round, including this one, is also appended to ``sync_runs``, and both
-    writes happen in the same transaction so the newest history row and these
-    columns can never describe different rounds.
-
-    The scalar columns are the ones a status surface reads directly; everything
-    else a ``ConvergeRun`` carries — the two diff summaries, the conflicted and
-    agent-resolved paths, the per-path failures, the locked refs and any held
-    confirmation — lives in ``last_run_json`` and is stored exactly once, so
-    the two can never disagree.
-    """
-
-    __tablename__ = "sync_remotes"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    url: Mapped[str] = mapped_column(String, nullable=False)
-    branch: Mapped[str] = mapped_column(String, nullable=False, default="main")
-    credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
-    include_credentials: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    worktree_path: Mapped[str] = mapped_column(String, nullable=False, default="~/.coffer/sync")
-    last_started_at: Mapped[datetime | None] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
-    )
-    last_run_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    last_status: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_join: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_error: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_commit: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_run_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-    __table_args__ = (
-        CheckConstraint("id = 1", name="ck_sync_remote_single_row"),
-        CheckConstraint("interval_seconds > 0", name="ck_sync_remote_interval_positive"),
-    )
-
-
 class SyncRunModel(Base):
-    """Every converge round this vault has run, newest last (spec vault-sync).
+    """Every sync round this machine has run (spec vault-sync; ADR
+    sync-applies-clean-merges-and-stops-on-any-conflict).
 
-    The remote's ``last_*`` columns answer "what happened just now"; this table
-    answers "what has been happening". They are different questions — a round
-    that failed once is noise, a round that has failed every hour since Tuesday
-    is the answer — and only the second one needs a row per round.
-
-    Machine-local, like the pointer: ``coffer.db`` is excluded from the bundle,
-    and a history that travelled would be another machine's account of rounds
-    this one never ran. Each machine keeps its own.
-
-    Same column-versus-payload split as the remote row, for the same reason:
-    what a table reads at a glance is a column, and everything else a
-    ``ConvergeRun`` carries — the two diff summaries, the conflicted and
-    agent-resolved paths, the per-path failures, the locked refs, any held
-    confirmation — is one JSON document written exactly once, so no column can
-    disagree with the payload beside it. The counts a row shows are derived
-    from that payload rather than stored a second time.
-
-    Swept by the retention worker (``sync_runs``), because a round runs on a
-    timer and an unbounded log of them is a leak, not a record.
+    Machine-local: a history that travelled would be another machine's
+    account of rounds this one never ran. The columns are what a list reads at
+    a glance; everything else a ``RoundRecord`` carries is ``payload_json``,
+    written once. Swept by the retention worker (``sync_runs``).
     """
 
     __tablename__ = "sync_runs"
@@ -140,56 +74,6 @@ class SyncRunModel(Base):
         # both are this index.
         Index("ix_sync_runs_finished_at", "finished_at"),
     )
-
-
-class ConvergenceStateModel(Base):
-    """This machine's convergence pointer and any held confirmation.
-
-    Machine-local and **never synced** (spec vault-sync "Keep machine-local
-    state out of the repository"): ``coffer.db`` is excluded from the bundle,
-    which is most of why this state belongs in SQLite rather than beside the
-    working tree. A pointer that travelled would be a different machine's claim
-    about what this vault has absorbed, and the whole diff-based apply rests on
-    it being this one's.
-
-    Single row, pinned the same way the remote is.
-    """
-
-    __tablename__ = "sync_convergence_state"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    #: The commit this vault has provably absorbed; NULL means "joining".
-    pointer: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: The round the deletion guard is holding, serialized. Held rather than
-    #: re-derived: the round had already merged, and possibly had an agent
-    #: resolve conflicts, by the time the guard tripped.
-    pending_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-    __table_args__ = (CheckConstraint("id = 1", name="ck_convergence_state_single_row"),)
-
-
-class SyncHeldPathModel(Base):
-    """One path the export must not publish as a deletion (spec vault-sync).
-
-    Two sets in one table, told apart by ``applicable``. A path the vault
-    failed to absorb is *pending*: retried next round, reported as an error,
-    released on success. A path that cannot apply on this machine at all — an
-    ``agent`` whose ``config_dir`` does not exist here — is *not applicable*:
-    preserved identically, but never retried and never reported, because a
-    fact about this machine should not become an error the user learns to
-    ignore.
-
-    Either way the exporter must leave the path in the working tree. Deleting
-    it would turn "this vault could not absorb it" into "the user deleted it",
-    which is the confusion the whole design exists to prevent.
-    """
-
-    __tablename__ = "sync_held_paths"
-
-    path: Mapped[str] = mapped_column(String, primary_key=True)
-    applicable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    held_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
 # The usage-metering tables (migration 0110) live in their own module to keep

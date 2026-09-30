@@ -16,8 +16,13 @@ these tables; this revision is the database's half of the move:
    An audit row whose resource was deleted keeps its label and names no uid;
    a channel row always had its channel (the foreign key cascaded).
 2. Every table whose state moved out is dropped, ``resources`` last.
-
-The sync tables are left to the sync rewrite.
+3. Sync (ADR sync-applies-clean-merges-and-stops-on-any-conflict): the remote
+   row moved to ``local/sync/remote.json`` before this revision; the
+   convergence pointer is the vault repository's ``HEAD`` and the retry set
+   has no successor, so ``sync_remotes``, ``sync_convergence_state`` and
+   ``sync_held_paths`` are dropped. ``sync_runs`` stays with its columns, and
+   its rows go: their payloads describe rounds of the retired translation
+   layer, in a shape the new round record does not read.
 
 Downgrade recreates the dropped tables empty and puts integer columns back,
 NULL where the audit trail cannot be mapped back and without the channel rows
@@ -54,6 +59,9 @@ _DROPPED = (
     "secret_boundary_settings",
     "internal_engine_config",
     "retention_policies",
+    "sync_remotes",
+    "sync_convergence_state",
+    "sync_held_paths",
     "resources",
 )
 
@@ -177,6 +185,7 @@ def upgrade() -> None:
     _rekey_channel_table("channel_outbox", _OUTBOX, _OUTBOX_COLUMNS, _OUTBOX_INDEXES)
     for table in _DROPPED:
         op.execute(f"DROP TABLE IF EXISTS {table}")
+    op.execute("DELETE FROM sync_runs")
 
 
 # --- downgrade: the 0116 shape, empty ------------------------------------------
@@ -251,6 +260,21 @@ _RECREATE = (
     checked_at TIMESTAMP NOT NULL, PRIMARY KEY (resource_uid))""",
     """CREATE TABLE mcp_tool_reach (resource_uid VARCHAR NOT NULL, tool VARCHAR NOT NULL,
     agents_json TEXT NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (resource_uid, tool))""",
+    """CREATE TABLE sync_remotes (id INTEGER NOT NULL, url VARCHAR NOT NULL,
+    branch VARCHAR DEFAULT 'main' NOT NULL, credential_ref VARCHAR,
+    include_credentials BOOLEAN DEFAULT 0 NOT NULL,
+    interval_seconds INTEGER DEFAULT '3600' NOT NULL,
+    enabled BOOLEAN DEFAULT 1 NOT NULL, worktree_path VARCHAR DEFAULT '~/.coffer/sync' NOT NULL,
+    last_run_at TIMESTAMP, last_status VARCHAR, last_error VARCHAR, last_commit VARCHAR,
+    updated_at TIMESTAMP NOT NULL, last_started_at TIMESTAMP, last_join VARCHAR,
+    last_run_json TEXT, PRIMARY KEY (id),
+    CONSTRAINT ck_sync_remote_single_row CHECK (id = 1),
+    CONSTRAINT ck_sync_remote_interval_positive CHECK (interval_seconds > 0))""",
+    """CREATE TABLE sync_convergence_state (id INTEGER NOT NULL, pointer VARCHAR,
+    pending_json TEXT, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (id),
+    CONSTRAINT ck_convergence_state_single_row CHECK (id = 1))""",
+    """CREATE TABLE sync_held_paths (path VARCHAR NOT NULL, applicable BOOLEAN DEFAULT 1 NOT NULL,
+    held_at TIMESTAMP NOT NULL, PRIMARY KEY (path))""",
 )
 
 

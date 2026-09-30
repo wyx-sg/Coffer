@@ -39,7 +39,7 @@ function machine(id: string, name: string, isSelf: boolean) {
     os: "darwin",
     hostname: name,
     coffer_version: "0.5.0",
-    last_converged_on: null,
+    last_round_at: null,
     key_matches: true,
     agents: [],
     is_self: isSelf,

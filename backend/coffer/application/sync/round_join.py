@@ -12,7 +12,12 @@ from __future__ import annotations
 import json
 from collections import Counter
 
-from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
+from coffer.application.sync.round_engine import (
+    PROBLEM_STATUS,
+    Recorder,
+    RoundEngine,
+    layout_refusal,
+)
 from coffer.application.sync.round_trees import identity_conflicts, settle_machines
 from coffer.domain.sync.joins import AreaCount, JoinKind, JoinPreview
 from coffer.domain.sync.remote import SyncRemote
@@ -52,7 +57,7 @@ def returning_base(engine: RoundEngine, tip: str) -> str | None:
 def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinPreview:
     d = engine.d
     d.git.ensure()
-    d.git.set_remote(remote.url)
+    d.git.set_remote(remote.url, remote.username)
     d.git.set_carry_secret(remote.include_secret)
     d.writer.settle()
     local = d.git.head() or ""
@@ -60,6 +65,9 @@ def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinP
     mine = _content(d.git.files(local))
     if tip is None:
         return JoinPreview(JoinKind.EMPTY, None, pushed=_areas(sorted(mine)))
+    refused = layout_refusal(d, tip)
+    if refused is not None:
+        return JoinPreview(JoinKind.NEW, tip, refused=refused[1])
     newest = d.git.log(start=tip, limit=1)
     labels = d.labels(tip)
     pushed_by = labels.get(newest[0].meta.machine or "", newest[0].meta.machine) if newest else None
@@ -110,6 +118,10 @@ def join(engine: RoundEngine, remote: SyncRemote, token: str | None) -> RoundRec
         except RemoteFailed as exc:
             return rec(PROBLEM_STATUS[exc.problem], detail=exc.detail)
         local = d.git.head() or ""
+        if shown.refused is not None and shown.remote_tip is not None:
+            refused = layout_refusal(d, shown.remote_tip)
+            if refused is not None:
+                return rec(refused[0], detail=refused[1])
         d.state.set_joined(True)
         if shown.kind is JoinKind.EMPTY:
             return engine._push(rec, remote, token, local, None)
