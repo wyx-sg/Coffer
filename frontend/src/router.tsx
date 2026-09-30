@@ -78,14 +78,8 @@ const pageRoutes: RouteObject[] = [
   { path: "chat", element: <ChatRedirect /> },
   { path: "chat/:id", element: <ChatRedirect /> },
   { path: "mcp-servers", element: <ResourcesPage /> },
-  {
-    path: "mcp-servers/:name",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
-  {
-    path: "mcp-servers/:name/:tab",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
+  { path: "mcp-servers/:name", element: <ResourcesPage /> },
+  { path: "mcp-servers/:name/:tab", element: <ResourcesPage /> },
   // Legacy route — this surface used to live at /resources.
   { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
   {

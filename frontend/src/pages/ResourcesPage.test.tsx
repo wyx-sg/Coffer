@@ -1,58 +1,81 @@
 // frontend/src/pages/ResourcesPage.test.tsx
 //
-// The MCP-servers surface. It scopes its query to kind=mcp_server SERVER-SIDE
-// rather than fetching every resource and filtering client-side off the shared
-// kind registry — the latter silently broadened as `memory`/`knowledge_base`
-// registered their own UIs, leaking those stores into this list. We mock the
-// data hook + the two heavy MCP children so the test asserts ResourcesPage's
-// own branching (skeleton / error / empty-welcome / populated) and, crucially,
-// that it requests only mcp_server resources.
-
-import { afterEach, describe, expect, test, vi } from "vitest";
-import { acceptance } from "@/test/acceptance";
-import { render, screen } from "@testing-library/react";
+// The MCP servers page: the list beside the open server. It scopes its query
+// to kind=mcp_server SERVER-SIDE rather than fetching every resource and
+// filtering client-side (which once leaked memory and knowledge stores into
+// this list). The data hooks are mocked at the network boundary.
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
-import { ResourcesPage } from "./ResourcesPage";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+
+import { acceptance } from "@/test/acceptance";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ToastProvider } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
+import { ResourcesPage } from "./ResourcesPage";
 
 vi.mock("@/lib/hooks/useResources", () => ({ useResources: vi.fn() }));
-vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
-  AddMcpServerDialog: () => <button>add mcp server</button>,
+vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({
+    data: [
+      { uid: "a-cc", type: "claude_code", display_name: "Claude Code" },
+      { uid: "a-cx", type: "codex", display_name: "Codex" },
+    ],
+  }),
 }));
-vi.mock("@/components/mcp/McpServersTable", () => ({
-  McpServersTable: ({
-    resources,
-    isLoading,
-  }: {
-    resources: ResourceOut[];
-    isLoading?: boolean;
-  }) => (
-    <div data-testid="mcp-table" data-loading={isLoading ? "true" : "false"}>
-      {resources.map((r) => (
-        <span key={r.uid}>{r.name}</span>
-      ))}
-    </div>
+vi.mock("@/lib/hooks/useAgentDirectMcpEntries", () => ({
+  useAgentDirectMcpEntries: () => ({ groups: [], count: 0, isLoading: false }),
+}));
+vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
+  AddMcpServerDialog: ({ open, initialMode }: { open: boolean; initialMode?: string }) =>
+    open ? <div role="dialog">{`add dialog: ${initialMode}`}</div> : null,
+}));
+vi.mock("@/components/mcp/server/McpServerPane", () => ({
+  McpServerPane: ({ resource }: { resource: ResourceOut }) => (
+    <div data-testid="pane">{`pane: ${resource.name}`}</div>
   ),
+}));
+
+const statusOf: Record<string, unknown> = {};
+vi.mock("@/lib/api/client", () => ({
+  getApiClient: () => ({
+    GET: vi.fn(async (path: string, opts: { params: { path: { uid: string } } }) => {
+      const uid = opts.params.path.uid;
+      if (path.endsWith("/status")) return { data: statusOf[uid] ?? { status: "unknown" } };
+      if (path.endsWith("/tiering"))
+        return {
+          data: {
+            enabled: true,
+            budget: 50,
+            catalogue_size: 3,
+            listed_count: 3,
+            tool_count: 3,
+            listed: ["a", "b", "c"],
+            behind_search: [],
+          },
+        };
+      return { data: undefined, error: { error: { code: "NOT_FOUND", message: "x" } } };
+    }),
+  }),
 }));
 
 const { useResources } = await import("@/lib/hooks/useResources");
 const useResourcesMock = vi.mocked(useResources);
 
-function wrap(ui: React.ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return (
-    <QueryClientProvider client={qc}>
-      <MemoryRouter>{ui}</MemoryRouter>
-    </QueryClientProvider>
-  );
-}
-
-/** A row carries both halves: the uid it is keyed and addressed by, and the
- *  name the reader sees. */
-function resource(uid: string, name: string, kind: string): ResourceOut {
-  return { uid, name, kind, config: {} } as unknown as ResourceOut;
+function server(uid: string, name: string, extra: Partial<ResourceOut> = {}): ResourceOut {
+  return {
+    uid,
+    name,
+    kind: "mcp_server",
+    title: null,
+    enabled: true,
+    scope: null,
+    config: { transport: { type: "stdio", command: "npx", args: ["-y", name] } },
+    ...extra,
+  } as unknown as ResourceOut;
 }
 
 function stubQuery(opts: { data?: ResourceOut[]; isPending?: boolean; error?: unknown }) {
@@ -60,39 +83,67 @@ function stubQuery(opts: { data?: ResourceOut[]; isPending?: boolean; error?: un
     data: opts.data,
     isPending: opts.isPending ?? false,
     error: opts.error ?? null,
+    refetch: vi.fn(),
   } as unknown as ReturnType<typeof useResources>);
 }
 
+const where = { url: "" };
+function Probe() {
+  const loc = useLocation();
+  where.url = loc.pathname + loc.search;
+  return null;
+}
+
+function renderAt(path = "/mcp-servers") {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <TooltipProvider>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <Routes>
+              {["/mcp-servers", "/mcp-servers/:name", "/mcp-servers/:name/:tab"].map((p) => (
+                <Route
+                  key={p}
+                  path={p}
+                  element={
+                    <>
+                      <ResourcesPage />
+                      <Probe />
+                    </>
+                  }
+                />
+              ))}
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+}
+
 describe("ResourcesPage", () => {
+  beforeEach(() => {
+    for (const k of Object.keys(statusOf)) delete statusOf[k];
+  });
   afterEach(() => vi.clearAllMocks());
 
   test("scopes the query to mcp_server (does not list every kind)", () => {
-    // The regression guard: kind-filtering is delegated to the backend, so a
-    // newly-registered kind (memory, knowledge_base) can never leak in.
     stubQuery({ data: [] });
-    render(wrap(<ResourcesPage />));
+    renderAt();
     expect(useResourcesMock).toHaveBeenCalledWith("mcp_server");
   });
 
-  test("keeps the header up and hands the table isLoading while the query is pending", () => {
+  test("keeps the header up over skeleton rows while the query is pending", () => {
     stubQuery({ isPending: true });
-    render(wrap(<ResourcesPage />));
-    // No bare "Loading…" card: the title stays mounted over a loading table.
+    renderAt();
     expect(screen.getByRole("heading", { name: /mcp servers/i })).toBeInTheDocument();
-    expect(screen.getByTestId("mcp-table")).toHaveAttribute("data-loading", "true");
     expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-  });
-
-  test("shows the error card with the translated message when the query errors", () => {
-    stubQuery({ error: new ApiError("BOOM", "kaboom") });
-    render(wrap(<ResourcesPage />));
-    expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
-    expect(screen.getByText(/kaboom/i)).toBeInTheDocument();
   });
 
   acceptance("web-ui", "a server error never reads as an unexpected error", () => {
     stubQuery({ error: new ApiError("INTERNAL_ERROR", "internal error") });
-    const { container } = render(wrap(<ResourcesPage />));
+    const { container } = renderAt();
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
     // A readable message that says where to look, not a shrug.
     expect(screen.getByText(/activity/i)).toBeInTheDocument();
@@ -100,23 +151,92 @@ describe("ResourcesPage", () => {
     expect(container.textContent).not.toContain("INTERNAL_ERROR");
   });
 
-  test("shows the welcome panel (and no table) when there are no servers", () => {
+  acceptance("web-ui", "empty resources list renders a welcome view", () => {
     stubQuery({ data: [] });
-    render(wrap(<ResourcesPage />));
-    expect(screen.queryByTestId("mcp-table")).not.toBeInTheDocument();
+    renderAt();
+    const welcome = screen.getByTestId("mcp-welcome");
+    expect(within(welcome).getByText(/no mcp servers yet/i)).toBeInTheDocument();
+    fireEvent.click(within(welcome).getByRole("button", { name: /add server/i }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("add dialog: paste");
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("listitem")).toBeNull();
   });
 
-  test("renders the table (with the Add action) for the returned servers", () => {
+  test("the page carries one Add server action", () => {
+    stubQuery({ data: [server("u1", "github")] });
+    renderAt();
+    const adds = screen.getAllByRole("button", { name: /add server/i });
+    expect(adds).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /paste json|import json/i })).toBeNull();
+  });
+
+  test("the list groups servers by what needs the user, each with its reason", async () => {
+    statusOf.u1 = {
+      status: "failing",
+      last_error: "Connection refused",
+      failing_since: new Date().toISOString(),
+    };
+    statusOf.u2 = {
+      status: "healthy",
+      missing_secret: "Authorization",
+      missing_secret_ref: "LINEAR_API_KEY",
+    };
+    statusOf.u3 = { status: "failing", missing_runner: "uvx" };
+    statusOf.u4 = { status: "healthy" };
     stubQuery({
       data: [
-        resource("u-srv-a", "srv-a", "mcp_server"),
-        resource("u-srv-b", "srv-b", "mcp_server"),
+        server("u1", "sentry"),
+        server("u2", "linear"),
+        server("u3", "duckdb"),
+        server("u4", "github", { scope: { agents: ["a-cc"] } } as Partial<ResourceOut>),
+        server("u5", "postgres", { enabled: false }),
       ],
     });
-    render(wrap(<ResourcesPage />));
-    expect(screen.getByTestId("mcp-table")).toBeInTheDocument();
-    expect(screen.getByText("srv-a")).toBeInTheDocument();
-    expect(screen.getByText("srv-b")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add mcp server/i })).toBeInTheDocument();
+    renderAt();
+    const attention = await screen.findByRole("region", { name: "Needs attention" });
+    await within(attention).findByText(/Connection refused · since/);
+    expect(within(attention).getByText("Secret missing · LINEAR_API_KEY")).toBeInTheDocument();
+    expect(within(attention).getByText("uvx is not installed")).toBeInTheDocument();
+    const healthy = screen.getByRole("region", { name: "Healthy" });
+    expect(within(healthy).getByText("github")).toBeInTheDocument();
+    await within(healthy).findByText("stdio · 3 tools");
+    const off = screen.getByRole("region", { name: "Off" });
+    expect(within(off).getByText("postgres")).toBeInTheDocument();
+  });
+
+  // Base-spec scenario: the row is a link, so a click or Enter opens the item.
+  acceptance("web-ui", "a row click opens the item's detail page", async () => {
+    stubQuery({ data: [server("u1", "github"), server("u2", "linear")] });
+    renderAt("/mcp-servers/github/tools");
+    expect(await screen.findByTestId("pane")).toHaveTextContent("pane: github");
+    fireEvent.click(screen.getByRole("link", { name: /linear/ }));
+    // The open tab is kept when another server is chosen.
+    expect(where.url).toBe("/mcp-servers/linear/tools");
+    await waitFor(() => expect(screen.getByTestId("pane")).toHaveTextContent("pane: linear"));
+  });
+
+  test("an old uid address redirects to the name address, keeping the tab", async () => {
+    stubQuery({ data: [server("u-github", "github")] });
+    renderAt("/mcp-servers/u-github?tab=tools");
+    await waitFor(() => expect(where.url).toBe("/mcp-servers/github/tools"));
+  });
+
+  test("filtering narrows the list by name or command", async () => {
+    stubQuery({ data: [server("u1", "github"), server("u2", "linear")] });
+    renderAt();
+    fireEvent.change(screen.getByRole("textbox", { name: /filter servers/i }), {
+      target: { value: "lin" },
+    });
+    expect(screen.queryByText("github")).toBeNull();
+    expect(screen.getByText("linear")).toBeInTheDocument();
+  });
+
+  test("ticking rows shows the selection bar with the reach choice and Delete", async () => {
+    stubQuery({ data: [server("u1", "github"), server("u2", "linear")] });
+    renderAt();
+    fireEvent.click(screen.getByRole("checkbox", { name: /github/ }));
+    const bar = screen.getByRole("region", { name: /selected mcp servers/i });
+    expect(within(bar).getByRole("button", { name: /reach/i })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: /delete/i })).toBeInTheDocument();
   });
 });

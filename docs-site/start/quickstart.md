@@ -130,7 +130,7 @@ OK  (993 ms)
 
 The first test can take a few seconds while `npx` downloads the package. An agent sees each tool as `filesystem__<tool>`. **Name length** counts the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a name over 64 characters is flagged with `!`, because model provider APIs refuse it.
 
-**In the web UI:** open **MCP servers**, click **Add MCP server**, and paste the server's JSON in the standard `mcpServers` format. The path must be absolute:
+**In the web UI:** open **MCP servers**, click **Add server**, and paste the server's JSON in the standard `mcpServers` format (a command line or a URL works too). The path must be absolute:
 
 ```json
 {

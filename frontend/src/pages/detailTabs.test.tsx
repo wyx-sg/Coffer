@@ -124,9 +124,8 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
       serverUid="u-1"
       basePath="/mcp-servers/srv"
       capabilities={undefined}
-      config={{ transport: { type: "stdio", command: "npx" } }}
-      isCapsPending={false}
-      onRefresh={vi.fn()}
+      overview={<div>server overview</div>}
+      tools={<div>server tools</div>}
     />,
   );
   const mcpStrip = strip();
@@ -155,9 +154,8 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
       serverUid="u-1"
       basePath="/mcp-servers/srv"
       capabilities={undefined}
-      config={{ transport: { type: "stdio", command: "npx", args: ["-y", "srv"] } }}
-      isCapsPending={false}
-      onRefresh={vi.fn()}
+      overview={<div>npx -y srv</div>}
+      tools={<div>server tools</div>}
     />,
   );
 
@@ -168,7 +166,8 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
       .getAllByRole("tab")
       .map((t) => t.textContent),
   ).toEqual(["Overview", "Tools", "Resources", "Prompts", "Invocations"]);
-  // The Overview pane is what is showing: what the server runs, not a toggle list.
+  // The Overview pane is what is showing, not the tools list.
   expect(screen.getByText("npx -y srv")).toBeVisible();
+  expect(screen.queryByText("server tools")).not.toBeInTheDocument();
   expect(screen.queryByText(/capability list/)).not.toBeInTheDocument();
 });

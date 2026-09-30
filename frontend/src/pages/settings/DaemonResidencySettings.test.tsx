@@ -64,6 +64,9 @@ test("nothing is clickable until the daemon has answered", () => {
   expect(screen.getByRole("switch", { name: /start at login/i })).toBeDisabled();
 });
 
+// The requirement behind this marker moves to the Daemon tab with change
+// revise-web-ui-ia ("the settings daemon tab sets when the daemon runs"); the
+// marker is renamed when the change is archived. The row now lives there.
 acceptance("web-ui", "the general tab sets when the daemon runs", async () => {
   getMock.mockResolvedValue({
     data: { login_service_supported: true, login_service_installed: false },
@@ -77,7 +80,7 @@ acceptance("web-ui", "the general tab sets when the daemon runs", async () => {
     .mockResolvedValueOnce({ error: { error: { code: "INTERNAL_ERROR", message: "nope" } } });
 
   render(wrap(<DaemonResidencySettings />));
-  expect(await screen.findByText("Coffer's daemon")).toBeInTheDocument();
+  expect(await screen.findByText("Start at login")).toBeInTheDocument();
 
   // The card offers no idle-window or stand-down control: the switch is its
   // one control.

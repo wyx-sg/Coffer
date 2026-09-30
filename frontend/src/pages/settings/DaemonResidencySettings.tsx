@@ -1,25 +1,32 @@
 // frontend/src/pages/settings/DaemonResidencySettings.tsx
 //
-// Settings → General: whether Coffer's daemon starts at login.
+// Settings → Daemon: whether Coffer's daemon starts at login — the Start at
+// login row of the Startup section (spec web-ui "Set when the daemon runs on
+// the Daemon tab").
 //
 // An agent calls Coffer from a terminal, an editor or a chat channel, mostly
 // with no window open anywhere, so a daemon that exists only because something
 // started it is down exactly when it is wanted — and whoever asks first pays
 // the cold start. Starting it at login fixes that. Nothing ends it on its own:
 // the daemon never stands down for being idle, so there is no idle window to
-// offer here (spec web-ui "Let the user choose when the daemon runs").
+// offer here.
 //
 // The response says what is actually true afterwards rather than what was
 // asked for.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { useDaemonResidency, useSetDaemonResidency } from "@/lib/hooks/useDaemonResidency";
 
-export function DaemonResidencySettings() {
+interface Props {
+  /** The daemon cannot be reached: the switch cannot change. */
+  disabled?: boolean;
+}
+
+export function DaemonResidencySettings({ disabled = false }: Props) {
   const { t } = useTranslation();
   const { data } = useDaemonResidency();
   const save = useSetDaemonResidency();
@@ -52,32 +59,25 @@ export function DaemonResidencySettings() {
   const unsupported = data?.login_service_supported === false;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.daemon.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">{t("settings.daemon.autostart")}</p>
-            <p className="text-sm text-muted-foreground">
-              {unsupported
-                ? t("settings.daemon.autostartUnsupported")
-                : t("settings.daemon.autostartHelp")}
-            </p>
-          </div>
-          <Switch
-            checked={autostart}
-            disabled={!loaded || unsupported || save.isPending}
-            onCheckedChange={commit}
-            aria-label={t("settings.daemon.autostart")}
-          />
-        </div>
-
-        {save.error ? (
-          <p className="text-sm text-destructive">{translateApiError(t, save.error)}</p>
-        ) : null}
-      </CardContent>
-    </Card>
+    <SettingRow
+      label={t("settings.daemon.autostart")}
+      description={
+        unsupported ? t("settings.daemon.autostartUnsupported") : t("settings.daemon.autostartHelp")
+      }
+      status={
+        save.error ? (
+          <span className="text-xs text-danger" role="alert">
+            {translateApiError(t, save.error)}
+          </span>
+        ) : null
+      }
+    >
+      <Switch
+        checked={autostart}
+        disabled={disabled || !loaded || unsupported || save.isPending}
+        onCheckedChange={commit}
+        aria-label={t("settings.daemon.autostart")}
+      />
+    </SettingRow>
   );
 }

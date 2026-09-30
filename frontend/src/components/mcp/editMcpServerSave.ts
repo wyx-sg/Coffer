@@ -42,7 +42,7 @@ export function credentialRefsOf(config: unknown): Record<string, string> {
 /** The config JSON minus the fields with their own controls — credentials and
  * the two timeouts. Both are merged back in on save, so the textarea never
  * competes with a structured field over the same key. */
-export function configWithoutOwnControls(config: unknown): string {
+function configWithoutOwnControls(config: unknown): string {
   const clone = JSON.parse(JSON.stringify(config ?? {})) as Record<string, unknown>;
   const transport = clone.transport as Record<string, unknown> | undefined;
   if (transport) delete transport.credential_refs;
@@ -51,9 +51,61 @@ export function configWithoutOwnControls(config: unknown): string {
   return JSON.stringify(clone, null, 2);
 }
 
+/** The transport fields the edit form shows as fields: where the server is
+ *  reached (URL, or command + arguments) and its plain, non-secret values
+ *  (a stdio server's `env`, an HTTP server's `headers`). */
+export interface TransportFields {
+  type: "stdio" | "http";
+  url: string;
+  command: string;
+  args: string[];
+  plain: { key: string; value: string }[];
+}
+
+function stringMap(raw: unknown): { key: string; value: string }[] {
+  if (!raw || typeof raw !== "object") return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter(([, v]) => typeof v === "string")
+    .map(([key, value]) => ({ key, value: value as string }));
+}
+
+export function transportFieldsOf(config: unknown): TransportFields {
+  const tr = ((config as Record<string, unknown> | null)?.transport ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const http = tr.type === "http";
+  return {
+    type: http ? "http" : "stdio",
+    url: typeof tr.url === "string" ? tr.url : "",
+    command: typeof tr.command === "string" ? tr.command : "",
+    args: Array.isArray(tr.args) ? tr.args.map(String) : [],
+    plain: stringMap(http ? tr.headers : tr.env),
+  };
+}
+
+/** The config JSON the save path takes: the stored config (minus the fields
+ *  with their own controls) with the form's transport fields written over it,
+ *  so every key the form does not show is kept as it was. */
+export function configTextFrom(config: unknown, fields: TransportFields): string {
+  const base = JSON.parse(configWithoutOwnControls(config)) as Record<string, unknown>;
+  const transport = { ...((base.transport as Record<string, unknown>) ?? {}) };
+  const plain = Object.fromEntries(
+    fields.plain.filter((r) => r.key.trim() !== "").map((r) => [r.key.trim(), r.value]),
+  );
+  if (fields.type === "http") {
+    Object.assign(transport, { url: fields.url.trim(), headers: plain });
+  } else {
+    Object.assign(transport, { command: fields.command.trim(), args: fields.args, env: plain });
+  }
+  return JSON.stringify({ ...base, transport });
+}
+
 export interface SaveArgs {
   resource: ResourceOut;
   description: string;
+  /** The title to store; left out, the stored title is not touched. */
+  title?: string;
   configText: string;
   creds: CredRow[];
   timeouts: Timeouts;
@@ -66,13 +118,14 @@ export async function saveMcpServerEdit({
   configText,
   creds,
   timeouts,
+  title,
   t,
 }: SaveArgs): Promise<{ orphanWarnings: string[]; awaitingApproval: boolean }> {
   let config: Record<string, unknown>;
   try {
     config = JSON.parse(configText) as Record<string, unknown>;
   } catch {
-    throw new Error(t("mcp.import.errInvalidJson"));
+    throw new Error(t("mcp.edit.errInvalidConfig"));
   }
   const client = getApiClient();
 
@@ -132,6 +185,7 @@ export async function saveMcpServerEdit({
     params: { path: { uid: resource.uid } },
     body: {
       description: description.trim() || null,
+      ...(title === undefined ? {} : { title: title.trim() || null }),
       config: withTimeouts({ ...config, transport }, timeouts),
     },
   });

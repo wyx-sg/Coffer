@@ -54,7 +54,7 @@ describe("useImportMcpServers", () => {
     const created = new Map<string, string>();
     let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      imported = await result.current.mutateAsync({ servers: [SERVER], created });
+      imported = (await result.current.mutateAsync({ servers: [SERVER], created })).created;
     });
 
     expect(postMock).toHaveBeenCalledWith(
@@ -82,10 +82,11 @@ describe("useImportMcpServers", () => {
 
     let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      imported = await result.current.mutateAsync({
+      const report = await result.current.mutateAsync({
         servers: [SERVER],
         created: new Map([["fs", "u-filesystem"]]),
       });
+      imported = report.created;
     });
     expect(postMock).not.toHaveBeenCalled();
     // A retry that re-POSTs nothing must still say where the server is, or the

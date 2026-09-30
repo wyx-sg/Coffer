@@ -102,12 +102,18 @@ export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
 
 export const mcpCapabilitiesKey = (serverUid: string) =>
   ["mcp", "capabilities", serverUid] as const;
-export const mcpStatusKey = (serverUid: string) => ["mcp", "status", serverUid] as const;
+/** Prefix of every server's status: a change to any MCP server refreshes them. */
+const mcpStatusesKey = ["mcp", "status"] as const;
+export const mcpStatusKey = (serverUid: string) => [...mcpStatusesKey, serverUid] as const;
 export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unknown>) =>
   ["mcp", "invocations", serverUid, filters] as const;
 /** The gateway-wide invocation log (every server) — the Activity page. */
 export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
   ["mcp", "invocations", "all", filters] as const;
+/** The server page's reads: the last 24 hours, its own log, the tiering split. */
+export const mcpSummaryKey = (serverUid: string) => ["mcp", "summary", serverUid] as const;
+export const mcpLogKey = (serverUid: string) => ["mcp", "log", serverUid] as const;
+export const mcpTieringKey = (serverUid: string) => ["mcp", "tiering", serverUid] as const;
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
@@ -144,6 +150,9 @@ export const daemonLogsKey = (filters: Record<string, unknown>) =>
 export const daemonVersionSkewKey = (version: string | undefined) =>
   ["daemon", "version-skew", version] as const;
 export const daemonResidencyKey = ["daemon", "residency"] as const;
+export const daemonPortKey = ["daemon", "port"] as const;
+/** Settings > Data: what Coffer keeps on this machine, by kind. */
+export const storageKey = ["storage"] as const;
 export const daemonFeaturesKey = ["daemon", "features"] as const;
 
 // --- fs — the loopback daemon's view of the local filesystem ---------------
@@ -262,6 +271,8 @@ export function ownListKeyForKind(kind: string): QueryKey | undefined {
       return memoryPartitionsKey;
     case "channel":
       return channelsKey;
+    case "mcp_server":
+      return mcpStatusesKey;
     default:
       return undefined;
   }

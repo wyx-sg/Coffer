@@ -1,92 +1,243 @@
 // frontend/src/components/mcp/AddMcpServerDialog.tsx
-import { useRef, useState } from "react";
+// The Add server dialog (design 4.1; spec web-ui "Add MCP servers from one
+// paste box"). Controlled: the page renders the Add server button and mounts
+// this. Steps: the paste box → the prefilled form (one server) or the review
+// (several), plus Import from your agents. It adds MCP servers only.
+//
+// Adding registers each server, then writes its secrets, then its reach
+// (importMcpServers.ts). One server added → its page, where it is tested once;
+// several → stay, toast, test each in the background. A secret the daemon
+// holds for approval (202) is said before the dialog lets go.
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
-import type { ParsedServer } from "./jsonImport";
-import { Button } from "@/components/ui/button";
+
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { useImportMcpServers } from "@/lib/hooks/useMcpServerMutations";
-import { BatchImportError } from "./importMcpServers";
-import { JsonImportPanel } from "./JsonImportPanel";
+import { useToast } from "@/components/ui/toast";
+import { agentTypeLabel } from "@/lib/agents/display";
+import { useAgentDirectMcpEntries } from "@/lib/hooks/useAgentDirectMcpEntries";
+import { useAgents } from "@/lib/hooks/useAgents";
+import { useImportMcpServers, useTestAddedServers } from "@/lib/hooks/useMcpServerMutations";
+import { useResources } from "@/lib/hooks/useResources";
+import type { ParsedServer } from "@/lib/mcp/pasteParse";
+import { ApprovalStep } from "./add/ApprovalStep";
+import { ImportFromAgents } from "./add/ImportFromAgents";
+import { PasteStep } from "./add/PasteStep";
+import { ReviewStep } from "./add/ReviewStep";
+import { ServerForm } from "./add/ServerForm";
+import type { FailedServer, NewServer, ReachIntent } from "./importMcpServers";
 
-/**
- * "Add MCP server" modal — paste the standard `mcpServers` JSON, review
- * which env values are secrets, and import a batch (importMcpServers.ts
- * does the registering and rolling back). A partial failure keeps the
- * servers that did register and lists every one that did not, one line each.
- */
-export function AddMcpServerDialog() {
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Which view the dialog opens on; the paste box by default. */
+  initialMode?: "paste" | "importAgents";
+}
+
+type Step =
+  | { kind: "paste" }
+  | { kind: "form"; server: ParsedServer; seq: number }
+  | { kind: "review"; servers: ParsedServer[]; seq: number }
+  | { kind: "importAgents" }
+  | { kind: "approval"; names: string[]; then: { added: Added; reach: ReachIntent } | null };
+
+interface Added {
+  name: string;
+  uid: string;
+}
+
+const emptyServer = (transportType: "stdio" | "http"): ParsedServer => ({
+  name: "",
+  transportType,
+  command: "",
+  args: [],
+  url: "",
+  env: [],
+});
+
+export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [serverErrors, setServerErrors] = useState<string[]>([]);
-  // What a prior attempt of THIS import session already registered — name to
-  // uid — so a retry after a partial failure re-attempts only the servers that
-  // failed instead of re-POSTing the created ones (which would 409 "already
-  // exists"), and so a retry that ends with one server still knows where it is.
+  const { toast } = useToast();
+  const [step, setStep] = useState<Step>({ kind: initialMode });
+  const [text, setText] = useState("");
+  const [failures, setFailures] = useState<FailedServer[]>([]);
+  // What this dialog session already registered (name → uid), so a retry after
+  // a partial failure re-attempts only the failures.
   const createdRef = useRef<Map<string, string>>(new Map());
-  const importBatch = useImportMcpServers();
+  const seq = useRef(0);
+  const add = useImportMcpServers();
+  const testAdded = useTestAddedServers();
+  const { data: servers } = useResources("mcp_server");
+  const { data: agents } = useAgents();
+  const { count: agentEntryCount } = useAgentDirectMcpEntries();
+  const taken = new Set((servers ?? []).map((s) => s.name));
 
-  const runImport = (servers: ParsedServer[]) => {
-    setServerErrors([]);
-    importBatch.mutate(
-      { servers, created: createdRef.current },
+  // The page opens the dialog by its `open` prop (Radix reports only closes),
+  // so a fresh session starts whenever it becomes open — on the view it was
+  // asked for, the paste box or Import from your agents.
+  useEffect(() => {
+    if (!open) return;
+    setStep({ kind: initialMode });
+    setText("");
+    setFailures([]);
+    createdRef.current = new Map();
+  }, [open, initialMode]);
+  const setOpen = (next: boolean) => onOpenChange(next);
+
+  const reachPhrase = (reach: ReachIntent) => {
+    if (reach.mode === "everywhere") return t("mcp.add.reachAll");
+    if (reach.mode === "disabled") return t("mcp.add.reachOff");
+    const names = reach.agents.map((uid) => {
+      const a = agents?.find((x) => x.uid === uid);
+      return a ? agentTypeLabel(a.type ?? a.name) : uid;
+    });
+    return names.length > 0 ? names.join(", ") : t("mcp.add.reachOff");
+  };
+
+  /** One server added: close, open its page, test it once and toast the result. */
+  const finishOne = (added: Added, reach: ReachIntent) => {
+    onOpenChange(false);
+    navigate(`/mcp-servers/${encodeURIComponent(added.name)}`);
+    void testAdded([added.uid]).then(([r]) => {
+      if (r.status === "fulfilled" && r.value.ok) {
+        const ms = r.value.latency_ms;
+        toast.success(
+          t("mcp.add.toastTested", { name: added.name, ms, reach: reachPhrase(reach) }),
+        );
+      } else {
+        const error =
+          r.status === "fulfilled"
+            ? (r.value.error_message ?? "")
+            : String(r.reason?.message ?? "");
+        toast.error(t("mcp.add.toastFailing", { name: added.name, error }));
+      }
+    });
+  };
+
+  const submit = (batch: NewServer[], reach: ReachIntent, single: boolean) => {
+    const before = new Set(createdRef.current.keys());
+    add.mutate(
+      { servers: batch, created: createdRef.current, reach },
       {
-        onSuccess: (created) => {
-          setOpen(false);
-          if (created.length === 1) {
-            navigate(`/mcp-servers/${encodeURIComponent(created[0].name)}`);
+        onSuccess: (report) => {
+          setFailures(report.failed);
+          const fresh = report.created.filter((c) => !before.has(c.name));
+          if (single) {
+            const one = report.created[0];
+            if (!one) return;
+            if (report.awaitingApproval.length > 0) {
+              setStep({
+                kind: "approval",
+                names: report.awaitingApproval,
+                then: { added: one, reach },
+              });
+            } else finishOne(one, reach);
+            return;
           }
-        },
-        onError: (err: unknown) => {
-          setServerErrors(
-            err instanceof BatchImportError
-              ? err.failed
-              : [err instanceof Error ? err.message : String(err)],
-          );
+          void testAdded(fresh.map((c) => c.uid));
+          if (report.failed.length > 0) {
+            const first = report.failed[0];
+            toast.info(
+              t("mcp.add.toastPartial", {
+                done: report.created.length,
+                total: report.created.length + report.failed.length,
+                names: report.failed.map((f) => f.name).join(", "),
+                reason: first.message,
+              }),
+            );
+            return;
+          }
+          toast.success(t("mcp.add.toastAddedMany", { count: report.created.length }));
+          if (report.awaitingApproval.length > 0) {
+            setStep({ kind: "approval", names: report.awaitingApproval, then: null });
+          } else onOpenChange(false);
         },
       },
     );
   };
 
+  const openServers = (found: ParsedServer[]) => {
+    seq.current += 1;
+    setFailures([]);
+    if (found.length === 1) setStep({ kind: "form", server: found[0], seq: seq.current });
+    else setStep({ kind: "review", servers: found, seq: seq.current });
+  };
+
+  const heading =
+    step.kind === "review"
+      ? { title: t("mcp.add.reviewTitle"), sub: t("mcp.add.reviewSub") }
+      : step.kind === "importAgents"
+        ? { title: t("mcp.import.title"), sub: t("mcp.import.sub") }
+        : step.kind === "approval"
+          ? { title: t("mcp.add.approvalTitle"), sub: t("mcp.add.subtitle") }
+          : { title: t("mcp.add.dialogTitle"), sub: t("mcp.add.subtitle") };
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) createdRef.current = new Map();
-        else setServerErrors([]);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-1 size-4" /> {t("resources.addServer")}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[90vh] max-w-[640px] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{t("mcp.server.addTitle")}</DialogTitle>
-          <DialogDescription>{t("mcp.server.addSubtitle")}</DialogDescription>
+          <DialogTitle>{heading.title}</DialogTitle>
+          <DialogDescription>{heading.sub}</DialogDescription>
         </DialogHeader>
-        {serverErrors.length > 0 ? (
-          <ul
-            className="list-inside list-disc space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-            role="alert"
-          >
-            {serverErrors.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+        {step.kind === "paste" ? (
+          <PasteStep
+            text={text}
+            onTextChange={setText}
+            agentEntryCount={agentEntryCount}
+            onServers={openServers}
+            onChooseType={(type) => openServers([emptyServer(type)])}
+            onImportAgents={() => setStep({ kind: "importAgents" })}
+            onCancel={() => onOpenChange(false)}
+          />
         ) : null}
-        <JsonImportPanel onImport={runImport} importing={importBatch.isPending} />
+        {step.kind === "form" ? (
+          <ServerForm
+            key={step.seq}
+            initial={step.server}
+            taken={taken}
+            pending={add.isPending}
+            failure={failures[0] ?? null}
+            onBack={() => setStep({ kind: "paste" })}
+            onCancel={() => onOpenChange(false)}
+            onSubmit={(server, reach) => submit([server], reach, true)}
+          />
+        ) : null}
+        {step.kind === "review" ? (
+          <ReviewStep
+            key={step.seq}
+            initial={step.servers}
+            taken={taken}
+            added={new Set(createdRef.current.keys())}
+            failures={failures}
+            pending={add.isPending}
+            onBack={() => setStep({ kind: "paste" })}
+            onSubmit={(batch, reach) => submit(batch, reach, false)}
+          />
+        ) : null}
+        {step.kind === "importAgents" ? (
+          <ImportFromAgents
+            onBack={() => setStep({ kind: "paste" })}
+            onDone={(r) => {
+              toast.success(t("mcp.import.done", { count: r.adopted.length }));
+              onOpenChange(false);
+            }}
+          />
+        ) : null}
+        {step.kind === "approval" ? (
+          <ApprovalStep
+            names={step.names}
+            onDone={() =>
+              step.then ? finishOne(step.then.added, step.then.reach) : onOpenChange(false)
+            }
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

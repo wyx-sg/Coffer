@@ -12,7 +12,6 @@ import { useCallback, useSyncExternalStore } from "react";
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 
-export const THEME_PREFERENCES: readonly ThemePreference[] = ["system", "light", "dark"];
 const THEME_KEY = "coffer.theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
