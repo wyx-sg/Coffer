@@ -1448,7 +1448,7 @@
       },
       "runningOn": "运行于 127.0.0.1:{{port}}",
       "offlineShell": "重启它即可恢复 Coffer；它响应后本页面会自动重新连接。",
-      "offlineBrowser": "由守护进程提供的页面无法启动它。请在终端中运行以下命令，然后刷新：",
+      "offlineBrowser": "由守护进程提供的页面无法启动它。请在终端中运行以下命令：",
       "restart": "重启",
       "restartNow": "立即重启",
       "restartTimedOut": "守护进程在 90 秒内没有恢复。等它响应后到「活动 › 守护进程日志」查看，或重新启动它。",
@@ -1560,7 +1560,7 @@
       "outOfDateBody": "当前应用复用了上一个版本残留的旧后台服务。请重启守护进程，使应用与守护进程运行同一版本。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
-      "webRestartHint": "浏览器无法重启它——请在终端运行："
+      "webRestartHint": "浏览器无法启动它——请在终端运行："
     },
     "reconnect": {
       "title": "正在重新连接守护进程…",

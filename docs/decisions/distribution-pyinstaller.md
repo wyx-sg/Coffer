@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
+**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
 
 ## Context
 

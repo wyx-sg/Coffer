@@ -75,7 +75,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/settings", "secret"),
     ("/api/v1/skills", "skill-manager"),
     ("/api/v1/sync", "vault-sync"),
-    ("/api/v1/vault", "vault-sync"),
+    ("/api/v1/vault", "vault-storage"),
     ("/api/v1/upkeep", "resource-framework"),
     ("/api/v1/usage", "provider-switching"),
 )
@@ -99,6 +99,7 @@ TITLES: dict[str, str] = {
     "resource-framework": "Resource Framework",
     "secret": "Secrets",
     "skill-manager": "Skill Manager",
+    "vault-storage": "Vault Storage",
     "vault-sync": "Vault Sync",
 }
 

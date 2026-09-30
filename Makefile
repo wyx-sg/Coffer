@@ -167,6 +167,7 @@ lint:
 	$(PY) scripts/check_pyinstaller_specs.py
 	$(PY) scripts/check_cli_reference.py
 	$(PY) scripts/check_docs_locales.py
+	$(PY) scripts/check_error_codes_reference.py
 	$(PY) scripts/check_removed_commands.py
 	$(PY) scripts/check_platform_calls.py
 	$(PY) scripts/check_coffer_paths.py

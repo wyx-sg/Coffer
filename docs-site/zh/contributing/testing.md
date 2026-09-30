@@ -186,12 +186,13 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | 契约新鲜度 | 每项能力的 `api.openapi.yaml` 都由 Pydantic 模型重新生成，必须和签入的文件一致，并且每个对外提供的路由都必须属于某项能力。用 `make contracts` 修复 |
 | `scripts/check_response_models.py` | 每个 FastAPI 路由都声明 `response_model=`（流式和文件响应用 `response_class=`），所以没有路由返回无类型的 `dict` |
 | `scripts/check_adr_index.py` | `docs/decisions/` 内的链接都能解析，并且决策记录索引恰好列出现存的所有决策记录 |
-| `scripts/check_spec_citations.py` | 任何被跟踪文件中的每一处 `spec <capability> "<Title>"` 引用都指向一条真实存在的需求 |
+| `scripts/check_spec_citations.py` | 任何被跟踪文件中的每一处 `spec <capability> "<Title>"` 引用都指向一条真实存在的需求。在 `openspec/` 内，相对于规格的链接（`[x](../skill-manager/spec.md) "<Title>"`）和指向文件所在能力的 `see "<Title>"` 也会检查。跨行折断的标题按合并成一行来读 |
 | `scripts/check_architecture_doc.py` | `docs-site/architecture/layering.md` 中的代码布局树列出了每个包、没有列出已经不存在的东西，并且架构页面列出了每一个内置 `coffer__*` 工具 |
 | `scripts/check_pyinstaller_specs.py` | 三个 PyInstaller spec 指向存在的文件，并保留 `-X utf8` 运行时选项。没有任何 pull request job 运行 PyInstaller，所以这是唯一的早期预警 |
 | `scripts/check_cli_reference.py` | 本站生成的 CLI 参考页面（英文和中文）与代码一致。用 `make docs-reference` 修复偏移 |
 | `scripts/check_docs_locales.py` | 本站的英文树和中文树一一对应：页面、侧边栏条目、标题锚点，以及中文页面链接到中文页面 |
-| `scripts/check_removed_commands.py` | `docs-site/` 下的页面、仓库指南（`README.md`、`AGENTS.md`、`CONTRIBUTING.md`、`.agents/`）、规格、随包发布的技能正文、Web 界面源文件或 e2e spec 中，都没有引用已被移除的 `coffer` 命令、选项或 `coffer__` 工具。每次命中都会写明应改用的命令；有意提到它的行（比如断言它已被移除的场景）列在脚本的 `ALLOWED` 里 |
+| `scripts/check_error_codes_reference.py` | 中英文的[错误码](/zh/reference/error-codes)页列出守护进程在 `surfaces/http/errors.py` 中映射的每一个错误码，每个都标明它实际使用的 HTTP 状态码，且不列出守护进程没有映射的错误码 |
+| `scripts/check_removed_commands.py` | `docs-site/` 下的页面、仓库指南（`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CONTRIBUTING.md`、`.agents/`、除 ADR 以外的 `docs/`）、规格、桌面壳源文件、随包发布的技能正文、Web 界面源文件或 e2e spec 中，都没有引用已被移除的 `coffer` 命令、选项或 `coffer__` 工具。每次命中都会写明应改用的命令；有意提到它的行（比如断言它已被移除的场景）列在脚本的 `ALLOWED` 里 |
 | `scripts/check_platform_calls.py` | 基础设施层平台部分以外的代码都不询问自己运行在哪个操作系统上。测试不受此限制。见[平台端口](/zh/architecture/platform) |
 | `scripts/check_coffer_paths.py` | 每个 `~/.coffer` 路径都在 `infrastructure/vault/home.py` 里构造，它是唯一知道目录布局并遵循 `HOME` 的模块；其他模块自己构造路径就会失败。迁移和真实 home 的测试守卫不受此限制 |
 | `scripts/check_agent_type_branches.py` | 智能体描述符及其切面以外的代码都不按智能体类型分支。见[智能体切面](/zh/architecture/agent-facets) |

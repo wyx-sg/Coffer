@@ -735,7 +735,7 @@ than by how Coffer is built, and MUST open on General:
   [experimental-features](../experimental-features/spec.md) "List and switch the features on the General tab").
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
-  group; in a development build a file beside the database or the login
+  group; in a development build the file `~/.coffer/master.key` or the login
   keychain, with the switch that moves it — with its backup, import and
   fingerprint; the daemon's access token (see "Show, copy and rotate the access
   token on Settings › Security"); and whether a secret waits for approval
@@ -1497,11 +1497,10 @@ stopping — the desktop shell's restart waits for the replacement and hands the
 page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first").
 The About tab MUST show the version (with the short commit a release build was
 made from, when stamped), license, source, the data folder, the update check of "Check
-for and install updates on Settings › About" and **Copy diagnostics** only, and no
-release channel —
+for and install updates on Settings › About" and **Copy diagnostics** only —
 which copies the version, release channel, host, daemon state and port, and
 the enabled experimental features as plain text, and never a token or a
-secret — with no language picker (the
+secret — with no release-channel control, no language picker (the
 sidebar already switches language) and no installed-resource-kind list
 (developer detail). Remaining jargon is rewritten in plain language (e.g.
 "prune" is phrased as clearing expired data).

@@ -121,6 +121,9 @@ def test_restore_asks_before_writing() -> None:
     assert (vault_root() / "skills/pdf/SKILL.md").read_bytes() == b"v2\n"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="refused hand edits are listed on REST and the command line"
+)
 def test_problems_lists_refused_hand_edits() -> None:
     empty = _runner.invoke(cli_app, ["vault", "problems"])
     assert empty.exit_code == 0 and "no problems" in empty.output

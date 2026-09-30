@@ -287,7 +287,13 @@ delete a channel from its row. A channel's detail page MUST show its status
 (adapter running, paired peer, and the inbound state the channel's type
 reports — for SeaTalk, its websocket connection),
 issue pairing codes, edit the channel, send a test notification to its paired
-owner (see "Notify the paired owner on demand"), and delete it.
+owner (see "Notify the paired owner on demand"), and delete it. The detail page
+MUST split into two tabs, in this order: **Overview**, the default, at the bare
+`/channels/<uid>` — the paired owner and re-pairing, the default agent, the
+agents the channel may drive, and a link to the conversations it started — and
+**Settings**, at `/channels/<uid>/settings` — the settings below, the machine
+that runs it and its secrets. Choosing a tab changes the address and nothing
+else.
 
 Editing changes the channel's default agent, its type's plain settings (a
 SeaTalk app id), its title and its two group-gating switches, `require_mention` and
@@ -349,6 +355,11 @@ and `PATCH /api/v1/resources/{uid}`.
 - **WHEN** the user runs `coffer channel edit tg --title "Phone bot"`, `coffer channel scope tg --agents codex`, `coffer channel disable tg` and then `coffer channel rm tg`
 - **THEN** the title is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
 - **AND** the removal deletes the channel and its peer binding, and each step is audited
+
+#### Scenario: a channel's detail opens on Overview and keeps Settings on its own tab
+- **GIVEN** a registered channel
+- **WHEN** `/channels/<uid>/settings` is opened, and then the Overview tab is chosen
+- **THEN** the first shows the channel's settings, and choosing Overview moves the address to the bare `/channels/<uid>`
 
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to

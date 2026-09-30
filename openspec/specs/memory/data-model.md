@@ -53,7 +53,7 @@ trusting a comment:
 | Path | Written by | Read by |
 |---|---|---|
 | `.raw/` | aggregation, and only aggregation | the distil pass only — the file tree leaves it out and its read route refuses it |
-| `notes/` | the distil pass | delivery, recall, the file tree, and any agent holding the path |
+| `notes/` | the distil pass | delivery, prompt-time retrieval, the file tree, and any agent holding the path |
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
 | `RETIRED.md` | the distil pass | **the next distil pass**, and a human |
 
@@ -83,7 +83,7 @@ global").
 | `name` | the directory name, and the Resource's name | A readable slug from the repository's own name — `/home/dev/coffer` → `coffer`. A collision is resolved by prefixing a parent segment (`work-api` vs `personal-api`), never by an id ("Identify a partition by its repository"). |
 | `repository_key` | `Resource.config` | The identity a directory is resolved to. `remote:<host>/<path>` when the repository has an `origin` remote, so two clones agree; `path:<abs>` when it has none. Empty for `global`. |
 | `repository_path` | `Resource.config`, restated at the top of `MEMORY.md` | Absolute path of the repository's main working tree. Empty for `global`. |
-| `enabled` | the Resource's own column | Always true: the kind declares itself non-toggleable, so every partition is served and enable/disable is refused with `RESOURCE_NOT_TOGGLEABLE` ("Serve every partition to every agent"). |
+| `enabled` | not stored: the kind is not toggleable | Always true: the kind declares itself non-toggleable, so every partition is served and enable/disable is refused with `RESOURCE_NOT_TOGGLEABLE` ("Serve every partition to every agent"). |
 | `note_count` | counted from `notes/` at call time | Never stored. |
 | `unresolvable` | computed at call time | True when `repository_path` no longer exists on disk. Surfaced rather than hidden, because an orphaned partition is delivered to nobody and the developer is the only one who can decide to delete it ("Report unresolvable partitions"). |
 
@@ -107,7 +107,7 @@ global").
    dated scratch folders created this way under the previous design.
 
 Partitions are created by aggregation, never by the user and never by an
-agent's working directory at read time ("Create partitions only by
+agent's working directory at read time (see "Provision partitions only from
 aggregation") — the `memory` Kind sets `generic_create_allowed=False`, and
 `MemoryService.aggregate` opts in explicitly. Deletion goes through the
 kind-agnostic Resource route, which cleans the directory up through the Kind's
@@ -326,8 +326,9 @@ the vault-wide audit surface ("Audit every delivery fire").
 
 What each session was already given — the notes retrieved for it and the
 triggers that already held a command — is kept per `session_id` in the daemon's
-memory, bounded to the 2,048 most recent sessions. It is not persisted: a
-daemon restart forgets it.
+memory, bounded to the 2,048 most recent sessions. It is not written to a file
+of its own: at boot it is rebuilt from the last 7 days of `memory_delivery_fired`
+audit events ("Remember what a session was given across daemon restarts").
 
 ## Trigger
 
@@ -370,5 +371,6 @@ every kind shares.
 | `memory_trigger_armed` / `memory_trigger_disarmed` | a person arms or disarms a trigger |
 | `memory_trigger_deleted` | a trigger's file is deleted |
 
-A recall records the usual `mcp_invocations` row and nothing about its query
-or its results ("Audit every lifecycle act").
+Prompt-time retrieval (`POST /api/v1/memory/hook`) records one
+`memory_delivery_fired` event naming the notes it delivered, and nothing about
+the prompt it matched ("Audit every delivery fire").

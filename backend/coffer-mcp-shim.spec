@@ -4,7 +4,7 @@
 # Output: dist/coffer-mcp-shim (single-file executable)
 # Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
 # ~/.coffer/bin/ at startup (spec daemon "Deploy frozen sibling binaries and
-# back up the vault before migrating") so MCP clients can launch it.
+# back up the history database before migrating") so MCP clients can launch it.
 
 # -*- mode: python ; coding: utf-8 -*-
 

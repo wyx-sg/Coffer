@@ -353,7 +353,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer` and `coffer-mcp-shim` out of its
-    own directory (spec daemon "Deploy frozen sibling binaries and back up the vault
+    own directory (spec daemon "Deploy frozen sibling binaries and back up the history database
     before migrating") and finds `coffer-daemon` as a sibling
     (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
     processes cannot start.

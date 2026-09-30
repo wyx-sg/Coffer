@@ -7,9 +7,9 @@ It migrates ``runs.db`` only: the move of a pre-vault home out of
 which a person runs once and this runner refuses to do in their place.
 
 Before a migration actually changes the schema, the on-disk database is copied
-aside as ``coffer.db.pre-<revision>`` (with its ``-wal``/``-shm`` companions when
+aside as ``runs.db.pre-<revision>`` (with its ``-wal``/``-shm`` companions when
 present). A migration that fails half-way, or one whose data rewrite turns out
-wrong, is then a file rename away from recovery instead of a lost vault. Only
+wrong, is then a file rename away from recovery instead of a lost history. Only
 the newest few copies are kept, and nothing is copied when the schema is
 already current — the normal case on every restart but the first after an
 upgrade.
@@ -33,8 +33,8 @@ from coffer.infrastructure.vault.migration.errors import PreVaultDatabase
 from coffer.infrastructure.vault.migration.guard import refuse_unmigrated_home
 from coffer.infrastructure.vault.migration.places import LAYOUT_REVISION
 
-#: How many ``coffer.db.pre-*`` copies survive; older ones are removed once a
-#: newer copy lands, so an install that upgrades often does not hoard vaults.
+#: How many ``runs.db.pre-*`` copies survive; older ones are removed once a
+#: newer copy lands, so an install that upgrades often does not hoard copies.
 KEEP_PRE_MIGRATION_COPIES = 3
 
 _SIDE_FILES = ("-wal", "-shm")

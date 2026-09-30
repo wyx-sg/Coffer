@@ -140,8 +140,8 @@ export const FILES: MemoryFileTreeOut = {
   root: {
     name: "coffer",
     path: "",
-    abs_path: "/Users/dev/.coffer/memory/coffer",
-    folder_abs_path: "/Users/dev/.coffer/memory",
+    abs_path: "/Users/dev/.coffer/derived/memory/coffer",
+    folder_abs_path: "/Users/dev/.coffer/derived/memory",
     type: "dir",
     size: null,
     truncated: false,
@@ -149,8 +149,8 @@ export const FILES: MemoryFileTreeOut = {
       {
         name: "notes",
         path: "notes",
-        abs_path: "/Users/dev/.coffer/memory/coffer/notes",
-        folder_abs_path: "/Users/dev/.coffer/memory/coffer",
+        abs_path: "/Users/dev/.coffer/derived/memory/coffer/notes",
+        folder_abs_path: "/Users/dev/.coffer/derived/memory/coffer",
         type: "dir",
         size: null,
         truncated: false,
@@ -158,8 +158,8 @@ export const FILES: MemoryFileTreeOut = {
           {
             name: "use-node-20.md",
             path: "notes/use-node-20.md",
-            abs_path: "/Users/dev/.coffer/memory/coffer/notes/use-node-20.md",
-            folder_abs_path: "/Users/dev/.coffer/memory/coffer/notes",
+            abs_path: "/Users/dev/.coffer/derived/memory/coffer/notes/use-node-20.md",
+            folder_abs_path: "/Users/dev/.coffer/derived/memory/coffer/notes",
             type: "file",
             size: 200,
             truncated: false,

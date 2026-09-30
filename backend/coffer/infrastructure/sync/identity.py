@@ -34,9 +34,7 @@ from coffer.infrastructure.daemon.config import (
     write_cached_machine_id,
 )
 from coffer.infrastructure.sync.machine_id import MachineIdentity, resolve
-from coffer.infrastructure.vault.home import coffer_home
-
-_FALLBACK_FILE = "machine-id"
+from coffer.infrastructure.vault.home import MACHINE_ID_FILENAME, coffer_home
 
 
 def resolve_identity(root: pathlib.Path | None = None) -> MachineIdentity:
@@ -63,7 +61,7 @@ def machine_name() -> str:
 def _is_fallback(directory: pathlib.Path, machine_id: str) -> bool:
     """Whether ``machine_id`` came from the locally-stored fallback identifier."""
     try:
-        raw = (directory / _FALLBACK_FILE).read_text(encoding="utf-8").strip()
+        raw = (directory / MACHINE_ID_FILENAME).read_text(encoding="utf-8").strip()
     except OSError:
         return False
     if not raw:

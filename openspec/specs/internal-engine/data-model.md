@@ -12,7 +12,7 @@ stored as.
 
 Coffer's own operating settings: one document per vault,
 `state/settings/internal-engine.json`, so a second copy has nowhere to be
-(see "Keep the engine's settings in one global row").
+(see "Keep the engine's settings in one vault document").
 
 | Field | Type | Constraints / Notes |
 |---|---|---|

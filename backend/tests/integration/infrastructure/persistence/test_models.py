@@ -45,7 +45,7 @@ async def test_audit_log_round_trip(tmp_path):
 
 @pytest.mark.acceptance(
     spec="internal-engine",
-    scenario="a second engine settings row is unrepresentable",
+    scenario="a second engine settings document is unrepresentable",
 )
 @pytest.mark.asyncio
 async def test_internal_engine_config_refuses_a_second_row() -> None:

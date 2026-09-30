@@ -64,7 +64,7 @@ In a development build:
 
 Resolution reads the file first, then the keychain (see "Resolve the master key
 file-first and create it only for an empty store"). `MasterKeyManager` records
-which location answered; that value is what `GET /api/v1/settings/ secrets`
+which location answered; that value is what `GET /api/v1/settings/secrets`
 reports and what `PUT` compares against before relocating.
 
 Relocation writes and verifies the destination, then removes the source, so the

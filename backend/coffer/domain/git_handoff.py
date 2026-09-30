@@ -1,5 +1,6 @@
-"""The hand-off for a machine with no ``git`` (spec knowledge "Keep every
-document's history and undo a pass as a whole"; the skill Git import).
+"""The hand-offs for a machine with no ``git``, or one too old (spec knowledge
+"Keep every document's history and undo a pass as a whole"; the skill Git
+import; spec vault-storage "Refuse to start on a git older than 2.40").
 
 Coffer reads git history and Git repositories with the machine's own ``git``
 and does not install it: how git is installed depends on the machine, so the
@@ -41,6 +42,27 @@ def git_install_handoff(machine: str, *, needed_for: str) -> str:
     )
 
 
+def git_update_handoff(machine: str, *, found: str, needed: str, needed_for: str) -> str:
+    """The prompt asking the person's agent to bring git on ``machine`` from
+    version ``found`` up to at least ``needed``."""
+    return render_handoff(
+        Handoff(
+            task=f"Please update git on this machine to version {needed} or later.",
+            facts=(
+                f"This machine: {machine}.",
+                f"Coffer needs git {needed} or later for {needed_for}; the `git` on the "
+                f"PATH the Coffer daemon uses is version {found}.",
+            ),
+            steps=(
+                "Update it the way that fits this machine, and make sure the newer git "
+                "comes first on the PATH the Coffer daemon starts with.",
+                f"When you are done, run `git --version` to confirm it reports {needed} or later.",
+                "Then tell me to start Coffer again.",
+            ),
+        )
+    )
+
+
 def git_missing_details(machine: str, *, needed_for: str) -> dict[str, object]:
     """The error ``details`` that carry the install hand-off."""
     return {
@@ -49,4 +71,9 @@ def git_missing_details(machine: str, *, needed_for: str) -> dict[str, object]:
     }
 
 
-__all__ = ["GIT_MISSING", "git_install_handoff", "git_missing_details"]
+__all__ = [
+    "GIT_MISSING",
+    "git_install_handoff",
+    "git_missing_details",
+    "git_update_handoff",
+]

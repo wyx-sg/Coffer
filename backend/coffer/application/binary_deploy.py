@@ -1,5 +1,5 @@
 """Deploy a frozen build's sibling binaries into ``~/.coffer/bin`` (spec daemon "Deploy
-frozen sibling binaries and back up the vault before migrating").
+frozen sibling binaries and back up the history database before migrating").
 
 The daemon owns the job because it is the one process every frozen install
 starts, whichever tier it came from, and ``coffer-mcp-shim`` must be able to
@@ -174,7 +174,7 @@ def retire_unshipped_links(
 ) -> list[str]:
     """Remove each public symlink into a version directory under a name not shipped.
 
-    Spec daemon "Deploy frozen sibling binaries and back up the vault before
+    Spec daemon "Deploy frozen sibling binaries and back up the history database before
     migrating": a binary a release dropped must stop resolving to an old build
     rather than linger on the user's ``PATH``. Generic by design, so the next
     binary a release drops needs no special case. Anything at such a path that

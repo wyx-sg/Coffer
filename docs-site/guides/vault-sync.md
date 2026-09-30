@@ -50,15 +50,15 @@ Four rules shape everything below:
 ### GitLab
 
 1. Create a private, empty project, then a **project access token** on it (**Settings › Access tokens**) with the **`write_repository`** scope and a role that may push to the branch (Developer or higher; Maintainer if the branch is protected). A personal access token with `write_repository` works too.
-2. Store the token and configure the remote. GitLab's token is sent with the user name `oauth2` (or the account's user name), so pass `--username oauth2`:
+2. Store the token, look at the repository, then configure it. GitLab's token is sent with the user name `oauth2` (or the account's user name), so pass `--username oauth2` to both commands:
 
    ```sh
    printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
+   coffer sync remote check https://gitlab.com/<group>/<repo>.git \
+     --secret-ref sync/gitlab-token --username oauth2
    coffer sync remote set https://gitlab.com/<group>/<repo>.git \
      --secret-ref sync/gitlab-token --username oauth2
    ```
-
-   `coffer sync remote check` always sends the default username `coffer`, so it cannot look at a GitLab repository with its token. To look before you save, fill in the set-up form on the **Sync** page and press **Check repository**, which sends the **User name** you enter.
 
    For a self-managed GitLab, use your instance's host in place of `gitlab.com`.
 

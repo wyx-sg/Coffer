@@ -238,3 +238,60 @@ def test_a_malformed_citation_of_a_real_capability_fails(gate, tree, text) -> No
 def test_a_string_literal_or_unknown_word_is_not_malformed(gate, tree, text) -> None:
     errors, _ = _check(gate, tree, text)
     assert not [e for e in errors if "malformed" in e]
+
+
+# ---------------------------------------------------------------- inside the specs
+
+
+_OWN = SPECS_DIR + "/knowledge/spec.md"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A link relative to the citing spec, resolved against its directory.
+        '[telegram](../channels/telegram/spec.md) "Download every Telegram media type"',
+        # A bare `see` names the file's own capability, wrapped like prose.
+        '(see "Use the file path as a\ndocument\'s identity")',
+    ],
+)
+def test_a_spec_internal_citation_of_an_existing_requirement_passes(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text, rel=_OWN)
+    assert errors == []
+    assert len(gate.find_citations(text, _OWN)) == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "cap", "title"),
+    [
+        (
+            '[telegram](../channels/telegram/spec.md) "Download some Telegram media"',
+            "channels/telegram",
+            "Download some Telegram media",
+        ),
+        # A title that wraps across a Markdown line break is compared joined.
+        (
+            'the rule (see "Keep two\ntrees per collection")',
+            "knowledge",
+            "Keep two trees per collection",
+        ),
+    ],
+)
+def test_a_spec_internal_citation_of_a_missing_title_fails(gate, tree, text, cap, title) -> None:
+    errors, _ = _check(gate, tree, text, rel=_OWN)
+    assert len(errors) == 1
+    assert f"spec {cap} has no requirement titled {title!r}" in errors[0]
+
+
+def test_the_spec_internal_forms_are_read_only_under_openspec(gate, tree) -> None:
+    """Outside the specs, a relative `spec.md` link or a bare `see "..."` is not
+    a citation: the relative link would resolve somewhere else, and `see` is
+    ordinary prose."""
+    text = '[x](../channels/telegram/spec.md) "Download some media" — see "Keep two trees here"'
+    assert gate.find_citations(text, "docs-site/guides/x.md") == []
+    assert _check(gate, tree, text, rel="docs-site/guides/x.md") == ([], [])
+
+
+def test_a_short_quoted_label_after_see_is_not_a_citation(gate, tree) -> None:
+    text = 'the dialog shows (see "Current key") beside the file'
+    assert gate.find_citations(text, _OWN) == []

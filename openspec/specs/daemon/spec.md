@@ -325,7 +325,7 @@ nothing — and the environment the install itself runs in is no better a source
 the daemon's, which was commonly spawned by a GUI-launched editor and has exactly that minimal
 `PATH`. It MUST start the build that is current rather than the one that was current when it was
 installed: deployed binaries live under a per-version directory whose older entries are pruned (see
-"Deploy frozen sibling binaries and back up the vault before migrating"), so a service pinned to a
+"Deploy frozen sibling binaries and back up the history database before migrating"), so a service pinned to a
 versioned path stops working two upgrades later, and a supervisor that cannot execute its program
 fails silently — which is the one way autostart could stop without anyone finding out. It MUST
 write to the daemon log (see "Write one bounded daemon log in one format") rather than a file of
@@ -353,13 +353,21 @@ endpoint alike — to the loopback interface only.
 The daemon MUST require an authentication token on every management API call. The token is minted
 locally at startup, published only in the user-only-readable `daemon.json` (see "Publish one
 private discovery file"), and rotatable. `GET /api/v1/daemon/status` is the one deliberate
-exemption (see "Answer the status probe without a token").
+exemption (see "Answer the status probe without a token"). The API's schema,
+`GET /api/v1/openapi.json`, MUST need the token like any other management call, and the
+daemon MUST NOT serve the framework's interactive API pages (`/docs`, `/redoc`) at all.
 
 #### Scenario: a management call without the token is refused
 - **GIVEN** a daemon with an active token,
 - **WHEN** any route under `/api/v1` other than `/api/v1/daemon/status` is called with no token, or with a token that is not the active one,
 - **THEN** it is refused with `401` before the route does anything,
 - **AND** `/api/v1/daemon/status` still answers with no token.
+
+#### Scenario: the API schema is served only to a token holder
+- **GIVEN** a daemon with an active token,
+- **WHEN** `/api/v1/openapi.json` is read with no token, with a wrong one and with the active one, and `/openapi.json`, `/docs` and `/redoc` are requested,
+- **THEN** the schema is refused with `401` until the active token is sent, and then answers with the management routes,
+- **AND** nothing answers at `/openapi.json`, `/docs` or `/redoc`.
 
 ### Requirement: Rotate the token from REST or the command line
 Rotation MUST be reachable from both `POST /api/v1/daemon/rotate-token` and
@@ -640,7 +648,7 @@ downloaders can verify integrity without trusting the GitHub Release UI alone.
 - **THEN** the release holds exactly one `SHA256SUMS`, listing every staged artifact exactly once,
 - **AND** every artifact verifies against it with a stock SHA-256 checker.
 
-### Requirement: Deploy frozen sibling binaries and back up the vault before migrating
+### Requirement: Deploy frozen sibling binaries and back up the history database before migrating
 When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its
 sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` — into
 `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop
@@ -681,7 +689,7 @@ whichever tier it came from.
 - **THEN** `~/.coffer/bin/coffer-callback` no longer exists, while `coffer`, `coffer-daemon` and `coffer-mcp-shim` point into the new build's version directory,
 - **AND** a regular file at `~/.coffer/bin/<name>` for a name the build does not ship is left untouched.
 
-#### Scenario: a schema upgrade keeps a copy of the vault
+#### Scenario: a schema upgrade keeps a copy of the history database
 - **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
 - **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.

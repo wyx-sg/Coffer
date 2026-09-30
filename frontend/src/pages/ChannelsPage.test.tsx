@@ -286,14 +286,16 @@ acceptance(
   },
 );
 
-describe("tabs live in the path", () => {
-  test("/settings opens Settings, and Overview is the bare address", async () => {
+acceptance(
+  "channels",
+  "a channel's detail opens on Overview and keeps Settings on its own tab",
+  async () => {
     renderChannelsPage(`/channels/${TEAM.uid}/settings`);
     expect(await screen.findByTestId("channel-settings")).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
     await waitFor(() => expect(where.url).toBe(`/channels/${TEAM.uid}`));
-  });
-});
+  },
+);
 
 acceptance("channels", "a channel links to its conversations instead of showing them", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);

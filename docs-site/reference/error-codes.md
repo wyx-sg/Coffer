@@ -42,9 +42,9 @@ give the status each code is actually sent with.
 | `ORIGIN_NOT_ALLOWED` | 403 | The request carries an `Origin` that is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin. Defends against requests from other sites. | Open the UI from the daemon or the desktop app. To serve it from a dev origin, start the daemon with `COFFER_DEV_CORS=1` or list the origin in `COFFER_CORS_ORIGINS`. |
 | `BAD_REQUEST` | 400 | A route rejected the request (for example an invalid `X-Coffer-Actor` value or malformed JSON on `/mcp`). | Read `message`; fix the request. |
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's transcript sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
-| `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json`. |
+| `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json` to a caller with the token. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
-| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json`. |
+| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
 | `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
 | `HTTP_<status>` | as named | A bare HTTP error with a status that has no named code. | Read `message`. |
 
@@ -62,6 +62,7 @@ give the status each code is actually sent with.
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
 | `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation run is already going for this collection. | Wait for the running run to finish; `coffer daemon status` and the UI show it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer config list retention.`. |
+| `ATTENTION_NOT_IGNORABLE` | 409 | The key names no attention item that can be ignored: nothing is listed under it, or the item is a failure rather than a notice. | Refresh the attention list; fix a failure instead of ignoring it. |
 
 ## Secrets
 
@@ -144,6 +145,14 @@ give the status each code is actually sent with.
 | `SKILL_FILE_STALE` | 409 | A skill file changed on disk after you read it. | Reload and reapply your edit. |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | No skill by that name was found in the agent's own skills folders. | Refresh the agent's skills list. |
 | `UNMANAGED_SKILL_INVALID` | 422 | An agent's own skill cannot be adopted because its folder is invalid. | Fix its `SKILL.md`, then adopt. |
+| `SKILL_STAGING_NOT_FOUND` | 404 | Nothing is staged under that id: the import or update preview was confirmed, cancelled or expired (stages last an hour and do not survive a restart). | Stage the source again. |
+| `SKILL_ORPHAN_NOT_FOUND` | 404 | No folder by that name in the skills store is outside your library. | Refresh the skills page. |
+| `SKILL_COPY_NOT_OURS` | 409 | Deleting the skill found an agent's copy that is not Coffer's link, so the whole delete was refused and nothing changed. `details` name the folder and the agent. | Restore that copy from the master first, or delete the folder yourself. |
+| `SKILL_COPY_NOT_DIFFERING` | 409 | Compare or resolve was asked for an agent's copy that is not a folder in the way of Coffer's link. | Nothing to compare; the agent already has the link, or nothing. |
+| `SKILL_NOT_FROM_GIT` | 409 | The skill was not added from a Git repository, so it has no source to update from. | Re-add it from its repository with `--force` to replace it. |
+| `SKILL_SOURCE_UNREACHABLE` | 502 | git could not fetch the skill's repository, resolve its ref or find its folder. The message is git's own, with any credential removed; with git missing, `details.handoff` is a prompt for your agent. | Check the repository URL, the ref and your access to it. |
+| `SKILL_UPDATE_CONFLICT` | 409 | The skill's folder was edited since its pinned commit, so taking the update would discard the edit. | Keep your edits, or take the update and discard them. |
+| `SKILL_UPDATE_NOT_PENDING` | 409 | "I merged it" named a commit that is not an update waiting for the skill. | Open the update again and merge against the commit it offers. |
 
 ## Knowledge
 
@@ -162,6 +171,8 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | No version by that id in the knowledge history, or none for that document. | List versions with `coffer knowledge history <path>` or `coffer knowledge changes`. |
 | `KNOWLEDGE_NOT_A_PASS` | 400 | Only a curation pass can be undone, and this version is another kind of change. | Restore the document's earlier version with `coffer knowledge restore`. |
 | `KNOWLEDGE_UNDO_CONFLICT` | 409 | A later change touched one of the pass's documents, named in the message, so the undo was refused and nothing was written. | Edit or restore that document instead. |
+| `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Restore the document's earlier version instead. |
+| `KNOWLEDGE_RESTORE_CONFLICT` | 409 | Putting the deleted document back would overwrite the file now at its path. `details` name the version and the document; nothing was written. | Move or rename the file at that path, then restore again. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
 | `ENGINE_UNAVAILABLE` | 503 | A binary or converter the operation needs (ripgrep, or a document converter backend) is unavailable. | Reinstall Coffer; the bundled binaries include them. |
 | `GREP_PATTERN_INVALID` | 400 | ripgrep rejected a pattern. | Fix the pattern. |
@@ -190,6 +201,9 @@ give the status each code is actually sent with.
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model. `details.reason` is a short token such as `model_not_found`. | Pick a model the agent offers. |
 | `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation. | Refresh the conversation; retry the message shown there. |
 | `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the 30-day media sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
+| `ATTACHMENT_NOT_FOUND` | 422 | A message names an attachment no upload stored: it was never uploaded, or its file was pruned. Nothing was sent. | Upload the file again. |
+| `ATTACHMENT_TOO_LARGE` | 413 | An upload from the web composer is over the per-file limit the message names. | Attach a smaller file. |
+| `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | No agent can use a file of that type from a turn (video, archives, executables and other binaries). | Attach an image, a document, audio or a text file. |
 | `CHANNEL_NOT_PAIRED` | 409 | The channel has no paired chat to send to. | Pair it: `coffer channel pair <name>`. See [Channels](/guides/channels). |
 | `CHANNEL_NOT_RUNNING` | 409 | The channel's adapter is not running (disabled or still starting). | Enable the channel and wait for it to connect. |
 | `CHANNEL_SEND_FAILED` | 502 | The messaging platform refused or failed the send. | Read `message`; check the bot's token and permissions. |
@@ -230,6 +244,13 @@ give the status each code is actually sent with.
 | `SYNC_MACHINE_NAME_INVALID` | 422 | The machine name is empty or too long. | Choose another name. |
 | `SYNC_CANNOT_RETIRE_SELF` | 422 | You tried to retire the machine you are on. | Retire it from another machine, or clear the sync remote here. |
 
+## The daemon
+
+| Code | HTTP | Meaning | Typical fix |
+| --- | --- | --- | --- |
+| `PORT_OUT_OF_RANGE` | 422 | The port is outside 1024-65535, so the daemon could never bind it. `details` carry the port and the range. | Choose a port in the range. |
+| `PORT_IN_USE` | 409 | Another program holds the port. `details.holder` names it and its pid when Coffer can tell. | Stop that program, or choose another port. |
+
 ## Experimental features
 
 | Code | HTTP | Meaning | Typical fix |
@@ -243,14 +264,17 @@ give the status each code is actually sent with.
 These are raised while the daemon starts, before it serves requests. They appear in
 `~/.coffer/logs/daemon.log` and in the output of `coffer daemon start`.
 
-| Code | Meaning | Typical fix |
-| --- | --- | --- |
-| `DB_SCHEMA_TOO_NEW` | `~/.coffer/runs.db` was migrated by a newer or different Coffer build. Mapped to HTTP 409 if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
-| `VAULT_MIGRATION_REQUIRED` | The home still keeps its state in `coffer.db`, from a Coffer before the vault layout. | Stop the daemon and run `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading). |
-| `VAULT_MIGRATION_ON_HOLD` | `coffer migrate --rollback` put the home back and left its hold marker. | Run the previous build, or `coffer migrate --resume` and then `coffer migrate`. |
-| `VAULT_MIGRATION_REFUSED` | `coffer migrate` will not touch the home as it stands, for example an upgrade stopped half-way. | Follow the message; after a half-done upgrade, `coffer migrate --rollback` first. |
-| `GIT_MISSING` | The vault needs `git` and none was found. | Install git the way that fits the machine; the error's `details.handoff` is a prompt for your agent. |
-| `MASTER_KEY_MISSING` | See [Secret store](#secrets). | |
+| Code | HTTP | Meaning | Typical fix |
+| --- | --- | --- | --- |
+| `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` was migrated by a newer or different Coffer build. The status applies if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
+| `VAULT_MIGRATION_REQUIRED` | 409 | The home still keeps its state in `coffer.db`, from a Coffer before the vault layout. | Stop the daemon and run `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading). |
+| `VAULT_MIGRATION_ON_HOLD` | 409 | `coffer migrate --rollback` put the home back and left its hold marker. | Run the previous build, or `coffer migrate --resume` and then `coffer migrate`. |
+| `VAULT_MIGRATION_REFUSED` | 409 | `coffer migrate` will not touch the home as it stands, for example an upgrade stopped half-way. | Follow the message; after a half-done upgrade, `coffer migrate --rollback` first. |
+| `GIT_MISSING` | 500 | The vault needs `git` and none was found. A route that needs git answers with it too. | Install git the way that fits the machine; the error's `details.handoff` is a prompt for your agent. |
+
+`MASTER_KEY_MISSING` can stop a start as well; see [Secrets](#secrets). A `git` older than
+2.40 stops the daemon with no code: the log names the version it found and carries a prompt
+you can give your agent to update git.
 
 ## Chat turn errors
 
