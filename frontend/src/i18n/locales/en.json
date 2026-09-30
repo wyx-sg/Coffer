@@ -3678,7 +3678,7 @@
       "agent": "Agent",
       "unavailable": "not available on this Mac",
       "workingDir": "Working directory",
-      "workingDirPlaceholder": "Coffer’s workspace (~/.coffer/workspace)",
+      "workingDirPlaceholder": "Coffer’s workspace (~/.coffer/content/workspace)",
       "start": "Start"
     },
     "header": {
