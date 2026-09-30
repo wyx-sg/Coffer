@@ -8,13 +8,20 @@ or a document points at one by naming its capability and quoting its title:
     spec channels/telegram, "Download every Telegram media type ..."
     [knowledge](../openspec/specs/knowledge/spec.md) "Use the file path ..."
 
+and, inside the specs themselves, two shorter forms: a link relative to the
+citing file (``[skill-manager](../skill-manager/spec.md) "Keep one ..."``,
+resolved against the file's own directory), and a bare ``see "<Title>"`` of
+three words or more, which names a requirement of the capability whose
+directory the file is in.
+
 A title is only a name, so nothing but this script notices when one is renamed
 or retired and the citation keeps quoting the old words. Every citation must
 resolve: its capability is a directory under `openspec/specs/` (a child such as
 `channels/seatalk` included) and its title is a `### Requirement:` heading in
-that directory's `spec.md`. A citation may wrap across comment or docstring
-lines; the continuation's leader (`#`, `#:`, `//`, `///`, `*`, `>`) is not part
-of the title. A title that only exists in an in-flight change — an `ADDED`
+that directory's `spec.md`. A citation may wrap across lines — a Markdown
+paragraph, a comment, a docstring — and is read as if the lines were joined:
+the line break, and a continuation's leader (`#`, `#:`, `//`, `///`, `*`, `>`),
+become one space. A title that only exists in an in-flight change — an `ADDED`
 requirement or the new name of a `RENAMED` one under
 `openspec/changes/<name>/specs/` — is accepted and listed, so a change can cite
 what it is adding before it is archived. Files inside a change folder may also
@@ -30,6 +37,7 @@ Stdlib only. Exits non-zero on any failure.
 
 from __future__ import annotations
 
+import posixpath
 import re
 import subprocess
 import sys
@@ -82,6 +90,20 @@ LINK_CITATION = re.compile(
     r"\[[^\]\n]*\]\((?:[^)\s]*/)?openspec/specs/(?P<cap>[a-z0-9/-]+?)/spec\.md"
     r"(?:#[^)\s]*)?\)(?:'s)?,?" + _SEP + _TITLE
 )
+#: `[<text>](<relative path>/spec.md) "<Title>"` inside `openspec/`: the path is
+#: resolved against the citing file's directory, so `../skill-manager/spec.md`
+#: from `openspec/specs/knowledge/` names `skill-manager`.
+RELATIVE_LINK_CITATION = re.compile(
+    r"\[[^\]\n]*\]\((?P<path>(?:\.\.?/)*(?:[a-z0-9-]+/)*spec\.md)"
+    r"(?:#[^)\s]*)?\)(?:'s)?,?" + _SEP + _TITLE
+)
+#: `see "<Title>"` inside a capability's own files: a requirement of that
+#: capability. Three words at least, so a quoted UI label ("see "Current key"
+#: beside ...") is not read as one.
+SELF_CITATION = re.compile(r"\b[Ss]ee" + _SEP + _TITLE)
+_SELF_MIN_WORDS = 3
+#: Where a file's own capability is read from: the spec tree, or a change's deltas.
+_OWN_CAPABILITY = re.compile(r"^openspec/(?:specs|changes/[^/]+/specs)/(?P<cap>.+)/[^/]+\.md$")
 #: A citation of a real capability whose title the recogniser above would skip:
 #: a quote straight after a comma or colon (`spec knowledge,"Title"`), or a
 #: title opening with a space, a backtick or a digit. Reported, never skipped,
@@ -174,25 +196,58 @@ def _title(match: re.Match[str]) -> str:
     return _CONTINUATION.sub(" ", raw).strip()
 
 
-def find_citations(text: str) -> list[Citation]:
+def _relative_capability(rel: str, path: str) -> str | None:
+    """The capability a link relative to ``rel`` points at, or ``None``."""
+    target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+    prefix = "openspec/specs/"
+    if not target.startswith(prefix) or not target.endswith("/spec.md"):
+        return None
+    return target[len(prefix) : -len("/spec.md")] or None
+
+
+def _extra_citations(text: str, rel: str) -> list[tuple[re.Match[str], str]]:
+    """The spec-internal forms: relative links, and ``see "<Title>"`` of the
+    file's own capability. Only files under ``openspec/`` use them."""
+    if not rel.startswith("openspec/"):
+        return []
+    found: list[tuple[re.Match[str], str]] = []
+    for match in RELATIVE_LINK_CITATION.finditer(text):
+        if cap := _relative_capability(rel, match.group("path")):
+            found.append((match, cap))
+    own = _OWN_CAPABILITY.match(rel)
+    if own and not rel.endswith("/proposal.md"):
+        for match in SELF_CITATION.finditer(text):
+            if len(_title(match).split()) >= _SELF_MIN_WORDS:
+                found.append((match, own.group("cap")))
+    return found
+
+
+def find_citations(text: str, rel: str | None = None) -> list[Citation]:
+    """Every citation in ``text``; with ``rel`` (the file's repository path),
+    also the spec-internal forms a file under ``openspec/`` may use."""
     found: list[Citation] = []
+    matches: list[tuple[re.Match[str], str]] = []
     for pattern in (PLAIN_CITATION, LINK_CITATION):
         for match in pattern.finditer(text):
             cap = match.group("cap")
             if pattern is PLAIN_CITATION and cap in NOT_A_CAPABILITY:
                 continue
-            raw = match.group("dq") or match.group("cq") or match.group("sq") or ""
-            # A "title" spanning several lines is two quotes that happen to
-            # pair up, not one wrapped title.
-            if raw.count("\n") > 3:
-                continue
-            # Every title is a phrase. A quoted single token after a
-            # `# spec <cap>` label is the next line's key — an error code in
-            # a status map — not a title.
-            if not re.search(r"\s", raw.strip()):
-                continue
-            line = text.count("\n", 0, match.start()) + 1
-            found.append(Citation(line, cap, _title(match)))
+            matches.append((match, cap))
+    if rel is not None:
+        matches += _extra_citations(text, rel)
+    for match, cap in matches:
+        raw = match.group("dq") or match.group("cq") or match.group("sq") or ""
+        # A "title" spanning several lines is two quotes that happen to
+        # pair up, not one wrapped title.
+        if raw.count("\n") > 3:
+            continue
+        # Every title is a phrase. A quoted single token after a
+        # `# spec <cap>` label is the next line's key — an error code in
+        # a status map — not a title.
+        if not re.search(r"\s", raw.strip()):
+            continue
+        line = text.count("\n", 0, match.start()) + 1
+        found.append(Citation(line, cap, _title(match)))
     return sorted(found, key=lambda c: c.line)
 
 
@@ -207,7 +262,7 @@ def check_file(rel: str, text: str, titles: Titles) -> tuple[list[str], list[str
     errors: list[str] = []
     notes: list[str] = []
     change = _change_of(rel)
-    for cite in find_citations(text):
+    for cite in find_citations(text, rel):
         where = f"{rel}:{cite.line}"
         known = titles.live.get(cite.capability)
         own = (titles.by_change.get(change, {}) if change else {}).get(cite.capability)
@@ -265,7 +320,7 @@ def check_tree(root: Path, files: list[str]) -> tuple[list[str], list[str], int]
             text = (root / rel).read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        count += len(find_citations(text))
+        count += len(find_citations(text, rel))
         file_errors, file_notes = check_file(rel, text, titles)
         errors += file_errors
         notes += file_notes

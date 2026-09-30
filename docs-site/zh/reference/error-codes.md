@@ -35,9 +35,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `ORIGIN_NOT_ALLOWED` | 403 | 请求带有的 `Origin` 不属于 Coffer 自己：守护进程的 Web 源、桌面应用，或显式开启的开发源。用于防御来自其他网站的请求。 | 从守护进程或桌面应用打开界面。要从开发源提供界面，用 `COFFER_DEV_CORS=1` 启动守护进程，或把该源列入 `COFFER_CORS_ORIGINS`。 |
 | `BAD_REQUEST` | 400 | 某个路由拒绝了请求（例如无效的 `X-Coffer-Actor` 值，或发到 `/mcp` 的 JSON 格式错误）。 | 阅读 `message`；修正请求。 |
 | `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的对话记录会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
-| `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 提供实时的路由列表。 |
+| `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 向带令牌的调用方提供实时的路由列表。 |
 | `FORBIDDEN` | 403 | 路由拒绝了该操作。 | 阅读 `message`。 |
-| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json` 中该路由的 schema 检查请求体。 |
+| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
 | `INTERNAL_ERROR` | 500 | 意外的失败。完整的 traceback 在守护进程日志中，对应响应的 trace id。 | 运行 `grep <trace-id> ~/.coffer/logs/daemon.log`，或 `coffer log daemon --errors`。 |
 | `HTTP_<status>` | 同名状态 | 一个没有具名错误码的普通 HTTP 错误。 | 阅读 `message`。 |
 
@@ -55,6 +55,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集和记忆分区都始终提供。 | 如果不再需要提供，就删除该资源。 |
 | `UPKEEP_ALREADY_RUNNING` | 409 | 该知识集已有一次整理正在进行。 | 等正在进行的整理完成；`coffer daemon status` 和界面都会显示它。 |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | 保留请求指定的表没有保留策略。 | 用 `coffer config list retention.` 列出有效的表。 |
+| `ATTENTION_NOT_IGNORABLE` | 409 | 该键下没有可以忽略的提醒项：要么什么都没列出，要么列出的是故障而不是提示。 | 刷新提醒列表；故障要修好，而不是忽略。 |
 
 ## 密钥 {#secrets}
 
@@ -137,6 +138,14 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SKILL_FILE_STALE` | 409 | 你读取之后，某个技能文件在磁盘上被改过。 | 重新加载，再重新做你的修改。 |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | 在智能体自己的技能文件夹中找不到这个名字的技能。 | 刷新智能体的技能列表。 |
 | `UNMANAGED_SKILL_INVALID` | 422 | 智能体自己的某个技能因为文件夹无效而无法纳入托管。 | 修好它的 `SKILL.md`，再纳入托管。 |
+| `SKILL_STAGING_NOT_FOUND` | 404 | 该 id 下没有暂存内容：导入或更新预览已被确认、取消或已过期（暂存只保留一小时，重启后不保留）。 | 重新暂存来源。 |
+| `SKILL_ORPHAN_NOT_FOUND` | 404 | 技能存储中没有该名称、且不在你的技能库中的文件夹。 | 刷新技能页面。 |
+| `SKILL_COPY_NOT_OURS` | 409 | 删除技能时发现某个智能体的副本不是 Coffer 的链接，所以整个删除被拒绝，什么都没改。`details` 给出该文件夹和智能体。 | 先从主副本恢复那个副本，或自己删除该文件夹。 |
+| `SKILL_COPY_NOT_DIFFERING` | 409 | 请求比较或处理的智能体副本并不是挡在 Coffer 链接位置上的文件夹。 | 无需比较：该智能体已经是链接，或那里什么都没有。 |
+| `SKILL_NOT_FROM_GIT` | 409 | 该技能不是从 Git 仓库添加的，因此没有可以更新的来源。 | 用 `--force` 从它的仓库重新添加以替换它。 |
+| `SKILL_SOURCE_UNREACHABLE` | 502 | git 无法拉取技能的仓库、解析它的 ref 或找到它的文件夹。消息是 git 自己的，已去掉任何凭据；如果缺少 git，`details.handoff` 是给你的智能体的提示词。 | 检查仓库地址、ref 以及你对它的访问权限。 |
+| `SKILL_UPDATE_CONFLICT` | 409 | 自固定提交以来技能文件夹被编辑过，接受更新会丢弃这些编辑。 | 保留你的编辑，或接受更新并丢弃它们。 |
+| `SKILL_UPDATE_NOT_PENDING` | 409 | “我已合并”给出的提交不是该技能正在等待的更新。 | 重新打开更新，并基于它提供的提交合并。 |
 
 ## 知识 {#knowledge}
 
@@ -155,6 +164,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | 知识历史中没有这个 id 的版本，或该文档没有这个版本。 | 用 `coffer knowledge history <path>` 或 `coffer knowledge changes` 列出版本。 |
 | `KNOWLEDGE_NOT_A_PASS` | 400 | 只有一轮整理可以撤销，而这个版本是其他类型的改动。 | 用 `coffer knowledge restore` 恢复文档的早期版本。 |
 | `KNOWLEDGE_UNDO_CONFLICT` | 409 | 之后的改动动过这轮整理涉及的某篇文档（消息中给出），所以撤销被拒绝，什么都没写。 | 改为编辑或恢复那篇文档。 |
+| `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 改为恢复该文档的早期版本。 |
+| `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
 | `ENGINE_UNAVAILABLE` | 503 | 操作所需的某个二进制或转换器（ripgrep，或文档转换后端）不可用。 | 重新安装 Coffer；打包附带的二进制中包含它们。 |
 | `GREP_PATTERN_INVALID` | 400 | ripgrep 拒绝了某个模式。 | 修正模式。 |
@@ -183,6 +194,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型。`details.reason` 是一个简短的标记，如 `model_not_found`。 | 选择该智能体提供的模型。 |
 | `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话。 | 刷新对话；重试那里显示的消息。 |
 | `ATTACHMENT_EXPIRED` | 410 | 再次发送（重试）的消息带有一个已被 30 天媒体清理删除的文件；什么都没发送。 | 重新附上文件，发送一条新消息。 |
+| `ATTACHMENT_NOT_FOUND` | 422 | 消息引用了一个没有存储过的附件：从未上传，或其文件已被清理。什么都没发送。 | 重新上传该文件。 |
+| `ATTACHMENT_TOO_LARGE` | 413 | 网页输入框上传的文件超过了消息中给出的单文件上限。 | 附上更小的文件。 |
+| `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | 没有智能体能在一轮对话中使用这种类型的文件（视频、压缩包、可执行文件和其他二进制文件）。 | 附上图片、文档、音频或文本文件。 |
 | `CHANNEL_NOT_PAIRED` | 409 | 该消息渠道没有可发送的已配对聊天。 | 配对它：`coffer channel pair <name>`。见[消息渠道](/zh/guides/channels)。 |
 | `CHANNEL_NOT_RUNNING` | 409 | 该消息渠道的适配器没有运行（已禁用或仍在启动）。 | 启用该渠道并等待它连上。 |
 | `CHANNEL_SEND_FAILED` | 502 | 消息平台拒绝了发送或发送失败。 | 阅读 `message`；检查机器人的令牌和权限。 |
@@ -223,6 +237,13 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `SYNC_MACHINE_NAME_INVALID` | 422 | 机器名为空或过长。 | 换一个名字。 |
 | `SYNC_CANNOT_RETIRE_SELF` | 422 | 你试图退役当前所在的机器。 | 从另一台机器退役它，或在这里清除同步远端。 |
 
+## 守护进程 {#the-daemon}
+
+| 错误码 | HTTP | 含义 | 常见修复 |
+| --- | --- | --- | --- |
+| `PORT_OUT_OF_RANGE` | 422 | 端口不在 1024-65535 之间，守护进程永远无法绑定它。`details` 给出该端口和范围。 | 选一个范围内的端口。 |
+| `PORT_IN_USE` | 409 | 另一个程序占用了该端口。Coffer 能识别时，`details.holder` 给出它的名称和 pid。 | 停掉那个程序，或换一个端口。 |
+
 ## 实验功能 {#experimental-features}
 
 | 错误码 | HTTP | 含义 | 常见修复 |
@@ -235,14 +256,15 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 这些错误在守护进程启动、开始处理请求之前抛出。它们出现在 `~/.coffer/logs/daemon.log` 和 `coffer daemon start` 的输出中。
 
-| 错误码 | 含义 | 常见修复 |
-| --- | --- | --- |
-| `DB_SCHEMA_TOO_NEW` | `~/.coffer/runs.db` 被更新或不同的 Coffer 构建迁移过。万一出现在响应中，会映射为 HTTP 409。 | 升级 Coffer，或恢复数据库迁移前的备份。见[文件与目录](/zh/reference/filesystem)。 |
-| `VAULT_MIGRATION_REQUIRED` | 该 home 仍把状态保存在 `coffer.db` 中，来自保险库布局之前的 Coffer。 | 停止守护进程并运行 `coffer migrate`。见[升级现有的 Coffer](/zh/guides/upgrading)。 |
-| `VAULT_MIGRATION_ON_HOLD` | `coffer migrate --rollback` 已把 home 恢复原状，并留下了暂停标记。 | 运行之前的构建，或先运行 `coffer migrate --resume` 再运行 `coffer migrate`。 |
-| `VAULT_MIGRATION_REFUSED` | `coffer migrate` 不会处理当前状态的 home，例如一次中途停下的升级。 | 按消息操作；升级做到一半时，先运行 `coffer migrate --rollback`。 |
-| `GIT_MISSING` | 保险库需要 `git`，但没有找到。 | 按适合这台机器的方式安装 git；错误的 `details.handoff` 是给你的智能体的提示词。 |
-| `MASTER_KEY_MISSING` | 见[密钥存储](#secrets)。 | |
+| 错误码 | HTTP | 含义 | 常见修复 |
+| --- | --- | --- | --- |
+| `DB_SCHEMA_TOO_NEW` | 409 | `~/.coffer/runs.db` 被更新或不同的 Coffer 构建迁移过。万一出现在响应中，就使用这个状态码。 | 升级 Coffer，或恢复数据库迁移前的备份。见[文件与目录](/zh/reference/filesystem)。 |
+| `VAULT_MIGRATION_REQUIRED` | 409 | 该 home 仍把状态保存在 `coffer.db` 中，来自保险库布局之前的 Coffer。 | 停止守护进程并运行 `coffer migrate`。见[升级现有的 Coffer](/zh/guides/upgrading)。 |
+| `VAULT_MIGRATION_ON_HOLD` | 409 | `coffer migrate --rollback` 已把 home 恢复原状，并留下了暂停标记。 | 运行之前的构建，或先运行 `coffer migrate --resume` 再运行 `coffer migrate`。 |
+| `VAULT_MIGRATION_REFUSED` | 409 | `coffer migrate` 不会处理当前状态的 home，例如一次中途停下的升级。 | 按消息操作；升级做到一半时，先运行 `coffer migrate --rollback`。 |
+| `GIT_MISSING` | 500 | 保险库需要 `git`，但没有找到。需要 git 的路由也会返回它。 | 按适合这台机器的方式安装 git；错误的 `details.handoff` 是给你的智能体的提示词。 |
+
+`MASTER_KEY_MISSING` 也可能让启动失败；见[密钥](#secrets)。低于 2.40 的 `git` 也会让守护进程停下，但没有错误码：日志会给出找到的版本，并附上一段可以交给你的智能体、让它升级 git 的提示词。
 
 ## 聊天轮次错误 {#chat-turn-errors}
 

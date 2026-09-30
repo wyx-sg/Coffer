@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when a doc, a spec, a shipped skill, the web UI or an e2e spec quotes a removed command.
+"""Fail when a doc, a spec, a shipped skill, the web UI, the desktop shell or an e2e spec quotes a removed command.
 
 The OpenSpec change reshape-cli-and-mcp-surface rebuilt the `coffer` command
 line around one grammar and removed two built-in MCP tools, with no
@@ -7,9 +7,12 @@ compatibility aliases (its design.md "Command mapping" lists every old
 spelling and its replacement). Anything that still quotes an old spelling tells
 a reader or an agent to run a command that no longer exists, and the failure
 only shows when someone follows it. The readers that matter are the docs site,
-the repository's own guides (README, AGENTS, CONTRIBUTING, ``.agents/``), the
-specs, the skills Coffer ships (an agent runs what they say verbatim), the web
-UI's source and the e2e suite, so those are the trees scanned here.
+the repository's own guides (README in both languages, AGENTS, CONTRIBUTING,
+``.agents/``, ``docs/``), the specs, the skills Coffer ships (an agent runs what
+they say verbatim), the web UI's and the desktop shell's source and the e2e
+suite, so those are the trees scanned here. The ADRs under ``docs/decisions/``
+are not: an ADR is the record of a decision as it was taken, and quoting the
+command that decision introduced or removed is its job.
 
 Each entry is a whole command phrase matched on word boundaries, so a phrase
 that is a prefix of a live command is not caught by accident (`coffer mcp
@@ -45,6 +48,9 @@ SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("backend/coffer", (".md",)),  # shipped skill bodies (`**/skill_assets/*.md`)
     ("e2e", (".ts", ".sh", ".json")),
     ("README.md", (".md",)),
+    ("README.zh-CN.md", (".md",)),
+    ("docs", (".md",)),
+    ("desktop/src", (".rs", ".json")),
     ("AGENTS.md", (".md",)),
     ("CONTRIBUTING.md", (".md",)),
     (".agents", (".md",)),
@@ -52,6 +58,8 @@ SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("frontend/src", (".ts", ".tsx", ".json")),
 )
 _SKIP_DIRS = {"node_modules", ".vitepress/cache", "dist", "__pycache__"}
+#: Subtrees of a scanned tree left out on purpose: the ADRs are history.
+_SKIP_TREES = ("docs/decisions/",)
 _SKIP_FILES = {"package-lock.json"}
 
 #: (removed phrase, what replaces it). A phrase is words separated by spaces;
@@ -226,7 +234,7 @@ PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
 
 def _skipped(path: Path) -> bool:
     rel = path.relative_to(REPO_ROOT).as_posix()
-    if path.name in _SKIP_FILES:
+    if path.name in _SKIP_FILES or rel.startswith(_SKIP_TREES):
         return True
     return any(f"/{d}/" in f"/{rel}/" for d in _SKIP_DIRS)
 
