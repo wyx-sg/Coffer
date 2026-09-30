@@ -4,7 +4,7 @@
 //
 // Until this existed, a user whose vault had just been damaged by a round
 // could see exactly what the round did — the History row lists every path —
-// and had no way to undo it without opening a terminal. `coffer sync rollback`
+// and had no way to undo it without opening a terminal. `coffer sync restore`
 // was the only door.
 //
 // The button belongs to ONE row, never to all of them: `POST /sync/rollback`
