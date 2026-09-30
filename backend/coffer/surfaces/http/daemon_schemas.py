@@ -115,8 +115,8 @@ class DaemonLogListOut(BaseModel):
 class DaemonPortOut(BaseModel):
     """The port of the next start beside the port this daemon answers on.
 
-    ``pending`` is the two differing: a saved port takes effect at the next
-    start (spec daemon "Bind a fixed, settable port"), so until then the page
+    ``pending`` is a saved port this daemon is not on: it takes effect at the
+    next start (spec daemon "Bind a fixed, settable port"), so until then the page
     says so and the status keeps showing ``bound_port``.
     """
 

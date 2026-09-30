@@ -230,7 +230,7 @@ async def test_the_server_log_reads_the_newest_lines_and_tells_coffer_from_stder
     path.write_text(
         "2026-09-30T14:02:44+00:00 coffer start uvx mcp-server-duckdb\n"
         "Installed 14 packages\n"
-        "2026-09-30T14:02:45+00:00 coffer error launcher \"uvx\" not found on PATH /usr/bin\n"
+        '2026-09-30T14:02:45+00:00 coffer error launcher "uvx" not found on PATH /usr/bin\n'
     )
     body = (await ctx.client.get(f"/api/v1/resources/mcp_server/{srv.uid}/log")).json()
     assert body["path"] == str(path)

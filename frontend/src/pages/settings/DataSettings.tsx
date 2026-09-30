@@ -94,7 +94,9 @@ export function DataSettings() {
                 label={t("settings.data.local.attachments")}
                 description={t("settings.data.local.attachmentsHelp")}
               >
-                <span className="text-sm text-text">{formatBytes(data.local_content.bytes)}</span>
+                <span className="text-sm text-text" data-visual-volatile>
+                  {formatBytes(data.local_content.bytes)}
+                </span>
               </SettingRow>
               <SettingRow label={t("settings.data.location")}>
                 <div className="flex flex-col items-end gap-0.5">

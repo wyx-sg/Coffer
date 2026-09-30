@@ -27,7 +27,11 @@ router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"], dependencies=[Depen
 def _port_out() -> DaemonPortOut:
     configured = daemon_config.effective_port()
     bound = daemon_routes.get_port()
-    return DaemonPortOut(port=configured, bound_port=bound, pending=configured != bound)
+    # Pending only when a port was saved and this daemon is not on it. With
+    # nothing saved there is nothing to apply: a daemon the test suite started
+    # in its port range answers elsewhere than 8000 without anything pending.
+    saved = daemon_config.read_fixed_port() is not None
+    return DaemonPortOut(port=configured, bound_port=bound, pending=saved and configured != bound)
 
 
 @router.get("/port", response_model=DaemonPortOut)

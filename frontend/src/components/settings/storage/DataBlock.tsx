@@ -21,7 +21,9 @@ export function DataBlock({ title, size, description, action, testId, children }
         {size === null ? (
           <Skeleton className="h-4 w-24" />
         ) : (
-          <span className="text-xs text-text-muted">{size}</span>
+          <span className="text-xs text-text-muted" data-visual-volatile>
+            {size}
+          </span>
         )}
         {action ? <div className="ml-auto flex items-center gap-2">{action}</div> : null}
       </div>

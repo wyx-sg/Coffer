@@ -87,6 +87,16 @@ async def test_the_port_reads_the_default_and_the_bound_port(client):
 
 
 @pytest.mark.asyncio
+async def test_nothing_is_pending_while_no_port_is_saved(client, monkeypatch):
+    # A daemon started in a test port range answers elsewhere than 8000 with
+    # nothing saved: there is nothing to apply at the next start.
+    monkeypatch.setattr(daemon_routes, "_PORT", 18300)
+    async with client:
+        r = await client.get("/api/v1/daemon/port")
+    assert r.json() == {"port": 8000, "bound_port": 18300, "pending": False}
+
+
+@pytest.mark.asyncio
 async def test_the_port_routes_require_the_token(client):
     async with client:
         r = await client.get("/api/v1/daemon/port", headers={"X-Coffer-Token": ""})

@@ -108,7 +108,9 @@ export function DaemonStatusCard({ state, status, inShell }: Props) {
           <Fact label={t("settings.daemonTab.channel")}>{status.channel}</Fact>
           <Fact label={t("settings.daemonTab.startedAt")}>{formatDateTime(status.started_at)}</Fact>
           <Fact label={t("settings.daemonTab.executable")}>
-            <span className="font-mono">{status.executable}</span>
+            <span className="font-mono" data-visual-volatile>
+              {status.executable}
+            </span>
           </Fact>
         </dl>
       ) : null}

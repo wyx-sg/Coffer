@@ -115,7 +115,11 @@ export function McpServerHeader({
             <span aria-hidden className="text-text-subtle">
               ·
             </span>
-            <span className="min-w-0 break-all font-mono" data-testid="mcp-server-target">
+            <span
+              className="min-w-0 break-all font-mono"
+              data-testid="mcp-server-target"
+              data-visual-volatile
+            >
               {transport.target}
             </span>
           </>
