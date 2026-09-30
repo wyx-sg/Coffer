@@ -140,7 +140,7 @@ def run(
             argv,
             cwd=root if root.is_dir() else None,
             env=env,
-            input=stdin,
+            input=stdin if stdin is not None else b"",
             capture_output=True,
             timeout=timeout,
             check=False,

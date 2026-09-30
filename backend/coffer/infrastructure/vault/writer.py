@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from coffer.domain.vault.content_ids import fingerprint
 from coffer.domain.vault.errors import VaultFileStale, VaultValidationFailed
@@ -54,6 +54,10 @@ from coffer.infrastructure.vault.atomic import atomic_write, remove_file
 from coffer.infrastructure.vault.repository import VaultRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _nothing_held() -> tuple[str, ...]:
+    return ()
 
 
 class Transaction:
@@ -147,6 +151,7 @@ class VaultWriter:
         self._owned: Counter[str] = Counter()
         self._listeners: list[Listener] = []
         self._problems: dict[str, tuple[Finding, ...]] = {}
+        self._held: Callable[[], Iterable[str]] = _nothing_held
 
     # --- configuration -------------------------------------------------------
 
@@ -155,6 +160,26 @@ class VaultWriter:
 
     def add_listener(self, listener: Listener) -> None:
         self._listeners.append(listener)
+
+    def set_held(self, provider: Callable[[], Iterable[str]]) -> None:
+        """Paths deliberately kept different from ``HEAD`` — a join's files
+        that differ, left as they are here until the person chooses. They are
+        never settled; the stores read them from disk."""
+        self._held = provider
+
+    def held(self) -> frozenset[str]:
+        return frozenset(self._held())
+
+    def restore_disk(self, path: str, data: bytes | None) -> None:
+        """Put ``data`` back at ``path`` on disk without committing — only for
+        a held path, whose working-tree bytes are deliberately not ``HEAD``'s."""
+        path = check_path(path)
+        with self.lock:
+            target = self.repo.root / path
+            if data is None:
+                remove_file(target, stop_at=self.repo.root)
+            else:
+                atomic_write(target, data)
 
     # --- reading ---------------------------------------------------------------
 
@@ -252,6 +277,12 @@ class VaultWriter:
             return None
         return CommitResult(version, meta, tuple(paths))
 
+    def notify(self, result: CommitResult) -> None:
+        """Tell every listener about a commit made outside this writer's own
+        transactions — a sync round's checkout, which moves ``HEAD`` itself
+        under :attr:`lock`."""
+        self._notify(result)
+
     def _notify(self, result: CommitResult) -> None:
         for listener in list(self._listeners):
             try:
@@ -269,8 +300,9 @@ class VaultWriter:
             out: dict[str, str | None] = {}
             changed = [p for _code, p in self.repo.status() if not p.endswith("/")]
             ignored = self.repo.ignored(changed)
+            held = self.held()
             for path in changed:
-                if self._owned[path] or path in ignored:
+                if self._owned[path] or path in ignored or path in held:
                     continue
                 data = self.read_disk(path)
                 out[path] = fingerprint(data) if data is not None else None
@@ -285,8 +317,11 @@ class VaultWriter:
         asks for (a minted uid) follow as one ``daemon`` commit."""
         meta = meta or CommitMeta(writer=WRITER_DISK, operation=OP_EDIT, summary="Edited on disk")
         with self.lock:
+            held = self.held()
             candidates = [
-                p for p in (paths if paths is not None else self.pending()) if not self._owned[p]
+                p
+                for p in (paths if paths is not None else self.pending())
+                if not self._owned[p] and p not in held
             ]
             if not candidates:
                 return None

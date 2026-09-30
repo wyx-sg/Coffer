@@ -7,8 +7,9 @@ composition root; these Protocols are the part a use case may depend on.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Protocol
+from collections.abc import Callable, Iterable, Sequence
+from contextlib import AbstractContextManager
+from typing import Any, Protocol
 
 from coffer.domain.vault.findings import Finding
 from coffer.domain.vault.history import Commit
@@ -32,6 +33,9 @@ class TransactionPort(Protocol):
 
 
 class VaultWriterPort(Protocol):
+    #: The vault's one write lock (a re-entrant lock); a sync checkout holds it.
+    lock: AbstractContextManager[Any]
+
     def begin(self, meta: CommitMeta) -> TransactionPort: ...
     def read_disk(self, path: str) -> bytes | None: ...
     def write_file(
@@ -46,6 +50,10 @@ class VaultWriterPort(Protocol):
     def problems(self) -> dict[str, tuple[Finding, ...]]: ...
     def set_validator(self, validator: Validator) -> None: ...
     def add_listener(self, listener: Listener) -> None: ...
+    def notify(self, result: CommitResult) -> None: ...
+    def set_held(self, provider: Callable[[], Iterable[str]]) -> None: ...
+    def held(self) -> frozenset[str]: ...
+    def restore_disk(self, path: str, data: bytes | None) -> None: ...
 
 
 class VaultHistoryPort(Protocol):

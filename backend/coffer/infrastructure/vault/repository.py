@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
@@ -87,13 +88,7 @@ class VaultRepository:
                     "--no-verify",
                     "-F",
                     "-",
-                    stdin=message(
-                        CommitMeta(
-                            writer=WRITER_DAEMON,
-                            operation=OP_BASELINE,
-                            summary="History starts here",
-                        )
-                    ).encode(),
+                    stdin=_baseline_message(),
                     writer=WRITER_DAEMON,
                 )
             self._ready.add(key)
@@ -305,6 +300,14 @@ class VaultRepository:
 def _chunks(items: list[str], size: int = 200) -> Iterable[list[str]]:
     for i in range(0, len(items), size):
         yield items[i : i + size]
+
+
+def _baseline_message() -> bytes:
+    """The first commit's message. It names a fresh random vault id, so two
+    vaults created in the same second never share a root commit — which would
+    make git see a common history two machines never had."""
+    meta = CommitMeta(writer=WRITER_DAEMON, operation=OP_BASELINE, summary="History starts here")
+    return (message(meta) + f"Coffer-Vault: {uuid.uuid4().hex}\n").encode()
 
 
 def _manifest_bytes() -> bytes:
