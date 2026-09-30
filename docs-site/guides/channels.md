@@ -97,6 +97,8 @@ Send the bot a message. The first message opens a conversation on the channel's 
   ```
 
   The `💬` line is what the agent last said before a tool call; the answer grows under the rule. The final reply keeps everything the agent wrote, one paragraph per stretch of text.
+
+  A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
 - A turn that fails, is stopped, or hits the tool-iteration limit ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 ### What the reply looks like

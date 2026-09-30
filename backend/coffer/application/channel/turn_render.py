@@ -6,10 +6,10 @@ from the adapter's declared capabilities (never its type):
 - supports_live_text → ONE surface the renderer keeps updating for the whole
   turn (see "Grow a reply in place on one live surface"). Each snapshot is the
   turn's status block — ``⏳ Working · 2m 14s · 7 steps``, the agent's latest
-  narration, the newest step lines (see "Show a turn's working state as one
-  status line") — with the answer written so far under it. Telegram's surface is
-  a message it edits or a draft; SeaTalk's is a message stream. The renderer
-  never knows which.
+  narration, the newest step lines (the tool name alone in a group; see "Show a
+  turn's working state as one status line") — with the answer written so far
+  under it. Telegram's surface is a message it edits or a draft; SeaTalk's is a
+  message stream. The renderer never knows which.
 - The header ticks on the surfaces' keep-alive cadence, so a long silent tool
   still shows time passing.
 
@@ -111,7 +111,9 @@ class TurnRenderer:
 
     async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         started = self.now()
-        self._status = TurnStatus(started=started, show_steps=self.show_steps)
+        self._status = TurnStatus(
+            started=started, show_steps=self.show_steps, chat_kind=self.chat_kind
+        )
         self._reply = ReplyText()
         self._surface = TurnSurface(
             self.adapter, self.chat_id, self.thread_id, self.chat_kind, self._with_mention
