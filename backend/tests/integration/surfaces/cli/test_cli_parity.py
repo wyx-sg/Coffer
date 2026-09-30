@@ -83,9 +83,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "run": set(),
     "adopt": {"skill", "mcp"},
     "discard": {"skill", "mcp"},
-    # `test` re-queries capabilities, then reports health; `cap` toggles one
-    # tool, prompt or resource (spec mcp-gateway).
-    "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
+    # `test` re-queries capabilities, then reports health; `prompt` prints the
+    # hand-off a server's page offers; `cap` toggles one tool, prompt or
+    # resource (spec mcp-gateway).
+    "mcp": {*_LIFECYCLE, "add", "scope", "test", "prompt", "cap"},
     "mcp cap": {"list", "enable", "disable"},
     # Custom-tool groups (spec mcp-gateway "Manage custom tools on REST and the
     # command line"): an `mcp_server` of the `http_api` transport. `reimport`
@@ -103,7 +104,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # whose status `show` prints as `coffer_connection`; `transcript [<id>]` reads
     # the agent's history; `models` is the web model picker's list
     # (GET /agent-providers/{agent_key}/models); `hooks` lists every hook in
-    # the agent's native config (GET /agents/{uid}/hooks).
+    # the agent's native config (GET /agents/{uid}/hooks); `prompt` prints the
+    # install prompt GET /agents/types and GET /agents/{uid} carry as
+    # `install_handoff`.
     "agent": {
         *_LIFECYCLE,
         "add",
@@ -114,6 +117,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "config",
         "plugin",
         "hooks",
+        "prompt",
     },
     # Writes to the agent's own config files; reading them is `path agent
     # <name> config` (see _FILE_BACKED_ROUTES).

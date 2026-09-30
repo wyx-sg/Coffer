@@ -227,13 +227,13 @@ class ConfigFileFormatInvalid(CofferError):  # noqa: N818
 
 
 class ShimNotFound(CofferError):  # noqa: N818
-    """The coffer-mcp-shim binary could not be resolved. Maps to 422."""
+    """The coffer-mcp-shim binary could not be resolved (422); carries the hand-off prompt."""
 
     code = "SHIM_NOT_FOUND"
 
-    def __init__(self, looked_for: str = "coffer-mcp-shim") -> None:
+    def __init__(self, looked_for: str = "coffer-mcp-shim", handoff: str | None = None) -> None:
         super().__init__(f"could not resolve the {looked_for} binary on PATH or bundled location")
-        self.looked_for = looked_for
+        self.error_details = {"handoff": {"prompt": handoff}} if handoff else {}
 
 
 class FsPathNotBrowsable(CofferError):  # noqa: N818

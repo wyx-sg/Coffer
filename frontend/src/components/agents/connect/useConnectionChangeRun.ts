@@ -4,7 +4,9 @@
 // registers the agent (the daemon creates a never-run agent's directory) and
 // then connects it; Connect / Repair installs the missing parts; Disconnect
 // removes Coffer's parts — and the agent's items move applying → applied, or
-// fail together with the translated error when its call fails. A retry
+// fail together with the translated error — and, when the refusal carries one
+// (a missing coffer-mcp-shim), the daemon's hand-off prompt — when its call
+// fails. A retry
 // re-runs only the failed agents, and a registration that already succeeded
 // is not repeated.
 import { useRef, useState } from "react";
@@ -14,7 +16,7 @@ import { useTranslation } from "react-i18next";
 import type { ChangeStatus } from "@/components/change-preview/changeCounts";
 import { agentsApi, type AgentType, type AgentTypeOut } from "@/lib/api/agents";
 import { clearConnectFailure, recordConnectFailure } from "@/lib/agents/connectFailure";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { agentsKey } from "@/lib/api/queryKeys";
 import { useAgentConnect, useRegisterAgent } from "@/lib/hooks/useAgents";
 
@@ -23,6 +25,16 @@ export type ChangeKind = "add" | "connect" | "disconnect";
 export interface AgentProgress {
   status: ChangeStatus;
   error?: string;
+  /** The refusal's hand-off prompt (`details.handoff.prompt`), when it has one. */
+  handoff?: string;
+}
+
+/** The hand-off prompt a coded refusal carries in its details, if any. */
+function handoffOf(error: unknown): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const details = error.details as { handoff?: { prompt?: unknown } } | undefined;
+  const prompt = details?.handoff?.prompt;
+  return typeof prompt === "string" && prompt ? prompt : undefined;
 }
 
 export type RunPhase = "review" | "applying" | "done";
@@ -71,7 +83,7 @@ export function useConnectionChangeRun(kind: ChangeKind | undefined, connectUid:
         if (uid) clearConnectFailure(uid);
       } catch (error) {
         const reason = translateApiError(t, error);
-        mark(row.type, { status: "failed", error: reason });
+        mark(row.type, { status: "failed", error: reason, handoff: handoffOf(error) });
         // The Overview keeps saying why a Connect failed after the dialog closes.
         const uid = uidOf();
         if (uid && kind !== "disconnect") recordConnectFailure(uid, reason);

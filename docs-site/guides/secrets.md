@@ -47,7 +47,7 @@ Each row's **⋯** menu:
 
 **Add secret** stores a new standalone secret: a name (letters, digits, `.`, `_` and `-`, at most 64, fixed once added) and a value, which is never shown back. A name that already exists is caught before anything is sent, with a link to replace that secret's value instead. The dialog shows the reference to cite.
 
-**Find plaintext keys** runs the [plaintext scan](#move-plaintext-secret-files-into-the-store) from the page. It lists each key it found by file, line, key and the secret name it would get — never the value — with every finding ticked. Untick what should stay, then **Review changes**: Coffer works out what the import would do without writing anything, and shows the secrets it would add and the files it would change. **Apply** moves them. A name that already holds a different value is skipped with its file untouched, and the dialog lists what was skipped and why. Skills that still point at `~/.coffer/secrets/` are listed too, for you to update by hand.
+**Find plaintext keys** runs the [plaintext scan](#move-plaintext-secret-files-into-the-store) from the page. It lists each key it found by file, line, key and the secret name it would get — never the value — with every finding ticked. Untick what should stay, then **Review changes**: Coffer works out what the import would do without writing anything, and shows the secrets it would add and the files it would change. **Apply** moves them. A name that already holds a different value is skipped with its file untouched, and the dialog lists what was skipped and why. Skills that still point at `~/.coffer/secrets/` are listed too, for you to update by hand — or to hand to your agent with **Copy prompt** or **Ask an agent** beside the list. The prompt names each skill, file and line and the secret names the keys become, asks the agent to rewrite the commands to use `coffer run` and show you the diff, and never carries a value.
 
 While any change waits for approval, the top of the page says how many, with **Review** to reopen the approvals window. With no secrets at all, the page offers **Add secret** and **Find plaintext keys**.
 
@@ -214,7 +214,7 @@ Earlier advice kept skill secrets in plaintext files such as `~/.coffer/secrets/
 coffer credentials scan
 ```
 
-The scan reads `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of strings), and every text file in your managed skills (assignments whose name says password, secret, token or key, and well-known token shapes). For each finding it prints the file, line, key and the standalone name it would get, such as `coffer://secret/db.PASSWORD` — never the value. It also names every skill that still reads a file under `~/.coffer/secrets/`, so you can move its command to `coffer run --env-file`.
+The scan reads `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of strings), and every text file in your managed skills (assignments whose name says password, secret, token or key, and well-known token shapes). For each finding it prints the file, line, key and the standalone name it would get, such as `coffer://secret/db.PASSWORD` — never the value. It also names every skill that still reads a file under `~/.coffer/secrets/`, so you can move its command to `coffer run --secret` or `coffer run --env-file`; `coffer credentials scan --prompt` prints a prompt that hands that rewrite to your agent.
 
 ```sh
 coffer credentials import --dry-run     # print the plan, write nothing

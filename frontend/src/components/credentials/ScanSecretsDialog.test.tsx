@@ -4,10 +4,15 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 import type { SecretScan } from "@/lib/api/credentials";
+import { acceptance } from "@/test/acceptance";
 import { ScanSecretsDialog } from "./ScanSecretsDialog";
 
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
+}));
 vi.mock("@/lib/api/credentials", () => ({
   credentialsApi: {
     scan: vi.fn(),
@@ -54,6 +59,7 @@ const SCAN: SecretScan = {
       skill: "deploy",
     },
   ],
+  handoff: { prompt: "These skills read keys from files in ~/.coffer/secrets/." },
 };
 
 const onOpenChange = vi.fn();
@@ -64,7 +70,9 @@ function renderDialog() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <ScanSecretsDialog open onOpenChange={onOpenChange} />
+      <MemoryRouter>
+        <ScanSecretsDialog open onOpenChange={onOpenChange} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -85,8 +93,23 @@ describe("ScanSecretsDialog", () => {
     expect(within(dialog).getByText("npm-publish-token")).toBeInTheDocument();
     expect(within(dialog).getByText("GITHUB_TOKEN")).toBeInTheDocument();
     expect(within(dialog).getByText("3 of 3 ticked")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("1 skill still points at ~/.coffer/secrets/");
+    expect(dialog).toHaveTextContent("1 skill still reads keys from ~/.coffer/secrets/");
   });
+
+  acceptance(
+    "credentials",
+    "a skill still reading a secrets file is handed to an agent",
+    async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      renderDialog();
+      const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+      // Beside the mentions, the manual list stays and the hand-off is offered.
+      expect(within(dialog).getByText(/deploy/)).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Copy prompt" }));
+      expect(writeText).toHaveBeenCalledWith(SCAN.handoff?.prompt);
+    },
+  );
 
   test("review runs a dry run of the ticked findings; apply runs the import", async () => {
     api.importFindings.mockImplementation(async (ids, dryRun) => ({
@@ -155,7 +178,7 @@ describe("ScanSecretsDialog", () => {
   });
 
   test("a scan that finds nothing says so", async () => {
-    api.scan.mockResolvedValue({ findings: [], mentions: [] });
+    api.scan.mockResolvedValue({ findings: [], mentions: [], handoff: null });
     renderDialog();
     expect(
       await screen.findByRole("dialog", { name: "No plaintext keys found" }),

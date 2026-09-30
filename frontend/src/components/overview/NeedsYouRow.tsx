@@ -6,11 +6,16 @@
 // Secrets, a memory hook changed by hand in the agent's settings on that
 // agent's Hooks tab (lib/overview/attention). An item the daemon marks
 // `ignorable` — informational, such as an agent simply not connected — also
-// carries a ⋯ with Ignore (Stop ignoring once it is ignored); no other row
-// has a menu (Overview boards, 1.3.01 / 1.3.05).
+// carries a ⋯ with Ignore (Stop ignoring once it is ignored). An item whose fix
+// is a chore for an agent carries the daemon's hand-off prompt, and its ⋯ then
+// offers Copy prompt and, with a managed agent available, Ask an agent — the
+// same hand-off the kind's page offers, in the menu because the action column
+// has room for one button. Any other row has no menu (Overview boards,
+// 1.3.01 / 1.3.05).
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
 import { StatusDot } from "@/components/status/StatusDot";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
@@ -44,12 +49,21 @@ export function NeedsYouRow({ item, ignored = false, onIgnore, onRestore }: Prop
   const since = describeSince(item.since);
   const action = t(itemActionLabelKey(item));
   const run = ignored ? onRestore : onIgnore;
-  const menu: MenuAction | null =
-    item.ignorable && run
-      ? ignored
-        ? { key: "restore", label: t("overview.needsYou.restore"), onSelect: run }
-        : { key: "ignore", label: t("overview.needsYou.ignore"), onSelect: run }
-      : null;
+  const handoff = useAgentHandoff(item.handoff?.prompt ?? "");
+  const menu: MenuAction[] = [];
+  if (item.handoff) {
+    menu.push({ key: "copy-prompt", label: t("handoff.copyPrompt"), onSelect: handoff.copy });
+    if (handoff.canAsk)
+      menu.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
+  }
+  if (item.ignorable && run) {
+    const separated = menu.length > 0;
+    menu.push(
+      ignored
+        ? { key: "restore", label: t("overview.needsYou.restore"), onSelect: run, separated }
+        : { key: "ignore", label: t("overview.needsYou.ignore"), onSelect: run, separated },
+    );
+  }
   return (
     <li className={cn(ROW_GRID, ignored && "opacity-70")}>
       <span
@@ -88,12 +102,13 @@ export function NeedsYouRow({ item, ignored = false, onIgnore, onRestore }: Prop
             {action}
           </Link>
         </Button>
-        {menu ? (
+        {menu.length ? (
           <ActionMenu
             label={t("overview.needsYou.moreFor", { name: item.title })}
-            actions={[menu]}
+            actions={menu}
           />
         ) : null}
+        {handoff.dialog}
       </div>
     </li>
   );

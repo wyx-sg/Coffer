@@ -9,7 +9,7 @@ import { ActionMenu } from "@/components/ui/menu";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { AgentBadge } from "@/components/agent/AgentBadge";
-import { abbreviateHomePath, agentInstallCommand, agentTypeLabel } from "@/lib/agents/display";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
@@ -115,8 +115,9 @@ function CofferDetail({ row, state }: { row: AgentTypeOut; state: AgentRowState 
     case "disabled":
       return t("agents.list.detail.disabled");
     case "not_installed":
+      return t("agents.list.detail.installByAgent");
     case "config_left_behind":
-      return <span className="break-all font-mono">{agentInstallCommand(row.type)}</span>;
+      return t("agents.list.detail.reinstallByAgent", { dir });
     case "checking":
       return null;
   }

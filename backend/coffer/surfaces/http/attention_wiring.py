@@ -26,6 +26,8 @@ from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.service import ConvergeService
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.health_repo import MCPServerHealthRepo
+from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
+from coffer.surfaces.http.mcp.handoff_views import McpHandoffs
 
 
 def build_attention_sources(
@@ -44,14 +46,21 @@ def build_attention_sources(
     if health_repo is not None:
         sources.append(
             McpAttentionSource(
-                resources=resource_svc, health=health_repo, credentials=credential_store
+                resources=resource_svc,
+                health=health_repo,
+                credentials=credential_store,
+                handoffs=McpHandoffs(),
             )
         )
     sources.append(
         AgentAttentionSource(agents=resource_svc, detect=auto_detect, connection=connection_service)
     )
     if channel_service is not None:
-        sources.append(ChannelAttentionSource(resources=resource_svc, channels=channel_service))
+        sources.append(
+            ChannelAttentionSource(
+                resources=resource_svc, channels=channel_service, sdk_handoff=sdk_missing_handoff
+            )
+        )
     if sync_service is not None:
         sources.append(SyncAttentionSource(sync=sync_service))
     if cli_service is not None:

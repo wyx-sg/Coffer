@@ -29,6 +29,7 @@ from coffer.surfaces.http.skill_source_schemas import (
     SkillUpdateApplyRequest,
     SkillUpdateCompareOut,
     SkillUpdateKeepRequest,
+    SkillUpdateMergedRequest,
     SkillUpdatePreviewOut,
     compare_out,
     preview_out,
@@ -180,3 +181,18 @@ async def keep_mine(
     source = SkillConfig.model_validate((await svc.get_skill(uid)).config).source
     assert isinstance(source, GitImportSource)
     return status_out(result, source.commit)
+
+
+@router.post("/{uid}/source/merged", response_model=SkillOut)
+async def record_merged(
+    uid: str,
+    body: SkillUpdateMergedRequest,
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+    sources: SkillSourceService = Depends(get_skill_source_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> SkillOut:
+    """ "I merged it" (spec skill-manager "Record an update merged into local
+    edits"): pin the skill to the upstream commit its local edits were merged
+    with, leaving the master folder's files as they are."""
+    updated = await sources.mark_merged(uid, body.commit, actor=actor)
+    return await _to_skill_out(svc, updated, await _agents_by_id(svc), sources=sources)

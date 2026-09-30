@@ -103,6 +103,7 @@ describe("useChannels hooks", () => {
       inbound: null,
       runs_on: "machine-here",
       runs_here: true,
+      handoff: null,
     };
     const fetchMock = stubFetch(status);
 

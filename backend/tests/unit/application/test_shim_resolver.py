@@ -65,6 +65,31 @@ def test_raises_when_nothing_resolves(tmp_path, monkeypatch):
         default_shim_resolver()
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="a missing shim is refused with a prompt that hands finding it to an agent",
+)
+def test_a_missing_shim_carries_a_handoff_naming_where_coffer_looked(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(tmp_path / "gone" / "coffer-mcp-shim"))
+    monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: None)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setattr(mcp_service.sysconfig, "get_path", lambda _name: str(empty))
+    monkeypatch.setattr(mcp_service.sys, "executable", str(tmp_path / "dist" / "python"))
+
+    with pytest.raises(ShimNotFound) as caught:
+        default_shim_resolver()
+
+    prompt = caught.value.error_details["handoff"]["prompt"]
+    assert prompt.startswith("Please find or reinstall Coffer's `coffer-mcp-shim`")
+    # Where an installed Coffer keeps it, and every place Coffer looked.
+    assert str(tmp_path / "home" / ".coffer" / "bin" / "coffer-mcp-shim") in prompt
+    assert str(tmp_path / "gone" / "coffer-mcp-shim") in prompt
+    assert str(empty) in prompt and str(tmp_path / "dist") in prompt
+    assert "choose Connect again" in prompt
+
+
 def _deploy(home: pathlib.Path, version: str) -> tuple[pathlib.Path, pathlib.Path]:
     """A frozen deploy under `home`: the version directory's shim and the
     public symlink into it, the way `binary_deploy` lays them out."""

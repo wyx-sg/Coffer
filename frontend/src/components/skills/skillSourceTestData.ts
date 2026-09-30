@@ -75,6 +75,7 @@ export function updatePreview(over: Partial<SkillUpdatePreview> = {}): SkillUpda
       },
     ],
     local_changes: [],
+    handoff: null,
     ...over,
   };
 }

@@ -33,7 +33,7 @@ export function DaemonSettings() {
       <DaemonStatusCard state={state} status={status} inShell={inShell} />
       <SettingsSection title={t("settings.daemonTab.startup")} testId="settings-daemon-startup">
         <DaemonResidencySettings disabled={unreachable} />
-        <DaemonPortRow disabled={unreachable} inShell={inShell} />
+        <DaemonPortRow disabled={unreachable} />
       </SettingsSection>
     </div>
   );

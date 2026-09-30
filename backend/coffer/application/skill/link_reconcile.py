@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.reconcile.ports import Applied, AuditEvent
 from coffer.application.skill import binding_ops
+from coffer.application.skill.drift_handoff import drift_handoff
 from coffer.domain.audit import AuditEventType
 from coffer.domain.reconcile import (
     Decision,
@@ -283,11 +284,17 @@ def _decide(d: Difference) -> Decision:
     """The direction policy for one difference. Independent of the trigger:
     what is safe to repair unattended is exactly what is safe on request."""
     if d.key.startswith(ORPHAN_PREFIX):
+        assert d.observed is not None
+        folder = str(d.observed.params["target"])
+        kind = DriftKind.ORPHAN_MASTER
         return Decision(
             Disposition.REPORT,
-            DriftKind.ORPHAN_MASTER.value,
-            "A folder in Coffer's skill store has no Coffer record; Coffer leaves it "
-            "for you to add or remove.",
+            kind.value,
+            "A folder in Coffer's skill store is not in your library, so no agent gets it; "
+            "Coffer leaves it for you to add to the library or delete.",
+            handoff=drift_handoff(
+                kind, skill=d.key.removeprefix(ORPHAN_PREFIX), path=folder, master=folder
+            ),
         )
     if d.op is Op.ADD:
         return Decision(
@@ -305,18 +312,25 @@ def _decide(d: Difference) -> Decision:
         )
     assert d.desired is not None and d.observed is not None
     state = d.observed.params["state"]
+    link, master = str(d.observed.params["link"]), str(d.observed.params["target"])
     if state == DriftKind.REPLACED_WITH_REGULAR.value:
         return Decision(
             Disposition.BLOCKED,
             "foreign_content",
-            f"{d.observed.params['link']} holds content Coffer did not put there; Coffer "
-            "never overwrites it — move it away and the link is made.",
+            f"{link} holds a folder Coffer did not put there; Coffer never overwrites it, "
+            "so the skill's copy and that folder wait for you to keep one.",
+            handoff=drift_handoff(
+                DriftKind.REPLACED_WITH_REGULAR, skill=d.subject.title, path=link, master=master
+            ),
         )
     if state == DriftKind.MISSING_MASTER.value:
         return Decision(
             Disposition.BLOCKED,
             DriftKind.MISSING_MASTER.value,
             "The skill's master folder is gone, so there is nothing to link to.",
+            handoff=drift_handoff(
+                DriftKind.MISSING_MASTER, skill=d.subject.title, path=link, master=master
+            ),
         )
     if d.observed.params["link"] != d.desired.params["link"]:
         return Decision(

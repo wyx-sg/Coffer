@@ -20,6 +20,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 from coffer.infrastructure.logging.files import log_dir
@@ -83,7 +84,7 @@ def daemon_log_path() -> Path:
     return log_dir() / "daemon.log"
 
 
-def spawn_detached_daemon() -> subprocess.Popen[bytes]:
+def spawn_detached_daemon(env: Mapping[str, str] | None = None) -> subprocess.Popen[bytes]:
     """Spawn the daemon detached from the caller, stdio redirected to ``daemon.log``.
 
     The one spawn every auto-spawn surface shares — the CLI's detect-or-spawn,
@@ -93,6 +94,9 @@ def spawn_detached_daemon() -> subprocess.Popen[bytes]:
     shim once did) threw that away and could only report "did not come up
     within 10s". Appending both streams to ``daemon.log`` keeps the message
     where "check daemon.log" already points the user.
+
+    ``env`` replaces the inherited environment — the daemon's own restart
+    passes one naming the predecessor to wait for (``self_restart``).
 
     Raises ``OSError`` when the process cannot be started; the log handle is
     closed on that path and otherwise leaks into the child on purpose.
@@ -104,6 +108,7 @@ def spawn_detached_daemon() -> subprocess.Popen[bytes]:
         "stdout": log,
         "stderr": log,
         "stdin": subprocess.DEVNULL,
+        "env": dict(env) if env is not None else None,
         # Windows: no console, detached; POSIX: a new session.
         **detached_popen_kwargs(),
     }

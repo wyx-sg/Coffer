@@ -145,6 +145,10 @@ class Decision:
     disposition: Disposition
     reason_code: str
     reason: str
+    #: The prompt that hands a difference no write settles to the person's
+    #: agent (``domain/handoff.py``), when the target has one; the attention
+    #: list carries it beside the item. ``None`` for everything a pass repairs.
+    handoff: str | None = None
 
 
 @dataclass(frozen=True)

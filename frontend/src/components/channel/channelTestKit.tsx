@@ -69,6 +69,7 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
     runs_on: (channel.config.runs_on as string | undefined) ?? null,
     runs_here: channel.config.runs_on === HERE,
     diagnostics: [],
+    handoff: null,
     ...over,
   };
 }

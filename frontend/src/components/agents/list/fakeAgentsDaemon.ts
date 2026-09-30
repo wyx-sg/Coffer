@@ -5,6 +5,7 @@
 // this fake, which keeps registrations and connections as the daemon would.
 import { vi } from "vitest";
 
+import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
 
@@ -16,6 +17,8 @@ interface FakeCall {
 
 export interface FakeDaemon {
   types: AgentTypeOut[];
+  /** The managed agents a conversation (and so Ask an agent) can run on. */
+  providers: AgentProviderInfo[];
   connections: Record<string, CofferConnection>;
   models: Record<string, string>;
   calls: FakeCall[];
@@ -44,6 +47,7 @@ export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">
     state: "installed_active",
     uid: null,
     version: over.type === "codex" ? "0.41.0" : "2.1.281",
+    install_handoff: null,
     ...over,
   };
 }
@@ -51,6 +55,7 @@ export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">
 export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
   return {
     types: [],
+    providers: [],
     connections: {},
     models: {},
     calls: [],
@@ -105,7 +110,8 @@ export function fakeCallFor(d: FakeDaemon) {
       if (method === "DELETE") return connected(d, uid, false);
       return d.connections[uid] ?? { state: "disconnected", parts: parts(false) };
     }
-    if (path === "/agents/types") return { types: d.types };
+    if (path === "/agents/types") return { types: d.types, install_handoff: null };
+    if (path === "/agent-providers") return { agents: d.providers };
     if (path === "/agents" && method === "POST") {
       const body = opts.body as { type: string; config_dir?: string };
       const row = d.types.find((r) => r.type === body.type)!;

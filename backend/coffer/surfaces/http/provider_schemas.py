@@ -23,6 +23,7 @@ from coffer.domain.provider.config import CuratedPrice, Protocol
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 from coffer.domain.usage.pricing import PriceSource
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class ProviderModel(BaseModel):
@@ -315,3 +316,7 @@ class LocalRuntimeOut(BaseModel):
 
 class DetectLocalOut(BaseModel):
     found: list[LocalRuntimeOut]
+    #: With nothing found, the prompt that hands setting a runtime up to the
+    #: person's agent (``application/provider/local_runtime_handoff.py``);
+    #: ``None`` once one answers.
+    handoff: HandoffOut | None = None

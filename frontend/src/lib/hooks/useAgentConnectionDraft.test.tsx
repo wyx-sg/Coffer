@@ -31,6 +31,7 @@ const AGENT: AgentOut = {
   tier_models: null,
   wire_api: null,
   version: null,
+  install_handoff: null,
   state: "installed_active",
   created_at: "",
   updated_at: "",

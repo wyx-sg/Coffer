@@ -1365,6 +1365,10 @@ components:
         agent_type:
           title: Agent Type
           type: string
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         has_value:
           title: Has Value
           type: boolean
@@ -1390,6 +1394,7 @@ components:
       - plan
       - last_observed_at
       - windows
+      - handoff
       title: AgentQuotaOut
       type: object
     AgentType:
@@ -1484,8 +1489,13 @@ components:
             $ref: '#/components/schemas/LocalRuntimeOut'
           title: Found
           type: array
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
       required:
       - found
+      - handoff
       title: DetectLocalOut
       type: object
     DetectProtocolIn:
@@ -1553,6 +1563,18 @@ components:
       - day
       title: GroupBy
       type: string
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
+      type: object
     ListModelsIn:
       properties:
         base_url:

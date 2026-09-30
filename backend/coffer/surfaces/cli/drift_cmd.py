@@ -117,6 +117,12 @@ def repair(
 def attention(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+    prompt: str | None = typer.Option(
+        None,
+        "--prompt",
+        metavar="KEY",
+        help="Print the hand-off prompt of the item with this key, to give an agent",
+    ),
 ) -> None:
     """What needs you now, across every kind, with the route that acts on each."""
     c, _info = _cli_client.client_or_exit()
@@ -124,6 +130,9 @@ def attention(
         r = c.get("/attention")
         _cli_client.check(r, verbose=_verbose(ctx))
     body = r.json()
+    if prompt is not None:
+        _print_prompt(body, prompt)
+        return
     if output_json:
         typer.echo(_json.dumps(body, indent=2))
         return
@@ -137,11 +146,23 @@ def attention(
         table.add_column(col)
     for i in body["items"]:
         a = i["action"]
-        table.add_row(
-            i["severity"],
-            i["kind"],
-            i["title"],
-            i["reason"],
-            f"{a['verb']}: {a['method']} {a['path']}",
-        )
+        action = f"{a['verb']}: {a['method']} {a['path']}"
+        table.add_row(i["severity"], i["kind"], i["title"], i["reason"], action)
     _console.print(table)
+    handoffs = [i for i in body["items"] if i.get("handoff")]
+    if handoffs:
+        typer.echo("A prompt to give an agent:")
+        for i in handoffs:
+            typer.echo(f"  {i['title']}: coffer attention --prompt {i['key']}")
+
+
+def _print_prompt(body: dict[str, Any], key: str) -> None:
+    """The item's hand-off prompt, exactly as the Overview row offers it."""
+    item = next((i for i in (*body["items"], *body["ignored"]) if i["key"] == key), None)
+    if item is None:
+        typer.echo(f"{key}: nothing needs you under this key now", err=True)
+        raise typer.Exit(int(ExitCode.NOT_FOUND))
+    if not item.get("handoff"):
+        typer.echo(f"{key}: this item has no hand-off; its action is the fix", err=True)
+        raise typer.Exit(int(ExitCode.GENERIC))
+    typer.echo(item["handoff"]["prompt"])

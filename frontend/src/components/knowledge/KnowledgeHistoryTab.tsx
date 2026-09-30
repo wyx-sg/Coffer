@@ -7,18 +7,21 @@
 // many lines it moved — and the chosen one on the right: its diff against the
 // version before, or against the document as it is now, with Restore this
 // version, which writes a NEW version naming you rather than rewriting the
-// past. A history that cannot be read says so here with a retry; the Document
-// tab reads on its own and keeps working.
+// past. A history that cannot be read says so here with a retry — and, when
+// git is missing, the refusal's prompt for installing it; the Document tab
+// reads on its own and keeps working.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { History } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeVersionPanel } from "@/components/knowledge/KnowledgeVersionPanel";
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { translateApiError } from "@/lib/api/errors";
 import { versionSentence, whenLabel, writerLabel } from "@/lib/knowledge/changes";
 import { useDocumentHistory } from "@/lib/hooks/useKnowledgeHistory";
@@ -45,6 +48,8 @@ export function KnowledgeHistoryTab({ path, currentBody }: Props) {
     );
   }
   if (history.error) {
+    // With git missing the refusal carries the prompt for installing it.
+    const gitHandoff = errorHandoff(history.error);
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6" role="alert">
         <EmptyState
@@ -61,7 +66,13 @@ export function KnowledgeHistoryTab({ path, currentBody }: Props) {
               <Link to="/activity">{t("knowledge.history.openActivity")}</Link>
             </Button>
           }
-        />
+        >
+          {gitHandoff ? (
+            <div className="flex justify-center">
+              <AgentHandoff prompt={gitHandoff} size="sm" />
+            </div>
+          ) : null}
+        </EmptyState>
       </div>
     );
   }

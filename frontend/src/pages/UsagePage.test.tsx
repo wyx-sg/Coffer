@@ -114,6 +114,7 @@ const QUOTA: AgentQuota[] = [
     plan: "max",
     has_value: true,
     last_observed_at: null,
+    handoff: null,
     windows: [win("five_hour", "5-hour window", 42, 2), win("seven_day", "Weekly", 61, 60)],
   },
   {
@@ -121,15 +122,31 @@ const QUOTA: AgentQuota[] = [
     plan: "plus",
     has_value: true,
     last_observed_at: null,
+    handoff: null,
     windows: [
       win("primary", "Primary · 5 h", 91, 1),
       win("secondary", "Secondary · 7 days", 100, 130.5),
     ],
   },
 ];
+const STATUSLINE_PROMPT = "Please set up Coffer's status line wrapper for Claude Code.";
 const NO_QUOTA: AgentQuota[] = [
-  { agent_type: "claude_code", plan: null, has_value: false, last_observed_at: null, windows: [] },
-  { agent_type: "codex", plan: null, has_value: false, last_observed_at: null, windows: [] },
+  {
+    agent_type: "claude_code",
+    plan: null,
+    has_value: false,
+    last_observed_at: null,
+    windows: [],
+    handoff: { prompt: STATUSLINE_PROMPT },
+  },
+  {
+    agent_type: "codex",
+    plan: null,
+    has_value: false,
+    last_observed_at: null,
+    windows: [],
+    handoff: null,
+  },
 ];
 
 interface Setup {
@@ -249,15 +266,27 @@ describe("subscription quota", () => {
     expect(within(quota).queryByText(/% used/)).toBeNull();
   });
 
-  test("the statusline wrapper is described, never switched on by the page", async () => {
-    install({ quota: NO_QUOTA });
-    renderPage();
-    const quota = quotaSection();
-    expect(
-      await within(quota).findByText("coffer usage statusline -- <your statusLine command>"),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("switch")).toBeNull();
-  });
+  acceptance(
+    "provider-switching",
+    "the quota page hands the statusline opt-in to an agent",
+    async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      install({ quota: NO_QUOTA });
+      renderPage();
+      const quota = quotaSection();
+      expect(
+        await within(quota).findByText(/have your agent point Claude Code's status line/),
+      ).toBeInTheDocument();
+      // One hand-off, on Claude Code's row only; the page never switches it on.
+      const copy = within(quota).getAllByRole("button", { name: "Copy prompt" });
+      expect(copy).toHaveLength(1);
+      fireEvent.click(copy[0]);
+      expect(writeText).toHaveBeenCalledWith(STATUSLINE_PROMPT);
+      expect(within(quota).queryByText(/coffer usage statusline/)).toBeNull();
+      expect(screen.queryByRole("switch")).toBeNull();
+    },
+  );
 
   test("a Codex read that did not happen says why, with a retry", async () => {
     const { post } = install({
@@ -287,38 +316,42 @@ describe("subscription quota", () => {
 });
 
 describe("API-key usage", () => {
-  acceptance("provider-switching", "a model with no price reads as a dash, never zero", async () => {
-    install();
-    renderPage();
-    const usage = usageSection();
-    expect((await within(usage).findAllByText("$25.81")).length).toBeGreaterThan(0);
-    expect(within(usage).getByText("Cost (estimated)")).toBeInTheDocument();
-    expect(within(usage).getByText("3,092 requests · 47 unpriced")).toBeInTheDocument();
-    expect(within(usage).getAllByText("6.00M").length).toBeGreaterThan(0);
-    expect(within(usage).getAllByText("1.06M").length).toBeGreaterThan(0);
-    // Cost per day: one bar per local day of the range, named in its tooltip.
-    const chart = await within(usage).findByRole("figure", { name: "Cost per day" });
-    expect(within(chart).getAllByRole("img")).toHaveLength(7);
-    expect(within(chart).getByRole("img", { name: "Thu 24 Sep · $25.81" })).toBeInTheDocument();
+  acceptance(
+    "provider-switching",
+    "a model with no price reads as a dash, never zero",
+    async () => {
+      install();
+      renderPage();
+      const usage = usageSection();
+      expect((await within(usage).findAllByText("$25.81")).length).toBeGreaterThan(0);
+      expect(within(usage).getByText("Cost (estimated)")).toBeInTheDocument();
+      expect(within(usage).getByText("3,092 requests · 47 unpriced")).toBeInTheDocument();
+      expect(within(usage).getAllByText("6.00M").length).toBeGreaterThan(0);
+      expect(within(usage).getAllByText("1.06M").length).toBeGreaterThan(0);
+      // Cost per day: one bar per local day of the range, named in its tooltip.
+      const chart = await within(usage).findByRole("figure", { name: "Cost per day" });
+      expect(within(chart).getAllByRole("img")).toHaveLength(7);
+      expect(within(chart).getByRole("img", { name: "Thu 24 Sep · $25.81" })).toBeInTheDocument();
 
-    const table = within(usage).getByRole("table");
-    const rows = within(table).getAllByRole("row");
-    expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
-    // Nothing prices it — not set on its provider, reported by the provider,
-    // or in the bundled list: a dash, never $0.00, whose note says where a
-    // price is set.
-    expect(
-      within(rows[2]).getByLabelText(
-        "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list. Set one in Model providers.",
-      ),
-    ).toHaveTextContent(/^—$/);
-    expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
-    expect(within(rows[3]).getByText("Total · 7 days")).toBeInTheDocument();
-    expect(
-      within(usage).getByRole("link", { name: "Edit prices in Model providers" }),
-    ).toHaveAttribute("href", "/model-providers");
-  });
+      const table = within(usage).getByRole("table");
+      const rows = within(table).getAllByRole("row");
+      expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
+      expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
+      // Nothing prices it — not set on its provider, reported by the provider,
+      // or in the bundled list: a dash, never $0.00, whose note says where a
+      // price is set.
+      expect(
+        within(rows[2]).getByLabelText(
+          "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list. Set one in Model providers.",
+        ),
+      ).toHaveTextContent(/^—$/);
+      expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
+      expect(within(rows[3]).getByText("Total · 7 days")).toBeInTheDocument();
+      expect(
+        within(usage).getByRole("link", { name: "Edit prices in Model providers" }),
+      ).toHaveAttribute("href", "/model-providers");
+    },
+  );
 
   test("the range and the breakdown live in the URL and drive the summary", async () => {
     const { get } = install();

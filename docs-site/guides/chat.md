@@ -25,7 +25,7 @@ There is no `coffer chat` command group. Conversations are reachable from the Co
 
 You do **not** need a [model provider](/guides/providers). A provider is an optional override; without one the agent runs on its own login.
 
-If no managed agent is available, the page shows **No managed agent available** instead of a composer.
+If no managed agent is available, the page shows **No managed agent available** instead of a composer. While no supported agent is installed on this machine it offers **Copy prompt**: the daemon's prompt that has any assistant install Claude Code or Codex (copy only, since Coffer has no agent to ask yet). Once one is installed but not added, it links to the **Agents** page, where you add it.
 
 ## Start a conversation
 

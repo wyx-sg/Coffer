@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from coffer.infrastructure.mcp.invocation_summary import InvocationSummary
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class McpServerStatusOut(BaseModel):
@@ -37,6 +38,11 @@ class McpServerStatusOut(BaseModel):
     missing_secret: str | None = None
     #: …and the secret's own reference, which is what the user recognises.
     missing_secret_ref: str | None = None
+    #: The chore for the person's agent when the server needs one: installing
+    #: its missing launcher, or finding why it fails (spec mcp-gateway "Name a
+    #: missing stdio launcher", "Hand a failing MCP server's diagnosis to an
+    #: agent"). Null for a server that is healthy, unknown or missing a secret.
+    handoff: HandoffOut | None = None
 
 
 class CallCountOut(BaseModel):

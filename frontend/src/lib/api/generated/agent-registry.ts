@@ -559,6 +559,7 @@ export interface components {
             display_name: string;
             /** Effort */
             effort: string | null;
+            install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Model */
             model: string | null;
             /** Name */
@@ -617,6 +618,7 @@ export interface components {
             default_skill_dir: string;
             /** Display Name */
             display_name: string;
+            install_handoff: components["schemas"]["HandoffOut"] | null;
             /** Name */
             name: string;
             /** Other Config Dir */

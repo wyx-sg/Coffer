@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 
 class UpstreamSummary(BaseModel):
     registered: int
@@ -62,6 +64,24 @@ class FeatureListOut(BaseModel):
 
 class FeatureSetIn(BaseModel):
     enabled: bool
+
+
+class DaemonRestartOut(BaseModel):
+    """A restart under way (spec daemon "Restart itself on request")."""
+
+    #: The port the successor binds — the configured one, so a saved port
+    #: change applies. The page finds the new daemon there and reloads from it.
+    port: int
+
+
+class DaemonUpgradeOut(BaseModel):
+    """How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent")."""
+
+    #: ``binaries`` (the installer's frozen binaries), ``app`` (the macOS
+    #: desktop app) or ``source`` (a source checkout).
+    install_method: Literal["binaries", "app", "source"]
+    #: The prompt that has the person's agent upgrade it that way.
+    handoff: HandoffOut
 
 
 class DaemonResidencyOut(BaseModel):

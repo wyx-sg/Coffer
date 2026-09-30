@@ -2,20 +2,20 @@
 //
 // With no reading yet the row says when one will appear. Codex's row also
 // carries why the last manual read did not happen (app-server unreachable,
-// asked too soon), with a retry. Claude Code's no-reading row names the opt-in
-// statusline wrapper: Coffer never installs it, so the page only says how.
+// asked too soon), with a retry. Claude Code's no-reading row offers the
+// opt-in statusline wrapper as a hand-off (the row's `handoff` prompt): Coffer
+// never installs it, so the person's agent edits Claude Code's settings.
 import { RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { HelpTip } from "@/components/HelpTip";
 import { Button } from "@/components/ui/button";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentQuota } from "@/lib/api/usage";
 import { formatClock, formatMoment } from "@/lib/usage/format";
 import { QuotaMeter } from "./QuotaMeter";
-
-const STATUSLINE_COMMAND = "coffer usage statusline -- <your statusLine command>";
 
 /** Why a manual Codex read did not happen, when it was tried, and how to try again. */
 export interface RefreshState {
@@ -82,16 +82,16 @@ export function QuotaCard({ quota, now, refresh }: Props) {
           <span className="text-xs text-text-muted">
             {t("usage.quota.empty.body", { agent: name })}
           </span>
-          {quota.agent_type === "claude_code" ? (
-            <span className="flex flex-wrap items-center gap-1 text-xs text-text-muted">
-              {t("usage.quota.statusline.lead")}
-              <code className="rounded-sm bg-code px-1 font-mono text-2xs text-text">
-                {STATUSLINE_COMMAND}
-              </code>
-              <HelpTip label={t("usage.quota.statusline.helpLabel")}>
-                <p className="text-xs">{t("usage.quota.statusline.help")}</p>
-              </HelpTip>
-            </span>
+          {quota.handoff ? (
+            <div className="flex flex-col items-start gap-1.5">
+              <span className="flex flex-wrap items-center gap-1 text-xs text-text-muted">
+                {t("usage.quota.statusline.lead")}
+                <HelpTip label={t("usage.quota.statusline.helpLabel")}>
+                  <p className="text-xs">{t("usage.quota.statusline.help")}</p>
+                </HelpTip>
+              </span>
+              <AgentHandoff prompt={quota.handoff.prompt} size="sm" />
+            </div>
           ) : null}
         </div>
       )}

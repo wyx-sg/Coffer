@@ -152,14 +152,14 @@ acceptance("skill-manager", "check agents' copies from the skills page", async (
     agent_name: "codex",
     kind: "missing_link",
     target_path: "/Users/me/.codex/skills/deep-research",
-    suggested_remedy: "Re-create the link.",
+    handoff: null,
   };
   const foreign: SkillDriftEntry = {
     skill_name: "frontend-design",
     agent_name: "codex",
     kind: "replaced_with_regular",
     target_path: "/Users/me/.codex/skills/frontend-design",
-    suggested_remedy: "Move the folder aside, then repair.",
+    handoff: { prompt: "Compare it with Coffer's copy." },
   };
   vi.mocked(skillsApi.verify).mockResolvedValue({ entries: [missing, foreign] });
   vi.mocked(skillsApi.repair).mockResolvedValue({
@@ -178,6 +178,10 @@ acceptance("skill-manager", "check agents' copies from the skills page", async (
   expect(findings[0]).toHaveTextContent("~/.codex/skills/deep-research");
   expect(findings[0]).toHaveTextContent("Link missing");
   expect(findings[1]).toHaveTextContent("Folder in the way");
+  // Repair is the fix for the missing link; the folder in the way is handed off.
+  expect(findings[0]).toHaveTextContent("Repair puts it back");
+  expect(within(findings[0]).queryByRole("button", { name: "Copy prompt" })).toBeNull();
+  expect(within(findings[1]).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
   // Checking is read-only: nothing has been repaired yet.
   expect(skillsApi.repair).not.toHaveBeenCalled();
 

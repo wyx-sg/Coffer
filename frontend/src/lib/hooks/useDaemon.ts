@@ -2,9 +2,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
-import { applyDaemonConnection, daemonVersionMatches, restartDaemon } from "@/lib/tauri";
+import {
+  applyDaemonConnection,
+  daemonVersionMatches,
+  inDesktopShell,
+  restartDaemon,
+} from "@/lib/tauri";
+import { restartFromBrowser } from "@/lib/daemonRestart";
 import type { components } from "@/lib/api/types";
-import { daemonStatusKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
+import { daemonStatusKey, daemonUpgradeKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
 
 type DaemonStatusOut = components["schemas"]["DaemonStatusOut"];
 
@@ -49,15 +55,21 @@ export function useDaemonOutOfDate(version: string | undefined) {
 }
 
 /**
- * Restart the daemon from the desktop shell and take over the replacement it
- * hands back. useMutation owns the in-flight / error state and dedups
- * double-clicks. No toast: the offline banner renders the error inline, next
- * to the button that caused it.
+ * Restart the daemon and take over the replacement. In the desktop shell the
+ * shell restarts it and hands the replacement back; in a browser the daemon
+ * restarts itself and the page reloads from its successor
+ * (`lib/daemonRestart.ts`), so that branch settles only if it fails.
+ * useMutation owns the in-flight / error state and dedups double-clicks. No
+ * toast: the error renders inline, next to the button that caused it.
  */
 export function useRestartDaemon() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
+      if (!inDesktopShell()) {
+        await restartFromBrowser();
+        return null;
+      }
       // The daemon mints a fresh token on every start, so the credentials the
       // shell handed over at launch are now revoked. The restart already
       // waited for the replacement to answer and returned its connection, so
@@ -75,6 +87,26 @@ export function useRestartDaemon() {
     // The token changed, so every cached query (not just daemon/status) was
     // fetched with the revoked credentials — refetch the whole cache so the
     // app recovers in place.
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: (result) => (result ? qc.invalidateQueries() : undefined),
+  });
+}
+
+/**
+ * The hand-off that upgrades Coffer on this machine the way it was installed
+ * (spec daemon "Hand an upgrade of Coffer to an agent") — for Settings › About
+ * in a browser, where no control can install an update. Asked only when
+ * `enabled`, so the desktop shell, which updates itself, never asks.
+ */
+export function useUpgradeHandoff(enabled: boolean) {
+  return useQuery({
+    queryKey: daemonUpgradeKey,
+    enabled,
+    staleTime: Infinity,
+    queryFn: async (): Promise<string> => {
+      const { data, error } = await getApiClient().GET("/daemon/upgrade");
+      if (error) throwApiError(error, "INTERNAL_ERROR", "upgrade hand-off failed");
+      if (!data) throw new ApiError("INTERNAL_ERROR", "empty upgrade response");
+      return data.handoff.prompt;
+    },
   });
 }

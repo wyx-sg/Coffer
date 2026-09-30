@@ -33,6 +33,8 @@ vi.mock("@/lib/hooks/useAgents", async (importOriginal) => ({
   useAgentConnection: () => ({ data: undefined }),
 }));
 vi.mock("@/components/agents/list/useAgentRowActions", () => ({ useAgentRowActions: vi.fn() }));
+// No managed agent to ask: a hand-off offers Copy prompt only.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 
 vi.mock("@/components/agents/AgentOverviewTab", () => ({ AgentOverviewTab: stub("overview") }));
 vi.mock("@/components/agents/model/AgentModelTab", () => ({ AgentModelTab: stub("model") }));
@@ -196,15 +198,19 @@ describe("AgentDetailPage", () => {
     expect(change).toHaveBeenCalledWith("add");
   });
 
-  test("a type that is not installed says how to install it", () => {
+  test("a type that is not installed offers the daemon's install prompt", () => {
     mockRoute({
       added: false,
       rowState: "not_installed",
-      typeRow: { state: "missing", version: null },
+      typeRow: {
+        state: "missing",
+        version: null,
+        install_handoff: { prompt: "Please install Claude Code on this machine." },
+      },
     });
     renderAt();
     expect(screen.getByText("Claude Code isn’t installed")).toBeInTheDocument();
-    expect(screen.getByText(/npm install -g @anthropic-ai\/claude-code/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy command" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/npm|install -g/);
   });
 });

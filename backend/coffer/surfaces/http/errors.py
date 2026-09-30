@@ -118,6 +118,8 @@ _STATUS: dict[str, int] = {
     "SKILL_STAGING_NOT_FOUND": 404,
     "SKILL_SOURCE_UNREACHABLE": 502,
     "SKILL_UPDATE_CONFLICT": 409,
+    # "I merged it" against a commit that is not the waiting update.
+    "SKILL_UPDATE_NOT_PENDING": 409,
     "SKILL_NOT_FROM_GIT": 409,
     # An agent's copy Coffer did not make stops a delete; a copy that is not a
     # folder in the way has nothing to resolve; an orphan that is not there.

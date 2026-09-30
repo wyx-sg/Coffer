@@ -7,7 +7,9 @@ foreign content sits where a link belongs) is offered as "review", because no
 write would help until its cause is gone. The plan is computed on every read
 and writes nothing; "since" is when a writing pass first saw it. A repairable
 difference no writing pass has visited yet is left out — the next pass repairs
-it on its own — so the list holds what a pass could not fix.
+it on its own — so the list holds what a pass could not fix. A difference
+whose target hands it to an agent (a folder in the way of a skill's link) carries
+that prompt as the item's hand-off.
 """
 
 from __future__ import annotations
@@ -71,6 +73,7 @@ class DriftAttentionSource:
                     severity=_severity(change),
                     action=_action(change, by_id.get(change.id)),
                     since=since,
+                    handoff=change.decision.handoff,
                 )
             )
         for failure in periodic.failures:

@@ -8,6 +8,8 @@ import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 
 interface Offender {
@@ -45,11 +47,16 @@ export function SkillAddRefusal({ error, action }: Props) {
   const details = detailsOf(error);
   const reason = typeof details.reason === "string" ? details.reason : null;
   const offenders = offendersOf(details);
+  // No git on this machine: the refusal carries the install hand-off.
+  const handoff = errorHandoff(error);
   const message = error instanceof ApiError ? error.envelopeMessage : translateApiError(t, error);
 
   let title = t("skillSources.refusal.title");
   let body: ReactNode = message;
-  if (error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE") {
+  if (reason === "git_missing") {
+    title = t("skillSources.refusal.gitMissing");
+    body = t("skillSources.refusal.gitMissingBody");
+  } else if (error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE") {
     title = t("skillSources.refusal.unreachable");
   } else if (error instanceof ApiError && error.code === "SKILL_INVALID") {
     if (reason === "skill_md_not_found") {
@@ -86,6 +93,11 @@ export function SkillAddRefusal({ error, action }: Props) {
               </li>
             ))}
           </ul>
+        ) : null}
+        {handoff ? (
+          <span className="pt-1">
+            <AgentHandoff prompt={handoff} size="sm" />
+          </span>
         ) : null}
       </div>
       {action ? <span className="ml-auto shrink-0">{action}</span> : null}

@@ -21,6 +21,7 @@ from coffer.application.attention import (
     ignorable,
 )
 from coffer.domain.reconcile import ItemResult, Outcome, PassReport
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 
 class ReconcileSubjectOut(BaseModel):
@@ -110,6 +111,9 @@ class AttentionItemOut(BaseModel):
     severity: Literal["error", "warning", "info"]
     since: datetime | None
     action: AttentionActionOut
+    #: The chore handed to an agent, when the item is one: the same prompt the
+    #: kind's own page offers. ``null`` when the action alone is the fix.
+    handoff: HandoffOut | None = None
 
 
 class AttentionSourceErrorOut(BaseModel):
@@ -180,6 +184,7 @@ def attention_item_out(item: AttentionItem) -> AttentionItemOut:
         severity=item.severity.value,
         since=item.since,
         action=AttentionActionOut(verb=a.verb, method=a.method, path=a.path, body=a.body),  # type: ignore[arg-type]
+        handoff=handoff_out(item.handoff),
     )
 
 

@@ -59,9 +59,8 @@ export function useMcpServerStatus(serverUid: string) {
 }
 
 /** The stdio launcher missing on THIS machine (imported server, runner not
- * installed here), if any — rendered as "missing <runner>" with a hint to
- * install it manually. Coffer manages configuration; it does not install
- * software on the user's machine. */
+ * installed here), if any. Coffer does not install software on the user's
+ * machine: the status read's `handoff` gives the install to an agent. */
 export function useMcpServerRunner(serverUid: string) {
   return useServerStatusRead(serverUid, selectRunner);
 }

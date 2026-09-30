@@ -6,16 +6,13 @@
 import { Trans, useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import {
-  abbreviateHomePath,
-  agentInstallCommand,
-  agentProgramName,
-  agentTypeLabel,
-} from "@/lib/agents/display";
+import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 
 import type { OverviewActions } from "../AgentOverviewTab";
-import { FixWay, InstallCommand, LastKnownRows, ProblemBanner } from "./FixParts";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+
+import { FixWay, LastKnownRows, ProblemBanner } from "./FixParts";
 import { InlineCode, OverviewSection } from "./OverviewSection";
 import { useDetectionCheck } from "./useDetectionCheck";
 import { mainConfigPath } from "./paths";
@@ -50,7 +47,9 @@ export function AgentNotFoundCard({ agent, actions }: Props) {
         <OverviewSection title={t(`${K}.waysToFix`)}>
           <ul className="flex flex-col">
             <FixWay title={t(`${K}.reinstall.title`, { name })} body={t(`${K}.reinstall.body`)}>
-              <InstallCommand command={agentInstallCommand(agent.type)} />
+              {agent.install_handoff ? (
+                <AgentHandoff prompt={agent.install_handoff.prompt} size="sm" />
+              ) : null}
             </FixWay>
             <FixWay title={t(`${K}.moved.title`)} body={t(`${K}.moved.body`, { name })}>
               <Button variant="outline" size="sm" onClick={actions.onChangeConfigDir}>

@@ -170,6 +170,17 @@ export function useKeepSkillEdits() {
   });
 }
 
+/** Record that the update was merged into the local edits (spec skill-manager
+ * "Record an update merged into local edits"). */
+export function useMarkSkillMerged() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { uid: string; commit: string }) =>
+      skillsApi.markMerged(vars.uid, vars.commit),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: skillsKey }),
+  });
+}
+
 /** One file's local / pinned / incoming text in a staged update. */
 export function useSkillUpdateCompare(uid: string, stagingId: string | null, path: string | null) {
   return useQuery({

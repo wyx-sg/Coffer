@@ -28,6 +28,7 @@ from coffer.domain.skill_source_errors import (
     SkillSourceRejected,
     SkillSourceUnreachable,
     SkillUpdateConflict,
+    SkillUpdateNotPending,
 )
 from coffer.infrastructure.persistence.engine import session_maker
 from coffer.infrastructure.skill.archive_reader import ZipArchiveReader
@@ -329,3 +330,100 @@ async def test_update_operations_refuse_a_skill_not_from_git(env: Env) -> None:
         await env.svc.check(local.uid)
     with pytest.raises(SkillNotFromGit):
         await env.svc.preview(local.uid)
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a conflict hands merging the update to an agent"
+)
+async def test_a_conflict_carries_the_merge_hand_off(env: Env) -> None:
+    up = _upstream(env.tmp)
+    skill = await env.add(up)
+    first = (await env.source(skill.uid)).commit
+    (env.master("review") / "notes.txt").write_text("mine\n")
+    new = _upstream_moves(up)
+
+    view = await env.svc.preview(skill.uid)
+    prompt = view.handoff
+    assert prompt is not None
+    assert str(env.master("review")) in prompt
+    assert first in prompt and new in prompt
+    assert "notes.txt (modified)" in prompt  # the local edit
+    assert "rework review" in prompt  # the upstream commit's subject
+    assert up.url in prompt
+    assert "only read it — never push" in prompt
+    assert "do not record it yourself" in prompt
+    # Nothing was written by building it.
+    assert (env.master("review") / "notes.txt").read_text() == "mine\n"
+    assert (await env.source(skill.uid)).commit == first
+    env.svc.cancel(view.stage_id)
+
+
+async def test_a_preview_without_local_edits_hands_nothing_off(env: Env) -> None:
+    up = _upstream(env.tmp)
+    skill = await env.add(up)
+    _upstream_moves(up)
+    view = await env.svc.preview(skill.uid)
+    assert (view.conflict, view.handoff) == (False, None)
+    env.svc.cancel(view.stage_id)
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="recording a merge moves the pin and keeps the merged files"
+)
+async def test_recording_a_merge_moves_the_pin_and_keeps_the_files(env: Env) -> None:
+    up = _upstream(env.tmp)
+    skill = await env.add(up)
+    first = (await env.source(skill.uid)).commit
+    (env.master("review") / "notes.txt").write_text("mine\n")
+    new = _upstream_moves(up)
+    view = await env.svc.preview(skill.uid)
+    env.svc.cancel(view.stage_id)
+    # The agent's merge: upstream's new file taken, the local edit kept.
+    (env.master("review") / "new.txt").write_text("new\n")
+    (env.master("review") / "old.txt").unlink()
+    merged_hash = folder_content_hash(env.master("review"))
+
+    await env.svc.mark_merged(skill.uid, new[:10], actor="cli")
+
+    source = await env.source(skill.uid)
+    assert source.commit == new
+    # The master's files are exactly as the merge left them.
+    assert (env.master("review") / "notes.txt").read_text() == "mine\n"
+    assert folder_content_hash(env.master("review")) == merged_hash
+    # The pin's hash is upstream's own content, so the merged edit still
+    # reads as a local edit against the new base.
+    assert source.content_hash != merged_hash
+    status = await env.svc.status(skill)
+    assert status is not None and status.update_available(new) is False
+    [event] = await env.graph.audit.query(event_type=AuditEventType.SKILL_UPDATE_MERGED.value)
+    assert event.actor == "cli"
+    assert event.details == {"from_commit": first, "to_commit": new}
+
+    # A later upstream change is a conflict again, listing only the carried edit.
+    up.write("skills/review/SKILL.md", skill_md("review", "v3"))
+    up.commit("v3")
+    later = await env.svc.preview(skill.uid)
+    assert later.conflict is True
+    assert [(c.path, c.status) for c in later.local_changes] == [("notes.txt", "modified")]
+    env.svc.cancel(later.stage_id)
+    assert env.stages_left() == []
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="recording a merge refuses a commit that is not the update"
+)
+async def test_recording_a_merge_refuses_a_commit_not_waiting(env: Env) -> None:
+    up = _upstream(env.tmp)
+    skill = await env.add(up)
+    first = (await env.source(skill.uid)).commit
+    # Nothing newer upstream: there is no update to have merged.
+    with pytest.raises(SkillUpdateNotPending):
+        await env.svc.mark_merged(skill.uid, first, actor="cli")
+    _upstream_moves(up)
+    # The pinned commit itself, and a commit that is not on the ref, are refused.
+    for commit in (first, "0" * 40):
+        with pytest.raises(SkillUpdateNotPending):
+            await env.svc.mark_merged(skill.uid, commit, actor="cli")
+    assert (await env.source(skill.uid)).commit == first
+    assert await env.graph.audit.query(event_type=AuditEventType.SKILL_UPDATE_MERGED.value) == []
+    assert env.stages_left() == []

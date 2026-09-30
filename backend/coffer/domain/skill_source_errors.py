@@ -49,9 +49,13 @@ class SkillSourceUnreachable(CofferError):  # noqa: N818
 
     code = "SKILL_SOURCE_UNREACHABLE"
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, details: dict[str, object] | None = None) -> None:
         super().__init__(message)
         self.git_message = message
+        #: With git missing, ``domain.git_handoff.git_missing_details``: the
+        #: reason and the install hand-off the page offers beside the error.
+        if details:
+            self.error_details: dict[str, object] = details
 
 
 class SkillUpdateConflict(CofferError):  # noqa: N818
@@ -65,6 +69,25 @@ class SkillUpdateConflict(CofferError):  # noqa: N818
             f"skill {name} was edited since its pinned commit; keep your edits, or take the "
             "update and discard them"
         )
+
+
+class SkillUpdateNotPending(CofferError):  # noqa: N818
+    """ "I merged it" names a commit that is not an update waiting for the skill.
+
+    Spec skill-manager "Record an update merged into local edits": the pin may
+    move only to a commit on the skill's ref past the pinned one — the upstream
+    commit the merge was made against — never to an arbitrary commit, and not
+    when nothing newer is there.
+    """
+
+    code = "SKILL_UPDATE_NOT_PENDING"
+
+    def __init__(self, name: str, commit: str) -> None:
+        super().__init__(
+            f"{commit!r} is not an update waiting for skill {name}; open the update again "
+            "and merge against the commit it offers"
+        )
+        self.error_details = {"commit": commit}
 
 
 class SkillNotFromGit(CofferError):  # noqa: N818

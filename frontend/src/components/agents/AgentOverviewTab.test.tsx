@@ -36,6 +36,7 @@ const AGENT: AgentOut = {
   tier_models: null,
   wire_api: null,
   version: "2.1.281",
+  install_handoff: null,
   state: "installed_active",
   created_at: "2026-06-12T08:00:00Z",
   updated_at: "2026-09-27T18:04:00Z",
@@ -51,6 +52,7 @@ const TYPE_ROW: AgentTypeOut = {
   other_config_dir: null,
   default_skill_dir: `${HOME}/.claude/skills`,
   version: "2.1.281",
+  install_handoff: null,
   uid: "u-cc",
 };
 const HOOK: CofferHook = {
@@ -329,15 +331,16 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
 describe("AgentOverviewTab — problem states replace the tab", () => {
   const CODEX = { type: "codex" as const, config_dir: `${HOME}/.codex` };
 
-  test("config left behind: what is still there and the install command", async () => {
+  test("config left behind: what is still there and the reinstall prompt", async () => {
     const acts = renderTab({
-      agent: CODEX,
+      agent: { ...CODEX, install_handoff: { prompt: "Please reinstall OpenAI Codex." } },
       typeRow: { ...CODEX, state: "config_only", standard_config_dir: `${HOME}/.codex` },
     });
     expect(
       screen.getByText("Codex’s config is left behind — the program isn’t installed"),
     ).toBeInTheDocument();
-    expect(screen.getByText("npm install -g @openai/codex")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/npm|install -g/);
     expect(screen.queryByText("Connection")).not.toBeInTheDocument();
     expect(screen.getByText("Left in ~/.codex")).toBeInTheDocument();
     // Revealing the folder and removing the agent stay in the ⋯ menu.

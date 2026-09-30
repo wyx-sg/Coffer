@@ -21,6 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { errorHandoff } from "@/lib/api/errorHandoff";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { SkillOut, SkillUpdatePreview } from "@/lib/api/skills";
 import { useChangeSkillSource } from "@/lib/hooks/useSkillCopies";
@@ -90,6 +92,7 @@ export function SkillChangeSourceDialog({ skill, open, onOpenChange }: Props) {
     );
   const error = change.error;
   const unreachable = error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE";
+  const handoff = errorHandoff(error);
   const now = [repoLabel(source.url), folderLabel(source.subpath), t("skills.detail.pinned")]
     .filter(Boolean)
     .join(" · ");
@@ -126,6 +129,7 @@ export function SkillChangeSourceDialog({ skill, open, onOpenChange }: Props) {
                   {translateApiError(t, error)}
                 </p>
               ) : null}
+              {handoff ? <AgentHandoff prompt={handoff} size="sm" /> : null}
               <Alert variant="info">
                 <Info aria-hidden />
                 <AlertTitle>{t("skills.changeSource.noteTitle")}</AlertTitle>

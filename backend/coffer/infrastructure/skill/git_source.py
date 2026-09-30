@@ -30,8 +30,10 @@ import pathlib
 import tempfile
 from dataclasses import dataclass
 
+from coffer.domain.git_handoff import git_missing_details
 from coffer.domain.skill.git_url import ALLOWED_SCHEMES, display_url
 from coffer.domain.skill_source_errors import SkillSourceUnreachable
+from coffer.infrastructure.platform.host import machine_label
 
 DEFAULT_TIMEOUT_S = 180.0
 _PINNED = ("-c", "core.hooksPath=/dev/null", "-c", "core.quotepath=false")
@@ -96,7 +98,15 @@ class GitSource:
                 stderr=asyncio.subprocess.PIPE,
             )
         except FileNotFoundError as exc:
-            raise SkillSourceUnreachable("git is not installed on this machine") from exc
+            # Still SKILL_SOURCE_UNREACHABLE, with the install-git hand-off in
+            # its details (reason "git_missing"): how git is installed depends
+            # on the machine, so Coffer names no installer.
+            raise SkillSourceUnreachable(
+                "git is not installed on this machine",
+                git_missing_details(
+                    machine_label(), needed_for="adding and updating skills from a Git repository"
+                ),
+            ) from exc
         try:
             out, err = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
         except TimeoutError as exc:

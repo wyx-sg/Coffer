@@ -16,18 +16,22 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from coffer.application.mcp.runner_detect import missing_runner_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.http_api import HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
+from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.http_api_client import HttpApiUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.probe import probe_server
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import boundary_resolver, get_credential_store
 from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.config_test_routes import cancel_on_disconnect
 from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
+from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt, launcher_prompt
 from coffer.surfaces.http.mcp.probe_schemas import McpTestResultOut, result_out
 
 router = APIRouter(
@@ -98,7 +102,14 @@ async def test_mcp_server(
         await health_repo.upsert(
             resource.uid, "healthy" if result.ok else "failing", datetime.now(tz=UTC)
         )
-        return result_out(result)
+        if result.ok:
+            return result_out(result)
+        return result_out(
+            result,
+            handoff=await _failed_test_handoff(
+                resource, result.error_message, list(result.stderr_tail)
+            ),
+        )
 
     start = time.monotonic()
     try:
@@ -140,4 +151,19 @@ async def test_mcp_server(
             latency_ms=latency_ms,
             error_code="initialize_failed",
             error_message=str(e),
+            handoff=await _failed_test_handoff(resource, str(e), []),
         )
+
+
+async def _failed_test_handoff(
+    resource: Resource, error: str | None, stderr: list[str]
+) -> HandoffOut:
+    """The chore a failed test hands to an agent (spec mcp-gateway "Hand a
+    failing MCP server's diagnosis to an agent"): installing the launcher when
+    it is not found here, else finding the cause from the error and stderr."""
+    runner = await asyncio.to_thread(missing_runner_of, resource.config)
+    if runner is not None:
+        prompt = await asyncio.to_thread(launcher_prompt, resource, runner)
+    else:
+        prompt = await asyncio.to_thread(diagnose_prompt, resource, error=error, stderr=stderr)
+    return HandoffOut(prompt=prompt)

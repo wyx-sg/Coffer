@@ -27,6 +27,7 @@ from coffer.domain.skill.source import (
 )
 from coffer.domain.skill.source_status import SourceStatus
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
 from coffer.surfaces.http.skill_dependencies import (
@@ -175,7 +176,12 @@ class DriftEntryOut(BaseModel):
     agent_name: str
     kind: DriftKind
     target_path: str
-    suggested_remedy: str
+    #: A finding no repair settles (a folder in the way, a folder no skill
+    #: owns, a missing master) handed to the person's agent; null when Repair
+    #: is the fix. What the kind means is the surface's own words, keyed on
+    #: ``kind`` (spec skill-manager "Hand unsettled skill drift to an agent
+    #: with a prompt").
+    handoff: HandoffOut | None
 
 
 class DriftReportOut(BaseModel):
@@ -225,7 +231,7 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
         agent_name=e.agent_name,
         kind=e.kind,
         target_path=e.target_path,
-        suggested_remedy=e.suggested_remedy,
+        handoff=handoff_out(e.handoff),
     )
 
 

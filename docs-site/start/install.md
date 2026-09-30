@@ -217,6 +217,8 @@ coffer daemon restart
 
 :::
 
+In a browser, **Settings › About** offers this upgrade as a prompt for your agent, naming the version running and how this copy was installed.
+
 For the desktop app, quit Coffer, stop the daemon with `coffer daemon stop`, replace `Coffer.app` with the new version and clear its quarantine flag again. The next launch starts the new daemon, which deploys the new binaries.
 
 Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `coffer.db.pre-<revision>`.

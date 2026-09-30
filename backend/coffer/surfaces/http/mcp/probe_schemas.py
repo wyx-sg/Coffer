@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from coffer.domain.mcp.probe import ProbeResult
 from coffer.domain.mcp.server_config import HttpTransport, StdioTransport
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 McpTestErrorCode = Literal[
     "url_refused",
@@ -71,6 +72,14 @@ class McpTestResultOut(BaseModel):
     unreleased_secret_keys: list[str] = Field(
         default_factory=list,
         description="With stored_secret_not_released: the keys whose stored secret was cited.",
+    )
+    handoff: HandoffOut | None = Field(
+        default=None,
+        description=(
+            "A failed test of a registered server: the prompt that hands the chore to an "
+            "agent — installing its missing launcher, or finding why it fails. Null when "
+            "the test passed, the fix is a stored secret, or the config is not saved."
+        ),
     )
 
 

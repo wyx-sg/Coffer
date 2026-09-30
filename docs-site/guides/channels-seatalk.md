@@ -43,7 +43,7 @@ Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket del
 
    To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **contains** `seatalk_oapi_sdk/`, in the environment the daemon starts from.
 
-Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart.
+Coffer imports the SDK only when a SeaTalk channel starts, never at daemon start, and keeps retrying while it is missing. You can add the SDK before or after registering the channel; a channel that is already waiting picks it up without a daemon restart. In the web UI, a channel waiting for the SDK links SeaTalk's download page and offers the rest of these steps as a prompt for your agent: you download the archive, the agent unpacks it into the directory above.
 
 ## 3. Register the channel
 

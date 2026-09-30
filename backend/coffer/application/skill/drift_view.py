@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import TYPE_CHECKING, Protocol
 
+from coffer.application.skill.drift_handoff import drift_handoff
 from coffer.application.skill.link_reconcile import (
     AGENT_DIR_MISSING,
     OK,
@@ -28,13 +29,7 @@ from coffer.application.skill.link_reconcile import (
 )
 from coffer.domain.errors import CofferError
 from coffer.domain.reconcile import Disposition, Outcome, PassReport, PlannedChange
-from coffer.domain.skill.drift import (
-    DriftEntry,
-    DriftKind,
-    DriftReport,
-    RepairResult,
-    suggested_remedy,
-)
+from coffer.domain.skill.drift import DriftEntry, DriftKind, DriftReport, RepairResult
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
@@ -59,14 +54,15 @@ async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | N
     state = str(observed.params["state"])
     if d.key.startswith(ORPHAN_PREFIX):
         kind = DriftKind.ORPHAN_MASTER
+        name, folder = d.key.removeprefix(ORPHAN_PREFIX), str(observed.params["target"])
         return DriftEntry(
             # A folder no row claims: there is no uid on either side, and the
             # name is a directory name, not a label Coffer issued.
-            skill_name=d.key.removeprefix(ORPHAN_PREFIX),
+            skill_name=name,
             agent_name="",
             kind=kind,
-            target_path=str(observed.params["target"]),
-            suggested_remedy=suggested_remedy(kind),
+            target_path=folder,
+            handoff=drift_handoff(kind, skill=name, path=folder, master=folder),
         )
     if state == OK:
         return None
@@ -83,14 +79,18 @@ async def _entry(service: SkillService, change: PlannedChange) -> DriftEntry | N
         agent = await service._rs.get(agent_uid)
     except CofferError:
         return None
+    link = str(observed.params["link"])
     return DriftEntry(
         skill_name=skill.name,
         agent_name=agent.name,
         kind=kind,
-        target_path=str(observed.params["link"]),
-        suggested_remedy=suggested_remedy(kind),
+        target_path=link,
         skill_uid=skill.uid,
         agent_uid=agent.uid,
+        # The same prompt the attention item carries (link_reconcile._decide).
+        handoff=drift_handoff(
+            kind, skill=skill.name, path=link, master=str(observed.params["target"])
+        ),
     )
 
 

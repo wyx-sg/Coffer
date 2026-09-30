@@ -242,6 +242,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "runs_on": None,
         "runs_here": True,  # this runtime has no machine, so nothing is foreign
         "title": None,  # none set, so a surface shows the name
+        "handoff": None,  # nothing to hand to an agent
     }
 
 
@@ -398,3 +399,30 @@ async def test_channel_status_carries_the_resource_title(ctx: _Ctx) -> None:
         r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
     assert r.status_code == 200, r.text
     assert (r.json()["name"], r.json()["title"]) == ("tg", "Team bot")
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a missing sdk is handed to an agent from the channel page",
+)
+async def test_status_hands_a_missing_sdk_to_an_agent(
+    ctx: _Ctx, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vendor = tmp_path / "sdk-home"
+    monkeypatch.setenv("COFFER_SEATALK_SDK_DIR", str(vendor))
+    ctx.runtime.adapters["st"] = _StubAdapter()
+    ctx.runtime.websockets[ctx.st_uid] = ("sdk_missing", "not found")
+    async with _client(ctx.app) as c:
+        missing = (await c.get(f"/api/v1/channels/{ctx.st_uid}/status")).json()
+        ctx.runtime.websockets[ctx.st_uid] = ("connected", None)
+        connected = (await c.get(f"/api/v1/channels/{ctx.st_uid}/status")).json()
+    prompt = missing["handoff"]["prompt"]
+    # Where the daemon loads it from, where the person downloads it, and how
+    # the agent confirms it — the download itself stays with the person.
+    assert f"{vendor}/seatalk_oapi_sdk/" in prompt
+    assert "$COFFER_SEATALK_SDK_DIR" in prompt
+    assert "https://open.seatalk.io/docs/WebSocket-Event-Callback" in prompt
+    assert "~/Downloads" in prompt
+    assert "coffer channel show st" in prompt
+    assert "I will log in myself" in prompt
+    assert connected["handoff"] is None

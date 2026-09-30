@@ -39,6 +39,7 @@ from coffer.surfaces.http.dependencies import (
     get_audit_service,
     get_resource_service,
 )
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.capability_views import (
     cached_capability_list,
     live_capability_list,
@@ -50,6 +51,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_preferences_repo,
     require_mcp_server,
 )
+from coffer.surfaces.http.mcp.handoff_views import diagnose_prompt, launcher_prompt
 from coffer.surfaces.http.mcp.page_schemas import McpServerStatusOut
 from coffer.surfaces.http.schemas import CapabilityKeyBody, CapabilityListOut
 
@@ -217,7 +219,8 @@ async def get_server_status(
         health_status, checked_at = health
         if health_status == "failing" and failure is None:
             detail["failing_since"] = checked_at
-        return McpServerStatusOut(status=health_status, last_checked_at=checked_at, **detail)
+        out = McpServerStatusOut(status=health_status, last_checked_at=checked_at, **detail)
+        return await _with_handoff(out, resource)
 
     caps = await prefs.list_for(resource.id)
     # Health is read from the most recent call that says something about the
@@ -235,7 +238,19 @@ async def get_server_status(
         state = "healthy"
     else:
         state = "unknown"
-    return McpServerStatusOut(status=state, **detail)
+    return await _with_handoff(McpServerStatusOut(status=state, **detail), resource)
+
+
+async def _with_handoff(out: McpServerStatusOut, resource: Resource) -> McpServerStatusOut:
+    """``out`` with the chore its state hands to an agent: installing a missing
+    launcher first (it is the cause of any failure), else diagnosing a failure."""
+    if out.missing_runner:
+        prompt = await asyncio.to_thread(launcher_prompt, resource, out.missing_runner)
+    elif out.status == "failing" and not out.missing_secret:
+        prompt = await asyncio.to_thread(diagnose_prompt, resource, error=out.last_error)
+    else:
+        return out
+    return out.model_copy(update={"handoff": HandoffOut(prompt=prompt)})
 
 
 async def _toggle_capability(

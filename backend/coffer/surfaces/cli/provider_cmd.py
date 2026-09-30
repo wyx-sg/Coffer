@@ -142,12 +142,17 @@ def detect_local(
             typer.echo(f"not a local address: {base_url}", err=True)
             raise typer.Exit(6)
         _cli_client.check(r, verbose=False)
-    found = r.json()["found"]
+    body = r.json()
+    found = body["found"]
     if json_out:
         typer.echo(_json.dumps(found, indent=2))
         return
     if not found:
         typer.echo("no local model runtime found")
+        handoff = body.get("handoff") or {}
+        if handoff.get("prompt"):
+            # The same words the Add provider dialog offers to copy.
+            typer.echo(f"\nTo set one up, give your agent this prompt:\n\n{handoff['prompt']}")
         return
     for hit in found:
         rt = hit["runtime"]

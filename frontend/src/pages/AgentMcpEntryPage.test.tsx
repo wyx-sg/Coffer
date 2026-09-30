@@ -57,6 +57,7 @@ const AGENT: AgentOut = {
   tier_models: null,
   wire_api: null,
   version: null,
+  install_handoff: null,
   state: "installed_active",
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
@@ -103,6 +104,7 @@ const TYPE_ROW = {
   other_config_dir: null,
   default_skill_dir: "/home/u/.claude/skills",
   version: null,
+  install_handoff: null,
 } as const;
 
 function stub(entry: Partial<McpEntryDetailOut> = {}) {

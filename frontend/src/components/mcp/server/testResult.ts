@@ -19,5 +19,6 @@ export function failedTest(message: string): TestResult {
     tool_count: 0,
     tools: [],
     unreleased_secret_keys: [],
+    handoff: null,
   };
 }

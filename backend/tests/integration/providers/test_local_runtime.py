@@ -5,6 +5,7 @@ provider-switching "Detect a local model runtime without changing it",
 from __future__ import annotations
 
 import json
+import socket
 
 import pytest
 from starlette.applications import Starlette
@@ -78,6 +79,8 @@ def test_detection_reads_runtime_version_and_windows(tmp_path, monkeypatch):
     models = {m["id"]: m for m in hit["models"]}
     assert models["qwen3-coder"] == {"id": "qwen3-coder", "context_window": 65536, "tools": True}
     assert models["embed-only"]["tools"] is False
+    # A runtime answered, so there is nothing to hand off.
+    assert r.json()["handoff"] is None
     # Read-only: nothing that pulls, loads or generates was called.
     assert not any("pull" in call or "generate" in call for call in calls)
 
@@ -102,6 +105,34 @@ def test_detection_refuses_a_remote_address(tmp_path, monkeypatch):
     with _client(app) as c:
         r = c.post("/api/v1/providers/detect-local", json={"base_url": "http://example.com:11434"})
     assert r.status_code == 422, r.text
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="nothing found hands setting up a runtime to an agent"
+)
+def test_nothing_found_hands_setting_up_a_runtime_to_an_agent(tmp_path, monkeypatch):
+    with socket.socket() as probe:  # a loopback port nothing listens on
+        probe.bind(("127.0.0.1", 0))
+        silent = probe.getsockname()[1]
+    app = _app(tmp_path, monkeypatch, 59876)
+    with _client(app) as c:
+        r = c.post(
+            "/api/v1/providers/detect-local", json={"base_url": f"http://127.0.0.1:{silent}"}
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["found"] == []
+    prompt = body["handoff"]["prompt"]
+    # The machine, the runtimes detection probes with their default ports, and
+    # the two it recommends — never an install command.
+    assert "This machine:" in prompt
+    for fact in ("Ollama on port 11434", "LM Studio on port 1234", "llama-server on port 8080"):
+        assert fact in prompt
+    assert "Prefer Ollama or LM Studio" in prompt
+    assert "press Detect" in prompt
+    assert "brew" not in prompt and "curl " not in prompt
+    # The rules every hand-off carries.
+    assert "sudo or changes system settings" in prompt
 
 
 @pytest.mark.acceptance(

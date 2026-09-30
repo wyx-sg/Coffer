@@ -90,7 +90,7 @@ Coffer never reads Claude Code's or Codex's login token and never calls an undoc
 
 ### Opt-in: Claude Code's statusline
 
-Claude Code passes a statusline command the documented `rate_limits` object on every refresh. `coffer usage statusline` forwards it to Coffer and then runs your own statusline command with the same input, printing its output — so your statusline keeps working, even when the daemon is down. Coffer never installs it — the Usage page only tells you the command, it has no switch that edits your settings. To use it, set it yourself in `~/.claude/settings.json`:
+Claude Code passes a statusline command the documented `rate_limits` object on every refresh. `coffer usage statusline` forwards it to Coffer and then runs your own statusline command with the same input, printing its output — so your statusline keeps working, even when the daemon is down. Coffer never installs it and the Usage page has no switch that edits your settings. While Claude Code has no reading, its row offers a prompt for your agent (**Copy prompt**, or **Ask an agent**; `coffer usage quota --prompt` prints the same text): it names your Claude Code agent's `settings.json`, asks the agent to wrap your current `statusLine.command` as `coffer usage statusline -- '<it>'` (or add one that runs `coffer usage statusline` alone) and to show you the diff before saving. To do it yourself, set it in `~/.claude/settings.json` (or the config folder your Claude Code agent uses):
 
 ```json
 {

@@ -245,6 +245,12 @@ def reject_approval(
 def scan_plaintext(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+    prompt: bool = typer.Option(
+        False,
+        "--prompt",
+        help="Print the prompt that hands rewriting skills still reading ~/.coffer/secrets/ "
+        "to an agent",
+    ),
 ) -> None:
     """Find plaintext secrets in ~/.coffer/secrets/ and in your skills.
 
@@ -260,6 +266,10 @@ def scan_plaintext(
     if output_json:
         typer.echo(_json.dumps(body))
         return
+    if prompt:
+        handoff = body.get("handoff")
+        typer.echo(handoff["prompt"] if handoff else "(no skill reads ~/.coffer/secrets/)")
+        return
     findings = body.get("findings", [])
     if not findings:
         typer.echo("(no plaintext secrets found)")
@@ -274,8 +284,10 @@ def scan_plaintext(
     for m in body.get("mentions", []):
         typer.echo(
             f"skill {m['skill']} still reads {m['mention']} ({m['path']}:{m['line']}) — "
-            "move its command to `coffer run --env-file`"
+            "move its command to `coffer run --secret` or `coffer run --env-file`"
         )
+    if body.get("handoff"):
+        typer.echo("`coffer credentials scan --prompt` hands rewriting them to an agent")
 
 
 @app.command("import")

@@ -11,6 +11,10 @@ Three signals, each one the backend already records or can check cheaply:
 - ``mcp_missing_secret`` — a credential ref the server's config cites is not in
   the credential store. One item per missing ref.
 
+A missing launcher and a failing server are chores for the person's agent, so
+those two items carry the kind's hand-off prompt (``application/mcp/handoff``)
+— the same text the server's page offers — and their reason names no command.
+
 Only enabled servers are asked: a disabled one is not expected to work.
 """
 
@@ -48,6 +52,15 @@ class CredentialPresencePort(Protocol):
     def exists(self, ref: str) -> bool: ...
 
 
+class McpHandoffPort(Protocol):
+    """The hand-off prompts, with the host facts (machine, ``PATH``, log tail)
+    the composition root reads."""
+
+    def launcher(self, server: Resource, runner: str) -> str: ...
+
+    def diagnose(self, server: Resource) -> str: ...
+
+
 def _test_action(uid: str) -> AttentionAction:
     return AttentionAction(
         verb="test", method="POST", path=f"/api/v1/resources/mcp_server/{uid}/test"
@@ -65,11 +78,13 @@ class McpAttentionSource:
         health: McpHealthPort,
         credentials: CredentialPresencePort,
         runner_missing: Callable[[dict[str, Any]], str | None] = missing_runner_of,
+        handoffs: McpHandoffPort | None = None,
     ) -> None:
         self._resources = resources
         self._health = health
         self._credentials = credentials
         self._runner_missing = runner_missing
+        self._handoffs = handoffs
 
     async def items(self) -> Sequence[AttentionItem]:
         servers = await self._resources.list(kind=KIND, enabled=True)
@@ -90,9 +105,14 @@ class McpAttentionSource:
                     uid=server.uid,
                     title=server.name,
                     reason_code="mcp_missing_launcher",
-                    reason=f"Its launcher `{runner}` is not installed on this machine.",
+                    reason=f"Its launcher {runner} is not found on this machine.",
                     severity=Severity.ERROR,
                     action=_test_action(server.uid),
+                    handoff=(
+                        await asyncio.to_thread(self._handoffs.launcher, server, runner)
+                        if self._handoffs
+                        else None
+                    ),
                 )
             ]
         health = await self._health.get(server.uid)
@@ -108,6 +128,11 @@ class McpAttentionSource:
                 severity=Severity.ERROR,
                 action=_test_action(server.uid),
                 since=health[1],
+                handoff=(
+                    await asyncio.to_thread(self._handoffs.diagnose, server)
+                    if self._handoffs
+                    else None
+                ),
             )
         ]
 
@@ -143,6 +168,7 @@ class McpAttentionSource:
 __all__ = [
     "CredentialPresencePort",
     "McpAttentionSource",
+    "McpHandoffPort",
     "McpHealthPort",
     "McpResourcesPort",
 ]

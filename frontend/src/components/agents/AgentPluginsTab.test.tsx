@@ -19,6 +19,8 @@ import { acceptance } from "@/test/acceptance";
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: { plugins: vi.fn(), togglePlugin: vi.fn(), uninstallPlugin: vi.fn() },
 }));
+// No managed agent to ask: a hand-off offers Copy prompt only.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
@@ -34,6 +36,7 @@ function agent(type: AgentOut["type"]): AgentOut {
     tier_models: null,
     wire_api: null,
     version: null,
+    install_handoff: null,
     state: "installed_active",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
@@ -76,7 +79,11 @@ function Landed() {
   return <div data-testid="landed">{`${loc.pathname}${loc.search}`}</div>;
 }
 
-function renderTab(data: Partial<PluginsResponse>, type: AgentOut["type"] = "claude_code") {
+function renderTab(
+  data: Partial<PluginsResponse>,
+  type: AgentOut["type"] = "claude_code",
+  over: Partial<AgentOut> = {},
+) {
   api.plugins.mockResolvedValue({
     items: [],
     marketplaces: [],
@@ -97,7 +104,7 @@ function renderTab(data: Partial<PluginsResponse>, type: AgentOut["type"] = "cla
       </MemoryRouter>
     </QueryClientProvider>
   );
-  return render(<AgentPluginsTab agent={agent(type)} />, { wrapper: Wrapper });
+  return render(<AgentPluginsTab agent={{ ...agent(type), ...over }} />, { wrapper: Wrapper });
 }
 
 const rowOf = async (text: string) => (await screen.findByText(text)).closest("tr") as HTMLElement;
@@ -164,6 +171,16 @@ describe("AgentPluginsTab", () => {
       expect(screen.getByText(en.agents.pluginsTab.footnote.claudeNoCli)).toBeInTheDocument();
     },
   );
+
+  test("with Claude Code's program gone, the tab offers its reinstall prompt", async () => {
+    renderTab({ items: [SUPERPOWERS], can_uninstall: false }, "claude_code", {
+      state: "config_only",
+      install_handoff: { prompt: "Please reinstall Claude Code on this machine." },
+    });
+    await screen.findByText("superpowers");
+    expect(screen.getByText(/program isn’t found on this machine/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+  });
 
   acceptance("agent-registry", "open a plugin's detail page from the Plugins tab", async () => {
     // The Plugins-tab half of the scenario: rows do not expand, and the

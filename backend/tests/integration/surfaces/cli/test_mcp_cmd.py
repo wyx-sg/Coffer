@@ -724,7 +724,8 @@ def test_mcp_group_offers_the_new_verbs_only() -> None:
     # between typer/rich releases).
     group = typer.main.get_command(app).commands["mcp"]  # type: ignore[attr-defined]
     assert set(group.commands) == {
-        "list", "show", "add", "edit", "rm", "enable", "disable", "scope", "test", "cap",
+        "list", "show", "add", "edit", "rm", "enable", "disable", "scope", "test", "prompt",
+        "cap",
     }  # fmt: skip
 
 

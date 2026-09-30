@@ -4,17 +4,18 @@
 // "Bind a fixed, settable port": a whole number from 1024 to 65535 that no
 // other program holds, each refused in place (the daemon checks it and names
 // the holder); saving writes it for the next start, and the row then says it
-// takes effect after Coffer restarts, with Restart now in the desktop shell
-// and the restart command to copy in a browser. The status above keeps showing
-// the port the daemon answers on until then.
+// takes effect after Coffer restarts, with Restart now — the shell's restart
+// in the desktop shell, the daemon's own in a browser, which then reloads the
+// page from the new port. The status above keeps showing the port the daemon
+// answers on until then.
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError, translateApiError } from "@/lib/api/errors";
+import { restartErrorText } from "@/lib/daemonRestart";
 import { useRestartDaemon } from "@/lib/hooks/useDaemon";
 import { useDaemonPort, useSetDaemonPort } from "@/lib/hooks/useDaemonPort";
 
@@ -29,10 +30,9 @@ interface Holder {
 interface Props {
   /** The daemon cannot be reached: the field is shown but cannot change. */
   disabled: boolean;
-  inShell: boolean;
 }
 
-export function DaemonPortRow({ disabled, inShell }: Props) {
+export function DaemonPortRow({ disabled }: Props) {
   const { t } = useTranslation();
   const id = useId();
   const port = useDaemonPort(!disabled);
@@ -139,15 +139,17 @@ export function DaemonPortRow({ disabled, inShell }: Props) {
                 {t("settings.daemonTab.portPendingHelp")}
               </span>
             </div>
-            {inShell ? (
-              <Button onClick={() => restart.mutate()} disabled={restart.isPending}>
-                {restart.isPending
-                  ? t("daemon.offline.restarting")
-                  : t("settings.daemonTab.restartNow")}
-              </Button>
-            ) : null}
+            <Button onClick={() => restart.mutate()} disabled={restart.isPending}>
+              {restart.isPending
+                ? t("daemon.offline.restarting")
+                : t("settings.daemonTab.restartNow")}
+            </Button>
           </div>
-          {!inShell ? <CopyableCommand command="coffer daemon restart" /> : null}
+          {restart.error ? (
+            <p className="text-xs text-danger" role="alert">
+              {restartErrorText(t, restart.error)}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </>

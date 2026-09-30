@@ -28,6 +28,8 @@ coffer daemon stop       # SIGTERM, then wait for it to exit
 coffer daemon restart    # stop (if running), then start
 ```
 
+In the web UI, **Settings → Daemon → Restart** restarts it from a browser too: the daemon starts its successor, which waits for it to exit before binding the port, then exits itself, and the page reloads from the new daemon (which has a new token). The desktop app's Restart stops and starts the daemon from outside instead. `coffer daemon restart` keeps doing it from outside, so it also works on a daemon that no longer answers.
+
 `coffer daemon status` prints what the daemon reports about itself:
 
 ```text
@@ -60,11 +62,11 @@ To move it:
 ```sh
 coffer config get daemon.port        # the configured port
 coffer config set daemon.port 8765   # always bind 8765 from now on
-coffer daemon restart                # apply it
+coffer daemon restart                # apply it (or Restart now on Settings → Daemon)
 coffer config unset daemon.port      # back to 8000
 ```
 
-`daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. For the same reason the port has no page in the web UI and no REST route.
+`daemon.port` accepts ports from 1024 to 65535. The setting is written to `~/.coffer/daemon-config.json`, which the daemon reads before it binds, so these commands work with no daemon running. That is on purpose: the state you most need to change the port from is a daemon that cannot start because its port is taken. **Settings → Daemon** writes the same file through the running daemon, and its **Restart now** applies the change; the page then reloads from the new port.
 
 A change applies at the next start. If a daemon is running on the old port, `set` and `unset` say so and tell you to run `coffer daemon restart`.
 

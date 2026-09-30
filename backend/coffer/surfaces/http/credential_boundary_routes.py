@@ -34,6 +34,7 @@ from fastapi import APIRouter, Depends, Query
 
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.presence import CHALLENGE_TTL_SECONDS
+from coffer.application.credentials.scan_handoff import mentions_handoff
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import (
@@ -73,6 +74,7 @@ from coffer.surfaces.http.credential_schemas import (
     SecretScanOut,
 )
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
+from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.secret_boundary_wiring import (
     approval_applied,
     approval_out,
@@ -292,6 +294,11 @@ async def scan_plaintext() -> SecretScanOut:
             SecretScanMentionOut(skill=m.skill, path=m.path, line=m.line, mention=m.mention)
             for m in result.mentions
         ],
+        handoff=handoff_out(
+            mentions_handoff(
+                result.mentions, [f for f in result.findings if f.source == "secrets_file"]
+            )
+        ),
     )
 
 

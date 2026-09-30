@@ -152,9 +152,13 @@ class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
 
     code = "KNOWLEDGE_HISTORY_UNAVAILABLE"
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, details: dict[str, object] | None = None) -> None:
         super().__init__(f"knowledge history is unavailable: {reason}")
         self.reason = reason
+        #: With git missing, ``domain.git_handoff.git_missing_details``: the
+        #: reason and the install hand-off the page offers beside the error.
+        if details:
+            self.error_details: dict[str, object] = details
 
 
 class KnowledgeVersionNotFound(KnowledgeError):  # noqa: N818
@@ -194,7 +198,9 @@ class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
 
     code = "KNOWLEDGE_UNDO_CONFLICT"
 
-    def __init__(self, version: str, document: str, later: str) -> None:
+    def __init__(
+        self, version: str, document: str, later: str, *, handoff: str | None = None
+    ) -> None:
         super().__init__(
             f"cannot undo this curation pass: {document!r} has changed since "
             "(undo would overwrite that change)"
@@ -207,6 +213,10 @@ class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
             "document": document,
             "later_version": later,
         }
+        if handoff is not None:
+            # Undoing it by hand while keeping the later edits, as a prompt for
+            # the person's agent (application/knowledge/undo_handoff.py).
+            self.error_details["handoff"] = {"prompt": handoff}
 
 
 class KnowledgeNotADelete(KnowledgeError):  # noqa: N818

@@ -27,6 +27,7 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from typing import TYPE_CHECKING
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -45,6 +46,7 @@ from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.platform.host import machine_label
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
@@ -102,7 +104,13 @@ def wire_knowledge_kind(
     )
     set_knowledge_service(service)
     set_history_service(
-        KnowledgeHistoryService(knowledge=service, history=KNOWLEDGE_HISTORY, audit=audit)
+        KnowledgeHistoryService(
+            knowledge=service,
+            history=KNOWLEDGE_HISTORY,
+            audit=audit,
+            # The OS and architecture do not change while the daemon runs.
+            machine=cache(machine_label),
+        )
     )
 
     ingest_service = IngestService(

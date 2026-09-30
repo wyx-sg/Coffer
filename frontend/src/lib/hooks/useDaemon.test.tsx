@@ -11,6 +11,8 @@ vi.mock("@/lib/tauri", () => ({
   daemonVersionMatches: vi.fn(),
   restartDaemon: vi.fn(),
   applyDaemonConnection: vi.fn(),
+  // The shell's restart; the browser's is lib/daemonRestart.test.ts.
+  inDesktopShell: () => true,
 }));
 const { daemonVersionMatches, restartDaemon, applyDaemonConnection } = await import("@/lib/tauri");
 const daemonVersionMatchesMock = vi.mocked(daemonVersionMatches);

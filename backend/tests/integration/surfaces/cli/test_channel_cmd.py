@@ -12,6 +12,7 @@ import asyncio
 import json
 from datetime import UTC
 from datetime import datetime as dt
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -803,6 +804,23 @@ def test_show_of_a_websocket_channel_prints_its_error_verbatim(
     assert r.exit_code == 0, r.output
     assert "inbound:  websocket (kicked)" in r.output
     assert "ws error: another connection took over" in r.output
+
+
+def test_show_of_a_channel_missing_the_sdk_prints_the_hand_off(
+    channel_daemon: _Daemon, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLI hands over the same words as the channel page (the SDK is missing)."""
+    monkeypatch.setenv("COFFER_SEATALK_SDK_DIR", str(tmp_path / "sdk"))
+    assert _register_st().exit_code == 0
+    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    st_uid = channel_daemon.uid("st")
+    channel_daemon.runtime.websocket_states[st_uid] = "sdk_missing"
+    channel_daemon.runtime.websocket_errors[st_uid] = "not found"
+
+    r = runner.invoke(app, ["channel", "show", "st"])
+    assert r.exit_code == 0, r.output
+    assert "For your agent:" in r.output
+    assert f"{tmp_path / 'sdk'}/seatalk_oapi_sdk/" in r.output
 
 
 def test_show_says_an_unbound_channel_runs_nowhere(channel_daemon: _Daemon) -> None:
