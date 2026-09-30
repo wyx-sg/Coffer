@@ -145,7 +145,7 @@ test("every page the shell adds resolves to a page of its own", async () => {
   }
 });
 
-test("the CLIs page and a command's address each resolve to their own page", async () => {
+test("the CLIs page and a command's address both resolve to the CLIs page", async () => {
   const get = mockApi();
   const empty = get.getMockImplementation()!;
   get.mockImplementation((path: string) =>
@@ -158,7 +158,7 @@ test("the CLIs page and a command's address each resolve to their own page", asy
   await waitFor(() => expect(screen.getByRole("heading", { name: "CLIs" })).toBeInTheDocument(), {
     timeout: 5_000,
   });
-  // The detail page, titled by the command it is addressed by.
+  // The detail pane, titled by the command it is addressed by.
   await waitFor(() => expect(screen.getByRole("heading", { name: "gh" })).toBeInTheDocument());
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });

@@ -1,32 +1,29 @@
-// src/components/clis/CliDetailSections.tsx — the body of a CLI's page: Command, Login and Needed by, as read-only rows.
+// src/components/clis/CliDetailSections.tsx — the body of a CLI's pane: Command, Login and Needed by, as read-only rows in a two-column grid.
 //
-// The only actions here are the confirmation-gated Install… / Update… beside
-// the Homebrew command and Copy beside the login command — Coffer never runs a
-// login. Each skill under Needed by opens that skill's Requires tab.
+// The only action here is Copy beside the login command — Coffer never runs a
+// login or an install (the pane's header hands those to an agent). Each skill
+// under Needed by opens that skill's Requires tab.
 import { Check, Copy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import type { Cli } from "@/lib/api/clis";
-import { isInstallable } from "@/lib/clis/format";
 import { useCopyText } from "@/lib/hooks/useCopyText";
-import { CliActionButton } from "./CliActionButton";
 import { CliField, CliSection } from "./CliField";
 
 interface Props {
   cli: Cli;
-  onInstall: (cli: Cli) => void;
 }
 
-export function CliDetailSections({ cli, onInstall }: Props) {
+export function CliDetailSections({ cli }: Props) {
   const { t } = useTranslation();
   const { copied, copy } = useCopyText();
   const loginCommand = cli.login.command;
   const versionOk = cli.status !== "missing" && cli.status !== "outdated";
 
   return (
-    <div className="space-y-6">
+    <div className="grid items-start gap-7 lg:grid-cols-2">
       <CliSection title={t("clis.detail.sections.command")}>
         <CliField label={t("clis.detail.foundAt")}>
           {cli.path ? (
@@ -46,16 +43,6 @@ export function CliDetailSections({ cli, onInstall }: Props) {
             </span>
           ) : null}
         </CliField>
-        {isInstallable(cli) ? (
-          <CliField
-            label={t(
-              cli.status === "outdated" ? "clis.detail.updateWith" : "clis.detail.installWith",
-            )}
-            trailing={<CliActionButton cli={cli} onInstall={onInstall} />}
-          >
-            <code className="font-mono text-xs">{cli.install_command}</code>
-          </CliField>
-        ) : null}
       </CliSection>
 
       <CliSection title={t("clis.detail.sections.login")}>

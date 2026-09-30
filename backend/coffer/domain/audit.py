@@ -69,10 +69,6 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
-    # A Homebrew install of a command a skill requires (spec skill-manager
-    # "Install a required command only through Homebrew and only when asked").
-    CLI_INSTALL_STARTED = "cli_install_started"
-    CLI_INSTALL_FINISHED = "cli_install_finished"
     # spec knowledge
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
