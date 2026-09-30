@@ -132,11 +132,11 @@ const pageRoutes: RouteObject[] = [
     path: "agents/:type/plugins/:pluginId",
     element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
   },
+  // The Channels page is the list beside the open channel, so all three
+  // addresses render the same page (the tab is the optional last segment).
   { path: "channels", element: <ChannelsPage /> },
-  {
-    path: "channels/:uid",
-    element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
-  },
+  { path: "channels/:uid", element: <ChannelsPage /> },
+  { path: "channels/:uid/:tab", element: <ChannelsPage /> },
   // The Skills page is the library beside the open skill, so all three
   // addresses render the same page; it loads the detail pane on first open.
   { path: "skills", element: <SkillsPage /> },

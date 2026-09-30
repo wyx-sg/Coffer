@@ -1,25 +1,28 @@
 // frontend/src/lib/hooks/useChannels.ts — TanStack Query bindings for channels.
 //
 // Channel resources ride the generic /resources API (kind=channel), so
-// useChannels delegates to useResources and shares its ["resources", …] cache
-// — the kind-agnostic useEnableResource / useDisableResource / useDeleteResource
-// mutations (useResourceMutations.ts) invalidate it for free. The
-// channel-specific operations (status, pairing) live under a "channels" key.
-// Channels DO declare scope (ADR per-agent-resource-scope): which agents answer
-// on a transport is per-agent, so the list row and the detail header both mount
-// the shared reach control. The scope binding itself is generic
-// (useScope.ts) — there is nothing channel-specific about it, so none here.
-// The machine BINDING is the other axis and is channel-specific: it lives in
-// the channel's own config (`runs_on`), travels with the document, and is
-// written through the same config PATCH an edit uses — see useRebindChannel.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+// useChannels delegates to useResources and shares its ["resources", …] cache;
+// enable / disable / delete / reach are the generic mutations. What is
+// channel-specific lives here: live status and the state it puts a channel in,
+// pairing, notify, reconnect, the settings auto-save, and the machine binding
+// (`runs_on`, written through the same config PATCH an edit uses).
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/channels";
-import { applyChannelEdit } from "@/components/channel/editChannel";
+import type { ResourceOut } from "@/lib/api/resources";
+import { resourcesApi } from "@/lib/api/resources";
+import { describeChannel, type ChannelView } from "@/components/channel/channelState";
+import {
+  applyChannelEdit,
+  planChannelEdit,
+  type ChannelEditValues,
+} from "@/components/channel/editChannel";
 import { createChannel } from "@/components/channel/registerChannel";
 import type { ChannelEditPlan, ChannelPlan } from "@/components/channel/schema";
+import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
 import { channelStatusKey, pendingApprovalsKey, resourcesKey } from "@/lib/api/queryKeys";
@@ -47,6 +50,137 @@ export function useChannelStatus(uid: string, opts: { poll?: boolean } = {}) {
     // not re-fan-out N status requests on every navigation.
     staleTime: opts.poll ? 0 : 15_000,
   });
+}
+
+/**
+ * Every listed channel's state, for the list's groups and rows. One status
+ * query per channel on the same key the open channel polls, so the open row
+ * and the header always read one answer; non-polling here (the change feed and
+ * the open channel's poll keep them fresh).
+ */
+export function useChannelViews(channels: readonly ResourceOut[]): Map<string, ChannelView> {
+  const statuses = useQueries({
+    queries: channels.map((c) => ({
+      queryKey: channelStatusKey(c.uid),
+      queryFn: () => getChannelStatus(c.uid),
+      staleTime: 15_000,
+    })),
+  });
+  const { data: machineList } = useMachines();
+  const { machineId: selfId } = useThisMachineId();
+  const known = (machineList?.machines ?? []).map((m) => m.machine_id);
+  const views = new Map<string, ChannelView>();
+  channels.forEach((c, i) => {
+    const q = statuses[i];
+    views.set(
+      c.uid,
+      describeChannel({
+        enabled: c.enabled,
+        config: c.config,
+        status: q?.data,
+        statusFailed: q?.isError ?? false,
+        selfId,
+        knownMachines: known,
+      }),
+    );
+  });
+  return views;
+}
+
+/** The open channel's live status (polled) and the state it puts it in. */
+export function useChannelView(channel: ResourceOut) {
+  const status = useChannelStatus(channel.uid, { poll: true });
+  const { data: machineList } = useMachines();
+  const { machineId: selfId } = useThisMachineId();
+  const view = describeChannel({
+    enabled: channel.enabled,
+    config: channel.config,
+    status: status.data,
+    statusFailed: status.isError,
+    selfId,
+    knownMachines: (machineList?.machines ?? []).map((m) => m.machine_id),
+  });
+  return { status, view, selfId };
+}
+
+/**
+ * Restart a channel's adapter. There is no reconnect route: turning the
+ * channel off and on again stops the adapter and starts a fresh one, which
+ * dials the platform anew — and takes a SeaTalk connection back from whatever
+ * process was handed it.
+ */
+export function useReconnectChannel(uid: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ enabled }: { enabled: boolean }) => {
+      if (enabled) await resourcesApi.disable(uid);
+      await resourcesApi.enable(uid);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+export type AutoSaveState = "idle" | "saving" | "saved" | "error";
+
+/**
+ * Save a channel's settings as they change (the Settings tab has no Save
+ * button). Each call PATCHes the whole config, so calls are queued and each
+ * plans from the config the previous one wrote — two fields saved a moment
+ * apart must not each PATCH back the config from before the other. A failure
+ * is toasted and leaves the state at "error"; the field keeps what was typed.
+ */
+export function useChannelAutoSave(channel: ResourceOut) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [state, setState] = useState<AutoSaveState>("idle");
+  const latest = useRef(channel.config);
+  const pending = useRef(0);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+
+  // Adopt the server's config whenever it changes and nothing is in flight.
+  useEffect(() => {
+    if (pending.current === 0) latest.current = channel.config;
+  }, [channel.config]);
+
+  const save = useCallback(
+    (values: Partial<ChannelEditValues>) => {
+      pending.current += 1;
+      setState("saving");
+      queue.current = queue.current.then(async () => {
+        const config = latest.current;
+        const agent = typeof config.default_agent === "string" ? config.default_agent : "";
+        const plan = planChannelEdit({
+          uid: channel.uid,
+          name: channel.name,
+          config,
+          values: { default_agent: agent, ...values },
+        });
+        try {
+          await applyChannelEdit(plan);
+          latest.current = plan.config;
+          setState("saved");
+          void qc.invalidateQueries({ queryKey: resourcesKey });
+          void qc.invalidateQueries({ queryKey: channelStatusKey(channel.uid) });
+        } catch (error) {
+          setState("error");
+          toast.error(translateApiError(t, error));
+        } finally {
+          pending.current -= 1;
+        }
+      });
+      return queue.current;
+    },
+    [channel.uid, channel.name, qc, t, toast],
+  );
+
+  return { save, state };
 }
 
 /** Issue a pairing code; refreshes the status (pending_pairing) on success. */
