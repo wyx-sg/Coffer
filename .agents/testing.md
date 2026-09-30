@@ -225,6 +225,30 @@ The backend unit and integration tiers run on **pytest-xdist**: `make verify-uni
 
 CI shards the integration tier as well — see [CI Jobs](#ci-jobs).
 
+## Property-Based Tests
+
+A rule that must hold for every input — not for three hand-picked ones — is tested as a property with `hypothesis` (a dev dependency in `backend/uv.lock`). Today: the sync deletion breaker (`tests/unit/domain/sync/test_breaker_properties.py`, checked against the threshold in integers), a stop and its answers (`test_stop_properties.py`), and a round's merge decision (`tests/unit/application/sync/test_round_merge_properties.py`, the real `RoundEngine` over the in-memory `fake_git.py`: any conflict stops, a lossy clean merge is held, and neither snapshots, checks out or pushes).
+
+- **Profiles** (`tests/support/hypothesis_profiles.py`, loaded by the root `conftest.py`): `ci` is the default — 100 examples, derandomized (every run draws the same cases), `deadline=None`, no example database. `HYPOTHESIS_PROFILE=thorough` draws 2000 random examples for a local hunt.
+- **No per-example deadline.** A deadline is a wall-clock assertion and fails on a loaded machine; keep it off.
+- **Skip, don't break.** Each property module starts with `pytest.importorskip("hypothesis")`, so a venv synced before the dependency landed skips them instead of failing collection.
+- **A shrunk failure becomes an example test** beside the property, so the case stays pinned whatever the profile draws.
+- **Check the generator reaches every branch.** `event(...)` plus `--hypothesis-show-statistics` shows each outcome's share; a property whose generator never reaches the branch it claims to cover is a vacuous test.
+
+## Performance Budgets
+
+Each budget is a test with a ceiling a few times above the measured cost, so it catches work that should not be there, not a busy machine. Measured 2026-10-01 on an Apple-silicon laptop under a shared load average of 6–27.
+
+| Budget | Measured | Ceiling | Test (`backend/tests/integration/perf/`) | Runs in |
+| --- | --- | --- | --- | --- |
+| Daemon spawn → first `ready` `/api/v1/daemon/status`, fake `HOME`, empty vault | 2.4–6.6 s | 15 s (`STARTUP_CEILING_S`) | `test_startup_time.py` | `make verify` + `verify-benchmark` |
+| Gateway median overhead per tool call vs a direct upstream connection | 2–5 ms | 50 ms | `test_gateway_overhead.py` (spec mcp-gateway) | `make verify` + `verify-benchmark` |
+| Steady-state reconcile pass (2 agents, 20 skills, a provider) | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `test_reconcile_pass_cost.py` | `verify-benchmark` only (~1 min setup), `skipif` without `COFFER_RUN_BENCHMARKS=1` |
+
+All three carry `pytestmark = pytest.mark.benchmark`, so `-m benchmark` selects every budget; a budget cheap enough for verify simply has no `skipif`. When a budget moves, re-measure (serially and on xdist), update the numbers here, in the test's docstring and in docs-site `contributing/testing.md` (en + zh), and keep the ceiling at 2–3× the loaded measurement.
+
+**Flaky means a wall-clock assumption.** No test retries itself (no `pytest-rerunfailures`, no loop-until-green). A test that fails only under load is fixed at the root: replace a sleep-then-assert with a wait on the condition, bound only the thing that can hang, and never let a per-test `pytest.mark.timeout` sit within a small factor of the test's loaded runtime.
+
 ## Make Targets
 
 ```bash
@@ -235,7 +259,7 @@ make verify-unit         # unit-purity guardrail + unit tier (xdist, PYTEST_WORK
 make verify-integration  # integration tier only (xdist, PYTEST_WORKERS=auto)
 make test-durations      # re-measure backend/.test_durations (CI shard balance)
 make verify-contract     # contract tier only
-make verify-benchmark    # the benchmark-marked tests (excluded from verify)
+make verify-benchmark    # every benchmark-marked test, including those too slow for verify
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
@@ -295,7 +319,7 @@ Two consequences worth internalising:
 | `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/unit` (`PYTEST_WORKERS` defaults to `auto`), then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
 | `make verify-integration` | `pytest -n $(PYTEST_WORKERS) --dist loadgroup backend/tests/integration`.                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
 | `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After adding a route or touching the MCP surface. After editing Pydantic API schemas run `make contracts` (models → contracts → frontend types); `make lint` fails on a stale contract. |
-| `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
+| `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — every perf-budget test (see "Performance Budgets"); the env var releases the ones `make verify` skips as too slow.                     | After touching the gateway hot path or any code a perf budget covers.       |
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
 | `make verify-acceptance`  | `openspec validate --all --strict` (every requirement owns a scenario), then `scripts/audit_acceptance.py` (every scenario has a marker, every marker a scenario).                | Every spec.md edit. Cheap; needs the root `npm install` for the OpenSpec CLI. |
 
@@ -337,7 +361,7 @@ up here as an image diff.
 | `test-unit`                       | `make verify-unit` (purity check + backend pytest on xdist + frontend vitest)                                              |
 | `test-integration (N/4)`          | Four shards of `make verify-integration`, each picking its quarter with pytest-split (`--splits 4 --group N --splitting-algorithm least_duration`) balanced by the committed `backend/.test_durations`, and each running that quarter on xdist across the runner's cores. Installs `ripgrep`. |
 | `test-integration`                | The required check: succeeds only when all four shards succeeded, or when they were skipped because the change is `code=false`. |
-| `test-benchmark`                  | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
+| `test-benchmark`                  | `make verify-benchmark` — every benchmark-marked perf-budget test, and the **only** place the slow ones (gated on `COFFER_RUN_BENCHMARKS=1`) execute, so a budget can't go unchecked while its acceptance marker reports green |
 | `audit-acceptance`                | `make verify-acceptance`: `openspec validate --all --strict` (needs the root `npm ci`), then `scripts/audit_acceptance.py`. Always runs. |
 | `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) through gitleaks-action — the scan `make verify-secrets` runs locally. A committed secret fails the PR even if the final tree is clean. Always runs. |
 | `test-contract`                   | `make verify-contract`                                                                                                     |

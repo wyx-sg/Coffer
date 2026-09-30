@@ -37,7 +37,7 @@ cd frontend && npx vitest run src/components/PageHeader.test.tsx
 cd e2e && npx playwright test --project=web shell_skills
 ```
 
-`make verify-benchmark` 以 `COFFER_RUN_BENCHMARKS=1` 运行标记为 `benchmark` 的性能预算测试。`make verify` 不包含它们，有一个单独的 CI job 负责运行。`make coverage` 生成 pytest 和 Vitest 的覆盖率报告。用它来发现没测到的分支，而不是把它当成指标。
+`make verify-benchmark` 运行所有标记为 `benchmark` 的性能预算测试。它会设置 `COFFER_RUN_BENCHMARKS=1`，让那些慢到进不了 `make verify` 的测试也一起运行，有一个单独的 CI job 负责运行它。哪项预算在哪里运行，见[性能预算](#performance-budgets)。`make coverage` 生成 pytest 和 Vitest 的覆盖率报告。用它来发现没测到的分支，而不是把它当成指标。
 
 ## 好测试是什么样的 {#what-a-good-test-looks-like}
 
@@ -59,6 +59,15 @@ cd e2e && npx playwright test --project=web shell_skills
 - `keyring` 测试后端，它是另一个真实实现，而不是 mock
 
 只 mock **非本地**的东西（外部 HTTP 服务、LLM API）、以测试关心的方式**不确定**的东西（时钟、随机数），或者万不得已时 mock **慢**的东西。需要 mock 慢东西的测试，往往放错了层级。
+
+### 基于性质的测试 {#property-based-tests}
+
+有些规则必须对所有输入都成立，而不只是对几个挑出来的输入成立。这类测试写下规则本身，由 [Hypothesis](https://hypothesis.readthedocs.io/) 生成输入。同步的删除闸门和同步轮次的合并决策就是这样测试的：
+
+- **删除闸门。** 用生成的区域去对照用整数写出的阈值（20 个文件，或超过该区域的五分之一）。同时检查移动永远不算作丢失。
+- **一个轮次。** 生成的 vault 分叉在内存里的 git 上跑过真实的轮次引擎。任何冲突都必须让这一轮停下，丢失过多的合并必须被拦住。这两种情况都不允许检出任何东西，也不允许推送。其他所有干净的合并都必须被应用并推送，而且下一轮必须无事可做。
+
+这些测试属于单元层，在 `make verify` 中运行。默认配置每个测试抽取 100 个样例，每次运行都是同样的 100 个。它不给单个样例设时间上限，也不往仓库里写样例数据库。改动了被测代码之后，运行 `HYPOTHESIS_PROFILE=thorough make verify-unit` 做更深的搜索：每个测试抽取 2000 个随机样例。某条性质失败时，Hypothesis 会把输入缩小到最小的失败用例并打印出来。把这个用例写成一个普通的样例测试，放在这条性质旁边。
 
 ### 测试并行运行 {#tests-run-in-parallel}
 
@@ -140,6 +149,20 @@ pytest 标记在 `backend/pyproject.toml` 中注册，并在 `--strict-markers` 
 ## 单元测试纯度 {#unit-purity}
 
 `scripts/check_unit_purity.py` 是 `make verify-unit` 里第一个运行的。它解析 `backend/tests/unit/` 下的每个文件，只要导入了 I/O 模块就失败：`subprocess`、`sqlite3`、`httpx`、`fastapi.testclient`、`socket`、`requests`、`urllib.request`、`aiohttp` 或 `keyring`。报错信息会写明文件和行号，并指引你去集成层级。要禁用另一个模块，把它加到脚本里的 `BANNED` 字典。
+
+## 性能预算 {#performance-budgets}
+
+有几项开销有预算，由测试来保证。每个上限都比实测值高出几倍。它在代码开始做不该做的事时失败，而不是在机器忙的时候失败。
+
+| 预算 | 实测 | 上限 | 测试 | 运行于 |
+| --- | --- | --- | --- | --- |
+| 守护进程启动：在假 home 和空 vault 上，从拉起进程到第一次报告 `ready` | 2.4–6.6 s | 15 s | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
+| 网关开销：一次 MCP 工具调用经过网关、相比直连多花的时间的中位数 | 2–5 ms | 50 ms | `backend/tests/integration/perf/test_gateway_overhead.py` | `make verify` |
+| 稳态下的一轮调和：两个已连接的智能体、20 个 skill、一个启用中的 provider 连接 | 27–40 ms | 2 s（`PASS_BUDGET_SECONDS`） | `backend/tests/integration/perf/test_reconcile_pass_cost.py` | 只在 `make verify-benchmark` |
+
+实测数据来自一台 Apple Silicon 笔记本，测量时机器上还有别的工作在跑。启动测试和网关测试各只需几秒，所以和集成层的其他测试一起运行。调和测试光是搭建它的机器就要将近一分钟，所以只有 `make verify-benchmark` 和它的 CI job 运行它。这三个测试都标记了 `benchmark`，所以 `make verify-benchmark` 会跑全部预算。
+
+测试从不自动重试。只在机器负载高时才失败的测试是有 bug 的，bug 在测试里或者在代码里：找到其中对墙钟时间的假设，把它去掉。
 
 ## 用 Playwright 做端到端测试 {#end-to-end-tests-with-playwright}
 

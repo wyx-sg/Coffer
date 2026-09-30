@@ -147,7 +147,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make verify-e2e` | 两个 Playwright 项目，`web` 和 `mcp` |
 | `make verify-acceptance` | `openspec validate --all --strict`，然后是 `scripts/audit_acceptance.py` |
 | `make openspec-validate` | 只做 OpenSpec 严格校验 |
-| `make verify-benchmark` | 标记为 `benchmark` 的性能预算测试，`verify` 不包含它们 |
+| `make verify-benchmark` | 所有标记为 `benchmark` 的性能预算测试，包括慢到进不了 `verify` 的那些 |
 | `make verify-secrets` | 像 CI 的 `secrets-scan` job 那样，用 gitleaks 扫描完整的 git 历史。没装 gitleaks 时跳过 |
 | `make lint` | 所有静态门禁：见[测试](/zh/contributing/testing#what-make-verify-runs) |
 | `make format` | 对 `backend` 和 `evals` 运行 `ruff format` 和 `ruff check --fix`，然后对 `frontend/` 运行 prettier |

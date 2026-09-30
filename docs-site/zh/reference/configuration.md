@@ -93,7 +93,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 | --- | --- | --- | --- |
 | `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `8000` 或 `8009`。 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) |
 | `COFFER_EVAL_CAPTURE` | 未设置 | 把每次 `coffer__search_tools` 查询及其结果以 JSON 行的形式记录下来，供评测工具使用。`1`、`true` 或 `yes` 写入 `~/.coffer/eval-capture.jsonl`；其他任何非假值都被当作输出路径。 | [`application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py)、[`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) |
-| `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行网关开销基准测试（`make verify-benchmark`）。 | [`backend/tests/integration/perf/test_gateway_overhead.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_gateway_overhead.py) |
+| `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行慢到进不了 `make verify` 的性能预算测试，比如调和单轮成本（`make verify-benchmark`）。 | [`backend/tests/integration/perf/test_reconcile_pass_cost.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_reconcile_pass_cost.py) |
 
 ### Coffer 为它启动的进程设置的变量 {#variables-coffer-sets-for-processes-it-starts}
 

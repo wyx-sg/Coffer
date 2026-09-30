@@ -147,7 +147,7 @@ Run `make help` for the same list.
 | `make verify-e2e` | Both Playwright projects, `web` and `mcp` |
 | `make verify-acceptance` | `openspec validate --all --strict`, then `scripts/audit_acceptance.py` |
 | `make openspec-validate` | Only the OpenSpec strict validation |
-| `make verify-benchmark` | The perf-budget tests marked `benchmark`, which `verify` excludes |
+| `make verify-benchmark` | Every perf-budget test marked `benchmark`, including the ones too slow for `verify` |
 | `make verify-secrets` | gitleaks over the full git history, as CI's `secrets-scan` job runs it. Skips when gitleaks is not installed |
 | `make lint` | Every static gate: see [Testing](/contributing/testing#what-make-verify-runs) |
 | `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`, then prettier over `frontend/` |
