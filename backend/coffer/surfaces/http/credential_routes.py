@@ -1,7 +1,7 @@
 # backend/coffer/surfaces/http/credential_routes.py
 """/api/v1/credentials — read and write secrets in the encrypted credential store.
 
-Secrets are Fernet-encrypted into the coffer DB; only ciphertext is persisted;
+Secrets are Fernet-encrypted into one file per ref; only ciphertext is persisted;
 audit rows carry the ref only — secret values never appear in the audit log.
 
 The UI uses this when importing MCP server JSON: any plaintext secret in the
@@ -34,7 +34,7 @@ from coffer.domain.errors import CredentialInUse
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import secret_uri, standalone_name
 from coffer.infrastructure.credentials.plaintext_scan import skills_citing_secrets
-from coffer.infrastructure.sync.paths import skills_root
+from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.credential_schemas import CredentialWriteOut
@@ -82,8 +82,8 @@ async def set_secret(
     credentials "Hold a replaced value in use until a person approves it").
     """
     boundary = get_secret_boundary()
-    # to_thread: the store write blocks on SQLite's busy_timeout; on the
-    # event loop it would freeze the coroutine holding the write lock.
+    # to_thread: the store write is file IO and, for a vault ref, a git
+    # commit under the vault's write lock — nothing for the event loop.
     approval = await asyncio.to_thread(boundary.write, body.ref, body.value, actor=actor)
     if approval is not None:
         await audit.record(
@@ -177,7 +177,6 @@ async def list_refs(
 def _skill_folder(name: str) -> Resource:
     epoch = datetime.fromtimestamp(0, tz=UTC)
     return Resource(
-        id=0,
         uid="",
         kind="skill",
         name=name,
@@ -208,8 +207,8 @@ async def secret_exists(
     so no audit event is recorded and a corrupt (undecryptable) row can't
     500 the probe; it still reports present.
     """
-    # to_thread: a store read opens its own SQLite connection and can wait on
-    # the write lock; on the loop that stalls every other request meanwhile.
+    # to_thread: a store read is blocking file IO; on the loop it would stall
+    # every other request meanwhile.
     return CredentialExistsOut(present=await asyncio.to_thread(store.exists, ref))
 
 
@@ -261,8 +260,8 @@ async def delete_secret(
                 "resources": [{"uid": c.uid, "kind": c.kind, "name": c.name} for c in citations],
             },
         )
-    # to_thread: the sync store write blocks on SQLite's busy_timeout, which on
-    # the event loop would deadlock against the loop's own aiosqlite writer.
+    # to_thread: the removal is file IO and, for a vault ref, a git commit
+    # under the vault's write lock — nothing for the event loop.
     removed = await asyncio.to_thread(store.remove, ref)
     # 204 either way, but only a real removal is a lifecycle change worth an
     # audit row (spec credentials "Delete a credential idempotently").

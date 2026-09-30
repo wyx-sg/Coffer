@@ -1,112 +1,109 @@
-"""What the encrypted store itself promises (spec credentials).
+"""What the encrypted store itself promises on disk (spec credentials; ADR
+storage-is-five-classes-by-nature, credentials-across-machines).
 
-Real SQLite file, real Fernet key, and the store's own code — the tests read
-the ``credentials`` row back with plain ``sqlite3`` so they see exactly what is
-persisted, not what the store chooses to return.
+Real files, a real vault repository, a real Fernet key and the store's own
+code — the tests read the ciphertext files and the vault's git history back
+directly, so they see exactly what is persisted, not what the store returns.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import pathlib
-import sqlite3
+import stat
+import subprocess
 import threading
 import time
+from typing import Any
 
 import pytest
 from cryptography.fernet import Fernet
 
+from coffer.domain.vault.fernet_time import encrypted_at
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-
-_SCHEMA = """
-CREATE TABLE credentials (
-    ref TEXT PRIMARY KEY,
-    ciphertext BLOB NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-"""
+from coffer.infrastructure.vault.home import local_root, vault_root
+from coffer.infrastructure.vault.instance import vault_repository
 
 
-@pytest.fixture
-def db_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    p = tmp_path / "coffer.db"
-    conn = sqlite3.connect(p)
-    conn.execute(_SCHEMA)
-    conn.commit()
-    conn.close()
-    return p
+def _git(root: pathlib.Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), *args], check=True, capture_output=True, text=True
+    ).stdout
 
 
-def _rows(db_path: pathlib.Path, ref: str) -> list[tuple[bytes, str, str]]:
-    conn = sqlite3.connect(db_path)
-    try:
-        return conn.execute(
-            "SELECT ciphertext, created_at, updated_at FROM credentials WHERE ref = ?", (ref,)
-        ).fetchall()
-    finally:
-        conn.close()
+def _mode(path: pathlib.Path) -> int:
+    return stat.S_IMODE(os.stat(path).st_mode)
 
 
 @pytest.mark.acceptance(
     spec="credentials", scenario="a stored secret is only ciphertext in the credentials table"
 )
-def test_a_stored_secret_is_only_ciphertext_in_the_credentials_table(
-    db_path: pathlib.Path,
-) -> None:
+def test_a_stored_secret_is_only_ciphertext_in_its_file(tmp_path: pathlib.Path) -> None:
     key = Fernet.generate_key()
-    store = EncryptedCredentialStore(db_path=db_path, key=key)
+    store = EncryptedCredentialStore(key, home=tmp_path)
     secret = "sk-plaintext-must-not-persist"
 
     store.set("svc/key", secret)
 
-    rows = _rows(db_path, "svc/key")
-    assert len(rows) == 1
-    ciphertext = bytes(rows[0][0])
-    assert secret.encode() not in ciphertext
-    assert Fernet(key).decrypt(ciphertext).decode() == secret
-    # Nothing else in the file spells it either.
-    assert secret.encode() not in db_path.read_bytes()
+    path = vault_root(tmp_path) / "credentials" / "svc" / "key.enc"
+    data = path.read_bytes()
+    assert data.endswith(b"\n") and data.count(b"\n") == 1
+    assert secret.encode() not in data
+    assert Fernet(key).decrypt(data.strip()).decode() == secret
+    # Nothing anywhere under ~/.coffer spells it either.
+    for found in (tmp_path / ".coffer").rglob("*"):
+        if found.is_file():
+            assert secret.encode() not in found.read_bytes(), found
 
 
 @pytest.mark.acceptance(
     spec="credentials", scenario="writing an existing ref re-encrypts it in place"
 )
-def test_writing_an_existing_ref_re_encrypts_it_in_place(db_path: pathlib.Path) -> None:
+def test_writing_an_existing_ref_re_encrypts_it_in_place(tmp_path: pathlib.Path) -> None:
     key = Fernet.generate_key()
-    store = EncryptedCredentialStore(db_path=db_path, key=key)
+    store = EncryptedCredentialStore(key, home=tmp_path)
 
     store.set("svc/key", "first-value")
-    [(first_cipher, created_at, first_updated)] = _rows(db_path, "svc/key")
-    time.sleep(0.01)  # timestamps are ISO strings; make "later" observable
+    path = store.path_of("svc/key")
+    first_cipher = path.read_bytes()
+    created = store.created_at("svc/key")
+    time.sleep(1.05)  # the token's timestamp has one-second resolution
     store.set("svc/key", "second-value")
 
-    rows = _rows(db_path, "svc/key")
-    assert len(rows) == 1
-    cipher, created_again, updated = rows[0]
-    assert bytes(cipher) != bytes(first_cipher)
-    assert Fernet(key).decrypt(bytes(cipher)).decode() == "second-value"
+    cipher = path.read_bytes()
+    assert cipher != first_cipher
+    assert Fernet(key).decrypt(cipher.strip()).decode() == "second-value"
     assert store.get("svc/key") == "second-value"
-    assert created_again == created_at
-    assert updated > first_updated
+    assert store.created_at("svc/key") == created
+    [(ref, _created, updated)] = store.list_refs()
+    assert ref == "svc/key"
+    assert updated > _created
+    assert encrypted_at(cipher) is not None
+    assert encrypted_at(cipher) > encrypted_at(first_cipher)  # type: ignore[operator]
 
 
 @pytest.mark.acceptance(
     spec="credentials", scenario="an async caller reaches the store through its async facade"
 )
 async def test_an_async_caller_reaches_the_store_through_its_async_facade(
-    db_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    store = EncryptedCredentialStore(db_path=db_path, key=Fernet.generate_key())
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
     loop_thread = threading.get_ident()
     seen: list[int] = []
-    real_connect = store._connect
 
-    def _recording_connect() -> sqlite3.Connection:
-        seen.append(threading.get_ident())
-        return real_connect()
+    def recording(name: str) -> None:
+        real = getattr(store, name)
 
-    monkeypatch.setattr(store, "_connect", _recording_connect)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            seen.append(threading.get_ident())
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(store, name, wrapper)
+
+    for name in ("path_of", "_write_vault", "_delete_vault"):
+        recording(name)
     assert asyncio.get_running_loop() is not None
 
     await store.aset("svc/key", "async-value")
@@ -116,6 +113,95 @@ async def test_an_async_caller_reaches_the_store_through_its_async_facade(
     assert await store.aexists("svc/key") is False
     assert await store.aget("svc/key") is None
 
-    # Every blocking SQLite call ran — and none of them on the loop's thread.
-    assert len(seen) == 6
+    # Every blocking file or git call ran — and none of them on the loop's thread.
+    assert len(seen) >= 6
     assert all(ident != loop_thread for ident in seen)
+
+
+def test_files_are_0600_and_their_directories_0700(tmp_path: pathlib.Path) -> None:
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    store.set("channel/seatalk/app-secret", "v")
+    store.set("proxy-token/agent-1", "t")
+
+    vault_file = vault_root(tmp_path) / "credentials" / "channel" / "seatalk" / "app-secret.enc"
+    local_file = local_root(tmp_path) / "credentials" / "proxy-token" / "agent-1.enc"
+    assert _mode(vault_file) == 0o600
+    assert _mode(local_file) == 0o600
+    for directory in (
+        vault_root(tmp_path) / "credentials",
+        vault_file.parent,
+        vault_file.parent.parent,
+        local_root(tmp_path) / "credentials",
+        local_file.parent,
+    ):
+        assert _mode(directory) == 0o700, directory
+
+
+def test_proxy_tokens_live_under_local_and_never_under_the_vault(tmp_path: pathlib.Path) -> None:
+    """A proxy token unlocks only this machine's loopback model proxy, so it
+    is machine-local state and has no file the vault could ever commit."""
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    vault_repository(vault_root(tmp_path)).set_carry_credentials(True)
+    store.set("proxy-token/agent-1", "loopback-token")
+
+    assert (local_root(tmp_path) / "credentials" / "proxy-token" / "agent-1.enc").is_file()
+    assert not list((tmp_path / ".coffer" / "vault").rglob("agent-1.enc"))
+    assert store.get("proxy-token/agent-1") == "loopback-token"
+    assert store.remove("proxy-token/agent-1") is True
+    assert not (local_root(tmp_path) / "credentials" / "proxy-token").exists()
+
+
+def test_a_set_is_a_vault_commit_when_the_repository_carries_credentials(
+    tmp_path: pathlib.Path,
+) -> None:
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    root = vault_root(tmp_path)
+    vault_repository(root).set_carry_credentials(True)
+
+    store.set("gh/token", "v1")
+    body = _git(root, "log", "-1", "--format=%an%n%B")
+    assert body.startswith("Coffer (daemon)\n")
+    assert "Stored credential gh/token" in body
+    assert "Coffer-Writer: daemon" in body
+    assert "Coffer-Operation: credential-set" in body
+    assert "v1" not in body
+    assert _git(root, "ls-files", "credentials").split() == ["credentials/gh/token.enc"]
+
+    store.remove("gh/token")
+    body = _git(root, "log", "-1", "--format=%B")
+    assert "Coffer-Operation: credential-delete" in body
+    assert _git(root, "ls-files", "credentials") == ""
+
+
+def test_a_set_is_no_commit_while_the_repository_does_not_carry_credentials(
+    tmp_path: pathlib.Path,
+) -> None:
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    root = vault_root(tmp_path)
+
+    store.set("gh/token", "v1")
+    store.set("gh/token", "v2")
+    store.remove("gh/token")
+    store.set("gh/other", "v3")
+
+    assert (root / "credentials" / "gh" / "other.enc").is_file()
+    assert _git(root, "rev-list", "--count", "HEAD").strip() == "1"  # the baseline only
+    assert _git(root, "ls-files", "credentials") == ""
+    assert _git(root, "status", "--porcelain") == ""
+
+
+def test_odd_refs_are_stored_under_their_encoded_names(tmp_path: pathlib.Path) -> None:
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    store.set("team one/.git/ключ", "v")
+    creds = vault_root(tmp_path) / "credentials"
+    expected = creds / "team%20one" / "%2Egit" / "%D0%BA%D0%BB%D1%8E%D1%87.enc"
+    assert expected.is_file()
+    assert [ref for ref, _c, _u in store.list_refs()] == ["team one/.git/ключ"]
+
+
+@pytest.mark.parametrize("ref", ["", "a//b", "../x", "a/..", "/abs", "trailing/", "./a"])
+def test_a_ref_that_would_leave_its_directory_is_refused(tmp_path: pathlib.Path, ref: str) -> None:
+    store = EncryptedCredentialStore(Fernet.generate_key(), home=tmp_path)
+    with pytest.raises(ValueError):
+        store.set(ref, "v")
+    assert not (tmp_path / ".coffer" / "vault" / "credentials").exists()

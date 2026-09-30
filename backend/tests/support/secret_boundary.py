@@ -1,8 +1,8 @@
-"""An in-memory stand-in for the secret boundary's tables, for tests.
+"""An in-memory stand-in for the secret boundary's local state, for tests.
 
-Same contract as ``infrastructure.credentials.boundary_store.SqliteBoundaryStore``
+Same contract as ``infrastructure.credentials.boundary_store.FileBoundaryStore``
 (the application's ``BoundaryStorePort``), held in dicts, so the gate's rules
-can be exercised without a database and route tests can install a real
+can be exercised without files and route tests can install a real
 ``SecretBoundary`` over a fake credential store.
 """
 

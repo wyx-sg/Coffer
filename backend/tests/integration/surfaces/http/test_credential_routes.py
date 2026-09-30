@@ -73,7 +73,6 @@ class _FakeAuditRepo:
 def _resource(kind: str, name: str, *, row_id: int = 1) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        id=row_id,
         uid=f"{row_id:032x}",
         kind=kind,
         name=name,

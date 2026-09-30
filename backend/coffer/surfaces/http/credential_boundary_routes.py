@@ -44,8 +44,8 @@ from coffer.domain.credential_errors import (
 )
 from coffer.domain.secrets import is_valid_secret_name, secret_ref, secret_uri
 from coffer.infrastructure.credentials import plaintext_scan
+from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.infrastructure.sync.identity import coffer_dir
-from coffer.infrastructure.sync.paths import skills_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import (
     get_credential_store,

@@ -16,26 +16,24 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy import text as _sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-
 from coffer.application.audit_service import AuditService
 from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
+from coffer.application.repos import ResourceRepo
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialLocked, MasterKeyMissing
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore, ref_files
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
 from coffer.surfaces.http.secret_boundary_wiring import (
     adopt_existing_bindings,
     init_secret_boundary,
     make_master_key_manager,
+    master_key_path,
 )
 from coffer.surfaces.http.secret_boundary_wiring import (
     boundary_resolver as boundary_resolver,
@@ -96,26 +94,35 @@ class CredentialWiring:
     master_key: MasterKeyManager
 
 
-async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> CredentialWiring:
+#: The resource repository the one-time legacy keychain move reads citers
+#: from; None skips that move (a composition without resources).
+_legacy_resource_repo: ResourceRepo | None = None
+
+
+async def init_credential_store(
+    *, home: pathlib.Path | None = None, resource_repo: ResourceRepo | None = None
+) -> CredentialWiring:
     """Resolve the master key, build the encrypted store, publish DI singletons.
 
     Envelope encryption: resolve the Fernet master key (file first, then
-    keychain), build the encrypted store, and replace every KeyringAdapter
-    injection point.  Creating a brand-new key is only legal while the
-    credentials table is empty — otherwise existing ciphertext would be
-    silently undecryptable, so we fail loudly instead.
+    keychain), build the file-backed store over ``vault/credentials/`` and
+    ``local/credentials/``, and replace every KeyringAdapter injection point.
+    Creating a brand-new key is only legal while no ciphertext file exists —
+    otherwise existing ciphertext would be silently undecryptable, so we fail
+    loudly instead. ``home`` is the user's home (default: ``HOME``);
+    ``resource_repo`` feeds the legacy keychain move at
+    :func:`run_credential_startup`.
     """
+    global _legacy_resource_repo
+    _legacy_resource_repo = resource_repo
     # The key's home is chosen by how this build was made (a signed release's
     # Keychain access group, or the development file / legacy keychain pair).
-    master_key_manager = make_master_key_manager(db_path)
-    async with engine.connect() as conn:
-        ciphertext_rows = (
-            await conn.execute(_sa_text("SELECT COUNT(*) FROM credentials"))
-        ).scalar_one()
-    key_path = db_path.parent / "master.key"
+    master_key_manager = make_master_key_manager(home)
+    stored = len(await asyncio.to_thread(ref_files, home))
+    key_path = master_key_path(home)
     try:
         master_key = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
+            None, lambda: master_key_manager.resolve(allow_create=stored == 0)
         )
     except CredentialLocked as e:
         # The keychain may hold the key; creating one in the file now would
@@ -129,16 +136,16 @@ async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> C
     if master_key is None:
         raise MasterKeyMissing(str(key_path))
     try:
-        credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
+        credential_store = EncryptedCredentialStore(master_key, home=home)
     except ValueError as e:
         # A present-but-corrupt key (e.g. truncated file) must fail loudly and
         # name its location — regenerating over live ciphertext is never safe.
-        raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
+        raise MasterKeyMissing(str(key_path)) from e
     set_credential_store(credential_store)
     set_master_key_manager(master_key_manager)
     # The approval gate and the presence grants, before any consumer of a
     # secret is built (every one gets ``boundary_resolver``).
-    init_secret_boundary(db_path, credential_store, master_key_manager)
+    init_secret_boundary(credential_store, master_key_manager, home=home)
     return CredentialWiring(store=credential_store, master_key=master_key_manager)
 
 
@@ -147,7 +154,6 @@ _logger = logging.getLogger(__name__)
 
 async def run_credential_startup(
     kinds: dict[str, Kind],
-    sm: async_sessionmaker[AsyncSession],
     credential_store: EncryptedCredentialStore,
     audit: AuditService,
     resources: ResourceService,
@@ -160,7 +166,8 @@ async def run_credential_startup(
     stops nothing that already worked (spec credentials "Hold a secret for a
     new destination until a person approves it").
     """
-    await run_legacy_keychain_migration(kinds, sm, credential_store, audit)
+    if _legacy_resource_repo is not None:
+        await run_legacy_keychain_migration(kinds, _legacy_resource_repo, credential_store, audit)
     manager = get_master_key_manager()
     if manager.migrated_from is not None:
         await audit.record(
@@ -180,7 +187,7 @@ async def run_credential_startup(
 
 async def run_legacy_keychain_migration(
     kinds: dict[str, Kind],
-    sm: async_sessionmaker[AsyncSession],
+    resource_repo: ResourceRepo,
     credential_store: EncryptedCredentialStore,
     audit: AuditService,
 ) -> None:
@@ -194,7 +201,7 @@ async def run_legacy_keychain_migration(
     try:
         moved = await migrate_legacy_keychain(
             kinds,
-            SqlAlchemyResourceRepo(sm),
+            resource_repo,
             KeyringAdapter(),
             credential_store,
             audit,

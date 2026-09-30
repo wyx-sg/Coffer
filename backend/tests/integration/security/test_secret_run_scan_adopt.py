@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from typer.testing import CliRunner
 
+from coffer.infrastructure.vault.home import local_root
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
@@ -155,7 +156,7 @@ def _plaintext(home: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     env = secrets / "db.env"
     env.write_text("# the test database\nDB_HOST=db.internal\nDB_PASSWORD=hunter2hunter2\n")
     env.chmod(0o600)
-    skill = home / ".coffer" / "skills" / "deploy"
+    skill = home / ".coffer" / "vault" / "skills" / "deploy"
     (skill / "scripts").mkdir(parents=True)
     script = skill / "scripts" / "run.sh"
     script.write_text(
@@ -231,19 +232,19 @@ def test_bindings_in_use_at_upgrade_keep_working(
     # Rewind to a vault from before the boundary: no bindings, no marker, and
     # a secret stored long ago.
     old = (datetime.now(tz=UTC) - timedelta(days=90)).isoformat()
-    d.sql("DELETE FROM secret_bindings")
-    d.sql("DELETE FROM secret_approvals")
-    d.sql("DELETE FROM secret_boundary_settings")
-    d.sql("UPDATE credentials SET created_at = ?", old)
+    secrets_dir = local_root(tmp_path) / "secrets"
+    for name in ("bindings", "approvals", "settings"):
+        (secrets_dir / f"{name}.json").unlink(missing_ok=True)
+    (secrets_dir / "credential-times.json").write_text(json.dumps({"gh/token": old}))
 
     with running_daemon(tmp_path, db) as upgraded:
         assert upgraded.resolve_for(first) == {"TOKEN": "ghp_from_before"}
         assert upgraded.resolve_for(second) == {"TOKEN": "ghp_from_before"}
         assert upgraded.pending() == []
-        adopted = upgraded.sql("SELECT COUNT(*) FROM secret_bindings")[0][0]
+        adopted = len(upgraded.local_secrets("bindings")["bindings"])
     assert adopted == 2
 
     with running_daemon(tmp_path, db) as again:
-        assert again.sql("SELECT COUNT(*) FROM secret_bindings")[0][0] == 2
+        assert len(again.local_secrets("bindings")["bindings"]) == 2
         third = again.register_stdio("third", "server-three", {"TOKEN": "gh/token"})
         assert again.pending(destination_uid=third["uid"]) != []

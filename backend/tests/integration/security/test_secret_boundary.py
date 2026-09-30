@@ -8,6 +8,7 @@ desktop app's half — the presence check and the signed grant — is played by
 
 from __future__ import annotations
 
+import base64
 import json
 import pathlib
 from collections.abc import Iterator
@@ -341,11 +342,12 @@ def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
     approval = r.json()["approval"]
     assert approval["op"] == "replace_value" and "attacker-bot-token" not in r.text
     assert d.value("gh/token") == "ghp_boundary_value_1"
-    for (blob,) in d.sql("SELECT pending_ciphertext FROM secret_approvals"):
-        assert blob is None or b"attacker-bot-token" not in bytes(blob)
+    [held] = d.local_secrets("approvals")["approvals"]
+    assert held["pending_ciphertext"]
+    assert b"attacker-bot-token" not in base64.b64decode(held["pending_ciphertext"])
     d.approve(approval["id"])
     assert d.value("gh/token") == "attacker-bot-token"
-    assert d.sql("SELECT pending_ciphertext FROM secret_approvals") == [(None,)]
+    assert [a["pending_ciphertext"] for a in d.local_secrets("approvals")["approvals"]] == [None]
 
 
 @pytest.mark.acceptance(
@@ -376,7 +378,7 @@ def test_switching_the_protection_off_waits(cli: BoundaryDaemon) -> None:
 )
 def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryDaemon) -> None:
     d = daemon
-    skill = d.home / ".coffer" / "skills" / "db-tools"
+    skill = d.home / ".coffer" / "vault" / "skills" / "db-tools"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("Run with coffer://secret/used-one set.\n")
     d.store("secret/lonely", "lonely-value-1")
