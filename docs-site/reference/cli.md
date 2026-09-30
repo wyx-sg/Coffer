@@ -1695,7 +1695,7 @@ coffer memory context [OPTIONS]
 
 Print the composed session-start context to stdout.
 
-The installed session-start hook runs this; you rarely need to. It prints nothing, and exits 0, when the daemon is not running.
+This is the text the installed hook (``coffer memory hook``) delivers at session start, printed for you to read. It prints nothing, and exits 0, when the daemon is not running.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
