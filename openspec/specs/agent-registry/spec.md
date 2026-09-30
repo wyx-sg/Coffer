@@ -739,7 +739,7 @@ On the agent's Hooks tab, Coffer's memory hook MUST be **one row** per file that
 - **AND** Coffer's hook reads `current` on all four events with trust `not_required` and no recorded fire, and nothing is written or audited
 
 #### Scenario: report a stale Coffer hook
-- **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's marked hook on `UserPromptSubmit` alone, as an older build wrote it, and one recorded fire
+- **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's marked hook on `UserPromptSubmit` alone, with a command other than the one Coffer would write now, and one recorded fire
 - **WHEN** the user lists the agent's hooks
 - **THEN** Coffer's hook reads `stale` on `UserPromptSubmit`, the installed and expected commands differ, and the last fire is reported
 

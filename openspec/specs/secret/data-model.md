@@ -89,7 +89,7 @@ CREATE TABLE secret_approvals (         -- what waits for the desktop app
     pending_ciphertext BLOB,            -- a new or replacement value, Fernet-sealed; cleared on any decision
     decided_at TEXT, decided_by TEXT
 );
-CREATE TABLE secret_boundary_settings ( -- require_approval, adopted_existing_bindings
+CREATE TABLE secret_boundary_settings ( -- require_approval
     key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
 ```
@@ -122,7 +122,6 @@ secrets, is never probed at register time, and releases nothing on delete.
 | `SECRET_LOCKED`    | The OS keychain refused or could not be read                        | 503; the legacy migration treats it as "skip and retry next start" |
 | `SECRET_UNREADABLE`| Ciphertext will not decrypt with the current key                   | 5xx, naming the ref |
 | `MASTER_KEY_MISSING`   | Ciphertext exists and no key resolves, or the key is corrupt | Fatal at daemon startup, naming the path |
-| `MASTER_KEY_CONFLICT`  | A signed build finds one key in its Keychain item and a different one in the file or legacy item | Fatal at daemon startup, naming both fingerprints |
 | `SECRET_BINDING_PENDING` | A secret would go to a destination or target nobody approved | 409, `details.approval_ids`; the CLI exits `9` |
 | `PRESENCE_GRANT_INVALID` | A presence grant is missing, expired, reused, for another operation or target, or not signed with the grant key | 403 |
 | `APPROVAL_NOT_FOUND` / `APPROVAL_NOT_PENDING` | An approval id that does not exist, or was already decided | 404 / 409 |
@@ -139,7 +138,7 @@ framework's):
 | `secret_revealed`  | `{ref}` — the desktop app's presence-gated reveal |
 | `secret_deleted`   | `{ref}`                          |
 | `secret_migrated`  | `{ref}`                          |
-| `master_key_relocated` | `{to}` (and `{from}` for the signed build's move into its access group) |
+| `master_key_relocated` | `{to}` |
 | `master_key_exported`  | `{path, fingerprint}` — the desktop app's key backup |
 | `secret_resolved`      | `{name, argv0, cwd}` — one `coffer run` resolve, never the rest of argv |
 | `secret_approval_requested` / `_approved` / `_rejected` | `{approval_id, op, ref}` |

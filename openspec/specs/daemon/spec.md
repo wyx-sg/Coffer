@@ -558,7 +558,7 @@ prints the records as the route returns them. A refusal from the route MUST be p
 route's error and a non-zero exit.
 
 #### Scenario: the daemon log tail reads every writer's format
-- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a line in the format the daemon wrote before "Write one bounded daemon log in one format" was met, a uvicorn line, a colour-escaped line from an upstream, and a multi-line traceback,
+- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a uvicorn line, a `LEVEL - logger - message` line from an upstream, a colour-escaped line from an upstream, and a multi-line traceback,
 - **WHEN** `GET /api/v1/daemon/logs` is called with a token,
 - **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
 - **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.
@@ -678,10 +678,6 @@ and report that a login service is not supported there. The CLI path records no 
 the reason the port records none: it must work with no daemon running, so the audit table is
 unreachable on exactly the path it serves.
 
-`~/.coffer/daemon-config.json` MUST NOT carry an idle window. An `idle_shutdown_hours` key an earlier
-build wrote there MUST be ignored when the file is read and MUST be dropped the next time the file
-is written, so the file only ever states settings that still decide something.
-
 #### Scenario: the settings page changes residency in one request
 - **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
 - **WHEN** a client reads `GET /api/v1/daemon/residency` and then sends `PUT /api/v1/daemon/residency` with `login_service_installed: true`,
@@ -693,12 +689,6 @@ is written, so the file only ever states settings that still decide something.
 - **WHEN** the user runs `coffer daemon service install`, `coffer daemon service status` and `coffer daemon service uninstall`,
 - **THEN** the login service is installed, reported installed, and removed,
 - **AND** no database is opened and no audit entry recorded, and `coffer daemon idle` is not a command.
-
-#### Scenario: an idle window left in the daemon config is ignored and dropped
-- **GIVEN** a `~/.coffer/daemon-config.json` an earlier build wrote, carrying `idle_shutdown_hours: 6` beside a pinned port,
-- **WHEN** the daemon starts, and the user then runs `coffer config set daemon.port` with another port,
-- **THEN** the daemon serves on the pinned port and never stands down on its own,
-- **AND** the rewritten file carries the new port and no `idle_shutdown_hours` key.
 
 ### Requirement: Clear inherited agent-home variables at start
 The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type's home variable — from its own environment when it starts, before it spawns anything, and log once which ones it removed. A daemon started from a shell that exports one would otherwise hand it to every agent process it spawns, so an agent registered on the default directory would run against the exported one while Coffer delivers its skills, MCP entry and config into the default. An agent gets the variable only from its own registered config directory ([agent-registry](../agent-registry/spec.md)), set on that agent's process alone.

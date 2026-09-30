@@ -44,10 +44,7 @@ be inspected answers `False`, and every caller treats that as "do nothing".
 Settings read **before** the database is opened, so nothing here can live in
 SQLite (`infrastructure/daemon/config.py`). Mode `0600`. Written by **merge**,
 never by replacement, so several settings share one file and a key written by a
-newer build survives being touched by an older one — with one exception:
-`idle_shutdown_hours`, which earlier builds wrote for an idle stand-down the
-daemon no longer has, is ignored on read and removed by every write (spec daemon
-"Change residency from the settings page or the command line").
+newer build survives being touched by an older one.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
