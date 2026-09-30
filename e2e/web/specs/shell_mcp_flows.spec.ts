@@ -5,7 +5,7 @@
 // round-trip. The 001-spec tests already cover the backend correctness;
 // here we pin the new look-and-feel: welcome-card → add → detail → tabs.
 
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acceptance } from "./_acceptance";
@@ -89,41 +89,59 @@ acceptance(
     const name = generateUniqueName("e2e002reg");
     try {
       await page.goto("/mcp-servers");
-      // "Add MCP server" opens a modal — no navigation away from the list.
+      // "Add server" opens a modal — no navigation away from the list.
       await page
-        .getByRole("button", { name: /Add MCP server/i })
+        .getByRole("button", { name: /^add server$/i })
         .first()
         .click();
       await expect(
         page.getByRole("heading", { name: /Add MCP server/i }),
       ).toBeVisible();
-      // Paste the standard mcpServers JSON, review, import.
+      // Paste the standard mcpServers JSON: one server opens the prefilled form.
+      await page.locator("#mcp-paste").fill(
+        JSON.stringify({
+          mcpServers: {
+            [name]: {
+              command: PYTHON,
+              args: [
+                FAKE_SERVER,
+                "--scenario",
+                "basic",
+                "--tools",
+                "read_file",
+              ],
+            },
+          },
+        }),
+      );
+      await page.getByRole("button", { name: /^continue$/i }).click();
+      await expect(page.locator("#add-server-name")).toHaveValue(name);
       await page
-        .locator("#json-input")
-        .fill(JSON.stringify({ mcpServers: { [name]: { command: "echo" } } }));
-      await page.getByRole("button", { name: /continue/i }).click();
-      await page.getByRole("button", { name: /import/i }).click();
+        .getByRole("button", { name: /^add server$/i })
+        .last()
+        .click();
 
-      // The detail route carries the uid, which no test can predict, so the
-      // claim "it landed on the new server's page" is made where it is
-      // legible: the URL is A detail page, and the page is THIS server's.
-      await expect(page).toHaveURL(/\/mcp-servers\/[^/]+$/, { timeout: 15_000 });
-      await expect(page.getByRole("heading", { name })).toBeVisible({
+      // It lands on the new server, addressed by its fixed name.
+      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}$`), {
         timeout: 15_000,
       });
-      // The redesigned detail page surfaces the server name as a level-1
-      // heading inside the new layout.
-      await expect(page.getByRole("heading", { name })).toBeVisible();
-      // Health state transitions: a freshly registered server starts at
-      // "unknown" and flips to "healthy" once the status probe lands.
-      // Binding to both labels in one regex avoids flakes on slow CI
-      // where we miss the brief "unknown" frame, while still asserting
-      // the badge stops on a known terminal state.
+      await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
+        timeout: 15_000,
+      });
+      // A freshly registered server reads "Not checked yet" until its first
+      // test lands, then "Healthy" (the add runs one test right away).
       await expect(
         page
-          .locator('[data-testid="health-badge"]')
-          .getByText(/unknown|healthy/i),
+          .getByTestId("mcp-server-pane")
+          .getByText(/^(not checked yet|healthy)$/i)
+          .first(),
       ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page
+          .getByTestId("mcp-server-pane")
+          .getByText(/^healthy$/i)
+          .first(),
+      ).toBeVisible({ timeout: 20_000 });
     } finally {
       await deregisterMcpServer(name);
     }
@@ -268,34 +286,32 @@ acceptance(
     try {
       await page.goto("/mcp-servers");
       await page
-        .getByRole("button", { name: /Add MCP server/i })
+        .getByRole("button", { name: /^add server$/i })
         .first()
         .click();
       await expect(
         page.getByRole("heading", { name: /Add MCP server/i }),
       ).toBeVisible();
+      // No paste: choose the type by hand and fill the form.
+      await page.getByRole("button", { name: /command \(stdio\)/i }).click();
+      await page.locator("#add-server-name").fill(name);
+      await page.locator("#add-server-command").fill("echo");
       await page
-        .locator("#json-input")
-        .fill(JSON.stringify({ mcpServers: { [name]: { command: "echo" } } }));
-      await page.getByRole("button", { name: /continue/i }).click();
-      await page.getByRole("button", { name: /import/i }).click();
+        .getByRole("button", { name: /^add server$/i })
+        .last()
+        .click();
 
-      // Import navigates to the detail page
-      // The detail route carries the uid, which no test can predict, so the
-      // claim "it landed on the new server's page" is made where it is
-      // legible: the URL is A detail page, and the page is THIS server's.
-      await expect(page).toHaveURL(/\/mcp-servers\/[^/]+$/, { timeout: 15_000 });
-      await expect(page.getByRole("heading", { name })).toBeVisible({
+      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}$`), {
+        timeout: 15_000,
+      });
+      await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
         timeout: 15_000,
       });
 
-      // Navigate back to the list — the server card must appear there
+      // Back on the list the server is a row.
       await page.goto("/mcp-servers");
       await expect(
-        page
-          .getByRole("link", { name: new RegExp(name) })
-          .or(page.getByText(new RegExp(name)))
-          .first(),
+        page.getByRole("link", { name: new RegExp(name) }).first(),
       ).toBeVisible({ timeout: 10_000 });
     } finally {
       await deregisterMcpServer(name);
@@ -307,21 +323,18 @@ acceptance(
   "web-ui",
   "JSON import shows readable error for malformed JSON",
   async ({ page }) => {
-    // UI Shell §Acceptance: pasting a non-JSON payload into the Add
-    // MCP server dialog must surface a parse-error message in-dialog
-    // without firing a /resources request and without leaking the
-    // generic "INTERNAL_ERROR" / "unexpected error" copy.
+    // Pasting a non-JSON payload into the Add server dialog surfaces a
+    // readable message in the dialog without firing a request and without
+    // the generic "INTERNAL_ERROR" / "unexpected error" copy.
     await page.goto("/mcp-servers");
     await page
-      .getByRole("button", { name: /Add MCP server/i })
+      .getByRole("button", { name: /^add server$/i })
       .first()
       .click();
     await expect(
       page.getByRole("heading", { name: /Add MCP server/i }),
     ).toBeVisible();
 
-    // Capture network requests so we can later assert nothing fired
-    // against /resources or /credentials while the JSON is malformed.
     const apiCalls: string[] = [];
     page.on("request", (req) => {
       const url = req.url();
@@ -333,30 +346,21 @@ acceptance(
       }
     });
 
-    // Paste a payload that is not valid JSON. The panel validates as the
-    // user types: a readable parse error appears at once and Continue stays
-    // disabled, so there is nothing to click and nothing can reach the
-    // daemon.
-    await page.locator("#json-input").fill("{invalid json");
-
-    await expect(
-      page.getByRole("heading", { name: /Add MCP server/i }),
-    ).toBeVisible();
-    await expect(page.getByRole("alert").first()).toContainText(
-      /invalid|parse|expected|JSON|mcpServers/i,
+    // The box reads as the user types: a readable parse error appears at
+    // once and Continue stays disabled, so nothing can reach the daemon.
+    await page.locator("#mcp-paste").fill('{"mcpServers": {"x": }');
+    await expect(page.locator("#mcp-paste-result")).toContainText(
+      /not valid json|json/i,
       { timeout: 5_000 },
     );
     await expect(
-      page.getByRole("button", { name: /continue/i }),
+      page.getByRole("button", { name: /^continue$/i }),
     ).toBeDisabled();
 
-    // The forbidden copy MUST NOT appear inside the dialog.
     await expect(page.getByText(/unexpected error/i)).toHaveCount(0);
     await expect(page.getByText(/INTERNAL_ERROR/)).toHaveCount(0);
-    // The INTERNAL_ERROR copy reads "Coffer hit an internal error…".
     await expect(page.getByText(/internal error/i)).toHaveCount(0);
 
-    // No write request landed at the backend.
     expect(
       apiCalls.filter(
         (c) =>
@@ -396,9 +400,106 @@ acceptance(
       await expect(page.getByText("alpha_tool").first()).toBeVisible({
         timeout: 5_000,
       });
-      await expect(page.getByText("beta_tool")).toHaveCount(0);
+      // Exact: the server's header names its command line, which carries both.
+      await expect(page.getByText("beta_tool", { exact: true })).toHaveCount(0);
     } finally {
       await deregisterMcpServer(name);
     }
   },
 );
+
+// --- the paste box's other forms (change revise-web-ui-ia; the scenario
+// markers are added when the change is archived) ---------------------------
+
+test("pasting JSON with three servers opens the review and adds all three", async ({
+  page,
+}) => {
+  const names = ["a", "b", "c"].map((x) => generateUniqueName(`e2e3${x}`));
+  try {
+    await page.goto("/mcp-servers");
+    await page
+      .getByRole("button", { name: /^add server$/i })
+      .first()
+      .click();
+    const servers = Object.fromEntries(
+      names.map((n) => [
+        n,
+        {
+          command: PYTHON,
+          args: [FAKE_SERVER, "--scenario", "basic", "--tools", "t"],
+        },
+      ]),
+    );
+    await page
+      .locator("#mcp-paste")
+      .fill(JSON.stringify({ mcpServers: servers }));
+    await expect(page.locator("#mcp-paste-result")).toContainText(
+      /found 3 servers/i,
+    );
+    await page.getByRole("button", { name: /review 3 servers/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /review before adding/i }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /add 3 servers/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /review before adding/i }),
+    ).toHaveCount(0, {
+      timeout: 15_000,
+    });
+    for (const n of names) {
+      await expect(
+        page.getByRole("link", { name: new RegExp(n) }).first(),
+      ).toBeVisible({
+        timeout: 10_000,
+      });
+      expect(await resolveResourceUid("mcp_server", n)).not.toBeNull();
+    }
+  } finally {
+    for (const n of names) await deregisterMcpServer(n);
+  }
+});
+
+test("pasting a command line prefills a stdio server", async ({ page }) => {
+  await page.goto("/mcp-servers");
+  await page
+    .getByRole("button", { name: /^add server$/i })
+    .first()
+    .click();
+  await page
+    .locator("#mcp-paste")
+    .fill(
+      "claude mcp add github -e GITHUB_TOKEN=ghp_x -- npx -y @modelcontextprotocol/server-github",
+    );
+  await expect(page.locator("#mcp-paste-result")).toContainText(
+    /command · stdio/i,
+  );
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await expect(page.locator("#add-server-name")).toHaveValue("github");
+  await expect(page.locator("#add-server-command")).toHaveValue("npx");
+  await expect(page.locator("#add-server-args")).toHaveValue(
+    "-y @modelcontextprotocol/server-github",
+  );
+  await expect(
+    page.getByRole("switch", { name: "GITHUB_TOKEN is a secret" }),
+  ).toBeChecked();
+  // Nothing was added: close without saving.
+  await page.keyboard.press("Escape");
+});
+
+test("pasting a URL prefills a Streamable HTTP server", async ({ page }) => {
+  await page.goto("/mcp-servers");
+  await page
+    .getByRole("button", { name: /^add server$/i })
+    .first()
+    .click();
+  await page.locator("#mcp-paste").fill("https://mcp.example.com/mcp");
+  await expect(page.locator("#mcp-paste-result")).toContainText(
+    /url · streamable http/i,
+  );
+  await page.getByRole("button", { name: /^continue$/i }).click();
+  await expect(page.locator("#add-server-url")).toHaveValue(
+    "https://mcp.example.com/mcp",
+  );
+  await expect(page.locator("#add-server-name")).toHaveValue("example");
+  await page.keyboard.press("Escape");
+});

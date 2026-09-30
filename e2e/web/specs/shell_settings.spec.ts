@@ -6,7 +6,7 @@
 // control anywhere. The first two markers still name the scenarios of the
 // Settings page the change replaces; they follow its scenario names at archive.
 
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { acceptance } from "./_acceptance";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 
@@ -41,9 +41,7 @@ acceptance(
     // Clicking a tab swaps the pane without closing the modal.
     await modal.getByRole("link", { name: /^About$/ }).click();
     await expect(page).toHaveURL(/\/settings\/about$/);
-    await expect(
-      modal.getByRole("heading", { name: /about coffer/i }),
-    ).toBeVisible();
+    await expect(modal.getByTestId("settings-about-head")).toBeVisible();
 
     // Escape closes it onto the page underneath, at that page's route.
     await page.keyboard.press("Escape");
@@ -70,9 +68,9 @@ acceptance(
     const panes: [string, RegExp][] = [
       ["general", /^Automatic upkeep$/], // GeneralSettings -> Coffer's model
       ["security", /^Encryption$/], // SecuritySettings
-      ["data", /^Data retention$/], // DataSettings
-      ["daemon", /^Coffer's daemon$/], // DaemonSettings -> DaemonResidencySettings
-      ["about", /^About Coffer$/], // AboutPage
+      ["data", /^Vault$/], // DataSettings
+      ["daemon", /^Startup$/], // DaemonSettings
+      ["about", /^Coffer$/], // AboutPage
     ];
     for (const [tab, heading] of panes) {
       await page.goto(`/settings/${tab}`);
@@ -138,7 +136,9 @@ acceptance(
       // Settings auto-save: there is no Save button — the days field persists on
       // blur. Fill the value, then blur and wait for the PATCH to land.
       const saved = page.waitForResponse(
-        (r) => r.url().includes("/retention/policies/") && r.request().method() === "PATCH",
+        (r) =>
+          r.url().includes("/retention/policies/") &&
+          r.request().method() === "PATCH",
         { timeout: 10_000 },
       );
       await daysInput.fill("45");
@@ -183,3 +183,93 @@ acceptance(
     ).toBeVisible();
   },
 );
+
+// Settings > Data and > Daemon (change revise-web-ui-ia; the scenario markers
+// are added when the change is archived). The e2e daemon runs under its own
+// throwaway HOME, so clearing its cache or pinning its port touches nothing
+// of the user's.
+
+test("the data tab shows four blocks and clears the rebuildable cache after a confirmation", async ({
+  page,
+}) => {
+  await page.goto("/settings/data");
+  const modal = page.getByTestId("settings-modal");
+  for (const block of ["vault", "local", "history", "cache"]) {
+    await expect(modal.getByTestId(`settings-data-${block}`)).toBeVisible();
+  }
+  await expect(modal.getByText(/this mac only/i)).toHaveCount(0);
+  await expect(modal.locator("#forever-mcp_invocations")).toBeVisible();
+
+  await modal
+    .getByTestId("settings-data-cache")
+    .getByRole("button", { name: /^clear$/i })
+    .click();
+  const dialog = page.getByRole("dialog", { name: /clear the cache/i });
+  await expect(dialog).toBeVisible();
+  const cleared = page.waitForResponse(
+    (r) =>
+      r.url().includes("/storage/cache/clear") &&
+      r.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: /clear cache/i }).click();
+  expect((await cleared).ok()).toBe(true);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("the daemon tab refuses a port out of range and leaves a saved one pending until restart", async ({
+  page,
+}) => {
+  const { token, port } = readDaemonToken();
+  const putPort = (p: number) =>
+    fetch(`http://127.0.0.1:${port}/api/v1/daemon/port`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Coffer-Token": token,
+        "X-Coffer-Actor": "e2e",
+      },
+      body: JSON.stringify({ port: p }),
+    });
+  try {
+    await page.goto("/settings/daemon");
+    const modal = page.getByTestId("settings-modal");
+    await expect(modal.getByTestId("settings-daemon-status")).toContainText(
+      `127.0.0.1:${port}`,
+    );
+    // A browser offers the restart command, never a restart button.
+    await expect(
+      modal.getByText("coffer daemon restart").first(),
+    ).toBeVisible();
+    await expect(modal.getByText(/token/i)).toHaveCount(0);
+
+    // The field holds the port of the next start (the suite's daemon binds a
+    // port from its test range, so that one may differ from the bound port).
+    const configured = (await (
+      await fetch(`http://127.0.0.1:${port}/api/v1/daemon/port`, {
+        headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e" },
+      })
+    ).json()) as { port: number };
+    const field = modal.getByRole("textbox", { name: /^port$/i });
+    await expect(field).toHaveValue(String(configured.port));
+    await field.fill("80");
+    await modal.getByRole("button", { name: /^save$/i }).click();
+    await expect(
+      modal.getByText(/whole number from 1024 to 65535/i),
+    ).toBeVisible();
+
+    const next = port === 65000 ? 65001 : 65000;
+    await field.fill(String(next));
+    await modal.getByRole("button", { name: /^save$/i }).click();
+    await expect(
+      modal.getByTestId("settings-daemon-port-pending"),
+    ).toContainText(`Port ${next} saved`);
+    // Until the restart the status keeps the port it answers on.
+    await expect(modal.getByTestId("settings-daemon-status")).toContainText(
+      `127.0.0.1:${port}`,
+    );
+  } finally {
+    // Best effort: the suite's HOME is throwaway, and its daemon binds from
+    // its test range whatever the file says.
+    await putPort(port).catch(() => undefined);
+  }
+});
