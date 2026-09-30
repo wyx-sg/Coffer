@@ -54,11 +54,11 @@ description: 把保险库的 git 仓库拉取和推送到你自己拥有的私�
 
    ```sh
    printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
-   coffer sync remote check https://gitlab.com/<group>/<repo>.git \
-     --secret-ref sync/gitlab-token --username oauth2
    coffer sync remote set https://gitlab.com/<group>/<repo>.git \
      --secret-ref sync/gitlab-token --username oauth2
    ```
+
+   `coffer sync remote check` 总是发送默认用户名 `coffer`，所以没法带着令牌查看 GitLab 仓库。想在保存之前先看一眼，就在**同步**页面的设置表单里填好，再点**检查仓库**，它会发送你填写的**用户名**。
 
    对于自建的 GitLab，把 `gitlab.com` 换成你实例的主机名。
 

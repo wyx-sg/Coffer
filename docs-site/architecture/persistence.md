@@ -227,7 +227,7 @@ A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and 
 
 ## Settings that live outside every class
 
-Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token): the rendezvous every surface reads to find the daemon. `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the machine name and id, and the experimental-feature switches. It must be readable before any upgrade runs, so it is neither vault nor local state. Both are written atomically at mode `0600`. Their contents are described in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out) and, key by key, in [Configuration](/reference/configuration#daemon-config-json).
+Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token): the rendezvous every surface reads to find the daemon. `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the model proxy's port, the machine name and id, and the experimental-feature switches. It must be readable before any upgrade runs, so it is neither vault nor local state. Both are written atomically at mode `0600`. Their contents are described in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out) and, key by key, in [Configuration](/reference/configuration#daemon-config-json).
 
 ## Trade-offs
 

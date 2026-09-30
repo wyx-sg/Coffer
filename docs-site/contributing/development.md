@@ -119,10 +119,10 @@ The [configuration reference](/reference/configuration) lists every variable the
 | `backend/pyproject.toml`, `backend/uv.lock` | Dependencies, ruff, mypy, pytest and import-linter configuration |
 | [`frontend/`](https://github.com/wyx-sg/Coffer/tree/main/frontend) | The React web UI. See [Frontend](/contributing/frontend) |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | The Tauri 2 desktop shell (Rust) that hosts the same `frontend/dist` |
-| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser) and `mcp/` (MCP client to shim to daemon) |
+| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser), `mcp/` (MCP client to shim to daemon) and `visual/` (screenshot baselines, `make verify-visual`) |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | Eval harness for tool search and tool routing, with datasets and baselines |
 | [`openspec/`](https://github.com/wyx-sg/Coffer/tree/main/openspec) | The product contract: `specs/` (current), `changes/` (in flight and archived) |
-| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `principles.md`, `architecture.md`, `decisions/` (ADRs) and `research/` |
+| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/` (ADRs), `research/` and `skill-library/`. Principles and architecture live in this site, under [Architecture](/architecture/) |
 | `docs-site/` | This VitePress site |
 | [`scripts/`](https://github.com/wyx-sg/Coffer/tree/main/scripts) | Repository gates (`check_*.py`, `audit_acceptance.py`) and build scripts |
 | `.agents/` | Convention files for contributors and agents |

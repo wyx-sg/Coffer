@@ -93,7 +93,7 @@ scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）
 | 工具 | 作用 |
 | --- | --- |
 | `coffer__search_tools` | 按一段自然语言查询对完整的上游目录排序，返回真实的工具 schema，智能体随后可以直接调用。 |
-| `coffer__write` | 把新材料归档到某个知识集。知识功能开启时可用。 |
+| `coffer__write` | 把新材料归档到某个知识集。 |
 
 没有记忆工具，也没有日志工具。记忆笔记是 `~/.coffer/derived/memory/` 下的 Markdown 文件，智能体用自己的文件工具搜索；Coffer 的记录用 `coffer log audit|mcp|daemon` 读取。
 

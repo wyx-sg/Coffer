@@ -321,7 +321,7 @@ A trigger names its note rather than copying it, so the reason shown is always t
 Every note delivered at a prompt, before a command or after one reads as **provenance plus fact**. It names the note's file, and states its title and description as "the user's standing rule is: …" for a `feedback` note, or as "a fact they recorded: …" for anything else:
 
 ```text
-Coffer memory, a note recorded for this user (/Users/you/.coffer/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
+Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
 ```
 
 The wording is deliberate. In an earlier round of the eval, a note phrased as an imperative ("delete the branch and the worktree") and delivered just before a command was quoted back to the user as a prompt injection. Stated as the user's standing rule, 0 of 72 runs flagged a note. Delivered text is never an instruction to the agent, and nothing delivered at command time asks for a destructive step.

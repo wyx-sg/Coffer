@@ -54,11 +54,11 @@ Four rules shape everything below:
 
    ```sh
    printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
-   coffer sync remote check https://gitlab.com/<group>/<repo>.git \
-     --secret-ref sync/gitlab-token --username oauth2
    coffer sync remote set https://gitlab.com/<group>/<repo>.git \
      --secret-ref sync/gitlab-token --username oauth2
    ```
+
+   `coffer sync remote check` always sends the default username `coffer`, so it cannot look at a GitLab repository with its token. To look before you save, fill in the set-up form on the **Sync** page and press **Check repository**, which sends the **User name** you enter.
 
    For a self-managed GitLab, use your instance's host in place of `gitlab.com`.
 

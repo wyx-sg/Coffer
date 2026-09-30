@@ -9,7 +9,7 @@ Coffer's backend is Python 3.12+.
 - **Python 3.12+**
 - **FastAPI** for HTTP surface
 - **Pydantic v2** for models + validation
-- **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the exclusive data-access path)
+- **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the only access path to `runs.db`, the history database; the vault's files are the system of record for configuration and are written only through `VaultWriter`, `infrastructure/vault/`)
 - **`cryptography`** (Fernet) for the envelope-encrypted secret store
 - **`keyring`** for OS keychain (secret module only — master key opt-in + legacy migration)
 - **`asyncio`** for async + subprocess management. Coffer's own code imports
@@ -107,23 +107,35 @@ The desktop shell lives in `desktop/`. It is a **native host over the same
 `frontend/dist`** the daemon serves, not a second UI: it hosts the built SPA as
 a local asset, supplies the API token over IPC (because the daemon spec's "Hand the browser its token in the served page" injection
 cannot reach a document nobody served), runs detect-or-spawn for the daemon, and
-sits in the tray. It owns nothing else — file actions go through the daemon's
-HTTP routes in both hosts, and binary deployment belongs to the daemon's
-frozen-start path ([The Desktop Shell
-Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md)).
+sits in the menu bar. Beyond that it owns three things only a native host can
+do: the **secret boundary** (the presence check and the presence grant, signed
+with the master key, that release a plaintext value or an approval, plus the
+notice that a secret is waiting for approval), the **updater** (a signed
+release manifest, and replacing the old daemon after the relaunch), and **sync
+alerts** (a notification when the vault's last sync round needs a human). File
+actions go through the daemon's HTTP routes in both hosts, and binary
+deployment belongs to the daemon's frozen-start path ([The Desktop Shell
+Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md);
+[Distribution](../docs-site/architecture/distribution.md)).
 
 - **Rust 2021**, **Tauri 2** (`tray-icon`, `image-png`).
 - File size: **≤ 400 lines** per `.rs` file, same cap as backend Python and
   gated by `scripts/check_file_sizes.py`. The shell is deliberately split into
-  small modules to stay under it: `resolve` (the five-step chain deciding where
-  a daemon comes from), `discovery` (reading `daemon.json`, probing a port),
-  `spawn` (starting one), `daemon` (the three IPC commands the webview calls
-  and the detect-or-spawn policy behind them — rate limiting, stop-then-start,
-  the credential handshake), `env_path`, `sidecar`, `tray` (the menu, and the
-  `set_ui_language` command the page reports its interface language through),
-  `tray_locale` (which language the tray speaks, and its words), and `logging` (the
-  shell's own records, appended to `~/.coffer/logs/daemon.log`, so a failed
-  tray restart does not fail in silence).
+  small modules to stay under it, grouped by responsibility:
+  - **daemon:** `resolve` (the five-step chain deciding where a daemon comes
+    from), `discovery` (reading `daemon.json`, probing a port), `spawn`,
+    `ready`, `restart` (the restart policy as pure functions), `daemon` (the
+    IPC commands the webview calls and the detect-or-spawn policy behind them —
+    rate limiting, stop-then-start, the token handshake), `daemon_http`,
+    `env_path`, `sidecar`, `coffer_home` (every `~/.coffer` path the shell
+    touches);
+  - **menu bar:** `tray`, `tray_state`, `tray_watch`, `tray_nav`, `tray_locale`;
+  - **secret boundary:** `secrets` (its IPC commands), `presence`,
+    `presence_macos`, `presence_grant`, `master_key`, `approval_watch`;
+  - **updates:** `updater`, `update_state`, `update_relaunch`;
+  - **sync alerts:** `sync_watch`, `sync_alert`, `sync_presentation`;
+  - `logging` (the shell's own records, appended to `~/.coffer/logs/daemon.log`,
+    so a failed tray restart does not fail in silence).
 - Pure decision functions — the resolution chain, the rate limit, `daemon.json`
   parsing, the `$PATH` merge — are split from their I/O so `cargo test` covers
   them without a Tauri runtime or a socket.

@@ -53,6 +53,7 @@ openspec/
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | 投射到每个智能体配置中的模型提供商连接 |
 | [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | 与类型无关的资源模型、scope、审计日志、保留策略、REST/CLI 对等 |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | 技能主存储以及向智能体的投递 |
+| [`vault-storage`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-storage/spec.md) | `~/.coffer/` 下的五类存储、作为 git 仓库并通过一次经过校验的提交写入的保险库，以及一次性升级 |
 | [`vault-sync`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) | 让保险库与用户自己的 git 远端收敛 |
 | [`web-ui`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md) | 应用外壳、信息架构、共享的列表与详情约定、i18n |
 

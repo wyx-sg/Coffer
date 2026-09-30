@@ -30,7 +30,7 @@ When you run `coffer agent connect claude-code`, Coffer writes one `coffer` entr
 
 ## What it manages
 
-Everything Coffer manages is a **resource** of one of seven **kinds**. Every resource has an immutable id, a name, an on/off switch and an audit trail.
+Everything Coffer manages is a **resource** of one of seven **kinds**. Every resource has an immutable id, a name, an on/off switch (knowledge collections and memory partitions are always on) and an audit trail.
 
 | Kind | What it is | Guide |
 | --- | --- | --- |

@@ -83,9 +83,9 @@ A binary installed by `curl` is not quarantined, so macOS Gatekeeper does not bl
 
 ## Desktop app
 
-1. Download `Coffer-unsigned-aarch64-apple-darwin.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest).
+1. Download the `.dmg` from [Releases](https://github.com/wyx-sg/Coffer/releases/latest). A signed and notarised release is named `Coffer-aarch64-apple-darwin.dmg`; a build without code signing says so in its name, `Coffer-unsigned-aarch64-apple-darwin.dmg`.
 2. Open the `.dmg` and drag **Coffer** to **Applications**.
-3. The app is not code-signed or notarised, so macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
+3. Only for an unsigned build: macOS refuses a browser-downloaded copy with "Coffer is damaged and can't be opened". The app is not damaged. Clear the quarantine flag and open it again:
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/Coffer.app

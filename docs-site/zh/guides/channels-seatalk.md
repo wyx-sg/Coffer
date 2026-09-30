@@ -34,16 +34,18 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 
 ## 2. 提供 WebSocket SDK {#_2-supply-the-websocket-sdk}
 
-1. 从 SeaTalk 开放平台下载 SeaTalk 用于 WebSocket 事件回调的 Python SDK。包名是 `seatalk_oapi_sdk`；见 SeaTalk 的 [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) 文档。
-2. 解压它，让包目录位于 Coffer 的 vendor 目录下：
+1. 从 SeaTalk 开放平台下载 SeaTalk 用于 WebSocket 事件回调的 Python SDK。包名是 `seatalk_oapi_sdk`；见 SeaTalk 的 [WebSocket Event Callback](https://open.seatalk.io/docs/WebSocket-Event-Callback) 文档。下载这一步由你来做，因为它在平台的登录之后。
+2. 其余的交给你的智能体。消息渠道登记好之后（第 3 步），等待 SDK 的消息渠道会显示**未安装 SeaTalk 的 Python SDK**，链接到 SeaTalk 的下载页面，并提供**复制提示词**（有 Coffer 托管的智能体可用时还有**交给智能体**）：一段让智能体把压缩包解压到 Coffer vendor 目录的提示词。放好之后点**重试**。
 
-   ```text
-   ~/.coffer/vendor/seatalk_oapi_sdk/
-   ```
+Coffer 只在 SeaTalk 消息渠道启动时才导入 SDK，从不在守护进程启动时导入；SDK 缺失时它会一直重试。你可以在登记消息渠道之前或之后添加 SDK；已经在等待的消息渠道不用重启守护进程就能用上它。
 
-   想放在别处，就在守护进程启动的环境里，把 `COFFER_SEATALK_SDK_DIR` 设为**包含** `seatalk_oapi_sdk/` 的那个目录。
+要手动处理，就解压压缩包，让包目录位于 Coffer 的 vendor 目录下：
 
-Coffer 只在 SeaTalk 消息渠道启动时才导入 SDK，从不在守护进程启动时导入；SDK 缺失时它会一直重试。你可以在登记消息渠道之前或之后添加 SDK；已经在等待的消息渠道不用重启守护进程就能用上它。在 Web 界面里，等待 SDK 的消息渠道会链接到 SeaTalk 的下载页面，并把其余步骤作为一段提示词交给你的智能体：你下载压缩包，智能体把它解压到上面的目录。
+```text
+~/.coffer/vendor/seatalk_oapi_sdk/
+```
+
+想放在别处，就在守护进程启动的环境里，把 `COFFER_SEATALK_SDK_DIR` 设为**包含** `seatalk_oapi_sdk/` 的那个目录。
 
 ## 3. 登记消息渠道 {#_3-register-the-channel}
 

@@ -69,6 +69,7 @@ line each:
 | `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
 | `scripts/dump_i18n_backend_keys.py --check`  | `make lint`           | A backend error code or audit event type is missing from the frontend's locale-coverage fixture                             |
 | `scripts/check_unit_purity.py`               | `make verify-unit`    | A test under `backend/tests/unit/` imports an I/O module                                                                    |
+| `openspec validate --all --strict`          | `make verify-acceptance` | A spec or change is malformed, or a requirement owns no scenario (runs first, before `audit_acceptance.py`)             |
 | `scripts/audit_acceptance.py`                | `make verify-acceptance` | A spec scenario has no test marker, or a marker names no scenario                                                        |
 | `scripts/ci_change_scope.py`                 | CI `changes` job      | (Not a gate.) Decides whether a pull request is prose-only, so the test jobs can be skipped                                |
 | `scripts/verify_stamp.py`                    | `make verify`         | (Not a gate.) Records the fingerprint the verify-before-commit hook compares against                                        |

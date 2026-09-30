@@ -284,16 +284,16 @@ environments:
 
 ## 编写流程 {#authoring-workflow}
 
-在 Coffer 的主存储之外编写。`coffer skill add` 会把文件夹拷进 `~/.coffer/vault/skills/`；在存储内部编写，就等于把一个文件夹导入到它自己身上。
+在 `~/.coffer` 之外、你自己的文件夹里编写（示例用的是 `~/src/skills/<domain>`）。`coffer skill add` 会把文件夹拷进 `~/.coffer/vault/skills/`；在存储内部编写，就等于把一个文件夹导入到它自己身上。
 
 ```sh
 # 1. Author and test in the authoring root
-cd ~/.coffer/skill-src/<domain>
+cd ~/src/skills/<domain>
 ~/.cache/coffer-skill-venv/bin/pytest -q scripts
 ~/.cache/coffer-skill-venv/bin/python scripts/lint_portable.py .
 
 # 2. Import into the master store; Coffer validates and delivers it
-coffer skill add ~/.coffer/skill-src/<domain>
+coffer skill add ~/src/skills/<domain>
 
 # 3. Confirm delivery
 coffer skill verify
@@ -301,7 +301,7 @@ coffer skill verify
 
 第一次导入之后，以编写目录作为唯一的事实来源：
 
-- 做正式改动时，编辑编写目录，重新运行测试和 lint，然后 `coffer skill add --force ~/.coffer/skill-src/<domain>`。
+- 做正式改动时，编辑编写目录，重新运行测试和 lint，然后 `coffer skill add --force ~/src/skills/<domain>`。
 - 做快速修复时，编辑 `coffer path skill <domain>` 打印出的主文件夹中的文件；智能体下次读取时就会看到改动。把同样的改动也应用到编写目录，否则下一次 `coffer skill add --force` 会把它覆盖掉。
 - `coffer skill verify` 报告主副本与每个智能体已投递链接之间的偏移，`--fix` 修复缺失或被改指向的链接。
 

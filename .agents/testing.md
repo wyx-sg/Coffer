@@ -62,9 +62,7 @@ e2e/
 ├── scripts/start_daemon.sh    # the isolated-HOME daemon both projects share
 ├── web/
 │   └── specs/                 # browser against the daemon-served UI
-│       ├── *.spec.ts          # agent_workspace, shell_activity, shell_agents,
-│       │                      # shell_chat_attachments, shell_cold_start, shell_knowledge,
-│       │                      # shell_mcp_flows, shell_settings, shell_skills
+│       ├── *.spec.ts          # one spec per page or flow
 │       └── _acceptance.ts, _helpers.ts   # support modules, not specs
 └── mcp/
     └── specs/                 # real MCP client → shim → daemon
