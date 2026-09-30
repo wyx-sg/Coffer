@@ -25,7 +25,7 @@ function item(overrides: Partial<AttentionItem> = {}): AttentionItem {
     uid: "u1",
     title: "fetch",
     reason_code: "mcp_missing_launcher",
-    reason: "Its launcher uvx is not installed on this machine.",
+    reason: "Its launcher uvx isn't found on this machine.",
     severity: "error",
     since: null,
     action: { verb: "test", method: "POST", path: "/api/v1/resources/mcp_server/u1/test", body: null },

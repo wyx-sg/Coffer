@@ -24,6 +24,16 @@ class CliNeededByOut(BaseModel):
     why: str | None
 
 
+class CliServerOut(BaseModel):
+    """One enabled stdio MCP server started with the command (or with a
+    launcher it provides: ``uvx`` for ``uv``, ``npx`` for ``node``)."""
+
+    server_uid: str
+    server_name: str
+    #: The launcher its config names, e.g. ``uvx``.
+    launcher: str
+
+
 class CliLoginOut(BaseModel):
     """``state`` is ``None`` when the command was not found, so its login check
     could not run. ``command`` is the login command to copy — Coffer never
@@ -42,13 +52,16 @@ class CliOut(BaseModel):
     path: str | None
     #: What ``--version`` printed; ``None`` when missing or unreadable.
     version: str | None
-    #: The highest minimum any skill asks for.
+    #: The highest minimum any skill asks for (MCP servers ask for none).
     min_version: str | None
     login: CliLoginOut
     #: The prompt to hand to an agent: install a missing command, update an
     #: outdated one, or help the person log in. ``None`` when ready.
     handoff: HandoffOut | None
+    #: The skills that declare the command.
     needed_by: list[CliNeededByOut]
+    #: The MCP servers that start with it.
+    needed_by_servers: list[CliServerOut]
     checked_at: datetime
 
 
@@ -88,6 +101,10 @@ def cli_out(view: CliView) -> CliOut:
                 why=n.why,
             )
             for n in row.needed_by
+        ],
+        needed_by_servers=[
+            CliServerOut(server_uid=s.server_uid, server_name=s.server_name, launcher=s.launcher)
+            for s in row.needed_by_servers
         ],
         checked_at=probe.checked_at,
     )

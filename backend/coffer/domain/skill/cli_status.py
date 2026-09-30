@@ -2,7 +2,10 @@
 
 Rows aggregate every managed skill that declares the command: the minimum is
 the highest any of them asks for; the title, login check and login command
-come from the first skill (by name) that declares each. The status is
+come from the first skill (by name) that declares each. The launcher an
+enabled stdio MCP server starts with is required too — by that server, under
+the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
+with no minimum and no login. The status is
 problem-first — ``missing``, ``outdated``, ``logged_out``, ``ready`` — and a
 version that cannot be read is reported as unknown, never as outdated.
 """
@@ -55,6 +58,15 @@ class NeededBy:
 
 
 @dataclass(frozen=True)
+class ServerLauncher:
+    """An enabled stdio MCP server and the launcher it is started with."""
+
+    server_uid: str
+    server_name: str
+    launcher: str
+
+
+@dataclass(frozen=True)
 class RequiredCommand:
     command: str
     title: str | None
@@ -62,6 +74,23 @@ class RequiredCommand:
     login_check: tuple[str, ...] | None
     login: str | None
     needed_by: tuple[NeededBy, ...]
+    #: The MCP servers started with this command (or a launcher it provides).
+    needed_by_servers: tuple[ServerLauncher, ...] = ()
+
+
+#: Launchers that ship inside another command: checking the CLI checks them.
+_PROVIDED_BY: dict[str, str] = {"uvx": "uv", "npx": "node", "bunx": "bun"}
+
+
+def launcher_cli(launcher: str) -> str | None:
+    """The command a stdio launcher is checked as — ``uv`` for ``uvx``,
+    ``node`` for ``npx``, the launcher itself otherwise. ``None`` for a path
+    (``./run.sh``, ``/opt/x/bin/server``): that is a file, not a command on
+    ``PATH``."""
+    name = launcher.strip()
+    if not name or "/" in name or "\\" in name:
+        return None
+    return _PROVIDED_BY.get(name, name)
 
 
 @dataclass(frozen=True)
@@ -78,16 +107,30 @@ class ProbeResult:
     login_check: tuple[str, ...] | None = None
 
 
-def aggregate(skills: Iterable[SkillRequirements]) -> list[RequiredCommand]:
+def aggregate(
+    skills: Iterable[SkillRequirements], servers: Iterable[ServerLauncher] = ()
+) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name."""
     by_command: dict[str, list[tuple[str, str, CommandRequirement]]] = {}
     for skill in sorted(skills, key=lambda s: (s.skill_name, s.skill_uid)):
         for req in skill.requirements:
             by_command.setdefault(req.command, []).append((skill.skill_uid, skill.skill_name, req))
-    return [_row(command, entries) for command, entries in sorted(by_command.items())]
+    by_server: dict[str, list[ServerLauncher]] = {}
+    for server in sorted(servers, key=lambda s: (s.server_name, s.server_uid)):
+        cli = launcher_cli(server.launcher)
+        if cli is not None:
+            by_server.setdefault(cli, []).append(server)
+    return [
+        _row(command, by_command.get(command, ()), by_server.get(command, ()))
+        for command in sorted(by_command.keys() | by_server.keys())
+    ]
 
 
-def _row(command: str, entries: Sequence[tuple[str, str, CommandRequirement]]) -> RequiredCommand:
+def _row(
+    command: str,
+    entries: Sequence[tuple[str, str, CommandRequirement]],
+    servers: Sequence[ServerLauncher] = (),
+) -> RequiredCommand:
     reqs = [req for _uid, _name, req in entries]
     return RequiredCommand(
         command=command,
@@ -99,6 +142,7 @@ def _row(command: str, entries: Sequence[tuple[str, str, CommandRequirement]]) -
             NeededBy(skill_uid=uid, skill_name=name, min_version=r.min_version, why=r.why)
             for uid, name, r in entries
         ),
+        needed_by_servers=tuple(servers),
     )
 
 
@@ -141,9 +185,11 @@ __all__ = [
     "NeededBy",
     "ProbeResult",
     "RequiredCommand",
+    "ServerLauncher",
     "SkillRequirements",
     "aggregate",
     "highest_minimum",
+    "launcher_cli",
     "login_state",
     "status_of",
 ]

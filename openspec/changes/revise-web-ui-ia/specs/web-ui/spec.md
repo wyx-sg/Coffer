@@ -1385,20 +1385,26 @@ transport.
 
 ### Requirement: Show every CLI a skill requires on the CLIs page
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that
-any skill requires, with the version found beside the minimum the skills ask
-for, the login state where the command has one, and which skills need it,
-problems first — missing, older than the minimum, or not logged in, grouped
-under Needs you above Ready — as a split view with the selected CLI's detail
-beside the list (`/clis/<command>`). The app MUST NOT show an install command or
-run an install. For a CLI that needs the
-user, its detail page and the skill's Requires tab MUST offer the daemon's
-hand-off prompt (spec skill-manager "Hand a required command to an agent with a
-prompt") through **Copy prompt** and **Ask an agent** — the latter opens a new
-conversation with a Coffer-managed agent chosen in the New conversation dialog,
-with the prompt in the composer and nothing sent until the user presses Send;
-with no managed agent available only Copy prompt is offered. The detail page
-also offers the **login command** to copy and **Check again**, which probes the
-command afresh. A skill's detail page MUST link each requirement it declares to
+any skill requires or any enabled stdio MCP server starts with (spec
+skill-manager "Check every required command where the agent runs"), with the
+version found beside the minimum the skills ask for, the login state where the
+command has one, and how many MCP servers and skills need it, problems first —
+missing, older than the minimum, or not logged in, grouped under Needs you above
+Ready — as a split view with the selected CLI's detail beside the list
+(`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
+with the command, each opening that server's page and naming its launcher, and
+the skills that declare it, each opening that skill's Requires tab; each row
+carries its kind when both need it. The app MUST NOT show an install, update or
+login command, a "run it in a terminal" instruction, or run any of them: a CLI
+that needs the user says what it costs in a plain sentence — which servers can't
+start and which skills fail — and its detail page and the skill's Requires tab
+MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
+command to an agent with a prompt") through **Copy prompt** and **Ask an agent**
+— the latter opens a new conversation with a Coffer-managed agent chosen in the
+New conversation dialog, with the prompt in the composer and nothing sent until
+the user presses Send; with no managed agent available only Copy prompt is
+offered. The detail page also offers **Check again**, which probes the command
+afresh. A skill's detail page MUST link each requirement it declares to
 that CLI's page, and Overview MUST show an attention item while any required CLI
 is missing, outdated or not logged in. What a skill declares and how a command
 is probed are specified by skill-manager; this page shows what they report.
@@ -1415,9 +1421,15 @@ is probed are specified by skill-manager; this page shows what they report.
 - **AND** the page offers Copy prompt, shows no install command, and with no managed agent available offers only Copy prompt
 
 #### Scenario: check again after logging in
-- **GIVEN** a CLI's detail page showing not logged in and its login command to copy
-- **WHEN** the user runs the login command in a terminal and chooses Check again
+- **GIVEN** a CLI's detail page showing not logged in, with the hand-off to an agent and no login command shown
+- **WHEN** the user logs in and chooses Check again
 - **THEN** the page probes the command afresh and shows it as logged in
+
+#### Scenario: a CLI an MCP server starts with lists that server
+- **GIVEN** `uv` missing, needed by the MCP server `duckdb` (started with `uvx`) and the skill `data-profiling`
+- **WHEN** the user opens `/clis/uv`
+- **THEN** the list row reads "Not found · duckdb needs it" with "1 server · 1 skill", the header reads "needed by 1 MCP server and 1 skill", and the banner says duckdb can't start and data-profiling fails at the step that calls uv
+- **AND** Needed by lists `duckdb` (MCP server, "starts with uvx") opening `/mcp-servers/duckdb` and `data-profiling` (Skill) opening its Requires tab
 
 #### Scenario: a skill's requirement links to its CLI
 - **GIVEN** a skill that requires `gh`

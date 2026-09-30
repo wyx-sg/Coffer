@@ -5,7 +5,9 @@ One item per command that is ``missing``, ``outdated`` or ``logged_out``
 ``cli`` with the command as the uid, each a warning whose action is ``check``
 — the CLIs page's own Check again — and the CLIs page's hand-off prompt
 (which names the login command for a command that is not logged in, so the
-reason names none). It reads the service's cache, probing only
+reason names none). A command only MCP servers need (a stdio launcher no
+skill declares) raises no item here: the server's own ``mcp_missing_launcher``
+item already names it. It reads the service's cache, probing only
 commands nothing was checked for yet.
 """
 
@@ -55,7 +57,7 @@ class CliAttentionSource:
                 handoff=view.handoff,
             )
             for view in listing.items
-            if view.status is not CliStatus.READY
+            if view.status is not CliStatus.READY and view.required.needed_by
         ]
 
 

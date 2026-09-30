@@ -7,12 +7,12 @@ from coffer.domain.error_base import CofferError
 
 
 class CliNotRequired(CofferError):  # noqa: N818
-    """No managed skill requires this command. Maps to 404."""
+    """No managed skill or MCP server requires this command. Maps to 404."""
 
     code = "CLI_NOT_REQUIRED"
 
     def __init__(self, command: str) -> None:
-        super().__init__(f"no skill requires the command {command!r}")
+        super().__init__(f"no skill or MCP server requires the command {command!r}")
         self.command = command
 
 
