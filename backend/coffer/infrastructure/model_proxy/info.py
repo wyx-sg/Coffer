@@ -16,22 +16,16 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from coffer.domain.model_proxy.state import PROXY_INFO_FILENAME
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
-
-
-def default_coffer_dir() -> Path:
-    """``$HOME/.coffer`` — read from ``HOME`` at call time, as the daemon does,
-    so a test's fake home (and a spawned proxy's) is honoured."""
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
+from coffer.infrastructure.vault.home import PROXY_INFO_FILENAME, proxy_info_path
 
 
 def info_path(coffer_dir: Path | None = None) -> Path:
-    return (coffer_dir or default_coffer_dir()) / PROXY_INFO_FILENAME
+    """``proxy.json`` under ``coffer_dir`` (default: ``HOME``'s, read at call time)."""
+    return coffer_dir / PROXY_INFO_FILENAME if coffer_dir else proxy_info_path()
 
 
 @dataclass(frozen=True)
@@ -84,7 +78,6 @@ def remove_info_if_owned(pid: int, coffer_dir: Path | None = None) -> bool:
 
 __all__ = [
     "ProxyInfo",
-    "default_coffer_dir",
     "info_path",
     "read_info",
     "remove_info_if_owned",

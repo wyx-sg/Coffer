@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 
 from coffer.application.eval_capture import CAPTURE_LOGGER_NAME, ENV_VAR
+from coffer.infrastructure.vault.home import eval_capture_path
 
 _FLAG_TRUE = {"1", "true", "yes"}
 _FLAG_FALSE = {"", "0", "false", "no"}
@@ -39,7 +40,7 @@ def _capture_path() -> Path | None:
     if value.lower() in _FLAG_FALSE:
         return None
     if value.lower() in _FLAG_TRUE:
-        return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "eval-capture.jsonl"
+        return eval_capture_path()
     return Path(value).expanduser()
 
 

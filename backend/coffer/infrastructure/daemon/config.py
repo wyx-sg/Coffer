@@ -25,6 +25,7 @@ from typing import Any
 
 from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT as _DEFAULT_PROXY_PORT
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
+from coffer.infrastructure.vault.home import daemon_config_path
 
 _logger = logging.getLogger(__name__)
 
@@ -51,12 +52,8 @@ class InvalidPort(ValueError):  # noqa: N818
     """Raised when a caller asks for a port the daemon could never bind."""
 
 
-def _coffer_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
-
-
 def config_path() -> Path:
-    return _coffer_dir() / "daemon-config.json"
+    return daemon_config_path()
 
 
 def validate_port(port: int) -> int:

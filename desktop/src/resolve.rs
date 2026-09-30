@@ -25,11 +25,11 @@
 //! with or without bundled binaries and only the packaging changes, never this
 //! code.
 
-use std::env;
 use std::path::PathBuf;
 
 use tauri::AppHandle;
 
+use crate::coffer_home;
 use crate::discovery::{daemon_responds_ok, read_daemon_info};
 use crate::env_path::{daemon_spawn_path, path_candidates};
 use crate::sidecar::resolve_sidecar;
@@ -115,10 +115,7 @@ pub fn daemon_exe_name() -> &'static str {
 /// Mirrors where the daemon's own frozen-start deploy puts it (spec daemon
 /// "Deploy frozen sibling binaries and back up the vault before migrating").
 pub fn user_bin_daemon_path(home: &str) -> PathBuf {
-    PathBuf::from(home)
-        .join(".coffer")
-        .join("bin")
-        .join(daemon_exe_name())
+    coffer_home::bin_dir(home).join(daemon_exe_name())
 }
 
 /// Run the chain against the real machine.
@@ -133,9 +130,7 @@ pub fn daemon_source(app: &AppHandle) -> Result<DaemonSource, String> {
         || resolve_sidecar(app, &["coffer-daemon"]).ok(),
         // (3) ~/.coffer/bin, where the daemon's own frozen-start deploy puts it.
         || {
-            let home = env::var("HOME")
-                .ok()
-                .or_else(|| env::var("USERPROFILE").ok())?;
+            let home = coffer_home::home_dir()?;
             let path = user_bin_daemon_path(&home);
             path.is_file().then_some(path)
         },

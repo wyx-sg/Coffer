@@ -27,11 +27,10 @@ from pathlib import Path
 from coffer.domain.usage.records import (
     PART_SUFFIX,
     SPOOL_DIR_ENV,
-    SPOOL_DIRNAME,
     SPOOL_SUFFIX,
     UsageRecord,
 )
-from coffer.infrastructure.model_proxy.info import default_coffer_dir
+from coffer.infrastructure.vault.home import proxy_usage_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ MAX_RECORDS = 500
 def spool_dir() -> Path:
     """``COFFER_PROXY_SPOOL_DIR``, else ``~/.coffer/proxy-usage``."""
     override = os.environ.get(SPOOL_DIR_ENV)
-    return Path(override) if override else default_coffer_dir() / SPOOL_DIRNAME
+    return Path(override) if override else proxy_usage_dir()
 
 
 def _pid_alive(pid: int) -> bool:

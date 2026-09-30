@@ -46,7 +46,7 @@ from coffer.domain.secrets import is_valid_secret_name, secret_ref, secret_uri
 from coffer.domain.sync.errors import MasterKeyPassphraseTooShort
 from coffer.infrastructure.secret import key_backup, plaintext_scan
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
-from coffer.infrastructure.sync.identity import coffer_dir
+from coffer.infrastructure.vault.home import legacy_secrets_dir
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.handoff_schemas import handoff_out
@@ -95,7 +95,7 @@ _COFFERS_OWN_SKILLS = frozenset({GUIDE_SKILL_NAME})
 
 
 def _secrets_dir() -> pathlib.Path:
-    return coffer_dir() / "secrets"
+    return legacy_secrets_dir()
 
 
 # --- approvals ---------------------------------------------------------------

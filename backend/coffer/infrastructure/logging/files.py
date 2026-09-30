@@ -24,6 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
+from coffer.infrastructure.vault.home import logs_dir
+
 _logger = logging.getLogger(__name__)
 
 #: One upstream's stderr before it is rolled aside. Small on purpose: this is a
@@ -49,7 +51,7 @@ def log_dir() -> Path:
     custom = os.environ.get("COFFER_LOG_DIR")
     if custom:
         return Path(custom)
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "logs"
+    return logs_dir()
 
 
 def upstream_log_path(server_name: str) -> Path:

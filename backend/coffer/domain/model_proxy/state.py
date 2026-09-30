@@ -123,16 +123,12 @@ def proxy_root(port: int) -> str:
 #: loopback proxy and nothing else — so vault sync never carries them.
 PROXY_TOKEN_REF_PREFIX = "proxy-token/"
 
-#: Where the running proxy publishes ``{port, pid, started_at, version,
-#: control_token}`` (mode 0600), beside ``daemon.json``.
-PROXY_INFO_FILENAME = "proxy.json"
 #: Header carrying the control token on the proxy's control routes.
 CONTROL_TOKEN_HEADER = "x-coffer-proxy-control"
 
 __all__ = [
     "CONTROL_TOKEN_HEADER",
     "DEFAULT_PROXY_PORT",
-    "PROXY_INFO_FILENAME",
     "PROXY_TOKEN_REF_PREFIX",
     "WIRE_PATHS",
     "ProxyAgent",

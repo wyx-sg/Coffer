@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import pathlib
 import sys
 
 from alembic import context
@@ -21,6 +20,7 @@ from coffer.infrastructure.mcp import (
 from coffer.infrastructure.persistence import models  # noqa: F401 — kind-agnostic models
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas
+from coffer.infrastructure.vault.home import runs_db_path
 
 cfg = context.config
 
@@ -83,7 +83,7 @@ def _db_url() -> str:
         return configured
     return os.environ.get(
         "COFFER_DB_URL",
-        f"sqlite+aiosqlite:///{pathlib.Path.home()}/.coffer/runs.db",
+        f"sqlite+aiosqlite:///{runs_db_path()}",
     )
 
 

@@ -32,6 +32,7 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.model_proxy.state import ProxyState, proxy_root
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.model_proxy.supervisor import ProxySupervisor
+from coffer.infrastructure.vault.home import coffer_home
 from coffer.surfaces.http.proxy_dependencies import ProxyFacade, set_proxy_facade
 
 _logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ def wire_model_proxy(
     supervisor = ProxySupervisor(
         state,
         port=effective_proxy_port(),
-        coffer_dir=coffer_dir or pathlib.Path.home() / ".coffer",
+        coffer_dir=coffer_dir or coffer_home(),
         version=coffer.__version__,
     )
     wiring = ModelProxyWiring(tokens=tokens, supervisor=supervisor)
