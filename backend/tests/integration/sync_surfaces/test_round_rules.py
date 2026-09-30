@@ -163,6 +163,7 @@ def test_the_routes_cover_every_sync_operation() -> None:
         ("POST", "/stop/files/answer"),
         ("POST", "/stop/files/editor"),
         ("GET", "/stop/files/versions"),
+        ("POST", "/stop/merged"),
         ("POST", "/continue"),
         ("POST", "/hold/confirm"),
         ("POST", "/hold/restore"),

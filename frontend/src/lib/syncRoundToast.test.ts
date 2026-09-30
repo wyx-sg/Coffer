@@ -36,4 +36,20 @@ describe("roundToast", () => {
     expect(toast.variant).toBe("error");
     expect(toast.message).toBe("HTTP 403");
   });
+
+  test("a rollback says how many files came back and from which snapshot", () => {
+    const toast = roundToast(
+      t,
+      makeRound({
+        status: "rolled_back",
+        snapshot: "snap-0929-1432",
+        applied: [
+          { path: "a.md", status: "removed" },
+          { path: "b.md", status: "modified" },
+        ],
+      }),
+    );
+    expect(toast.variant).toBe("success");
+    expect(toast.message).toBe("Rolled back 2 files to snap-0929-1432");
+  });
 });

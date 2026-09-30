@@ -11,11 +11,7 @@
 // binding does, by DERIVED id rather than display name, so renaming a machine
 // is free and a mistyped id can never be entered by hand.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
-
-import { translateApiError } from "@/lib/api/errors";
 import { syncApi } from "@/lib/api/sync";
-import { useToast } from "@/components/ui/toast";
 import { resourcesKey, scopeKey, skillsKey, syncKey, syncMachinesKey } from "@/lib/api/queryKeys";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 
@@ -41,16 +37,14 @@ export function useThisMachineId() {
 
 /**
  * Rename THIS machine. Free by construction: a channel's binding references
- * the derived id, never the label, so nothing else has to change.
+ * the derived id, never the label, so nothing else has to change. No error
+ * toast: the rename dialog shows the refusal in place and stays open.
  */
 export function useRenameSelf() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
   return useMutation({
     mutationFn: (name: string) => syncApi.renameSelf(name),
     onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

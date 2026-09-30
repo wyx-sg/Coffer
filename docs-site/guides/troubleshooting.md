@@ -179,11 +179,12 @@ See [Secret store](/guides/secret-store).
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `coffer sync status` exits 1 and shows `deletions held` | The deletion breaker held a round. | Read the list (`coffer sync hold`), then `coffer sync hold --confirm` or `--restore`. After a reinstall, restore. |
-| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | `coffer sync conflicts`, answer each file with `coffer sync resolve <path> --mine\|--theirs\|--edited`, then `coffer sync continue`, or use the conflict card on the **Sync** page. |
+| `stopped on conflicts` | Two machines changed the same file in ways git cannot merge. | `coffer sync conflicts`, answer each file with `coffer sync resolve <path> --mine\|--theirs\|--edited`, then `coffer sync continue`, or **Resolve conflicts** on the **Sync** page. To have your agent merge them, give it `coffer sync conflicts --prompt` (or **Merge with an agent**), then record its work with `coffer sync resolve --merged` (**I merged it**). |
 | `join required` | This machine has not joined the remote. | `coffer sync join` |
 | `remote too old` | The remote was written by a Coffer from before the vault layout. | Rebuild it: see [Upgrading an existing Coffer](/guides/upgrading#rebuild-your-sync-remote). |
 | Secrets cannot be decrypted | This machine lacks the master key. | `coffer sync key import <file>` |
-| Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--secret-ref`, or use an SSH key that needs no passphrase prompt. |
+| Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--secret-ref`, or use an SSH key that needs no passphrase prompt.  For GitLab over HTTPS add `--username oauth2`. |
+| `push failed`, `sign-in refused` or `remote unreachable` you cannot explain | The remote's side: a protected branch, a token without write scope, a network or VPN problem. | `coffer sync status --prompt` (or the prompt beside the message on the **Sync** page) hands the diagnosis to your agent, without the token. Then **Retry**. |
 
 The full list is in [Vault sync troubleshooting](/guides/vault-sync#troubleshooting).
 

@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from coffer.domain.sync.stops import Answer, ConflictReason
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.sync_schemas import SyncChangeOut
 
 
@@ -31,6 +32,11 @@ class ConflictFileOut(BaseModel):
     answer: Answer | None
     #: The hand-merge copy, once opened in the editor.
     editor_path: str | None
+    #: An encrypted secret (``secret/*.enc``): answered with one side or the
+    #: other only — no editor copy, no agent merge.
+    secret: bool = False
+    #: Whether this file is in the stop's agent hand-off.
+    agent_merge: bool = False
 
 
 class BreachOut(BaseModel):
@@ -68,6 +74,9 @@ class StoppedRoundOut(BaseModel):
     files: list[ConflictFileOut]
     unanswered: int
     hold: HoldOut | None
+    #: The prompt handing the files an agent may merge to the person's agent;
+    #: ``POST /sync/stop/merged`` records them once it is done.
+    handoff: HandoffOut | None = None
 
 
 class StopStateOut(BaseModel):
@@ -99,6 +108,8 @@ class FileVersionsOut(BaseModel):
     #: What taking the other machine's version changes on this machine.
     take_theirs: str
     binary: bool
+    #: The hand-merge copy as it is saved now, once it exists.
+    edited: str | None = None
 
 
 class JoinChoiceIn(BaseModel):

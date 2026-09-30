@@ -29,6 +29,7 @@ VAULT_AND_SYNC_STATUS: dict[str, int] = {
     # remote that refused us (upstream, 502).
     "SYNC_NOTHING_STOPPED": 409,
     "SYNC_CONFLICT_MARKERS_LEFT": 422,
+    "SYNC_SECRET_NOT_EDITABLE": 422,
     "SYNC_REMOTE_INVALID": 422,
     "SYNC_REMOTE_FAILED": 502,
     "SYNC_NO_REMOTE": 409,

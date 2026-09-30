@@ -62,12 +62,30 @@ export function useOpenInEditor() {
   });
 }
 
-/** Both sides of one file and what taking theirs changes — fetched on demand. */
-export function useFileVersions(path: string, enabled: boolean) {
+/**
+ * "I merged it": the agent merged the marked-up copies, and every one of them
+ * becomes its file's answer. Refused whole while a copy still has a marker —
+ * shown in place by the caller, like `useAnswerFile`'s refusals.
+ */
+export function useMarkMerged() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncApi.markMerged(),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+  });
+}
+
+/**
+ * Both sides of one file, what taking theirs changes, and the edited copy as
+ * saved — fetched on demand. `live` refetches whenever the window regains
+ * focus: the person saves the copy in their editor, then comes back here.
+ */
+export function useFileVersions(path: string, enabled: boolean, { live = false } = {}) {
   return useQuery({
     queryKey: [...syncStopKey, "versions", path],
     queryFn: () => syncApi.fileVersions(path),
     enabled,
+    refetchOnWindowFocus: live ? "always" : false,
   });
 }
 

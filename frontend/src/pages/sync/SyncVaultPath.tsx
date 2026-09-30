@@ -1,13 +1,15 @@
 // frontend/src/pages/sync/SyncVaultPath.tsx
 //
-// Where the vault lives, and the one place it must not: inside a folder that
-// Syncthing, iCloud or Dropbox also synchronises. Two tools syncing the same
-// git repository corrupt it between them, so the daemon pauses sync there and
-// this says why, with the path to move.
+// "Vault on this Mac": where the vault lives, and the one place it must not —
+// inside a folder that iCloud Drive, Dropbox or Syncthing also synchronises.
+// Two tools syncing one git repository corrupt it between them, so the daemon
+// pauses sync there and this row says why, naming the tool.
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { fsApi } from "@/lib/api/fs";
 
 export function SyncVaultPath({
   path,
@@ -17,19 +19,38 @@ export function SyncVaultPath({
   synchroniser: string | null;
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        {t("sync.remote.vaultPath")} <span className="font-mono">{path}</span>
-      </p>
-      {synchroniser ? (
-        <Alert variant="warning" data-testid="sync-cloud-folder">
-          <AlertTriangle aria-hidden />
-          <AlertDescription>
-            {t("sync.remote.cloudFolder", { tool: synchroniser, path })}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+    <div className="flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium text-text">{t("sync.remote.vaultPath")}</span>
+        {synchroniser ? (
+          <p
+            className="flex items-start gap-1.5 text-xs text-warning"
+            data-testid="sync-cloud-folder"
+          >
+            <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+            <span>
+              <span className="font-mono">{path}</span> ·{" "}
+              {t("sync.remote.cloudFolder", { tool: synchroniser })}
+            </span>
+          </p>
+        ) : (
+          <p className="text-xs text-text-muted">
+            <span className="font-mono">{path}</span> · {t("sync.remote.notCloudFolder")}
+          </p>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() =>
+          void fsApi.reveal(path).catch(() => toast.error(t("fileActions.revealFailed")))
+        }
+      >
+        {t("sync.remote.reveal")}
+      </Button>
     </div>
   );
 }

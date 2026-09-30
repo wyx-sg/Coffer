@@ -79,7 +79,13 @@ describe("syncStatusMarker", () => {
     expect(
       syncStatusMarker(
         status(true, {
-          problem: { kind: "unreachable", message: "no route", secret_ref: null, since: null },
+          problem: {
+            kind: "unreachable",
+            message: "no route",
+            secret_ref: null,
+            since: null,
+            handoff: null,
+          },
         }),
       ),
     ).not.toBeNull();

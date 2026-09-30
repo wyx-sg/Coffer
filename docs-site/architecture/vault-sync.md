@@ -115,6 +115,10 @@ Each conflicting file gets one of three answers:
 - **Take the other's** (`theirs`), shown with the diff of what changes here.
 - **Edit.** Coffer writes a marked-up copy of git's merge under `derived/sync-conflicts/` and opens it in your editor. The vault's own file never receives a conflict marker. Marking it resolved is refused while a marker is left, and the refusal names the line.
 
+A fourth way to reach the edit answer hands the merge to an agent, because merging two people's edits is judgement Coffer does not make (Principle IV). For every file both sides edited, the stopped round's `handoff` prompt names the vault, both sides' commits, the `git -C <vault> diff` commands and the marked-up copy Coffer has already written. The agent edits only those copies and never the vault or its git history. **I merged it** (`POST /api/v1/sync/stop/merged`, `coffer sync resolve --merged`) then records every copy as that file's edited answer, and refuses the whole request while any copy still holds a marker. The prompt is built in `domain/sync/handoffs.py`. It never carries a secret: a `secret/*.enc` file in a stop offers only mine and theirs, gets no editor copy, and is only counted in the prompt.
+
+A remote's refusal is handed over the same way. A rejected push, a refused sign-in and an unreachable remote put a prompt on the status's `problem`: the URL without credentials, the branch, the secret's name and git's message scrubbed of token shapes. A missing `git` is the problem `git_missing`, with the shared install hand-off.
+
 Answers are recorded, not applied one by one. When every file has one, **Continue** takes the resolved tree through the same validation, breaker, snapshot, checkout and push. A stop is a question about one pair of commits: if either side moves before you answer, the round is derived again and asks again. Local writes keep being committed while a round is stopped; only sync waits.
 
 Two cases never ask:

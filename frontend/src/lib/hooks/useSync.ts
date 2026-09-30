@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useSync.ts
 //
-// The Sync page's status, rounds, remote, rollback and master-key queries and
+// The Sync page's status, rounds, remote, and rollback queries and
 // mutations (spec vault-sync). What a stopped round asks of a person — the
 // conflict answers, the held deletions, the join — lives in `useSyncStop.ts`;
 // the machine registry in `useMachines.ts`.
@@ -28,7 +28,6 @@ import {
   resourcesKey,
   skillsKey,
   syncKey,
-  syncKeyFingerprintKey,
   syncRunsKey,
   syncStatusKey,
 } from "@/lib/api/queryKeys";
@@ -141,30 +140,4 @@ export function useRollbackPlan(runId: number | null, enabled: boolean) {
 /** Roll a round back, as a new commit the next round pushes. From a dialog. */
 export function useRollbackRound() {
   return useRoundMutation<number>((runId) => syncApi.rollback(runId), { toastErrors: false });
-}
-
-/** The key's short hash — never the key. Null when this vault holds none. */
-export function useKeyFingerprint() {
-  return useQuery({
-    queryKey: syncKeyFingerprintKey,
-    queryFn: () => syncApi.keyFingerprint(),
-  });
-}
-
-/**
- * Install a key the user carried here as a FILE, read in the browser. The
- * daemon never resolves a path the page named, and the browser never has to
- * learn one.
- */
-export function useImportMasterKey() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (material: string) => syncApi.importKey(material),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: syncKey });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
 }

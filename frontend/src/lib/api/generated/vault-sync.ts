@@ -472,6 +472,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/stop/merged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merged
+         * @description "I merged it": record the saved copy of every file handed to an agent
+         *     as its answer. Refused whole while any copy still has a conflict marker.
+         */
+        post: operations["merged_api_v1_sync_stop_merged_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vault/changes": {
         parameters: {
             query?: never;
@@ -643,6 +664,11 @@ export interface components {
         };
         /** ConflictFileOut */
         ConflictFileOut: {
+            /**
+             * Agent Merge
+             * @default false
+             */
+            agent_merge: boolean;
             answer: components["schemas"]["Answer"] | null;
             /** Area */
             area: string;
@@ -655,6 +681,11 @@ export interface components {
             /** Path */
             path: string;
             reason: components["schemas"]["ConflictReason"];
+            /**
+             * Secret
+             * @default false
+             */
+            secret: boolean;
             /** Theirs Machine */
             theirs_machine: string | null;
             /** Theirs Time */
@@ -710,6 +741,8 @@ export interface components {
             base: string | null;
             /** Binary */
             binary: boolean;
+            /** Edited */
+            edited: string | null;
             /** Ours */
             ours: string | null;
             /** Path */
@@ -718,6 +751,15 @@ export interface components {
             take_theirs: string;
             /** Theirs */
             theirs: string | null;
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /**
          * HoldGroupOut
@@ -895,11 +937,12 @@ export interface components {
         };
         /** ProblemOut */
         ProblemOut: {
+            handoff: components["schemas"]["HandoffOut"] | null;
             /**
              * Kind
              * @enum {string}
              */
-            kind: "unreachable" | "auth_failed" | "push_failed" | "cloud_folder" | "layout" | "failed";
+            kind: "unreachable" | "auth_failed" | "push_failed" | "cloud_folder" | "layout" | "git_missing" | "failed";
             /** Message */
             message: string;
             /** Secret Ref */
@@ -1027,6 +1070,7 @@ export interface components {
         StoppedRoundOut: {
             /** Files */
             files: components["schemas"]["ConflictFileOut"][];
+            handoff: components["schemas"]["HandoffOut"] | null;
             hold: components["schemas"]["HoldOut"] | null;
             /** Join */
             join: string | null;
@@ -2436,6 +2480,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileVersionsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    merged_api_v1_sync_stop_merged_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StopStateOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

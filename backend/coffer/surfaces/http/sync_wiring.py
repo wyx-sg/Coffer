@@ -40,6 +40,7 @@ from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
 from coffer.infrastructure.daemon.config import write_machine_name
 from coffer.infrastructure.persistence.sync_runs_repo import SyncRunRepo
+from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.infrastructure.sync.cloud_folder import synchroniser_of
@@ -48,6 +49,7 @@ from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteSt
 from coffer.infrastructure.sync.machine_descriptor import HostMachine
 from coffer.infrastructure.sync.master_key import ResolvedMasterKey, SecretFiles
 from coffer.infrastructure.sync.vault_git import VaultSyncGit
+from coffer.infrastructure.vault.git import git_available
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import VaultWriter
@@ -144,6 +146,8 @@ def wire_sync(
         vault_path=vault_root,
         inventory=AgentPluginInventory(resources, _plugins),
         after_apply=_reconcile_imported,
+        git_available=git_available,
+        host_label=machine_label,
     )
     return SyncWiring(service=service)
 

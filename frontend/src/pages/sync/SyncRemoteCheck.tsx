@@ -1,54 +1,40 @@
 // frontend/src/pages/sync/SyncRemoteCheck.tsx
 //
-// "Check repository": ask the daemon what the drafted repository holds before
-// anyone saves it — empty (the first push fills it), a Coffer vault (and at
-// which layout), some other repository, or unreachable / refused with git's
-// own message. Asked of the DRAFT, because the point is to find out before
-// the vault starts pushing into it.
+// What Check repository found when it is not something setup can go on with:
+// a repository that is not a Coffer vault, one that cannot be reached, a
+// refused sign-in, or a check that failed — each in a plain sentence, with
+// git's own words (already scrubbed by the daemon) under it. An empty
+// repository and a vault move setup on instead (see SyncSetup).
 import { useTranslation } from "react-i18next";
+import { AlertTriangle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
-import { useCheckRemote } from "@/lib/hooks/useSync";
-import { DEFAULT_BRANCH, type FormState } from "./syncRemoteForm";
+import type { RemoteCheck } from "@/lib/api/sync";
 
-const GOOD = new Set(["empty", "vault"]);
-
-export function SyncRemoteCheck({ form, disabled }: { form: FormState; disabled: boolean }) {
+export function SyncRemoteCheck({ result, error }: { result?: RemoteCheck; error?: unknown }) {
   const { t } = useTranslation();
-  const check = useCheckRemote();
-  const result = check.data;
+  if (!result && !error) return null;
+  if (result && (result.result === "empty" || result.result === "vault")) return null;
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || check.isPending}
-        onClick={() =>
-          check.mutate({
-            url: form.url.trim(),
-            branch: form.branch.trim() || DEFAULT_BRANCH,
-            secret_ref: form.secretRef.trim() || null,
-          })
-        }
-      >
-        {check.isPending ? t("sync.remote.checking") : t("sync.remote.check")}
-      </Button>
-      {result ? (
-        <span
-          className={GOOD.has(result.result) ? "text-xs text-status-ok" : "text-xs text-status-err"}
-          role="status"
-          data-testid="sync-remote-check"
-        >
-          {t(`sync.remote.checkResult.${result.result}`, { layout: result.layout ?? "?" })}
-          {result.detail ? ` — ${result.detail}` : ""}
+    <div
+      className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5"
+      role="alert"
+      data-testid="sync-remote-check"
+    >
+      <AlertTriangle className="mt-px size-[15px] shrink-0 text-danger" aria-hidden />
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-sm font-label text-text">
+          {result
+            ? t(`sync.setup.check.${result.result}`, { layout: result.layout ?? "?" })
+            : t("sync.setup.check.failed")}
         </span>
-      ) : check.error ? (
-        <span className="text-xs text-status-err" role="status">
-          {translateApiError(t, check.error)}
-        </span>
-      ) : null}
-    </>
+        {result?.detail || error ? (
+          <span className="break-words font-mono text-xs text-text-muted">
+            {result?.detail ?? translateApiError(t, error)}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
