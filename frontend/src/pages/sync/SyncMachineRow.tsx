@@ -7,7 +7,7 @@
 //           sit under it so two machines the user called "laptop" are still
 //           tellable apart, since the id is what `scope` actually references.
 //   key   — a ✓/✗ rather than two fingerprints to compare by eye. ✗ means that
-//           machine's credentials cannot be decrypted here; "—" means one side
+//           machine's secrets cannot be decrypted here; "—" means one side
 //           has published no fingerprint yet, which is not a mismatch.
 //   retire — removes only the machine's descriptor from the registry.
 import { useState } from "react";

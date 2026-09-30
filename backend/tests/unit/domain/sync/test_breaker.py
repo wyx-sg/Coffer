@@ -68,9 +68,7 @@ def test_a_resource_file_is_lost_only_when_its_uid_is_gone() -> None:
     assert losses(deltas, uids_before=uids, uids_after=["u-a"]) == ["resources/skill/b.json"]
 
 
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="the registry and manifest are never applied"
-)
+@pytest.mark.acceptance(spec="vault-sync", scenario="the registry and manifest are never applied")
 def test_descriptors_and_the_manifest_are_never_counted() -> None:
     gone = _gone([f"machines/m{i}.json" for i in range(30)] + ["manifest.json"])
     assert losses(gone) == []

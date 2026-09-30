@@ -41,7 +41,7 @@ describe("DataTable", () => {
     expect(screen.queryByText("alpha")).not.toBeInTheDocument();
   });
 
-  test("pagination splits rows into pages", () => {
+  test("shows the first N rows and Load N more adds the next ones, never numbered pages", () => {
     render(
       <DataTable
         rows={ROWS}
@@ -53,8 +53,32 @@ describe("DataTable", () => {
     );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.queryByText("gamma")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /next/i })).toBeNull();
+    // Only one row is left, so the button offers one.
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
+    expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("gamma")).toBeInTheDocument();
+    expect(screen.getByText("Showing 3 of 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /load/i })).toBeNull();
+  });
+
+  test("a new search shows the first N matches again", () => {
+    const many: Row[] = Array.from({ length: 5 }, (_, i) => ({ id: String(i), name: `x-${i}` }));
+    render(
+      <DataTable
+        rows={many}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        pageSize={2}
+        search={{ accessor: (r) => r.name, placeholder: "search" }}
+        emptyMessage="none"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
+    expect(screen.getByText("Showing 4 of 5")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "search" }), { target: { value: "x" } });
+    expect(screen.getByText("Showing 2 of 5")).toBeInTheDocument();
   });
 
   test("clicking a row fires onRowClick", () => {
@@ -181,10 +205,12 @@ describe("DataTable", () => {
     expect(screen.getByText("item-11")).toBeInTheDocument();
 
     // …and changing it in Settings to a smaller valid size re-renders the
-    // mounted table live: item-11 moves onto page 2.
+    // mounted table live: the first 10 show, and Load 2 more brings item-11.
     act(() => setDefaultPageSize(10));
     expect(screen.getByText("item-0")).toBeInTheDocument();
     expect(screen.queryByText("item-11")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 2 more" }));
+    expect(screen.getByText("item-11")).toBeInTheDocument();
   });
 
   test("bulk actions only operate on the currently-filtered rows (selection ∩ filter)", () => {
@@ -261,31 +287,35 @@ describe("DataTable", () => {
     expect(lastSelected.map((r) => r.name)).toEqual(["beta"]);
   });
 
-  test("server pagination: renders rows as-is and drives page changes through callbacks", () => {
+  test("server pagination: Load more asks for the next page and keeps the ones before", () => {
     const onPageChange = vi.fn();
     const onPageSizeChange = vi.fn();
-    // Caller passes ONE page (2 of 50). The table must not slice/hide them and
-    // must report 25 pages, delegating next/prev to the callbacks.
-    render(
-      <DataTable
-        rows={ROWS.slice(0, 2)}
-        columns={COLS}
-        rowKey={(r) => r.id}
-        serverPagination={{
-          page: 1,
-          pageSize: 2,
-          total: 50,
-          onPageChange,
-          onPageSizeChange,
-        }}
-        emptyMessage="none"
-      />,
+    const props = {
+      columns: COLS,
+      rowKey: (r: Row) => r.id,
+      emptyMessage: "none",
+    };
+    const pager = (page: number) => ({
+      page,
+      pageSize: 2,
+      total: 3,
+      onPageChange,
+      onPageSizeChange,
+    });
+    // Caller passes ONE page (2 of 3); the table must not slice or hide it.
+    const { rerender } = render(
+      <DataTable {...props} rows={ROWS.slice(0, 2)} serverPagination={pager(1)} />,
     );
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("beta")).toBeInTheDocument();
-    expect(screen.getByText(/page 1 of 25/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("Showing 2 of 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
     expect(onPageChange).toHaveBeenCalledWith(2);
+    // The caller hands over page 2: it is shown under page 1.
+    rerender(<DataTable {...props} rows={ROWS.slice(2)} serverPagination={pager(2)} />);
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("gamma")).toBeInTheDocument();
+    expect(screen.getByText("Showing 3 of 3")).toBeInTheDocument();
   });
 
   test("controlled search: forwards typing and resets the server page to 1", () => {

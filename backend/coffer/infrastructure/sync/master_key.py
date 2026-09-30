@@ -13,17 +13,18 @@ a key that lives in the keychain would otherwise be asked for every round.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from coffer.domain.credential_errors import CredentialLocked
-from coffer.infrastructure.credentials.encrypted_store import ref_files
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.credentials.ref_paths import is_local_ref
+from coffer.domain.secret_errors import SecretLocked
+from coffer.infrastructure.secret import key_backup
+from coffer.infrastructure.secret.encrypted_store import ref_files
+from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.secret.ref_paths import is_local_ref
 
 _logger = logging.getLogger(__name__)
 
@@ -36,8 +37,18 @@ class ResolvedMasterKey:
     a key installed through it replaces the answer.
     """
 
-    def __init__(self, manager: MasterKeyManager) -> None:
+    def __init__(
+        self,
+        manager: MasterKeyManager,
+        *,
+        on_install: Callable[[bytes], None] | None = None,
+    ) -> None:
         self._manager = manager
+        # Told the new key once it is installed: the running secret store
+        # encrypts and decrypts with the key it was built with, and after an
+        # import that must be the imported one, or a secret saved now would be
+        # sealed under a key this machine no longer keeps.
+        self._on_install = on_install
         self._lock = threading.Lock()
         self._resolved = False
         self._key: bytes | None = None
@@ -48,7 +59,7 @@ class ResolvedMasterKey:
             return
         try:
             self._key = self._manager.lookup()
-        except (CredentialLocked, OSError) as e:
+        except (SecretLocked, OSError) as e:
             self._key, self._unreadable = None, True
             _logger.warning("sync.master_key_unreadable", extra={"reason": str(e)})
         self._resolved = True
@@ -68,12 +79,23 @@ class ResolvedMasterKey:
         self._manager.install_key(key)
         with self._lock:
             self._key, self._resolved, self._unreadable = key.strip(), True, False
+        if self._on_install is not None:
+            self._on_install(key.strip())
+
+    def peek_backup(self, material: str) -> tuple[str, bool]:
+        """The fingerprint a key file holds, and whether it needs a passphrase."""
+        info = key_backup.peek(material)
+        return info.fingerprint, info.protected
+
+    def open_backup(self, material: str, passphrase: str | None) -> bytes:
+        """The key a key file holds — a ``.cfk`` opened with its passphrase."""
+        return key_backup.unwrap(material, passphrase)
 
     def fingerprint(self) -> str | None:
         """A short SHA-256 of the key, never the key: two machines showing the
         same fingerprint hold the same key."""
         key = self.export_key()
-        return hashlib.sha256(key).hexdigest()[:12] if key else None
+        return key_backup.key_fingerprint(key) if key else None
 
 
 class SecretFiles:

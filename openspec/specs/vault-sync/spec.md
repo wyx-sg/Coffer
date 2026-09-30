@@ -5,7 +5,7 @@
 Keep one vault across the user's own machines by converging each of them with a
 git repository the user owns. A developer works the same project from a laptop
 and a desktop, and both produce vault state: knowledge files, skills, MCP
-registrations, agent configuration, credentials. Without convergence each
+registrations, agent configuration, secrets. Without convergence each
 machine is an island, and the fix — export here, carry the directory, import
 there — is a chore nobody performs often enough for the two to stay alike. A
 background worker commits what this vault holds, lets git three-way-merge it
@@ -22,7 +22,7 @@ Other specs key on it: a channel's machine binding in spec
 
 Vocabulary. A **vault document** is the serialized form of one piece of vault
 state at one path in the working tree: a knowledge file, a skill file, a
-resource YAML, a state YAML, a credential blob, a machine descriptor. A
+resource YAML, a state YAML, a secret blob, a machine descriptor. A
 **converge round** is one full cycle of the seven round steps. The **retry set**
 is the paths the working tree holds that this vault has not absorbed, stored
 locally beside the pointer. A **machine** is one installation of Coffer.
@@ -164,17 +164,17 @@ it.
 
 Keying the path by the name made a rename a deletion beside an addition, and
 the receiving machine could not tell that from a delete-and-create: it ran the
-full deletion, which released the credential nothing else cited and dropped the
+full deletion, which released the secret nothing else cited and dropped the
 kind-owned state the row cascaded to. The name lives inside the document, where
 changing it is a modification of one file
 ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
 #### Scenario: a rename travels as a rename
-- **GIVEN** a resource that both machines hold, whose config cites a credential,
+- **GIVEN** a resource that both machines hold, whose config cites a secret,
   and which the receiving machine has given a reach of its own,
 - **WHEN** the user renames it on one machine and the two converge,
 - **THEN** the other machine holds the same resource under the new name — not a
-  new resource — with its credential still in the store, its kind-owned state
+  new resource — with its secret still in the store, its kind-owned state
   intact, and the reach that machine set for itself unchanged,
 - **AND** this holds whichever way the new name sorts against the old one,
   because the ordering of the paths a round applies must not decide whether a
@@ -203,7 +203,7 @@ A `channel` document MUST travel while its adapter does not. A channel is an
 inbound surface — a polled bot or a held websocket connection, each of which a
 platform serves to one consumer at a time — so the document names the one machine that may answer: `runs_on`, the
 `machine_id` whose daemon starts the adapter ([channels](../channels/spec.md) "Bind each channel to the one machine that runs it"). The other
-machine therefore holds the channel's configuration, its credential references
+machine therefore holds the channel's configuration, its secret references
 and its pairings, so taking over a bot is a rebind rather than a
 re-registration.
 
@@ -268,17 +268,17 @@ agent's configuration.
 - **THEN** no agent's configuration is written
 - **AND** the apply reports nothing to do
 
-### Requirement: Carry credentials as ciphertext only
-Credentials MUST travel as Fernet **ciphertext only**, and only when the remote
+### Requirement: Carry secrets as ciphertext only
+Secrets MUST travel as Fernet **ciphertext only**, and only when the remote
 is configured to carry it.
 
-#### Scenario: a synced channel carries a credential reference, never a secret
-- **GIVEN** a `channel` whose configuration cites a credential ref for its bot
+#### Scenario: a synced channel carries a secret reference, never a secret
+- **GIVEN** a `channel` whose configuration cites a secret ref for its bot
   token or its app secret,
 - **WHEN** a round exports the vault,
 - **THEN** the channel's document in the working tree holds the ref and no
   secret material, and the secrets themselves appear only as Fernet ciphertext
-  and only when the remote is configured to carry credentials.
+  and only when the remote is configured to carry secrets.
 
 ### Requirement: Publish one descriptor per machine
 One machine descriptor document per machine MUST travel (see "Write only this
@@ -387,8 +387,8 @@ folder that machine wrote itself and still delivers.
 
 ### Requirement: Allow at most one user-owned sync remote
 A vault MUST have **at most one** sync remote: a git repository the user owns,
-configured with a URL, a branch, a push credential reference, an interval, and
-whether credential ciphertext rides along. Sync MUST be disabled until the user
+configured with a URL, a branch, a push secret reference, an interval, and
+whether secret ciphertext rides along. Sync MUST be disabled until the user
 configures it. The interval MUST be at least 60 seconds: a shorter one is
 refused on every surface that sets it — the route, `coffer sync remote set
 --interval` and the web form — before anything is stored.
@@ -576,14 +576,14 @@ from its descriptor").
 ### Requirement: Publish the key fingerprint in the descriptor
 `key_fingerprint` MUST be the same short hash `GET /sync/key/fingerprint`
 returns, so the machines table can state directly that another machine's
-credentials cannot be decrypted here instead of the user comparing fingerprints
+secrets cannot be decrypted here instead of the user comparing fingerprints
 by hand.
 
 #### Scenario: a peer holding another master key is flagged
 - **GIVEN** a machine that has converged
 - **WHEN** its descriptor is read and `GET /sync/key/fingerprint` is asked on that machine
 - **THEN** the descriptor's `key_fingerprint` is the value the route returns
-- **AND** the machines table says that a peer whose fingerprint differs from this machine's has credentials that cannot be decrypted here
+- **AND** the machines table says that a peer whose fingerprint differs from this machine's has secrets that cannot be decrypted here
 
 ### Requirement: Restamp the convergence day at most once a day
 `last_converged_on` MUST be restamped **at most once per calendar day**, so a
@@ -895,16 +895,16 @@ deletion").
 - **THEN** that area's provider receives it
 - **AND** a document for an area no provider claims is skipped
 
-### Requirement: Apply credential blobs
-For `credentials/<ref>.enc`, an addition or a modification MUST write the
-ciphertext subject to the freshness rule (see "Let the fresher credential
-ciphertext win"); a deletion MUST delete the credential.
+### Requirement: Apply secret blobs
+For `secret/<ref>.enc`, an addition or a modification MUST write the
+ciphertext subject to the freshness rule (see "Let the fresher secret
+ciphertext win"); a deletion MUST delete the secret.
 
-#### Scenario: a credential blob is written as ciphertext and its deletion deletes the credential
-- **GIVEN** a credential blob arriving for a ref, and later its deletion
+#### Scenario: a secret blob is written as ciphertext and its deletion deletes the secret
+- **GIVEN** a secret blob arriving for a ref, and later its deletion
 - **WHEN** each is applied
-- **THEN** the ciphertext is written to the credential store, and a blob staler than the one held is refused
-- **AND** the deletion removes the credential
+- **THEN** the ciphertext is written to the secret store, and a blob staler than the one held is refused
+- **AND** the deletion removes the secret
 
 ### Requirement: Never apply the registry or the manifest
 `machines/*.yaml` and `manifest.json` MUST NOT be applied in either direction —
@@ -917,8 +917,8 @@ manifest is metadata about the tree.
 - **THEN** only the knowledge file is among them
 - **AND** neither the descriptor nor the manifest counts towards the deletion guard
 
-### Requirement: Release unreferenced credentials on deletion
-Deleting a resource MUST release the credentials no remaining resource cites,
+### Requirement: Release unreferenced secrets on deletion
+Deleting a resource MUST release the secrets no remaining resource cites,
 as any other deletion does.
 
 #### Scenario: a remote deletion is applied
@@ -926,7 +926,7 @@ as any other deletion does.
   pushed,
 - **WHEN** a round runs here,
 - **THEN** the skill's files and its registry row are removed here, the
-  credentials no remaining resource cites are released, and the deletion is
+  secrets no remaining resource cites are released, and the deletion is
   audited.
 
 ### Requirement: Re-run post-import hooks after applying
@@ -996,14 +996,14 @@ Per-path failures MUST be reported and MUST NOT abort the round.
 - **THEN** the other documents are applied and the round completes
 - **AND** the failing path is reported with its reason
 
-### Requirement: Let the fresher credential ciphertext win
-Credential blobs MUST NOT reach a text merge. A Fernet token carries its
+### Requirement: Let the fresher secret ciphertext win
+Secret blobs MUST NOT reach a text merge. A Fernet token carries its
 encryption time in cleartext, so two ciphertexts for one ref can be ordered
 without the key, and the **fresher encryption wins**. This rule applies to
-`credentials/*.enc` and to nothing else.
+`secret/*.enc` and to nothing else.
 
-#### Scenario: the fresher credential ciphertext wins
-- **GIVEN** one credential ref re-encrypted on both machines, the other machine's
+#### Scenario: the fresher secret ciphertext wins
+- **GIVEN** one secret ref re-encrypted on both machines, the other machine's
   encryption being the older one,
 - **WHEN** the two meet in a round,
 - **THEN** the fresher ciphertext is what both machines hold afterwards,
@@ -1388,12 +1388,12 @@ without aborting").
 ### Requirement: Never write the master key into the repository
 The master key MUST never be written into the repository. It is bootstrapped
 onto another machine out-of-band: a backup is written only by the desktop app,
-behind a presence check ([credentials](../credentials/spec.md) "Release
+behind a presence check ([secret](../secret/spec.md) "Release
 plaintext only to a present human in the desktop app"), and installed on the
 other machine with `coffer sync key import`.
 
 #### Scenario: the master key never enters the repository
-- **GIVEN** a remote configured to carry credential ciphertext,
+- **GIVEN** a remote configured to carry secret ciphertext,
 - **WHEN** a round pushes,
 - **THEN** the tree holds Fernet ciphertext and no key material, and a machine
   without the key reports those refs locked rather than failing decryption.
@@ -1402,45 +1402,45 @@ other machine with `coffer sync key import`.
 A machine holding ciphertext without the key MUST report those refs **locked**
 rather than failing decryption silently. Two absences MUST be told apart. A machine
 that genuinely holds no master key can open none of its ciphertext, so every
-credential ref it holds ciphertext for MUST be reported locked. A key that exists
+secret ref it holds ciphertext for MUST be reported locked. A key that exists
 but cannot be read right now (a locked or unavailable keychain, an unreadable key
 file) says nothing about which refs would open, so the round MUST report none
 and MUST log that the key was unreadable; the round is still recorded. The key
 MUST be resolved at most once per daemon start, whichever of the three answers
 it gives, so a key kept in the keychain costs at most one prompt.
 
-#### Scenario: credentials this machine cannot decrypt are reported locked
-- **GIVEN** a machine holding credential ciphertext written under a master key it does not hold
+#### Scenario: secrets this machine cannot decrypt are reported locked
+- **GIVEN** a machine holding secret ciphertext written under a master key it does not hold
 - **WHEN** a master key is imported that still does not decrypt them
 - **THEN** the import names those refs as still locked rather than reporting success silently
 
 #### Scenario: a machine with no master key reports every ref it holds as locked
-- **GIVEN** a machine with no master key file and none in the keychain, holding credential ciphertext that arrived from another machine
+- **GIVEN** a machine with no master key file and none in the keychain, holding secret ciphertext that arrived from another machine
 - **WHEN** a converge round runs
-- **THEN** the round's `locked_refs` names every credential ref this machine holds ciphertext for, and the round is recorded with them
+- **THEN** the round's `locked_refs` names every secret ref this machine holds ciphertext for, and the round is recorded with them
 
 #### Scenario: an unreadable key reports no ref locked
-- **GIVEN** a machine holding credential ciphertext whose master key lives in a keychain that is locked
+- **GIVEN** a machine holding secret ciphertext whose master key lives in a keychain that is locked
 - **WHEN** a converge round runs
 - **THEN** the round's `locked_refs` is empty, the unreadable key is logged, the round is recorded, and the keychain is not asked again on later rounds
 
-### Requirement: Hand the push credential to git as a helper
-The push credential MUST be resolved from the credential store at push time,
+### Requirement: Hand the push secret to git as a helper
+The push secret MUST be resolved from the secret store at push time,
 named by reference and never by value. It MUST NOT enter the repository's git
 config, MUST NOT appear in a command line, and MUST be redacted from any
 recorded error. It MUST reach git as a **credential helper**, which every git
 consults before it would prompt, and MUST NOT be handed over through a prompt
 mechanism: a prompt path is optional and platform-dependent — macOS's own git
-ignores `GIT_ASKPASS` entirely — so a credential delivered that way is not
+ignores `GIT_ASKPASS` entirely — so a secret delivered that way is not
 delivered at all on the platform Coffer ships a desktop app for. That failure is
 invisible by construction while a credential helper in the user's own git
 configuration happens to answer instead, and this layer pins that configuration
 away on purpose, so there is nothing left to fall back on when it stops.
 
-#### Scenario: the push credential never reaches the repository
-- **GIVEN** a configured remote with a push credential,
+#### Scenario: the push secret never reaches the repository
+- **GIVEN** a configured remote with a push secret,
 - **WHEN** a round pushes,
-- **THEN** the credential is absent from the repository's git config, from the
+- **THEN** the secret is absent from the repository's git config, from the
   git process's arguments, and from any recorded error text or audit payload,
 - **AND** it still authenticates, because it reaches git as a credential helper
   reading it from the environment rather than as an answer to a prompt.
@@ -1473,7 +1473,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 `adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
 `restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`
 — and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-credentials|--without-credentials] [--credential-ref] [--worktree <path>]`,
+`remote set <url> [--branch] [--interval <seconds>] [--with-secrets|--without-secrets] [--secret-ref] [--worktree <path>]`,
 `remote clear`, `remote pause`, `remote resume`, `machine list`,
 `machine rename <name>`, `machine rm <id>`,
 `key import <file>`, `key fingerprint`. There is no `key export`: a key backup
@@ -1483,7 +1483,7 @@ keeps the stored remote's value, the working tree included. `remote pause` and
 configured remote without forgetting it") and change nothing else.
 
 `status` MUST report the configured remote and every one of its settings — URL,
-branch, interval, whether credentials travel, the push credential ref, the
+branch, interval, whether secrets travel, the push secret ref, the
 working tree and whether the remote is switched on — beside how the last round
 went, in plain and `--json` output; with no remote configured it says so and
 names `remote set`. `restore` without `--at` undoes the last round that applied
@@ -1493,18 +1493,18 @@ something here (see "Snapshot before applying and roll back from it").
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
 - **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with an optional `--at`, `confirm`, `reject` and `rebuild` with `--yes`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials`, `--credential-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
+- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-secrets`, `--without-secrets`, `--secret-ref` and `--worktree`, `remote clear`, `remote pause`, `remote resume`, `machine list`, `machine rename`, `machine rm`, `key import` and `key fingerprint`, and no `key export`
 
 #### Scenario: pause and resume a remote from the command line
 - **GIVEN** a configured, enabled sync remote
 - **WHEN** the user runs `coffer sync remote pause`, and then `coffer sync remote resume`
 - **THEN** after the first the stored remote is switched off and a requested round reports `disabled`, and after the second it is switched on again
-- **AND** the URL, branch, interval, credential settings and working tree are unchanged throughout
+- **AND** the URL, branch, interval, secret settings and working tree are unchanged throughout
 
 #### Scenario: the status command reports the remote's settings
-- **GIVEN** a configured remote with a non-default branch, interval, push credential ref and working tree, carrying credentials
+- **GIVEN** a configured remote with a non-default branch, interval, push secret ref and working tree, carrying secrets
 - **WHEN** the user runs `coffer sync status --json`
-- **THEN** the output carries the remote's URL, branch, interval, credential setting, push credential ref, working tree and enabled switch as stored
+- **THEN** the output carries the remote's URL, branch, interval, secret setting, push secret ref, working tree and enabled switch as stored
 - **AND** with no remote configured `coffer sync status` says none is configured and names `coffer sync remote set`
 
 ### Requirement: Cover the same operations over HTTP
@@ -1514,7 +1514,8 @@ The HTTP API MUST cover the same operations under `/api/v1/sync`:
 `POST /sync/confirm`, `POST /sync/reject`, `POST /sync/rebuild`,
 `POST /sync/rollback`, `GET /sync/machines`, `PATCH /sync/machines/self`,
 `DELETE /sync/machines/{id}`, `GET /sync/key/fingerprint`,
-`POST /sync/key/import`. No sync route returns the master key.
+`POST /sync/key/import/preview`, `POST /sync/key/import`. No sync route
+returns the master key.
 
 #### Scenario: the HTTP API serves every sync operation
 - **GIVEN** the daemon's HTTP application
@@ -1592,7 +1593,7 @@ Tuesday is the answer.
 
 Repeats that are not quiet MUST fold the same way, by outcome: consecutive
 rounds that **failed**, and consecutive rounds **held** for confirmation, each
-fold into one counted row, because an expired credential is ten identical
+fold into one counted row, because an expired secret is ten identical
 failures by morning and a held round is re-raised every hour until it is
 answered — neither is more true for being printed ten times. A round that
 applied or published documents MUST NOT fold, however many like it came before,
@@ -1623,7 +1624,7 @@ too. The remote, the pointer and the history MUST all be kept, so switching it
 back on resumes where the vault left off. Re-running `coffer sync remote set`
 MUST keep a paused remote paused — it changes what it names and nothing else:
 every option it is not given keeps its stored value, including the branch, the
-interval, whether credentials travel, the push credential and the working tree
+interval, whether secrets travel, the push secret and the working tree
 — and a remote configured for the first time is stored enabled, with the
 defaults for every option it is not given.
 
@@ -1644,11 +1645,11 @@ defaults for every option it is not given.
 
 #### Scenario: reconfiguring a remote changes only what it names
 - **GIVEN** a configured remote with a non-default branch, interval, push
-  credential and working tree, carrying credentials
+  secret and working tree, carrying secrets
 - **WHEN** `coffer sync remote set` is run again naming only a new interval
 - **THEN** the stored remote carries the new interval and every other setting
   exactly as it was
-- **AND** running it with `--without-credentials` switches credential sync off
+- **AND** running it with `--without-secrets` switches secret sync off
   and changes nothing else
 
 ### Requirement: Present a Sync page with Runs, Setup and Machines tabs
@@ -1670,7 +1671,7 @@ actionable in only one.
 
 ### Requirement: Hold a push token pointed at a new URL until approved
 Setting the remote MUST resolve its push token for the remote's URL through the
-secret boundary ([credentials](../credentials/spec.md) "Hold a secret for a new
+secret boundary ([secret](../secret/spec.md) "Hold a secret for a new
 destination until a person approves it"). An existing token pointed at a URL it
 was not approved for MUST NOT be sent: the remote is saved without the
 reachability probe, so the approval has a destination to name; the answer is
@@ -1685,3 +1686,49 @@ refusal until then.
 - **WHEN** the remote is set to another URL citing the same token
 - **THEN** the token is not sent and the answer names a pending approval for the new URL
 - **AND** after the approval is applied, setting the remote again succeeds
+
+### Requirement: Import a master key after showing whose key it is
+Importing a master key MUST show, before anything is replaced, whose key the
+file holds beside this machine's: `POST /api/v1/sync/key/import/preview` takes
+the file's text and answers the key's fingerprint, this machine's fingerprint
+(or none), whether they are the same key, and whether the file is a
+passphrase-protected backup, and MUST change nothing. A protected backup's
+fingerprint is read from the file without its passphrase and MUST be checked
+against the key when the file is opened; a file whose fingerprint is not its
+key's MUST be refused with `MASTER_KEY_FILE_INVALID`. `POST
+/api/v1/sync/key/import` takes the file's text and, for a protected backup,
+its passphrase; a missing or wrong passphrase MUST be refused with
+`MASTER_KEY_PASSPHRASE_WRONG` and replace nothing. A bare Fernet key needs no
+passphrase. On success it MUST answer the fingerprint of the key now in use,
+whether a different key was replaced (the replaced key is kept as a backup,
+never overwritten), how many stored secrets the key decrypts, and the refs it
+still cannot decrypt; it is audited as `master_key_imported` with the
+fingerprints and never the key or the passphrase. The running daemon MUST use
+the imported key from then on, so a secret stored after the import is sealed
+under it. Key material coming in needs no presence check: a caller that
+supplies a key already has it.
+
+Settings › Security MUST offer the import as one dialog: choose the key file,
+see "Current key" beside "Key in the file" marked same or different, type the
+passphrase when the file needs one, and confirm with Replace key; afterwards it
+says how many secrets are readable now and names those still locked, with a
+way to the Secrets page. `coffer sync key import <file>` MUST ask for a
+protected file's passphrase without echoing it.
+
+#### Scenario: an import shows whose key the file holds before replacing
+- **GIVEN** a machine with its own master key, and a passphrase-protected backup of another machine's key
+- **WHEN** the backup, and then a copy of this machine's own key, are previewed
+- **THEN** the first answers the other key's fingerprint beside this machine's, not the same, and protected
+- **AND** the second answers the same key and not protected, and this machine's key is unchanged after both
+
+#### Scenario: a protected key file opens only with its passphrase
+- **GIVEN** a passphrase-protected backup of another machine's key
+- **WHEN** it is imported with a wrong passphrase, with none, and then with the right one
+- **THEN** the first two are refused with `MASTER_KEY_PASSPHRASE_WRONG`, echo no passphrase and leave this machine's key in place
+- **AND** the third installs the other key and answers its fingerprint with `replaced` true
+
+#### Scenario: the security tab replaces a key and names what stays locked
+- **GIVEN** Settings › Security, and a backup holding a key different from this machine's
+- **WHEN** the person chooses the file, types the passphrase and replaces the key
+- **THEN** the dialog showed both fingerprints and "different" before anything was sent to import
+- **AND** afterwards it names the key now in use, how many secrets are readable, and the names of those still locked, with Open Secrets

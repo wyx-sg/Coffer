@@ -18,6 +18,7 @@ import {
   getDelivered,
   getDeliveries,
   getNote,
+  getReading,
   listNotes,
   listPartitionFiles,
   listPartitions,
@@ -32,6 +33,7 @@ import {
   memoryNotesKey,
   memoryPartitionFilesKey,
   memoryPartitionsKey,
+  memoryReadingKey,
   memoryRetiredKey,
   resourcesKey,
   upkeepRunsKey,
@@ -90,6 +92,13 @@ export function useMemoryDelivered(uid: string) {
     queryFn: async () => (await getDelivered(uid)).agents,
     enabled: uid.length > 0,
   });
+}
+
+/** When the agents' memory was last read, and whose read failed — the
+ *  Memory header's "Read 14 min ago" and its failure banner (spec memory
+ *  "Report the last read of the agents' memory"). */
+export function useMemoryReading() {
+  return useQuery({ queryKey: memoryReadingKey, queryFn: getReading });
 }
 
 /** Per agent, the last seven days of memory delivery. */

@@ -18,15 +18,14 @@ import psutil
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import ToolDisabled
 from coffer.domain.resource import Resource
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
@@ -38,6 +37,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
@@ -270,7 +270,7 @@ async def _session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ig
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     supervisor_for["session-1"] = sup
     prefs, inv = MCPCapabilityPreferenceStore(derived_sm()), MCPInvocationRepo(sm)

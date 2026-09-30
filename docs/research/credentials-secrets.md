@@ -1,6 +1,6 @@
 # Credentials and secrets for agents: how other products do it
 
-**Feature**: hold secrets (API keys, tokens, OAuth grants) for AI agents and MCP servers on the local machine, hand each one to the process that needs it without exposing plaintext elsewhere, and move them between machines · **Coffer spec**: [credentials](../../openspec/specs/credentials/spec.md) · **Related ADRs**: [envelope-encrypted-credential-store](../decisions/envelope-encrypted-credential-store.md), [credential-references](../decisions/credential-references.md), [credentials-across-machines](../decisions/credentials-across-machines.md), [provider-keys-never-land-in-native-config](../decisions/provider-keys-never-land-in-native-config.md)
+**Feature**: hold secrets (API keys, tokens, OAuth grants) for AI agents and MCP servers on the local machine, hand each one to the process that needs it without exposing plaintext elsewhere, and move them between machines · **Coffer spec**: [credentials](../../openspec/specs/secret/spec.md) · **Related ADRs**: [envelope-encrypted-credential-store](../decisions/envelope-encrypted-credential-store.md), [credential-references](../decisions/credential-references.md), [credentials-across-machines](../decisions/credentials-across-machines.md), [provider-keys-never-land-in-native-config](../decisions/provider-keys-never-land-in-native-config.md)
 **Researched**: 2026-09 · **Method**: web research, primary sources
 
 Every product below is described along the same five axes:

@@ -31,6 +31,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.sync import round_answers, round_join, round_resume, round_rollback
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
+from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
 from coffer.application.sync.service_ports import (
     AgentInventoryPort,
@@ -43,10 +44,10 @@ from coffer.application.sync.service_remote import RemoteMixin
 from coffer.application.sync.service_status import StatusMixin
 from coffer.application.sync.views import RollbackView, RoundPage
 from coffer.domain.audit import AuditEventType
-from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.error_base import CofferError
-from coffer.domain.errors import CredentialMissing
-from coffer.domain.sync.errors import MasterKeyFileInvalid, SyncNoRemote, SyncRoundNotFound
+from coffer.domain.errors import SecretMissing
+from coffer.domain.secret_errors import SecretBindingPending
+from coffer.domain.sync.errors import SyncNoRemote, SyncRoundNotFound
 from coffer.domain.sync.joins import JoinPreview
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
@@ -68,7 +69,7 @@ _QUIET = frozenset(
 )
 
 
-class SyncService(RemoteMixin, MachinesMixin, StatusMixin):
+class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
     def __init__(
         self,
         *,
@@ -206,13 +207,13 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin):
         except SecretBindingPending:
             return failed(
                 RoundStatus.AUTH_FAILED,
-                f"the push token {remote.credential_ref} is waiting for approval in the "
+                f"the push token {remote.secret_ref} is waiting for approval in the "
                 "Coffer desktop app before it may be sent to this remote",
             )
-        except CredentialMissing:
+        except SecretMissing:
             return failed(
                 RoundStatus.AUTH_FAILED,
-                f"the push token {remote.credential_ref} is not stored on this machine",
+                f"the push token {remote.secret_ref} is not stored on this machine",
             )
 
         try:
@@ -360,24 +361,6 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin):
             stored = await self._history.append(done)
         await self._record("rollback", stored)
         return stored
-
-    # --- the master key ------------------------------------------------------------
-
-    def key_fingerprint(self) -> str | None:
-        return self._master_key.fingerprint()
-
-    async def import_key(self, material: str) -> list[str]:
-        """Install a master key carried from another machine; answer the refs
-        it still does not open."""
-        raw = material.strip().encode("utf-8")
-        if not raw:
-            raise MasterKeyFileInvalid("<import>", "no key material supplied")
-        try:
-            await asyncio.to_thread(self._master_key.install_key, raw)
-        except ValueError as exc:
-            raise MasterKeyFileInvalid("<import>", "not a valid Fernet key") from exc
-        await self._audit.record(AuditEventType.MASTER_KEY_IMPORTED.value, actor="user")
-        return await asyncio.to_thread(self._secrets.locked_refs)
 
 
 def _with_lock[T](engine: RoundEngine, fn: Callable[[], T]) -> T:

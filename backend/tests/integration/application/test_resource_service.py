@@ -160,15 +160,15 @@ async def test_generic_register_rejects_lifecycle_kind(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
+async def test_kind_supplied_secret_extractor_and_audit_redactor(tmp_path):
     """Resource framework: ResourceService must NOT hardcode the mcp_server
-    ``transport`` config shape. A kind supplies its own credential-ref
+    ``transport`` config shape. A kind supplies its own secret-ref
     extractor (probed before any DB write) and audit redactor (secrets stripped
     before audit), and the kind-agnostic core just calls them — proven here with
     a kind that stores its ref/secret OUTSIDE any ``transport`` key.
     """
     from coffer.domain.audit import AuditEventType
-    from coffer.domain.errors import CredentialMissing
+    from coffer.domain.errors import SecretMissing
 
     class _SecretConfig(BaseModel):
         secret_ref: str
@@ -186,7 +186,7 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
             name="vault",
             display_name="Vault",
             config_schema=_SecretConfig,
-            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
             audit_redactor=lambda cfg: {k: v for k, v in cfg.items() if k != "plaintext"},
         ),
     }
@@ -197,24 +197,24 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     try:
-        # Missing credential → probe fails before any DB write.
+        # Missing secret → probe fails before any DB write.
         svc_missing = ResourceService(
             kinds=kinds,
             repo=make_resource_repo(),
             audit=audit,
-            credentials=_FakeKeyring(present=set()),
+            secrets=_FakeKeyring(present=set()),
         )
-        with pytest.raises(CredentialMissing):
+        with pytest.raises(SecretMissing):
             await svc_missing.register(
                 kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli"
             )
 
-        # Present credential → succeeds; audit drops the redacted field.
+        # Present secret → succeeds; audit drops the redacted field.
         svc_ok = ResourceService(
             kinds=kinds,
             repo=make_resource_repo(),
             audit=audit,
-            credentials=_FakeKeyring(present={"k1"}),
+            secrets=_FakeKeyring(present={"k1"}),
         )
         await svc_ok.register(
             kind="vault",
@@ -232,11 +232,11 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_find_credential_citations_lists_referencing_resources(tmp_path):
-    """find_credential_citations scans every resource's config (via each kind's
-    credential_ref_extractor) and returns the RESOURCES that cite a given
-    credential — so the credential-delete route can refuse and name them back
-    to the user. A credential nothing references yields an empty list; kinds
+async def test_find_secret_citations_lists_referencing_resources(tmp_path):
+    """find_secret_citations scans every resource's config (via each kind's
+    secret_ref_extractor) and returns the RESOURCES that cite a given
+    secret — so the secret-delete route can refuse and name them back
+    to the user. A secret nothing references yields an empty list; kinds
     without an extractor are skipped, not crashed.
 
     It returns whole resources rather than identifiers because both callers
@@ -259,7 +259,7 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
             name="vault",
             display_name="Vault",
             config_schema=_SecretConfig,
-            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
         ),
         "plain": Kind(
             name="plain",
@@ -278,7 +278,7 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
             kinds=kinds,
             repo=make_resource_repo(),
             audit=audit,
-            credentials=_FakeKeyring(),
+            secrets=_FakeKeyring(),
         )
         a = await svc.register(kind="vault", name="a", config={"secret_ref": "k1"}, actor="cli")
         b = await svc.register(kind="vault", name="b", config={"secret_ref": "k1"}, actor="cli")
@@ -286,23 +286,23 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
         # An extractor-less kind must be skipped, not crash the scan.
         await svc.register(kind="plain", name="d", config={"foo": 1}, actor="cli")
 
-        citing_k1 = await svc.find_credential_citations("k1")
+        citing_k1 = await svc.find_secret_citations("k1")
         assert all(isinstance(r, Resource) for r in citing_k1)
         # Identified by uid — the list is a set of resources, not of labels.
         assert sorted(r.uid for r in citing_k1) == sorted([a.uid, b.uid])
         # And it carries the labels the 409 message shows the user.
         assert sorted(r.name for r in citing_k1) == ["a", "b"]
 
-        # A credential nothing references → empty list (delete proceeds).
-        assert await svc.find_credential_citations("unused") == []
+        # A secret nothing references → empty list (delete proceeds).
+        assert await svc.find_secret_citations("unused") == []
     finally:
         await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
+async def test_cited_secret_refs_collects_every_kinds_refs(tmp_path):
     """Every ref any registered resource cites, of whatever kind, keyed to the
-    resources citing it — what ``coffer credentials list`` enumerates. A kind
+    resources citing it — what ``coffer secret list`` enumerates. A kind
     that stores its ref somewhere other than an MCP transport must still count.
     """
 
@@ -310,7 +310,7 @@ async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
         header_ref: str
 
     class _KeyConfig(BaseModel):
-        credential_ref: str
+        secret_ref: str
 
     class _PlainConfig(BaseModel):
         foo: int = 0
@@ -324,13 +324,13 @@ async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
             name="server",
             display_name="Server",
             config_schema=_TransportConfig,
-            credential_ref_extractor=lambda cfg: {"Authorization": cfg["header_ref"]},
+            secret_ref_extractor=lambda cfg: {"Authorization": cfg["header_ref"]},
         ),
         "connection": Kind(
             name="connection",
             display_name="Connection",
             config_schema=_KeyConfig,
-            credential_ref_extractor=lambda cfg: {"credential_ref": cfg["credential_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret_ref": cfg["secret_ref"]},
         ),
         "plain": Kind(name="plain", display_name="Plain", config_schema=_PlainConfig),
     }
@@ -343,18 +343,18 @@ async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
             kinds=kinds,
             repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
-            credentials=_FakeKeyring(),
+            secrets=_FakeKeyring(),
         )
         a = await svc.register(kind="server", name="a", config={"header_ref": "gh"}, actor="cli")
         b = await svc.register(
-            kind="connection", name="b", config={"credential_ref": "llm"}, actor="cli"
+            kind="connection", name="b", config={"secret_ref": "llm"}, actor="cli"
         )
         c = await svc.register(
-            kind="connection", name="c", config={"credential_ref": "gh"}, actor="cli"
+            kind="connection", name="c", config={"secret_ref": "gh"}, actor="cli"
         )
         await svc.register(kind="plain", name="d", config={"foo": 1}, actor="cli")
 
-        cited = await svc.cited_credential_refs()
+        cited = await svc.cited_secret_refs()
         assert sorted(cited) == ["gh", "llm"]
         assert sorted(r.uid for r in cited["gh"]) == sorted([a.uid, c.uid])
         assert [r.uid for r in cited["llm"]] == [b.uid]
@@ -495,12 +495,12 @@ async def test_delete_unknown_resource_raises(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_knowledge_kind_declares_no_credentials(tmp_path):
-    """The knowledge kind supplies no credential extractor, so registering a
+async def test_knowledge_kind_declares_no_secrets(tmp_path):
+    """The knowledge kind supplies no secret extractor, so registering a
     collection never probes the keychain.
 
     Both former faces used to extract an embedding API-key ref from their own
-    config. Nothing about a directory of files needs a credential, so there is
+    config. Nothing about a directory of files needs a secret, so there is
     none to probe — and a register must not fail on a keychain that holds
     nothing."""
     from coffer.application.knowledge.kind import make_knowledge_kind
@@ -511,7 +511,7 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
 
     # The kind's hooks never touch the wrapped service at register time.
     kind = make_knowledge_kind(None)  # type: ignore[arg-type]
-    assert kind.credential_ref_extractor is None
+    assert kind.secret_ref_extractor is None
 
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -523,7 +523,7 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             kinds={KIND_KNOWLEDGE: kind},
             repo=make_resource_repo(),
             audit=audit,
-            credentials=_EmptyKeyring(),
+            secrets=_EmptyKeyring(),
         )
         created = await svc.register(
             kind=KIND_KNOWLEDGE,
@@ -542,11 +542,11 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="credentials",
-    scenario="deleting a resource releases the credentials nothing else cites",
+    spec="secret",
+    scenario="deleting a resource releases the secrets nothing else cites",
 )
-async def test_delete_releases_credentials_only_it_cited(tmp_path):
-    """Deleting a resource drops the credentials nothing else cites; a ref
+async def test_delete_releases_secrets_only_it_cited(tmp_path):
+    """Deleting a resource drops the secrets nothing else cites; a ref
     still cited by another resource survives (2026-07-10 orphan incident)."""
 
     class _SecretConfig(BaseModel):
@@ -570,7 +570,7 @@ async def test_delete_releases_credentials_only_it_cited(tmp_path):
             name="vault",
             display_name="Vault",
             config_schema=_SecretConfig,
-            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
         ),
     }
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -579,7 +579,7 @@ async def test_delete_releases_credentials_only_it_cited(tmp_path):
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     store = _FakeStore(present={"only-mine", "shared"})
-    svc = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit, credentials=store)
+    svc = ResourceService(kinds=kinds, repo=make_resource_repo(), audit=audit, secrets=store)
     try:
         a = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "t")
         b = await svc.register("vault", "b", {"secret_ref": "shared"}, "t")
@@ -594,14 +594,14 @@ async def test_delete_releases_credentials_only_it_cited(tmp_path):
         await svc.delete(c.uid, "t")
         assert not store.exists("shared")  # last citation gone
 
-        entries = await audit.query(event_type=AuditEventType.CREDENTIAL_DELETED.value)
+        entries = await audit.query(event_type=AuditEventType.SECRET_DELETED.value)
         assert {e.details["ref"] for e in entries} == {"only-mine", "shared"}
     finally:
         await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_delete_without_credential_store_is_unaffected(tmp_path):
+async def test_delete_without_secret_store_is_unaffected(tmp_path):
     class _SecretConfig(BaseModel):
         secret_ref: str
 
@@ -610,7 +610,7 @@ async def test_delete_without_credential_store_is_unaffected(tmp_path):
             name="vault",
             display_name="Vault",
             config_schema=_SecretConfig,
-            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
         ),
     }
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -632,8 +632,8 @@ async def test_delete_without_credential_store_is_unaffected(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None:
-    """The credential store's ``get`` is a blocking SQLite read; the register-time
+async def test_register_probes_secrets_off_the_loop_thread(tmp_path) -> None:
+    """The secret store's ``get`` is a blocking SQLite read; the register-time
     probe must run it in a worker thread, not on the loop it would stall."""
     import threading
 
@@ -653,7 +653,7 @@ async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None
             name="vault",
             display_name="Vault",
             config_schema=_SecretConfig,
-            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+            secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
         ),
     }
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -665,7 +665,7 @@ async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None
             kinds=kinds,
             repo=make_resource_repo(),
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
-            credentials=_RecordingStore(),
+            secrets=_RecordingStore(),
         )
         created = await svc.register(
             kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli"

@@ -192,9 +192,9 @@ The internal engine settings are one vault document, `state/settings/internal-en
 | **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. | `coffer config set engine.provider <connection>`, `coffer config set engine.model <model>`, `coffer config unset engine.model` |
 | **Time limit per call** | `60` s | How long one call to Coffer's own model may take. | `coffer config set engine.timeout <s>`, `coffer config unset engine.timeout` |
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer config set transcribe.provider <connection>`, `coffer config set transcribe.model <model>`, `coffer config unset transcribe.model` |
-| **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
-| **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
-| **Automatic upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
+| **Upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
+| **Upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
+| **Upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
 | **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. | `coffer config set prices.refresh on\|off`, `coffer config unset prices.refresh` |
 | Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer config set engine.curate_owner this\|<machine id>`, `coffer config unset engine.curate_owner` |
 
@@ -207,7 +207,7 @@ The sync remote is one machine-local file, `~/.coffer/local/sync/remote.json`, s
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
 | **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused. | `coffer sync remote set --interval <s>` |
-| **Push credential** | none | The secret holding the push token. | `coffer sync remote set --credential-ref <ref>` |
+| **Push secret** | none | The secret holding the push token. | `coffer sync remote set --secret-ref <ref>` |
 | Username | `coffer` | The username sent with an HTTPS token. GitHub and GitLab ignore it; Bitbucket and Azure DevOps need a real one. | `coffer sync remote set --username <name>` |
 | **Include encrypted secrets** | off | Commit and push `vault/secret/` (ciphertext only, never the key). | `coffer sync remote set --with-secret`, `--without-secret` |
 | **Sync automatically** | on | Off pauses the timer; the remote and its history are kept, and **Sync now** still runs a round. | `coffer sync remote pause`, `resume` |
@@ -237,7 +237,7 @@ coffer log prune
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set credentials.storage file\|keychain` |
+| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. | `coffer config set secrets.storage file\|keychain` |
 | Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target, and so does a new value for a secret in use. When off, both are approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). | `coffer config set secrets.require_approval on\|off` |
 
 ## Related
@@ -245,6 +245,6 @@ coffer log prune
 - [Files and directories](/reference/filesystem)
 - [Running the daemon](/guides/daemon)
 - [Experimental features](/guides/experimental-features)
-- [Credentials](/guides/credentials)
+- [Secret store](/guides/secret-store)
 - [CLI reference](/reference/cli)
 - [Distribution and releases](/architecture/distribution)

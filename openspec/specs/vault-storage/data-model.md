@@ -268,9 +268,9 @@ again rather than migrated.
 ## `runs.db`
 
 The history database, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another:
-one Alembic lineage, head `0117`, single writer. Every row that names a
+one Alembic lineage, head `0136`, single writer. Every row that names a
 resource names it by uid — `resource_uid`, `skill_uid`, `agent_uid`; there is
-no integer resource id. Revision 0117 re-keyed `audit_log`,
+no integer resource id. Revision 0136 re-keyed `audit_log`,
 `channel_thread_conversations`, `channel_thread_history` and `channel_outbox`
 from the integer id to `resource_uid`, dropped every table whose state moved
 out, and emptied `sync_runs`.
@@ -279,12 +279,12 @@ out, and emptied `sync_runs`.
 
 `coffer migrate` turns a home that holds `coffer.db` into this layout. It is
 Python, not an Alembic step (`infrastructure/vault/migration/`): it backs up the
-database, runs Alembic to 0116 on it, reads the old tables, creates the vault,
+database, runs Alembic to 0135 on it, reads the old tables, creates the vault,
 moves the trees (a rename, never a copy), replays the knowledge root's own git
 history into the vault under `knowledge/`, strips the `coffer_curated_at`
 stamps (settled documents seed `local/curation.json`), writes every file, makes
 **one** `daemon` commit (operation `layout`, `Coffer-Layout: db -> 3`), then
-renames `coffer.db` to `runs.db` and upgrades it to 0117.
+renames `coffer.db` to `runs.db` and upgrades it to 0136.
 
 | Old | New |
 | --- | --- |

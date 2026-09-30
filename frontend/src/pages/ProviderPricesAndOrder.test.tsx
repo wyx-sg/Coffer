@@ -23,8 +23,8 @@ vi.mock("@/lib/api/proxy", async (orig) => ({
   proxyApi: { status: vi.fn().mockResolvedValue({ port: 8001 }) },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
-vi.mock("@/lib/api/credentials", () => ({
-  credentialsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
 }));
 const { endpoint } = vi.hoisted(() => ({ endpoint: { models: [] as ProviderModel[] } }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
@@ -45,7 +45,7 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 
 const { providersApi } = await import("@/lib/api/providers");
 const { scopeApi } = await import("@/lib/api/scope");
-const { credentialsApi } = await import("@/lib/api/credentials");
+const { secretsApi } = await import("@/lib/api/secret");
 const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
@@ -54,7 +54,7 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   title: null,
   protocol: "openai",
   base_url: "https://openrouter.ai/api/v1",
-  credential_ref: `provider/${uid}`,
+  secret_ref: `provider/${uid}`,
   local_runtime: null,
   compatible_agents: ["codex"],
   is_active: false,
@@ -113,7 +113,7 @@ describe("prices, fallback and order", () => {
     vi.clearAllMocks();
     endpoint.models = chat("mine", "reported", "listed", "unknown");
     (scopeApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ scope: null });
-    (credentialsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (secretsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
       approvals: [],
     });
     api.prices.mockResolvedValue({
@@ -187,7 +187,7 @@ describe("prices, fallback and order", () => {
     serve([
       provider("ollama", {
         base_url: "http://127.0.0.1:11434/v1",
-        credential_ref: null,
+        secret_ref: null,
         local_runtime: { runtime: "ollama", version: "0.14.2", wires: ["openai"] },
       }),
     ]);

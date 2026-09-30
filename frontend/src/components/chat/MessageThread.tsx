@@ -33,7 +33,7 @@ interface Props {
   /** Prompts sent from here whose rows have not landed yet (the turn hook retires them). */
   pendingEchoes?: PendingEcho[];
   isStreaming: boolean;
-  /** Error from the latest turn (network, credential, agent error, …), and its dismiss. */
+  /** Error from the latest turn (network, secret, agent error, …), and its dismiss. */
   turnError?: Error | null;
   onClearTurnError?: () => void;
   /** False when turnError is a refused send (it stays in the composer): no Retry. */

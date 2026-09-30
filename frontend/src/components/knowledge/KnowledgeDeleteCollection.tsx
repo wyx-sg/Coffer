@@ -1,13 +1,17 @@
 // frontend/src/components/knowledge/KnowledgeDeleteCollection.tsx
 //
-// The collection overview's danger zone: Delete collection, behind a typed
-// confirmation — it removes the folder, every document and every inbox item
-// from disk. A collection is one `knowledge` Resource, so it goes through the
-// kind-agnostic resource delete like every other kind. The dialog closes only
-// once the delete has landed, and a refusal stays in it.
+// The collection overview's danger zone (boards 5.1.13, 5.1.19): Delete
+// collection, behind a typed confirmation — it removes the folder, every
+// document and every inbox item from disk. The delete is one change in the
+// vault's history, so Recent changes lists it with Restore (spec knowledge
+// "Restore a deleted collection or document from Recent changes"). A
+// collection is one `knowledge` Resource, so it goes through the kind-agnostic
+// resource delete like every other kind. The dialog closes only once the
+// delete has landed, and a refusal stays in it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -24,14 +28,19 @@ export function KnowledgeDeleteCollection({ collection }: { collection: Collecti
   const [typed, setTyped] = useState("");
 
   return (
-    <section className="space-y-2 rounded-xl border border-border-subtle p-4">
-      <h3 className="text-sm font-semibold">{t("knowledge.deleteCollection.zone")}</h3>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-text-muted">
-          {t("knowledge.deleteCollection.hint", { count: collection.document_count })}
-        </p>
+    <section className="flex flex-col gap-2">
+      <h3 className="flex min-h-[26px] items-center text-sm font-semibold">
+        {t("knowledge.deleteCollection.zone")}
+      </h3>
+      <div className="flex min-h-14 items-center gap-6 rounded-lg border border-border bg-surface-raised px-4 py-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <span className="text-sm font-medium">{t("knowledge.deleteCollection.confirm")}</span>
+          <span className="text-xs leading-[1.45] text-text-subtle">
+            {t("knowledge.deleteCollection.hint", { count: collection.document_count })}
+          </span>
+        </div>
         <Button variant="danger" size="sm" onClick={() => setOpen(true)}>
-          {t("knowledge.deleteCollection.button")}
+          <Trash2 aria-hidden /> {t("knowledge.deleteCollection.button")}
         </Button>
       </div>
       <ConfirmDialog

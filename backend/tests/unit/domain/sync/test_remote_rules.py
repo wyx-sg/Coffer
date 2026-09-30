@@ -42,7 +42,7 @@ _STORED = {
     "branch": "vault",
     "interval_seconds": 900,
     "include_secret": True,
-    "credential_ref": "sync/gitlab-token",
+    "secret_ref": "sync/gitlab-token",
     "username": "oauth2",
     "enabled": False,
 }

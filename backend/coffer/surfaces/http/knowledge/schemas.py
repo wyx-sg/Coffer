@@ -38,10 +38,9 @@ class CollectionOut(BaseModel):
     #: is exactly what an agent cannot see yet.
     document_count: int = 0
     pending_count: int = 0
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
+    #: The collection directory's absolute path — what Reveal folder opens
+    #: ("Return absolute paths on reads").
+    folder_path: str = ""
 
 
 class CollectionListOut(BaseModel):

@@ -106,7 +106,9 @@ function mockApi({
     .mockImplementation(async (path: string) =>
       path === "/storage"
         ? { data: storage, error: undefined }
-        : { data: { policies: POLICIES }, error: undefined },
+        : path === "/retention/policies/{table_name}/preview"
+          ? { data: { table_name: "mcp_invocations", days: 30, total_rows: 10, rows_to_delete: 4 } }
+          : { data: { policies: POLICIES }, error: undefined },
     );
   getApiClientMock.mockReturnValue({ GET: get, POST: post, PATCH: patch } as unknown as ReturnType<
     typeof getApiClient
@@ -265,9 +267,14 @@ describe("DataSettings", () => {
     // Turning keep-forever off shortens, so it asks first.
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
-    expect(await screen.findByTestId("settings-data-save-failed")).toBeInTheDocument();
+    const failed = await screen.findByTestId("settings-data-save-failed");
+    // The refused save names what is still in place.
+    expect(failed).toHaveTextContent("MCP calls are still kept forever.");
     expect(screen.getByText("Not saved")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(screen.getByTestId("settings-data-other-retention")).toHaveTextContent(
+      "Other retention settings: coffer config",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
   });
 });

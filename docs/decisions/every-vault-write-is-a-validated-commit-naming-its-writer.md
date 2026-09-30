@@ -164,13 +164,13 @@ snapshots.
   human write: the daemon sees `HEAD` move, validates the new tree, and flags
   what fails. A person who rewrites history that has already been pushed is told
   the next round must rejoin the remote.
-- **Credentials when not carried.** With `include_credentials` off,
-  `vault/credentials/` is excluded from every commit, so there is no local
+- **Secrets when not carried.** With `include_secret` off,
+  `vault/secret/` is excluded from every commit, so there is no local
   history of ciphertext either. Keeping one in a separate ignored repository
   was considered: it would let a person roll a secret back, but it retains the
   old ciphertext of every rotated or compromised secret indefinitely — the
   thing rotation exists to retire — and a Fernet key read once would open all
-  of it. Rolling a secret back is re-entering it. With `include_credentials`
+  of it. Rolling a secret back is re-entering it. With `include_secret`
   on, ciphertext is committed because it must be pushed, and its history is the
   remote's, as today. Stripping ciphertext from commits only at push time is
   not possible without rewriting the commits, which would break `HEAD` as the

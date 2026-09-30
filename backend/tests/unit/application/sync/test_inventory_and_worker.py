@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 from coffer.application.sync.inventory import AgentPluginInventory
 from coffer.application.sync.worker import SyncWorker
@@ -39,7 +39,9 @@ class _Plugins:
         )
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent"
+)
 async def test_each_agent_is_listed_with_its_plugins_and_a_failure_lists_none() -> None:
     agents = _Agents(
         SimpleNamespace(uid="u1", name="codex", config={"type": "codex"}),

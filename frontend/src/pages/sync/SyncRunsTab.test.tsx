@@ -185,8 +185,11 @@ describe("SyncRunsTab — rolling a round back", () => {
     seed([makeRound({ id: 3, status: "pulled", snapshot: "s", applied: APPLIED })]);
     render(<SyncRunsTab enabled />);
     fireEvent.click(rollbackButtons()[0]);
+    // The error is there from the start, so the confirm already reads "Try again".
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: /^roll back round$/i }),
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: /^(roll back round|try again)$/i,
+      }),
     );
     expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent(
       /snapshot is gone/,

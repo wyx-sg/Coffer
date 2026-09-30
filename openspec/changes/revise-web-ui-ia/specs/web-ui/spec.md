@@ -162,21 +162,35 @@ headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
 - **AND** in 中文 the group headings read 智能体, 运行, 能力, 上下文 and 系统, and no zh string names an agent as "Agent"
 
 ### Requirement: Show a self-clearing offline banner
-When an authenticated request fails to connect while the app is open, a
-daemon-offline banner MUST render above the workspace, naming the recovery the
-host can offer — in a browser the `coffer daemon start` command, in the desktop
-shell a Restart control, because only one of the two can spawn a daemon. The
-banner MUST clear itself once the daemon is reachable again, with no manual page
-reload. The banner owns the failure case; the shell footer reports the daemon's
-state at all times (see "Show the daemon's state in the shell footer"), and the
-two MUST agree: the footer never reads as running while the banner is shown.
+When the daemon's status probe stops answering while the app is open, the shell
+MUST first try to reconnect without taking the page away: it retries after 1, 2,
+4 and 8 seconds, and for the first 10 seconds of failures the page stays where
+it was, dimmed and not interactive, under a reconnecting bar at the top of the
+workspace that names the attempt, when the next one runs and that nothing is
+lost, with a Retry now control. After that the page MUST make way for an
+offline state in the workspace — the sidebar stays — naming the recovery the
+host can offer: in a browser the `coffer daemon start` command, in the desktop
+shell a Start daemon control, because only one of the two can spawn a daemon;
+both with Retry, when the next check runs and when the daemon last answered.
+Both MUST clear themselves once the daemon is reachable again, with no manual
+page reload: every query is read again and a toast says the app reconnected.
+The banner owns the failure case; the shell footer reports the daemon's state
+at all times (see "Show the daemon's state in the shell footer"), and the two
+MUST agree: the footer reads reconnecting under the bar and offline beside the
+offline state, never running.
 
 #### Scenario: daemon-offline banner appears when daemon is unreachable
 - **GIVEN** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **WHEN** the user has the app open and any authenticated request to the daemon fails to connect
-- **THEN** a daemon-offline banner renders at the top of the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Restart control, because it can
-- **AND** the shell footer reads as offline for as long as the banner is shown
-- **AND** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
+- **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Start daemon control, because it can
+- **AND** the shell footer reads as offline for as long as the offline state is shown
+- **AND** the offline state disappears automatically once the daemon becomes reachable again, without a manual page reload
+
+#### Scenario: a daemon that comes back within seconds leaves the page in place
+- **GIVEN** a page open with a running daemon
+- **WHEN** the daemon stops answering and answers again within 10 seconds
+- **THEN** the page stays mounted under the reconnecting bar, dimmed and not interactive, while the retries run
+- **AND** once it answers the bar goes, every query is read again and a toast says the app reconnected
 
 ### Requirement: Organise Settings into five tabs
 Settings — the modal of "Open Settings as a modal from the sidebar footer" —
@@ -248,10 +262,10 @@ The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
 the environment rather than ignored (a header and an environment entry of the
 same name are one header, the `headers` value winning). The user confirms which
-values are secrets; secrets MUST be lifted into the encrypted credential store
+values are secrets; secrets MUST be lifted into the encrypted secret store
 with only their refs kept in the resource config, and each server MUST be
 registered before its secrets are written, so a failed registration leaves no
-orphan credential entry. The user also chooses the servers' reach there.
+orphan secret entry. The user also chooses the servers' reach there.
 
 The review step MUST show each server's name as the name it will keep: it
 cannot be changed after registration
@@ -265,7 +279,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: MCP server registration round-trip via JSON import
 - **GIVEN** the user opens the Add server dialog from the MCP servers page
 - **WHEN** they paste the standard `mcpServers` JSON holding one server and add it from the prefilled form
-- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/secrets` (register-first ordering avoids orphan secret entries when registration fails)
 - **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<name>` showing the Overview tab
 - **AND** the new server appears on the MCP servers list with health "unknown" then "healthy" within 10 seconds
 
@@ -277,7 +291,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: a pasted HTTP server's headers are reviewed for secrets
 - **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
 - **WHEN** the review step is shown and confirmed
-- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+- **THEN** the header is offered as a secret, its value is written to the secret store, and the registered server keeps only its ref (`secret_refs`), never the value in `headers`
 
 #### Scenario: the import review shows each server's fixed name
 - **GIVEN** the user pastes an `mcpServers` block holding one server keyed `My Server` and one keyed with a 30-character name
@@ -325,7 +339,7 @@ request.
 - **GIVEN** the user opens the Add server dialog
 - **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape)
 - **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/secrets`
 - **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 #### Scenario: unreadable input offers a manual type choice
@@ -410,10 +424,14 @@ Only the visible tab pages through records — Everything through all three
 logs, each other tab through its own — and the count beside every other tab
 MUST come from a read of one row (the audit and invocation answers carry their
 `total`) or of the daemon log's bounded tail, never from paging a tab that is
-not in front. A record whose route fails MUST render its error inside its own
-tab, leaving the other two working — one failing lane must not take the other
-two down with it; on Everything the failing record is named above the stream,
-which shows the other two records, and offers Retry. There MUST be no manual
+not in front. A tab count follows the time window, the server and the status,
+not the who or kind filters, and a tab with nothing in the window — or whose
+log failed — shows no number. A record whose route fails MUST render its error
+inside its own tab, leaving the other two working — one failing lane must not
+take the other two down with it; on Everything the failing record is named
+above the stream with its error and which records are still shown ("Showing
+changes and daemon records only; they are complete."), the stream shows the
+other two records, and the notice offers Retry. There MUST be no manual
 refresh control and no Pause / Resume control: switching tab or changing a
 filter refetches, and new records arrive on their own (see "Stream new Activity
 records while the list is at the top").
@@ -438,7 +456,13 @@ machine only is a setting shown on the tab it belongs to:
 - **History** — the retention of each record kind — changes, MCP calls and
   conversations — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
-  **Clear expired now** action; a saved value survives a reload.
+  **Clear expired now** action and a muted line naming `coffer config` for the
+  other retention settings; a saved value survives a reload. Shortening a
+  window (or turning Keep forever off) MUST ask first, and the confirmation
+  MUST say how many records the shorter window deletes at the next cleanup and
+  how many the table holds now and would hold after, counted by the daemon
+  without deleting anything. A refused save MUST say so above the blocks with
+  **Try again**, name the window still in place, and mark the row "Not saved".
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache
   (`cache/agent/`), which Coffer rebuilds on its own: one **Clear** action,
   behind a confirmation saying that memory is rebuilt from the agents' own
@@ -457,6 +481,12 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
 - **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
+
+#### Scenario: shortening a retention window counts what it deletes
+- **GIVEN** MCP calls kept for 30 days, some of them older than 7 days
+- **WHEN** the user sets the MCP calls window to 7 days
+- **THEN** a confirmation asks "Keep MCP calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
+- **AND** nothing is deleted or saved until the user confirms
 
 #### Scenario: clear expired now removes what retention has passed
 - **GIVEN** MCP calls kept for 7 days and calls older than that
@@ -496,8 +526,17 @@ default, merging the changes, the calls and the daemon's warnings and errors
 into one newest-first stream, then one tab per record — **Changes**, **MCP
 calls**, **Daemon log** — each a newest-first table with the columns that
 record actually has: an activity line and who made it; a call's agent, server
-and tool, duration and outcome; a log record's level, logger and message. Each
-tab pages older records on request ("Load older") by the log's cursor.
+and tool, duration and outcome; a log record's level, logger and message. Above
+the rows a line says what the tab holds: on Everything and Changes the first
+day with its errors and warnings in the window ("1 error and 1 warning in the
+last hour"), or else how many records are loaded of how many there are; on MCP
+calls the window with the calls, the failed and the denied calls in it
+("182 calls · 7 failed · 1 denied"), each counted by the invocation route; on
+the Daemon log the file the tail is read from, newest first, and whether the
+list is following it, with **Open log file**. Each tab but the Daemon log pages
+older records on request ("Load older") by the log's cursor; beside the button
+it says how many the next page holds and from before when, and how long MCP
+calls and changes are kept, linking to Settings › Data where that is set.
 
 #### Scenario: activity gives each record its own tab
 - **GIVEN** Coffer has recorded an audit entry, an MCP invocation and a daemon log record
@@ -518,16 +557,49 @@ Every Activity tab MUST filter by free text and time range plus the filters its
 own records afford — Everything: who (an agent, or a person, the command line
 or Coffer itself), server and kind; Changes: who and the kind of resource
 changed; MCP calls: agent, server and status; Daemon log: a severity floor and
-a logger. Selecting any row MUST open it in a detail drawer beside the list —
-a failed call's error, a change's configuration before and after as a diff, a
-daemon record's traceback — ending in its raw underlying record, pretty-printed
+a logger. The time range offers the last 15 minutes, hour, 24 hours and 7 days,
+everything the retention settings keep, and a custom From / To (an empty To is
+now); a tab opens on the last hour, the Daemon log on the last 24 hours, until
+the user picks one. Who and kind choose several values at once, each listed
+with how many loaded records carry it: who lists the agents, then the ones who
+are not an agent — you (the web UI, the desktop app), the command line, Coffer
+itself and sync; kind lists MCP calls, Changes with each kind of change under
+it (a resource kind, or secrets, sync, settings and CLIs for a change that
+names no resource), and daemon records. A record passes when it matches any
+chosen value.
+
+Selecting a row on Everything, Changes or MCP calls MUST open it in a detail
+drawer beside the list, answer first — a failed call's error and how its server
+has been doing (since when it has been failing, and its errors in the last 24
+hours), a change's who and what, then its configuration before and after as a
+diff, a daemon record's message and traceback — then the records written
+within five minutes of it, ending in its raw underlying record, pretty-printed
 in a monospace, scrollable block; the drawer steps to the previous or next
-record without closing.
+record without closing, and its footer holds the next step: open the resource,
+read the daemon log about a failed call's server, or copy the record. A call's
+drawer shows its metadata only, since Coffer stores no call's arguments or
+results. A change whose event the page has no sentence for — a kind of record
+added later — reads through the same facts and diff. On the Daemon log a row
+opens in place under its own line instead, with its traceback, **Copy record**
+(its raw record) and, when the record names a server and tool, **Show the MCP
+call**, which opens the MCP calls tab looking for that call.
 
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
-- **WHEN** the user clicks (or presses Enter/Space on) that row
+- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or MCP calls
 - **THEN** a detail drawer opens beside the list and renders its raw record — the full underlying JSON, pretty-printed in a monospace, scrollable block
+
+#### Scenario: a daemon log row opens in place
+- **GIVEN** the Daemon log tab with an error record carrying a traceback and naming `server=github tool=search_issues`
+- **WHEN** the user selects that row, then chooses Show the MCP call
+- **THEN** the row opens under its own line with the traceback and Copy record, and no drawer opens
+- **AND** Show the MCP call opens the MCP calls tab filtered to `github.search_issues`
+
+#### Scenario: who and kind choose several values
+- **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
+- **WHEN** the user chooses the agent and "You" under Agent, then MCP calls and Changes under Kind
+- **THEN** the list keeps the agent's call and the web UI's change and drops the others, the Kind pill reads "Calls, changes" and its list says "Everything except daemon records"
+- **AND** the tab counts do not change
 
 ### Requirement: Read each Activity tab from its record owner's route
 The Activity page MUST add no route of its own: each tab reads the read-only
@@ -680,7 +752,7 @@ Resources heading, because "resource" is the framework's storage word, not a
 word a user navigates by:
 
 - **Model providers** is filed under Agents, not Capabilities or Settings: a
-  `provider` is `{protocol, base_url, credential_ref}`, the endpoint and key an
+  `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
   agent on that agent's page (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
@@ -706,7 +778,7 @@ CLIs page"), and sits under Capabilities beside Skills.
 Agents are stored as resources of kind `agent` but are the consumers of the
 others, so the Agents entry heads the Agents group and no agent is listed on a
 Capabilities or Context page. **Secrets** is not a resource kind — it is the
-credential store every kind cites into — and sits under System (see "Manage
+secret store every kind cites into — and sits under System (see "Manage
 stored secrets on the Secrets page").
 
 #### Scenario: each listed resource kind has one sidebar entry
@@ -737,8 +809,10 @@ daemon from the web kills the very page it was asked from, and recovery then nee
 a terminal anyway, where `coffer daemon stop` already is. Restarting is not
 stopping — the desktop shell's restart waits for the replacement and hands the
 page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first").
-The About tab MUST show version, license, source, the update check of "Check
-for and install updates on Settings › About" and **Copy diagnostics** only —
+The About tab MUST show the version (with the short commit a release build was
+made from, when stamped), license, source, the data folder, the update check of "Check
+for and install updates on Settings › About" and **Copy diagnostics** only, and no
+release channel —
 which copies the version, release channel, host, daemon state and port, and
 the enabled experimental features as plain text, and never a token or a
 secret — with no language picker (the
@@ -750,7 +824,7 @@ sidebar already switches language) and no installed-resource-kind list
 - **GIVEN** the user opens the Settings tabs
 - **WHEN** each tab is fully rendered
 - **THEN** no tab exposes a "Shutdown daemon" or "Stop daemon" control
-- **AND** the About tab shows version / license / source, the update check and Copy diagnostics only — no language picker, no resource-kind list
+- **AND** the About tab shows version / license / source / data folder, the update check and Copy diagnostics only — no language picker, no resource-kind list, no release channel
 
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
@@ -813,22 +887,35 @@ only as a redirect for old bookmarks: Coffer has no embedding configuration
 The shell MUST show the daemon's state at all times in a footer at the bottom of
 the sidebar, read from the daemon's status probe (spec
 [daemon](../daemon/spec.md) "Report the state the shell shows"). The footer MUST
-name one of four states in plain words — connecting (no answer yet), running,
-stopping (the daemon reports `draining`) or offline (it cannot be reached) — and,
-while running, the port it answers on. In the desktop shell, a daemon from a
-different app version MUST read as running with a version warning. Clicking the
-state MUST open the Settings modal on its Daemon tab over the current page. The
-labelled Settings row sits just above the state (see "Open Settings as a modal
-from the sidebar footer"). On the collapsed icon rail the state MUST shrink to
-an icon whose tooltip carries the same words, and the Settings row to its gear. Showing the state
-MUST NOT make starting the daemon the user's job: every surface that can start
-one still does so without asking.
+name one of five states in plain words — connecting (no answer yet), running,
+stopping (the daemon reports `draining`), reconnecting (the first seconds after
+it stopped answering, see "Show a self-clearing offline banner") or offline (it
+cannot be reached) — with the app's version beside it, and its accessible name
+MUST carry, while running, the port it answers on. In the desktop shell, a
+daemon from a different app version MUST read as running with a version
+warning. Clicking the state MUST open the version menu above it: its head names
+the version and the address the daemon answers on (or the state, when it is not
+running) and opens the Settings modal on its Daemon tab over the current page;
+below it the theme (Light, Dark, System, applied at once), the language (each
+locale named in its own language, applied at once), Documentation (the docs
+site) and Check for updates (Settings › About, where the desktop shell checks at
+once). The labelled Settings row sits just above the state (see "Open Settings
+as a modal from the sidebar footer"). On the collapsed icon rail the state MUST
+shrink to an icon whose tooltip carries the same words, and the Settings row to
+its gear. Showing the state MUST NOT make starting the daemon the user's job:
+every surface that can start one still does so without asking.
 
 #### Scenario: the footer shows a running daemon
 - **GIVEN** a daemon answering its status probe with `status: "ready"` on port 8000
 - **WHEN** the shell renders
-- **THEN** the sidebar footer reads that the daemon is running on port 8000
-- **AND** clicking it opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
+- **THEN** the sidebar footer reads that the daemon is running, with the app's version, and its accessible name names port 8000
+- **AND** clicking it opens the version menu, whose head names `127.0.0.1:8000` and opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
+
+#### Scenario: the version menu switches theme and language at once
+- **GIVEN** the version menu open from the footer
+- **WHEN** the user picks Dark, then 简体中文
+- **THEN** the whole shell turns dark and then reads in Chinese with no reload, each locale named in its own language
+- **AND** Documentation opens the docs site and Check for updates opens Settings › About
 
 #### Scenario: the footer says connecting before the first answer
 - **GIVEN** the shell has rendered and the daemon's status probe has not answered yet
@@ -839,7 +926,7 @@ one still does so without asking.
 - **GIVEN** the daemon cannot be reached
 - **WHEN** the footer renders
 - **THEN** it reads as offline while the offline banner is shown
-- **AND** clicking it still opens Settings → Daemon, which names the host's recovery
+- **AND** its version menu still opens Settings → Daemon, which names the host's recovery
 
 #### Scenario: the footer shows a stopping daemon
 - **GIVEN** a daemon whose status probe reports `status: "draining"`
@@ -855,15 +942,17 @@ one still does so without asking.
 The Daemon tab MUST show the daemon's state and carry the controls a user needs
 for it, and nothing that stops it:
 
-- **Status** — state, version, release channel, the port it answers on, when it
-  started and the executable answering, all from the status probe.
+- **Status** — state and the address it answers on, then one line: how long
+  it has been up, its pid and how many agents carry Coffer's connection, all
+  from the status probe. The version is on About and in the shell footer.
 - **Restart** — in the desktop shell, a Restart control that runs the shell's
   restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
   in a browser, the `coffer daemon restart` command to copy, because a page the
   daemon serves cannot start the daemon that replaces it.
 - **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
   a value MUST be a whole number from 1024 to 65535 and a port no other process
-  holds, each refused in place otherwise; saving writes it to the pre-database
+  holds, each refused in place otherwise, with Save disabled until the value is
+  edited; saving writes it to the pre-database
   daemon config and the row then reads **takes effect after restart**, with
   **Restart now** in the desktop shell and the `coffer daemon restart` command
   to copy in a browser. Until the restart, the status keeps showing the port the
@@ -883,7 +972,7 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab shows the running daemon
 - **GIVEN** a running daemon
 - **WHEN** the user opens `/settings/daemon`
-- **THEN** the status card shows its state, version, channel, port, start time and executable, matching `GET /api/v1/daemon/status`
+- **THEN** the status card shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
 - **AND** the tab carries no stop or shutdown control
 
 #### Scenario: the settings daemon tab offers the host's restart
@@ -925,7 +1014,7 @@ elsewhere from any page, and from a search control in the sidebar. It MUST do
 one thing — take the user somewhere — and MUST NOT carry an action that changes
 state: no create, delete, enable, reach or run entry.
 
-It MUST list two groups, filtered together by what the user types:
+It lists two kinds of entry, filtered together by what the user types:
 
 - **Pages** — every sidebar entry and every Settings tab, by the names the
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
@@ -936,17 +1025,24 @@ It MUST list two groups, filtered together by what the user types:
   "Carry an optional editable title on the kinds that have one") — each
   opening its detail page.
 
+With an empty query it MUST show **Recent** — the last few entries chosen in
+this browser, a convenience that is safe to lose — above every page. Under a
+query it MUST show the single best hit as **Best match** (an exact name first,
+then a match at the start of a name), then the other matching pages, then the
+matching objects in one group per kind, named as the kind's sidebar entry and
+in sidebar order, each group holding a few; typing more narrows them.
+
 A page or object of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
 own. Arrow keys MUST move the selection, Enter MUST open it, and Escape MUST
 close the palette and return focus where it was.
 
-The Pages group MUST be usable at once, whatever the daemon's state. While a
-kind's objects are loading, its group MUST say so; a kind whose list fails MUST
-show a readable error in its own group and leave the other groups working; while
-the daemon cannot be reached, the palette MUST list Pages only and say that
-objects need the daemon. A query that matches nothing MUST say so rather than
-show an empty panel.
+Pages MUST be usable at once, whatever the daemon's state. While the objects
+are loading, the palette MUST say so; a kind whose list fails MUST show a
+readable error in its own group and leave the other groups working; while the
+daemon cannot be reached, the palette MUST list Pages only and say that objects
+need the daemon. A query that matches nothing MUST say so, and what the palette
+searches, rather than show an empty panel.
 
 #### Scenario: the palette jumps to a page
 - **GIVEN** the app open on any page
@@ -956,14 +1052,19 @@ show an empty panel.
 #### Scenario: the palette jumps to an object
 - **GIVEN** a registered MCP server, and a model provider whose title differs from its name
 - **WHEN** the user opens the palette and types part of the server's name, then part of the provider's name, then part of the provider's title
-- **THEN** the first query lists the server under Objects, and the second and third each list the provider
+- **THEN** the first query lists the server, and the second and third each list the provider
 - **AND** choosing the server opens `/mcp-servers/<name>`
 
 #### Scenario: the palette offers no actions
-- **GIVEN** the palette open with an empty query
-- **WHEN** every entry it can list is read
+- **GIVEN** the palette open with an empty query, and then with queries naming objects
+- **WHEN** every entry it lists is read
 - **THEN** each entry is a page or an object that navigates somewhere
 - **AND** choosing any of them sends no request that changes state
+
+#### Scenario: an empty query shows recent choices above every page
+- **GIVEN** the user chose an MCP server and then the Usage page from the palette
+- **WHEN** they open the palette again with an empty query
+- **THEN** Recent lists Usage and then the server, and every page is listed below it
 
 #### Scenario: the palette leaves out switched-off features
 - **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry and a kind with a resource on disk
@@ -974,7 +1075,7 @@ show an empty panel.
 - **GIVEN** the palette opened before the object lists have answered
 - **WHEN** the user types a page's name
 - **THEN** the page is listed and can be opened
-- **AND** the Objects group says it is loading
+- **AND** the palette says the objects are loading
 
 #### Scenario: a failing kind leaves the rest of the palette working
 - **GIVEN** the skills list route failing and the MCP servers list answering
@@ -997,7 +1098,7 @@ The Secrets page (`/secrets`, under the sidebar's System group) MUST be the one
 page in the web UI that lists and manages stored secrets. A secret is shared
 infrastructure data — one reference can be cited by MCP servers, model
 providers, channels and skills at once (spec
-[credentials](../credentials/spec.md) "Address a secret by an opaque reference") —
+[secret](../secret/spec.md) "Address a secret by an opaque reference") —
 so it gets a page of its own rather than a section of any one kind's page, and
 it is not a Settings tab, because it holds data the user manages rather than a
 preference. A secret field inside a resource's own dialog stays there: a secret
@@ -1007,23 +1108,23 @@ The page MUST carry:
 
 - **List** — every secret the store reports, by its reference, with whether the
   store holds it, so a reference cited but missing reads as missing (spec
-  [credentials](../credentials/spec.md) "List every cited reference with its presence").
+  [secret](../secret/spec.md) "List every cited reference with its presence").
 - **Used by** — for each secret, what cites it, by kind and current name, each
   opening that thing's page; a secret nothing cites is marked unused.
 - **Add and replace** — store a new secret, or replace the value of one that
   exists, without the value ever being shown back.
 - **Reveal** — show one value behind an explicit action, which is an audited
-  read (spec [credentials](../credentials/spec.md) "Audit every read of a secret value").
+  read (spec [secret](../secret/spec.md) "Audit every read of a secret value").
 - **Delete** — refused while the secret is cited: the control MUST say what still
   uses it, naming each citer as the delete refusal does (spec
-  [credentials](../credentials/spec.md) "Refuse to delete a credential still in use"), and
+  [secret](../secret/spec.md) "Refuse to delete a secret still in use"), and
   the row MUST stay.
 - **Migration assistant** — the entry point that moves plaintext secret files into
   the store, shown once that assistant ships.
 
 This requirement fixes the page's place and its parts. What the store enumerates
 beyond cited references, how each operation behaves, and the migration
-assistant's steps are the credentials capability's, specified with it.
+assistant's steps are the secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
@@ -1041,42 +1142,53 @@ assistant's steps are the credentials capability's, specified with it.
 - **GIVEN** a stored secret listed on the Secrets page
 - **WHEN** the page renders, and then the user chooses Reveal on that row
 - **THEN** no value is shown until Reveal is chosen
-- **AND** the reveal records a `credential_read` audit entry carrying the reference only
+- **AND** the reveal records a `secret_read` audit entry carrying the reference only
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
-A sidebar entry MUST carry a dot while the attention signal of the kind or tool
-behind it is raised, so something that needs the user is seen from wherever they
-are. It MUST be a dot and not a count — what is waiting is one situation to look
-at — rendered by one shared component, with an accessible name that says the
-entry needs attention, and it MUST stay visible on the collapsed icon rail. What
-raises a signal and what clears it belongs to the capability that owns the kind;
-today the one signal is Sync's (spec
-[vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is"),
-and a kind that declares a signal is marked by this same dot with no change to
-the sidebar. An entry whose kind declares no signal MUST NOT carry a dot, and a
-signal that has not loaded, or whose read failed, MUST leave no dot rather than
-an error in the sidebar.
+A sidebar entry MUST carry a count badge while the kind or tool behind it has
+things that need the user, so they are seen from wherever the user is. The
+sidebar speaks only through these badges, and only for things that need the
+user — failures, drift, a held vault, a required CLI that is missing, too old or
+not logged in; an informational count (how many servers, how many documents
+waiting in a knowledge collection's inbox) MUST NOT become a badge. The badge
+shows how many things need the user, toned danger while any of them is a
+failure and warning otherwise, rendered by one shared component with an
+accessible name that says the entry needs attention. On the collapsed icon rail
+it MUST shrink to a dot of the same tone on the icon, and the row's tooltip
+carries the count ("MCP servers · 1 failing").
 
-#### Scenario: an entry whose kind needs attention carries a dot
-- **GIVEN** a sync round held for confirmation
+What raises a signal and what clears it belongs to the capability that owns the
+kind: the entries of Agents, MCP servers, Skills and Channels count the
+non-informational items the cross-kind attention list reports for their kind
+(spec [resource-framework](../resource-framework/spec.md) "Report what needs a
+person across every kind"); Sync keeps its own signal, one situation cleared by
+visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
+human where the user already is"); CLIs counts the required commands that need
+the user. Knowledge and Memory carry no badge. An entry whose kind declares no
+signal MUST NOT carry a badge, and a signal that has not loaded, or whose read
+failed, MUST leave no badge rather than an error in the sidebar.
+
+#### Scenario: an entry whose kind needs attention carries a count badge
+- **GIVEN** a sync round held for confirmation, and two MCP servers the attention list reports, one of them failing
 - **WHEN** the user is on any page other than Sync
-- **THEN** the Sync entry carries the attention dot, with an accessible name saying it needs attention
+- **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a danger badge of 2, each with an accessible name saying it needs attention
 - **AND** no other entry carries one
 
 #### Scenario: the attention dot stays on the collapsed rail
-- **GIVEN** the Sync entry carrying the attention dot
+- **GIVEN** the MCP servers entry carrying a badge for one failing server
 - **WHEN** the sidebar is collapsed to its icon rail
-- **THEN** the Sync icon still carries the dot
+- **THEN** the MCP servers icon carries a dot of the same tone, and its tooltip reads "MCP servers · 1 failing"
 
-#### Scenario: an entry without a signal never carries a dot
-- **GIVEN** every attention signal the kinds declare is raised
+#### Scenario: an entry without a signal never carries a badge
+- **GIVEN** every attention signal the kinds declare is raised, and documents waiting in a knowledge collection's inbox
 - **WHEN** the sidebar renders
-- **THEN** only the entries whose kinds declare a signal carry a dot
+- **THEN** only the entries whose kinds declare a signal carry a badge, and Knowledge carries none
+- **AND** an informational item of the attention list raises no badge
 
-#### Scenario: an unreadable signal leaves no dot
+#### Scenario: an unreadable signal leaves no badge
 - **GIVEN** the route behind a kind's attention signal failing, or not yet answered
 - **WHEN** the sidebar renders
-- **THEN** that entry carries no dot and the sidebar shows no error
+- **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
@@ -1467,16 +1579,24 @@ where the item is dealt with. An attention source that failed MUST be named
 above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
-tile per area whose backend exists and whose feature is switched on — Agents,
-Model providers, MCP servers, Skills, Channels, Knowledge, Memory and Sync —
-each with a status word drawn from that area's
-attention items, a count from its own list and a one-line summary, opening the
-area's page; an area with no backend yet has no tile. Each tile loads and fails
+tile per sidebar area whose feature is switched on — Agents, MCP servers,
+Skills, Knowledge, Memory, Model providers, Channels, Sync, Custom tools, CLIs,
+Secrets and Usage, in that order (Conversations show in Recent activity) —
+each with a status word drawn from that area's attention items (Secrets, which
+has no attention source, words its own list: a secret missing on this machine,
+one nothing uses; Usage shows its period and no health), a count from its own
+list and a one-line summary, opening the area's page; an area with no backend
+has no tile. Each tile loads and fails
 on its own: a failed tile says so with Retry and a link to its page while the
 rest of the page keeps working. **Recent activity** lists the last few changes
 with a link to Activity. With nothing needing the user the list is a calm "all
-good" card rather than an empty space, and with no agent registered the page
-opens on connecting the agents Coffer found.
+good" card rather than an empty space. With no agent registered the page is
+the first-run panel alone: the supported agents with their config folders and
+whether each was found on this machine, the found ones ticked, and **Review
+and connect** opening the connection review for the ticked ones (every file
+change shown before Coffer writes it); with none found it says so and its first
+step is **Scan again**; both offer adding an agent by hand, and the first step
+for what agents share follows.
 
 #### Scenario: overview lists what needs the user, most severe first
 - **GIVEN** an MCP server whose last test failed a day ago, an agent not connected since an hour ago and a warning from sync
@@ -1492,6 +1612,7 @@ opens on connecting the agents Coffer found.
 - **GIVEN** a vault with no agent registered
 - **WHEN** the user opens Overview
 - **THEN** the page offers to connect the supported agents, naming which were found on this machine, followed by the first step for what they share
+- **AND** with no supported agent found it says none was found and offers Scan again in place of connecting
 
 #### Scenario: one area failing to load leaves the rest of overview working
 - **GIVEN** the knowledge read fails while every other read answers
@@ -1501,7 +1622,7 @@ opens on connecting the agents Coffer found.
 #### Scenario: overview hides an area whose backend or feature is off
 - **GIVEN** an area owned by a registered experimental feature that is switched off
 - **WHEN** the user opens Overview
-- **THEN** there is no tile for that area, and no tile for Custom tools or CLIs
+- **THEN** there is no tile for that area, while Custom tools, CLIs, Secrets and Usage each have one
 
 #### Scenario: a resolved problem leaves overview on its own
 - **GIVEN** Overview open with one item in Needs you

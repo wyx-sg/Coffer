@@ -65,7 +65,7 @@ class SyncRunModel(Base):
     join_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     #: ``commit`` is reserved in SQL, so the column says what it holds instead.
     commit_sha: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: Already redacted of the push credential by the time it arrives here.
+    #: Already redacted of the push secret by the time it arrives here.
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -80,4 +80,8 @@ class SyncRunModel(Base):
 # this one within the file-size budget; importing it here registers them on
 # ``Base.metadata`` wherever the core models are loaded (``create_all``,
 # Alembic's env.py).
+# The ignored attention items (migration 0134), registered the same way.
+from coffer.infrastructure.persistence import (  # noqa: E402, F401
+    attention_ignore_repo as _attention_ignore_repo,
+)
 from coffer.infrastructure.persistence import usage_models as _usage_models  # noqa: E402, F401

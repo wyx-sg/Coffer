@@ -173,7 +173,7 @@ paths:
       tags:
       - providers
     post:
-      description: Create a provider profile (422 when the credential source is invalid).
+      description: Create a provider profile (422 when the secret source is invalid).
       operationId: create_provider_api_v1_providers_post
       parameters:
       - in: header
@@ -1047,6 +1047,26 @@ paths:
           $ref: '#/components/schemas/GroupBy'
           default: model
           description: model | agent | day
+      - description: Only requests this agent type sent
+        in: query
+        name: agent_type
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this agent type sent
+          title: Agent Type
+      - description: Only requests this connection served
+        in: query
+        name: connection_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this connection served
+          title: Connection Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -1303,6 +1323,26 @@ paths:
           $ref: '#/components/schemas/GroupBy'
           default: model
           description: model | agent | day
+      - description: Only requests this agent type sent
+        in: query
+        name: agent_type
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this agent type sent
+          title: Agent Type
+      - description: Only requests this connection served
+        in: query
+        name: connection_uid
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only requests this connection served
+          title: Connection Uid
       - in: header
         name: x-coffer-token
         required: false
@@ -1495,11 +1535,11 @@ components:
           - type: string
           - type: 'null'
           title: Base Url
-        credential_ref:
+        secret_ref:
           anyOf:
           - type: string
           - type: 'null'
-          title: Credential Ref
+          title: Secret Ref
         secret_value:
           anyOf:
           - type: string
@@ -1560,14 +1600,14 @@ components:
           - type: string
           - type: 'null'
           title: Base Url
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         provider:
           title: Provider
           type: string
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         secret_value:
           anyOf:
           - type: string
@@ -1829,7 +1869,7 @@ components:
     ProviderCreate:
       description: |-
         Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
-        supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
+        supply EXACTLY one of ``secret_value`` / ``secret_ref``; an ``ollama``
         connection has no key, so supply neither. WHICH agents the connection
         projects into is not set here: the new connection starts on the wire's own
         default scope and is re-targeted through the framework's scope surface
@@ -1841,11 +1881,6 @@ components:
           minLength: 1
           title: Base Url
           type: string
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         description:
           anyOf:
           - type: string
@@ -1869,6 +1904,11 @@ components:
           type: string
         protocol:
           $ref: '#/components/schemas/Protocol'
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         secret_value:
           anyOf:
           - maxLength: 8192
@@ -1984,7 +2024,7 @@ components:
       description: |-
         An LLM connection as returned by the API (no secret).
 
-        ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
+        ``secret_ref`` is ``None`` for ``ollama`` connections (no key).
         ``compatible_agents`` is the CONFIGURED reach — the agent types this
         connection's per-agent scope (ADR per-agent-resource-scope) covers among the
         agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
@@ -2021,11 +2061,6 @@ components:
           format: date-time
           title: Created At
           type: string
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         description:
           anyOf:
           - type: string
@@ -2058,6 +2093,11 @@ components:
           type: string
         protocol:
           $ref: '#/components/schemas/Protocol'
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         title:
           anyOf:
           - type: string
@@ -2079,7 +2119,7 @@ components:
       - title
       - protocol
       - base_url
-      - credential_ref
+      - secret_ref
       - compatible_agents
       - models
       - is_active
@@ -2095,7 +2135,7 @@ components:
       type: object
     ProviderPatch:
       description: |-
-        Partial update. ``credential_ref`` is immutable (it is the vault address
+        Partial update. ``secret_ref`` is immutable (it is the vault address
         the connection owns); ``protocol`` is not — the probe that guessed the wire
         can be wrong, so it is corrected in place rather than by re-entering the
         connection, key and all.
@@ -2390,17 +2430,17 @@ components:
           - type: string
           - type: 'null'
           title: Base Url
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         model:
           title: Model
           type: string
         provider:
           title: Provider
           type: string
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         secret_value:
           anyOf:
           - type: string
@@ -2653,6 +2693,11 @@ components:
           - type: string
           - type: 'null'
           title: Agent Type
+        agent_types:
+          items:
+            type: string
+          title: Agent Types
+          type: array
         agent_uid:
           anyOf:
           - type: string
@@ -2691,6 +2736,7 @@ components:
       - agent_uid
       - agent_type
       - day
+      - agent_types
       - totals
       title: UsageSummaryRowOut
       type: object

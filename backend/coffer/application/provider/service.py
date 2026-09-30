@@ -2,14 +2,14 @@
 provider profiles (spec provider-switching).
 
 A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
-from ``ResourceService``). This service adds the credential-vault handling, the
+from ``ResourceService``). This service adds the secret-vault handling, the
 single-active-per-agent invariant, the native-config projection (the "switch",
 chosen by the agents a connection's per-agent scope reaches — not its wire), and
 and the key decryption the model proxy's state is built from — no route
 returns a key; the proxy injects it (ADR api-key-providers-are-reached-through-
 a-separate-local-model-proxy).
 
-The credential store is synchronous (short-lived SQLite connections); every
+The secret store is synchronous (short-lived SQLite connections); every
 call is wrapped in ``asyncio.to_thread`` so the busy-wait never blocks the loop
 that holds the write lock (mirrors ``mcp_entry_service``).
 """
@@ -48,12 +48,12 @@ from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
-from coffer.domain.credential_errors import CredentialMissing
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
-from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
+from coffer.domain.provider.errors import NoActiveProvider, ProviderSecretSourceInvalid
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
+from coffer.domain.secret_errors import SecretMissing
 
 KIND = "provider"
 
@@ -65,7 +65,7 @@ _Uids = list[str]
 _Rows = list[Resource]
 
 
-class _CredentialStore(_Protocol):
+class _SecretStore(_Protocol):
     def get(self, ref: str) -> str | None: ...
     def set(self, ref: str, value: str) -> None: ...
     def delete(self, ref: str) -> None: ...
@@ -80,7 +80,7 @@ class ProviderService:
         self,
         *,
         resources: ResourceService,
-        credentials: _CredentialStore,
+        secrets: _SecretStore,
         # Handed straight to the projector, so it is annotated with the
         # projector's own port rather than a second copy of it here.
         config_store: ProjectionConfigStore,
@@ -92,7 +92,7 @@ class ProviderService:
         proxy_root: Callable[[], str] | None = None,
     ) -> None:
         self._resources = resources
-        self._credentials = credentials
+        self._secrets = secrets
         self._agents = agents
         self._audit = audit
         # The agents' provider projection facets: what each agent's native
@@ -131,7 +131,7 @@ class ProviderService:
         ADDRESS, and deriving it from the connection's name made the name a key
         — renaming then had to move the secret, in an order chosen so a live
         agent never saw a missing one. Nothing reads the ref's shape; ownership
-        is decided by citation (``release_orphaned_credentials``), not by the
+        is decided by citation (``release_orphaned_secrets``), not by the
         ref matching the name. Refs already minted under the old shape keep
         working untouched: they are just strings this config happens to hold.
         """
@@ -161,7 +161,7 @@ class ProviderService:
         protocol: Protocol,
         base_url: str,
         secret_value: str | None = None,
-        credential_ref: str | None = None,
+        secret_ref: str | None = None,
         models: _CuratedModels | None = None,
         description: str | None = None,
         local_runtime: LocalRuntime | None = None,
@@ -171,7 +171,7 @@ class ProviderService:
         detection found at a loopback endpoint) may carry a key or none.
         Otherwise, for anthropic/openai/unknown supply EXACTLY one
         of ``secret_value`` (stored to the vault at a freshly minted opaque ref
-        — see :meth:`_mint_ref`) or ``credential_ref`` (reuse an existing vault
+        — see :meth:`_mint_ref`) or ``secret_ref`` (reuse an existing vault
         entry). An ``ollama``
         connection has no key — supply neither. WHICH agents the connection
         projects into is its per-agent scope, started off by the kind (dormant
@@ -184,23 +184,23 @@ class ProviderService:
         ref: str | None
         minted = False
         if protocol is Protocol.OLLAMA:
-            if secret_value is not None or credential_ref is not None:
-                raise ProviderCredentialSourceInvalid()
+            if secret_value is not None or secret_ref is not None:
+                raise ProviderSecretSourceInvalid()
             ref = None
-        elif local_runtime is not None and secret_value is None and credential_ref is None:
+        elif local_runtime is not None and secret_value is None and secret_ref is None:
             ref = None
         else:
-            if (secret_value is None) == (credential_ref is None):
-                raise ProviderCredentialSourceInvalid()
-            ref = credential_ref
+            if (secret_value is None) == (secret_ref is None):
+                raise ProviderSecretSourceInvalid()
+            ref = secret_ref
             if secret_value is not None:
                 ref = self._mint_ref()
-                await asyncio.to_thread(self._credentials.set, ref, secret_value)
+                await asyncio.to_thread(self._secrets.set, ref, secret_value)
                 minted = True
         config = ProviderConfig(
             protocol=protocol,
             base_url=base_url,
-            credential_ref=ref,
+            secret_ref=ref,
             models=list(models or []),
             is_active=False,
             local_runtime=local_runtime,
@@ -213,7 +213,7 @@ class ProviderService:
             # Don't orphan the just-minted secret if registration fails
             # (duplicate name, etc.).
             if minted and ref is not None:
-                await asyncio.to_thread(self._credentials.delete, ref)
+                await asyncio.to_thread(self._secrets.delete, ref)
             raise
 
     async def list(self) -> list[Resource]:
@@ -268,9 +268,9 @@ class ProviderService:
     async def delete(self, uid: str, *, actor: str = "api") -> None:
         """Delete a profile.
 
-        The credential goes with it when nothing else cites it — but that is
+        The secret goes with it when nothing else cites it — but that is
         ``ResourceService.delete``'s job, not this one's: the kind declares a
-        ``credential_ref_extractor``, so the generic path already releases the
+        ``secret_ref_extractor``, so the generic path already releases the
         cited ref by citation count. This used to repeat that check here by
         asking whether the ref matched ``provider/<name>/key``, which only ever
         worked for refs whose shape spelled the name out.
@@ -318,13 +318,13 @@ class ProviderService:
     async def _key_of(self, cfg: ProviderConfig, *, label: str, uid: str) -> str:
         """The decrypted key of one connection, for the model proxy's state —
         only once its base URL is an approved destination (``secret_gate``)."""
-        ref = cfg.credential_ref
+        ref = cfg.secret_ref
         if ref is None:
             raise NoActiveProvider(label)
         await require_key(self, uid, label, cfg)
-        value = await asyncio.to_thread(self._credentials.get, ref)
+        value = await asyncio.to_thread(self._secrets.get, ref)
         if value is None:
-            raise CredentialMissing(ref)
+            raise SecretMissing(ref)
         return value
 
     async def set_internal_default(self, uid: str, *, actor: str = "api") -> Resource:

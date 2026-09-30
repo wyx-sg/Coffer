@@ -114,7 +114,7 @@ re-copied every binary on every start after a reinstall of the same release.
 Written beside `runs.db` before `alembic upgrade head` changes it, with its
 `-wal` and `-shm` companions when they exist. The three newest are kept. A
 start against an already-current schema copies nothing, and an in-memory
-database copies nothing. `runs.db` is the one Alembic lineage (head 0117); its
+database copies nothing. `runs.db` is the one Alembic lineage (head 0136); its
 path is `~/.coffer/runs.db` unless `COFFER_DB_URL` names another.
 
 ## The pre-vault backup set

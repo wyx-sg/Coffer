@@ -51,7 +51,7 @@ Some rules to know:
 - **`name` is a label**, but some kinds fix it once agents can see it (an MCP server's name is part of its tool names). Change a name through Coffer when it refuses a rename.
 - **Unknown fields are kept.** A field this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
 - **`${HOME}`** stands for your home directory, so the same file works on every machine.
-- **Never edit `secret/`.** The files are ciphertext; use `coffer credentials set`.
+- **Never edit `secret/`.** The files are ciphertext; use `coffer secret set`.
 
 Knowledge documents and skill folders are ordinary files: edit, add, move and delete them as you would any Markdown.
 

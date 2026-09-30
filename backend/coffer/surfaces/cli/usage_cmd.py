@@ -29,6 +29,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(
     help="Model usage through Coffer's proxy, and subscription quota",
@@ -88,6 +89,12 @@ def summary(
     start: str | None = typer.Option(None, "--from", help="First day of a custom range"),
     end: str | None = typer.Option(None, "--to", help="Last day of a custom range, inclusive"),
     group_by: str = typer.Option("model", "--by", help="model | agent | day"),
+    agent_type: str | None = typer.Option(
+        None, "--agent", help="Only requests this agent type sent (claude_code | codex)"
+    ),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Only requests this provider (by name) served"
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
     output_csv: bool = typer.Option(False, "--csv", help="CSV output"),
 ) -> None:
@@ -96,8 +103,12 @@ def summary(
         return
     verbose = _verbose(ctx)
     params = _range_params(range_name, start, end, group_by)
+    if agent_type is not None:
+        params["agent_type"] = agent_type
     c, _info = _cli_client.client_or_exit()
     with c:
+        if provider is not None:
+            params["connection_uid"] = resolve_uid(c, "provider", provider, verbose=verbose)
         r = c.get("/usage/export.csv" if output_csv else "/usage/summary", params=params)
         _cli_client.check(r, verbose=verbose)
     if output_csv:

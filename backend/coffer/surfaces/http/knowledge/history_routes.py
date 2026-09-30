@@ -1,6 +1,10 @@
 """``/api/v1/knowledge/history`` and ``/api/v1/knowledge/changes`` — a
 collection's history (spec knowledge "Keep every document's history and undo a
-pass as a whole", "Follow knowledge changes across collections").
+pass as a whole", "Follow knowledge changes across collections", "Restore a
+deleted collection or document from Recent changes").
+
+Also a collection's description (``PUT /collections/{uid}/description``): a
+person's recorded write like a restore, so it is served by the same service.
 
 Every accepted write to a collection is one commit naming its writer; these
 routes read that history back, restore one version of a document, and undo a
@@ -22,7 +26,9 @@ from coffer.surfaces.http.knowledge.history_schemas import (
     ChangeDetailOut,
     ChangeOut,
     ChangesOut,
+    CollectionDescribeIn,
     DocumentHistoryOut,
+    VersionBodyOut,
     VersionDiffOut,
     VersionRestoreIn,
     change_out,
@@ -30,7 +36,7 @@ from coffer.surfaces.http.knowledge.history_schemas import (
     history_out,
     waiting_out,
 )
-from coffer.surfaces.http.knowledge.schemas import FileOut
+from coffer.surfaces.http.knowledge.schemas import CollectionOut, FileOut
 
 router = APIRouter(
     prefix="/api/v1/knowledge",
@@ -68,6 +74,17 @@ async def version_diff(
         added=diff.added,
         removed=diff.removed,
     )
+
+
+@router.get("/history/version", response_model=VersionBodyOut)
+async def version_body(
+    path: str = Query(min_length=1),
+    version: str = Query(min_length=4),
+    svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
+) -> VersionBodyOut:
+    """The document's body as one version left it."""
+    body = await svc.version_body(path, version)
+    return VersionBodyOut(path=path, version=version, body=body)
 
 
 @router.post("/history/restore", response_model=FileOut)
@@ -116,3 +133,28 @@ async def undo_pass(
     """Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
     the document a later change would lose; nothing is written then."""
     return change_out(await svc.undo(version, actor=actor))
+
+
+@router.post("/changes/{version}/restore", response_model=ChangeOut)
+async def restore_deleted(
+    version: str,
+    svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> ChangeOut:
+    """Put back what a delete removed — a document, or a whole collection with
+    its documents, README and waiting items — as one new change naming the user.
+    409 ``KNOWLEDGE_RESTORE_CONFLICT`` / ``KNOWLEDGE_COLLECTION_EXISTS`` when
+    the path or the name is taken again; nothing is written then."""
+    return change_out(await svc.restore_deleted(version, actor=actor))
+
+
+@router.put("/collections/{uid}/description", response_model=CollectionOut)
+async def describe_collection(
+    uid: str,
+    body: CollectionDescribeIn,
+    svc: KnowledgeHistoryService = Depends(get_history_service),  # noqa: B008
+    actor: str = Depends(_actor),
+) -> CollectionOut:
+    """Rewrite the opening paragraph of the collection's README."""
+    entry = await svc.describe(uid, body.description, actor=actor)
+    return CollectionOut.model_validate(entry, from_attributes=True)

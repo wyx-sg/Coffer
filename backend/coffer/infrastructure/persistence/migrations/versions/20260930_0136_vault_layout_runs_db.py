@@ -2,10 +2,10 @@
 
 The vault layout (ADR storage-is-five-classes-by-nature) moves everything
 that is not history out of the database — resources become files; reach,
-custom tools' reach overrides and retention local JSON; credentials ciphertext
+custom tools' reach overrides and retention local JSON; secret ciphertext
 files; the MCP capability switches, channel pairings and engine settings vault
 documents; health and skill deliveries ``derived.db``. The pre-layout hooks the migration runner
-calls between 0116 and this revision have already written those files from
+calls between 0135 and this revision have already written those files from
 these tables; this revision is the database's half of the move:
 
 1. The four history tables that pointed at ``resources.id`` —
@@ -30,7 +30,7 @@ NULL where the audit trail cannot be mapped back and without the channel rows
 for the migration tests, not the data.
 
 Revision ID: 0136
-Revises: 0116
+Revises: 0135
 Create Date: 2026-09-30
 """
 
@@ -41,7 +41,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0136"
-down_revision: str | None = "0116"
+down_revision: str | None = "0135"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -53,7 +53,7 @@ _DROPPED = (
     "skill_source_status",
     "skill_agent_bindings",
     "mcp_server_health",
-    "credentials",
+    "secrets",
     "secret_bindings",
     "secret_approvals",
     "secret_boundary_settings",
@@ -188,7 +188,7 @@ def upgrade() -> None:
     op.execute("DELETE FROM sync_runs")
 
 
-# --- downgrade: the 0116 shape, empty ------------------------------------------
+# --- downgrade: the 0135 shape, empty ------------------------------------------
 
 _RECREATE = (
     """CREATE TABLE resources (
@@ -203,8 +203,9 @@ _RECREATE = (
     "CREATE UNIQUE INDEX ux_provider_single_transcribe_default ON resources (kind) WHERE "
     "kind = 'provider' AND json_extract(config_json, '$.transcribe_default') = 1",
     "CREATE UNIQUE INDEX uq_resources_uid ON resources (uid)",
-    """CREATE TABLE credentials (ref VARCHAR NOT NULL, ciphertext BLOB NOT NULL,
-    created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL, PRIMARY KEY (ref))""",
+    """CREATE TABLE secrets (ref VARCHAR NOT NULL, ciphertext BLOB NOT NULL,
+    created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL, last_used_at VARCHAR,
+    PRIMARY KEY (ref))""",
     """CREATE TABLE secret_bindings (ref VARCHAR NOT NULL, destination_kind VARCHAR NOT NULL,
     destination_uid VARCHAR NOT NULL, slot VARCHAR NOT NULL, target_fingerprint VARCHAR NOT NULL,
     approved_at VARCHAR NOT NULL, approval_id VARCHAR,
@@ -261,8 +262,8 @@ _RECREATE = (
     """CREATE TABLE mcp_tool_reach (resource_uid VARCHAR NOT NULL, tool VARCHAR NOT NULL,
     agents_json TEXT NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (resource_uid, tool))""",
     """CREATE TABLE sync_remotes (id INTEGER NOT NULL, url VARCHAR NOT NULL,
-    branch VARCHAR DEFAULT 'main' NOT NULL, credential_ref VARCHAR,
-    include_credentials BOOLEAN DEFAULT 0 NOT NULL,
+    branch VARCHAR DEFAULT 'main' NOT NULL, secret_ref VARCHAR,
+    include_secrets BOOLEAN DEFAULT 0 NOT NULL,
     interval_seconds INTEGER DEFAULT '3600' NOT NULL,
     enabled BOOLEAN DEFAULT 1 NOT NULL, worktree_path VARCHAR DEFAULT '~/.coffer/sync' NOT NULL,
     last_run_at TIMESTAMP, last_status VARCHAR, last_error VARCHAR, last_commit VARCHAR,

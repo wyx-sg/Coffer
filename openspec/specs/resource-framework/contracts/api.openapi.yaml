@@ -45,6 +45,98 @@ paths:
       summary: Get Attention
       tags:
       - reconcile
+  /api/v1/attention/ignored/{key}:
+    delete:
+      description: Stop ignoring ``key``; a key that is not ignored is a no-op.
+      operationId: unignore_attention_item_api_v1_attention_ignored__key__delete
+      parameters:
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Unignore Attention Item
+      tags:
+      - reconcile
+    put:
+      description: |-
+        Ignore the informational item ``key`` on this machine: it leaves
+        ``items`` and the counts and is listed under ``ignored``. 409
+        ``ATTENTION_NOT_IGNORABLE`` when nothing informational is listed under it.
+      operationId: ignore_attention_item_api_v1_attention_ignored__key__put
+      parameters:
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Ignore Attention Item
+      tags:
+      - reconcile
   /api/v1/audit:
     get:
       operationId: list_audit_api_v1_audit_get
@@ -863,6 +955,55 @@ paths:
       summary: Update Policy
       tags:
       - retention
+  /api/v1/retention/policies/{table_name}/preview:
+    get:
+      description: How many rows a window of ``days`` would delete, before the user confirms it.
+      operationId: preview_policy_api_v1_retention_policies__table_name__preview_get
+      parameters:
+      - in: path
+        name: table_name
+        required: true
+        schema:
+          title: Table Name
+          type: string
+      - in: query
+        name: days
+        required: true
+        schema:
+          maximum: 3650
+          minimum: 1
+          title: Days
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Policy
+      tags:
+      - retention
   /api/v1/retention/prune:
     post:
       operationId: prune_now_api_v1_retention_prune_post
@@ -975,6 +1116,13 @@ components:
       properties:
         action:
           $ref: '#/components/schemas/AttentionActionOut'
+        ignorable:
+          title: Ignorable
+          type: boolean
+        key:
+          description: '`<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes.'
+          title: Key
+          type: string
         kind:
           title: Kind
           type: string
@@ -1006,6 +1154,8 @@ components:
           - type: 'null'
           title: Uid
       required:
+      - key
+      - ignorable
       - kind
       - uid
       - title
@@ -1028,6 +1178,11 @@ components:
             $ref: '#/components/schemas/AttentionSourceErrorOut'
           title: Errors
           type: array
+        ignored:
+          items:
+            $ref: '#/components/schemas/AttentionItemOut'
+          title: Ignored
+          type: array
         items:
           items:
             $ref: '#/components/schemas/AttentionItemOut'
@@ -1037,6 +1192,7 @@ components:
       - items
       - errors
       - counts_by_kind
+      - ignored
       title: AttentionOut
       type: object
     AttentionSourceErrorOut:
@@ -1733,6 +1889,28 @@ components:
           title: Retention Days
       title: RetentionPolicyUpdate
       type: object
+    RetentionPreviewOut:
+      description: What shortening one policy's window would delete, counted and not run.
+      properties:
+        days:
+          title: Days
+          type: integer
+        rows_to_delete:
+          title: Rows To Delete
+          type: integer
+        table_name:
+          title: Table Name
+          type: string
+        total_rows:
+          title: Total Rows
+          type: integer
+      required:
+      - table_name
+      - days
+      - total_rows
+      - rows_to_delete
+      title: RetentionPreviewOut
+      type: object
     ScopeIn:
       additionalProperties: false
       description: |-
@@ -1797,14 +1975,14 @@ components:
           anyOf:
           - type: integer
           - type: 'null'
-          description: 'For a run that works through several items one pass at a time (knowledge''s Curate now): the passes finished so far. Null for a single pass.'
+          description: 'For a run that works through several items one pass at a time (knowledge''s Curate now, memory''s Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.'
           title: Done
         kind:
           description: 'The kind whose pass this is: `memory` or `knowledge`.'
           title: Kind
           type: string
         name:
-          description: The partition or collection being rewritten.
+          description: The uid of the partition or collection being rewritten, or `update` for a memory Update memory action as a whole.
           title: Name
           type: string
         started_at:

@@ -23,10 +23,11 @@ import contextlib
 import dataclasses
 
 from coffer.application.audit_service import AuditService
+from coffer.application.knowledge import collection_writes
 from coffer.application.knowledge.recording import recording, settle
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.knowledge.entry import KnowledgeFile
+from coffer.domain.knowledge.entry import CollectionEntry, KnowledgeFile
 from coffer.domain.knowledge.errors import (
     KnowledgeFileNotFound,
     KnowledgeHistoryUnavailable,
@@ -51,6 +52,7 @@ from coffer.domain.pagination import decode_cursor, encode_cursor
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 #: The cursor tag of the feed (spec resource-framework "Page growing lists by
@@ -124,6 +126,17 @@ class KnowledgeHistoryService:
             path=relpath, status=doc.status, diff=text, added=doc.added, removed=doc.removed
         )
 
+    async def version_body(self, relpath: str, version: str) -> str:
+        """The document's body as ``version`` left it — what Compare with
+        current sets against the document as it is now."""
+        paths.require_document(relpath)
+        history = await asyncio.to_thread(self._require)
+        change = await self._change(history, version)
+        raw = await asyncio.to_thread(history.show, change.version, relpath)
+        if raw is None:
+            raise KnowledgeVersionNotFound(version, relpath)
+        return split_frontmatter(fs.decode(raw))[1]
+
     async def restore(self, relpath: str, version: str, *, actor: str) -> KnowledgeFile:
         """Put ``relpath`` back as it was at ``version``, as a new commit."""
         row = await self._knowledge.require_collection(relpath)
@@ -152,6 +165,23 @@ class KnowledgeHistoryService:
         )
         await self._knowledge.catalogue_changed()
         return await asyncio.to_thread(fs.read_file, relpath)
+
+    async def restore_deleted(self, version: str, *, actor: str) -> Change:
+        """Put back what a delete removed — a document, or a whole collection."""
+        history = await self._settled()
+        change = await self._change(history, version)
+        made = await collection_writes.restore_deleted(
+            self._knowledge, history, self._audit, change, actor=actor
+        )
+        if made is None:
+            raise KnowledgeVersionNotFound(version)
+        return await self._change(history, made)
+
+    async def describe(self, uid: str, description: str, *, actor: str) -> CollectionEntry:
+        """Rewrite a collection's description — its README's first paragraph."""
+        return await collection_writes.describe_collection(
+            self._knowledge, self._audit, uid, description, actor=actor
+        )
 
     # --- the feed -----------------------------------------------------------
 

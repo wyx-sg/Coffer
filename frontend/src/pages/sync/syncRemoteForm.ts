@@ -8,7 +8,7 @@
 export interface FormState {
   url: string;
   branch: string;
-  credentialRef: string;
+  secretRef: string;
   includeSecret: boolean;
   intervalSeconds: number;
 }
@@ -55,7 +55,7 @@ export function isDirty(form: FormState, saved: FormState): boolean {
   return (
     form.url.trim() !== saved.url ||
     form.branch.trim() !== saved.branch ||
-    form.credentialRef.trim() !== saved.credentialRef ||
+    form.secretRef.trim() !== saved.secretRef ||
     form.includeSecret !== saved.includeSecret ||
     form.intervalSeconds !== saved.intervalSeconds
   );

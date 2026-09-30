@@ -300,7 +300,7 @@ class ScriptedCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         # ``timeout`` is recorded, not just tolerated: a bound the operator set
@@ -320,7 +320,7 @@ class ExplodingCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         raise AssertionError("no model may be called without an internal connection")

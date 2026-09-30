@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Keep the master key in exactly one place", spec credentials "Resolve the master key file-first and create it only for an empty store", spec credentials "Verify the destination before relocating the master key", spec credentials "Expose the master key's location on every surface", spec credentials "Refuse to start when the master key is missing", PR #51, PR #62
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Keep the master key in exactly one place", spec secret "Resolve the master key file-first and create it only for an empty store", spec secret "Verify the destination before relocating the master key", spec secret "Expose the master key's location on every surface", spec secret "Refuse to start when the master key is missing", PR #51, PR #62
 
 ## Context
 
@@ -64,7 +64,7 @@ Measured on 2026-09-30 (macOS 15.7.7):
 
 Two things constrain where the key and the secrets go. The vault converges
 through a user-owned git remote and carries ciphertext as files under
-`vault/credentials/` when the user opts in
+`vault/secret/` when the user opts in
 ([Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md),
 [Credentials Cross Machines Only as Ciphertext](credentials-across-machines.md)).
 And platform differences live behind one port, with only macOS shipping
@@ -100,7 +100,7 @@ signed app's access control.
   machine). A backup becomes one entry per secret instead of one key, and the
   store's enumeration, audit and reference counting would be rebuilt on
   keychain queries. With one key in an access group no other binary can read
-  (Option C), a copied `vault/credentials/` is already useless.
+  (Option C), a copied `vault/secret/` is already useless.
 - **Why it loses.** It gives up vault sync and the portable store for no gain
   against the threat.
 
@@ -152,7 +152,7 @@ signed app's access control.
   backup or another machine exists, so the product offers the export once after
   migration and on the Security page.
 - **Secrets are unchanged.** Every secret stays Fernet ciphertext in the
-  store — as files in `vault/credentials/` once the storage migration lands —
+  store — as files in `vault/secret/` once the storage migration lands —
   so sync of ciphertext, the fresher-encryption rule and the reference model
   are untouched.
 - **Behind the platform port.** The key's store is a port operation, not a
@@ -336,8 +336,12 @@ built (OpenSpec change `add-secret-boundary`, design D6):
   is, as built, that development arrangement rather than a separate backend.
 - **As built, the backup is written by the daemon, not the app.** The desktop
   app runs the presence check and signs a grant; the daemon writes the backup
-  into the folder the person picked (`coffer-master-key-<fingerprint>.key`,
-  mode `0600`, never over an existing file) and returns only the path and the
-  fingerprint. Import stays `coffer sync key import` and the Sync page's
-  import, open to every surface, since whoever holds the file holds the key;
-  moving import into the desktop app is not built.
+  into the folder the person picked (`coffer-master-key.cfk`, mode `0600`,
+  never over an existing file) and returns only the path and the fingerprint.
+  Since 2026-09-30 the file holds the key encrypted under a key scrypt derives
+  from a passphrase the person types in the app, so a stray copy opens nothing
+  on its own (OpenSpec change `add-master-key-import-to-security`). Import is
+  `coffer sync key import` and Settings › Security's **Import a master key**,
+  open to every surface, since whoever holds the file and its passphrase holds
+  the key; it shows the file's key fingerprint beside this machine's before
+  replacing anything.

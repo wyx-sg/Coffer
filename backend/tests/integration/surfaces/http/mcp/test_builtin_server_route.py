@@ -21,7 +21,7 @@ from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.builtin_server_wiring import wire_builtin_server
@@ -72,7 +72,7 @@ async def test_the_builtin_coffer_server_is_described_read_only(
     async def _connected() -> list[str]:
         return ["agent-1"]
 
-    monkeypatch.setattr(daemon_routes, "_PORT", 8123)
+    monkeypatch.setattr(daemon_port, "_PORT", 8123)
     set_active_token("tok")
     app = FastAPI()
     err_handlers.register(app)

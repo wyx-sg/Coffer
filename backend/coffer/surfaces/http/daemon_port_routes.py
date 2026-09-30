@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.port_setting import pin_port
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.daemon_schemas import DaemonPortIn, DaemonPortOut
 
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"], dependencies=[Depen
 
 def _port_out() -> DaemonPortOut:
     configured = daemon_config.effective_port()
-    bound = daemon_routes.get_port()
+    bound = daemon_port.get_port()
     # Pending only when a port was saved and this daemon is not on it. With
     # nothing saved there is nothing to apply: a daemon the test suite started
     # in its port range answers elsewhere than 8000 without anything pending.
@@ -42,7 +42,7 @@ async def get_daemon_port() -> DaemonPortOut:
 @router.put("/port", response_model=DaemonPortOut)
 async def put_daemon_port(body: DaemonPortIn) -> DaemonPortOut:
     """Save the port of the next start; refused in place when it cannot be bound."""
-    bound = daemon_routes.get_port()
+    bound = daemon_port.get_port()
     # psutil's process walk and the probe bind are blocking.
     await asyncio.to_thread(pin_port, body.port, bound_port=bound)
     return await asyncio.to_thread(_port_out)

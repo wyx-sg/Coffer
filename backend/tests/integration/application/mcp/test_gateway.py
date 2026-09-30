@@ -11,16 +11,15 @@ from unittest.mock import AsyncMock
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
@@ -32,6 +31,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
@@ -106,7 +106,7 @@ async def _setup(
 
     sup_kwargs: dict = {
         "resource_service": resource_svc,
-        "credential_resolver": CredentialResolver(KeyringAdapter()),
+        "secret_resolver": SecretResolver(KeyringAdapter()),
     }
     if supervisor_retry_delays is not None:
         sup_kwargs["retry_delays"] = supervisor_retry_delays

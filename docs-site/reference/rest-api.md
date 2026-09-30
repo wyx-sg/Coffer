@@ -101,20 +101,20 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 269 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 277 operations in 27 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
 | [daemon](#daemon) | 13 |
 | [resources](#resources) | 9 |
 | [audit](#audit) | 1 |
-| [retention](#retention) | 3 |
+| [retention](#retention) | 4 |
 | [upkeep](#upkeep) | 1 |
-| [reconcile](#reconcile) | 3 |
+| [reconcile](#reconcile) | 5 |
 | [events](#events) | 1 |
-| [credentials](#credentials) | 15 |
+| [secrets](#secrets) | 15 |
 | [settings](#settings) | 4 |
-| [sync](#sync) | 26 |
+| [sync](#sync) | 27 |
 | [vault](#vault) | 6 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 38 |
@@ -123,8 +123,8 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | [clis](#clis) | 4 |
 | [mcp](#mcp) | 15 |
 | [custom-tools](#custom-tools) | 14 |
-| [knowledge](#knowledge) | 15 |
-| [memory](#memory) | 16 |
+| [knowledge](#knowledge) | 18 |
+| [memory](#memory) | 17 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -177,6 +177,7 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/retention/policies` | List Policies |
 | `PATCH` | `/api/v1/retention/policies/{table_name}` | Update Policy |
+| `GET` | `/api/v1/retention/policies/{table_name}/preview` | How many rows a window of ``days`` would delete, before the user confirms it. |
 | `POST` | `/api/v1/retention/prune` | Prune Now |
 
 ### upkeep
@@ -192,6 +193,8 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/reconcile/plan` | Every difference a pass would find now, and what it would do about it. |
 | `POST` | `/api/v1/reconcile/apply` | Apply the named differences now. |
 | `GET` | `/api/v1/attention` | What needs a person now, across every kind whose feature is on — each item with one action, the route its own page calls. |
+| `PUT` | `/api/v1/attention/ignored/{key}` | Ignore the informational item ``key`` on this machine: it leaves ``items`` and the counts and is listed under ``ignored``. |
+| `DELETE` | `/api/v1/attention/ignored/{key}` | Stop ignoring ``key``; a key that is not ignored is a no-op. |
 
 ### events
 
@@ -199,32 +202,32 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/events` | Every change the daemon announces, as invalidation hints, from now on (or from after `Last-Event-ID`, replayed from a bounded buffer). |
 
-### credentials
+### secrets
 
 | Method | Path | Summary |
 | --- | --- | --- |
-| `GET` | `/api/v1/credentials/approvals` | Approvals, newest first — brought up to the configuration first, so a change saved a moment ago is already on the list. |
-| `GET` | `/api/v1/credentials/approvals/{approval_id}` | Get Approval |
-| `POST` | `/api/v1/credentials/approvals/{approval_id}/approve` | Apply a pending approval, against a presence grant for exactly this id. |
-| `POST` | `/api/v1/credentials/approvals/{approval_id}/reject` | Refuse a pending approval. |
-| `GET` | `/api/v1/credentials/presence/status` | Presence Status |
-| `POST` | `/api/v1/credentials/presence/challenge` | A one-time nonce for one operation on one target; the shell signs it. |
-| `POST` | `/api/v1/credentials/presence/reveal` | A secret's value, for the present human the desktop app just checked. |
-| `POST` | `/api/v1/credentials/presence/master-key-export` | Write the master key backup into the directory the person picked. |
-| `POST` | `/api/v1/credentials/secrets/resolve` | Standalone secrets for one `coffer run` child — never a resource's secret. |
-| `POST` | `/api/v1/credentials/scan` | Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store. |
-| `POST` | `/api/v1/credentials/import` | Move plaintext findings into the store, replacing each with its reference. |
-| `GET` | `/api/v1/credentials` | Every stored ref and every ref a resource cites, with who references it. |
-| `POST` | `/api/v1/credentials` | Store `value` under `ref` in the encrypted credential store. |
-| `GET` | `/api/v1/credentials/{ref}/exists` | Report whether a secret is stored under `ref`. |
-| `DELETE` | `/api/v1/credentials/{ref}` | Remove `ref` from the credential store. |
+| `GET` | `/api/v1/secrets/approvals` | Approvals, newest first — brought up to the configuration first, so a change saved a moment ago is already on the list. |
+| `GET` | `/api/v1/secrets/approvals/{approval_id}` | Get Approval |
+| `POST` | `/api/v1/secrets/approvals/{approval_id}/approve` | Apply a pending approval, against a presence grant for exactly this id. |
+| `POST` | `/api/v1/secrets/approvals/{approval_id}/reject` | Refuse a pending approval. |
+| `GET` | `/api/v1/secrets/presence/status` | Presence Status |
+| `POST` | `/api/v1/secrets/presence/challenge` | A one-time nonce for one operation on one target; the shell signs it. |
+| `POST` | `/api/v1/secrets/presence/reveal` | A secret's value, for the present human the desktop app just checked. |
+| `POST` | `/api/v1/secrets/presence/master-key-export` | Write the passphrase-protected master key backup into the picked directory. |
+| `POST` | `/api/v1/secrets/resolve` | Standalone secrets for one `coffer run` child — never a resource's secret. |
+| `POST` | `/api/v1/secrets/scan` | Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store. |
+| `POST` | `/api/v1/secrets/import` | Move plaintext findings into the store, replacing each with its reference. |
+| `GET` | `/api/v1/secrets` | Every stored ref and every ref a resource cites, with who references it. |
+| `POST` | `/api/v1/secrets` | Store `value` under `ref` in the encrypted secret store. |
+| `GET` | `/api/v1/secrets/{ref}/exists` | Report whether a secret is stored under `ref`. |
+| `DELETE` | `/api/v1/secrets/{ref}` | Remove `ref` from the secret store. |
 
 ### settings
 
 | Method | Path | Summary |
 | --- | --- | --- |
-| `GET` | `/api/v1/settings/credentials` | Report where the master key currently lives. |
-| `PUT` | `/api/v1/settings/credentials` | Relocate the master key. |
+| `GET` | `/api/v1/settings/secrets` | Report where the master key currently lives. |
+| `PUT` | `/api/v1/settings/secrets` | Relocate the master key. |
 | `GET` | `/api/v1/settings/secret-boundary` | Whether a secret waits for approval before it goes somewhere new. |
 | `PUT` | `/api/v1/settings/secret-boundary` | Turn the approval requirement on (at once) or off (after approval). |
 
@@ -257,6 +260,7 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | `PATCH` | `/api/v1/sync/machines/self` | Rename this machine. |
 | `DELETE` | `/api/v1/sync/machines/{machine_id}` | Retire another machine: its descriptor goes, in a commit of yours. |
 | `GET` | `/api/v1/sync/key/fingerprint` | Key Fingerprint |
+| `POST` | `/api/v1/sync/key/import/preview` | Whose key a file holds and whether it is this machine's, changing nothing. |
 | `POST` | `/api/v1/sync/key/import` | Import Key |
 
 ### vault
@@ -427,10 +431,13 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | `POST` | `/api/v1/knowledge/upload` | Upload |
 | `GET` | `/api/v1/knowledge/history` | A document's versions, newest first, each with its writer and time. |
 | `GET` | `/api/v1/knowledge/history/diff` | What one version did to the document. |
+| `GET` | `/api/v1/knowledge/history/version` | The document's body as one version left it. |
 | `POST` | `/api/v1/knowledge/history/restore` | Put one version of a document back, as a new change naming the user. |
 | `GET` | `/api/v1/knowledge/changes` | Recent changes across every collection (or one, by its name), newest first, with the items still waiting in each inbox. |
 | `GET` | `/api/v1/knowledge/changes/{version}` | One change in full: every document it touched, with its diff. |
 | `POST` | `/api/v1/knowledge/changes/{version}/undo` | Undo a curation pass as a whole. |
+| `POST` | `/api/v1/knowledge/changes/{version}/restore` | Put back what a delete removed — a document, or a whole collection with its documents, README and waiting items — as one new change naming the user. |
+| `PUT` | `/api/v1/knowledge/collections/{uid}/description` | Rewrite the opening paragraph of the collection's README. |
 
 ### memory
 
@@ -452,6 +459,7 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | `DELETE` | `/api/v1/memory/triggers/{trigger_id}` | Delete Trigger |
 | `GET` | `/api/v1/memory/deliveries` | Deliveries |
 | `GET` | `/api/v1/memory/partitions/{uid}/delivered` | Delivered |
+| `GET` | `/api/v1/memory/reading` | Reading |
 
 ### agent-providers
 
@@ -504,7 +512,7 @@ The daemon mounts 269 operations in 27 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/providers/price-list` | The price list in use and its refresh. |
 | `PUT` | `/api/v1/providers/price-list` | Turn the daily refresh on or off on this machine. |
 | `GET` | `/api/v1/providers` | List all provider profiles. |
-| `POST` | `/api/v1/providers` | Create a provider profile (422 when the credential source is invalid). |
+| `POST` | `/api/v1/providers` | Create a provider profile (422 when the secret source is invalid). |
 | `POST` | `/api/v1/providers/detect-local` | Which local model runtime answers where (spec provider-switching "Detect a local model runtime without changing it"). |
 | `GET` | `/api/v1/providers/{uid}` | Get one provider profile (404 if absent). |
 | `PATCH` | `/api/v1/providers/{uid}` | Partially update a provider profile. |

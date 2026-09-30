@@ -47,7 +47,7 @@ class Problem:
 
     kind: str
     message: str
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     since: str | None = None
 
 

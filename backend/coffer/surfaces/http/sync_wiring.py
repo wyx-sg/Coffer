@@ -38,10 +38,10 @@ from coffer.application.sync.token import BoundaryToken
 from coffer.application.sync.worker import SyncWorker
 from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.config import write_machine_name
 from coffer.infrastructure.persistence.sync_runs_repo import SyncRunRepo
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.infrastructure.sync.cloud_folder import synchroniser_of
 from coffer.infrastructure.sync.identity import machine_name, resolve_identity
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
@@ -101,11 +101,13 @@ def wire_sync(
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
     master_key: MasterKeyManager,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     platform: PlatformPort,
 ) -> SyncWiring:
     identity = resolve_identity()
-    key = ResolvedMasterKey(master_key)
+    # The running secret store is told an imported key, so a secret saved
+    # after the import is sealed under it.
+    key = ResolvedMasterKey(master_key, on_install=secret_store.use_key)
     writer = vault_writer()
     state = JsonRoundState()
     # A join's differing files stay as they are here, never settled, until
@@ -132,7 +134,7 @@ def wire_sync(
         engine=RoundEngine(deps),
         remotes=JsonRemoteStore(),
         history=SyncRunRepo(sm),
-        token=BoundaryToken(boundary_resolver(credential_store)),
+        token=BoundaryToken(boundary_resolver(secret_store)),
         machine=machine,
         master_key=key,
         secrets=SecretFiles(key),
@@ -152,7 +154,7 @@ def start_sync(
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
     master_key: MasterKeyManager,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     platform: PlatformPort,
 ) -> SyncWiring:
     """Wire sync and publish it: the routes' service, and the vault-write lock
@@ -162,7 +164,7 @@ def start_sync(
         audit=audit,
         sm=sm,
         master_key=master_key,
-        credential_store=credential_store,
+        secret_store=secret_store,
         platform=platform,
     )
     set_sync_service(wiring.service)
@@ -196,9 +198,9 @@ def sync_remote_secret_source() -> Callable[
 
     async def current() -> list[tuple[SecretDestination, Mapping[str, str], str]]:
         remote = await asyncio.to_thread(JsonRemoteStore().get)
-        if remote is None or not remote.credential_ref:
+        if remote is None or not remote.secret_ref:
             return []
-        return [(sync_remote_destination(remote.url), {"token": remote.credential_ref}, "user")]
+        return [(sync_remote_destination(remote.url), {"token": remote.secret_ref}, "user")]
 
     return current
 

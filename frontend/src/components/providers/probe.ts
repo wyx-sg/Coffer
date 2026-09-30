@@ -5,11 +5,11 @@ import type { Provider } from "@/lib/api/providers";
 import type { ProviderProbe } from "@/lib/hooks/useModelIntrospection";
 
 export function probeOf(
-  provider: Pick<Provider, "protocol" | "base_url" | "credential_ref">,
+  provider: Pick<Provider, "protocol" | "base_url" | "secret_ref">,
 ): ProviderProbe {
   return {
     provider: provider.protocol,
     base_url: provider.base_url,
-    credential_ref: provider.credential_ref,
+    secret_ref: provider.secret_ref,
   };
 }

@@ -41,8 +41,6 @@ from coffer.surfaces.http.chat.attachment_routes import router as chat_attachmen
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
-from coffer.surfaces.http.credential_boundary_routes import router as credential_boundary_router
-from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
 from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
@@ -71,6 +69,8 @@ from coffer.surfaces.http.reconcile_routes import attention_router
 from coffer.surfaces.http.reconcile_routes import router as reconcile_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.secret_boundary_routes import router as secret_boundary_router
+from coffer.surfaces.http.secret_routes import router as secret_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_copy_routes import router as skill_copy_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
@@ -99,8 +99,8 @@ def include_all_routers(app: FastAPI) -> None:
         event_router,  # the daemon-wide change feed (cross-kind)
         # Before the ref routes: their `{ref:path}` would otherwise match
         # `/approvals/...` for a DELETE nobody meant.
-        credential_boundary_router,
-        credential_router,
+        secret_boundary_router,
+        secret_router,
         settings_router,
         sync_router,  # spec vault-sync
         vault_router,  # spec vault-storage

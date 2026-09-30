@@ -1,5 +1,4 @@
 // src/components/activity/ActivityHeader.tsx — Activity's title with its live mark and ⋯ menu, and the four tabs with their counts.
-import { ScrollText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -13,7 +12,9 @@ import { ActivityMenu } from "./ActivityMenu";
 
 function CountBadge({ count }: { count: TabCount }) {
   const { i18n, t } = useTranslation();
-  if (count.value === undefined) return null;
+  // A tab with nothing in the window, or whose log failed, shows no number
+  // (design 6.1.06, 6.1.10).
+  if (!count.value) return null;
   const n = count.value.toLocaleString(i18n.language);
   return (
     // How many records exist differs run to run; screenshot tests mask it and
@@ -40,9 +41,7 @@ export function ActivityHeader({ tab, onTab, counts, live, specs, keep }: Props)
   return (
     <>
       <PageHeader
-        icon={ScrollText}
         title={t("activity.title")}
-        subtitle={t("activity.subtitle")}
         badges={
           <Tooltip>
             <TooltipTrigger asChild>

@@ -92,7 +92,7 @@ class McpTestStdioIn(BaseModel):
             args=self.args,
             env=self.env,
             cwd=self.cwd,
-            credential_refs=self.secret_refs,
+            secret_refs=self.secret_refs,
         )
 
 
@@ -107,7 +107,7 @@ class McpTestHttpIn(BaseModel):
     )
 
     def to_transport(self) -> HttpTransport:
-        return HttpTransport(url=self.url, headers=self.headers, credential_refs=self.secret_refs)
+        return HttpTransport(url=self.url, headers=self.headers, secret_refs=self.secret_refs)
 
 
 class McpConfigTestIn(BaseModel):

@@ -18,7 +18,7 @@ import dataclasses
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from coffer.domain.errors import CredentialMissing
+from coffer.domain.errors import SecretMissing
 from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote
 from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 
@@ -71,7 +71,7 @@ class RemoteMixin:
         await self._locked(apply)
         # A token not stored here yet is reported by the first round, with the
         # ref it names.
-        with contextlib.suppress(CredentialMissing):
+        with contextlib.suppress(SecretMissing):
             await self._token.token_for(remote)
         return remote
 
@@ -105,17 +105,15 @@ class RemoteMixin:
         return done
 
     async def check_remote(
-        self, url: str, branch: str, credential_ref: str | None, username: str = DEFAULT_USERNAME
+        self, url: str, branch: str, secret_ref: str | None, username: str = DEFAULT_USERNAME
     ) -> RemoteCheck:
         """What the remote at ``url`` holds on ``branch``, without keeping it."""
         from coffer.application.sync.views import RemoteCheck
 
-        candidate = SyncRemote(
-            url=url, branch=branch, credential_ref=credential_ref, username=username
-        )
+        candidate = SyncRemote(url=url, branch=branch, secret_ref=secret_ref, username=username)
         try:
             token = await self._token.token_for(candidate)
-        except CredentialMissing as exc:
+        except SecretMissing as exc:
             return RemoteCheck("auth_failed", detail=str(exc))
         try:
             tip = await asyncio.to_thread(

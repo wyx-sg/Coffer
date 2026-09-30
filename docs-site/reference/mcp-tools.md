@@ -269,7 +269,7 @@ already do both with what it has:
 | To find | Do this |
 | --- | --- |
 | A memory note | Grep the memory root the handshake and the session-start delivery name (every partition's notes are `<root>/<partition>/notes/*.md`), then read the file. `coffer path memory [<partition>]` prints the root or one partition's folder. |
-| What changed in Coffer (registrations, deletions, credential reads, config writes) | `coffer log audit --since 1h` |
+| What changed in Coffer (registrations, deletions, secret reads, config writes) | `coffer log audit --since 1h` |
 | Which MCP calls failed | `coffer log mcp --status error --since 1h`, or `--server <name>` for one server |
 | What the daemon logged, including tracebacks | `coffer log daemon --errors --since 1h`, or grep the file `coffer path logs` names |
 

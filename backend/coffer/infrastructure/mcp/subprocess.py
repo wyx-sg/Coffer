@@ -1,7 +1,7 @@
 """Stdio upstream connection — async wrapper around an mcp ClientSession.
 
 Spawns the upstream as a child subprocess with the env we hand it (which
-will already contain materialised credentials from CredentialResolver).
+will already contain materialised secrets from SecretResolver).
 The lifecycle is:
     create -> spawn_and_initialize -> [request*] -> close
 """
@@ -131,11 +131,11 @@ class StdioUpstreamConnection:
         """
         # Build the child env from the SDK's minimal safe allowlist
         # (PATH/HOME/SHELL/… — what a server legitimately needs to run) plus
-        # ONLY this server's static env and materialised credentials. We must
+        # ONLY this server's static env and materialised secrets. We must
         # NOT inherit the daemon's full ``os.environ``: an untrusted upstream
         # server would otherwise be able to read every secret/token the daemon
         # was started with (AWS keys, other services' tokens, COFFER_* config),
-        # defeating the keychain-scoped credential isolation. Passing an explicit
+        # defeating the keychain-scoped secret isolation. Passing an explicit
         # ``env`` also bypasses stdio_client's own filter, so our additions
         # (including secrets) survive intact.
         env = {**get_default_environment(), **self._transport.env, **self._env_overlay}
@@ -234,7 +234,7 @@ class StdioUpstreamConnection:
                 write_coffer_line(errlog, self._launch_error_line(exc, env))
             await self._cleanup()
             # Don't interpolate the raw exception into the message —
-            # an upstream/transport error can embed credential-bearing argv or
+            # an upstream/transport error can embed secret-bearing argv or
             # env detail. Surface only the exception type; the original is
             # chained via ``from exc`` for a debugger but never stringified
             # into logs or API responses.
@@ -250,7 +250,7 @@ class StdioUpstreamConnection:
 
     def _command_line(self) -> str:
         """The launcher and its static args. Secrets never appear here: they
-        reach the child only through ``credential_refs`` in its environment."""
+        reach the child only through ``secret_refs`` in its environment."""
         return " ".join([self._transport.command, *self._transport.args])
 
     def _note_stop(self, errlog: TextIO) -> None:

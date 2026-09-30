@@ -108,7 +108,7 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
 
 
 class _FailingReleaseStore:
-    """Holds the credential but refuses to delete it — recording each attempt,
+    """Holds the secret but refuses to delete it — recording each attempt,
     so a delete path that never tries the release cannot pass as "the release
     failed and the delete still completed"."""
 
@@ -154,13 +154,13 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
                 name="vault",
                 display_name="Vault",
                 config_schema=_SecretConfig,
-                credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+                secret_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
                 on_delete=on_delete,
             ),
         },
         repo=make_resource_repo(),
         audit=audit,
-        credentials=creds,
+        secrets=creds,
     )
     try:
         created = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "cli")
@@ -168,7 +168,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
         before = await audit.query(resource=created)
         assert len(before) >= 2
 
-        # The credential release fails, yet the completed deletion is not an error.
+        # The secret release fails, yet the completed deletion is not an error.
         assert creds.delete_calls == []
         await svc.delete(created.uid, actor="cli")
         assert creds.delete_calls == ["only-mine"]  # the release really was attempted

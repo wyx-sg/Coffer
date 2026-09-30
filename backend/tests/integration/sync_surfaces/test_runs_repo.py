@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 from coffer.domain.sync.rounds import AppliedChange, PulledCommit, RoundRecord, RoundStatus
 from coffer.infrastructure.persistence.base import Base

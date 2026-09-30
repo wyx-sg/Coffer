@@ -142,6 +142,20 @@ class VersionDiffOut(DocumentDiffOut):
     version: str
 
 
+class VersionBodyOut(BaseModel):
+    """A document's body as one version left it, for Compare with current."""
+
+    path: str
+    version: str
+    body: str
+
+
+class CollectionDescribeIn(BaseModel):
+    """A collection's new description: its README's opening paragraph."""
+
+    description: str = Field(min_length=1, max_length=2000)
+
+
 class VersionRestoreIn(BaseModel):
     """Put one version of a document back, as a new change."""
 

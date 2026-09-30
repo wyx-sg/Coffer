@@ -47,7 +47,7 @@ export function useConnectionModelOptions(
       {
         provider: connection.protocol,
         base_url: connection.base_url,
-        credential_ref: connection.credential_ref,
+        secret_ref: connection.secret_ref,
       },
       {
         onSuccess: (r) => {
@@ -60,7 +60,7 @@ export function useConnectionModelOptions(
     };
     // listModels identity is stable across renders; re-fetch only on connection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connection?.name, connection?.base_url, connection?.credential_ref, restricted, modality]);
+  }, [connection?.name, connection?.base_url, connection?.secret_ref, restricted, modality]);
 
   const models = restricted ? modelIds(curated, modality) : fetched;
   return current && !models.includes(current) ? [current, ...models] : models;

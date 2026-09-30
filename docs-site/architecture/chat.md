@@ -259,7 +259,7 @@ Each adapter then materialises attachments in its own shape, in this order:
 
 ## Channels as a second surface
 
-A channel is a [resource](/architecture/resource-framework) of kind `channel`: a Telegram bot or SeaTalk app bound to the vault, with credential references, a default agent, an inverted agent scope (the agents this channel may drive), and `runs_on`, the machine whose daemon runs its adapter. The channel layer reaches the turn platform through exactly two seams, `ChatService` for conversations and `TurnOrchestrator.enqueue_message` for turns, in-process, just as the web page does over HTTP.
+A channel is a [resource](/architecture/resource-framework) of kind `channel`: a Telegram bot or SeaTalk app bound to the vault, with secret references, a default agent, an inverted agent scope (the agents this channel may drive), and `runs_on`, the machine whose daemon runs its adapter. The channel layer reaches the turn platform through exactly two seams, `ChatService` for conversations and `TurnOrchestrator.enqueue_message` for turns, in-process, just as the web page does over HTTP.
 
 ### Thin adapters over a shared core
 

@@ -2,7 +2,8 @@
 //
 // "Needs you" first (one row per problem across every area), then a Health
 // tile per area, then the last few notable events. Before any agent is
-// registered the first two give way to the first-run panel. The page follows
+// registered the page is the first-run panel alone (no live mark, nothing to
+// have happened yet: Overview boards 1.3.03, 1.3.07). The page follows
 // the daemon's event stream: an attention change refetches the list, a
 // resource change the lists the tiles read (useDaemonEvents), so rows clear
 // themselves as problems resolve.
@@ -32,7 +33,7 @@ export function OverviewPage() {
         icon={LayoutDashboard}
         title={t("overview.title")}
         subtitle={t("overview.subtitle")}
-        actions={<LiveMark live={live} checkedAt={attention.dataUpdatedAt} />}
+        actions={firstRun ? null : <LiveMark live={live} checkedAt={attention.dataUpdatedAt} />}
       />
       {firstRun ? (
         <FirstRun />
@@ -40,9 +41,9 @@ export function OverviewPage() {
         <>
           <NeedsYouList />
           <HealthTiles />
+          <RecentActivity />
         </>
       )}
-      <RecentActivity />
     </div>
   );
 }

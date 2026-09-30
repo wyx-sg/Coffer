@@ -92,7 +92,9 @@ def _vault_file(path: str) -> Path:
     return vault_root() / path
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a resource document is identity, description and config")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resource document is identity, description and config"
+)
 async def test_a_resource_is_a_file_named_after_it_with_its_uid_inside() -> None:
     svc, _repo = _service(_kinds())
     created = await svc.register("widget", "blue", {"colour": "blue"}, actor="user")
@@ -138,7 +140,9 @@ async def test_rename_moves_the_file_in_one_commit() -> None:
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="reach stays on the machine it was set on")
-@pytest.mark.acceptance(spec="vault-sync", scenario="a resource document is identity, description and config")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resource document is identity, description and config"
+)
 async def test_reach_is_local_and_never_committed() -> None:
     svc, _repo = _service(_kinds())
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
@@ -229,7 +233,9 @@ async def test_a_config_the_schema_refuses_stays_out_of_head() -> None:
     assert (await svc.get(r.uid)).config["colour"] == "blue"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="machine-local files never reach the working tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="machine-local files never reach the working tree"
+)
 async def test_local_and_derived_kinds_are_filed_outside_git() -> None:
     svc, _repo = _service(_kinds())
     g = await svc.register("gadget", "g", {"colour": "blue"}, actor="user")
@@ -246,7 +252,10 @@ async def test_local_and_derived_kinds_are_filed_outside_git() -> None:
     assert not (derived_root() / "resources" / "gizmo" / "z.json").exists()
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a path under the home directory applies on a machine with a different home")
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a path under the home directory applies on a machine with a different home",
+)
 async def test_a_path_under_home_is_written_portably_and_read_back_expanded() -> None:
     svc, _repo = _service(_kinds())
     home = os.environ["HOME"]

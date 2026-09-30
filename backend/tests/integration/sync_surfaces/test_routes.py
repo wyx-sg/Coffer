@@ -3,9 +3,9 @@ board reads or acts through."""
 
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 from .conftest import client_for
 from .harness import Box
@@ -39,7 +39,9 @@ def test_status_run_and_history(pair: tuple[Box, Box]) -> None:
         assert missing.json()["error"]["code"] == "SYNC_ROUND_NOT_FOUND"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="keeping this machine's version continues the round")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="keeping this machine's version continues the round"
+)
 def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
     mac, mini = pair
     _conflict(mac, mini)
@@ -66,7 +68,9 @@ def test_a_stop_is_answered_and_continued(pair: tuple[Box, Box]) -> None:
     assert mini.disk(DOC) == b"Mini rotates on Fridays.\n"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an oversized deletion is held for confirmation")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
+)
 def test_a_hold_is_confirmed_through_the_route(pair: tuple[Box, Box]) -> None:
     mac, _mini = pair
     paths = [f"knowledge/bulk/n{i:02}.md" for i in range(22)]
@@ -82,7 +86,9 @@ def test_a_hold_is_confirmed_through_the_route(pair: tuple[Box, Box]) -> None:
         assert c.post("/sync/hold/confirm").json()["status"] == "pushed"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 @pytest.mark.acceptance(spec="vault-sync", scenario="sync stays off until a remote is configured")
 def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Path) -> None:
     mac, _mini = pair
@@ -108,15 +114,29 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
         assert preview["kind"] in ("returning", "new")
         assert c.get("/sync/join-choices").json() == {"files": []}
         assert c.get("/sync/key/fingerprint").json() == {"fingerprint": "abc123abc123"}
+        preview = c.post("/sync/key/import/preview", json={"material": "ok-key"}).json()
+        assert preview == {
+            "fingerprint": "f11e" * 3,
+            "current_fingerprint": "abc123abc123",
+            "same": False,
+            "protected": False,
+        }
         key = c.post("/sync/key/import", json={"material": "ok-key"}).json()
-        assert key == {"locked_refs": []}
+        assert key == {
+            "fingerprint": "abc123abc123",
+            "replaced": False,
+            "readable": 0,
+            "locked_refs": [],
+        }
 
         assert c.delete("/sync/remote").json() == {"cleared": True}
         no_remote = c.post("/sync/run")
         assert no_remote.json()["error"]["code"] == "SYNC_NO_REMOTE"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a round that applied nothing has nothing to roll back")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round that applied nothing has nothing to roll back"
+)
 @pytest.mark.acceptance(spec="vault-sync", scenario="a round can be rolled back")
 def test_a_round_is_rolled_back_through_the_route(pair: tuple[Box, Box]) -> None:
     mac, mini = pair

@@ -4,7 +4,7 @@ schema: spec-driven
 # conventions are in .agents/openspec.md; the invariants in docs-site/architecture/principles.md.
 context: |
   Coffer is a local-first AI agent vault: a developer's skills, knowledge,
-  MCP servers, credentials and agent configuration live on their own machines,
+  MCP servers, secrets and agent configuration live on their own machines,
   and coding agents (Claude Code, Codex) read and contribute through one local
   daemon. Single user, one vault across the user's machines, MIT-licensed.
 

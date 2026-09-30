@@ -16,7 +16,7 @@ import tomllib
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -152,8 +152,7 @@ def test_an_import_plan_merges_one_server_two_agents_share_and_writes_nothing(
     assert _files(home) == files_before
     assert _resources(client) == []
     assert (
-        client.get("/api/v1/credentials/mcp/codex/fetcher/API_TOKEN/exists").json()["present"]
-        is False
+        client.get("/api/v1/secrets/mcp/codex/fetcher/API_TOKEN/exists").json()["present"] is False
     )
     assert _audit_count(home) == audits_before
 
@@ -213,11 +212,11 @@ def test_applying_an_import_adds_merges_and_removes_duplicates_as_planned(
     assert added["name"] == "fetcher"
     by_name = {r["name"]: r for r in _resources(client)}
     assert by_name["fetcher"]["scope"]["agents"] == [cx, cc]
-    assert by_name["fetcher"]["config"]["transport"]["credential_refs"] == {
+    assert by_name["fetcher"]["config"]["transport"]["secret_refs"] == {
         "API_TOKEN": "mcp/codex/fetcher/API_TOKEN"
     }
     ref = "mcp/codex/fetcher/API_TOKEN"
-    assert client.get(f"/api/v1/credentials/{ref}/exists").json()["present"] is True
+    assert client.get(f"/api/v1/secrets/{ref}/exists").json()["present"] is True
     assert sorted(by_name["solo"]["scope"]["agents"]) == sorted([cx, cc])
 
     codex = tomllib.loads((home / ".codex" / "config.toml").read_text())

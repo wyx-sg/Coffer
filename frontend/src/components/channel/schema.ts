@@ -2,7 +2,7 @@
 //
 // Zod schema driving the add-channel form, plus the pure planning step that
 // turns validated form values into the resource config + the list of
-// credential-store writes. Field names mirror openspec/specs/channels/data-model.md:
+// secret-store writes. Field names mirror openspec/specs/channels/data-model.md:
 // secrets never live in the config — only `*_ref` references do. Every issue
 // message is an i18n KEY (`channels.dialog.errors.*`): the dialog renders
 // `t(issue.message)` under the field the path names, never zod's own English.
@@ -17,7 +17,7 @@
 import { z } from "zod";
 
 import type { ChannelType } from "@/lib/api/channels";
-import { mintCredentialRef } from "@/lib/credentialRef";
+import { mintSecretRef } from "@/lib/secretRef";
 import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 
 // There is no DEFAULT_AGENT constant any more. `default_agent` holds an agent
@@ -90,7 +90,7 @@ export interface ChannelPlan {
    *  title, and the resource name is derived from it at registration. */
   name: string;
   config: Record<string, unknown>;
-  /** Credential-store writes to perform BEFORE registering the resource. */
+  /** Secret-store writes to perform BEFORE registering the resource. */
   secrets: { ref: string; value: string }[];
 }
 
@@ -110,21 +110,21 @@ export interface ChannelEditPlan extends ChannelPlan {
 type ChannelSecret = "bot-token" | "app-secret";
 
 /**
- * Mint the credential-store ref for one of a channel's secrets:
+ * Mint the secret-store ref for one of a channel's secrets:
  * `channel/<uuid4 hex>/<secret>`.
  *
  * It takes no name. It used to — `channel/<name>/<secret>` — and that made the
  * channel's name a key into the encrypted store, so renaming a channel left its
  * config citing an address that no longer described it. Renaming is now a field
  * on `PATCH /resources/{uid}` for every kind, which is what reached the hazard;
- * an opaque address is what closes it. See `@/lib/credentialRef`.
+ * an opaque address is what closes it. See `@/lib/secretRef`.
  */
 function channelSecretRef(secret: ChannelSecret): string {
-  return mintCredentialRef("channel", secret);
+  return mintSecretRef("channel", secret);
 }
 
 /**
- * Turn validated form values into the resource config plus the credential-store
+ * Turn validated form values into the resource config plus the secret-store
  * writes. Pure (no network) — the config is fully built before any side
  * effect runs, mirroring AddMcpServerDialog's planServer. `runsOn` is passed in
  * for the same reason the values are, and so is `defaultAgentUid`: this

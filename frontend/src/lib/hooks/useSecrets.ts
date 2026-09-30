@@ -1,4 +1,4 @@
-// src/lib/hooks/useSecrets.ts — every query and mutation behind the Secrets page (spec credentials).
+// src/lib/hooks/useSecrets.ts — every query and mutation behind the Secrets page (spec secret).
 //
 // The list, storing and deleting a value, the plaintext scan and its import,
 // and the desktop app's presence-gated reveal. Nothing here ever caches a
@@ -7,28 +7,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { credentialsApi } from "@/lib/api/credentials";
+import { secretsApi } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  credentialScanKey,
-  credentialsKey,
-  credentialsListKey,
+  secretScanKey,
+  secretsKey,
+  secretsListKey,
   pendingApprovalsKey,
 } from "@/lib/api/queryKeys";
 import { revealSecret } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
-/** Every stored and cited ref with what uses it. */
-export function useSecrets() {
-  return useQuery({ queryKey: credentialsListKey, queryFn: () => credentialsApi.list() });
+/** Every stored and cited ref with what uses it; read only while `enabled`. */
+export function useSecrets(enabled = true) {
+  return useQuery({
+    queryKey: secretsListKey,
+    queryFn: () => secretsApi.list(),
+    enabled,
+  });
 }
 
 function useRefreshSecrets() {
   const qc = useQueryClient();
   return () => {
-    // `credentialsKey` is the prefix of the list and of the approvals; the
+    // `secretsKey` is the prefix of the list and of the approvals; the
     // pending list is named too so a 202 shows its approval at once.
-    void qc.invalidateQueries({ queryKey: credentialsKey });
+    void qc.invalidateQueries({ queryKey: secretsKey });
     void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
   };
 }
@@ -37,17 +41,17 @@ function useRefreshSecrets() {
 export function useSetSecret() {
   const refresh = useRefreshSecrets();
   return useMutation({
-    mutationFn: ({ ref, value }: { ref: string; value: string }) => credentialsApi.set(ref, value),
+    mutationFn: ({ ref, value }: { ref: string; value: string }) => secretsApi.set(ref, value),
     onSuccess: refresh,
     // No toast: the add and replace dialogs render the failure inline.
   });
 }
 
-/** Delete a ref. A `CREDENTIAL_IN_USE` refusal names what still uses it. */
+/** Delete a ref. A `SECRET_IN_USE` refusal names what still uses it. */
 export function useDeleteSecret() {
   const refresh = useRefreshSecrets();
   return useMutation({
-    mutationFn: (ref: string) => credentialsApi.remove(ref),
+    mutationFn: (ref: string) => secretsApi.remove(ref),
     onSuccess: refresh,
     // No toast: the delete dialog shows the refusal, and who still uses it, inline.
   });
@@ -56,8 +60,8 @@ export function useDeleteSecret() {
 /** The plaintext secrets found in files. Read only while `enabled` (the dialog is open). */
 export function useSecretScan(enabled: boolean) {
   return useQuery({
-    queryKey: credentialScanKey,
-    queryFn: () => credentialsApi.scan(),
+    queryKey: secretScanKey,
+    queryFn: () => secretsApi.scan(),
     enabled,
     // A scan reads files that change behind Coffer's back: never serve an old one.
     staleTime: 0,
@@ -73,11 +77,11 @@ export function useImportSecrets() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: ({ ids, dryRun }: { ids: string[]; dryRun: boolean }) =>
-      credentialsApi.importFindings(ids, dryRun),
+      secretsApi.importFindings(ids, dryRun),
     onSuccess: (_out, { dryRun }) => {
       if (dryRun) return;
       refresh();
-      qc.removeQueries({ queryKey: credentialScanKey });
+      qc.removeQueries({ queryKey: secretScanKey });
     },
     onError: (e) => toast.error(translateApiError(t, e)),
   });

@@ -12,7 +12,9 @@ from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote, SyncRemoteIn
 from coffer.infrastructure.vault import git
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a token is sent with the username the remote names")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a token is sent with the username the remote names"
+)
 def test_a_remote_sends_coffer_unless_told_otherwise() -> None:
     assert (
         SyncRemote(url="https://gitlab.com/me/vault.git").username == DEFAULT_USERNAME == "coffer"
@@ -22,14 +24,18 @@ def test_a_remote_sends_coffer_unless_told_otherwise() -> None:
     )
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a token is sent with the username the remote names")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a token is sent with the username the remote names"
+)
 @pytest.mark.parametrize("bad", ["", "   ", "a b", "a:b", "me@host", "a/b"])
 def test_a_username_git_cannot_send_is_refused(bad: str) -> None:
     with pytest.raises(SyncRemoteInvalid):
         SyncRemote(url="https://example.com/v.git", username=bad)
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a token is sent with the username the remote names")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a token is sent with the username the remote names"
+)
 def test_the_helper_reads_the_username_and_token_from_its_environment() -> None:
     env = git._env(Path("/v"), None, "tok", "x-token-auth")
     assert env["COFFER_GIT_USERNAME"] == "x-token-auth"

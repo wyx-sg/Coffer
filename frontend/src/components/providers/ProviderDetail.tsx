@@ -76,7 +76,7 @@ export function ProviderDetail({
         <KeyRejectedBanner
           status={rejectedStatus}
           use={use}
-          onReplace={provider.credential_ref ? () => setOpen("replace") : undefined}
+          onReplace={provider.secret_ref ? () => setOpen("replace") : undefined}
         />
       ) : null}
 

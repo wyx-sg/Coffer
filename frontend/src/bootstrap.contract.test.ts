@@ -39,7 +39,7 @@ describe("main.tsx bootstrap", () => {
     const rendered = MAIN.indexOf("createRoot");
     expect(started).toBeGreaterThan(-1);
     expect(rendered).toBeGreaterThan(-1);
-    // Started before the render, so a daemon that is already up credentials
+    // Started before the render, so a daemon that is already up secrets
     // the very first queries…
     expect(started).toBeLessThan(rendered);
 

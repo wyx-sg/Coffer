@@ -4,11 +4,10 @@ capability switches, channel pairings and the engine's settings, each read at
 
 from __future__ import annotations
 
-import pytest
-
 import json
 from datetime import UTC, datetime
 
+import pytest
 from pydantic import BaseModel
 
 from coffer.application.audit_service import AuditService
@@ -40,7 +39,9 @@ def _kinds() -> dict[str, Kind]:
     }
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
 async def test_capability_switches_are_a_vault_document_and_seen_times_are_derived() -> None:
     kinds = _kinds()
     repo = make_resource_repo(kinds)
@@ -87,7 +88,9 @@ async def test_a_switched_off_capability_never_seen_here_still_reads_off() -> No
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="a channel's pairings travel with it")
-@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
 async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
     kinds = _kinds()
     repo = make_resource_repo(kinds)
@@ -114,7 +117,9 @@ async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
     assert [p.chat_id for p in await peers.list_by_resource(channel.uid)] == ["dm"]
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="each shared state area reaches the working tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
 async def test_engine_settings_are_one_vault_document_and_absent_means_defaults() -> None:
     repo = VaultInternalEngineConfigRepo()
     assert await repo.get() is None

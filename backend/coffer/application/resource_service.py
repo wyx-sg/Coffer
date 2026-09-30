@@ -15,8 +15,8 @@ Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
 `resource_scope_ops`, `set_enabled`'s in `resource_enable_ops`, `rename`'s in
 `resource_rename_ops`, `set_title`'s in `resource_title_ops`, `delete`'s
-credential-release step in `resource_delete_ops`, and every question about what
-a kind *declares* — where it is stored, what redacts, what cites a credential, what
+secret-release step in `resource_delete_ops`, and every question about what
+a kind *declares* — where it is stored, what redacts, what cites a secret, what
 it will accept as a name — in `resource_kind_ops`.
 """
 
@@ -40,9 +40,9 @@ from coffer.application.resource_actor import acting_as
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
-    CredentialMissing,
     GenericCreateNotAllowed,
     ResourceNotFound,
+    SecretMissing,
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource
@@ -52,11 +52,11 @@ from coffer.domain.vault.layout import StorageClass
 _logger = logging.getLogger(__name__)
 
 
-class _CredentialStorePort(Protocol):
-    """Minimal kind-agnostic port for register-time credential probing and
+class _SecretStorePort(Protocol):
+    """Minimal kind-agnostic port for register-time secret probing and
     delete-time release.
 
-    Mirrors :class:`coffer.application.mcp.ports.CredentialStorePort` but
+    Mirrors :class:`coffer.application.mcp.ports.SecretStorePort` but
     defined locally so the kind-agnostic resource service does not import
     the mcp-specific port module (importlinter Contract 6).
     """
@@ -74,29 +74,29 @@ class ResourceService:
         kinds: dict[str, Kind],
         repo: ResourceRepo,
         audit: AuditService,
-        credentials: _CredentialStorePort | None = None,
+        secrets: _SecretStorePort | None = None,
     ) -> None:
         self._kinds = kinds
         self._repo = repo
         self._audit = audit
-        self._credentials = credentials
+        self._secrets = secrets
 
-    async def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
-        """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
+    async def _probe_secrets(self, kind_def: Kind, config: dict[str, Any]) -> None:
+        """Raise SecretMissing if any cited secret_ref is absent from the secret store.
 
-        Called BEFORE persisting a Resource so a missing credential never
-        leaves a partial resource file behind. Skipped if no credential
-        store is wired (back-compat for tests that don't need credential checks).
+        Called BEFORE persisting a Resource so a missing secret never
+        leaves a partial resource file behind. Skipped if no secret
+        store is wired (back-compat for tests that don't need secret checks).
 
         The store's ``get`` is a blocking SQLite read, so it runs in a worker
         thread: on the loop it would stall every other request for as long as
         the read (and any lock it waits on) takes.
         """
-        if self._credentials is None:
+        if self._secrets is None:
             return
-        for _key, ref in resource_kind_ops.credential_refs(kind_def, config).items():
-            if await asyncio.to_thread(self._credentials.get, ref) is None:
-                raise CredentialMissing(ref)
+        for _key, ref in resource_kind_ops.secret_refs(kind_def, config).items():
+            if await asyncio.to_thread(self._secrets.get, ref) is None:
+                raise SecretMissing(ref)
 
     def _require_kind(self, kind: str) -> Kind:
         if kind not in self._kinds:
@@ -185,10 +185,10 @@ class ResourceService:
                     await check
             except ValueError as e:
                 raise ConfigValidationError(str(e)) from e
-        # Probe before any DB write — a missing credential must not leave a
+        # Probe before any DB write — a missing secret must not leave a
         # half-created resource row behind. Spec mcp-gateway "Manage MCP
         # servers as resources" requires registration to fail naming the missing ref.
-        await self._probe_credentials(kind_def, validated)
+        await self._probe_secrets(kind_def, validated)
         now = datetime.now(tz=UTC)
         with acting_as(actor):
             created = await self._repo.create(
@@ -249,23 +249,23 @@ class ResourceService:
     async def find_by_name(self, kind: str, name: str) -> Resource | None:
         return await self._repo.find_by_name(kind, name)
 
-    async def find_credential_citations(self, credential_ref: str) -> builtins.list[Resource]:
-        """Every resource whose config cites ``credential_ref``.
+    async def find_secret_citations(self, secret_ref: str) -> builtins.list[Resource]:
+        """Every resource whose config cites ``secret_ref``.
 
         (Spelled ``builtins.list`` because this class also defines a ``list``
         method, which shadows the builtin in annotations appearing after it.)
 
         Delegates to ``resource_delete_ops``, which is the other half of the
-        same question: this one answers "may this credential be deleted?" for
-        the credential route, and that one answers "is anything still citing
+        same question: this one answers "may this secret be deleted?" for
+        the secret route, and that one answers "is anything still citing
         it?" after a resource goes away.
         """
         from coffer.application.resource_delete_ops import citations_of
 
-        return await citations_of(self, credential_ref)
+        return await citations_of(self, secret_ref)
 
-    async def cited_credential_refs(self) -> dict[str, builtins.list[Resource]]:
-        """Every credential ref cited by any resource, mapped to its citers."""
+    async def cited_secret_refs(self) -> dict[str, builtins.list[Resource]]:
+        """Every secret ref cited by any resource, mapped to its citers."""
         from coffer.application.resource_delete_ops import all_citations
 
         return await all_citations(self)
@@ -287,9 +287,9 @@ class ResourceService:
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(before.kind)
         validated = self._validate_config(kind_def, new_config)
-        # Same register-time invariant: if the update introduces a credential
-        # ref that does not exist in the credential store, fail before the DB write.
-        await self._probe_credentials(kind_def, validated)
+        # Same register-time invariant: if the update introduces a secret
+        # ref that does not exist in the secret store, fail before the DB write.
+        await self._probe_secrets(kind_def, validated)
         # Per-kind pre-write hook. Only ``channel`` supplies one: it
         # re-validates ``default_agent`` against the live agent registry and
         # the channel's own scope. May raise ``ConfigValidationError`` to
@@ -359,9 +359,9 @@ class ResourceService:
         return await _set_title(self, uid, title, actor)
 
     async def delete(self, uid: str, actor: str) -> None:
-        # Credential release (on successful delete) delegates to
+        # Secret release (on successful delete) delegates to
         # resource_delete_ops to keep this module under the file-size limit.
-        from coffer.application.resource_delete_ops import release_orphaned_credentials
+        from coffer.application.resource_delete_ops import release_orphaned_secrets
 
         snapshot = await self.get(uid)  # raises ResourceNotFound if missing
         kind_def = self._require_kind(snapshot.kind)
@@ -381,7 +381,7 @@ class ResourceService:
                 await result
         with acting_as(actor):
             await self._repo.delete(uid)
-        await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
+        await release_orphaned_secrets(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             resource=snapshot,

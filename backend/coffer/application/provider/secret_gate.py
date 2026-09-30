@@ -4,12 +4,12 @@ The key-bearing destination of a provider connection is its **base URL**: the
 local model proxy injects the key into requests to that URL, and Coffer's own
 engine sends it there too. Pointing an existing key at a new base URL is
 sending the secret somewhere new, so it waits for approval in the desktop app
-(spec credentials "Hold a secret for a new destination until a person approves
+(spec secret "Hold a secret for a new destination until a person approves
 it"); until then the connection is no member of the proxy's state and the
 engine cannot use it. Replacing the key of a connection whose key is in use
 waits the same way ("Hold a replaced value in use until a person approves it").
 
-The boundary is the credentials package's ``SecretBoundary``, reached through
+The boundary is the secret package's ``SecretBoundary``, reached through
 the port below and set by the composition root; ``None`` (a test-built
 service) gates nothing.
 """
@@ -42,16 +42,16 @@ def provider_destination(uid: str, name: str, cfg: ProviderConfig) -> SecretDest
 async def require_key(service: ProviderService, uid: str, name: str, cfg: ProviderConfig) -> None:
     """Raise ``SecretBindingPending`` unless this connection's key may go to its URL."""
     boundary = service._boundary
-    if boundary is None or cfg.credential_ref is None:
+    if boundary is None or cfg.secret_ref is None:
         return
     dest = provider_destination(uid, name, cfg)
-    await asyncio.to_thread(boundary.require, dest, {SLOT: cfg.credential_ref})
+    await asyncio.to_thread(boundary.require, dest, {SLOT: cfg.secret_ref})
 
 
 async def write_key(service: ProviderService, ref: str, value: str, *, actor: str) -> None:
     """Store a new key, or hold it for approval when the old one is in use."""
     boundary = service._boundary
     if boundary is None:
-        await asyncio.to_thread(service._credentials.set, ref, value)
+        await asyncio.to_thread(service._secrets.set, ref, value)
         return
     await asyncio.to_thread(lambda: boundary.write(ref, value, actor=actor))

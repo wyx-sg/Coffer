@@ -16,6 +16,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 import coffer
+from coffer import build_channel
+from coffer.application.agent.connection_service import AgentConnectionService
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.log_reader import (
@@ -30,6 +32,9 @@ from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import login_service
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
+from coffer.infrastructure.vault.home import coffer_home
+from coffer.surfaces.http import daemon_port
+from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
@@ -73,17 +78,6 @@ def set_daemon_phase(phase: _DaemonPhase) -> None:
 
 
 _STARTED_AT = datetime.now(tz=UTC)
-_PORT = 8000  # set by composition root
-
-
-def set_port(port: int) -> None:
-    global _PORT
-    _PORT = port
-
-
-def get_port() -> int:
-    """The port the daemon is serving on (set by the composition root)."""
-    return _PORT
 
 
 def set_started_at(started_at: datetime) -> None:
@@ -100,6 +94,7 @@ async def get_status(
     resource_service: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
     health_repo: MCPServerHealthRepo | None = Depends(get_health_repo_optional),  # noqa: B008
     features: FeatureService | None = Depends(get_feature_service_optional),  # noqa: B008
+    connection: AgentConnectionService | None = Depends(get_agent_connection_service_optional),  # noqa: B008
 ) -> DaemonStatusOut:
     phase = get_daemon_phase()
     # An app assembled without create_app has published no service; the
@@ -154,13 +149,40 @@ async def get_status(
         # mismatch say which daemon it attached to, not merely that one exists.
         executable=sys.executable,
         started_at=_STARTED_AT,
-        port=_PORT,
+        port=daemon_port.get_port(),
         upstream_summary=upstream_summary,
         channel=features.channel,
         features=features.enabled_map(),
         machine_id=daemon_config.read_cached_machine_id(),
         machine_name=daemon_config.read_machine_name(),
+        pid=os.getpid(),
+        commit=build_channel.COMMIT,
+        data_dir=_display_path(coffer_home()),
+        connected_agents=await _connected_agents(connection),
     )
+
+
+def _display_path(path: Path) -> str:
+    """``path`` written ``~/…`` when it sits under the home folder, as the UI shows paths."""
+    home = Path(os.environ.get("HOME", "~")).expanduser()
+    try:
+        return "~/" + path.relative_to(home).as_posix()
+    except ValueError:
+        return str(path)
+
+
+async def _connected_agents(connection: AgentConnectionService | None) -> int | None:
+    """How many agents carry Coffer's gateway entry, or ``None`` when it cannot be told.
+
+    Best-effort like the rest of the probe: it reads each agent's config file,
+    and a failure must never turn the readiness answer into an error.
+    """
+    if connection is None:
+        return None
+    try:
+        return len(await connection.connected_agents())
+    except Exception:
+        return None
 
 
 # === T035: shutdown / rotate-token ===
@@ -332,9 +354,10 @@ async def list_daemon_logs(
         since = since.replace(tzinfo=UTC) if since.tzinfo is None else since.astimezone(UTC)
     since_iso = since.isoformat() if since is not None else None
     records: list[DaemonLogRecordOut] = []
+    log_file = log_dir() / "daemon.log"
     # Parse oldest-first — a traceback is folded into the record above it —
     # then walk the result backwards to serve the page newest-first.
-    for record in reversed(parse_log_lines(tail_lines(log_dir() / "daemon.log"))):
+    for record in reversed(parse_log_lines(tail_lines(log_file))):
         if len(records) >= limit:
             break
         if not matches_level(record, errors_only) or not at_least(record, level):
@@ -352,4 +375,4 @@ async def list_daemon_logs(
                 record=record,
             )
         )
-    return DaemonLogListOut(records=records)
+    return DaemonLogListOut(records=records, path=str(log_file))

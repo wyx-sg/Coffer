@@ -22,7 +22,9 @@ def test_an_agent_is_local() -> None:
     assert kind.storage is StorageClass.LOCAL and kind.storage_row is None
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a locally generated skill is neither published nor overwritten")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a locally generated skill is neither published nor overwritten"
+)
 def test_coffers_own_skill_is_derived_and_every_other_skill_is_in_the_vault() -> None:
     kind = make_skill_kind(_noop)
     assert kind.storage_row is not None

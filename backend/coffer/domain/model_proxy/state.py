@@ -1,6 +1,6 @@
 """The state the daemon pushes to the model proxy over its control route.
 
-The proxy holds no database and reads no credential store: everything it needs
+The proxy holds no database and reads no secret store: everything it needs
 — which local token belongs to which agent, and which upstream members serve
 each agent — arrives in one :class:`ProxyState`, pushed on spawn, on re-attach
 and whenever a connection or an agent changes. Provider keys travel in it and
@@ -118,7 +118,7 @@ def proxy_root(port: int) -> str:
     return f"http://127.0.0.1:{port}"
 
 
-#: Credential-store refs holding the per-agent local proxy tokens:
+#: Secret-store refs holding the per-agent local proxy tokens:
 #: ``proxy-token/<agent_uid>``. Machine-local — a token unlocks this machine's
 #: loopback proxy and nothing else — so vault sync never carries them.
 PROXY_TOKEN_REF_PREFIX = "proxy-token/"

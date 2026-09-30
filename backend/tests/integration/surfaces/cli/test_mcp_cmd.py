@@ -50,7 +50,6 @@ from coffer.infrastructure.persistence.retention_repo import (
 from coffer.surfaces.cli.main import app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.daemon_routes import router as daemon_router
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
@@ -71,6 +70,7 @@ from coffer.surfaces.http.mcp.invocation_routes import router as invocation_rout
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from coffer.surfaces.http.secret_composition import get_secret_store
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _runner = CliRunner()
@@ -239,7 +239,7 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
     fapp.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     fapp.dependency_overrides[get_invocation_repo] = lambda: inv_repo
     fapp.dependency_overrides[get_health_repo] = lambda: health_repo
-    fapp.dependency_overrides[get_credential_store] = lambda: None
+    fapp.dependency_overrides[get_secret_store] = lambda: None
 
     set_active_token(_TOKEN)
     return fapp, engine
@@ -347,7 +347,7 @@ def test_mcp_add_http(mcp_daemon: Any) -> None:
             "remote",
             "--http",
             "http://example.com/mcp",
-            "--credential",
+            "--secret",
             "Authorization=keychain:myref",
         ],
     )
@@ -591,13 +591,13 @@ def _edit(*args: str) -> Any:
 
 def test_mcp_edit_stdio_replaces_the_command_line_only(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--env", "LOG=debug", "--credential", "TOKEN=mcp_server/x/TOKEN").exit_code == 0
+    assert _edit("--env", "LOG=debug", "--secret", "TOKEN=mcp_server/x/TOKEN").exit_code == 0
     result = _edit("--stdio", "npx -y my-server --flag")
     assert result.exit_code == 0, result.output
     transport = _config_of(uid)["transport"]
     assert (transport["command"], transport["args"]) == ("npx", ["-y", "my-server", "--flag"])
     assert transport["env"] == {"LOG": "debug"}
-    assert transport["credential_refs"] == {"TOKEN": "mcp_server/x/TOKEN"}
+    assert transport["secret_refs"] == {"TOKEN": "mcp_server/x/TOKEN"}
 
 
 def test_mcp_edit_env_merges_and_clear_env_drops_the_rest(mcp_daemon: Any) -> None:
@@ -609,12 +609,12 @@ def test_mcp_edit_env_merges_and_clear_env_drops_the_rest(mcp_daemon: Any) -> No
     assert _config_of(uid)["transport"]["env"] == {"C": "4"}
 
 
-def test_mcp_edit_credentials_merge_and_clear(mcp_daemon: Any) -> None:
+def test_mcp_edit_secrets_merge_and_clear(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--credential", "A=ref/a", "--credential", "B=ref/b").exit_code == 0
-    assert _config_of(uid)["transport"]["credential_refs"] == {"A": "ref/a", "B": "ref/b"}
-    assert _edit("--clear-credentials").exit_code == 0
-    assert _config_of(uid)["transport"]["credential_refs"] == {}
+    assert _edit("--secret", "A=ref/a", "--secret", "B=ref/b").exit_code == 0
+    assert _config_of(uid)["transport"]["secret_refs"] == {"A": "ref/a", "B": "ref/b"}
+    assert _edit("--clear-secrets").exit_code == 0
+    assert _config_of(uid)["transport"]["secret_refs"] == {}
 
 
 def test_mcp_edit_cwd_sets_and_empty_clears(mcp_daemon: Any) -> None:
@@ -653,14 +653,14 @@ def test_mcp_edit_http_url_and_headers(mcp_daemon: Any) -> None:
     assert _config_of(uid)["transport"]["headers"] == {}
 
 
-def test_mcp_edit_switches_transport_keeping_credentials(mcp_daemon: Any) -> None:
+def test_mcp_edit_switches_transport_keeping_secrets(mcp_daemon: Any) -> None:
     uid = _register_server()
-    assert _edit("--env", "A=1", "--credential", "TOKEN=ref/t").exit_code == 0
+    assert _edit("--env", "A=1", "--secret", "TOKEN=ref/t").exit_code == 0
     result = _edit("--http", "https://example.com/mcp")
     assert result.exit_code == 0, result.output
     transport = _config_of(uid)["transport"]
     assert transport["type"] == "http"
-    assert transport["credential_refs"] == {"TOKEN": "ref/t"}
+    assert transport["secret_refs"] == {"TOKEN": "ref/t"}
     assert "env" not in transport and "command" not in transport
     assert _edit("--stdio", "cat").exit_code == 0
     assert _config_of(uid)["transport"]["type"] == "stdio"
@@ -949,14 +949,14 @@ def test_mcp_add_empty_stdio_exits_2(mcp_daemon: Any) -> None:
     assert "cannot be empty" in (result.output + (result.stderr or ""))
 
 
-def test_mcp_add_bad_credential_format_exits_2(mcp_daemon: Any) -> None:
-    """A `--credential` value without '=' is a typer.BadParameter → exit 2."""
+def test_mcp_add_bad_secret_format_exits_2(mcp_daemon: Any) -> None:
+    """A `--secret` value without '=' is a typer.BadParameter → exit 2."""
     result = _runner.invoke(
         app,
-        ["mcp", "add", "fs", "--stdio", "cat", "--credential", "NO_EQUALS_SIGN"],
+        ["mcp", "add", "fs", "--stdio", "cat", "--secret", "NO_EQUALS_SIGN"],
     )
     assert result.exit_code == 2, result.output
-    assert "credential" in (result.output + (result.stderr or "")).lower()
+    assert "--secret" in (result.output + (result.stderr or "")).lower()
 
 
 # ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@ import {
 } from "@/lib/activity/records";
 
 /** Rows per "Load older". */
-const PAGE_SIZE = 200;
+export const PAGE_SIZE = 200;
 /** Rows the head re-reads; more new rows than this between two polls is a gap. */
 const HEAD_SIZE = 50;
 /** How often the head is re-read. */
@@ -44,6 +44,8 @@ interface Page {
   total: number | undefined;
   /** The daemon tail stopped at the route's cap: there may be more. */
   capped: boolean;
+  /** The file the daemon tail was read from. */
+  path?: string;
 }
 
 async function readPage(spec: SourceParams, limit: number, cursor: string | null): Promise<Page> {
@@ -71,6 +73,7 @@ async function readPage(spec: SourceParams, limit: number, cursor: string | null
     next: null,
     total: out.records.length,
     capped: out.records.length >= MAX_PAGE,
+    path: out.path,
   };
 }
 
@@ -103,6 +106,8 @@ export interface ActivitySourceState {
   refreshHead: () => void;
   /** The time of the oldest loaded record, for merging several logs. */
   oldestAt: number | undefined;
+  /** The daemon log's file, once its tail has been read. */
+  path: string | undefined;
 }
 
 export function useActivitySource(spec: SourceParams, enabled: boolean): ActivitySourceState {
@@ -193,6 +198,7 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
     isLoadingOlder: pages.isFetchingNextPage,
     refreshHead: () => void refetchHead(),
     oldestAt: oldest ? recordTimeMs(oldest) : undefined,
+    path: head.data?.path ?? firstPage?.path,
   };
 }
 

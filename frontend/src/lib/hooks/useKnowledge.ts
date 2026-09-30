@@ -106,13 +106,14 @@ export function useSaveKnowledgeFile() {
 }
 
 /** The one toast a finished Curate now leaves: the last pass says how the run
- *  ended; `count` only means something to `no_model`, which reports how many
- *  items it wrote as documents as they stood. */
+ *  ended; `count` is how many items it curated (`ok`), or for `no_model` how
+ *  many it wrote as documents as they stood. */
 function curateToastText(t: TFunction, result: CurationRunOut) {
   const last = result.passes[result.passes.length - 1];
   const promoted = result.passes.reduce((sum, p) => sum + p.promoted.length, 0);
+  const curated = result.passes.filter((p) => p.status === "ok").length;
   return t(last ? curateToastKey(last) : "knowledge.curate.status.up_to_date", {
-    count: promoted,
+    count: last?.status === "ok" ? curated : promoted,
   });
 }
 

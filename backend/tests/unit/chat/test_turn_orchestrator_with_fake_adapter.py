@@ -275,7 +275,7 @@ async def test_turn_in_progress_raises_on_second_start() -> None:
 
 @pytest.mark.asyncio
 async def test_build_adapter_error_propagates_and_releases_slot() -> None:
-    err = AgentConfigRejected("missing_credential", "agent could not build its adapter")
+    err = AgentConfigRejected("missing_secret", "agent could not build its adapter")
     provider = FakeAgentProvider(adapter=None, build_error=err)
     orchestrator, _, _, _ = make_orchestrator(provider=provider)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")

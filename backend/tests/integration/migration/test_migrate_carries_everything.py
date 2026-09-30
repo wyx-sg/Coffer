@@ -4,25 +4,24 @@ directory it belongs to, in the bytes its store would write (plan q9 §3)."""
 
 from __future__ import annotations
 
-import pytest
-
 import json
 import sqlite3
 import subprocess
 from pathlib import Path
 
+import pytest
 from cryptography.fernet import Fernet
 
 from coffer.domain.vault.document import ResourceDocument, parse_resource
 from coffer.domain.vault.writers import parse_meta
-from coffer.infrastructure.credentials.boundary_store import FileBoundaryStore
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.vault.migration.run import migrate
 from coffer.infrastructure.vault.migration.verify import check, take_inventory
 from coffer.infrastructure.vault.reach_store import ReachStore, reach_path
 
 from .conftest import UPGRADE
-from .legacy_home import UIDS, LegacyHome, resources
+from .legacy_home import LAST_USED, UIDS, LegacyHome, resources
 
 _CLASS = {"agent": "local", "memory": "derived"}
 
@@ -82,7 +81,9 @@ def test_reach_is_local_and_keeps_enabled_and_scope(legacy: LegacyHome) -> None:
 
 def test_every_secret_decrypts_from_its_file(legacy: LegacyHome) -> None:
     _migrate(legacy)
-    store = EncryptedCredentialStore(legacy.key, home=legacy.home)
+    store = EncryptedSecretStore(legacy.key, home=legacy.home)
+    # When a value was last used here is machine-local, and carried as it was.
+    assert store.last_used() == {"provider/anthropic": LAST_USED}
     for ref, value in legacy.secrets.items():
         assert store.get(ref) == value
     assert (legacy.coffer / "local/secret/proxy-token/claude_code.enc").is_file()
@@ -121,7 +122,9 @@ def test_state_documents_are_vault_files_keyed_by_the_owner_uid(legacy: LegacyHo
     assert engine["upkeep"]["distil"]["enabled"] is False
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="machine-local files never reach the working tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="machine-local files never reach the working tree"
+)
 def test_machine_local_settings_are_under_local(legacy: LegacyHome) -> None:
     _migrate(legacy)
     local = legacy.coffer / "local"
@@ -187,7 +190,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
             "SELECT resource_uid, active_conversation_id FROM channel_thread_conversations"
         ).fetchall() == [(UIDS["tg"], "conv-1")]
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert "resources" not in tables and "credentials" not in tables
+        assert "resources" not in tables and "secrets" not in tables
 
 
 def test_the_knowledge_history_is_the_vaults_under_knowledge(legacy: LegacyHome) -> None:

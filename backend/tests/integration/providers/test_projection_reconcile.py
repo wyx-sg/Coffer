@@ -109,7 +109,7 @@ async def _build(
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
         repo=make_resource_repo(),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     await resources.register(
         kind="agent",
@@ -124,7 +124,7 @@ async def _build(
     providers = ProviderService(
         agent_catalog=catalog,
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
         agents=agents,
         audit=audit,

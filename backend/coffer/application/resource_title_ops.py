@@ -11,8 +11,8 @@ is deliberately NOT routed through ``update_config``, for two reasons:
 
 - A title has no on-disk artifact behind it for the generic path to desync, so
   the lifecycle seam that refuses a kind's config rewrite has nothing to guard.
-- Writing it re-validates nothing, probes no credential and fires no kind hook:
-  a title edit refused because a credential the config cites has since been
+- Writing it re-validates nothing, probes no secret and fires no kind hook:
+  a title edit refused because a secret the config cites has since been
   deleted would be a refusal about something the caller did not touch.
 """
 

@@ -59,7 +59,7 @@ when it owned only a dispatch seam; that the kind-agnostic surface has no create
 that an empty registry answers every lifecycle route with a refusal are still true (see
 "Keep creation a per-kind seam"). The daemon it is mounted in — port, discovery file,
 token, loopback posture, `Host` guard — is daemon's; the encrypted store behind a
-resource's credential refs is credentials', and this spec only probes refs before a
+resource's secret refs is secrets', and this spec only probes refs before a
 write and releases orphaned ones after a delete, never holding a key. Coffer is a
 single-user personal tool with no multi-tenant or remote-access requirement beyond the
 token gate.
@@ -186,13 +186,13 @@ Deleting a resource MUST run the kind's own cleanup hook while the resource can 
 resolved, and a hook that fails MUST abort the deletion rather than leave a half-deleted
 thing — a resource is never left registered with its on-disk half already gone. Rows a
 kind owns MUST cascade; history MUST NOT — the audit log and the invocation log outlive
-the resource they describe. Credentials that no remaining resource cites MUST be
+the resource they describe. Secrets that no remaining resource cites MUST be
 released, and a failure to release MUST NOT turn an already-completed deletion into a
-caller-facing error; the store behind those refs is the credentials
+caller-facing error; the store behind those refs is the secrets
 spec's.
 
 #### Scenario: deleting a resource runs its kind's cleanup and keeps its history
-- **GIVEN** a resource with audit history, whose kind supplies a cleanup hook, and whose config cites a credential that nothing else cites and whose release fails,
+- **GIVEN** a resource with audit history, whose kind supplies a cleanup hook, and whose config cites a secret that nothing else cites and whose release fails,
 - **WHEN** the user deletes it,
 - **THEN** the hook runs while the resource can still be read back, the resource is gone, and the deletion returns without an error,
 - **AND** the audit entries written before the deletion are still readable for that resource,
@@ -253,11 +253,11 @@ the name is the resource's type. None of these kinds carries a title ("Carry an 
 editable title on the kinds that have one"): the fixed name is what every surface shows.
 
 #### Scenario: renaming a resource is an ordinary edit
-- **GIVEN** a resource of a kind whose name is not fixed, with a reach set, a credential cited by its
+- **GIVEN** a resource of a kind whose name is not fixed, with a reach set, a secret cited by its
   config, and rows in a table its kind owns,
 - **WHEN** the user changes its name through the kind-agnostic update,
 - **THEN** the resource is the same resource — its identity, its reach, its
-  credential and its kind-owned rows are untouched — and its audit trail comes
+  secret and its kind-owned rows are untouched — and its audit trail comes
   back whole, with the rows written before the change still saying what it was
   called then,
 - **AND** a name another resource of that kind already holds is refused with
@@ -323,6 +323,12 @@ table to its registered default. The on-demand prune MUST be `coffer log prune [
 <table>]`, which prunes every registered table, or only the one named, and prints how many
 entries each lost.
 
+Before a shorter period is saved, the web UI MUST be able to ask how many entries it would delete:
+`GET /api/v1/retention/policies/{table}/preview?days=<n>` answers the entries the table holds now
+and how many of them are older than `n` days, counts them against the same timestamp column the
+prune uses, and deletes and changes nothing. It is a read that serves a confirmation, so it has no
+command of its own: `coffer config set retention.<table>` saves a period directly.
+
 #### Scenario: configure retention per log
 - **GIVEN** the audit and invocation logs grow over time,
 - **WHEN** the user sets a retention period for a log (in days, or "keep forever"),
@@ -333,6 +339,12 @@ entries each lost.
 - **WHEN** the user runs `coffer config set retention.mcp_invocations 7` and then `coffer log prune --table mcp_invocations`
 - **THEN** `coffer config get retention.mcp_invocations` prints 7, the policy change is audited, and the prune reports how many entries it removed
 - **AND** only entries older than 7 days are gone
+
+#### Scenario: a shorter period is previewed before it is saved
+- **GIVEN** the audit log holds 4 entries, 2 of them older than 7 days
+- **WHEN** the web UI asks `GET /api/v1/retention/policies/audit_log/preview?days=7`
+- **THEN** the answer carries 4 entries now and 2 to delete
+- **AND** asking again answers 4 entries now: nothing was deleted
 
 ### Requirement: Report the passes in flight in one cross-kind read
 The system MUST answer, in one cross-kind read, which long model-driven passes this
@@ -379,7 +391,7 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 #### Scenario: command line covers every visual operation
 - **GIVEN** the daemon is running,
 - **WHEN** the CLI's live command tree is read,
-- **THEN** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `config`, `log`, `path`, `scan`, `adopt`, `discard`, `mcp`, `credentials`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
+- **THEN** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `config`, `log`, `path`, `scan`, `adopt`, `discard`, `mcp`, `secrets`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
 - **AND** every `coffer config` key is paired in the table with the settings route that stores it, or with the pre-bind settings file for a key read before the daemon binds, so a settings route with no key fails the test,
 - **AND** the groups whose surface is options rather than subcommands are claimed by those options instead, since an empty subcommand set would assert nothing about them,
 - **AND** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it,
@@ -399,8 +411,9 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 ### Requirement: Carry an optional editable title on the kinds that have one
 A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
 most 80 characters that a person chooses for display, separate from the resource's `name`. The
-kinds with a title are those whose name is a label a person chose — `provider`, `channel`,
-`knowledge` and `memory`. `agent`, `mcp_server` and `skill` carry none: each is shown by its fixed
+kinds with a title are those whose name is a label a person chose — `provider`, `channel`
+and `memory`. A knowledge collection carries none: it is named by its folder, with an editable
+description ([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place"). `agent`, `mcp_server`, `skill` and `knowledge` carry none: each is shown by its fixed
 name, and a non-empty title for one MUST be refused as a validation error (422) on registration
 and on update, with nothing changed. On a kind that carries one, the title MUST be editable
 through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`) and through

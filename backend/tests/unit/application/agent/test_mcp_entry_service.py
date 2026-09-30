@@ -13,7 +13,7 @@ Covers:
      touches the chosen file
   5. coffer entry is protected from remove
   7. adopt happy path: register BEFORE file write, secret moved to keychain +
-     credential_refs (never plain env), audit recorded
+     secret_refs (never plain env), audit recorded
   8. adopt with unmapped secret-like key → AdoptSecretUnresolved, no side effects
   9. adopt name conflict bubbles ResourceAlreadyExists, file unchanged, no rollback
  10. adopt rolls back the registered resource when the file write fails
@@ -253,7 +253,7 @@ async def svc(store, audit_svc, rs, keyring) -> AgentMcpEntryService:
         audit=audit_svc,
         store=store,
         resource_service=rs,
-        credentials=keyring,
+        secrets=keyring,
     )
 
 
@@ -470,13 +470,13 @@ async def test_adopt_happy_path_order(svc, store, rs, keyring, audit_svc):
 
     # Secret went to the keychain under the given ref with the original value...
     assert keyring.set_calls == [("mcp/jira/JIRA_API_TOKEN", "tok-123")]
-    # ...and into credential_refs, NOT the plain env of the registered config.
+    # ...and into secret_refs, NOT the plain env of the registered config.
     (kind, name, config, actor) = rs.register_calls[0]
     assert (kind, name, actor) == ("mcp_server", "jira", "cli")
     transport = config["transport"]
     assert "JIRA_API_TOKEN" not in transport["env"]
     assert transport["env"] == {"JIRA_URL": "https://jira.example.com"}
-    assert transport["credential_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
+    assert transport["secret_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
     assert resource.name == "jira"
 
     # Audit recorded with the resource name and NO secret values anywhere.
@@ -555,13 +555,13 @@ async def test_adopt_rollback_on_write_failure(svc, store, rs):
 
 
 # ---------------------------------------------------------------------------
-# 11. adopt ignores bogus mapping keys (no dangling credential_refs)
+# 11. adopt ignores bogus mapping keys (no dangling secret_refs)
 # ---------------------------------------------------------------------------
 
 
 async def test_adopt_bogus_mapping_key_ignored(svc, store, rs, keyring):
     """A secrets key that matches neither env nor headers must not reach keyring
-    or credential_refs — otherwise the transport would reference a keychain entry
+    or secret_refs — otherwise the transport would reference a keychain entry
     that was never written."""
     store._files[_CODEX_CONFIG] = _CODEX_TOML
     secrets = {
@@ -576,11 +576,11 @@ async def test_adopt_bogus_mapping_key_ignored(svc, store, rs, keyring):
     assert "mcp/jira/ghost" not in keyring_refs
     assert keyring_refs == ["mcp/jira/JIRA_API_TOKEN"]
 
-    # credential_refs in the registered transport must NOT contain the bogus key.
+    # secret_refs in the registered transport must NOT contain the bogus key.
     (_, _, config, _) = rs.register_calls[0]
     transport = config["transport"]
-    assert "DOES_NOT_EXIST_TOKEN" not in transport["credential_refs"]
-    assert transport["credential_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
+    assert "DOES_NOT_EXIST_TOKEN" not in transport["secret_refs"]
+    assert transport["secret_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
 
 
 # ---------------------------------------------------------------------------
@@ -611,7 +611,7 @@ async def test_adopt_gas_without_secret_mapping_raises(svc, store):
 
 async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring):
     """Adopting the gas entry WITH Authorization mapped writes the keychain entry
-    and produces a transport with empty headers + correct credential_refs."""
+    and produces a transport with empty headers + correct secret_refs."""
     store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_GAS
 
     resource = await svc.adopt(_CX_UID, "gas", secrets={"Authorization": "mcp/gas/auth"})
@@ -619,14 +619,14 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
     # Keychain received the raw value.
     assert keyring.set_calls == [("mcp/gas/auth", "Bearer abc")]
 
-    # Registered transport: headers empty, credential_refs set.
+    # Registered transport: headers empty, secret_refs set.
     (_, name, config, _) = rs.register_calls[0]
     assert name == "gas"
     transport = config["transport"]
     assert transport["type"] == "http"
     assert transport["url"] == "https://gas.example/mcp"
     assert transport["headers"] == {}
-    assert transport["credential_refs"] == {"Authorization": "mcp/gas/auth"}
+    assert transport["secret_refs"] == {"Authorization": "mcp/gas/auth"}
 
     # Entry removed from file; coffer survives.
     new_text = store._files[_CODEX_CONFIG]

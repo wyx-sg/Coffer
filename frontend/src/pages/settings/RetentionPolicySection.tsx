@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { RetentionShortenDialog } from "@/components/settings/storage/RetentionShortenDialog";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,15 +143,11 @@ export function RetentionPolicySection({ policy, onUpdate, updating, failed = fa
         ) : null}
       </div>
 
-      <ConfirmDialog
-        open={proposed !== null}
-        onOpenChange={(open) => {
-          if (!open) cancel();
-        }}
-        title={t("settings.retention.shortenTitle", { days: proposed ?? days })}
-        description={t("settings.retention.shortenBody")}
-        confirmLabel={t("settings.retention.shortenConfirm")}
-        pending={updating}
+      <RetentionShortenDialog
+        policy={policy}
+        proposed={proposed}
+        updating={updating}
+        onCancel={cancel}
         onConfirm={confirm}
       />
     </SettingRow>

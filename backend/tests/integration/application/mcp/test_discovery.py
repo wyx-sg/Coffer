@@ -10,14 +10,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
 from coffer.infrastructure.persistence.base import Base
@@ -26,6 +25,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.fake_mcp_server import start_http_fake as _start_http_fake
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.support.vault_stores import derived_sm, make_resource_repo
@@ -79,7 +79,7 @@ async def _setup(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     prefs = MCPCapabilityPreferenceStore(derived_sm())
     discovery = CapabilityDiscovery(
@@ -309,9 +309,9 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
 async def test_register_http_mcp_server_discovers_capabilities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Register an HTTP MCP server with a credential_ref; assert:
+    """Register an HTTP MCP server with a secret_ref; assert:
     - capabilities are discovered (tools list is populated)
-    - the credential value does not appear in any DB row (config column, audit entries)
+    - the secret value does not appear in any DB row (config column, audit entries)
     """
     backend = install_in_memory_keyring(monkeypatch)
 
@@ -327,8 +327,8 @@ async def test_register_http_mcp_server_discovers_capabilities(
             "transport": {
                 "type": "http",
                 "url": f"http://127.0.0.1:{port}/mcp",
-                # credential_refs maps a header name to a keyring key
-                "credential_refs": {"Authorization": "http_fake_token"},
+                # secret_refs maps a header name to a keyring key
+                "secret_refs": {"Authorization": "http_fake_token"},
             }
         }
 
@@ -345,12 +345,12 @@ async def test_register_http_mcp_server_discovers_capabilities(
                 "delete_file",
             }, f"Expected discovered tools, got: {tool_names}"
 
-            # --- Credential safety: scan every DB row for the secret value ---
+            # --- Secret safety: scan every DB row for the secret value ---
             # Check resources table (config column stores transport JSON)
             resource = await rsvc.get_by_name("mcp_server", "http_srv")
             config_str = str(resource.config)
             assert secret_value not in config_str, (
-                f"Credential leaked into resource.config: {config_str!r}"
+                f"Secret leaked into resource.config: {config_str!r}"
             )
 
             # Check audit entries
@@ -358,7 +358,7 @@ async def test_register_http_mcp_server_discovers_capabilities(
             for entry in all_audit:
                 entry_str = str(entry.details)
                 assert secret_value not in entry_str, (
-                    f"Credential leaked into audit entry details: {entry_str!r}"
+                    f"Secret leaked into audit entry details: {entry_str!r}"
                 )
         finally:
             await sup.dispose()

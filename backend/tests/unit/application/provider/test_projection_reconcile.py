@@ -83,7 +83,7 @@ def _connection(*, is_active: bool = True) -> Resource:
         {
             "protocol": "openai",
             "base_url": _BASE_URL,
-            "credential_ref": "agnes-key",
+            "secret_ref": "agnes-key",
             "is_active": is_active,
         },
         uid=_CONNECTION_UID,

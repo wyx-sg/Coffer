@@ -3,9 +3,9 @@
 `ChannelConfig` is what `Resource.config` holds when `kind == "channel"`.
 Telegram + SeaTalk as a Pydantic discriminated union on `channel_type`.
 
-Secrets never live here: every `*_ref` field is a credential-store ref. A
+Secrets never live here: every `*_ref` field is a secret-store ref. A
 value that *looks* like the raw secret itself (a Telegram bot token, a long
-high-entropy blob) is rejected with a pointer at the credential store.
+high-entropy blob) is rejected with a pointer at the secret store.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pydantic import (
     field_validator,
 )
 
-# A credential ref is a vault ADDRESS, not a secret: Coffer mints
+# A secret ref is a vault ADDRESS, not a secret: Coffer mints
 # "channel/<uuid4 hex>/<secret>" for one the UI stores, and a user may type a
 # path of their own. Raw secrets are longer and machine-shaped; reject the
 # obvious cases. The high-entropy pattern deliberately excludes "/": path-style
@@ -38,7 +38,7 @@ def _reject_raw_secret(field: str, value: str) -> str:
         if pat.search(value):
             raise ValueError(
                 f"{field} looks like a raw secret; store the secret with "
-                f"`coffer credentials set <ref>` and put the ref here instead"
+                f"`coffer secret set <ref>` and put the ref here instead"
             )
     return value
 

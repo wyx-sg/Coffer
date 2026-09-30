@@ -1,87 +1,25 @@
-// src/components/activity/ActivityBody.tsx — the visible tab's list in each of its states, and the strip above it.
+// src/components/activity/ActivityBody.tsx — the visible tab's list in each of its states.
 //
-// Loading is skeleton rows; a tab whose every log failed says so with Retry,
-// while on Everything a failed log is named above the rows the others still
-// show (spec web-ui "Query only the visible Activity tab and isolate
-// failures"); nothing yet says what to do next, and filters that match
-// nothing offer to clear them. The strip holds "↑ N new" while records wait.
+// Loading is skeleton rows; a tab whose every log failed says so with Retry
+// (spec web-ui "Query only the visible Activity tab and isolate failures");
+// nothing yet says what to do next, and filters that match nothing offer to
+// clear them. Otherwise the rows, with the line above them saying what the
+// list holds, and under them "Load older" (design 6.1.01, 6.1.02, 6.1.10).
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowUp, ScrollText } from "lucide-react";
+import { AlertCircle, RotateCw, ScrollText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import type { ActivityTab } from "@/lib/activity/records";
+import { everyLogFailed, failedNames, listSummary } from "@/lib/activity/feedText";
+import type { ActivityRecord, ActivityTab } from "@/lib/activity/records";
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
 import { ActivityList } from "./ActivityList";
+import { OlderHint } from "./ActivityNotices";
 import type { AgentLook } from "./activityCells";
-
-/** Whether every log the tab reads failed, so nothing at all can be shown. */
-function everyLogFailed(feed: ActivityFeed): boolean {
-  return feed.failed.length > 0 && feed.failed.length === feed.specs.length;
-}
-
-function useFailedNames(feed: ActivityFeed): string {
-  const { t } = useTranslation();
-  return feed.failed.map((s) => t(`activity.sources.${s.source}`)).join(", ");
-}
-
-/** A log that failed on a tab whose other logs still answered. */
-export function PartialFailure({ feed }: { feed: ActivityFeed }) {
-  const { t } = useTranslation();
-  const names = useFailedNames(feed);
-  if (feed.failed.length === 0 || everyLogFailed(feed)) return null;
-  return (
-    <Alert variant="error">
-      <AlertCircle />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span>
-          <span className="font-label text-text">
-            {t("activity.failed.title", { sources: names })}
-          </span>{" "}
-          {t("activity.failed.partial")}
-        </span>
-        <Button variant="outline" size="sm" onClick={() => feed.failed.forEach((s) => s.retry())}>
-          {t("activity.failed.retry")}
-        </Button>
-      </div>
-    </Alert>
-  );
-}
-
-/** "↑ N new" while records are held; otherwise how many are loaded. */
-export function NewRecordsStrip({
-  held,
-  feed,
-  onShowNew,
-}: {
-  held: boolean;
-  feed: ActivityFeed;
-  onShowNew: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex h-5 items-center justify-center text-2xs text-text-subtle">
-      {held && feed.pendingCount > 0 ? (
-        <button
-          type="button"
-          onClick={onShowNew}
-          className="inline-flex h-6 items-center gap-1 rounded-full bg-accent px-2.5 text-xs font-semibold text-accent-foreground shadow-overlay"
-        >
-          <ArrowUp className="size-3" aria-hidden />
-          {t("activity.pending", { count: feed.pendingCount })}
-        </button>
-      ) : (
-        <span data-visual-volatile="count" className="ml-auto">
-          {feed.loaded > 0 ? t("activity.loaded", { count: feed.loaded }) : null}
-        </span>
-      )}
-    </div>
-  );
-}
 
 interface Props {
   tab: ActivityTab;
@@ -92,6 +30,13 @@ interface Props {
   agents: ReadonlyMap<string, AgentLook>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  /** The time window's key and its words, for the summary and the MCP calls line. */
+  timeRange: string;
+  windowLabel: string;
+  /** What an open Daemon log row shows under itself. */
+  renderExpanded?: (r: ActivityRecord) => ReactNode;
+  /** Above the Daemon log's rows: the file it reads and whether it follows it. */
+  logLine?: ReactNode;
 }
 
 export function ActivityBody({
@@ -102,9 +47,14 @@ export function ActivityBody({
   agents,
   selectedKey,
   onSelect,
+  timeRange,
+  windowLabel,
+  renderExpanded,
+  logLine,
 }: Props) {
-  const { t } = useTranslation();
-  const names = useFailedNames(feed);
+  const { t, i18n } = useTranslation();
+  const names = failedNames(t, feed);
+  const summary = listSummary(t, i18n.language, tab, feed, timeRange);
 
   if (feed.isLoading) {
     return (
@@ -124,6 +74,7 @@ export function ActivityBody({
         description={translateApiError(t, feed.failed[0].error)}
         action={
           <Button variant="outline" onClick={() => feed.failed.forEach((s) => s.retry())}>
+            <RotateCw />
             {t("activity.failed.retry")}
           </Button>
         }
@@ -143,46 +94,57 @@ export function ActivityBody({
         }
       />
     ) : (
-      <EmptyState
-        icon={ScrollText}
-        title={t("activity.empty.title")}
-        description={t("activity.empty.body")}
-        action={
-          <Button asChild>
-            <Link to="/agents">{t("activity.empty.connect")}</Link>
-          </Button>
-        }
-        secondaryAction={
-          <Button asChild variant="outline">
-            <Link to="/mcp-servers">{t("activity.empty.addServer")}</Link>
-          </Button>
-        }
-      />
+      <div className="border-t border-border-subtle">
+        <EmptyState
+          icon={ScrollText}
+          title={t("activity.empty.title")}
+          description={t("activity.empty.body")}
+          action={
+            <Button asChild>
+              <Link to="/agents">{t("activity.empty.connect")}</Link>
+            </Button>
+          }
+          secondaryAction={
+            <Button asChild variant="outline">
+              <Link to="/mcp-servers">{t("activity.empty.addServer")}</Link>
+            </Button>
+          }
+        />
+      </div>
     );
   }
   return (
     <>
+      {logLine}
       <ActivityList
         tab={tab}
         rows={feed.rows}
         agents={agents}
         selectedKey={selectedKey}
         onSelect={onSelect}
+        summary={summary}
+        windowLabel={windowLabel}
+        renderExpanded={renderExpanded}
       />
-      <div className="flex flex-wrap items-center gap-3 px-3 py-4">
-        {feed.hasOlder ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={feed.loadOlder}
-            disabled={feed.isLoadingOlder}
-          >
-            {feed.isLoadingOlder ? t("activity.loadingOlder") : t("activity.loadOlder")}
-          </Button>
-        ) : (
-          <span className="text-xs text-text-subtle">{t("activity.end")}</span>
-        )}
-      </div>
+      {tab === "daemon" ? null : (
+        <div className="flex flex-wrap items-center gap-3 px-3 py-4">
+          {feed.hasOlder ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={feed.loadOlder}
+                disabled={feed.isLoadingOlder}
+              >
+                {feed.isLoadingOlder ? t("activity.loadingOlder") : t("activity.loadOlder")}
+              </Button>
+              <OlderHint oldest={feed.rows.at(-1)} />
+            </>
+          ) : (
+            <span className="text-xs text-text-subtle">{t("activity.end")}</span>
+          )}
+        </div>
+      )}
     </>
   );
 }

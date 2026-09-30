@@ -11,6 +11,7 @@ curation stamps, as the previous build kept it.
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import os
 import shutil
@@ -26,7 +27,13 @@ from cryptography.fernet import Fernet
 
 from coffer.surfaces.http.migrations_runner import _alembic_config
 
+_0135 = importlib.import_module(
+    "coffer.infrastructure.persistence.migrations.versions.20260930_0135_secrets"
+)
+
 AT = "2026-09-01 10:00:00.000000"
+#: When the provider's key was last used on this machine (revision 0135).
+LAST_USED = "2026-08-20T00:00:00+00:00"
 UIDS = {
     "github": "a1" * 16,
     "linear": "a2" * 16,
@@ -61,7 +68,7 @@ def resources(home: Path) -> list[Spec]:
                 "transport": {
                     "type": "stdio",
                     "command": "/bin/echo",
-                    "credential_refs": {"GITHUB_TOKEN": "mcp/github-token"},
+                    "secret_refs": {"GITHUB_TOKEN": "mcp/github-token"},
                 }
             },
             False,
@@ -164,7 +171,7 @@ def resources(home: Path) -> list[Spec]:
             {
                 "protocol": "anthropic",
                 "base_url": "https://api.anthropic.com",
-                "credential_ref": "provider/anthropic",
+                "secret_ref": "provider/anthropic",
             },
             True,
             None,
@@ -227,9 +234,18 @@ def _insert(conn: sqlite3.Connection, table: str, row: dict[str, Any]) -> None:
     conn.execute(f"INSERT INTO {table} ({cols}) VALUES ({marks})", tuple(row.values()))
 
 
+#: The revision that renamed the secret store's table, the sync remote's
+#: columns and the two config keys that cite a secret; a home built below it
+#: carries the old names, as that build wrote them.
+SECRET_RENAME = "0135"
+
+
 def _rows(conn: sqlite3.Connection, lh: LegacyHome, revision: str) -> None:
     fernet = Fernet(lh.key)
+    renamed = revision >= SECRET_RENAME
     for rid, kind, name, config, enabled, agents, title in resources(lh.home):
+        if not renamed:
+            _0135.rewrite_config(kind, config, forward=False)
         _insert(
             conn,
             "resources",
@@ -257,16 +273,15 @@ def _rows(conn: sqlite3.Connection, lh: LegacyHome, revision: str) -> None:
         "proxy-token/claude_code": "local-proxy",
     }
     for ref, value in lh.secrets.items():
-        _insert(
-            conn,
-            "credentials",
-            {
-                "ref": ref,
-                "ciphertext": fernet.encrypt(value.encode()),
-                "created_at": "2026-08-01T00:00:00+00:00",
-                "updated_at": "2026-08-02T00:00:00+00:00",
-            },
-        )
+        row: dict[str, Any] = {
+            "ref": ref,
+            "ciphertext": fernet.encrypt(value.encode()),
+            "created_at": "2026-08-01T00:00:00+00:00",
+            "updated_at": "2026-08-02T00:00:00+00:00",
+        }
+        if renamed and ref == "provider/anthropic":
+            row["last_used_at"] = LAST_USED
+        _insert(conn, "secrets" if renamed else "credentials", row)
     _insert(
         conn,
         "secret_bindings",
@@ -274,7 +289,7 @@ def _rows(conn: sqlite3.Connection, lh: LegacyHome, revision: str) -> None:
             "ref": "provider/anthropic",
             "destination_kind": "provider",
             "destination_uid": UIDS["anthropic"],
-            "slot": "credential_ref",
+            "slot": "secret_ref",
             "target_fingerprint": "fp1",
             "approved_at": "2026-08-03T00:00:00+00:00",
             "approval_id": "ap-1",
@@ -292,7 +307,7 @@ def _rows(conn: sqlite3.Connection, lh: LegacyHome, revision: str) -> None:
             "ref": "provider/anthropic",
             "destination_kind": "provider",
             "destination_uid": UIDS["anthropic"],
-            "slot": "credential_ref",
+            "slot": "secret_ref",
             "target_fingerprint": "fp1",
             "decided_at": "2026-08-03T00:01:00+00:00",
             "decided_by": "user",
@@ -424,7 +439,7 @@ def _rows(conn: sqlite3.Connection, lh: LegacyHome, revision: str) -> None:
             "id": 1,
             "url": "/nowhere/remote.git",
             "branch": "main",
-            "include_credentials": 0,
+            "include_secrets" if renamed else "include_credentials": 0,
             "interval_seconds": 900,
             "enabled": 1,
             "worktree_path": "~/.coffer/sync",
@@ -610,7 +625,7 @@ def _schema_at(revision: str) -> Path:
     return _SCHEMAS[revision]
 
 
-def build_legacy_home(home: Path, *, revision: str = "0116") -> LegacyHome:
+def build_legacy_home(home: Path, *, revision: str = SECRET_RENAME) -> LegacyHome:
     """A pre-vault home at ``home`` (the parent of ``.coffer``)."""
     lh = LegacyHome(home=home, key=Fernet.generate_key())
     lh.coffer.mkdir(parents=True, exist_ok=True)

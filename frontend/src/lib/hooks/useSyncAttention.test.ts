@@ -32,7 +32,7 @@ describe("attentionMarker", () => {
   });
 
   test("the same problem a round later is the same marker", () => {
-    // A timer re-raises one broken credential every pass; a marker that
+    // A timer re-raises one broken secret every pass; a marker that
     // called each repeat news would put the dot back over a problem the user
     // has already read.
     const first = attentionMarker(makeRound({ id: 1, status: "auth_failed", detail: "HTTP 403" }));
@@ -79,7 +79,7 @@ describe("syncStatusMarker", () => {
     expect(
       syncStatusMarker(
         status(true, {
-          problem: { kind: "unreachable", message: "no route", credential_ref: null, since: null },
+          problem: { kind: "unreachable", message: "no route", secret_ref: null, since: null },
         }),
       ),
     ).not.toBeNull();

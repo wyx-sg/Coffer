@@ -62,7 +62,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     name,
     protocol: "openai",
     base_url: "https://gw/openai",
-    credential_ref: "provider/acme/key",
+    secret_ref: "provider/acme/key",
     local_runtime: null,
     compatible_agents: ["codex"],
     is_active: false,
@@ -231,7 +231,7 @@ describe("SpeechToTextSettings", () => {
         fireEvent.click(screen.getByRole("button", { name: /test speech to text/i }));
       });
       expect(listMutate).toHaveBeenCalledWith(
-        { provider: "openai", base_url: "https://gw/openai", credential_ref: "provider/acme/key" },
+        { provider: "openai", base_url: "https://gw/openai", secret_ref: "provider/acme/key" },
         expect.anything(),
       );
       expect(chatProbe).not.toHaveBeenCalled();

@@ -61,7 +61,7 @@ class _Recording:
             actor=actor,
             agent=_Loop([]),
             models=_Model(),
-            credential_resolver=lambda ref: "key",
+            secret_resolver=lambda ref: "key",
         )
 
 

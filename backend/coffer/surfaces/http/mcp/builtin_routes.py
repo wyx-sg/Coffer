@@ -25,7 +25,7 @@ from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegi
 from coffer.application.mcp.gateway_tool_search import tool_search_descriptor
 from coffer.domain.mcp.capability import BUILTIN_SERVER_UID
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.mcp.dependencies import get_invocation_repo
 from coffer.surfaces.http.mcp.page_schemas import InvocationSummaryOut, invocation_summary_out
@@ -116,7 +116,7 @@ async def get_builtin_server(
     )
     tools = _tools(source.tools)
     return McpBuiltinServerOut(
-        url=f"http://127.0.0.1:{daemon_routes.get_port()}/mcp",
+        url=f"http://127.0.0.1:{daemon_port.get_port()}/mcp",
         checked_at=now,
         connected_agent_uids=await source.connected_agents(),
         tools=tools,

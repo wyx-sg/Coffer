@@ -30,7 +30,7 @@ const TICK: Duration = Duration::from_secs(15);
 /// Let the launch handshake's detect-or-spawn go first.
 const FIRST_TICK_DELAY: Duration = Duration::from_secs(5);
 
-const PENDING_PATH: &str = "/api/v1/credentials/approvals?status=pending";
+const PENDING_PATH: &str = "/api/v1/secrets/approvals?status=pending";
 
 /// One pending approval, as much of it as a notification needs.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -18,7 +18,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 
-from coffer.application.attention import AttentionService, AttentionSource
+from coffer.application.attention import AttentionService, AttentionSource, IgnoreStore
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.attention_source import DriftAttentionSource
 from coffer.application.reconcile.reconciler import Reconciler
@@ -57,11 +57,18 @@ def wire_attention(
     reconciler: Reconciler,
     feature_enabled: Callable[[str], bool],
     sources: Sequence[AttentionSource],
+    *,
+    ignores: IgnoreStore | None = None,
+    audit: AuditService | None = None,
 ) -> AttentionService:
     """The "needs you" list: the reconciler's open drift first, then each
-    kind's own signals; a source behind a switched-off feature is not asked."""
+    kind's own signals; a source behind a switched-off feature is not asked.
+    ``ignores`` holds what a person ignored on this machine."""
     service = AttentionService(
-        [DriftAttentionSource(reconciler), *sources], feature_enabled=feature_enabled
+        [DriftAttentionSource(reconciler), *sources],
+        feature_enabled=feature_enabled,
+        ignores=ignores,
+        audit=audit,
     )
     set_attention_service(service)
     return service

@@ -43,16 +43,16 @@ Choosing **Ollama** takes the local path instead: no key, and Coffer looks for a
 
 ```sh
 # Store the key first, so it never appears on a command line
-printf '%s' "$DEEPSEEK_API_KEY" | coffer credentials set deepseek/key
+printf '%s' "$DEEPSEEK_API_KEY" | coffer secret set deepseek/key
 
 coffer provider add deepseek \
   --protocol openai \
   --base-url https://api.deepseek.com \
-  --credential-ref deepseek/key
+  --secret-ref deepseek/key
 # added provider deepseek (openai)
 ```
 
-`coffer provider add` also accepts `--secret <key>`, which stores the key under a new opaque ref of the form `provider/<uuid>/key` — but the value then sits in your shell history. For `anthropic`, `openai` and `unknown` you must give exactly one of `--secret` or `--credential-ref`.
+`coffer provider add` also accepts `--secret <key>`, which stores the key under a new opaque ref of the form `provider/<uuid>/key` — but the value then sits in your shell history. For `anthropic`, `openai` and `unknown` you must give exactly one of `--secret` or `--secret-ref`.
 
 | Protocol | Meaning | Key |
 | --- | --- | --- |
@@ -237,7 +237,7 @@ See [The local model proxy](../architecture/model-proxy.md#failover) for the exa
 **Web UI:** on the provider's header:
 
 - **Edit** changes the **Name**, the **Protocol** and the **Base URL**, with **Test** before you save. Renaming changes only the label; the page stays where it is. The protocol is locked while an agent runs on the provider. The key is not edited here.
-- **Replace key** (on Overview, or the key-rejected banner) takes a new key, can **Test** it first, and overwrites the value behind the same secret — the agents' config files only name the secret, so they do not change. When the key is in use, the new value waits until you approve it in the Coffer app: the dialog and the API key row say **Waiting for approval in the Coffer app**, with **Review**. See [Credentials](/guides/credentials).
+- **Replace key** (on Overview, or the key-rejected banner) takes a new key, can **Test** it first, and overwrites the value behind the same secret — the agents' config files only name the secret, so they do not change. When the key is in use, the new value waits until you approve it in the Coffer app: the dialog and the API key row say **Waiting for approval in the Coffer app**, with **Review**. See [Secret store](/guides/secret-store).
 - **⋯ › Delete provider** deletes a provider nothing runs on, with its secret, after a confirmation. While an agent, Coffer's engine or speech to text runs on it, the delete is blocked: the dialog names each one and links to where it is changed.
 
 **CLI:**
@@ -253,10 +253,10 @@ coffer provider rm deepseek
 - **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
-- **Waiting for approval.** A new `--secret` for a key in use, a new `--base-url` for a connection whose key already goes somewhere, and `coffer provider add … --credential-ref` with a key another connection uses are saved but held until you approve them in the Coffer app. The command prints `waiting for approval in the Coffer app` with the approval's id and exits `9`; with `--wait` it waits for your answer instead. The old key and URL stay in use until then.
+- **Waiting for approval.** A new `--secret` for a key in use, a new `--base-url` for a connection whose key already goes somewhere, and `coffer provider add … --secret-ref` with a key another connection uses are saved but held until you approve them in the Coffer app. The command prints `waiting for approval in the Coffer app` with the approval's id and exits `9`; with `--wait` it waits for your answer instead. The old key and URL stay in use until then.
 - **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <agent_type>` for each agent type it reaches (the refusal names them), edit, then switch again.
-- **Renaming** changes only the label. The uid, the credential ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
-- **Deleting** removes the provider and deletes its credential if nothing else cites it.
+- **Renaming** changes only the label. The uid, the secret ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
+- **Deleting** removes the provider and deletes its secret if nothing else cites it.
 
 ## Boot self-check
 
@@ -279,7 +279,7 @@ A choice saves as soon as you make it; there is no Save button. A line under eac
 - **Set** — both halves are chosen and have not been tested during this visit.
 - **Answering** or **Failing** — the result of **Test**. For the engine, Test sends one small chat request to the chosen provider and model. For speech to text, a chat request would fail on a speech model, so Test instead asks the provider which models it serves: it passes when the list names your model and fails when it does not. A provider that answers but lists no models reads **Reachable**, because the model can't be checked. A failure shows the reason on that line and changes nothing: the pair stays as you chose it until you pick another one.
 
-Below the pickers, **Automatic upkeep** has one row per unattended pass, each with its own switch and interval.
+The passes Coffer runs on its own are switched on the pages they upkeep: curation from the **Automatic** control in the Knowledge header, reading and distilling memory from the one in the Memory header.
 
 **CLI:**
 
@@ -311,7 +311,7 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 ## Related
 
 - [Agents](/guides/agents) — model binding and the agent's own catalogue
-- [Credentials](/guides/credentials) — where provider keys are stored
+- [Secret store](/guides/secret-store) — where provider keys are stored
 - [Conversations](/guides/chat) and [Channels](/guides/channels) — where models are picked per conversation
 - [LLM Connections Are Projected Into Each Agent's Own Config File](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md)
 - Specs: [provider-switching](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)

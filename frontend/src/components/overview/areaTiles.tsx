@@ -23,6 +23,7 @@ import {
   type Area,
 } from "@/lib/overview/health";
 import { QueryTile } from "./QueryTile";
+import { ClisTile, CustomToolsTile, SecretsTile, UsageTile } from "./systemTiles";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -220,6 +221,10 @@ const TILES: Record<Area["id"], (props: AreaProps) => JSX.Element> = {
   knowledge: KnowledgeTile,
   memory: MemoryTile,
   sync: SyncTile,
+  customTools: CustomToolsTile,
+  clis: ClisTile,
+  secrets: SecretsTile,
+  usage: UsageTile,
 };
 
 /** The tile for one area. */

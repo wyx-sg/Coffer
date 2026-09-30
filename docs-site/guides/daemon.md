@@ -197,7 +197,7 @@ To go back to a pre-migration copy:
 coffer daemon stop
 cd ~/.coffer
 mv runs.db runs.db.broken
-cp runs.db.pre-0117 runs.db          # and the -wal / -shm files, if present
+cp runs.db.pre-0136 runs.db          # and the -wal / -shm files, if present
 ```
 
 Then start the build that matches that schema.
@@ -235,7 +235,7 @@ coffer daemon start
 ```
 
 ::: warning
-A backup that includes `master.key` can decrypt every credential in it. Store it like a password. A backup without the key keeps the credentials as ciphertext nobody can read.
+A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
 :::
 
 If you run Coffer on several machines, [vault sync](/guides/vault-sync) pushes the vault repository, history included, to a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.

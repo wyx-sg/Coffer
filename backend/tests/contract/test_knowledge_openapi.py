@@ -53,6 +53,14 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/changes"),
     ("GET", "/api/v1/knowledge/changes/{version}"),
     ("POST", "/api/v1/knowledge/changes/{version}/undo"),
+    # One version's body, for Compare with current; putting back what a delete
+    # removed (see "Restore a deleted collection or document from Recent
+    # changes"); and a collection's description, its README's opening
+    # paragraph (see "Name a collection by its folder and edit its description
+    # in place").
+    ("GET", "/api/v1/knowledge/history/version"),
+    ("POST", "/api/v1/knowledge/changes/{version}/restore"),
+    ("PUT", "/api/v1/knowledge/collections/{uid}/description"),
 }
 
 #: Exactly one (see "Expose exactly one knowledge tool"). Upload is

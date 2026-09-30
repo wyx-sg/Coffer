@@ -27,7 +27,7 @@ _FIRST_TIME: dict[str, Any] = {
     "branch": DEFAULT_BRANCH,
     "interval_seconds": DEFAULT_INTERVAL_SECONDS,
     "include_secret": False,
-    "credential_ref": None,
+    "secret_ref": None,
     "username": DEFAULT_USERNAME,
     "enabled": True,
 }
@@ -42,11 +42,11 @@ def remote_body(current: dict[str, Any] | None, url: str, **given: Any) -> dict[
     defaults), with ``url`` and every option the user passed laid over it.
 
     An option left at ``None`` was not passed and keeps its stored value; an
-    empty ``credential_ref`` is the one way to say "no push credential"."""
+    empty ``secret_ref`` is the one way to say "no push secret"."""
     body = dict(current) if current else dict(_FIRST_TIME)
     body.update({k: v for k, v in given.items() if v is not None})
-    if body.get("credential_ref") == "":
-        body["credential_ref"] = None
+    if body.get("secret_ref") == "":
+        body["secret_ref"] = None
     body["url"] = url
     return body
 
@@ -61,7 +61,7 @@ def print_remote(remote: dict[str, Any]) -> None:
         f"{'enabled' if remote['enabled'] else 'paused'}"
     )
     _console.print(
-        f"  push token: {remote.get('credential_ref') or '(none)'}"
+        f"  push token: {remote.get('secret_ref') or '(none)'}"
         f" · username {remote.get('username') or DEFAULT_USERNAME}"
     )
 
@@ -81,9 +81,9 @@ def remote_set(
         "--with-secret/--without-secret",
         help="Carry the encrypted secrets (ciphertext, never the master key); default off",
     ),
-    credential_ref: str | None = typer.Option(
+    secret_ref: str | None = typer.Option(
         None,
-        "--credential-ref",
+        "--secret-ref",
         help="Name of the push token in the secret store ('' removes it)",
     ),
     username: str | None = typer.Option(
@@ -110,7 +110,7 @@ def remote_set(
             branch=branch,
             interval_seconds=interval,
             include_secret=with_secret,
-            credential_ref=credential_ref,
+            secret_ref=secret_ref,
             username=username,
         )
         r = c.put("/sync/remote", json=body)
@@ -172,7 +172,7 @@ def remote_check(
     ctx: typer.Context,
     url: str | None = typer.Argument(None, help="A remote to look at (default: the stored one)"),
     branch: str | None = typer.Option(None, "--branch", help=f"Default {DEFAULT_BRANCH}"),
-    credential_ref: str | None = typer.Option(None, "--credential-ref", help="Push token to use"),
+    secret_ref: str | None = typer.Option(None, "--secret-ref", help="Push token to use"),
 ) -> None:
     """Look at a remote without keeping it: empty, a Coffer vault (and its
     layout), another repository, unreachable, or refusing the token."""
@@ -189,9 +189,7 @@ def remote_check(
         body = {
             "url": target,
             "branch": branch or current.get("branch") or DEFAULT_BRANCH,
-            "credential_ref": credential_ref
-            if credential_ref is not None
-            else current.get("credential_ref"),
+            "secret_ref": secret_ref if secret_ref is not None else current.get("secret_ref"),
         }
         r = c.post("/sync/remote/check", json=body)
         _cli_client.check(r, verbose=verbose)

@@ -26,7 +26,9 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.domain.internal_engine_config import AGGREGATE
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +65,18 @@ class AggregateWorker:
         is_enabled: EnabledCheck = _always_enabled,
         interval_s: float = DEFAULT_INTERVAL_S,
         read_interval: IntervalReader = _unset_interval,
+        clock: PassClock = PASS_CLOCK,
     ) -> None:
         self._aggregate = aggregate
+        # Where the Automatic popover's "next in" comes from (``application.upkeep_clock``).
+        self._clock = clock
         self._is_enabled = is_enabled
         self._interval_s = interval_s
         self._read_interval = read_interval
 
     async def run_forever(self) -> None:
         while True:
+            self._clock.running(AGGREGATE)
             try:
                 await self.run_once()
             except asyncio.CancelledError:
@@ -82,7 +88,8 @@ class AggregateWorker:
                 # isolation" already isolates one unreadable agent from the rest.
                 logger.warning("memory.aggregate_worker.pass_failed", exc_info=True)
             # The operator's interval is re-read as the wait runs, so changing
-            # it in Settings takes effect within a slice rather than an hour.
+            # it in the Automatic popover takes effect within a slice, not an hour.
+            self._clock.waiting(AGGREGATE)
             await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:

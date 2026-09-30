@@ -37,14 +37,14 @@ parsed for a mention, so an @mention inside a media caption is not recognized.
 
 ### Requirement: Configure a Telegram channel by a bot token reference
 A Telegram channel's configuration MUST be a **bot token reference** and nothing
-else beyond the fields every channel carries ([channels](../spec.md) "Register channels as a credential-referencing resource kind"). The token
-itself lives in the credential store; the reference is probed at registration.
+else beyond the fields every channel carries ([channels](../spec.md) "Register channels as a secret-referencing resource kind"). The token
+itself lives in the secret store; the reference is probed at registration.
 
 #### Scenario: register a telegram channel whose token reference resolves
-- **GIVEN** a bot token stored in the credential store under a reference
+- **GIVEN** a bot token stored in the secret store under a reference
 - **WHEN** a telegram channel is registered with that reference and no other type-specific field
 - **THEN** the channel is stored carrying the reference, not the token itself
-- **AND** a telegram registration naming a reference with no stored credential is rejected
+- **AND** a telegram registration naming a reference with no stored secret is rejected
 
 ### Requirement: Receive updates by long polling
 Telegram inbound MUST use **long polling**, with the update offset committed only

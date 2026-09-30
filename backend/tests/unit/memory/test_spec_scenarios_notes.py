@@ -117,7 +117,7 @@ class _RecordingCompletion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         payload = json.loads(user)

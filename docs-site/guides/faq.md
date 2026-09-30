@@ -13,7 +13,7 @@ Not by Coffer's own doing, unless you configure it to. The daemon listens only o
 
 - **MCP servers you register.** Coffer starts a stdio server and connects to an HTTP server at the URL you gave; what they contact is up to each server.
 - **Model providers.** If you choose a provider for **Coffer's model** or **Speech to text**, Coffer sends those requests to it. Your agents talk to their own providers as they always do.
-- **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Credentials travel only as ciphertext and only if you opt in; the master key never does.
+- **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Secrets travel only as ciphertext and only if you opt in; the master key never does.
 - **Channels.** A Telegram or SeaTalk channel exchanges messages with that platform.
 
 The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test connection** and model listing in the provider editor) is refused if it resolves to a loopback, private or link-local address, unless the provider is an Ollama server.
@@ -80,7 +80,7 @@ The complete list is in [Files and directories](/reference/filesystem).
 
 ## How are my secrets stored?
 
-Credentials are encrypted with Fernet, one file per secret under `~/.coffer/vault/secret/`. The master key lives in `~/.coffer/master.key` (mode `0600`) by default, or in the macOS keychain if you opt in under **Settings → Security**. Resources name a credential by reference, never by value. See [Credentials](/guides/credentials).
+Secrets are encrypted with Fernet, one file per secret under `~/.coffer/vault/secret/`. The master key lives in `~/.coffer/master.key` (mode `0600`) by default, or in the macOS keychain if you opt in under **Settings → Security**. Resources name a secret by reference, never by value. See [Secret store](/guides/secret-store).
 
 ## Can two machines share one vault?
 

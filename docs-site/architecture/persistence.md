@@ -88,7 +88,7 @@ A resource file carries its identity, format version, name, description and conf
       "type": "stdio",
       "command": "${HOME}/.local/bin/jira-mcp",
       "args": [],
-      "credential_refs": { "JIRA_TOKEN": "jira-token" }
+      "secret_refs": { "JIRA_TOKEN": "jira-token" }
     }
   }
 }
@@ -140,6 +140,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
 | `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage page reads. |
 | `quota_snapshots` | The latest official subscription quota each feed reported. |
+| `attention_ignores` | The informational "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
 
 ::: details Tables no code reads
 The migration chain also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build reads them; they exist because migrations are one linear history and later revisions build on the ones that created them.
@@ -198,7 +199,7 @@ The vault needs `git`. A machine without it fails at startup with a message nami
 
 ## Migrations of runs.db
 
-Schema changes to `runs.db` are Alembic revisions under [`infrastructure/persistence/migrations/versions/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations/versions), named `YYYYMMDD_NNNN_<slug>.py`. The head is `0117`, the revision that turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never an implicit `create_all`.
+Schema changes to `runs.db` are Alembic revisions under [`infrastructure/persistence/migrations/versions/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations/versions), named `YYYYMMDD_NNNN_<slug>.py`. The head is `0136`, the revision that turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never an implicit `create_all`.
 
 Migrations run in the daemon's lifespan, before any service is built ([`surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py)):
 
@@ -222,7 +223,7 @@ flowchart TB
 
 ## Secrets at rest
 
-A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and a trailing newline, mode `0600` in a `0700` directory. Machine-local refs such as the model proxy's tokens live in `local/secret/` instead and never enter the vault. Ciphertext is safe in the vault because the key is not: the master key stays in the OS credential store or the `0600` file `~/.coffer/master.key`. Whether `vault/secret/` is committed is decided by your sync remote's `include_secret` setting; until then it is excluded from the repository. The secret boundary's bindings, approvals and switches are in `local/secret-boundary/`. See [Security model](/architecture/security).
+A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and a trailing newline, mode `0600` in a `0700` directory. Machine-local refs such as the model proxy's tokens live in `local/secret/` instead and never enter the vault. Ciphertext is safe in the vault because the key is not: the master key stays in the OS secret store or the `0600` file `~/.coffer/master.key`. Whether `vault/secret/` is committed is decided by your sync remote's `include_secret` setting; until then it is excluded from the repository. The secret boundary's bindings, approvals and switches are in `local/secret-boundary/`. See [Security model](/architecture/security).
 
 ## Settings that live outside every class
 
@@ -246,7 +247,7 @@ Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime st
 | [`backend/coffer/application/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/vault) | Validation rules, history and restore, problems. |
 | [`backend/coffer/infrastructure/persistence/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence) | The runs.db engine, models and Alembic revisions; `derived_db.py`. |
 | [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | Startup migration, backup, too-new guard, the refusal of an old home. |
-| [`backend/coffer/infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py) | Secret ciphertext as files. |
+| [`backend/coffer/infrastructure/secret/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/encrypted_store.py) | Secret ciphertext as files. |
 | [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`. |
 
 ## Related

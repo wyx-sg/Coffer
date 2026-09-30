@@ -71,7 +71,7 @@ def remote_out(remote: SyncRemote) -> SyncRemoteOut:
     return SyncRemoteOut(
         url=remote.url,
         branch=remote.branch,
-        credential_ref=remote.credential_ref,
+        secret_ref=remote.secret_ref,
         username=remote.username,
         include_secret=remote.include_secret,
         interval_seconds=remote.interval_seconds,
@@ -107,7 +107,7 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
         problem=ProblemOut(
             kind=cast(Any, problem.kind),
             message=problem.message,
-            credential_ref=problem.credential_ref,
+            secret_ref=problem.secret_ref,
             since=problem.since,
         )
         if problem

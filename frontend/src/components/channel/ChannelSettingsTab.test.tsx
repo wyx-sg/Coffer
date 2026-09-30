@@ -3,7 +3,7 @@
 // A channel's Settings save as they change (no Save button): a switch PATCHes
 // at once, a typed value a moment after typing stops — and only when valid;
 // an invalid value shows its error and is never sent. Every PATCH carries the
-// whole config back with every credential ref untouched, and two saves a
+// whole config back with every secret ref untouched, and two saves a
 // moment apart never undo each other. Replacing a secret writes the new value
 // under the ref the channel already cites, then restarts the adapter.
 //
@@ -224,7 +224,7 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
 
   await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
   expect(api.POST.mock.calls[0]).toEqual([
-    "/credentials",
+    "/secrets",
     { body: { ref: "channel/9a/bot-token", value: "999:rotated" } },
   ]);
   const config = patched(api);
@@ -235,7 +235,7 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   // Then the adapter restarts: off and on again.
   await waitFor(() =>
     expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
-      "/credentials",
+      "/secrets",
       "/resources/{uid}/disable",
       "/resources/{uid}/enable",
     ]),

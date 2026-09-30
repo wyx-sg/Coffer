@@ -106,7 +106,7 @@ def _print_status(payload: dict[str, Any]) -> None:
             _console.print(f"  [yellow]{payload[key]} {text}[/yellow]")
     problem = payload.get("problem")
     if problem:
-        ref = f" (token {problem['credential_ref']})" if problem.get("credential_ref") else ""
+        ref = f" (token {problem['secret_ref']})" if problem.get("secret_ref") else ""
         _console.print(f"  [red]{problem['kind']}[/red]{ref}: {problem['message']}")
     if payload.get("next_round_at"):
         _console.print(f"  next round: {payload['next_round_at']}")

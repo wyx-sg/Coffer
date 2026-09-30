@@ -28,7 +28,7 @@ with a first commit, whether or not a sync remote is configured; configuring
 sync SHALL only add a remote. The repository's own `.git/info/exclude` — never
 a tracked `.gitignore` — SHALL keep out editor and system litter, hidden
 entries inside knowledge collections other than the inbox, and
-`credentials/` unless the sync remote carries credentials. A path the exclude
+`secret/` unless the sync remote carries secrets. A path the exclude
 file ignores MUST never be staged, neither as a change nor as a deletion.
 
 #### Scenario: a fresh vault is a repository with a first commit
@@ -37,7 +37,7 @@ file ignores MUST never be staged, neither as a change nor as a deletion.
 - **THEN** `vault/.git` exists, `manifest.json` records schema version 3, and `HEAD` is one commit written by the daemon
 
 #### Scenario: ciphertext is committed only when the remote carries credentials
-- **GIVEN** a credential file under `vault/credentials/` and a remote that does not carry credentials
+- **GIVEN** a credential file under `vault/secret/` and a remote that does not carry credentials
 - **WHEN** the vault commits
 - **THEN** the ciphertext is in no commit
 - **AND** once the remote carries credentials, the next commit includes it

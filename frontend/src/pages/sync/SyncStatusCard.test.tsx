@@ -54,7 +54,7 @@ describe("SyncStatusCard", () => {
           problem: {
             kind: "auth_failed",
             message: "remote: HTTP Basic: Access denied",
-            credential_ref: "sync.PUSH_TOKEN",
+            secret_ref: "sync.PUSH_TOKEN",
             since: null,
           },
         })}
@@ -70,7 +70,7 @@ describe("SyncStatusCard", () => {
       <SyncStatusCard
         status={makeStatus({
           synchroniser: "Dropbox",
-          problem: { kind: "cloud_folder", message: "", credential_ref: null, since: null },
+          problem: { kind: "cloud_folder", message: "", secret_ref: null, since: null },
         })}
       />,
     );

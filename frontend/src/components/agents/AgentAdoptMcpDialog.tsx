@@ -5,7 +5,7 @@
 // the entry out of the agent's file, keeping a .bak — and shows the name it
 // will have in Coffer, the command, and every env / header key with how it will
 // be stored. A secret-looking key's value moves into the encrypted vault under
-// a credential reference (prefilled `mcp/{agent}/{entry}/{KEY}`: an address a
+// a secret reference (prefilled `mcp/{agent}/{entry}/{KEY}`: an address a
 // person reads, minted once, never looked up by name); the value never travels
 // through this form. A name already taken in Coffer is said under the name
 // field (409 name conflict) and the user renames and retries; any other failure
@@ -48,7 +48,7 @@ function isNameConflict(err: unknown): boolean {
 interface Props {
   /** The agent being adopted from — what the adopt request is addressed to. */
   agentUid: string;
-  /** Its fixed name, which the minted credential refs spell. */
+  /** Its fixed name, which the minted secret refs spell. */
   agentName: string;
   /** Its product name, for the sentences ("so Claude Code never gets it twice"). */
   agentLabel: string;

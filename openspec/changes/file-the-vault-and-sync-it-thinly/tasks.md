@@ -16,8 +16,8 @@
 
 ## 3. Credentials as files
 
-- [ ] 3.1 Ciphertext store over `vault/credentials/<ref>.enc`
-- [ ] 3.2 Secret boundary (bindings, approvals, settings) over `local/secrets/`
+- [ ] 3.1 Ciphertext store over `vault/secret/<ref>.enc`
+- [ ] 3.2 Secret boundary (bindings, approvals, settings) over `local/secret-boundary/`
 
 ## 4. Class directories
 
@@ -42,7 +42,7 @@
 
 ## 7. Migration
 
-- [ ] 7.1 One-time migration from `coffer.db` at 0116 into the five classes, with the move manifest
+- [ ] 7.1 One-time migration from `coffer.db` at 0135 into the five classes, with the move manifest
 - [ ] 7.2 `coffer migrate --rollback` and `--rehearse`
 - [ ] 7.3 Rehearsal gate test from fixtures of the current schema; rollback byte for byte
 - [ ] 7.4 Two-machine cross-version sync test

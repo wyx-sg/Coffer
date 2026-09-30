@@ -33,9 +33,11 @@ from sqlalchemy import text
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
+from coffer.application.attention import Severity
 from coffer.application.audit_service import AuditService
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_reconcile import TARGET, DeliveryHookTarget
+from coffer.application.reconcile.attention_source import APPLY_PATH, DriftAttentionSource
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -291,3 +293,38 @@ async def test_a_dry_run_writes_nothing_under_home(rig: _Rig) -> None:
     assert all(r.outcome is Outcome.PLANNED for r in plan.results)
     assert rig.reconciler.pending_hints == {}
     assert rig.reconciler.last_pass is None
+
+
+@pytest.mark.acceptance(
+    spec="web-ui",
+    scenario="a memory hook changed by hand that coffer could not rewrite needs the user",
+)
+async def test_a_hand_edited_hook_a_pass_cannot_rewrite_is_a_needs_you_item(
+    rig: _Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Overview's Needs-you row for a hook changed by hand is the reconciler
+    drift source's item: absent while the next pass would simply rewrite the
+    hook, present — on the agent, with Repair — once a pass tried and failed."""
+    agent, _dir, _path = await _connected_agent_with_stale_hook(rig, AgentType.CLAUDE_CODE)
+    source = DriftAttentionSource(rig.reconciler)
+    # No pass has visited it yet: the next one rewrites it without anyone.
+    assert await source.items() == []
+
+    async def _refuse(entry: object) -> None:
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(rig.repo, "insert", _refuse)
+    (result,) = (await rig.reconciler.run(trigger=Trigger.PERIOD)).results
+    assert result.outcome is Outcome.FAILED
+
+    (item,) = await source.items()
+    assert (item.kind, item.uid, item.reason_code) == ("agent", agent.uid, "stale_command")
+    assert item.severity is Severity.WARNING
+    assert "no longer matches what Coffer installs" in item.reason
+    assert item.since is not None
+    assert (item.action.verb, item.action.method, item.action.path) == (
+        "repair",
+        "POST",
+        APPLY_PATH,
+    )
+    assert item.action.body == {"ids": [result.change.id]}

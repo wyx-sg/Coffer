@@ -46,7 +46,7 @@ from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScan
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
@@ -106,7 +106,7 @@ def wire_agent_and_skill_kinds(
     audit: AuditService,
     vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -206,7 +206,7 @@ def wire_agent_and_skill_kinds(
         audit=audit,
         store=config_file_store,
         resource_service=resource_svc,
-        credentials=credential_store,
+        secrets=secret_store,
     )
     # Import from your agents: a dry-run plan (with the reconciler's pending
     # coffer-entry changes) and the apply that performs it.

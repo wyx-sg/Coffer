@@ -147,7 +147,7 @@ class _World:
             item=item,
             agent=loop,
             models=_Model(),
-            credential_resolver=lambda ref: "key",
+            secret_resolver=lambda ref: "key",
         )
         assert all("error" not in r for r in loop.results), loop.results
         return outcome

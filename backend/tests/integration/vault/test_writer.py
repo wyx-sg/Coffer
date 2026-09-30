@@ -42,7 +42,9 @@ def test_a_write_is_one_commit_naming_its_writer_and_machine(
     assert repo.read("HEAD", "knowledge/a.md") == b"one\n"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an unchanged vault serializes to an identical tree")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an unchanged vault serializes to an identical tree"
+)
 def test_a_write_that_changes_nothing_makes_no_commit(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
@@ -181,8 +183,10 @@ def test_listeners_hear_every_commit(writer: VaultWriter) -> None:
     assert [r.paths for r in heard] == [("knowledge/a.md",)]
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="ciphertext travels only when the remote carries it")
-def test_credentials_are_never_committed_unless_carried(
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
+)
+def test_secrets_are_never_committed_unless_carried(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:
     writer.write_file("secret/ref.enc", b"gAAAA\n", meta=USER, expected=Expect.ABSENT)
@@ -208,7 +212,9 @@ def test_writers_in_parallel_threads_each_land_whole(
     assert writer.pending() == {}
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a symlink in the vault is skipped rather than published")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a symlink in the vault is skipped rather than published"
+)
 def test_symlinks_and_nested_repositories_are_never_recorded(
     writer: VaultWriter, repo: VaultRepository
 ) -> None:

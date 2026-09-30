@@ -162,7 +162,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
       {
         provider: draftConnObj.protocol,
         base_url: draftConnObj.base_url,
-        credential_ref: draftConnObj.credential_ref,
+        secret_ref: draftConnObj.secret_ref,
       },
       { onSuccess: (r) => setFetched(modelIds(r.models, "text")) },
     );
@@ -191,7 +191,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     }
     stageModel("", [], connLocal);
     list.mutate(
-      { provider: conn.protocol, base_url: conn.base_url, credential_ref: conn.credential_ref },
+      { provider: conn.protocol, base_url: conn.base_url, secret_ref: conn.secret_ref },
       {
         onSuccess: (r) => {
           const ids = modelIds(r.models, "text");
@@ -208,7 +208,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
       provider: draftConnObj.protocol,
       model: draftModel,
       base_url: draftConnObj.base_url,
-      credential_ref: draftConnObj.credential_ref,
+      secret_ref: draftConnObj.secret_ref,
     });
   };
 

@@ -24,14 +24,14 @@ from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.service import SyncService
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.health_repo import MCPServerHealthRepo
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 
 
 def build_attention_sources(
     *,
     resource_svc: ResourceService,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     connection_service: AgentConnectionService,
     auto_detect: AutoDetectService,
     sync_service: SyncService | None,
@@ -43,9 +43,7 @@ def build_attention_sources(
     sources: list[AttentionSource] = []
     if health_repo is not None:
         sources.append(
-            McpAttentionSource(
-                resources=resource_svc, health=health_repo, credentials=credential_store
-            )
+            McpAttentionSource(resources=resource_svc, health=health_repo, secrets=secret_store)
         )
     sources.append(
         AgentAttentionSource(agents=resource_svc, detect=auto_detect, connection=connection_service)
@@ -62,7 +60,7 @@ def build_attention_sources(
 def lifespan_attention_sources(
     *,
     resource_svc: ResourceService,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     connection_service: AgentConnectionService,
     sync_service: SyncService | None,
 ) -> list[AttentionSource]:
@@ -76,7 +74,7 @@ def lifespan_attention_sources(
 
     return build_attention_sources(
         resource_svc=resource_svc,
-        credential_store=credential_store,
+        secret_store=secret_store,
         connection_service=connection_service,
         auto_detect=get_auto_detect_service(),
         sync_service=sync_service,

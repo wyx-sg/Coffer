@@ -1,9 +1,12 @@
 // frontend/src/lib/knowledge/text.ts
-// Two small pieces of wording the Knowledge page derives rather than stores:
-// the progress label of a Curate now run, and the description an item added
-// from the web UI carries (the daemon requires one; the dialog has no field
-// for it).
+// Small pieces of wording the Knowledge page derives rather than stores: the
+// progress label of a Curate now run, the description an item added from the
+// web UI carries (the daemon requires one; the dialog has no field for it), a
+// document's outline for the reader's "On this page", and an undo refusal in
+// words.
 import type { TFunction } from "i18next";
+
+import { ApiError, translateApiError } from "@/lib/api/errors";
 
 import type { UpkeepRunOut } from "@/lib/api/upkeep";
 
@@ -24,4 +27,37 @@ export function describeItem(title: string, body: string): string {
     .trim();
   const sentence = text.split(/(?<=[.!?。！？])\s/)[0] ?? "";
   return (sentence || title).slice(0, 160);
+}
+
+interface Heading {
+  level: number;
+  text: string;
+}
+
+/** The document's headings, top three levels, outside fenced code. */
+export function outlineOf(body: string): Heading[] {
+  const out: Heading[] = [];
+  let fenced = false;
+  for (const line of body.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (fenced) continue;
+    const m = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (m) out.push({ level: m[1].length, text: m[2].replace(/[`*_]/g, "") });
+  }
+  return out;
+}
+
+/** The refusal in words, and the document that changed since when the daemon
+ *  names it. */
+export function undoRefusal(
+  t: TFunction,
+  error: unknown,
+): { text: string; document: string | null } {
+  if (error instanceof ApiError && error.code === "KNOWLEDGE_UNDO_CONFLICT") {
+    const document = (error.details as { document?: unknown } | undefined)?.document;
+    if (typeof document === "string") {
+      return { text: t("knowledge.pass.undoRefused", { document }), document };
+    }
+  }
+  return { text: translateApiError(t, error), document: null };
 }

@@ -42,7 +42,7 @@ Everything Coffer manages is a **resource** of one of seven **kinds**. Every res
 | `channel` | A Telegram or SeaTalk bot you use to chat with your agents from your phone | [Channels](/guides/channels) |
 | `provider` | A model-provider profile (protocol, base URL, key) that Coffer writes into each agent's config | [Model providers](/guides/providers) |
 
-Coffer also provides some capabilities that are not resource kinds: an encrypted [credential store](/guides/credentials), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
+Coffer also provides some capabilities that are not resource kinds: an encrypted [secret store](/guides/secret-store), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
 
 ## Where you use it
 

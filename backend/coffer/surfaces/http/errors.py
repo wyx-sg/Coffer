@@ -6,6 +6,7 @@ Response shape: {error: {code, message, details}}.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -18,18 +19,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from coffer.domain import errors
 from coffer.infrastructure.logging.setup import get_trace_id
 from coffer.surfaces.http import openapi_document
+from coffer.surfaces.http.error_status_vault import VAULT_AND_SYNC_STATUS
 
 _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
+    **VAULT_AND_SYNC_STATUS,
     "RESOURCE_NOT_FOUND": 404,
-    # The vault's write path (ADR every-vault-write-is-a-validated-commit-naming-its-writer).
-    "VAULT_FILE_STALE": 409,
-    "VAULT_FILE_INVALID": 422,
-    "VAULT_PATH_INVALID": 400,
-    "VAULT_VERSION_NOT_FOUND": 404,
-    "VAULT_GIT_FAILED": 500,
-    "GIT_MISSING": 500,
+    # Nothing informational is listed under that key to ignore.
+    "ATTENTION_NOT_IGNORABLE": 409,
     # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
     "CUSTOM_TOOL_NOT_FOUND": 404,
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
@@ -40,8 +38,7 @@ _STATUS: dict[str, int] = {
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "AGENT_TYPE_REGISTERED": 409,
-    # The agent's config dir is absent on this machine — a state of the
-    # machine, not a malformed request.
+    # The agent's config dir is absent here — a machine state, not a bad request.
     "AGENT_CONFIG_DIR_MISSING": 409,
     # The database was migrated by a newer build than this one.
     "DB_SCHEMA_TOO_NEW": 409,
@@ -55,14 +52,14 @@ _STATUS: dict[str, int] = {
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
-    "CREDENTIAL_MISSING": 400,
-    "CREDENTIAL_IN_USE": 409,
-    "CREDENTIAL_LOCKED": 503,
-    # Ciphertext exists but no key opens it (spec credentials "Refuse to start
-    # when the master key is missing"). Same class as CREDENTIAL_LOCKED: the
+    "SECRET_MISSING": 400,
+    "SECRET_IN_USE": 409,
+    "SECRET_LOCKED": 503,
+    # Ciphertext exists but no key opens it (spec secret "Refuse to start
+    # when the master key is missing"). Same class as SECRET_LOCKED: the
     # store is unusable until the key comes back, not a bad request.
     "MASTER_KEY_MISSING": 503,
-    "CREDENTIAL_UNREADABLE": 500,
+    "SECRET_UNREADABLE": 500,
     # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
     # somewhere-new): a destination nobody approved yet is a state that waits
     # for a person, not a bad request; a grant that does not verify is refused.
@@ -145,8 +142,7 @@ _STATUS: dict[str, int] = {
     # ripgrep's two failures. No surface calls it any more — the layer offers
     # no retrieval ("Expose exactly one knowledge tool") — but curation still
     # matches literally to pick its candidates ("Assemble a pass from a bounded
-    # context"), so a missing binary or a bad pattern can still
-    # surface through a pass.
+    # context"), so a missing binary or a bad pattern can surface through a pass.
     "ENGINE_UNAVAILABLE": 503,
     "GREP_PATTERN_INVALID": 400,
     # spec memory
@@ -180,29 +176,8 @@ _STATUS: dict[str, int] = {
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
-    "MASTER_KEY_FILE_INVALID": 422,
-    # A round the user has to answer before anything else can happen. Each is
-    # an ordinary state of the feature, not a fault: without an entry here they
-    # fall through to 500, which tells a browser (and the CLI's exit-code
-    # mapping) that Coffer broke when in fact it is waiting for an answer.
-    "SYNC_NOTHING_TO_ROLL_BACK": 409,
-    "SYNC_CANNOT_RETIRE_SELF": 422,
-    # The thin sync round (spec vault-sync): no round waiting for this answer,
-    # a hand merge that still has markers, a remote git would refuse, and a
-    # remote that refused us (upstream, 502).
-    "SYNC_NOTHING_STOPPED": 409,
-    "SYNC_CONFLICT_MARKERS_LEFT": 422,
-    "SYNC_REMOTE_INVALID": 422,
-    "SYNC_REMOTE_FAILED": 502,
-    "SYNC_NO_REMOTE": 409,
-    "SYNC_ROUND_NOT_FOUND": 404,
-    "SYNC_MACHINE_NOT_FOUND": 404,
-    "SYNC_MACHINE_NAME_INVALID": 422,
-    "VAULT_MIGRATION_REQUIRED": 409,
-    "VAULT_MIGRATION_ON_HOLD": 409,
-    "VAULT_MIGRATION_REFUSED": 409,
     # provider switching (spec provider-switching)
-    "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
+    "PROVIDER_SECRET_SOURCE_INVALID": 422,
     # Not 422: the patch is well-formed, and the same patch succeeds once the
     # connection is no longer projected — a state conflict, not a bad body.
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
@@ -229,17 +204,20 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_VERSION_NOT_FOUND": 404,
     "KNOWLEDGE_NOT_A_PASS": 400,
     "KNOWLEDGE_UNDO_CONFLICT": 409,
+    # Restoring a delete (spec knowledge "Restore a deleted collection or document
+    # from Recent changes"): nothing deleted is a wrong request, a path taken again a conflict.
+    "KNOWLEDGE_NOT_A_DELETE": 400,
+    "KNOWLEDGE_RESTORE_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").
     "KNOWLEDGE_PATH_UNSAFE": 400,
     # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
-    # failure"): named the limit, refused
-    # before any conversion or write.
+    # failure"): named the limit, refused before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
     # Curation's two refusals (spec knowledge "Refuse file-name references in
-    # documents", "Bound a pass to eight writes"). Both are the
-    # request being wrong rather than Coffer failing, so both are 400-class
+    # documents", "Bound a pass to eight writes"). Both are the request being
+    # wrong rather than Coffer failing, so both are 400-class
     # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
     # is a link that rots, and a pass past its write bound is one source trying
     # to rewrite the corpus. Neither is retryable unchanged.
@@ -324,6 +302,15 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     return out
 
 
+def _without_input(found: Sequence[Any]) -> list[dict[str, Any]]:
+    """Validation errors for the log, minus ``input``: a secret, key or passphrase."""
+    return [
+        {k: v for k, v in dict(e).items() if k not in ("input", "ctx")}
+        for e in found
+        if isinstance(e, Mapping)
+    ]
+
+
 def register(app: FastAPI) -> None:
     """Answer every failure with the envelope, and say so in the OpenAPI document."""
     openapi_document.install(app)
@@ -338,11 +325,11 @@ def register(app: FastAPI) -> None:
     @app.exception_handler(ValidationError)
     async def _handle_pydantic(request: Request, exc: ValidationError) -> JSONResponse:
         # Don't echo exc.errors() to the client — per-field `input`
-        # values can include PII or credentials the client just submitted.
+        # values can include PII or secrets the client just submitted.
         # Log the structured error server-side and return a generic envelope.
         _logger.warning(
             "http.validation_error",
-            extra={"path": str(request.url.path), "errors": exc.errors()},
+            extra={"path": str(request.url.path), "errors": _without_input(exc.errors())},
         )
         body = _envelope("CONFIG_INVALID", "request validation failed")
         resp = JSONResponse(status_code=422, content=body)
@@ -358,7 +345,7 @@ def register(app: FastAPI) -> None:
         # with a raw ``{"detail": [...]}``. Same redaction rationale as above.
         _logger.warning(
             "http.request_validation_error",
-            extra={"path": str(request.url.path), "errors": exc.errors()},
+            extra={"path": str(request.url.path), "errors": _without_input(exc.errors())},
         )
         body = _envelope("CONFIG_INVALID", "request validation failed")
         resp = JSONResponse(status_code=422, content=body)

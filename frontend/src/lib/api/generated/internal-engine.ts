@@ -228,6 +228,10 @@ export interface components {
             enabled: boolean;
             /** Interval S */
             interval_s: number | null;
+            /** Last Pass At */
+            last_pass_at: string | null;
+            /** Next Pass At */
+            next_pass_at: string | null;
         };
         /**
          * UpkeepUpdate

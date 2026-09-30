@@ -1,5 +1,5 @@
 // src/components/ui/table.tsx
-// Hairline table for column comparison: caption-role heads, 40px rows, hover/selected fills.
+// Hairline table for column comparison (Foundations-Tables): 34px label-role heads, 44px rows, hover/selected fills.
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -66,7 +66,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       className={cn(
-        "h-row border-b border-border-subtle transition-colors duration-fast hover:bg-surface-hover data-[state=selected]:bg-surface-selected",
+        "h-11 border-b border-border-subtle transition-colors duration-fast hover:bg-surface-hover data-[state=selected]:bg-surface-selected",
         className,
       )}
       {...props}
@@ -82,7 +82,8 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-8 px-3 text-left align-middle text-2xs font-semibold uppercase tracking-[.04em] text-text-subtle [&:has([role=checkbox])]:pr-0",
+      // Sentence case, like every other label: 11/600 in text-subtle, no fill.
+      "h-[34px] whitespace-nowrap px-3 text-left align-middle text-2xs font-semibold text-text-subtle [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}

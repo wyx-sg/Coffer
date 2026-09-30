@@ -25,7 +25,7 @@ sync-applies-clean-merges-and-stops-on-any-conflict decide the replacement.
   derived. Identity is the uid inside the file; a duplicate uid is refused, a
   missing one is minted. MCP capability switches, channel pairings and engine
   settings are vault state documents. Credential ciphertext is
-  `vault/credentials/<ref>.enc`. The integer resource id is gone; every history
+  `vault/secret/<ref>.enc`. The integer resource id is gone; every history
   table references the uid.
 - **Every write is a validated commit naming its writer.** One write path
   compares the expected content, writes atomically, validates, and commits one

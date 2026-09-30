@@ -26,7 +26,7 @@ export function RangeControl({ query, detailDays, onChange }: Props) {
           type="button"
           aria-pressed={query.range === r}
           className={segmentClass(query.range === r)}
-          onClick={() => onChange({ range: r, group_by: query.group_by })}
+          onClick={() => onChange({ ...query, range: r, from: undefined, to: undefined })}
         >
           {t(`usage.providers.range.${r}`)}
         </button>
@@ -36,7 +36,7 @@ export function RangeControl({ query, detailDays, onChange }: Props) {
         to={query.to}
         active={query.range === "custom"}
         detailDays={detailDays}
-        onApply={(from, to) => onChange({ range: "custom", from, to, group_by: query.group_by })}
+        onApply={(from, to) => onChange({ ...query, range: "custom", from, to })}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 """Wiring for the secret boundary: the gate, the presence grants, the destinations.
 
-Spec credentials "Hold a secret for a new destination until a person approves
+Spec secret "Hold a secret for a new destination until a person approves
 it" and "Release plaintext only to a present human in the desktop app"; ADR
 only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.
 
@@ -23,23 +23,23 @@ import pathlib
 from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.boundary import SecretBoundary
-from coffer.application.credentials.presence import PresenceGrants, derive_grant_key
-from coffer.application.credentials.resolver import CredentialResolver, CredentialStorePort
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.boundary import SecretBoundary
+from coffer.application.secret.presence import PresenceGrants, derive_grant_key
+from coffer.application.secret.resolver import SecretResolver, SecretStorePort
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretApproval, SecretDestination
-from coffer.infrastructure.credentials.boundary_store import FileBoundaryStore
-from coffer.infrastructure.credentials.build_identity import keychain_access_group
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.credentials.master_key_backends import (
+from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
+from coffer.infrastructure.secret.build_identity import keychain_access_group
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.secret.master_key_backends import (
     ACCOUNT,
     KeychainAccessGroupBackend,
 )
 from coffer.infrastructure.vault.home import coffer_home
-from coffer.surfaces.http.credential_schemas import ApprovalOut
+from coffer.surfaces.http.secret_schemas import ApprovalOut
 
 #: One resource's secrets as the boundary sees them: where they go, and which
 #: ref each slot cites. ``None`` when the resource sends nothing anywhere.
@@ -107,9 +107,9 @@ def set_secret_boundary(boundary: SecretBoundary | None, grants: PresenceGrants 
     _boundary, _grants = boundary, grants
 
 
-def boundary_resolver(store: CredentialStorePort) -> CredentialResolver:
+def boundary_resolver(store: SecretStorePort) -> SecretResolver:
     """The resolver every consumer of a secret gets: guarded once the daemon is up."""
-    return CredentialResolver(store, _boundary)
+    return SecretResolver(store, _boundary)
 
 
 def master_key_path(home: pathlib.Path | None = None) -> pathlib.Path:
@@ -142,7 +142,7 @@ def make_master_key_manager(home: pathlib.Path | None = None) -> MasterKeyManage
 
 
 def init_secret_boundary(
-    store: EncryptedCredentialStore,
+    store: EncryptedSecretStore,
     manager: MasterKeyManager,
     *,
     home: pathlib.Path | None = None,

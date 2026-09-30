@@ -24,7 +24,7 @@ from coffer.application.platform_port import PlatformPort
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
 from coffer.surfaces.http.builtin_server_wiring import wire_builtin_server
@@ -63,8 +63,8 @@ async def wire_resource_kinds(
     sm: async_sessionmaker[AsyncSession],
     vault: VaultStores,
     builtin_tools: BuiltinToolRegistry,
-    credential_store: EncryptedCredentialStore,
-    credential_resolver: Callable[[str], str],
+    secret_store: EncryptedSecretStore,
+    secret_resolver: Callable[[str], str],
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -80,7 +80,7 @@ async def wire_resource_kinds(
         audit,
         vault,
         builtin_tools,
-        credential_store,
+        secret_store,
         platform,
         agent_catalog,
         reconciler,
@@ -92,7 +92,7 @@ async def wire_resource_kinds(
         app,
         resource_svc,
         audit,
-        credential_store,
+        secret_store,
         agent_skill.agent_service,
         agent_catalog,
         reconciler,
@@ -122,7 +122,7 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         _catalogue_changed,
     )
 
@@ -133,14 +133,14 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         agent_skill.agent_service,
         agent_catalog,
     )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
-    mcp = wire_mcp_kind(app, resource_svc, audit, sm, vault, credential_store, builtin_tools)
+    mcp = wire_mcp_kind(app, resource_svc, audit, sm, vault, secret_store, builtin_tools)
     # Coffer's own `coffer` server, described for the MCP servers page.
     wire_builtin_server(builtin_tools, agent_skill.agent_service, agent_skill.mcp_service)
 

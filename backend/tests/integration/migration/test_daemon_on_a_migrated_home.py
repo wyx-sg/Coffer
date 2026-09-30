@@ -45,7 +45,7 @@ def test_the_daemon_lists_every_migrated_resource_with_its_reach(legacy: LegacyH
                 assert body["enabled"] is enabled, name
             if agents is not None and kind in ("mcp_server", "skill", "provider"):
                 assert body["scope"]["agents"] == agents, name
-        refs = client.get("/api/v1/credentials").json()["refs"]
+        refs = client.get("/api/v1/secrets").json()["refs"]
         stored = {r["ref"] for r in refs if r["present"]}
         assert set(legacy.secrets) - {"proxy-token/claude_code"} <= stored
 

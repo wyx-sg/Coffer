@@ -165,7 +165,7 @@ jobs:
       - name: stamp the stable channel
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        run: python3 scripts/stamp_channel.py stable
+        run: python3 scripts/stamp_channel.py stable --commit "$GITHUB_SHA"
 
       - name: bundle sidecar binaries
         shell: bash

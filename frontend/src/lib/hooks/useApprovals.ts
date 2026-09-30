@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useApprovals.ts
 //
-// The approvals a secret change can wait on (spec credentials, secret
+// The approvals a secret change can wait on (spec secret, secret
 // boundary): the pending list, and the two answers to one. Rejecting is a
 // plain REST call any surface may make; approving runs a presence check in the
 // desktop shell (`approvePending`), which signs the grant and sends the
@@ -13,9 +13,9 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { credentialsApi } from "@/lib/api/credentials";
+import { secretsApi } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
-import { credentialsKey, pendingApprovalsKey, secretBoundaryKey } from "@/lib/api/queryKeys";
+import { secretsKey, pendingApprovalsKey, secretBoundaryKey } from "@/lib/api/queryKeys";
 import { approvePending, onApprovalsEvent } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
@@ -33,7 +33,7 @@ export function openApprovalsSheet(): void {
 export function useSecretBoundarySettings() {
   return useQuery({
     queryKey: secretBoundaryKey,
-    queryFn: () => credentialsApi.secretBoundary(),
+    queryFn: () => secretsApi.secretBoundary(),
   });
 }
 
@@ -49,7 +49,7 @@ export function usePendingApprovals() {
   );
   return useQuery({
     queryKey: pendingApprovalsKey,
-    queryFn: () => credentialsApi.pendingApprovals(),
+    queryFn: () => secretsApi.pendingApprovals(),
     refetchInterval: POLL_MS,
     refetchIntervalInBackground: false,
   });
@@ -61,8 +61,8 @@ export function useRejectApproval() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (id: string) => credentialsApi.rejectApproval(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: credentialsKey }),
+    mutationFn: (id: string) => secretsApi.rejectApproval(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: secretsKey }),
     onError: (e) => toast.error(translateApiError(t, e)),
   });
 }
@@ -76,7 +76,7 @@ export function useApproveApproval() {
     mutationFn: (id: string) => approvePending(id),
     // Settled, not success: a cancelled Touch ID leaves the approval pending,
     // and a failed apply may still have moved it.
-    onSettled: () => void qc.invalidateQueries({ queryKey: credentialsKey }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: secretsKey }),
     onError: (e) => toast.error(translateApiError(t, e)),
   });
 }

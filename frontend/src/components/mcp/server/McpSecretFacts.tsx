@@ -15,8 +15,8 @@ interface Props {
 export function McpSecretFacts({ resource, detail }: Props) {
   const { t } = useTranslation();
   const refs =
-    (resource.config as { transport?: { credential_refs?: Record<string, string> } } | null)
-      ?.transport?.credential_refs ?? {};
+    (resource.config as { transport?: { secret_refs?: Record<string, string> } } | null)
+      ?.transport?.secret_refs ?? {};
   const http = transportOf(resource.config).type === "http";
   const missingRef = detail?.missing_secret_ref ?? null;
   const entries = Object.entries(refs);

@@ -22,9 +22,9 @@ from typing import Any
 
 from coffer.domain.vault.document import DocumentInvalid, parse_resource
 from coffer.domain.vault.portability import expand_home
-from coffer.infrastructure.credentials.encrypted_store import ref_files
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import decode, render
+from coffer.infrastructure.secret.encrypted_store import ref_files
 from coffer.infrastructure.vault.home import coffer_home
 from coffer.infrastructure.vault.migration.knowledge import CURATED_AT_KEY
 from coffer.infrastructure.vault.migration.legacy_db import read_legacy
@@ -121,7 +121,7 @@ def take_inventory(home: Path) -> Inventory:
                     shutil.copy2(source, copy.with_name(copy.name + side))
             state = read_legacy(copy)
             inv.resources = {r.uid: (r.kind, r.name, r.config) for r in state.resources}
-            inv.secrets = {str(c["ref"]) for c in state.credentials}
+            inv.secrets = {str(c["ref"]) for c in state.secrets}
             inv.rows = _count(copy, HISTORY_TABLES)
     base = coffer_home(home)
     for rel, digest in hash_tree(base).items():

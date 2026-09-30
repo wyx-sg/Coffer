@@ -203,7 +203,7 @@ def _spec(path: str) -> str:
 def _readable(path: str) -> str:
     """``path`` unless it is secret ciphertext. Rolling a secret back is
     re-entering it (ADR every-vault-write-is-a-validated-commit-naming-its-writer,
-    "Credentials when not carried"), so its files are neither shown nor
+    "Secrets when not carried"), so its files are neither shown nor
     restored through history."""
     clean = check_path(path)
     if clean == SECRET or clean.startswith(f"{SECRET}/"):

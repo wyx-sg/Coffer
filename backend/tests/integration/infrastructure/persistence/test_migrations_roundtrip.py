@@ -22,7 +22,7 @@ from alembic.config import Config as AlembicConfig
 HEAD_REVISION = "0136"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
-PRE_LAYOUT_REVISION = "0116"
+PRE_LAYOUT_REVISION = "0135"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -196,7 +196,10 @@ PRE_LAYOUT_REVISION = "0116"
 # ``memory`` row, whose kinds no longer carry a switch. 0106 adds the nullable
 # ``resources.title`` column and 0107 the ``resources.rev`` revision — no new
 # table. 0110 is DATA-only (an agent's fast model becomes its Haiku tier); 0111
-# adds the three usage-metering tables.
+# adds the three usage-metering tables. 0134 adds ``attention_ignores``; 0135
+# gives the secret store's
+# table a nullable ``last_used_at`` (spec secret "List every stored and cited
+# secret with what uses it") and renames it from ``credentials`` to ``secrets``.
 PRE_LAYOUT_TABLES = {
     "resources",
     "audit_log",
@@ -209,7 +212,7 @@ PRE_LAYOUT_TABLES = {
     # "Switch off or narrow one custom tool").
     "mcp_tool_reach",
     "skill_agent_bindings",
-    "credentials",
+    "secrets",
     "conversations",
     "chat_messages",
     "channel_peers",
@@ -220,7 +223,7 @@ PRE_LAYOUT_TABLES = {
     "channel_thread_history",
     "channel_outbox",
     # 0112: the secret boundary's approved bindings, pending approvals and
-    # switches (spec credentials "Hold a secret for a new destination until a
+    # switches (spec secret "Hold a secret for a new destination until a
     # person approves it").
     "secret_bindings",
     "secret_approvals",
@@ -246,6 +249,9 @@ PRE_LAYOUT_TABLES = {
     # 0114: what this machine last learned about a Git-imported skill's source
     # (spec skill-manager "Update a Git-imported skill from its source").
     "skill_source_status",
+    # 0134: the attention items ignored on this machine (spec web-ui "Let the
+    # user ignore an unconnected agent on Overview").
+    "attention_ignores",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -264,7 +270,7 @@ MOVED_OUT_TABLES = {
     "mcp_capability_preferences",
     "mcp_server_health",
     "skill_agent_bindings",
-    "credentials",
+    "secrets",
     "channel_peers",
     "secret_bindings",
     "secret_approvals",
@@ -306,8 +312,13 @@ PRE_MERGE_TABLES = (
         "skill_source_status",
         # 0115 created this.
         "mcp_tool_reach",
+        # 0135 renamed ``credentials`` to this.
+        "secrets",
+        # 0134 created this.
+        "attention_ignores",
     }
 ) | {
+    "credentials",
     # 0066 drops these at head; every revision below it still has them, and
     # 0066's downgrade recreates them empty so those revisions can drop them.
     "documents",
@@ -489,6 +500,8 @@ def test_0055_purges_retired_audit_events(tmp_path, monkeypatch):
     command.upgrade(cfg, "0054")
     retired = ("journal_append", "daemon_started", "keychain_read", "chat_turn_completed")
     live = ("resource_created", "credential_read", "skill_bound")
+    # 0135 renames the secret store's event types.
+    renamed = {"resource_created", "secret_read", "skill_bound"}
     with sqlite3.connect(db_path) as conn:
         for event_type in retired + live:
             conn.execute(
@@ -503,7 +516,7 @@ def test_0055_purges_retired_audit_events(tmp_path, monkeypatch):
 
     with sqlite3.connect(db_path) as conn:
         survivors = {row[0] for row in conn.execute("SELECT event_type FROM audit_log")}
-    assert survivors == set(live), f"unexpected audit rows after 0055: {sorted(survivors)}"
+    assert survivors == renamed, f"unexpected audit rows after 0055: {sorted(survivors)}"
 
 
 def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
@@ -870,7 +883,7 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
     assert "fast_model" not in after
     assert "wire_api" not in after
     assert after["base_url"] == "https://proxy/v1"
-    assert after["credential_ref"] == "provider/o/key"
+    assert after["secret_ref"] == "provider/o/key"  # 0135 renamed the key
 
     # Downgrade restores the pre-slim key set (values are placeholders).
     command.downgrade(cfg, "0039")
@@ -1154,6 +1167,14 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     assert convergence_tables <= _user_tables(db_path)
     assert "curate_owner_machine_id" in _internal_engine_config_columns()
     assert {"last_started_at", "last_join", "last_run_json"} <= _sync_remotes_columns()
+    # 0135 renamed ``credentials`` to ``secrets`` and the remote's two secret
+    # columns; its downgrade puts the old names back.
+    assert {"secret_ref", "include_secrets"} <= _sync_remotes_columns()
+    command.downgrade(cfg, "0134")
+    assert "secrets" not in _user_tables(db_path)
+    assert "credentials" in _user_tables(db_path)
+    assert {"credential_ref", "include_credentials"} <= _sync_remotes_columns()
+    assert not ({"secret_ref", "include_secrets"} & _sync_remotes_columns())
     command.downgrade(cfg, "0071")
     assert "memory_overrides" in _user_tables(db_path)
     command.downgrade(cfg, "0069")

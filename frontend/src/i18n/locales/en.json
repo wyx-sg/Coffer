@@ -134,10 +134,27 @@
     "backTo": "Back to {{label}}",
     "emptyValue": "—",
     "search": "Search",
-    "moreInfo": "More info"
+    "moreInfo": "More info",
+    "working": "Working…",
+    "tryAgain": "Try again",
+    "actionFailed": "Couldn’t finish that",
+    "undo": "Undo",
+    "details": "Details",
+    "lessDetails": "Less",
+    "earlierToasts": "{{count}} more",
+    "unsaved": {
+      "badge": "Unsaved changes",
+      "title": "Leave without saving?",
+      "body": "You edited <mono>{{file}}</mono> in <mono>{{name}}</mono>. If you leave now, those edits are lost.",
+      "bodyGeneric": "If you leave now, your edits are lost.",
+      "discard": "Discard changes",
+      "keep": "Keep editing",
+      "saveAndLeave": "Save and leave",
+      "saveFailed": "Couldn’t save"
+    }
   },
   "picker": {
-    "browse": "Browse…"
+    "browse": "Choose…"
   },
   "folderPicker": {
     "title": "Choose a folder",
@@ -194,7 +211,38 @@
       "outOfDate": "Daemon on port {{port}} is from a different app version",
       "stopping": "Daemon stopping",
       "offline": "Daemon offline",
-      "runningShort": "Running on port {{port}}"
+      "runningShort": "Daemon running",
+      "outOfDateShort": "Daemon out of date",
+      "reconnecting": "Reconnecting…"
+    },
+    "attentionCount": {
+      "danger": "{{count}} failing",
+      "warning_one": "{{count}} needs you",
+      "warning_other": "{{count}} need you"
+    },
+    "versionMenu": {
+      "label": "Version menu",
+      "title": "Coffer v{{version}}",
+      "daemonOn": "Daemon on",
+      "theme": "Theme",
+      "themes": {
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "localeIn": {
+        "en": "English",
+        "zh": "Chinese"
+      },
+      "documentation": "Documentation",
+      "checkUpdates": "Check for updates"
+    },
+    "update": {
+      "title": "Update ready",
+      "body": "is available. Restart downloads it, checks its signature and reopens Coffer.",
+      "restart": "Restart",
+      "whatsNew": "What’s new",
+      "dismiss": "Dismiss"
     }
   },
   "resources": {
@@ -735,10 +783,6 @@
       "capability_enabled": "Enabled {{capType}} {{key}} on {{resource}}",
       "channel_paired": "Paired the {{resource}} channel",
       "channel_pairing_issued": "Issued a pairing code for {{resource}}",
-      "credential_deleted": "Removed a credential",
-      "credential_migrated": "Credential migrated from OS keychain",
-      "credential_read": "Read a credential",
-      "credential_set": "Stored a credential",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a document from {{resource}}",
       "knowledge_edited": "Edited a document in {{resource}}",
@@ -785,7 +829,6 @@
       "token_rotated": "Access token rotated",
       "daemon_residency_updated": "Daemon residency changed",
       "knowledge_curated": "Curated {{resource}}: folded new items into its documents",
-      "credential_revealed": "Revealed a secret in the Coffer app",
       "secret_resolved": "Handed a secret to a coffer run command",
       "secret_approval_requested": "Asked for approval of a secret change",
       "secret_approval_approved": "Approved a secret change",
@@ -795,7 +838,14 @@
       "vault_file_edited": "Edited a vault file on disk",
       "vault_file_restored": "Restored an earlier version of a vault file",
       "provider_failover": "Failed over from {{from}} to {{to}} for {{model}}",
-      "provider_reordered": "Reordered model providers"
+      "provider_reordered": "Reordered model providers",
+      "secret_deleted": "Removed a secret",
+      "secret_migrated": "Secret migrated from OS keychain",
+      "secret_read": "Read a secret",
+      "secret_set": "Stored a secret",
+      "attention_ignored": "Ignored an item on Overview",
+      "attention_unignored": "Stopped ignoring an item on Overview",
+      "secret_revealed": "Revealed a secret in the Coffer app"
     },
     "capType": {
       "tool": "tool",
@@ -807,7 +857,6 @@
   },
   "activity": {
     "title": "Activity",
-    "subtitle": "What changed, what agents called through Coffer, and what the daemon logged — newest first.",
     "live": "Live",
     "notLive": "Not live",
     "liveHint": "New records appear as they happen.",
@@ -831,7 +880,10 @@
       "api": "API",
       "system": "Coffer",
       "agent": "An agent",
-      "channel": "Channel"
+      "channel": "Channel",
+      "you": "You",
+      "sync": "Sync",
+      "desktop": "You"
     },
     "status": {
       "ok": "OK",
@@ -873,7 +925,6 @@
       "kinds": {
         "calls": "MCP calls",
         "changes": "Changes",
-        "allChanges": "All changes",
         "daemon": "Daemon records",
         "notDaemon": "Everything except daemon records"
       },
@@ -884,7 +935,25 @@
         "provider": "Model providers",
         "channel": "Channels",
         "knowledge": "Knowledge",
-        "memory": "Memory"
+        "memory": "Memory",
+        "secret": "Secrets",
+        "sync": "Sync",
+        "settings": "Settings",
+        "cli": "CLIs"
+      },
+      "findAgent": "Find an agent",
+      "selected": "{{count}} selected",
+      "noOption": "Nothing matches.",
+      "kindCount": "{{count}} kinds",
+      "kindPill": {
+        "calls": "Calls",
+        "changes": "Changes",
+        "daemon": "Daemon records"
+      },
+      "kindInline": {
+        "calls": "calls",
+        "changes": "changes",
+        "daemon": "daemon records"
       }
     },
     "table": {
@@ -906,8 +975,6 @@
     },
     "pending_one": "{{count}} new",
     "pending_other": "{{count}} new",
-    "loaded_one": "{{count}} record loaded",
-    "loaded_other": "{{count}} records loaded",
     "loadOlder": "Load older",
     "loadingOlder": "Loading older records…",
     "end": "That's everything in this time range.",
@@ -921,22 +988,23 @@
     },
     "failed": {
       "title": "{{sources}} couldn't be loaded",
-      "partial": "Showing the other records only; they are complete.",
+      "partial": "Showing {{sources}} only; they are complete.",
       "retry": "Retry"
     },
     "menu": {
       "label": "More",
-      "heading": "Export filtered records",
+      "heading": "Export filtered records…",
       "json": "Export as JSON",
       "csv": "Export as CSV",
       "note": "Every record of this tab that matches its filters.",
       "done_one": "Exported {{count}} record",
-      "done_other": "Exported {{count}} records"
+      "done_other": "Exported {{count}} records",
+      "title": "Export filtered records… (JSON / CSV)"
     },
     "drawer": {
       "label": "Details",
-      "previous": "Previous record",
-      "next": "Next record",
+      "previous": "Previous event",
+      "next": "Next event",
       "close": "Close details",
       "kinds": {
         "change": "Change",
@@ -954,7 +1022,6 @@
         "knowledge": "Knowledge",
         "memory": "Memory"
       },
-      "event": "Event",
       "whatChanged": "What changed",
       "noDiff": "The configuration is the same before and after.",
       "secretNote": "Secret values are never recorded.",
@@ -972,7 +1039,8 @@
       "callProblem": {
         "error": "The call to {{server}} failed",
         "timeout": "The call to {{server}} timed out",
-        "denied": "The call to {{server}} was denied"
+        "denied": "The call to {{server}} was denied",
+        "unreachable": "Couldn't reach {{server}}"
       },
       "callNote": "Coffer records who called which tool, when and how it went. Arguments and results pass straight through and are never stored.",
       "level": "Level",
@@ -983,10 +1051,91 @@
       "copyCallId": "Copy call id",
       "copyRecord": "Copy record",
       "copied": "Copied",
-      "copyFailed": "Couldn't copy to the clipboard"
+      "copyFailed": "Couldn't copy to the clipboard",
+      "failingSince_one": "{{server}} has been failing since {{since}} — {{count}} error in the last 24 hours.",
+      "failingSince_other": "{{server}} has been failing since {{since}} — {{count}} errors in the last 24 hours.",
+      "errorsToday_one": "{{count}} error from this server in the last 24 hours.",
+      "errorsToday_other": "{{count}} errors from this server in the last 24 hours.",
+      "daemonRecords": "Daemon log records",
+      "offsetSeconds": "{{sign}}{{n}} s",
+      "offsetMinutes": "{{sign}}{{n}} min",
+      "whenToday": "{{time}} today",
+      "whenYesterday": "{{time}} yesterday",
+      "whenOn": "{{time}}, {{date}}"
     },
     "daemon": {
       "noMessage": "(log record with no message)"
+    },
+    "actorLong": {
+      "ui": "You, in the web UI",
+      "user": "You",
+      "desktop": "You, in the Coffer app",
+      "cli": "You, from the command line",
+      "api": "Through the API",
+      "system": "Coffer",
+      "sync": "Sync",
+      "channel": "A channel"
+    },
+    "time": {
+      "label": "Time range: {{range}}",
+      "heading": "Time range",
+      "15m": "Last 15 minutes",
+      "1h": "Last hour",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "all": "Everything kept",
+      "custom": "Custom range",
+      "from": "From",
+      "to": "To",
+      "now": "Now",
+      "start": "The start",
+      "apply": "Apply range",
+      "customLabel": "{{from}} → {{to}}",
+      "phrase": {
+        "15m": "in the last 15 minutes",
+        "1h": "in the last hour",
+        "24h": "in the last 24 hours",
+        "7d": "in the last 7 days",
+        "all": "",
+        "custom": "in this range"
+      }
+    },
+    "summary": {
+      "sources": {
+        "change": "changes",
+        "call": "MCP calls",
+        "daemon": "daemon records"
+      },
+      "calls_one": "{{n}} call",
+      "calls_other": "{{n}} calls",
+      "failed_one": "{{n}} failed",
+      "failed_other": "{{n}} failed",
+      "denied_one": "{{n}} denied",
+      "denied_other": "{{n}} denied",
+      "errors_one": "{{n}} error",
+      "errors_other": "{{n}} errors",
+      "warnings_one": "{{n}} warning",
+      "warnings_other": "{{n}} warnings",
+      "problems": "{{problems}} {{range}}",
+      "all_one": "{{n}} record",
+      "all_other": "{{n}} records",
+      "loadedOf": "{{loaded}} loaded of {{total}}"
+    },
+    "older": {
+      "hint_one": "Next {{count}}, from before {{before}}. MCP calls are kept {{calls}} and changes {{changes}} — change it in",
+      "hint_other": "Next {{count}}, from before {{before}}. MCP calls are kept {{calls}} and changes {{changes}} — change it in",
+      "settings": "Settings › Data",
+      "forever": "forever",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "years_one": "1 year",
+      "years_other": "{{count}} years"
+    },
+    "daemonLog": {
+      "open": "Open log file",
+      "following": "· newest first · following",
+      "newestFirst": "· newest first",
+      "showCall": "Show the MCP call"
     }
   },
   "settings": {
@@ -1009,7 +1158,7 @@
       "themeLight": "Light",
       "themeDark": "Dark",
       "preferredEditor": "Open files with",
-      "preferredEditorHelp": "The editor Coffer opens managed files in. Pick a detected editor, or type any app name or launch command.",
+      "preferredEditorHelp": "The editor Coffer opens managed files in.",
       "preferredEditorSystemDefault": "System default",
       "preferredEditorCustom": "Custom…",
       "preferredEditorCustomCommand": "Custom editor command",
@@ -1022,7 +1171,7 @@
     },
     "daemon": {
       "autostart": "Start at login",
-      "autostartHelp": "Keep the daemon running whether or not Coffer is open, so an agent's first call of the day does not wait for it to start. It is restarted if it crashes.",
+      "autostartHelp": "Keeps the daemon running whether or not the window is open, so an agent's first call never waits.",
       "autostartUnsupported": "Only available on macOS."
     },
     "features": {
@@ -1049,7 +1198,6 @@
       "neverPruned": "Not pruned yet",
       "shortenTitle": "Shorten retention to {{days}} days?",
       "shortenBody": "The next prune will delete older rows.",
-      "shortenConfirm": "Shorten",
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneConfirmTitle": "Clear expired data now?",
@@ -1059,11 +1207,17 @@
       "policy": {
         "audit_log": {
           "name": "Changes",
-          "description": "Every change made in Coffer, by you, the CLI, sync or an agent"
+          "description": "Every change made in Coffer, by you, the CLI, sync or an agent",
+          "shortenTitle": "Keep changes for {{days}} days?",
+          "unit_one": "change",
+          "unit_other": "changes"
         },
         "mcp_invocations": {
           "name": "MCP calls",
-          "description": "Who called which tool, and how it went"
+          "description": "Who called which tool, and how it went",
+          "shortenTitle": "Keep MCP calls for {{days}} days?",
+          "unit_one": "call",
+          "unit_other": "calls"
         },
         "conversations_archive": {
           "name": "Auto-archive idle chats",
@@ -1071,20 +1225,39 @@
         },
         "conversations": {
           "name": "Conversations",
-          "description": "Archived conversations and channel threads, counted from when they were archived"
+          "description": "Archived conversations and channel threads, counted from when they were archived",
+          "shortenTitle": "Keep conversations for {{days}} days?",
+          "unit_one": "conversation",
+          "unit_other": "conversations"
         },
         "sync_runs": {
           "name": "Sync rounds",
           "description": "History of converge rounds against the sync remote."
         }
-      }
+      },
+      "rows_one": "row",
+      "rows_other": "rows",
+      "shortenCounted_one": "About {{rows}} older than {{days}} days is deleted at the next cleanup, within six hours. It can't be brought back.",
+      "shortenCounted_other": "About {{rows}} older than {{days}} days are deleted at the next cleanup, within six hours. They can't be brought back.",
+      "shortenConfirmDays_one": "Shorten to {{count}} day",
+      "shortenConfirmDays_other": "Shorten to {{count}} days",
+      "now": "Now",
+      "after": "After",
+      "forever": "Forever",
+      "foreverLower": "forever",
+      "daysCount_one": "{{count}} day",
+      "daysCount_other": "{{count}} days",
+      "forDays_one": "for {{count}} day",
+      "forDays_other": "for {{count}} days",
+      "about": "about {{rows}}"
     },
     "about": {
       "copyDiagnostics": "Copy diagnostics for a bug report",
       "fields": {
         "version": "Version",
         "license": "License",
-        "source": "Source"
+        "source": "Source",
+        "dataFolder": "Data folder"
       },
       "updates": {
         "title": "Updates",
@@ -1111,9 +1284,10 @@
         "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
       },
       "diagnosticsCopied": "Diagnostics copied — paste them into your bug report.",
-      "versionLine": "Version {{version}} · {{channel}} channel",
+      "versionLine": "Version {{version}}",
       "versionLineLoading": "Reading the version…",
-      "details": "Details"
+      "details": "Details",
+      "versionWithCommit": "{{version}} ({{commit}})"
     },
     "security": {
       "masterKey": {
@@ -1129,7 +1303,6 @@
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
         "confirmMove": "Move key",
-        "accessGroupNote": "Only Coffer's signed apps can read it, so there is nothing to move.",
         "keychainTitle": "Keychain",
         "fileTitle": "Key file",
         "keychainDescription": "Coffer reads the master key from the macOS Keychain when the daemon starts.",
@@ -1158,9 +1331,21 @@
         "exportedTitle": "Master key exported",
         "exportedBody": "Saved {{file}} to {{dir}} · recorded in Activity.",
         "exportedHint": "Move it off this Mac — a password manager or a USB drive — and delete the copy here.",
-        "fingerprint": "Fingerprint",
         "showInFinder": "Show in Finder",
-        "done": "Done"
+        "done": "Done",
+        "onlyInApp": "Exporting asks for Touch ID or your login password, so it is only available in the Coffer desktop app.",
+        "openInApp": "Open in Coffer app to export",
+        "dialogTitle": "Export the master key",
+        "safeTitle": "Keep it somewhere safe and offline",
+        "safeBody": "Without this key the secrets in your vault can't be read — on this Mac or any other. Coffer can't recover it for you.",
+        "passphrase": "Protect the file with a passphrase",
+        "passphraseHint": "You need it to import the key on another Mac.",
+        "tooShort_one": "Use at least {{count}} character.",
+        "tooShort_other": "Use at least {{count}} characters.",
+        "repeat": "Repeat passphrase",
+        "mismatch": "The passphrases don't match.",
+        "submit": "Export key…",
+        "exporting": "Exporting…"
       },
       "access": {
         "title": "Access"
@@ -1180,10 +1365,47 @@
         "recorded": "Recorded as token_rotated in Activity",
         "rotateConfirm": "Rotate token",
         "rotating": "Rotating…",
-        "rotated": "Daemon token rotated"
+        "rotated": "Token rotated · agents picked up the new one · recorded in Activity"
       },
       "secretsFooter": "Secrets are managed in Secrets.",
-      "manageInSecrets": "Manage in Secrets"
+      "manageInSecrets": "Manage in Secrets",
+      "import": {
+        "title": "Import a master key",
+        "description": "From another Mac, so this Mac can read the secrets that sync to it. Replacing the key asks you first.",
+        "button": "Import…",
+        "dialogTitle": "Replace this Mac’s master key?",
+        "dialogBody": "The key in the file replaces the one in this Mac’s Keychain. Secrets that were stored with the current key stay readable only if both keys are the same.",
+        "keyFile": "Key file",
+        "noFile": "No file chosen",
+        "choose": "Choose…",
+        "fileEmpty": "That file is empty — pick the key file exported on the other Mac.",
+        "passphrase": "Passphrase",
+        "passphraseHint": "The passphrase set when the key was exported on the other Mac.",
+        "current": "Current key",
+        "inFile": "Key in the file",
+        "none": "None",
+        "same": "same",
+        "different": "different",
+        "recorded": "Recorded in Activity",
+        "replace": "Replace key",
+        "importSame": "Import key",
+        "importing": "Importing…",
+        "importedTitle": "Key imported",
+        "importedLocked_one": "This Mac now uses key {{fingerprint}}, but {{count}} secret still can’t be decrypted with it. It was stored on this Mac with the old key.",
+        "importedLocked_other": "This Mac now uses key {{fingerprint}}, but {{count}} secrets still can’t be decrypted with it. They were stored on this Mac with the old key.",
+        "importedAll": "This Mac now uses key {{fingerprint}}, and every secret decrypts with it.",
+        "readable": "Readable now",
+        "secretCount_one": "{{count}} secret",
+        "secretCount_other": "{{count}} secrets",
+        "stillLocked": "Still locked",
+        "lockedHint": "Add their values again in Secrets, or import the key they were stored with.",
+        "openSecrets": "Open Secrets"
+      },
+      "fingerprint": {
+        "title": "Key fingerprint",
+        "description": "Matching fingerprints on two Macs mean they hold the same key.",
+        "none": "No key on this Mac yet"
+      }
     },
     "models": {
       "testConnection": "Test connection"
@@ -1209,47 +1431,6 @@
       "modelPlaceholder": "Select a model",
       "modelOff": "Off — do not transcribe"
     },
-    "upkeep": {
-      "title": "Automatic upkeep",
-      "subtitle": "The passes Coffer runs on its own, without being asked. Each one can be switched off and re-timed.",
-      "interval": "How often {{pass}} runs",
-      "defaultInterval": "Default ({{interval}})",
-      "everyHours": "Every {{count}}h",
-      "everyMinutes": "Every {{count}} min",
-      "owner": {
-        "label": "Runs on:",
-        "thisMachine": "This machine",
-        "everyMachine": "Every machine",
-        "unknownMachine": "Unknown machine ({{id}})",
-        "self": "Curation runs here. The other machines sharing this vault leave the derived documents to this one.",
-        "other": "Curation runs on {{machine}}. This machine reads what that one derives and never rewrites it.",
-        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both curate the same items into their own documents and the vault ends up holding the same knowledge twice.",
-        "fault": "Curation is assigned to {{id}}, which no machine in the registry claims. It is running on no machine at all — the switch above still reads on, and nothing else in Coffer reports this. Take it over here to start it again.",
-        "takeOver": "Run curation on this machine",
-        "takeOverHint": "Names this machine as the owner. Whichever machine held it stops curating after the next sync round brings the change over; this one starts at its next pass.",
-        "noMachineId": "This machine has no id yet, so it cannot be named as the owner.",
-        "clear": "Clear owner",
-        "clearTitle": "Let every machine curate?",
-        "clearBody": "With no owner, every machine sharing this vault curates the same items into documents. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
-        "claimedToast": "Curation now runs on this machine",
-        "clearedToast": "Curation is no longer tied to one machine"
-      },
-      "passes": {
-        "aggregate": {
-          "name": "Read from agents",
-          "writes": "Reads your agents' own memory files and writes only Coffer's derived tree. No model involved."
-        },
-        "distil": {
-          "name": "Distil memory",
-          "writes": "The model turns the entries read from your agents into Coffer's own notes and rewrites the index. Deleting the tree and re-running reproduces an equivalent set."
-        },
-        "curate": {
-          "name": "Curate new knowledge into documents",
-          "writes": "Coffer's model curates new items — uploads and what agents write down — into a collection's documents, and carries a document you edited through to the others.",
-          "caution": "Switch this off and new items wait in the inbox until you curate by hand, and edits are not carried through."
-        }
-      }
-    },
     "close": "Close settings",
     "sections": "Settings sections",
     "daemonTab": {
@@ -1258,7 +1439,8 @@
       "state": {
         "connecting": "Connecting…",
         "stopping": "Stopping",
-        "offline": "Offline — the daemon isn't answering"
+        "offline": "Offline — the daemon isn't answering",
+        "reconnecting": "Reconnecting…"
       },
       "runningOn": "Running on 127.0.0.1:{{port}}",
       "offlineShell": "Restart it to bring Coffer back; this page reconnects when it answers.",
@@ -1269,17 +1451,23 @@
       "copyCommand": "Copy {{command}}",
       "port": "Port",
       "portHelp": "{{min}}–{{max}}, default 8000. Bookmarks and agent connections follow it.",
-      "portRange": "Choose a whole number from {{min}} to {{max}}.",
-      "portInUse": "Port {{port}} is in use by another program.",
-      "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}).",
+      "portRange": "Use a port from {{min}} to {{max}}.",
+      "portInUse": "Port {{port}} is in use by another program. Pick another port.",
+      "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}). Pick another port.",
       "portPending": "Port {{port}} saved — takes effect after Coffer restarts",
       "portPendingHelp": "Agents are reconnected to the new port automatically.",
       "save": "Save",
       "startup": "Startup",
-      "version": "Version",
-      "channel": "Channel",
-      "startedAt": "Started",
-      "executable": "Executable"
+      "upDays_one": "Up {{count}} day",
+      "upDays_other": "Up {{count}} days",
+      "upHours_one": "Up {{count}} hour",
+      "upHours_other": "Up {{count}} hours",
+      "upMinutes_one": "Up {{count}} minute",
+      "upMinutes_other": "Up {{count}} minutes",
+      "upJustNow": "Just started",
+      "pid": "pid {{pid}}",
+      "agentsConnected_one": "{{count}} agent connected",
+      "agentsConnected_other": "{{count}} agents connected"
     },
     "cofferModel": {
       "title": "Coffer's model",
@@ -1346,11 +1534,14 @@
         "description": "Memory tree and conversation summary cache. Coffer rebuilds it automatically.",
         "clear": "Clear",
         "confirmTitle": "Clear the cache?",
-        "confirmBody": "{{size}} — the memory tree and the conversation summary cache. Coffer rebuilds memory from the agents' own memory on the next update; an equally good rebuild needs Coffer's model (without it each memory becomes a note of its own), and memories whose sources are gone won't come back. Nothing you wrote and no history is touched.",
+        "confirmBody": "{{size}} — the memory tree and the conversation summary cache. Coffer rebuilds memory from the agents' own memory with Coffer's model; memories whose sources are gone won't come back. Nothing you wrote and no history is touched.",
         "confirm": "Clear cache",
         "clearing": "Clearing…",
         "cleared": "Cleared {{size}}. Memory is rebuilt on the next update."
-      }
+      },
+      "stillKept": "{{name}} are still kept {{window}}.",
+      "otherRetention": "Other retention settings:",
+      "tryAgain": "Try again"
     },
     "prices": {
       "label": "Refresh model prices",
@@ -1366,23 +1557,36 @@
   },
   "daemon": {
     "offline": {
-      "title": "Daemon offline",
-      "body": "The coffer daemon stopped responding. Capability lists, tool calls, and registrations will fail until it restarts.",
-      "notReadyTitle": "Daemon not running",
-      "notReadyBody": "Coffer's background service isn't reachable yet. It usually starts on its own and this notice clears itself once it does; if the problem continues, restart Coffer.",
       "outOfDateTitle": "Daemon out of date",
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
+    },
+    "reconnect": {
+      "title": "Reconnecting to the daemon…",
+      "connectingTitle": "Connecting to the daemon…",
+      "detail": "Attempt {{attempt}} · next try in {{seconds}}s · changes are paused, nothing is lost",
+      "retryNow": "Retry now",
+      "reconnected": "Reconnected"
+    },
+    "offlineState": {
+      "title": "Coffer’s daemon isn’t running",
+      "body": "This window talks to a background service on <mono>{{address}}</mono>. Your vault is safe on disk — agents just can’t reach their MCP servers until it’s back.",
+      "bodyNoAddress": "This window talks to Coffer’s background service. Your vault is safe on disk — agents just can’t reach their MCP servers until it’s back.",
+      "start": "Start daemon",
+      "starting": "Starting…",
+      "retry": "Retry",
+      "checkingIn": "Checking again in {{seconds}}s",
+      "lastReply": "last reply {{time}}"
     }
   },
   "notFound": {
-    "title": "Page not found",
-    "subtitle": "No route matches {{path}}.",
-    "bodyTitle": "You might have followed a stale link",
-    "body": "If you typed the URL by hand, double-check it. Otherwise head back home — every Coffer page is reachable from the sidebar.",
-    "cta": "Back to home"
+    "title": "Nothing lives at this address",
+    "body": "No page matches <mono>{{path}}</mono>. The link may be stale, or the page was renamed.",
+    "cta": "Back to Overview",
+    "didYouMean": "Did you mean",
+    "search": "Search Coffer"
   },
   "errors": {
     "AGENT_CONFIG_DIR_MISSING": "This agent's config directory doesn't exist on this machine",
@@ -1400,10 +1604,6 @@
     "CONFIG_FILE_STALE": "The config file changed on disk since you loaded it. Reload and retry.",
     "CONFIG_INVALID": "Configuration is invalid",
     "CONVERSATION_NOT_FOUND": "Conversation not found",
-    "CREDENTIAL_IN_USE": "This credential is still referenced by other resources. Detach them before deleting it.",
-    "CREDENTIAL_LOCKED": "The OS keychain is locked — unlock it and retry",
-    "CREDENTIAL_MISSING": "Required credential is missing from the credential store — store it again on the resource's edit page",
-    "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
     "CURSOR_INVALID": "The list's page position is no longer valid — reload the list from the start.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
@@ -1433,8 +1633,8 @@
     "KNOWLEDGE_VERSION_NOT_FOUND": "That version isn't in this document's history",
     "KNOWLEDGE_PATH_UNSAFE": "That path is outside the knowledge collection",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "This file is too large to upload. The limit is 20 MB.",
-    "MASTER_KEY_FILE_INVALID": "That is not a valid master key",
-    "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets. Import it on the Sync page.",
+    "MASTER_KEY_FILE_INVALID": "That is not a Coffer master key file",
+    "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets. Import it in Settings › Security.",
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
@@ -1457,7 +1657,6 @@
     "PLUGIN_UNINSTALL_FAILED": "Uninstall failed",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
-    "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
@@ -1498,7 +1697,7 @@
     "APPROVAL_NOT_PENDING": "That approval has already been answered.",
     "SECRET_NAME_INVALID": "That secret name isn't valid.",
     "SECRET_NOT_FOUND": "No secret is stored under that name.",
-    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your credentials were stored with and remove the other.",
+    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your secrets were stored with and remove the other.",
     "CUSTOM_TOOL_NOT_FOUND": "No custom tool or group by that name",
     "NOT_A_CUSTOM_TOOL_GROUP": "That MCP server isn't a custom-tool group",
     "CUSTOM_TOOL_EXISTS": "A tool with that name already exists in this group",
@@ -1530,13 +1729,26 @@
     "VAULT_VERSION_NOT_FOUND": "That version of the file does not exist.",
     "SKILL_COPY_NOT_OURS": "An agent's copy of this skill is no longer Coffer's link, so Coffer won't remove it. Restore it from master first, or delete that folder yourself.",
     "SKILL_COPY_NOT_DIFFERING": "That agent's copy is Coffer's link now; there is nothing to compare.",
-    "SKILL_ORPHAN_NOT_FOUND": "That folder is no longer outside your library."
+    "SKILL_ORPHAN_NOT_FOUND": "That folder is no longer outside your library.",
+    "SECRET_IN_USE": "This secret is still referenced by other resources. Detach them before deleting it.",
+    "SECRET_LOCKED": "The OS keychain is locked — unlock it and retry",
+    "SECRET_MISSING": "Required secret is missing from the secret store — store it again on the resource's edit page",
+    "SECRET_UNREADABLE": "Stored secret could not be decrypted with the current master key",
+    "PROVIDER_SECRET_SOURCE_INVALID": "Supply exactly one of a saved secret or an inline key",
+    "ATTENTION_NOT_IGNORABLE": "Only an item that is worth knowing but not broken can be ignored, and this one isn't listed any more.",
+    "MASTER_KEY_PASSPHRASE_WRONG": "That passphrase doesn't open this key file.",
+    "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
+    "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
+    "KNOWLEDGE_NOT_A_DELETE": "Only a delete can be restored from Recent changes."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
     "perPage": "Per page",
     "prev": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "showing": "Showing {{shown}} of {{total}}",
+    "loadMore": "Load {{count}} more",
+    "loadingMore": "Loading more…"
   },
   "agents": {
     "title": "Agents",
@@ -2832,13 +3044,17 @@
       "never": "not yet"
     },
     "noModel": {
-      "line": "Items become documents as they arrive. Set Coffer's model to curate new items into your documents:",
+      "line": "Set Coffer's model to curate new items into your documents ·",
       "link": "Settings › General"
     },
     "collection": {
       "emptyTitle": "{{name}} is empty",
       "emptyBody": "Write the first document, upload one you already have, or drop Markdown files into the folder. Agents already see the collection and can write to its inbox.",
-      "pickDocument": "Choose a document in the tree to read it."
+      "editDescription": "Edit description",
+      "descriptionLabel": "What belongs in this collection",
+      "descriptionHint": "The opening paragraph of the folder's README.md; every agent reads it through the coffer-guide skill.",
+      "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
+      "revealFolder": "Reveal folder"
     },
     "create": {
       "title": "New collection",
@@ -2848,7 +3064,8 @@
       "description": "What belongs in here",
       "descriptionHint": "One sentence: what belongs in this collection",
       "everyAgent": "Every agent sees it through the coffer-guide skill.",
-      "submit": "Create collection"
+      "submit": "Create collection",
+      "created": "Created {{name}}"
     },
     "deleteCollection": {
       "zone": "Danger zone",
@@ -2856,15 +3073,14 @@
       "hint_other": "Removes the folder and all {{count}} documents from disk.",
       "button": "Delete…",
       "title": "Delete {{name}}?",
-      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. This can't be undone.",
+      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. It stays in the vault's history, so Recent changes can restore it.",
       "typeToConfirm": "Type {{name}} to confirm",
       "confirm": "Delete collection"
     },
     "add": {
       "button": "Add a document",
-      "here": "Add a document here",
       "title": "Add a document",
-      "hint": "It goes to the collection's Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
+      "hint": "It goes to {{collection}}'s Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
       "hintNoModel": "Coffer's model isn't set, so it is written as a document as it is.",
       "collection": "Collection",
       "titleField": "Title",
@@ -2877,15 +3093,25 @@
     "upload": {
       "button": "Upload",
       "title": "Upload a document",
-      "body": "Coffer converts it to Markdown and curates it into the collection. The original file is not kept.",
-      "choose": "Choose a file",
+      "body": "Coffer converts it to Markdown; it lands in the collection's Inbox and is curated within the hour. The original file is not kept.",
+      "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
       "into": "Into collection",
       "converting": "Converting to Markdown…",
       "uploading": "Uploading…",
-      "pending": "Uploaded “{{title}}” — it waits in the Inbox and will be curated shortly.",
-      "written": "Uploaded “{{title}}” — saved as {{path}}."
+      "pending": "{{name}} is in {{collection}}'s Inbox · curated within the hour",
+      "written": "{{name}} is saved as {{path}}",
+      "zipTitle": "ZIP files can't be converted",
+      "zipBody": "Unzip it and upload the files inside one at a time.",
+      "tooLargeTitle": "Larger than 20 MB",
+      "tooLargeBody": "Split it, or export the part that matters as PDF.",
+      "noTextTitle": "No text in this PDF",
+      "noTextBody": "It is scanned pages. Coffer reads text, not images — paste the text into a document instead. Nothing was added to the Inbox.",
+      "noTextAnyTitle": "No text found",
+      "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added to the Inbox.",
+      "unsupportedTitle": "{{kind}} files can't be converted",
+      "failedTitle": "Couldn't upload this file"
     },
     "curate": {
       "now": "Curate now",
@@ -2899,7 +3125,9 @@
         "too_large": "That item is too large for one pass, so it was kept as its own document.",
         "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and it will try again.",
         "truncatedGaveUp": "The curation pass was cut off three times in a row, so the item was kept as its own document and won't be run again.",
-        "failed": "Curation didn't finish. Nothing was lost — it will try again."
+        "failed": "Curation didn't finish. Nothing was lost — it will try again.",
+        "ok_one": "Curated {{count}} item into your documents",
+        "ok_other": "Curated {{count}} items into your documents"
       }
     },
     "inbox": {
@@ -2909,27 +3137,34 @@
       "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "empty": "Nothing waiting. New items from agents and uploads show up here first.",
-      "back": "All items",
-      "writtenBy": "Written by {{who}} · {{when}}",
-      "waitingSince": "Written by {{who}} · {{when}} · waiting to be curated",
-      "readOnly": "An item is read-only: curation files it into the right document, and it leaves the Inbox then."
+      "writtenBy": "written by {{who}} {{when}}",
+      "readOnly": "Items open read-only. Curation folds each one into the documents and removes it from the Inbox.",
+      "heading": "Inbox · {{name}}",
+      "writtenWithWrite": "Written by {{who}} with coffer__write · {{when}}",
+      "writtenByYou": "Written by you · {{when}}"
     },
     "document": {
       "tab": "Document",
       "where": "Where this document is",
-      "meta": "Edited {{updated}} · Created {{created}} by {{actor}}",
       "more": "More actions for {{path}}",
-      "curatedBanner": "Curation last changed this document from {{agent}}'s item, {{when}}.",
-      "seePass": "See what this pass changed"
+      "curatedBanner": "Curated {{agent}}'s item into this document {{when}}.",
+      "seePass": "See what this pass changed",
+      "views": "Document views",
+      "rail": "About this document",
+      "onThisPage": "On this page",
+      "properties": "Properties",
+      "edited": "Edited",
+      "created": "Created",
+      "curatedFrom": "Curated from",
+      "byWhen": "{{who}} · {{when}}",
+      "passes_one": "{{count}} inbox item",
+      "passes_other": "{{count}} inbox items"
     },
     "editor": {
       "label": "Edit {{path}}",
       "title": "Title",
       "description": "Description",
-      "frontmatterNote": "Frontmatter · read-only here · curation keeps it current",
-      "footer": "Markdown · ⌘S save · esc cancel",
-      "footerUnsaved": "Markdown · Unsaved changes · ⌘S save · esc cancel",
-      "footerNotSaved": "Markdown · Not saved",
+      "frontmatterNote": "Read-only here · curation keeps it current",
       "conflictTitle": "This document changed on disk while you were editing",
       "conflictBody": "Your text was not saved: the file is newer than the copy you opened. Reload to get the current version, or compare first; copy your text if you want to keep it.",
       "compare": "Compare",
@@ -2937,28 +3172,50 @@
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
       "compareTitle": "On disk now, against your text",
-      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text."
+      "compareBody": "Lines marked − are only on disk; lines marked + are only in your text.",
+      "frontmatter": "Frontmatter",
+      "editStands": "Your edit stands: items curated later go around it, never over it.",
+      "markdown": "Markdown",
+      "unsaved": "Unsaved changes",
+      "notSaved": "Not saved",
+      "saveKey": "save",
+      "cancelKey": "cancel",
+      "copied": "Your text is on the clipboard",
+      "reloaded": "Reloaded the version on disk"
     },
     "deleteDocument": {
       "menu": "Delete document…",
       "title": "Delete {{name}}?",
       "body": "Coffer deletes this file from disk:",
       "afterwards": "Agents stop finding it from their next read. It stays in the vault's History, so it can be restored as a new version.",
-      "confirm": "Delete document"
+      "confirm": "Delete document",
+      "deletedToast": "Deleted {{name}}",
+      "goneTitle": "No document open",
+      "goneBody": "{{name}} was deleted. Its versions stay in the vault's history — Recent changes lists the delete and can restore it."
     },
     "history": {
       "tab": "History",
-      "count_one": "{{count}} version · newest first",
-      "count_other": "{{count}} versions · newest first",
       "current": "Current",
       "none": "No versions recorded yet.",
       "versionLabel": "The chosen version",
       "wholePass": "See the whole pass",
       "restore": "Restore this version",
-      "restored": "Restored as a new version.",
+      "restored": "Restored as a new version",
       "failedTitle": "Couldn't read this document's history",
       "failedFine": "The document itself is fine.",
-      "openActivity": "Open Activity"
+      "openActivity": "Open Activity",
+      "versions": "Versions",
+      "countLabel_one": "{{count}} version",
+      "countLabel_other": "{{count}} versions",
+      "newestFirst": "newest first",
+      "oneOfPass_one": "The only document this curation pass changed.",
+      "oneOfPass_other": "One of {{count}} documents changed in this curation pass.",
+      "restoreHint": "Restoring it saves a new version; later versions stay in the list.",
+      "restoredToast": "Restored the {{when}} version as a new version",
+      "diffMode": "Which diff",
+      "changesInVersion": "Changes in this version",
+      "compareCurrent": "Compare with current",
+      "removedVersion": "This version removed the document; there is nothing to compare."
     },
     "diff": {
       "none": "No changes to the text."
@@ -2986,6 +3243,37 @@
         "rename": "moved {{document}}",
         "remove": "removed {{document}}",
         "baseline": "recorded the collection as it was"
+      },
+      "version": {
+        "pass": "Curated {{agent}}'s item",
+        "save": "Edited in Coffer",
+        "delete": "Deleted",
+        "promote": "Added as written",
+        "submit": "Submitted as an item",
+        "restore": "Restored an earlier version",
+        "undo": "Undid a curation pass",
+        "edit": "Edited on disk",
+        "sync": "Pulled from another Mac",
+        "create": "Created",
+        "rename": "Moved",
+        "remove": "Removed with its collection",
+        "baseline": "Recorded as it was"
+      },
+      "verb": {
+        "pass": "curated {{agent}}'s item into",
+        "save": "edited",
+        "delete": "deleted",
+        "promote": "added as written",
+        "submit": "submitted an item",
+        "restore": "restored",
+        "undo": "undid the pass that changed",
+        "edit": "edited on disk",
+        "sync": "pulled from another Mac",
+        "create": "created the collection",
+        "rename": "moved",
+        "remove": "deleted the collection",
+        "baseline": "recorded the collection as it was",
+        "restoreCollection": "restored the collection"
       }
     },
     "recent": {
@@ -3002,12 +3290,31 @@
       "waitingTitle": "Waiting to be curated",
       "waitingCount_one": "{{count}} item",
       "waitingCount_other": "{{count}} items",
-      "waitingMeta": "{{collection}} · written by {{who}} · {{when}}",
+      "waitingMeta": "{{collection}} · written by {{who}} {{when}}",
       "nothingWaiting": "Nothing waiting. New items from agents and uploads show up here first.",
       "today": "Today",
       "yesterday": "Yesterday",
       "empty": "No changes in the last 7 days.",
-      "failed": "Couldn't read recent changes"
+      "failed": "Couldn't read recent changes",
+      "open": "Open",
+      "openItem": "Open {{title}}",
+      "seePass": "See the pass",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "restored": "Restored",
+      "restoredToast": "Restored {{name}}",
+      "detail": {
+        "delete": "Removed from the collection; its versions stay in the vault's history.",
+        "remove_one": "The collection and its {{count}} file were deleted; they stay in the vault's history.",
+        "remove_other": "The collection and its {{count}} files were deleted; they stay in the vault's history.",
+        "undo": "The pass was undone as a whole, as one new version by you.",
+        "restore": "Put back as a new version; the history before it stays.",
+        "sync_one": "{{count}} line changed on another Mac.",
+        "sync_other": "{{count}} lines changed on another Mac.",
+        "pass": "From one inbox item"
+      }
     },
     "pass": {
       "title": "Curation pass · {{when}}",
@@ -3018,19 +3325,26 @@
         "modified": "Modify",
         "removed": "Remove"
       },
-      "itemsLeft": "The items this pass curated left the Inbox. Their text stays in each document's History.",
+      "itemsLeft": "The inbox items this pass curated left the Inbox. Their text stays in each document's History.",
       "undoTitle": "Undo this curation pass?",
-      "undoBody": "Puts every document this pass changed back to how it was before {{when}}.",
+      "undoBody": "Puts the documents this pass changed back to how they were before {{when}}.",
       "undoEffect": {
         "added": "removed",
-        "modified": "back to its version before the pass",
-        "removed": "restored"
+        "modified": "back to before the pass",
+        "removed": "put back"
       },
-      "undoNote": "Each document gets a new version by you, so this can be undone from its History too. The items are not queued again.",
+      "undoNote": "All or nothing: if a document changed after this pass, nothing is undone. Each document gets a new version by you. The inbox items are not queued again.",
       "undoConfirm": "Undo pass",
       "undoing": "Undoing…",
-      "undoRefused": "Nothing was undone: {{document}} was changed after this pass, and undoing would overwrite that change.",
-      "undoneToast": "Undid the pass."
+      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History instead.",
+      "undoneToast": "Undid the pass.",
+      "heading": "What this curation pass changed",
+      "meta": "one new version per document · from one inbox item",
+      "notUndone": "Not undone",
+      "changedSince": "changed after this pass",
+      "undoRefusedTitle": "Couldn't undo this pass",
+      "undoneBy": "Undone by {{who}} at {{when}}",
+      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again."
     },
     "welcome": {
       "title": "Nothing written down yet",
@@ -3041,13 +3355,38 @@
       },
       "upload": {
         "title": "Bring in what you have",
-        "body": "Upload PDF, Word or Markdown into a collection; Coffer turns it into documents."
+        "body": "Upload PDF, Word or Markdown; Coffer turns it into documents."
       },
       "agents": {
         "title": "Let agents write",
-        "body": "Agents file what they learn with coffer__write; it lands in the Inbox.",
+        "body": "Agents file what they learn with <code>coffer__write</code>; it lands in the inbox.",
         "automatic": "Automatic"
       }
+    },
+    "automatic": {
+      "title": "Automatic curation",
+      "description": "Curates new Inbox items into your documents, one pass at a time.",
+      "last": "Last pass {{when}}",
+      "never": "No pass yet",
+      "curating": "Curating…",
+      "owner": {
+        "label": "Curation runs on",
+        "thisMac": "{{name}} · this Mac",
+        "thisMacFallback": "This Mac",
+        "none": "Not chosen",
+        "unknown": "Unknown Mac ({{id}})",
+        "hint": "One Mac curates; the others get the result through sync.",
+        "unbound": "No Mac is chosen, so every Mac curates and the same knowledge can be written twice. Choose one.",
+        "fault": "No Mac in this vault has that id, so curation runs nowhere. Choose a Mac.",
+        "claimedToast": "Curation now runs on the chosen Mac",
+        "clearedToast": "Curation is no longer tied to one Mac",
+        "runsElsewhere": "Runs on {{machine}}",
+        "pillFault": "runs on no Mac"
+      }
+    },
+    "when": {
+      "today": "Today {{time}}",
+      "yesterday": "Yesterday {{time}}"
     }
   },
   "memory": {
@@ -3087,7 +3426,10 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide."
+      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide.",
+      "sample": "Sample memory",
+      "sources": "Sources",
+      "distil": "Distil"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -3098,7 +3440,17 @@
     },
     "welcome": {
       "title": "Nothing distilled yet",
-      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository."
+      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository.",
+      "noAgentsTitle": "No agent memory to read",
+      "noAgentsBody": "Memory is read from each connected agent's own memory. No agent is connected to Coffer yet, so there is nothing to distil.",
+      "connect": "Connect an agent",
+      "found": "Found on this Mac",
+      "foundMeta": "Coffer also reads on its own on a timer",
+      "foundNone": "No memory yet",
+      "foundCount_one": "{{count}} file in {{projects}}",
+      "foundCount_other": "{{count}} files in {{projects}}",
+      "projects_one": "{{count}} project",
+      "projects_other": "{{count}} projects"
     },
     "detail": {
       "notFound": "This partition no longer exists.",
@@ -3110,7 +3462,8 @@
         "label": "More actions for {{name}}",
         "reveal": "Reveal partition folder",
         "copyPath": "Copy path",
-        "delete": "Delete partition…"
+        "delete": "Delete partition…",
+        "history": "Distil history in Activity"
       }
     },
     "memories": {
@@ -3122,7 +3475,9 @@
       "select": "Select a memory to read it.",
       "loadFailed": "Couldn't load the memories.",
       "emptyTitle": "No memories for {{name}} yet",
-      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours."
+      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repository but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repository but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
     },
     "noModel": {
       "title": "Coffer's model isn't set, so each agent's entry becomes its own memory",
@@ -3138,6 +3493,35 @@
       "characters_other": "{{count}} characters",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
       "loadFailed": "Couldn't load what is delivered."
+    },
+    "automatic": {
+      "title": "Read memory automatically",
+      "description": "Reads each agent’s own memory and distils it. Coffer never writes to it.",
+      "last": "Last read {{when}}",
+      "never": "Not read yet"
+    },
+    "allAgents": "All agents",
+    "waiting_one": "{{count}} entry read from {{agents}}, waiting to distil",
+    "waiting_other": "{{count}} entries read from {{agents}}, waiting to distil",
+    "distil": {
+      "done": "Distilled {{when}}",
+      "never": "Not distilled yet",
+      "running": "Distilling…"
+    },
+    "status": {
+      "read": "Read {{when}}",
+      "failed_one": "{{count}} agent failed",
+      "failed_other": "{{count}} agents failed",
+      "reading": "Reading agents’ memory…",
+      "distilling": "Distilling {{current}} of {{total}} partitions"
+    },
+    "failure": {
+      "title": "Couldn't read {{agent}}'s memory:",
+      "anAgent": "an agent",
+      "kept": "{{agent}}'s memories stay as its last full read left them.",
+      "keptSince": "{{agent}}'s memories stay as they were after its last full read on {{date}}.",
+      "retry": "Retry",
+      "openActivity": "Open Activity"
     }
   },
   "conversations": {
@@ -3485,11 +3869,6 @@
         "saved": "Saved",
         "error": "Couldn't save"
       },
-      "credentials": {
-        "title": "Credentials",
-        "replace": "Replace",
-        "hint": "Stored in Coffer's credential store; the channel's config only carries a reference."
-      },
       "machine": {
         "runsOn": "Runs on",
         "hint": "Exactly one machine holds the bot's connection."
@@ -3498,6 +3877,11 @@
         "title": "Danger zone",
         "body": "Stops the bot and removes the pairing. Conversations stay in Conversations.",
         "button": "Delete…"
+      },
+      "secrets": {
+        "title": "Secrets",
+        "replace": "Replace",
+        "hint": "Stored in Coffer's secret store; the channel's config only carries a reference."
       }
     },
     "add": {
@@ -3606,7 +3990,7 @@
         "body": "Paste the new secret from the SeaTalk Open Platform. Pairing and settings are kept; the bot restarts on the new secret.",
         "label": "New app secret"
       },
-      "hint": "Stored in Coffer's credential store; the old value is overwritten.",
+      "hint": "Stored in Coffer's secret store; the old value is overwritten.",
       "submit": "Replace and restart"
     },
     "test": {
@@ -3744,12 +4128,12 @@
       "secretsLocal": "{{count}} kept on this machine"
     },
     "problem": {
-      "noCredential": "no credential",
+      "noSecret": "no secret",
       "cloudTool": "a cloud sync tool",
       "since": "Since {{when}}",
       "auth_failed": {
         "title": "The remote refused to sign in",
-        "body": "Git could not sign in with the credential {{ref}}. Check that the entry exists in Coffer's credential store and still has access to the repository."
+        "body": "Git could not sign in with the secret {{ref}}. Check that it is still stored in Coffer and still has access to the repository."
       },
       "unreachable": {
         "title": "The remote cannot be reached",
@@ -3942,19 +4326,16 @@
     },
     "key": {
       "title": "Master key",
-      "hint": "Credentials sync as ciphertext only. Another machine can decrypt what this one publishes only once it holds this same key — export it to a file, carry it over a channel you trust, and import it there. It is never written into the repository.",
+      "hint": "Secrets sync as ciphertext only. Another machine can decrypt what this one publishes only once it holds this same key — export it to a file, carry it over a channel you trust, and import it there. It is never written into the repository.",
       "fingerprint": "Key fingerprint",
       "fingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
       "export": "Export key",
       "import": "Import key",
       "importConfirmTitle": "Replace this machine's master key?",
-      "importConfirmBody": "Credentials stored with the current key stay readable only if the new key is the same one.",
-      "exported": "Backup written to {{path}} (fingerprint {{fingerprint}})",
-      "imported": "Key imported — this machine now decrypts the credentials it syncs.",
-      "importedLocked": "Key imported, but {{count}} credential reference still cannot be decrypted with it.",
-      "fileEmpty": "That file is empty — pick the key file exported from the other machine.",
-      "exportInApp": "Open in Coffer app to export",
-      "exportInAppHint": "Exporting the master key asks for Touch ID or your login password, so it is only available in the Coffer desktop app. The app writes the backup file and shows where it went."
+      "importConfirmBody": "Secrets stored with the current key stay readable only if the new key is the same one.",
+      "imported": "Key imported — this machine now decrypts the secrets it syncs.",
+      "importedLocked": "Key imported, but {{count}} secret reference still cannot be decrypted with it.",
+      "fileEmpty": "That file is empty — pick the key file exported from the other machine."
     },
     "machines": {
       "title": "Machines",
@@ -3998,8 +4379,6 @@
         "url": "Enter a git remote URL (https://… or git@…)",
         "interval": "Interval must be at least 60 seconds"
       },
-      "credentialRef": "Push credential",
-      "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
       "includeSecret": "Include encrypted secrets",
       "includeSecretHint_one": "{{count}} encrypted secret would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
       "includeSecretHint_other": "{{count}} encrypted secrets would be pushed. Secrets travel as ciphertext; the master key is never pushed.",
@@ -4016,7 +4395,9 @@
       "stop": "Stop syncing",
       "stopTitle": "Stop syncing with this remote?",
       "stopBody": "This machine forgets the remote. The vault, its history and the repository itself are left as they are; syncing again means joining again.",
-      "notConfigured": "No remote configured yet. Name a repository above and this vault starts syncing with it."
+      "notConfigured": "No remote configured yet. Name a repository above and this vault starts syncing with it.",
+      "secretRef": "Push secret",
+      "secretRefHint": "The name of an entry in Coffer's secret store — not the secret itself. The daemon resolves it when it pushes, so the secret never reaches this page, the repository's git config, or any error text."
     }
   },
   "overview": {
@@ -4042,7 +4423,15 @@
         "title": "Nothing needs you",
         "body": "Anything that needs you shows up here.",
         "checked": "Checked"
-      }
+      },
+      "moreFor": "More for {{name}}",
+      "ignore": "Ignore",
+      "restore": "Stop ignoring",
+      "ignored_one": "{{count}} ignored",
+      "ignored_other": "{{count}} ignored",
+      "showIgnored": "Show",
+      "hideIgnored": "Hide",
+      "ignoredList": "Ignored"
     },
     "actions": {
       "connect": "Connect",
@@ -4052,7 +4441,8 @@
       "run": "Review",
       "review": "Review",
       "repair": "Repair drift",
-      "open": "Open"
+      "open": "Open",
+      "repairHook": "Repair hook"
     },
     "kinds": {
       "agent": "Agent",
@@ -4090,7 +4480,7 @@
         "unitRegistered_other": "registered"
       },
       "providers": {
-        "ok": "Ready",
+        "ok": "Answering",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
         "unit_one": "provider",
@@ -4114,7 +4504,7 @@
         "calls": "{{calls}} calls · {{errors}} errors in the last 24 h"
       },
       "skills": {
-        "ok": "Up to date",
+        "ok": "In sync",
         "warn_one": "{{count}} drifted",
         "warn_other": "{{count}} drifted",
         "unit_one": "skill",
@@ -4167,6 +4557,43 @@
           "failed": "Failed",
           "none": "No round yet"
         }
+      },
+      "attention_one": "{{count}} needs attention",
+      "attention_other": "{{count}} need attention",
+      "customTools": {
+        "ok": "All answering",
+        "warn_one": "{{count}} needs attention",
+        "warn_other": "{{count}} need attention",
+        "unit_one": "group",
+        "unit_other": "groups",
+        "calls": "{{calls}} requests · {{errors}} errors in the last 24 h",
+        "none": "No tool groups yet"
+      },
+      "clis": {
+        "ok": "All ready",
+        "warn_one": "{{count}} not ready",
+        "warn_other": "{{count}} not ready",
+        "unit_one": "CLI",
+        "unit_other": "CLIs",
+        "neededBy_one": "Needed by {{count}} skill · {{names}}",
+        "neededBy_other": "Needed by {{count}} skills · {{names}}",
+        "none": "No skill needs a CLI yet"
+      },
+      "secrets": {
+        "ok": "All in use",
+        "missing_one": "{{count}} missing here",
+        "missing_other": "{{count}} missing here",
+        "unused_one": "{{count}} unused",
+        "unused_other": "{{count}} unused",
+        "unit_one": "secret",
+        "unit_other": "secrets",
+        "referencedBy_one": "Referenced by {{count}} server, tool or skill",
+        "referencedBy_other": "Referenced by {{count}} servers, tools and skills",
+        "none": "No secrets yet"
+      },
+      "usage": {
+        "period": "Today",
+        "unit": "tokens"
       }
     },
     "activity": {
@@ -4180,8 +4607,6 @@
       "body": "Connecting an agent adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
       "preview": "You'll see every file change before Coffer writes it.",
       "found": "Found on this Mac",
-      "notInstalled": "Not installed",
-      "connect": "Review and connect",
       "thenTitle": "Then add what they share",
       "shared": {
         "mcpServers": {
@@ -4190,21 +4615,36 @@
         },
         "skills": {
           "body": "No skills yet",
-          "cta": "Add skill"
+          "cta": "Add a skill"
         },
         "knowledge": {
-          "body": "No collections yet",
-          "cta": "Add knowledge"
+          "body": "No documents yet",
+          "cta": "Open Knowledge"
         },
         "providers": {
           "body": "Agents use their own login",
-          "cta": "Add provider"
+          "cta": "Add a provider"
         },
         "channels": {
           "body": "No channels yet",
-          "cta": "Add channel"
+          "cta": "Connect a chat app"
         }
-      }
+      },
+      "foundBody_one": "Coffer found {{count}} agent on this Mac. Connecting it adds Coffer's gateway to its config, so it gets the same MCP servers and skills as every agent you add.",
+      "foundBody_other": "Coffer found {{count}} agents on this Mac. Connecting one adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
+      "noneTitle": "No coding agents found",
+      "noneBody": "Coffer looked in your home folder for {{names}} and found none of them. Install one and scan again, or point Coffer at an agent's config folder by hand.",
+      "and": " and ",
+      "confirmOnly": "Coffer only connects agents you confirm.",
+      "notFound": "Not found",
+      "tick": "Connect {{name}}",
+      "connect_one": "Review and connect {{count}} agent",
+      "connect_other": "Review and connect {{count}} agents",
+      "byHand": "Add an agent by hand",
+      "scan": "Scan again",
+      "looked": "Looked in your home folder",
+      "lastScanned": "Last scanned",
+      "thenHint": "Each can wait until you need it"
     }
   },
   "customTools": {
@@ -4634,7 +5074,7 @@
     "noMatch": "No secret matches this search.",
     "about": {
       "label": "About secrets",
-      "body": "A secret is stored once, encrypted with this Mac's master key, and referred to by name. MCP servers, model providers, channels and skills cite it instead of holding the value, so replacing it here updates every one of them. No value is shown on this page unless you reveal it in the Coffer desktop app."
+      "body": "Use a secret in a command: coffer run --secret github-token -- gh release create v2. The command runs with GITHUB_TOKEN set for it alone; repeat --secret for more, NAME=secret picks the variable name. It keeps the value out of files and shell history; it doesn't hide it from an agent that runs the command."
     },
     "empty": {
       "title": "No secrets yet",
@@ -4649,13 +5089,17 @@
     "cols": {
       "name": "Name",
       "usedBy": "Used by",
-      "actions": "Actions"
+      "actions": "Actions",
+      "lastUsed": "Last used",
+      "created": "Created"
     },
     "row": {
-      "missing": "Missing",
+      "missing": "Missing on this Mac",
       "pending": "Waiting for approval",
       "localReadable": "Readable by local processes",
-      "localReadableHint": "Coffer hands this value to a child process's environment, where other processes you run can read it."
+      "localReadableHint": "Coffer hands this value to a child process's environment, where other processes you run can read it.",
+      "addValue": "Add value",
+      "addValueFor": "Add a value for {{name}}"
     },
     "kind": {
       "mcp_server": "MCP server",
@@ -4677,14 +5121,14 @@
     "menu": {
       "label": "Actions for {{name}}",
       "replace": "Replace value…",
-      "store": "Store value…",
       "reveal": "Reveal value…",
       "revealInApp": "Reveal in the Coffer app",
-      "copyRef": "Copy reference",
+      "copyRef": "Copy reference ({{reference}})",
       "copied": "Copied {{reference}}",
       "copyFailed": "Couldn't copy to the clipboard",
       "activity": "Show in Activity",
-      "delete": "Delete…"
+      "delete": "Delete…",
+      "addValue": "Add value…"
     },
     "add": {
       "open": "Add secret",
@@ -4704,19 +5148,15 @@
     },
     "replace": {
       "title": "Replace the value of {{name}}",
-      "storeTitle": "Store a value for {{name}}",
+      "storeTitle": "Add a value for {{name}}",
       "secret": "Secret",
       "value": "New value",
       "hint": "The old value is destroyed. Everything that uses it gets the new one.",
       "submit": "Replace value",
-      "storeSubmit": "Store value",
+      "storeSubmit": "Add value",
       "submitting": "Saving…",
       "replaced": "Replaced the value of {{name}}",
-      "stored": "Stored a value for {{name}}"
-    },
-    "pending": {
-      "title": "Saved, waiting for approval",
-      "body": "The new value is stored sealed. It takes effect once a person approves it in the Coffer desktop app."
+      "stored": "Added a value for {{name}}"
     },
     "reveal": {
       "title": "Show the value of {{name}}?",
@@ -4728,11 +5168,11 @@
       "valueLabel": "Value of {{name}}",
       "hide": "Hide",
       "copied": "Value copied",
-      "hidesIn": "Hides in {{seconds}} s · recorded as credential_revealed"
+      "hidesIn": "Hides in {{seconds}} s · recorded as secret_revealed"
     },
     "delete": {
       "title": "Delete {{name}}?",
-      "body": "Nothing uses it. Its value is destroyed on this Mac. This can't be undone.",
+      "body": "Nothing uses it. Its value is destroyed on this Mac and, if encrypted secrets sync, on your other Macs at their next round. This can't be undone.",
       "submit": "Delete secret",
       "submitting": "Deleting…",
       "deleted": "Deleted {{name}}"
@@ -4782,11 +5222,94 @@
       "applying": "Applying…",
       "applied_one": "Moved {{count}} key into secrets",
       "applied_other": "Moved {{count}} keys into secrets",
-      "resultTitle_one": "Moved {{count}} key into secrets",
-      "resultTitle_other": "Moved {{count}} keys into secrets",
+      "resultTitle_one": "Moved {{moved}} of {{count}} key",
+      "resultTitle_other": "Moved {{moved}} of {{count}} keys",
       "skippedSummary_one": "{{count}} was skipped and its file left as it was:",
       "skippedSummary_other": "{{count}} were skipped and their files left as they were:",
-      "skipped": "Skipped"
+      "skipped": "Skipped",
+      "noneBody_one": "Coffer checked {{count}} file and found no API keys or tokens written in plain text.",
+      "noneBody_other": "Coffer checked {{count}} files and found no API keys or tokens written in plain text.",
+      "checked": "Checked",
+      "checkedWhere": "~/.coffer/secrets/, skills",
+      "unwrittenSummary": "{{path}} {{reason}}. The key is saved as the secret {{name}}, but the file still holds it in plain text.",
+      "notChanged": "not changed",
+      "inActivity": "Every change is in Activity",
+      "tryAgain": "Try again"
+    },
+    "pending": {
+      "toast": "Saved, waiting for approval · the new value is stored sealed and takes effect once approved in the Coffer desktop app"
+    },
+    "time": {
+      "never": "Never",
+      "justNow": "Just now",
+      "minutesAgo_one": "{{count}} min ago",
+      "minutesAgo_other": "{{count}} min ago",
+      "hoursAgo_one": "{{count}} hour ago",
+      "hoursAgo_other": "{{count}} hours ago",
+      "today": "{{time}} today",
+      "yesterday": "Yesterday"
+    },
+    "missing": {
+      "title_one": "{{count}} secret has no value on this Mac",
+      "title_other": "{{count}} secrets have no value on this Mac",
+      "body": "They came with the vault, but encrypted secrets aren't synced here. Servers that use them can't start until they have a value.",
+      "importKey": "Import master key…"
+    },
+    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
+    "approvals": {
+      "title_one": "{{count}} change waiting for approval",
+      "title_other": "{{count}} changes waiting for approval",
+      "hintShell": "Approving asks for Touch ID or your login password.",
+      "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
+      "requestedBy": "Requested by",
+      "secret": "Secret",
+      "destination": "Sent to",
+      "target": "Target",
+      "approve": "Approve",
+      "reject": "Reject",
+      "op": {
+        "bind": "New use",
+        "replace_value": "New value",
+        "disable_protection": "Turn off protection",
+        "add_secret": "New secret"
+      },
+      "review": "Review",
+      "change": "Change",
+      "question": {
+        "add_secret": "Approve the new secret {{name}}?",
+        "replace_value": "Approve a new value for {{name}}?",
+        "bind": "Approve sending {{name}} to {{destination}}?",
+        "disable_protection": "Turn off approval for secret changes?"
+      },
+      "body": {
+        "add_secret": "The value is stored sealed. It can be used only after you approve it.",
+        "replace_value": "The new value is stored sealed. Until you approve it, {{users}} keep using the current value.",
+        "replace_value_unused": "The new value is stored sealed. Until you approve it, the current value stays.",
+        "bind": "Nothing is sent until you approve it.",
+        "disable_protection": "Until you approve it, every new secret, new value and new use keeps waiting for approval."
+      },
+      "requestedAt": "{{who}}, {{time}}",
+      "via": {
+        "ui": "You · in the Coffer UI",
+        "cli": "You · on the command line",
+        "api": "Through the API"
+      },
+      "nothingYet": "Nothing yet",
+      "openApp": "Open the Coffer app on this Mac to approve — it asks for Touch ID or your login password.",
+      "approveEllipsis": "Approve…",
+      "approveInApp": "Approve in the Coffer desktop app",
+      "approved": {
+        "add_secret": "Approved · {{name}} added",
+        "replace_value": "Approved · {{name}} has its new value",
+        "bind": "Approved · {{name}} goes to {{destination}}",
+        "disable_protection": "Approved · secret changes no longer wait for approval"
+      },
+      "rejected": {
+        "add_secret": "Rejected · {{name}} was not added",
+        "replace_value": "Rejected · {{name}} keeps its current value",
+        "bind": "Rejected · {{name}} is not sent to {{destination}}",
+        "disable_protection": "Rejected · secret changes still wait for approval"
+      }
     }
   },
   "usage": {
@@ -4807,7 +5330,8 @@
         "claude_code": "Claude {{plan}} login",
         "codex": "ChatGPT {{plan}} login",
         "other": "{{plan}} login",
-        "none": "Subscription login"
+        "none": "Subscription login",
+        "apiKey": "API key · {{vendor}}"
       },
       "used": "{{percent}}% used",
       "limitReached": "Limit reached",
@@ -4837,7 +5361,7 @@
       },
       "refreshFailed": {
         "title": "Couldn't reach Codex's app-server",
-        "read_failed": "codex app-server did not answer.",
+        "read_failed": "codex app-server exited before answering.",
         "codex_unavailable": "Codex is not available on this machine.",
         "no_subscription": "Codex is not signed in with a ChatGPT plan.",
         "no_windows": "The app-server answered without any quota window.",
@@ -4845,7 +5369,16 @@
       },
       "lastTried": "Last tried {{time}}.",
       "tryAgain": "Try again",
-      "error": "Couldn't load subscription quota."
+      "error": "Couldn't load subscription quota.",
+      "apiKey": {
+        "title": "No subscription quota",
+        "body": "{{agent}} uses an API key from {{vendor}} here, so there is no plan limit. Its requests are metered below under API-key providers, by the provider actually used."
+      },
+      "metered": "Metered",
+      "noReadingShort": "No reading",
+      "waiting": "Waiting",
+      "rereadLabel": "Refresh {{agent}} quota",
+      "someRequests": "some requests"
     },
     "providers": {
       "title": "API-key providers",
@@ -4903,7 +5436,12 @@
         "output": "Output",
         "cacheRead": "Cache read",
         "cacheWrite": "Cache write",
-        "cost": "Cost"
+        "cost": "Cost",
+        "second": {
+          "model": "By",
+          "agent": "Via",
+          "day": "Top agent"
+        }
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
@@ -4912,8 +5450,12 @@
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
       "unknownTip_other": "{{n}} requests ended before reporting their usage; their tokens are not counted.",
-      "total": "Total · {{range}}",
-      "noPriceTipOn": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list (updated {{date}}). Set one in Model providers."
+      "total": "Total · {{range}} · cost of priced models",
+      "noPriceTipOn": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list (updated {{date}}). Set one in Model providers.",
+      "today": "{{day}} · today",
+      "earlierDays_one": "{{count}} earlier day ·",
+      "earlierDays_other": "{{count}} earlier days ·",
+      "showAllDays": "Show all {{count}}"
     },
     "empty": {
       "firstTitle": "No API-key usage yet",
@@ -4921,6 +5463,11 @@
       "openProviders": "Open Model providers",
       "rangeTitle": "No requests in this range",
       "rangeBody": "Pick a longer range, or check back after an agent sends requests with an API-key provider."
+    },
+    "viaApiKey": "via API key",
+    "filters": {
+      "agent": "Agent",
+      "provider": "Provider"
     }
   },
   "placeholder": {
@@ -4932,9 +5479,8 @@
   },
   "palette": {
     "label": "Command palette",
-    "placeholder": "Search pages and objects…",
+    "placeholder": "Search pages, servers, skills, secrets…",
     "pages": "Pages",
-    "objects": "Objects",
     "loading": "Loading…",
     "failed": "{{kind}}: couldn't load the list",
     "offline": "Objects need the daemon. Only pages are listed.",
@@ -4952,31 +5498,27 @@
       "knowledge": "Knowledge",
       "memory": "Memory",
       "customTool": "Custom tool",
-      "cli": "CLI"
-    }
-  },
-  "credentials": {
-    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
-    "presence": {
-      "openInApp": "Open in Coffer app"
+      "cli": "CLI",
+      "page": "Page",
+      "conversation": "Conversation",
+      "secret": "Secret"
     },
-    "approvals": {
-      "title_one": "{{count}} change waiting for approval",
-      "title_other": "{{count}} changes waiting for approval",
-      "hintShell": "Approving asks for Touch ID or your login password.",
-      "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
-      "requestedBy": "Requested by",
-      "secret": "Secret",
-      "destination": "Sent to",
-      "target": "Target",
-      "approve": "Approve",
-      "reject": "Reject",
-      "op": {
-        "bind": "New use",
-        "replace_value": "New value",
-        "disable_protection": "Turn off protection"
-      },
-      "review": "Review"
+    "bestMatch": "Best match",
+    "recent": "Recent",
+    "noResultsHint": "Check the spelling. {{shortcut}} finds pages, servers, skills, secrets and conversations by name.",
+    "footerNote": "Jumps to pages and objects; actions live on their page",
+    "untitled": "Untitled conversation",
+    "usedBy_one": "used by {{name}}",
+    "usedBy_other": "used by {{name}} +{{more}}",
+    "status": {
+      "off": "Off",
+      "failing": "Failing",
+      "attention": "Needs attention",
+      "missing": "Missing",
+      "notFound": "Not found",
+      "outdated": "Too old",
+      "loggedOut": "Not logged in",
+      "running": "Running"
     }
   },
   "providers": {
@@ -5422,5 +5964,25 @@
     "copied": "Copied",
     "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine."
+  },
+  "upkeep": {
+    "every": "Every",
+    "next": "next {{when}}",
+    "interval": {
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "default": "Default ({{interval}})"
+    },
+    "pill": {
+      "label": "Automatic · {{state}}",
+      "hourly": "hourly",
+      "daily": "daily",
+      "every": "every {{interval}}",
+      "off": "off"
+    }
   }
 }

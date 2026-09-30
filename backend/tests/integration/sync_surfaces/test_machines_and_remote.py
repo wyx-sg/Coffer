@@ -13,10 +13,11 @@ import pytest
 
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.worker import SyncWorker
-from coffer.domain.credential_errors import SecretBindingPending
+from coffer.domain.secret_errors import SecretBindingPending
 from coffer.domain.sync.errors import (
     CannotRetireSelf,
     MasterKeyFileInvalid,
+    MasterKeyPassphraseWrong,
     SyncMachineNotFound,
 )
 from coffer.domain.sync.remote import SyncRemote
@@ -37,8 +38,12 @@ def _remote_files(url: str, prefix: str) -> set[str]:
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="renaming a machine costs nothing")
-@pytest.mark.acceptance(spec="vault-sync", scenario="a retired machine leaves the registry with its descriptor")
-@pytest.mark.acceptance(spec="vault-sync", scenario="a round publishes this machine's descriptor and no other")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a retired machine leaves the registry with its descriptor"
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round publishes this machine's descriptor and no other"
+)
 def test_machines_are_listed_renamed_and_retired(tmp_path: Path) -> None:
     mac, mini, _old = joined(tmp_path, "Mac", "Mini", "Old")
     mini.round()
@@ -72,9 +77,15 @@ def test_machines_are_listed_renamed_and_retired(tmp_path: Path) -> None:
     assert {v.descriptor.machine_id for v in mac.run(mac.service.machines())} == {"mac", "mini"}
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a descriptor publishes the pointer this machine reached")
-@pytest.mark.acceptance(spec="vault-sync", scenario="a descriptor carries what the machines table shows")
-@pytest.mark.acceptance(spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a descriptor publishes the pointer this machine reached"
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a descriptor carries what the machines table shows"
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent"
+)
 def test_a_descriptor_carries_the_fields_and_the_plugin_inventory(tmp_path: Path) -> None:
     from coffer.domain.sync.machine import AgentInventory, Plugin
 
@@ -90,7 +101,10 @@ def test_a_descriptor_carries_the_fields_and_the_plugin_inventory(tmp_path: Path
     assert doc["agents"][0]["plugins"][0]["id"] == "linear"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an invalid hand edit on a path the round changes is never overwritten")
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an invalid hand edit on a path the round changes is never overwritten",
+)
 def test_an_invalid_hand_edit_on_a_path_the_round_changes_is_never_overwritten(
     tmp_path: Path,
 ) -> None:
@@ -140,7 +154,9 @@ def test_icloud_and_file_provider_roots_are_synchronisers(tmp_path: Path) -> Non
     assert synchroniser_of(home / ".coffer" / "vault", home=home) is None
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a curation pass and a converge round do not overlap")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a curation pass and a converge round do not overlap"
+)
 def test_the_worker_never_runs_a_round_while_curation_holds_the_lock(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
 
@@ -160,7 +176,9 @@ def test_the_worker_never_runs_a_round_while_curation_holds_the_lock(tmp_path: P
     assert after == before + 1
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a paused remote runs no round and asks for nothing")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a paused remote runs no round and asks for nothing"
+)
 def test_the_worker_does_not_run_while_the_remote_is_paused(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
     mac.run(mac.service.pause(False))
@@ -171,7 +189,10 @@ def test_the_worker_does_not_run_while_the_remote_is_paused(tmp_path: Path) -> N
     assert mac.run(mac.service.status()).next_round_at is None
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an ordinary round on a machine without a pointer still detects the join")
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an ordinary round on a machine without a pointer still detects the join",
+)
 @pytest.mark.acceptance(spec="vault-sync", scenario="a remote is checked before it is saved")
 def test_a_remote_is_checked_set_and_cleared(tmp_path: Path) -> None:
     (mac,) = fleet(tmp_path, "Mac")
@@ -194,22 +215,26 @@ def test_a_remote_is_checked_set_and_cleared(tmp_path: Path) -> None:
     assert mac.run(mac.service.clear_remote()) is False
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a token waiting for approval is a sign-in problem")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a token waiting for approval is a sign-in problem"
+)
 def test_a_token_waiting_for_approval_is_a_recorded_sign_in_problem(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
-    mac.remotes.put(SyncRemote(url=mac.url, credential_ref="sync/github-token"))
+    mac.remotes.put(SyncRemote(url=mac.url, secret_ref="sync/github-token"))
     mac.token.error = SecretBindingPending(["a1"], ["sync"])
     got = mac.round()
     assert got.status is RoundStatus.AUTH_FAILED
     assert "sync/github-token" in (got.detail or "")
     problem = mac.run(mac.service.status()).problem
     assert problem is not None
-    assert (problem.kind, problem.credential_ref) == ("auth_failed", "sync/github-token")
+    assert (problem.kind, problem.secret_ref) == ("auth_failed", "sync/github-token")
     items = mac.run(SyncAttentionSource(sync=mac.service).items())
     assert [i.reason_code for i in items] == ["sync_auth_failed"]
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="the attention list names what a round waits for")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the attention list names what a round waits for"
+)
 def test_attention_names_a_stop_and_a_join_choice(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")
     mac.put("knowledge/team/on-call.md", "Mac\n")
@@ -221,14 +246,27 @@ def test_attention_names_a_stop_and_a_join_choice(tmp_path: Path) -> None:
     assert items[0].action.path == "/api/v1/sync/stop"
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked"
+)
 def test_a_key_import_is_checked_and_answers_the_refs_still_locked(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
     with pytest.raises(MasterKeyFileInvalid):
         mac.run(mac.service.import_key("   "))
     with pytest.raises(MasterKeyFileInvalid):
         mac.run(mac.service.import_key("not-a-key"))
+    with pytest.raises(MasterKeyPassphraseWrong):
+        mac.run(mac.service.import_key('{"protected": true}', "wrong"))
+    assert mac.key.installed is None, "a refused import replaces nothing"
     mac.secrets.locked = ["channel/seatalk/app-secret"]
-    assert mac.run(mac.service.import_key("ok-key")) == ["channel/seatalk/app-secret"]
+    done = mac.run(mac.service.import_key("ok-key"))
+    assert done.locked_refs == ["channel/seatalk/app-secret"]
+    assert done.fingerprint == "abc123abc123" and done.replaced is False
     assert mac.service.key_fingerprint() == "abc123abc123"
     assert mac.audit.events[-1][0] == "master_key_imported"
+    preview = mac.service.preview_key('{"protected": true}')
+    assert (preview.fingerprint, preview.current, preview.protected) == (
+        "f11e" * 3,
+        "abc123abc123",
+        True,
+    )

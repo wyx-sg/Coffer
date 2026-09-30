@@ -2,6 +2,7 @@
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 
+import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { shortcutLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -29,9 +30,7 @@ export function SidebarSearch({ collapsed, onOpen }: Props) {
       {!collapsed ? (
         <>
           <span className="flex-1 truncate text-left">{label}</span>
-          <kbd className="inline-flex h-[18px] items-center rounded-xs border border-border bg-surface-raised px-1 font-sans text-2xs text-text-subtle">
-            {shortcutLabel("k")}
-          </kbd>
+          <Kbd aria-hidden>{shortcutLabel("k")}</Kbd>
         </>
       ) : null}
     </button>

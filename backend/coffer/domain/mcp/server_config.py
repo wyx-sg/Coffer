@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 from coffer.domain.mcp.http_api import HttpApiTransport
 
 # Patterns that look like secrets — if a static env/header value matches,
-# reject it; secrets must go through `credential_refs` so they live in
+# reject it; secrets must go through `secret_refs` so they live in
 # the keychain rather than the config DB.
 _SECRET_PATTERNS = [
     re.compile(r"^Bearer\s+"),
@@ -34,8 +34,7 @@ def _reject_secret_values(values: dict[str, str]) -> dict[str, str]:
         for pat in _SECRET_PATTERNS:
             if pat.search(v):
                 raise ValueError(
-                    f"static value for {k!r} looks like a secret; "
-                    f"move it into credential_refs instead"
+                    f"static value for {k!r} looks like a secret; move it into secret_refs instead"
                 )
     return values
 
@@ -45,7 +44,7 @@ class StdioTransport(BaseModel):
     command: str
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
-    credential_refs: dict[str, str] = Field(default_factory=dict)
+    secret_refs: dict[str, str] = Field(default_factory=dict)
     cwd: str | None = None
 
     @field_validator("env")
@@ -58,7 +57,7 @@ class HttpTransport(BaseModel):
     type: Literal["http"] = "http"
     url: HttpUrl
     headers: dict[str, str] = Field(default_factory=dict)
-    credential_refs: dict[str, str] = Field(default_factory=dict)
+    secret_refs: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("headers")
     @classmethod

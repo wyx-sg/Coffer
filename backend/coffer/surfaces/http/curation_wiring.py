@@ -37,7 +37,7 @@ _log = logging.getLogger(__name__)
 
 def wire_curation(
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     guide: BuiltinGuide,
 ) -> CurationPass:
     """Build the pass and register it for the route, the CLI and the worker."""
@@ -51,7 +51,7 @@ def wire_curation(
     curation = CurationPass(
         agent=LangchainAgenticReorg(),
         models=models,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         on_corpus_changed=_redeliver,
         read_timeout=read_internal_engine_timeout,
     )

@@ -30,7 +30,7 @@ deviates from their text.
 | D12 | `runs.db` = today's `coffer.db`, renamed, with Alembic revision 0136 dropping the tables that moved out and re-keying `resource_id` → uid. `COFFER_DB_URL` keeps naming it. | ADR storage "runs.db keeps the single-writer rule … one Alembic lineage". |
 | D13 | MCP capability toggles live in the vault as `state/mcp-preferences/<server name>.json` (server uid inside, only disabled capabilities listed); first/last seen go to derived. Channel pairings `state/channel-peers/<channel name>.json`; engine settings `state/settings/internal-engine.json`. Agent plugin inventory moves into the machine descriptor (`agents: [{type, plugins}]`). | Keeps today's synced areas (so the boards' areas and the breaker's areas stay), drops the churny columns. |
 | D14 | Curation finds a person's edits by blob comparison: `local/curation.json` records the blob each document had when curation last settled it; a document whose `HEAD` blob differs and whose last commit writer is not `curation`/`sync` is pending. `_align_mtime`, `coffer_curated_at` stamps and the mtime check are deleted (stamps stripped by the migration). | ADR writers ("mtime never decides"). |
-| D15 | The migration is Python, not an Alembic step: `infrastructure/vault/migration/` reads the pre-vault tables (DB at revision 0116), writes files, moves trees, folds the knowledge repository's history in, commits one `Coffer-Layout: db -> 1` commit, then the runner renames `coffer.db` → `runs.db` and runs 0136. Backup `coffer.db.pre-vault` (+wal/shm) first; a manifest `local/migration.json` records every move so `coffer migrate --rollback` reverses them; `coffer migrate --rehearse` runs it against a copy in a throwaway HOME. | ADR format-version rollback rules. |
+| D15 | The migration is Python, not an Alembic step: `infrastructure/vault/migration/` reads the pre-vault tables (DB at revision 0135), writes files, moves trees, folds the knowledge repository's history in, commits one `Coffer-Layout: db -> 1` commit, then the runner renames `coffer.db` → `runs.db` and runs 0136. Backup `coffer.db.pre-vault` (+wal/shm) first; a manifest `local/migration.json` records every move so `coffer migrate --rollback` reverses them; `coffer migrate --rehearse` runs it against a copy in a throwaway HOME. | ADR format-version rollback rules. |
 | D16 | Thin sync per ADR option B: fetch → `merge-tree --write-tree` → stop on any conflict / guard / snapshot → `read-tree -m -u` CAS checkout → push. Stopped round in `local/sync/round.json` with per-file answers (`mine` / `theirs` / `edited`, editor copy under `derived/sync-conflicts/`). Join: `new` (union: nothing deleted, differing files left alone until chosen, same-name-different-uid = conflict) and `returning` (3-way from the descriptor's last commit), both previewed. Credential ciphertext conflicts are settled by Fernet time, never asked. Snapshots `refs/tags/coffer/pre-apply/<ts>`, ten kept; rollback = a new `user` commit of the snapshot's tree for the paths the round changed. Breaker 20% / 20 documents, uid-counted for resource files. Problems classified: `unreachable`, `auth_failed`, `push_failed`, `cloud_folder`. | ADR sync; boards 6.5.01–6.5.23. |
 
 ## Layout
@@ -45,7 +45,7 @@ deviates from their text.
     knowledge/<collection>/...   (history folded in from the old <knowledge root>/.git)
     skills/<name>/...            master folders
     memory-triggers/<id>.md
-    credentials/<ref>.enc        excluded in .git/info/exclude unless include_credentials
+    secret/<ref>.enc        excluded in .git/info/exclude unless include_secret
     machines/<machine id>.json   descriptors (sync)
   local/                         never synced
     resources/agent/<name>.json  reach.json  tool-reach.json  retention.json  curation.json
@@ -68,8 +68,8 @@ deviates from their text.
 | resources (config) | vault / local (agent) / derived (memory, builtin skill) | resource files |
 | resources.enabled, scope_json | local | `local/reach.json` |
 | mcp_tool_reach (custom tools' per-tool reach) | local | `local/tool-reach.json` |
-| credentials | vault | `vault/credentials/<ref>.enc` |
-| secret_bindings, secret_approvals, secret_boundary_settings | local | `local/secrets/*.json` |
+| credentials | vault | `vault/secret/<ref>.enc` |
+| secret_bindings, secret_approvals, secret_boundary_settings | local | `local/secret-boundary/*.json` |
 | mcp_capability_preferences (enabled) | vault | `state/mcp-preferences/` |
 | mcp_capability_preferences (first/last seen) | derived | `derived.db` |
 | channel_peers | vault | `state/channel-peers/` |
@@ -85,7 +85,7 @@ deviates from their text.
 ## The migration, step by step
 
 On the first start of the new build, before any service is built:
-1. `alembic upgrade 0116` if the DB is older (existing `coffer.db.pre-<rev>` backup rule).
+1. `alembic upgrade 0135` if the DB is older (existing `coffer.db.pre-<rev>` backup rule).
 2. Copy `coffer.db` (+`-wal`/`-shm`) to `coffer.db.pre-vault`; never opened for writing again.
 3. Create `vault/`, `local/`, `content/`, `derived/`; write resource files, reach, state files,
    ciphertext files, local JSON from the tables.

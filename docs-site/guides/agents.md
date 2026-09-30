@@ -288,7 +288,7 @@ coffer adopt mcp claude-code:github --secret GITHUB_TOKEN=github/token
 
 The ref is `<agent>:<entry>`, as the scan prints it.
 
-When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), adoption requires a `--secret KEY=REF` mapping for each one. Coffer stores the current value in its [encrypted credential store](/guides/credentials) under the ref you name, and the new resource config carries only the ref. A name collision is refused with a suggested alternative (`--name` to pick one). For a Claude Code name that appears in both files, pass `--source` with the file's key (`global` or `settings`). The `coffer` entry itself is never removable or adoptable this way.
+When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), adoption requires a `--secret KEY=REF` mapping for each one. Coffer stores the current value in its [encrypted secret store](/guides/secret-store) under the ref you name, and the new resource config carries only the ref. A name collision is refused with a suggested alternative (`--name` to pick one). For a Claude Code name that appears in both files, pass `--source` with the file's key (`global` or `settings`). The `coffer` entry itself is never removable or adoptable this way.
 
 ## Plugins
 

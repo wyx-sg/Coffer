@@ -2,7 +2,7 @@
 
 Application code must depend on abstract Protocols, never on
 infrastructure classes directly. The concrete implementations in
-``coffer.infrastructure.{credentials,mcp}.*`` are wired at composition root
+``coffer.infrastructure.{secrets,mcp}.*`` are wired at composition root
 (``coffer.surfaces.http.app``) and pass through these Protocol types.
 
 These mirror the existing concrete shapes — they exist so application
@@ -24,7 +24,7 @@ from coffer.domain.mcp.capability import (
 )
 
 
-class CredentialStorePort(Protocol):
+class SecretStorePort(Protocol):
     """Secret storage bridge — encrypted SQLite store (default) wired at
     composition root. Confined to infrastructure via importlinter Contract 4."""
 

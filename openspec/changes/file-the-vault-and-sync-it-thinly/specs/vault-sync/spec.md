@@ -858,7 +858,7 @@ round's.
 The master key MUST never be written into the vault: it stays in the OS
 credential store or `~/.coffer/master.key`, outside the repository. It is
 bootstrapped onto another machine out-of-band: a backup is written only by the
-desktop app, behind a presence check ([credentials](../credentials/spec.md)
+desktop app, behind a presence check ([secret](../secret/spec.md)
 "Release plaintext only to a present human in the desktop app"), and installed
 on the other machine with `coffer sync key import`.
 
@@ -888,7 +888,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 `join [--yes]`, `conflicts`, `resolve <path> --mine|--theirs|--edited`,
 `edit <path>`, `continue`, `hold [--confirm|--restore]`,
 `choose [<path> --mine|--theirs]` — and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-secret|--without-secret] [--credential-ref] [--username] [--wait]`,
+`remote set <url> [--branch] [--interval <seconds>] [--with-secret|--without-secret] [--secret-ref] [--username] [--wait]`,
 `remote clear`, `remote pause`, `remote resume`, `remote check`,
 `machine list`, `machine rename <name>`, `machine rm <id>`,
 `key import <file>`, `key fingerprint`. There is no `key export`: a key backup

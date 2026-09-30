@@ -57,7 +57,7 @@ async def _member(
     service: ProviderService, resource: Resource, cfg: ProviderConfig, wire: Wire
 ) -> ProxyMember | None:
     key: str | None = None
-    if cfg.credential_ref is not None:
+    if cfg.secret_ref is not None:
         try:
             key = await service._key_of(cfg, label=resource.name, uid=resource.uid)
         except Exception:

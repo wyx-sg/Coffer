@@ -59,7 +59,9 @@ def test_the_reconciler_runs_once_after_a_round_that_applied_something(tmp_path:
     assert passes == [1]
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a round diffs from the pointer stored on this machine")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round diffs from the pointer stored on this machine"
+)
 @pytest.mark.acceptance(spec="vault-sync", scenario="a stale machine does not resurrect a deletion")
 def test_a_machine_that_did_not_touch_a_file_takes_its_deletion(tmp_path: Path) -> None:
     mac, mini = joined(tmp_path, "Mac", "Mini")

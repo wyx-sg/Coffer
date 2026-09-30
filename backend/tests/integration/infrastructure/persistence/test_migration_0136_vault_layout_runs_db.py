@@ -18,7 +18,7 @@ from tests.integration.infrastructure.persistence.test_migrations_roundtrip impo
 
 _DROPPED = {
     "resources",
-    "credentials",
+    "secrets",
     "secret_bindings",
     "secret_approvals",
     "secret_boundary_settings",
@@ -81,7 +81,7 @@ def test_history_is_rekeyed_to_uids_and_every_row_is_kept(tmp_path, monkeypatch)
     db_path = tmp_path / "runs.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
-    command.upgrade(cfg, "0116")
+    command.upgrade(cfg, "0135")
     with sqlite3.connect(db_path) as conn:
         _seed(conn)
     command.upgrade(cfg, "0136")
@@ -110,7 +110,7 @@ def test_history_is_rekeyed_to_uids_and_every_row_is_kept(tmp_path, monkeypatch)
         # The old rounds' payloads do not parse as round records: they go,
         # the table stays for the thin sync's rounds.
         assert conn.execute("SELECT count(*) FROM sync_runs").fetchone() == (0,)
-    command.downgrade(cfg, "0116")
+    command.downgrade(cfg, "0135")
     with sqlite3.connect(db_path) as conn:
         assert _tables(conn) >= _DROPPED
         assert conn.execute("SELECT count(*) FROM audit_log").fetchone() == (4,)

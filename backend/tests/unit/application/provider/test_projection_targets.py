@@ -62,7 +62,7 @@ def _connection(
 ) -> tuple[Resource, ProviderConfig]:
     config: dict[str, Any] = {"protocol": protocol, "base_url": "https://gw/v1"}
     if protocol != "ollama":
-        config["credential_ref"] = "provider/x/key"
+        config["secret_ref"] = "provider/x/key"
     resource = Resource(
         uid="cccccccccccccccccccccccccccccccc",
         kind="provider",

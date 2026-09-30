@@ -32,9 +32,9 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.logging.files import prune_log_dir
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.curation_wiring import start_curation_worker
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.memory.distil_state import DistilRunner
@@ -72,7 +72,7 @@ def start_background_workers(
     audit: AuditService,
     engine_config: InternalEngineConfigService,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     master_key: MasterKeyManager,
     platform: PlatformPort,
 ) -> BackgroundWorkers:
@@ -87,7 +87,7 @@ def start_background_workers(
         audit=audit,
         sm=sm,
         master_key=master_key,
-        credential_store=credential_store,
+        secret_store=secret_store,
         platform=platform,
     )
     sync_worker = start_sync_worker(sync)

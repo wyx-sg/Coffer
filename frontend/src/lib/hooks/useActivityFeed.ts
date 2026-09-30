@@ -14,7 +14,7 @@
 import { useMemo } from "react";
 import type { TFunction } from "i18next";
 
-import type { SourceParams } from "@/lib/api/activity";
+import type { CallParams, SourceParams } from "@/lib/api/activity";
 import {
   mergeNewestFirst,
   recordLogger,
@@ -25,6 +25,7 @@ import {
 } from "@/lib/activity/records";
 import {
   matchesFilters,
+  singleAgent,
   sourcesFor,
   type ActivityFilters,
   type FilterContext,
@@ -54,13 +55,9 @@ function sourceParams(
   f: ActivityFilters,
   since: string | undefined,
 ): SourceParams {
-  if (source === "change") {
-    const kind = f.kind.startsWith("change:") ? f.kind.slice("change:".length) : undefined;
-    return {
-      source,
-      params: { since, kind: tab === "everything" || tab === "changes" ? kind : undefined },
-    };
-  }
+  // A change's kind is a category the audit route does not know (secrets,
+  // sync, settings), so the kind filter is applied on the client.
+  if (source === "change") return { source, params: { since } };
   if (source === "call") {
     return {
       source,
@@ -68,7 +65,7 @@ function sourceParams(
         since,
         uid: f.server !== "any" ? f.server : undefined,
         status: tab === "mcp" && isCallStatus(f.status) ? f.status : undefined,
-        agentUid: f.by.startsWith("agent:") ? f.by.slice("agent:".length) : undefined,
+        agentUid: singleAgent(tab, f),
       },
     };
   }
@@ -112,6 +109,15 @@ export interface ActivityFeed {
   until: string | undefined;
   /** Every daemon logger among the loaded records, for the logger filter. */
   loggers: string[];
+  /** Every loaded record before the client-side filters, for the pills' counts. */
+  loadedRecords: ActivityRecord[];
+  /**
+   * On the MCP calls tab with no status chosen: how many calls in the window
+   * failed (an error or a timeout) and how many were denied.
+   */
+  callTally: { failed: number; denied: number } | undefined;
+  /** The daemon log's file, when this tab reads it. */
+  logPath: string | undefined;
 }
 
 interface Args {
@@ -188,14 +194,18 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
       (s) => active.has(s.source) && JSON.stringify(specOf(s.source)) === wanted,
     );
   };
+  // The counts beside the tabs follow the time window, the server and the
+  // status, not who or what kind: choosing agents or kinds narrows the list,
+  // while the tabs keep saying how much there is (design 6.1.03, 6.1.04).
+  const framing: ActivityFilters = { ...filters, by: [], kinds: [] };
   const countSpecs = {
-    changes: sourceParams("change", "changes", filters, since),
-    callsAll: sourceParams("call", "everything", filters, since),
-    callsTab: sourceParams("call", "mcp", filters, since),
-    daemonAll: sourceParams("daemon", "everything", filters, since),
-    daemonTab: sourceParams("daemon", "daemon", filters, since),
+    changes: sourceParams("change", "changes", framing, since),
+    callsAll: sourceParams("call", "everything", framing, since),
+    callsTab: sourceParams("call", "mcp", framing, since),
+    daemonAll: sourceParams("daemon", "everything", framing, since),
+    daemonTab: sourceParams("daemon", "daemon", framing, since),
   };
-  const everythingSources = sourcesFor("everything", filters);
+  const everythingSources = sourcesFor("everything", framing);
   const reuse = {
     changes: sameAs(countSpecs.changes),
     callsAll: sameAs(countSpecs.callsAll),
@@ -216,6 +226,24 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
     ),
     daemonTab: useActivityCount(countSpecs.daemonTab, !reuse.daemonTab),
   };
+  // The MCP calls tab's line ("182 calls · 7 failed · 1 denied"): one row's
+  // read per outcome, as the tab counts are.
+  const tallyOn = tab === "mcp" && filters.status === "any" && active.has("call");
+  const withStatus = (status: "error" | "timeout" | "denied"): SourceParams => ({
+    source: "call",
+    params: { ...(callSpec.params as CallParams), status },
+  });
+  const errors = useActivityCount(withStatus("error"), tallyOn);
+  const timeouts = useActivityCount(withStatus("timeout"), tallyOn);
+  const denied = useActivityCount(withStatus("denied"), tallyOn);
+  const callTally =
+    tallyOn &&
+    errors.value !== undefined &&
+    timeouts.value !== undefined &&
+    denied.value !== undefined
+      ? { failed: errors.value + timeouts.value, denied: denied.value }
+      : undefined;
+
   const pick = (name: keyof typeof countSpecs): TabCount => {
     const state = reuse[name];
     return state ? countOf(state) : read[name];
@@ -226,9 +254,9 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
       ...(everythingSources.includes("call") ? [pick("callsAll")] : []),
       ...(everythingSources.includes("daemon") ? [pick("daemonAll")] : []),
     ]),
-    changes: sourcesFor("changes", filters).length ? pick("changes") : NONE,
-    mcp: sourcesFor("mcp", filters).length ? pick("callsTab") : NONE,
-    daemon: sourcesFor("daemon", filters).length ? pick("daemonTab") : NONE,
+    changes: sourcesFor("changes", framing).length ? pick("changes") : NONE,
+    mcp: sourcesFor("mcp", framing).length ? pick("callsTab") : NONE,
+    daemon: sourcesFor("daemon", framing).length ? pick("daemonTab") : NONE,
   };
 
   // The frontier logs are the ones to page: loading an older page of any
@@ -253,5 +281,8 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
     keep,
     until,
     loggers: [...new Set(merged.map(recordLogger).filter(Boolean))].sort(),
+    loadedRecords: merged,
+    callTally,
+    logPath: active.has("daemon") ? daemon.path : undefined,
   };
 }

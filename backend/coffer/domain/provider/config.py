@@ -1,7 +1,7 @@
 """``ProviderConfig`` — the ``Resource.config`` payload for kind ``provider``.
 
 Value-level validation only (types, well-formedness). No I/O. A connection is a
-credentialed endpoint: ``{protocol, base_url, credential_ref}``. The MODEL it
+credentialed endpoint: ``{protocol, base_url, secret_ref}``. The MODEL it
 runs is NOT stored here — it is chosen at the point of use (per-agent binding,
 the internal-engine selector, the chat surface), per spec provider-switching
 "Take projected model keys from the agent's binding".
@@ -25,9 +25,9 @@ pure function of this config knows one. Activation lives in
 ``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
 uses.
 
-The credential is referenced by ``credential_ref`` only — the raw key lives in
+The secret is referenced by ``secret_ref`` only — the raw key lives in
 the Fernet vault and is never stored here, mirroring the MCP kind. ``ollama``
-connections carry no credential (``credential_ref`` is ``None``).
+connections carry no secret (``secret_ref`` is ``None``).
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ from pydantic import (
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
-# Same ref grammar the credential store accepts (slash-namespaced segments).
+# Same ref grammar the secret store accepts (slash-namespaced segments).
 _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
 
 #: Shape-only bounds for the curated ``models`` set. Model ids are OPAQUE — they
@@ -89,7 +89,7 @@ class CuratedModel(BaseModel):
     """One entry of a connection's offered set: an opaque id plus its kind.
 
     The modality is what lets one connection serve several surfaces from a
-    single credential — a chat picker narrows to ``text`` — instead of every id
+    single secret — a chat picker narrows to ``text`` — instead of every id
     being offered everywhere. It records what the ENDPOINT serves, which is why
     ``embedding`` remains a valid kind although Coffer embeds nothing. It
     is STORED, not derived: Coffer guesses a value only when introspection
@@ -190,8 +190,8 @@ class ProviderConfig(BaseModel):
     # derived from anything the user can change; multiple connections MAY
     # share one ref. Required for anthropic/openai/unknown; ``None`` for ollama
     # (no key). Probed for existence at register/update time by the kind's
-    # credential_ref_extractor.
-    credential_ref: str | None = None
+    # secret_ref_extractor.
+    secret_ref: str | None = None
     # Which of the endpoint's models the user actually intends to use — the
     # OFFERED set, not a chosen model. A picker that offers THIS connection's
     # models (the per-agent binding, the internal-engine selector) narrows to
@@ -253,14 +253,14 @@ class ProviderConfig(BaseModel):
             raise ValueError("must not be empty")
         return v.strip()
 
-    @field_validator("credential_ref")
+    @field_validator("secret_ref")
     @classmethod
     def _valid_ref(cls, v: str | None) -> str | None:
         if v is None:
             return None
         if not _CRED_REF_PATTERN.match(v):
             raise ValueError(
-                f"invalid credential_ref {v!r}: must match ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+                f"invalid secret_ref {v!r}: must match ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
             )
         return v
 
@@ -292,16 +292,16 @@ class ProviderConfig(BaseModel):
         return list(cleaned.values())
 
     @model_validator(mode="after")
-    def _credential_matches_protocol(self) -> ProviderConfig:
-        """anthropic/openai/unknown connections require a ``credential_ref``
+    def _secret_matches_protocol(self) -> ProviderConfig:
+        """anthropic/openai/unknown connections require a ``secret_ref``
         unless they are a local runtime, whose key is optional (LM Studio,
         vLLM and llama-server can be started with one); an ollama-protocol
         connection (Coffer's own engine, no key) must not carry one."""
         if self.protocol is Protocol.OLLAMA:
-            if self.credential_ref is not None:
-                raise ValueError("ollama connection must not carry a credential_ref")
-        elif not self.credential_ref and self.local_runtime is None:
-            raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
+            if self.secret_ref is not None:
+                raise ValueError("ollama connection must not carry a secret_ref")
+        elif not self.secret_ref and self.local_runtime is None:
+            raise ValueError(f"{self.protocol.value} connection requires a secret_ref")
         if self.local_runtime is not None and not is_loopback_url(self.base_url):
             raise ValueError("a local runtime connection must point at this machine (loopback)")
         return self
@@ -348,7 +348,7 @@ class ResolvedConnection:
     The model lives apart from the connection (spec provider-switching
     "Take projected model keys from the agent's binding"), so the two travel
     together when Coffer's internal engine builds a chat model: the connection
-    supplies the endpoint + protocol + credential, the ``model`` is resolved
+    supplies the endpoint + protocol + secret, the ``model`` is resolved
     separately (the internal-engine selector, the per-agent binding, …).
     """
 

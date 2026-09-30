@@ -1,12 +1,15 @@
 """``coffer knowledge …`` — knowledge collections from the terminal (spec
 knowledge "Cover knowledge management on REST and the CLI").
 
-``show``, ``edit`` and ``rm`` are the lifecycle verbs every kind shares
-(``_kind_verbs``). ``list`` and ``add`` are the kind's own: ``list`` reads
+``show`` and ``rm`` are the lifecycle verbs every kind shares
+(``_kind_verbs``). ``list``, ``add`` and ``edit`` are the kind's own: ``list`` reads
 ``/knowledge/collections``, which counts each collection's documents and its
 items waiting to be curated and reads its description off its ``README.md``; ``add``
 creates the directory and the README, which the generic create route does not
-(the kind is not generic-creatable). ``write``, ``upload`` and ``curate`` feed
+(the kind is not generic-creatable); ``edit`` renames a collection (its
+directory moves with it) or rewrites its description, the README's opening
+paragraph. A collection has no title: it is shown by its folder name.
+``write``, ``upload`` and ``curate`` feed
 and run curation. There is no ``scope``, ``enable`` or ``disable``: every collection is
 served to every agent ("Serve every collection to every agent").
 
@@ -36,7 +39,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._kind_verbs import KindVerbs, check_title_arg, label, register_kind_verbs
+from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs
 from coffer.surfaces.cli._resolve import resolve_uid
 from coffer.surfaces.cli.knowledge_history_cmd import register_history_commands
 
@@ -102,10 +105,8 @@ def add_collection(
     description: str = typer.Option(
         "", "--description", "-d", help="Written as the opening paragraph of its README.md"
     ),
-    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
 ) -> None:
     """Create a collection. Nothing else creates one."""
-    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(
@@ -113,10 +114,34 @@ def add_collection(
             json={"name": name, "description": description or None},
         )
         _cli_client.check(r, verbose=_verbose(ctx))
-        if title:
-            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
-            _cli_client.check(t, verbose=_verbose(ctx))
     typer.echo(f"added: collection {name}")
+
+
+@app.command("edit")
+def edit_collection(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., metavar="NAME", help="Name or uid"),
+    new_name: str | None = typer.Option(None, "--name", help="New name (the folder moves)"),
+    description: str | None = typer.Option(
+        None, "--description", "-d", help="Rewrite the opening paragraph of its README.md"
+    ),
+) -> None:
+    """Rename a collection (its directory moves with it) or rewrite its description."""
+    if new_name is None and not description:
+        typer.echo("nothing to change: name at least one option", err=True)
+        raise typer.Exit(2)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, KIND, ref, verbose=_verbose(ctx))
+        if description:
+            r = c.put(
+                f"/knowledge/collections/{uid}/description", json={"description": description}
+            )
+            _cli_client.check(r, verbose=_verbose(ctx))
+        if new_name is not None:
+            r = c.patch(f"/resources/{uid}", json={"name": new_name})
+            _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"updated: collection {new_name or ref}")
 
 
 register_kind_verbs(
@@ -124,14 +149,9 @@ register_kind_verbs(
     KindVerbs(
         kind=KIND,
         noun="collection",
-        verbs=frozenset({"edit", "rm"}),
-        # A collection's description is the opening paragraph of its README,
-        # edited in the README itself.
-        edit_description=False,
-        help={
-            "edit": "Rename a collection (its directory moves with it) or set its title.",
-            "rm": "Remove a collection and its directory.",
-        },
+        verbs=frozenset({"rm"}),
+        titled=False,
+        help={"rm": "Remove a collection and its directory (`restore --deleted` brings it back)."},
     ),
 )
 

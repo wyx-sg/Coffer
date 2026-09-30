@@ -3,7 +3,7 @@
 Entities, fields, and reuse anchors for the provider registry.
 Depends on the agent kind and its config-file store from spec
 [agent-registry](../agent-registry/spec.md), on the Fernet vault from spec
-credentials, and on the kind-agnostic Resource framework.
+secret, and on the kind-agnostic Resource framework.
 
 ## Domain entities (`backend/coffer/domain/provider/`)
 
@@ -18,7 +18,7 @@ model is chosen at the point of use.
 |---|---|---|
 | `protocol` | `Protocol` | Required. `"anthropic"`, `"openai"`, `"ollama"` or `"unknown"`. The wire the endpoint speaks: it drives model introspection and whether a key is required, and supplies the scope a new connection STARTS with. It is not a projection gate — that is the resource's scope. Mutable (the probe that guessed it can be wrong). |
 | `base_url` | `str` | Required, non-blank (trimmed); the upstream endpoint. |
-| `credential_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, minted opaquely as `provider/<uuid4>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown`; MUST be absent for `ollama`, which has no key. Immutable once set. |
+| `secret_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, minted opaquely as `provider/<uuid4>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown`; MUST be absent for `ollama`, which has no key. Immutable once set. |
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
@@ -93,7 +93,7 @@ value object.
 
 | Error | Code | Status | When |
 |---|---|---|---|
-| `ProviderCredentialSourceInvalid` | `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | both or neither credential source supplied |
+| `ProviderSecretSourceInvalid` | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | both or neither secret source supplied |
 | `NoActiveProvider` | `NO_ACTIVE_PROVIDER` | 404 | a key was asked for and nothing is active |
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection that is active (see "Refuse to move the wire of a live connection") |
 | `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | activating an `ollama` connection (see "Keep ollama connections internal-only") |
@@ -215,13 +215,13 @@ engine's question, asked in `application/engine/resolve.py`.
 
 All implementation MUST reuse these existing components; do not re-implement.
 
-### Fernet vault (credential isolation)
+### Fernet vault (secret isolation)
 
 | Component | Path | Used for |
 |---|---|---|
-| `EncryptedCredentialStore` | `backend/coffer/infrastructure/credentials/encrypted_store.py` | `get/set/exists/delete` — store and retrieve raw secrets |
-| credential resolver | `backend/coffer/application/credentials/resolver.py` | resolve a ref to plaintext (key resolution) |
-| citation guard | `ResourceService.find_credential_citations` | guard before deleting an owned secret |
+| `EncryptedSecretStore` | `backend/coffer/infrastructure/secret/encrypted_store.py` | `get/set/exists/delete` — store and retrieve raw secrets |
+| secret resolver | `backend/coffer/application/secret/resolver.py` | resolve a ref to plaintext (key resolution) |
+| citation guard | `ResourceService.find_secret_citations` | guard before deleting an owned secret |
 
 ### Config-file store (native config write)
 
@@ -245,7 +245,7 @@ All implementation MUST reuse these existing components; do not re-implement.
 |---|---|---|
 | `Kind` dataclass | `backend/coffer/domain/resource.py` | define the `provider` kind |
 | `Scope` / `is_active` | `backend/coffer/domain/scope.py` | the per-agent reach axis |
-| kind factory | `backend/coffer/application/provider/kind.py` | `make_provider_kind()` — config schema, credential-ref extractor, `supports_scope`, `default_scope` |
+| kind factory | `backend/coffer/application/provider/kind.py` | `make_provider_kind()` — config schema, secret-ref extractor, `supports_scope`, `default_scope` |
 | composition root | `backend/coffer/surfaces/http/provider_wiring.py` | build the service, mount the routes, register the kind |
 
 ### Single-active invariant
@@ -316,10 +316,10 @@ kind declares no redactor because its config holds no secret).
 
 | Method | Purpose |
 |---|---|
-| `create(...) -> Resource` | Validate the credential source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
+| `create(...) -> Resource` | Validate the secret source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
 | `list()` / `get(uid)` | The connections, as the surfaces read them. |
 | `update(uid, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
-| `delete(uid)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
+| `delete(uid)` | Guard the owned secret via `find_secret_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
 | `deactivate(agent_type) -> DeactivateResult` | Revert every agent of that type to its built-in login, switching the connection covering it off as a unit; idempotent. |
 | `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. Raises `NoActiveProvider` when the connection reaches no agent (disabled, scoped to no agent, or keyless), by the same reach test the legacy wire form uses. |
@@ -374,7 +374,7 @@ No new directories. Connections are vault files:
       <name>.json          # one JSON document per connection (no secret);
                            # the uid inside is the identity, so a rename is one file's move
   secret/
-    <credential_ref>.enc   # e.g. secret/provider/<uuid4>/key.enc — Fernet
+    <secret_ref>.enc   # e.g. secret/provider/<uuid4>/key.enc — Fernet
                            # ciphertext of the raw API key
 ```
 
@@ -404,7 +404,7 @@ every push: `ProxyState {revision, agents: [ProxyAgent {agent_uid, agent_type,
 token_sha256}], routes: [ProxyRoute {agent_uid, wire, members: [ProxyMember
 {connection_uid, connection_name, upstream_root, auth, key, models, local}]}]}`.
 `key` is held only in the proxy's memory and never shown by `repr`. The
-per-agent tokens live in the credential store under `proxy-token/<agent_uid>`
+per-agent tokens live in the secret store under `proxy-token/<agent_uid>`
 (machine-local ciphertext under `~/.coffer/local/secret/`, never in the vault). `~/.coffer/proxy.json` (mode `0600`)
 holds `{port, pid, started_at, version, control_token}`.
 
@@ -412,7 +412,7 @@ holds `{port, pid, started_at, version, control_token}`.
 
 `LocalRuntime {runtime: ollama | lmstudio | vllm | llama_server, version,
 wires: [anthropic | openai]}` — what detection found; set only on a connection
-whose `base_url` is loopback, and it makes `credential_ref` optional. Omitted
+whose `base_url` is loopback, and it makes `secret_ref` optional. Omitted
 from the stored document when unset.
 
 ### Curated-model facts

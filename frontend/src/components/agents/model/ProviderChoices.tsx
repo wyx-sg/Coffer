@@ -57,7 +57,7 @@ export function ProviderChoices({
     const count = modelIds(p.models ?? [], "text").length;
     return [
       hostOf(p.base_url),
-      p.credential_ref ? t("agents.modelTab.provider.keyInVault") : null,
+      p.secret_ref ? t("agents.modelTab.provider.keyInVault") : null,
       count > 0 ? t("agents.modelTab.provider.modelCount", { count }) : null,
     ]
       .filter(Boolean)

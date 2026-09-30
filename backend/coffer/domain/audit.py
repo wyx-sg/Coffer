@@ -27,20 +27,24 @@ class AuditEventType(StrEnum):
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     RETENTION_UPDATED = "retention_updated"
+    # spec web-ui "Let the user ignore an unconnected agent on Overview": an
+    # informational "needs you" item ignored on this machine, or no longer.
+    ATTENTION_IGNORED = "attention_ignored"
+    ATTENTION_UNIGNORED = "attention_unignored"
     # Settings > Data "Rebuildable cache": the memory tree and the transcript
     # summary cache were cleared, to be rebuilt by the next memory update.
     STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
-    CREDENTIAL_SET = "credential_set"
-    CREDENTIAL_READ = "credential_read"
-    CREDENTIAL_DELETED = "credential_deleted"
-    CREDENTIAL_MIGRATED = "credential_migrated"
+    SECRET_SET = "secret_set"
+    SECRET_READ = "secret_read"
+    SECRET_DELETED = "secret_deleted"
+    SECRET_MIGRATED = "secret_migrated"
     MASTER_KEY_RELOCATED = "master_key_relocated"
     # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
     # somewhere-new): a value shown to a present human in the desktop app, a
     # standalone secret resolved into one `coffer run` child, the approvals a
     # new destination waits on, and plaintext secret files moved into the store.
-    CREDENTIAL_REVEALED = "credential_revealed"
+    SECRET_REVEALED = "secret_revealed"
     SECRET_RESOLVED = "secret_resolved"
     SECRET_APPROVAL_REQUESTED = "secret_approval_requested"
     SECRET_APPROVAL_APPROVED = "secret_approval_approved"

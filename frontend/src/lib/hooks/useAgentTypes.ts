@@ -5,12 +5,22 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { agentsApi } from "@/lib/api/agents";
-import { agentTypesKey } from "@/lib/api/queryKeys";
+import { agentInstallHandoffKey, agentTypesKey } from "@/lib/api/queryKeys";
 
 export function useAgentTypes(enabled = true) {
   return useQuery({
     queryKey: agentTypesKey,
     queryFn: async () => (await agentsApi.types()).types,
+    enabled,
+  });
+}
+
+/** The daemon's prompt that hands installing an agent to the person, while no
+ *  supported agent is installed on this machine; `null` once one is. */
+export function useAgentInstallHandoff(enabled = true) {
+  return useQuery({
+    queryKey: agentInstallHandoffKey,
+    queryFn: async () => (await agentsApi.types()).install_handoff?.prompt ?? null,
     enabled,
   });
 }

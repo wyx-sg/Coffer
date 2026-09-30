@@ -7,7 +7,7 @@ its own and refuses to start on a home that has not been upgraded
 
 1. back up ``coffer.db`` (+``-wal``/``-shm``) as ``coffer.db.pre-vault`` and
    ``daemon-config.json`` into the backup set — first, before anything moves;
-2. bring ``coffer.db`` to revision 0116 and read every table that moves out;
+2. bring ``coffer.db`` to revision 0135 and read every table that moves out;
 3. create the vault repository, move the trees into their class directories,
    fold the knowledge history in, strip the curation stamps;
 4. write every resource, state document, ciphertext and local file, and
@@ -200,7 +200,7 @@ def migrate(
         state = read_legacy(legacy)
         repo = vault_writer(vault_root(home)).repo
         remote = state.sync_remote
-        repo.set_carry_secret(bool(remote and remote.get("include_credentials")))
+        repo.set_carry_secret(bool(remote and remote.get("include_secrets")))
         repo.ensure()
 
         def moved(move: Move) -> None:

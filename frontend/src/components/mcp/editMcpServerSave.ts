@@ -7,8 +7,8 @@
 // never stored, and brand-new refs are rolled back when that PATCH fails so a
 // rejected edit never orphans a secret.
 //
-// The PATCH is addressed to the server's uid, and so are the credential refs:
-// `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/credentialRef`. Nothing here
+// The PATCH is addressed to the server's uid, and so are the secret refs:
+// `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/secretRef`. Nothing here
 // reads the server's NAME: a ref built from the name would make the name a key
 // into the encrypted store, and rename is a field on `PATCH /resources/{uid}`.
 //
@@ -19,20 +19,20 @@ import type { TFunction } from "i18next";
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
-import { isMintedCredentialRef, mintCredentialRef } from "@/lib/credentialRef";
+import { isMintedSecretRef, mintSecretRef } from "@/lib/secretRef";
 import type { ParsedEnvVar } from "@/lib/mcp/pasteTypes";
-import { credentialRefsOf, plainMapOf, secretPlanOf } from "./env/rowsModel";
+import { secretRefsOf, plainMapOf, secretPlanOf } from "./env/rowsModel";
 import { withTimeouts, type Timeouts } from "./serverTimeouts";
 
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-/** The config JSON minus the fields with their own controls — credentials and
+/** The config JSON minus the fields with their own controls — secrets and
  * the two timeouts. Both are merged back in on save. */
 function configWithoutOwnControls(config: unknown): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(config ?? {})) as Record<string, unknown>;
   const transport = clone.transport as Record<string, unknown> | undefined;
-  if (transport) delete transport.credential_refs;
+  if (transport) delete transport.secret_refs;
   delete clone.spawn_timeout_seconds;
   delete clone.request_timeout_seconds;
   return clone;
@@ -75,7 +75,7 @@ export function transportFieldsOf(config: unknown): TransportFields {
 }
 
 /** What the form holds for the transport: its fields and every row. Only the
- *  Plain rows land in `env` / `headers`; Secret rows go to credential_refs. */
+ *  Plain rows land in `env` / `headers`; Secret rows go to secret_refs. */
 export interface TransportForm {
   type: "stdio" | "http";
   url: string;
@@ -132,7 +132,7 @@ export async function saveMcpServerEdit({
   }
   const client = getApiClient();
 
-  // Validated before any credential write: a Secret row with neither a value
+  // Validated before any secret write: a Secret row with neither a value
   // nor a stored secret, or one renamed while it keeps its own stored secret
   // (we don't hold the plaintext to move it), is refused here.
   const plan = secretPlanOf(rows, t);
@@ -140,26 +140,26 @@ export async function saveMcpServerEdit({
   // Write new / rotated secret values first. Track the refs that are BRAND NEW
   // (not a rotation of an existing ref) so they can be cleaned up if the PATCH
   // below fails — otherwise a config the backend rejects would orphan them.
-  const originalRefSet = new Set(Object.values(credentialRefsOf(resource.config)));
-  const credentialRefs: Record<string, string> = { ...plan.cited };
+  const originalRefSet = new Set(Object.values(secretRefsOf(resource.config)));
+  const secretRefs: Record<string, string> = { ...plan.cited };
   const newlyWrittenRefs: string[] = [];
   // Set when the daemon answered 202: a new value replaces one in use, so it is
   // stored sealed and waits for approval in the Coffer app.
   let awaitingApproval = false;
   for (const typed of plan.typed) {
-    const ref = typed.rotate ?? mintCredentialRef("mcp_server", typed.key);
-    const { data: written, error: e } = await client.POST("/credentials", {
+    const ref = typed.rotate ?? mintSecretRef("mcp_server", typed.key);
+    const { data: written, error: e } = await client.POST("/secrets", {
       body: { ref, value: typed.value },
     });
-    if (e) throwApiError(e, "INTERNAL_ERROR", "credential write failed");
+    if (e) throwApiError(e, "INTERNAL_ERROR", "secret write failed");
     if (written?.approval !== undefined) awaitingApproval = true;
-    credentialRefs[typed.key] = ref;
+    secretRefs[typed.key] = ref;
     if (!originalRefSet.has(ref)) newlyWrittenRefs.push(ref);
   }
 
   const transport = {
     ...((config.transport as Record<string, unknown>) ?? {}),
-    credential_refs: credentialRefs,
+    secret_refs: secretRefs,
   };
   const { error: pe } = await client.PATCH("/resources/{uid}", {
     params: { path: { uid: resource.uid } },
@@ -170,12 +170,12 @@ export async function saveMcpServerEdit({
     },
   });
   if (pe) {
-    // PATCH rejected the config — delete the brand-new credential entries we
+    // PATCH rejected the config — delete the brand-new secret entries we
     // just wrote so they don't dangle (best-effort; rotations of existing refs
     // are left, since the unchanged config still uses them).
     for (const ref of newlyWrittenRefs) {
       try {
-        await client.DELETE("/credentials/{ref}", { params: { path: { ref } } });
+        await client.DELETE("/secrets/{ref}", { params: { path: { ref } } });
       } catch {
         // best-effort cleanup; the PATCH error below is what matters
       }
@@ -183,20 +183,20 @@ export async function saveMcpServerEdit({
     throwApiError(pe, "INTERNAL_ERROR", "update failed");
   }
 
-  // Clean up credential store entries this server no longer references — but
+  // Clean up secret store entries this server no longer references — but
   // only ones Coffer minted for it, never a Secrets-page secret or a ref the
   // user wrote by hand to share one secret between two servers. Ownership is
   // the ref's SHAPE (a minted ref carries a uuid nothing else produced), not
   // the server's name. A failed cleanup must not roll back the PATCH above.
-  const newRefs = new Set(Object.values(credentialRefs));
+  const newRefs = new Set(Object.values(secretRefs));
   const orphanWarnings: string[] = [];
-  for (const ref of Object.values(credentialRefsOf(resource.config))) {
-    if (!newRefs.has(ref) && isMintedCredentialRef("mcp_server", ref)) {
-      const { error: de } = await client.DELETE("/credentials/{ref}", {
+  for (const ref of Object.values(secretRefsOf(resource.config))) {
+    if (!newRefs.has(ref) && isMintedSecretRef("mcp_server", ref)) {
+      const { error: de } = await client.DELETE("/secrets/{ref}", {
         params: { path: { ref } },
       });
       if (de) {
-        const msg = de.error?.message ?? "credential delete failed";
+        const msg = de.error?.message ?? "secret delete failed";
         console.warn(`[EditMcpServerDialog] orphan cleanup failed for ${ref}:`, msg);
         orphanWarnings.push(ref);
       }

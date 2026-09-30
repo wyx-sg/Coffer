@@ -25,6 +25,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/attention/ignored/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ignore Attention Item
+         * @description Ignore the informational item ``key`` on this machine: it leaves
+         *     ``items`` and the counts and is listed under ``ignored``. 409
+         *     ``ATTENTION_NOT_IGNORABLE`` when nothing informational is listed under it.
+         */
+        put: operations["ignore_attention_item_api_v1_attention_ignored__key__put"];
+        post?: never;
+        /**
+         * Unignore Attention Item
+         * @description Stop ignoring ``key``; a key that is not ignored is a no-op.
+         */
+        delete: operations["unignore_attention_item_api_v1_attention_ignored__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -251,6 +277,26 @@ export interface paths {
         patch: operations["update_policy_api_v1_retention_policies__table_name__patch"];
         trace?: never;
     };
+    "/api/v1/retention/policies/{table_name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Policy
+         * @description How many rows a window of ``days`` would delete, before the user confirms it.
+         */
+        get: operations["preview_policy_api_v1_retention_policies__table_name__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retention/prune": {
         parameters: {
             query?: never;
@@ -308,6 +354,13 @@ export interface components {
         /** AttentionItemOut */
         AttentionItemOut: {
             action: components["schemas"]["AttentionActionOut"];
+            /** Ignorable */
+            ignorable: boolean;
+            /**
+             * Key
+             * @description `<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes.
+             */
+            key: string;
             /** Kind */
             kind: string;
             /** Reason */
@@ -334,6 +387,8 @@ export interface components {
             };
             /** Errors */
             errors: components["schemas"]["AttentionSourceErrorOut"][];
+            /** Ignored */
+            ignored: components["schemas"]["AttentionItemOut"][];
             /** Items */
             items: components["schemas"]["AttentionItemOut"][];
         };
@@ -764,6 +819,20 @@ export interface components {
             retention_days?: number | null;
         };
         /**
+         * RetentionPreviewOut
+         * @description What shortening one policy's window would delete, counted and not run.
+         */
+        RetentionPreviewOut: {
+            /** Days */
+            days: number;
+            /** Rows To Delete */
+            rows_to_delete: number;
+            /** Table Name */
+            table_name: string;
+            /** Total Rows */
+            total_rows: number;
+        };
+        /**
          * ScopeIn
          * @description A resource's activation scope as a request writes it: one allow-list of
          *     agents (ADR per-agent-resource-scope). ``null`` or absent means
@@ -816,7 +885,7 @@ export interface components {
         UpkeepRunOut: {
             /**
              * Done
-             * @description For a run that works through several items one pass at a time (knowledge's Curate now): the passes finished so far. Null for a single pass.
+             * @description For a run that works through several items one pass at a time (knowledge's Curate now, memory's Update memory): the items finished so far. Null for a single pass, and for Update memory while it is still reading.
              */
             done: number | null;
             /**
@@ -826,7 +895,7 @@ export interface components {
             kind: string;
             /**
              * Name
-             * @description The partition or collection being rewritten.
+             * @description The uid of the partition or collection being rewritten, or `update` for a memory Update memory action as a whole.
              */
             name: string;
             /**
@@ -869,6 +938,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AttentionOut"];
                 };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ignore_attention_item_api_v1_attention_ignored__key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unignore_attention_item_api_v1_attention_ignored__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
@@ -1534,6 +1685,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetentionPolicyOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_policy_api_v1_retention_policies__table_name__preview_get: {
+        parameters: {
+            query: {
+                days: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                table_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

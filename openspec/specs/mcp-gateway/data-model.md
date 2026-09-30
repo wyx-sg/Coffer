@@ -8,7 +8,7 @@ label), `Kind`, `Scope`, `AuditEntry`, `RetentionPolicy`, `PrunableTable`, the
 resource file, reach, the audit log and the retention policies — is modelled by
 spec [resource-framework](../resource-framework/data-model.md); the storage
 classes and state documents by spec vault-storage. This document covers only
-what the MCP kind adds on top; ciphertext belongs to spec credentials.
+what the MCP kind adds on top; ciphertext belongs to spec secret.
 
 ## What this kind contributes to the framework
 
@@ -22,7 +22,7 @@ resource-framework:
 | `generic_create_allowed`   | True — an MCP server is fully described by its config, so the kind-agnostic create may make one |
 | `supports_scope`           | True — reach is enforced at the gateway's per-session listing                                 |
 | `validate_name`            | reserves the `__` namespace separator, which the prefixing scheme depends on                  |
-| `credential_ref_extractor` | the transport's `credential_refs`, so refs are probed before any write and released after a delete |
+| `secret_ref_extractor` | the transport's `secret_refs`, so refs are probed before any write and released after a delete |
 | `audit_redactor`           | an audit-safe copy of a transport config                                                     |
 | `on_delete`                | tears down any running upstream for that server before its file goes                         |
 | `on_rename`                | releases every live connection held under the name being left behind, before the file changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)) |
@@ -39,7 +39,7 @@ Pydantic `BaseModel`. Discriminator value: `"stdio"`.
 | `command`         | `str`              | executable, e.g. `"npx"`                                                                     |
 | `args`            | `list[str]`        | default `[]`                                                                                 |
 | `env`             | `dict[str, str]`   | static env, never contains secrets; rejected if a value looks like a token (regex check)     |
-| `credential_refs` | `dict[str, str]`   | maps `env_var_name → ref` into the encrypted credential store; resolved (decrypted) at spawn |
+| `secret_refs` | `dict[str, str]`   | maps `env_var_name → ref` into the encrypted secret store; resolved (decrypted) at spawn |
 | `cwd`             | `str \| None`      | optional working directory                                                                   |
 
 ### `HttpTransport` (`domain/mcp/server_config.py`)
@@ -51,7 +51,7 @@ Pydantic `BaseModel`. Discriminator value: `"http"`.
 | `type`            | `Literal["http"]`  | discriminator                                                |
 | `url`             | `pydantic.HttpUrl` | upstream MCP HTTP/SSE endpoint                               |
 | `headers`         | `dict[str, str]`   | static headers; same secret regex as `env`                   |
-| `credential_refs` | `dict[str, str]`   | maps `header_name → ref` into the encrypted credential store |
+| `secret_refs` | `dict[str, str]`   | maps `header_name → ref` into the encrypted secret store |
 
 ### `HttpApiTransport` (`domain/mcp/http_api.py`)
 
@@ -66,7 +66,7 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `headers`         | `dict[str, str]`         | static group headers; no `{argument}` hole; same secret regex as `env`                  |
 | `auth_header`     | `str \| None`            | the header the secret goes in, e.g. `Authorization`                                     |
 | `auth_prefix`     | `str`                    | prepended to the secret's value, e.g. `Bearer `                                         |
-| `credential_refs` | `dict[str, str]`         | at most `{auth_header: ref}`; the API binds a Secrets-page name as `secret/<name>`      |
+| `secret_refs` | `dict[str, str]`         | at most `{auth_header: ref}`; the API binds a Secrets-page name as `secret/<name>`      |
 | `timeout_seconds` | `int`                    | default `30`; range `1–300`; per request                                                |
 | `source`          | `OpenApiSource \| None`  | where an import came from: `kind` (`url`/`file`), `location`, `title`, `version`, `fetched_at`, `skipped` operation keys |
 | `tools`           | `list[HttpApiTool]`      | unique names                                                                            |
@@ -192,7 +192,7 @@ out.
 In the one-time upgrade to the vault layout the rows of
 `mcp_capability_preferences` were split into the switch documents and
 `mcp_capability_seen`, `mcp_server_health` was copied into `derived.db`,
-`mcp_tool_reach` became `local/tool-reach.json`, and revision 0117 dropped the
+`mcp_tool_reach` became `local/tool-reach.json`, and revision 0136 dropped the
 three tables.
 
 ### Capability switches — `state/mcp-preferences/<server name>.json`

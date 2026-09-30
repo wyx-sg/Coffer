@@ -47,5 +47,5 @@ class FakeResources:
             if (kind is None or r.kind == kind) and (enabled is None or r.enabled == enabled)
         ]
 
-    async def cited_credential_refs(self) -> dict[str, list[Resource]]:
+    async def cited_secret_refs(self) -> dict[str, list[Resource]]:
         return self.cited

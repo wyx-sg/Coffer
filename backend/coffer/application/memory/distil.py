@@ -275,7 +275,7 @@ def _distil_mechanically(
     )
 
 
-def _unbound_credential(ref: str) -> str:
+def _unbound_secret(ref: str) -> str:
     """Stand-in for a resolver the composition root did not supply."""
     return ref
 
@@ -286,7 +286,7 @@ async def distil_partition(
     completion: LlmCompletionPort | None,
     model_selector: ModelSelectorPort | None,
     repository_path: str = "",
-    credential_resolver: Callable[[str], str] | None = None,
+    secret_resolver: Callable[[str], str] | None = None,
     max_entries_per_chunk: int = routing.DEFAULT_MAX_ENTRIES_PER_CHUNK,
     read_timeout: TimeoutReader | None = None,
 ) -> DistilResult:
@@ -299,7 +299,7 @@ async def distil_partition(
     makes a sweep over an idle vault free and what the acceptance scenario's
     "a second pass over unchanged sources reinstates nothing" rests on.
 
-    ``credential_resolver`` is optional because the composition root may bind
+    ``secret_resolver`` is optional because the composition root may bind
     one into the completion adapter it passes instead; when neither happens
     the ref travels unresolved, the completion fails, and the pass degrades to
     having written nothing but the index.
@@ -336,7 +336,7 @@ async def distil_partition(
             model_used=True,
         )
 
-    resolver = credential_resolver if credential_resolver is not None else _unbound_credential
+    resolver = secret_resolver if secret_resolver is not None else _unbound_secret
     timeout = await resolve_timeout(read_timeout)
     plan = await planning.build_plan(
         partition,
@@ -345,7 +345,7 @@ async def distil_partition(
         retired=retired,
         model=model,
         completion=completion,
-        credential_resolver=resolver,
+        secret_resolver=resolver,
         timeout=timeout,
         chunk_size=max_entries_per_chunk,
     )
@@ -355,7 +355,7 @@ async def distil_partition(
         retired=retired,
         model=model,
         completion=completion,
-        credential_resolver=resolver,
+        secret_resolver=resolver,
         timeout=timeout,
     )
     _write_index(partition, repository_path)

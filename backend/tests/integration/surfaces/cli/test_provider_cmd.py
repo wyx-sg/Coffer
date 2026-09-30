@@ -101,7 +101,7 @@ def provider_daemon(tmp_path, monkeypatch):
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
         repo=make_resource_repo(),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     # One agent of each type, registered through the service because the agent
     # kind refuses the generic create path. They exist so `coffer provider
@@ -121,7 +121,7 @@ def provider_daemon(tmp_path, monkeypatch):
     provider_svc = ProviderService(
         agent_catalog=agent_catalog(),
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
         agents=_RegisteredAgents(resources),
         audit=audit,
@@ -315,14 +315,14 @@ def test_cli_edit_corrects_a_mis_probed_wire(provider_daemon):
     """The probe that guessed the wire can be wrong, so `edit --protocol`
     corrects it in place — the key does not have to be re-entered."""
     _add("agnes")
-    ref = _show("agnes")["config"]["credential_ref"]
+    ref = _show("agnes")["config"]["secret_ref"]
 
     edited = _runner.invoke(cli_app, ["provider", "edit", "agnes", "--protocol", "openai"])
     assert edited.exit_code == 0, edited.output
 
     shown = _show("agnes")
     assert shown["config"]["protocol"] == "openai"
-    assert shown["config"]["credential_ref"] == ref
+    assert shown["config"]["secret_ref"] == ref
 
 
 def test_cli_edit_rotates_the_key_in_place(provider_daemon):
@@ -331,7 +331,7 @@ def test_cli_edit_rotates_the_key_in_place(provider_daemon):
     rotated = _runner.invoke(cli_app, ["provider", "edit", "acme", "--secret", "sk-new"])
     assert rotated.exit_code == 0, rotated.output
     after = _show("acme")
-    assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
+    assert after["config"]["secret_ref"] == before["config"]["secret_ref"]
 
 
 @pytest.mark.acceptance(
@@ -388,7 +388,7 @@ def test_cli_edit_name_renames_the_same_connection(provider_daemon):
 
     after = _show("acme-eu")
     assert after["uid"] == before["uid"]
-    assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
+    assert after["config"]["secret_ref"] == before["config"]["secret_ref"]
 
     entries = asyncio.run(audit.query(event_type="resource_renamed"))
     assert [(e.details["from"], e.details["to"]) for e in entries] == [("acme", "acme-eu")]

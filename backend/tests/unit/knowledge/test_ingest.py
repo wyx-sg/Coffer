@@ -95,12 +95,12 @@ class _Completion:
         self._raises = raises
         self.calls: list[tuple[str, str]] = []
 
-    async def complete(self, *, system, user, model, credential_resolver, timeout=None):  # type: ignore[no-untyped-def]
+    async def complete(self, *, system, user, model, secret_resolver, timeout=None):  # type: ignore[no-untyped-def]
         self.calls.append((system, user))
         self.timeout = timeout
         if self._raises:
             raise RuntimeError("the internal connection is unreachable")
-        assert credential_resolver("provider/test") == "k"
+        assert secret_resolver("provider/test") == "k"
         return self._text or ""
 
 
@@ -110,7 +110,7 @@ def fake_connection() -> ResolvedConnection:
         config=ProviderConfig(
             protocol="openai",
             base_url="https://example.invalid/v1",
-            credential_ref="provider/test",
+            secret_ref="provider/test",
         ),
         model="agnes-2.0-flash",
     )
@@ -152,13 +152,13 @@ class _EmptyRegistry:
         return Conversion(markdown=self._markdown, title="Scan", converter="markitdown")
 
 
-def _service(knowledge, *, models=None, completion=None, credential_resolver=None):  # type: ignore[no-untyped-def]
+def _service(knowledge, *, models=None, completion=None, secret_resolver=None):  # type: ignore[no-untyped-def]
     return IngestService(
         knowledge=knowledge,
         registry=default_registry(),
         models=models,
         completion=completion,
-        credential_resolver=credential_resolver or (lambda ref: "k"),
+        secret_resolver=secret_resolver or (lambda ref: "k"),
     )
 
 
@@ -279,7 +279,7 @@ async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing
     service = IngestService(
         knowledge=knowledge,
         registry=_EmptyRegistry(),
-        credential_resolver=lambda ref: "k",
+        secret_resolver=lambda ref: "k",
     )
 
     with pytest.raises(EmptyConversion) as exc_info:
@@ -297,7 +297,7 @@ async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None
     service = IngestService(
         knowledge=knowledge,
         registry=_EmptyRegistry(markdown="\n   \n\t\n"),
-        credential_resolver=lambda ref: "k",
+        secret_resolver=lambda ref: "k",
     )
 
     with pytest.raises(EmptyConversion):

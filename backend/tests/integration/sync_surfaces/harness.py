@@ -18,6 +18,7 @@ from typing import Any
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.service import SyncService
+from coffer.domain.sync.errors import MasterKeyFileInvalid, MasterKeyPassphraseWrong
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord
 from coffer.domain.vault.findings import Finding, FindingCode
@@ -91,6 +92,17 @@ class FakeKey:
 
     def fingerprint(self) -> str | None:
         return self.value
+
+    def peek_backup(self, material: str) -> tuple[str, bool]:
+        return "f11e" * 3, material.startswith("{")
+
+    def open_backup(self, material: str, passphrase: str | None) -> bytes:
+        raw = material.strip().encode("utf-8")
+        if not raw:
+            raise MasterKeyFileInvalid("<import>", "no key material supplied")
+        if material.startswith("{") and passphrase != "right passphrase":
+            raise MasterKeyPassphraseWrong()
+        return raw
 
 
 class FakeSecrets:

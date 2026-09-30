@@ -33,7 +33,7 @@ _NEXT = {
     "held": "review with 'coffer sync hold', then 'coffer sync hold --confirm' or --restore",
     "waiting_on_edit": "an edit of yours on that file is not settled yet; the next round retries",
     "join_required": "run 'coffer sync join' to see what joining would do, and join",
-    "auth_failed": "check the push token ('coffer sync remote set --credential-ref ...')",
+    "auth_failed": "check the push token ('coffer sync remote set --secret-ref ...')",
     "paused_cloud_folder": "move the vault out of the synchronised folder",
 }
 

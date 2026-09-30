@@ -116,8 +116,8 @@ class _ResourcePort(Protocol):
     async def delete(self, uid: str, actor: str) -> None: ...
 
 
-class _CredentialStorePort(Protocol):
-    """Write-only slice of the credential store (secrets flow IN, never out)."""
+class _SecretStorePort(Protocol):
+    """Write-only slice of the secret store (secrets flow IN, never out)."""
 
     def set(self, ref: str, value: str) -> None: ...
 
@@ -132,13 +132,13 @@ class AgentMcpEntryService:
         audit: AuditService,
         store: ConfigFileStorePort,
         resource_service: _ResourcePort,
-        credentials: _CredentialStorePort,
+        secrets: _SecretStorePort,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
         self._store = store
         self._rs = resource_service
-        self._credentials = credentials
+        self._secrets = secrets
 
     async def agent(self, uid: str) -> tuple[Resource, AgentConfig]:
         """The agent row and its parsed config.
@@ -289,7 +289,7 @@ class AgentMcpEntryService:
         def _delete_all() -> None:
             for ref in refs.values():
                 with contextlib.suppress(Exception):
-                    self._credentials.delete(ref)
+                    self._secrets.delete(ref)
 
         # One to_thread for the whole rollback: the store write blocks on
         # SQLite's busy_timeout, which on the loop would freeze the very
@@ -310,10 +310,10 @@ class AgentMcpEntryService:
     ) -> Resource:
         """Promote a config-file entry into a registered ``mcp_server`` resource.
 
-        ``secrets`` maps secret-looking env/header KEY names to credential refs;
+        ``secrets`` maps secret-looking env/header KEY names to secret refs;
         every flagged key must be mapped (``AdoptSecretUnresolved`` otherwise).
-        Secret VALUES go straight into the credential store and into
-        ``credential_refs`` — never into the resource config, audit log, or
+        Secret VALUES go straight into the secret store and into
+        ``secret_refs`` — never into the resource config, audit log, or
         any log line. Register + verify happen BEFORE the source entry is
         removed; a failure after registration deletes the new resource so the
         agent's file is never left without a working entry.
@@ -328,7 +328,7 @@ class AgentMcpEntryService:
 
         # Narrow the caller-supplied mapping to keys that actually appear in the
         # entry's env or headers.  A key absent from both would still end up in
-        # credential_refs (via to_transport_config) while the stored secret it
+        # secret_refs (via to_transport_config) while the stored secret it
         # references was never written — dangling reference.
         provided = secrets or {}
         applicable = {
@@ -343,13 +343,13 @@ class AgentMcpEntryService:
                 for key, ref in applicable.items():
                     env, headers = parsed_entry.env, parsed_entry.headers
                     value = env[key] if key in env else headers[key]
-                    self._credentials.set(ref, value)
+                    self._secrets.set(ref, value)
                     written.append(ref)
             except Exception:
                 # Don't orphan the refs already written before the failure.
                 for ref in written:
                     with contextlib.suppress(Exception):
-                        self._credentials.delete(ref)
+                        self._secrets.delete(ref)
                 raise
 
         # One to_thread for all writes: off the loop (SQLite busy-wait would

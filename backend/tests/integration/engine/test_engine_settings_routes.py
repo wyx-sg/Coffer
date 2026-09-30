@@ -162,7 +162,13 @@ async def test_the_upkeep_block_names_exactly_the_three_passes(api: AsyncClient)
     upkeep = (await _config(api))["upkeep"]
     assert set(upkeep) == set(_PASSES)
     for name in _PASSES:
-        assert set(upkeep[name]) == {"enabled", "interval_s", "default_interval_s"}
+        assert set(upkeep[name]) == {
+            "enabled",
+            "interval_s",
+            "default_interval_s",
+            "last_pass_at",
+            "next_pass_at",
+        }
 
     r = await api.put(
         "/internal-engine-config/upkeep",

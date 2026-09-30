@@ -264,7 +264,7 @@ Coffer does not offer toggling an entry's `enabled` flag, nor editing an entry i
 ### Requirement: Show one direct MCP entry's full configuration without its secrets
 Users MUST be able to open one direct MCP entry and see everything the agent's own config file holds for it, read-only: its transport, its command and arguments (or its URL), its working directory, its per-entry `enabled` flag where the format has one, the names of its environment variables and HTTP headers, every other key the entry carries, which config file it lives in (the resolved absolute path, with open-in-editor and reveal-in-file-manager beside it), and `matches_resource` when an equivalent `mcp_server` resource is already registered. The read is addressed like removal and adoption — the entry's name, plus the source file where the type's entries may come from more than one — and is derived from the file at read time; Coffer stores nothing and starts nothing, so an unmanaged server is never spawned to be looked at.
 
-No secret value crosses the API. Environment and header values are never returned — only their names, with the secret-like ones flagged by the pattern of "Route secret-like environment values to the credential store on adoption". Any other key whose name matches that pattern with a non-empty value, or whose value nests such a key at any depth, has its value withheld by the daemon and is reported as masked.
+No secret value crosses the API. Environment and header values are never returned — only their names, with the secret-like ones flagged by the pattern of "Route secret-like environment values to the secret store on adoption". Any other key whose name matches that pattern with a non-empty value, or whose value nests such a key at any depth, has its value withheld by the daemon and is reported as masked.
 
 The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry}`), from `coffer scan --ref <agent>:<entry> [--source] [--json]`, and in the web UI as the page a direct server's name opens on the agent's MCP servers tab (`/agents/{uid}/mcp-servers/{entry}?source=`). The page labels the entry as a direct server of that agent, returns to the agent's MCP servers tab, and offers the row's two writes: adopting it (then opening the new managed server's page) and deleting it behind the same confirm (then returning to the tab).
 
@@ -318,13 +318,13 @@ Users MUST be able to adopt a direct MCP entry into Coffer, so that it is served
 - **THEN** an `mcp_server` resource named `github-work` is registered and the direct entry is gone from the agent's config
 - **AND** an `agent_mcp_entry_adopted` audit entry is recorded
 
-### Requirement: Route secret-like environment values to the credential store on adoption
-Adoption MUST NOT persist secret values into resource config. When an entry's environment or HTTP headers carry values under secret-like keys (defined below), the adopt request MUST supply a credential mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's credential store through the daemon (per the credentials invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
+### Requirement: Route secret-like environment values to the secret store on adoption
+Adoption MUST NOT persist secret values into resource config. When an entry's environment or HTTP headers carry values under secret-like keys (defined below), the adopt request MUST supply a secret mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's secret store through the daemon (per the secrets invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
 
-#### Scenario: require a credential mapping for secret-like env values
+#### Scenario: require a secret mapping for secret-like env values
 - **GIVEN** a direct MCP entry whose environment contains a value under a secret-like key (e.g. `API_TOKEN`)
-- **WHEN** the user adopts the entry without supplying a credential mapping for that key
-- **THEN** the request is rejected with a response listing the unresolved keys; when the mapping is supplied, the secret is stored in the credential store via the daemon and the created resource config carries a reference, never the value
+- **WHEN** the user adopts the entry without supplying a secret mapping for that key
+- **THEN** the request is rejected with a response listing the unresolved keys; when the mapping is supplied, the secret is stored in the secret store via the daemon and the created resource config carries a reference, never the value
 
 ### Requirement: Degrade a facet to a parse-error state when its config file is unparseable
 When an agent config file cannot be parsed, the affected facet (MCP entries, plugins) MUST degrade to an explicit parse-error state (file path + parser error) without failing the surrounding view, leaving other facets and tabs unaffected, and entry-level writes against that file MUST be rejected until it parses again.

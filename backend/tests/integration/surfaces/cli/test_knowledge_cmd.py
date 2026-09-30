@@ -24,7 +24,6 @@ from datetime import UTC
 from datetime import datetime as dt
 
 import pytest
-import typer
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
@@ -264,10 +263,11 @@ def test_show_edit_and_rm_a_collection(knowledge_cli_daemon, tmp_path):
     assert shown.exit_code == 0, shown.output
     uid = json.loads(_extract_json(shown.output))["uid"]
 
+    # No title: a collection is shown by its folder name.
     titled = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--title", "Shopee"])
-    assert titled.exit_code == 0, titled.output
+    assert titled.exit_code == 2, titled.output
     by_uid = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", uid, "--json"])
-    assert json.loads(_extract_json(by_uid.output))["title"] == "Shopee"
+    assert json.loads(_extract_json(by_uid.output))["name"] == "shopee"
 
     # No switch: every collection is served to every agent (spec knowledge
     # "Serve every collection to every agent").
@@ -280,25 +280,51 @@ def test_show_edit_and_rm_a_collection(knowledge_cli_daemon, tmp_path):
     assert json.loads(_extract_json(listed.output))["collections"] == []
 
 
-def test_edit_takes_no_description_because_the_readme_holds_it(knowledge_cli_daemon, tmp_path):
+def test_edit_rewrites_the_description_in_the_readme(knowledge_cli_daemon, tmp_path):
     """A collection's description is its README's opening paragraph (spec
-    knowledge "Read a collection's description from its README"), so `edit`
-    offers no `--description` that would store one nobody reads."""
-    _make_collection("shopee")
-    refused = _runner.invoke(
-        cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--description", "ignored"]
+    knowledge "Read a collection's description from its README"): `edit
+    --description` rewrites that paragraph, and nothing is stored in the row."""
+    _make_collection("shopee", "Old words.")
+    edited = _runner.invoke(
+        cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--description", "Shopee's services."]
     )
-    assert refused.exit_code == 2, refused.output
-    edit = typer.main.get_command(cli_app).commands[KIND_KNOWLEDGE].commands["edit"]  # type: ignore[attr-defined]
-    assert not any("--description" in p.opts for p in edit.params)
+    assert edited.exit_code == 0, edited.output
+    readme = (_knowledge_root() / "shopee" / "README.md").read_text(encoding="utf-8")
+    assert readme == "# shopee\n\nShopee's services.\n"
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+    rows = json.loads(_extract_json(listed.output))["collections"]
+    assert rows[0]["description"] == "Shopee's services."
+    assert _daemon().get(f"/resources/{rows[0]['uid']}").json()["description"] in (None, "")
+    nothing = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "edit", "shopee"])
+    assert nothing.exit_code == 2, nothing.output
 
 
-def test_add_sets_a_title_when_asked(knowledge_cli_daemon):
+def test_add_takes_no_title(knowledge_cli_daemon):
+    """A collection has no title — it is shown by its folder name."""
     added = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "add", "shopee", "--title", "Shopee"])
-    assert added.exit_code == 0, added.output
-    assert "added: collection shopee" in added.output
-    shown = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", "shopee", "--json"])
-    assert json.loads(_extract_json(shown.output))["title"] == "Shopee"
+    assert added.exit_code == 2, added.output
+
+
+def test_restore_deleted_brings_a_removed_collection_back(knowledge_cli_daemon, tmp_path):
+    """spec knowledge "Restore a deleted collection or document from Recent changes":
+    `restore --deleted` names the delete's version from `changes`."""
+    _make_collection("shopee", "Shopee services.")
+    doc = _write("shopee", "Cache", body="kept")
+    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "rm", "shopee", "--yes"]).exit_code == 0
+    feed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "changes", "--json"])
+    removal = next(
+        c for c in json.loads(_extract_json(feed.output))["changes"] if c["operation"] == "remove"
+    )
+
+    restored = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "restore", "--deleted", removal["version"]])
+    assert restored.exit_code == 0, restored.output
+    assert doc in restored.output
+    assert (_knowledge_root() / doc).is_file()
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+    rows = json.loads(_extract_json(listed.output))["collections"]
+    assert [(r["name"], r["description"]) for r in rows] == [("shopee", "Shopee services.")]
+    both = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "restore", doc, "abc123", "--deleted", "x"])
+    assert both.exit_code == 2, both.output
 
 
 def test_the_route_refuses_to_delete_the_readme(knowledge_cli_daemon, tmp_path):
@@ -510,6 +536,9 @@ _KNOWLEDGE_OPERATIONS = {
     ("GET", "/api/v1/knowledge/changes"),
     ("GET", "/api/v1/knowledge/changes/{version}"),
     ("POST", "/api/v1/knowledge/changes/{version}/undo"),
+    ("POST", "/api/v1/knowledge/changes/{version}/restore"),
+    ("GET", "/api/v1/knowledge/history/version"),
+    ("PUT", "/api/v1/knowledge/collections/{uid}/description"),
 }
 _KNOWLEDGE_COMMANDS = [
     "list",

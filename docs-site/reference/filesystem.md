@@ -86,7 +86,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `local/skill-source-status.json` | What this machine last found at each Git-imported skill's source. | daemon | Never | Yes: the next check fills it in. |
 | `local/secret/` | Machine-local ciphertext, such as the model proxy's tokens. | daemon | Never | The proxy tokens are minted again; agents on a provider re-read theirs. |
 | `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here. | daemon | Never | Every secret waits for approval again. |
-| `local/sync/remote.json` | The one sync remote: URL, branch, push credential ref, username, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
+| `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, username, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
 | `local/sync/round.json` | A stopped round, a hold, or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |
 | `local/migration.json` | The record of the one-time upgrade: every move it made, read by `coffer migrate --rollback`. | `coffer migrate` | Never | Not until you are sure you will not roll back. |
 
@@ -163,7 +163,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
-| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or credential. | daemon (supervisor), model proxy | No | Yes. |
+| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or secret. | daemon (supervisor), model proxy | No | Yes. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 

@@ -18,7 +18,7 @@ There is no pointer of its own and no retry set: the last commit this machine
 converged at is the vault's own history (and its descriptor's
 `last_converged_commit`), and a round that cannot apply stops whole instead of
 leaving some paths behind. In the one-time upgrade to the vault layout the old
-remote row was carried to `local/sync/remote.json` and Alembic revision 0117
+remote row was carried to `local/sync/remote.json` and Alembic revision 0136
 dropped `sync_remotes`, `sync_convergence_state` and `sync_held_paths` and
 emptied `sync_runs`.
 
@@ -32,7 +32,7 @@ remote. Machine-local and never committed.
 {
   "url": "https://github.com/me/vault.git",
   "branch": "main",
-  "credential_ref": "secret/github",
+  "secret_ref": "secret/github",
   "username": "coffer",
   "include_secret": false,
   "interval_seconds": 3600,
@@ -44,13 +44,13 @@ remote. Machine-local and never committed.
 | --- | --- | --- |
 | `url` | str | the user's own repository; must not start with `-` or contain whitespace (`SYNC_REMOTE_INVALID`, 422) |
 | `branch` | str | default `main`; checked against git's branch-name rules |
-| `credential_ref` | str? | a **reference** into the credential store, never a secret. Its value reaches git through a per-invocation credential helper, resolved through the secret boundary with destination `sync_remote` / `remote`, target `git <url>` — a token for a URL it was never approved for waits for a person (the round is `auth_failed` until then) |
+| `secret_ref` | str? | a **reference** into the secret store, never a secret. Its value reaches git through a per-invocation credential helper, resolved through the secret boundary with destination `sync_remote` / `remote`, target `git <url>` — a token for a URL it was never approved for waits for a person (the round is `auth_failed` until then) |
 | `username` | str | default `coffer`; the name an HTTPS token is sent with. GitHub and GitLab ignore it; Bitbucket needs one such as `x-token-auth`, Azure DevOps a real one. Non-blank, no spaces, `:`, `@` or `/`, at most 128 characters |
 | `include_secret` | bool | whether `vault/secret/` is committed and pushed at all; default off. Off, `/secret/` is in `vault/.git/info/exclude` |
 | `interval_seconds` | int | default 3600; positive, raised to at least 60 |
 | `enabled` | bool | `false` pauses the timer; the remote and history are kept, and "Sync now" still runs a round |
 
-Because `credential_ref` is a reference, the whole document can be returned by
+Because `secret_ref` is a reference, the whole document can be returned by
 the API or logged without redaction. Setting a remote with a different `url` or
 `branch` clears `round.json`'s `stop`, `confirmed` and `joined` (a stop and a
 join are facts about one remote's history); clearing the remote also clears
@@ -168,7 +168,7 @@ CREATE TABLE sync_runs (
     status        VARCHAR   NOT NULL,
     join_kind     VARCHAR,              -- new / returning when the round joined; else NULL
     commit_sha    VARCHAR,              -- the commit the round reached (`commit` is reserved in SQL)
-    error         TEXT,                 -- redacted of the push credential before it is written
+    error         TEXT,                 -- redacted of the push secret before it is written
     payload_json  TEXT                  -- the whole RoundRecord, written once
 );
 CREATE INDEX ix_sync_runs_finished_at ON sync_runs(finished_at);

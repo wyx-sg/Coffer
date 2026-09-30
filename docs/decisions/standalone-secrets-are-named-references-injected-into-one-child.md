@@ -3,14 +3,14 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Resolve standalone secrets into one child with coffer run", spec credentials "List every stored and cited secret with what uses it", spec credentials "Move plaintext secret files into the store", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Address a secret by an opaque reference", spec secret "Resolve standalone secrets into one child with coffer run", spec secret "List every stored and cited secret with what uses it", spec secret "Move plaintext secret files into the store", spec secret "Route every secret command through the daemon", spec secret "Release unshared references when a resource is deleted", spec secret "Hold plaintext only in memory at the moment of use"
 
 ## Context
 
 The credential store was built for **resources**. Every secret in it today is
 cited by a resource's config through an opaque ref minted for that resource
 (`provider/<hex>/key`, `<kind>/<hex>/<key>`), resolved by
-`CredentialResolver.materialize` (`application/credentials/resolver.py:34`) at
+`CredentialResolver.materialize` (`application/secret/resolver.py:34`) at
 an MCP spawn, a channel adapter start, a sync push or a provider key fetch
 ([Resources Cite Secrets by Opaque Reference](credential-references.md)).
 
@@ -22,15 +22,15 @@ says credentials live "in a credential store or a file such as
 `~/.coffer/secrets/<name>.env` with mode 600". In practice that file is the
 only option a skill author has, because nothing in Coffer can hand a secret to
 a command. The store already accepts an arbitrary ref
-(`coffer credentials set <ref>`, `POST /api/v1/credentials`), but:
+(`coffer secret set <ref>`, `POST /api/v1/credentials`), but:
 
 - nothing resolves a ref for a command a person or an agent runs;
 - `coffer credentials list` and `GET /api/v1/credentials` (`list_cited_refs`,
-  `surfaces/http/credential_routes.py:76`) list only refs a resource cites, so a
+  `surfaces/http/secret_routes.py:76`) list only refs a resource cites, so a
   secret stored for a skill is invisible once stored. The store itself can
-  only `count()` rows (`infrastructure/credentials/encrypted_store.py:95`); the
+  only `count()` rows (`infrastructure/secret/encrypted_store.py:95`); the
   one enumeration, `list_refs`, lives in the sync adapter
-  (`infrastructure/sync/credentials.py:94`);
+  (`infrastructure/sync/secret.py:94`);
 - resolution at use is not audited: `materialize` records nothing, and neither
   does the provider key route (`surfaces/http/provider_routes.py:131`). Only a
   deliberate read (`GET /api/v1/credentials/{ref}`, `get --show`) is audited as
@@ -320,7 +320,7 @@ Rules a future change must respect:
   ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
 - **Obligations.** Spec deltas in credentials (the namespace, `coffer run`,
   audit on resolve, listing every stored ref) and vault-sync (the scan before
-  every vault commit); a store enumeration method in `infrastructure/credentials/`; the
+  every vault commit); a store enumeration method in `infrastructure/secret/`; the
   gitleaks binary in the distribution; tests for masking across a chunk
   boundary, for a value never appearing in the parent's environment, and for
   a commit refusing when the scanner is missing.

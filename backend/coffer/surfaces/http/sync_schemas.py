@@ -2,7 +2,7 @@
 (spec vault-sync; ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
 The shapes of a stopped round, a hold and a join live in
-``sync_stop_schemas``. Remote shapes carry ``credential_ref`` and never the
+``sync_stop_schemas``. Remote shapes carry ``secret_ref`` and never the
 push token, so a remote can be rendered, logged or pasted into a bug report
 with nothing to redact.
 """
@@ -95,7 +95,7 @@ USERNAME_PATTERN = r"^[^\s:@/]+$"
 class SyncRemoteIn(BaseModel):
     url: str = Field(min_length=1, pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     #: The username an HTTPS token is sent with (Bitbucket and Azure DevOps
     #: need a real one; GitHub and GitLab ignore it).
     username: str = Field(
@@ -120,7 +120,7 @@ class SyncRemoteIn(BaseModel):
 class SyncRemoteOut(BaseModel):
     url: str
     branch: str
-    credential_ref: str | None
+    secret_ref: str | None
     username: str
     include_secret: bool
     interval_seconds: int
@@ -139,7 +139,7 @@ class SyncRemoteClearedOut(BaseModel):
 class RemoteCheckIn(BaseModel):
     url: str = Field(min_length=1, pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     username: str = Field(
         default=DEFAULT_USERNAME, min_length=1, max_length=128, pattern=USERNAME_PATTERN
     )
@@ -190,7 +190,7 @@ class WaitingCommitOut(BaseModel):
 class ProblemOut(BaseModel):
     kind: Literal["unreachable", "auth_failed", "push_failed", "cloud_folder", "layout", "failed"]
     message: str
-    credential_ref: str | None
+    secret_ref: str | None
     since: str | None
 
 
@@ -264,11 +264,39 @@ class KeyFingerprintOut(BaseModel):
 
 
 class KeyMaterialIn(BaseModel):
+    #: The key file's text as the person picked it: a ``.cfk`` backup or a
+    #: bare key.
     material: str = Field(min_length=1)
 
 
+class KeyPreviewOut(BaseModel):
+    """A key file beside this machine's key, before anything is replaced."""
+
+    #: The key in the file (12 hex characters, never the key).
+    fingerprint: str
+    #: This machine's key, or null when it holds none yet.
+    current_fingerprint: str | None
+    #: True when both are the same key, so importing changes nothing.
+    same: bool
+    #: True for a passphrase-protected ``.cfk`` backup.
+    protected: bool
+
+
+class KeyImportIn(BaseModel):
+    material: str
+    #: Opens a ``.cfk`` backup; not needed for a bare key. Never stored or
+    #: recorded.
+    passphrase: str | None = None
+
+
 class KeyImportOut(BaseModel):
-    #: Secrets this machine's key still does not open.
+    #: The key this machine now uses.
+    fingerprint: str
+    #: True when a different key was installed before (it is kept as a backup).
+    replaced: bool
+    #: How many stored secrets the key decrypts.
+    readable: int
+    #: The stored secrets it still cannot decrypt.
     locked_refs: list[str]
 
 
@@ -276,8 +304,10 @@ __all__ = [
     "AgentInventoryOut",
     "AreaCountsOut",
     "KeyFingerprintOut",
+    "KeyImportIn",
     "KeyImportOut",
     "KeyMaterialIn",
+    "KeyPreviewOut",
     "MachineListOut",
     "MachineOut",
     "MachineRemovedOut",

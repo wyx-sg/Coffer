@@ -63,9 +63,30 @@ export function itemPage(item: AttentionItem): string {
   return item.uid && page.detail ? page.detail(encode(item.uid)) : page.list;
 }
 
-/** The page an item's one action opens — a missing secret is added on Secrets. */
+/** The reasons the reconciler's memory-hook target reports about Coffer's hook
+ *  in an agent's own settings: changed by hand (and not rewritten), missing,
+ *  not trusted or switched off in the agent, or a settings file that does not
+ *  parse. Each is dealt with on the agent's Hooks tab, whose hook row carries
+ *  Repair. */
+const HOOK_REASONS = new Set([
+  "stale_command",
+  "hook_missing",
+  "hook_untrusted",
+  "hook_disabled",
+  "hook_trust_unknown",
+  "unreadable_config",
+]);
+
+/** Whether an item is about Coffer's memory hook in one agent. */
+function isHookItem(item: AttentionItem): boolean {
+  return item.kind === "agent" && HOOK_REASONS.has(item.reason_code);
+}
+
+/** The page an item's one action opens — a missing secret is added on
+ *  Secrets, a memory-hook problem is dealt with on the agent's Hooks tab. */
 export function actionPage(item: AttentionItem): string {
   if (item.reason_code === "mcp_missing_secret") return "/secrets";
+  if (isHookItem(item) && item.uid) return `${itemPage(item)}/hooks`;
   return itemPage(item);
 }
 
@@ -74,4 +95,11 @@ const VERBS = new Set(["connect", "test", "set_secret", "check", "run", "review"
 /** i18n key of the action button's label; an unknown verb reads "Open". */
 export function actionLabelKey(verb: string): string {
   return `overview.actions.${VERBS.has(verb) ? verb : "open"}`;
+}
+
+/** One item's label key: a memory hook's repair reads "Repair hook" rather
+ *  than "Repair drift"; everything else goes by its verb. */
+export function itemActionLabelKey(item: AttentionItem): string {
+  if (isHookItem(item) && item.action.verb === "repair") return "overview.actions.repairHook";
+  return actionLabelKey(item.action.verb);
 }

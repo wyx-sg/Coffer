@@ -5,7 +5,7 @@
 // the stored remote and only works once one exists, "Check repository" asked
 // of the draft, "Stop syncing" behind a confirmation, the vault's path with
 // the cloud-folder warning — and the invariant that nothing on it can hold a
-// secret: the push credential is named by REFERENCE.
+// secret: the push secret is named by REFERENCE.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -54,7 +54,7 @@ describe("SyncRemoteCard", () => {
     expect(screen.getByLabelText(/repository url/i)).toHaveValue(
       "https://git.example.com/me/vault.git",
     );
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(screen.getByText("/Users/me/.coffer/vault")).toBeInTheDocument();
     expect(screen.queryByTestId("sync-cloud-folder")).not.toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe("SyncRemoteCard", () => {
     expect(checkMutate).toHaveBeenCalledWith({
       url: "https://git.example.com/me/vault.git",
       branch: "main",
-      credential_ref: "sync.PUSH_TOKEN",
+      secret_ref: "sync.PUSH_TOKEN",
     });
 
     mocked(useCheckRemote).mockReturnValue(
@@ -146,16 +146,17 @@ describe("SyncRemoteCard", () => {
     expect(screen.queryByRole("button", { name: /stop syncing/i })).not.toBeInTheDocument();
   });
 
-  acceptance("vault-sync", "the push credential never reaches the repository", () => {
+  acceptance("vault-sync", "the push secret never reaches the repository", () => {
     // What the daemon serves is a ref and nothing secret-shaped...
     const served = status(true).remote as unknown as Record<string, unknown>;
-    expect(served.credential_ref).toBe("sync.PUSH_TOKEN");
-    const secretish = /token|password|credential(?!_ref)/i;
-    expect(Object.keys(served).filter((k) => secretish.test(k))).toEqual([]);
+    expect(served.secret_ref).toBe("sync.PUSH_TOKEN");
+    // ``include_secret`` is the switch that carries ciphertext, not a value.
+    const secretish = /token|password|secret(?!_ref)/i;
+    expect(Object.keys(served).filter((k) => secretish.test(k))).toEqual(["include_secret"]);
 
     // ...and what the card renders is that ref, never a password field.
     render(<SyncRemoteCard status={status(true)} />);
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
   });
 });

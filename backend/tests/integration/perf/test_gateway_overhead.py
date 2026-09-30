@@ -17,14 +17,13 @@ from pathlib import Path
 import pytest
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig, StdioTransport
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceStore,
@@ -37,6 +36,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
@@ -71,7 +71,7 @@ async def test_gateway_overhead_under_50ms_median(
 
     # ------------------------------------------------------------------ #
     # Baseline: direct connection — no gateway, no supervisor, no         #
-    # discovery layer, no DB, no credential resolution.                   #
+    # discovery layer, no DB, no secret resolution.                   #
     # ------------------------------------------------------------------ #
     baseline_ms: list[float] = []
     direct = StdioUpstreamConnection(
@@ -127,7 +127,7 @@ async def test_gateway_overhead_under_50ms_median(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     prefs = MCPCapabilityPreferenceStore(derived_sm())
     inv_repo = MCPInvocationRepo(sm)

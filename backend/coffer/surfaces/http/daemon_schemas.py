@@ -43,6 +43,17 @@ class DaemonStatusOut(BaseModel):
     machine_id: str | None
     #: This machine's display label (the hostname unless the user set one).
     machine_name: str
+    #: The daemon's process id, for the Settings Daemon tab's status line.
+    pid: int
+    #: The commit a release build was made from (short hash), stamped with the
+    #: channel; ``null`` in a build from source.
+    commit: str | None = None
+    #: Coffer's data folder, written ``~/…`` when it sits under the home folder.
+    data_dir: str
+    #: How many registered agents carry Coffer's gateway entry; ``null`` while
+    #: the composition root has not wired the connection service, or when it
+    #: could not be read.
+    connected_agents: int | None = None
 
 
 class FeatureOut(BaseModel):
@@ -110,6 +121,9 @@ class DaemonLogRecordOut(BaseModel):
 
 class DaemonLogListOut(BaseModel):
     records: list[DaemonLogRecordOut]
+    #: The absolute path of the file the tail was read from, so the Activity
+    #: page can name it and open it with ``POST /fs/open``.
+    path: str
 
 
 class DaemonPortOut(BaseModel):

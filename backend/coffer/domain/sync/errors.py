@@ -68,9 +68,34 @@ class CannotRetireSelf(CofferError):  # noqa: N818
         )
 
 
+class MasterKeyPassphraseWrong(CofferError):  # noqa: N818
+    """A protected key file did not open with the passphrase given. Maps to 422.
+
+    Also the answer when no passphrase was given for a file that needs one:
+    the two are the same situation to the person holding the file.
+    """
+
+    code = "MASTER_KEY_PASSPHRASE_WRONG"
+
+    def __init__(self) -> None:
+        super().__init__("the passphrase does not open this key file")
+
+
+class MasterKeyPassphraseTooShort(CofferError):  # noqa: N818
+    """A key backup was asked for with a passphrase under the minimum. Maps to 422."""
+
+    code = "MASTER_KEY_PASSPHRASE_TOO_SHORT"
+
+    def __init__(self, minimum: int) -> None:
+        super().__init__(f"the passphrase must be at least {minimum} characters")
+        self.minimum = minimum
+
+
 __all__ = [
     "CannotRetireSelf",
     "MasterKeyFileInvalid",
+    "MasterKeyPassphraseTooShort",
+    "MasterKeyPassphraseWrong",
     "SyncMachineNameInvalid",
     "SyncMachineNotFound",
     "SyncNoRemote",

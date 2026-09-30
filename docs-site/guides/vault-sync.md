@@ -22,9 +22,9 @@ Four rules shape everything below:
 
 - **A private, empty git repository you own.** GitHub, GitLab, a server of your own, a bare repository on a NAS, or a `file://` path on a USB drive all work. One vault syncs with at most one remote.
 - **Credentials git can use without prompting.** Coffer runs `git` with your global and system git configuration switched off and terminal prompts disabled, so a credential helper in `~/.gitconfig` or macOS's keychain helper is not consulted. Pick one:
-  - **HTTPS with a token** stored in Coffer's secret store and named with `--credential-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process. It never appears in the URL, the command line, the repository's config or an error message.
+  - **HTTPS with a token** stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process. It never appears in the URL, the command line, the repository's config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt.
-  - **`file://`**: no credential.
+  - **`file://`**: no secret.
 - **`git` on every machine.** On macOS, `xcode-select --install` provides it.
 - **The same Coffer version on every machine.** A remote written by another vault layout is refused (see [Troubleshooting](#troubleshooting)).
 - **The vault outside any cloud-synced folder.** A vault inside Dropbox, iCloud Drive, Syncthing or another File Provider folder pauses sync: two tools syncing one git repository corrupt it.
@@ -34,17 +34,17 @@ Four rules shape everything below:
 ### GitHub
 
 1. Create a private, empty repository and a fine-grained personal access token with **Contents: Read and write** on it.
-2. Store the token. `coffer credentials set` reads the value from stdin, so it stays out of your shell history:
+2. Store the token. `coffer secret set` reads the value from stdin, so it stays out of your shell history:
 
    ```sh
-   printf '%s' "$GITHUB_TOKEN" | coffer credentials set sync/github-token
+   printf '%s' "$GITHUB_TOKEN" | coffer secret set sync/github-token
    ```
 
 3. Look at the repository, then configure it:
 
    ```sh
-   coffer sync remote check https://github.com/you/coffer-vault.git --credential-ref sync/github-token
-   coffer sync remote set https://github.com/you/coffer-vault.git --credential-ref sync/github-token
+   coffer sync remote check https://github.com/you/coffer-vault.git --secret-ref sync/github-token
+   coffer sync remote set https://github.com/you/coffer-vault.git --secret-ref sync/github-token
    ```
 
 ### GitLab
@@ -53,9 +53,9 @@ Four rules shape everything below:
 2. Store it and configure the remote:
 
    ```sh
-   printf '%s' "$GITLAB_TOKEN" | coffer credentials set sync/gitlab-token
-   coffer sync remote check https://gitlab.com/<you>/<repo>.git --credential-ref sync/gitlab-token
-   coffer sync remote set https://gitlab.com/<you>/<repo>.git --credential-ref sync/gitlab-token
+   printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
+   coffer sync remote check https://gitlab.com/<you>/<repo>.git --secret-ref sync/gitlab-token
+   coffer sync remote set https://gitlab.com/<you>/<repo>.git --secret-ref sync/gitlab-token
    ```
 
    For a self-managed GitLab, use your instance's host in place of `gitlab.com`.
@@ -78,7 +78,7 @@ Git sends a username with every HTTPS token. Coffer sends `coffer` unless you pa
 
 ```sh
 coffer sync remote set https://bitbucket.org/<workspace>/<repo>.git \
-  --credential-ref sync/bitbucket-token --username x-token-auth
+  --secret-ref sync/bitbucket-token --username x-token-auth
 ```
 
 ### Options
@@ -88,7 +88,7 @@ coffer sync remote set https://bitbucket.org/<workspace>/<repo>.git \
 | `--branch` | `main` | The branch every machine syncs on. |
 | `--interval` | `3600` | Seconds between automatic rounds, at least `60`. A smaller value is refused. |
 | `--with-secret` / `--without-secret` | without | Carry the encrypted secrets (`vault/secret/`). The master key is never carried under any setting. |
-| `--credential-ref` | none | Name of the push token in the secret store. `''` removes it. |
+| `--secret-ref` | none | Name of the push token in the secret store. `''` removes it. |
 | `--username` | `coffer` | Username sent with an HTTPS token. |
 | `--wait` | off | Wait for a pending approval in the Coffer app instead of exiting. |
 
@@ -108,7 +108,7 @@ coffer sync join
 
 `join` prints what joining would do and asks before it applies anything. Against an empty remote it pushes everything this vault holds.
 
-In the web UI the same steps are on the **Sync** page. **Setup** holds the remote card: **Repository URL**, **Branch**, **Interval (seconds)**, **Push credential**, **Include encrypted secrets**, **Check repository** and **Save remote**. **Runs** then shows the **Join this remote** card with the same preview and a **Join** button.
+In the web UI the same steps are on the **Sync** page. **Setup** holds the remote card: **Repository URL**, **Branch**, **Interval (seconds)**, **Push secret**, **Include encrypted secrets**, **Check repository** and **Save remote**. **Runs** then shows the **Join this remote** card with the same preview and a **Join** button.
 
 ## Join another machine
 
@@ -133,17 +133,17 @@ On the web the **Runs** tab lists them with **Keep mine**, **Take theirs**, **Ke
 
 ## Move the master key
 
-Only needed when the remote carries secrets. On a machine that has the key, open the **desktop app** and back the key up: pick a folder, confirm with Touch ID or your login password, and the app writes `coffer-master-key-<fingerprint>.key` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
+Only needed when the remote carries secrets. On a machine that has the key, open the **desktop app** and back the key up on **Settings › Security**: choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 
 Carry the file over a channel you trust (a password manager, `scp`, a USB stick), never through the sync repository. On the other machine:
 
 ```sh
-coffer sync key import ~/coffer-master-key-<fingerprint>.key
+coffer sync key import ~/coffer-master-key.cfk   # asks for the passphrase
 coffer sync key fingerprint                     # compare with the other machine
-rm ~/coffer-master-key-<fingerprint>.key
+rm ~/coffer-master-key.cfk
 ```
 
-The **Master key** card on **Setup** offers **Import key** as well. Without the key, sync still works, but secrets that arrived cannot be decrypted here and the resources that need them cannot start. The **Machines** tab flags a machine whose key differs from this one's.
+**Import a master key** on **Settings › Security** does it with the two keys' fingerprints side by side before anything is replaced, and a passphrase-protected backup asks for its passphrase; the **Master key** card on **Setup** offers **Import key** as well. The key it replaces is kept as a backup. Without the key, sync still works, but secrets that arrived cannot be decrypted here and the resources that need them cannot start. The **Machines** tab flags a machine whose key differs from this one's.
 
 ## What travels and what stays
 
@@ -159,7 +159,7 @@ Some consequences to know:
 
 - **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time takes that machine's default reach.
 - **A channel travels, but its adapter runs on one machine.** A chat bot can have only one consumer, so each channel names the machine that runs it. To move a bot, run `coffer channel bind <name> [<machine_id>]` from the machine that currently runs it. See [Channels](/guides/channels).
-- **Curation runs on one machine.** The pass that merges new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Set it under **Settings → General → Coffer's model → Automatic upkeep** or with `coffer config set engine.curate_owner`. See [Knowledge](/guides/knowledge).
+- **Curation runs on one machine.** The pass that merges new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Once the vault spans several machines, choose it under **Curation runs on** in the Knowledge header's **Automatic** popover, or with `coffer config set engine.curate_owner`. See [Knowledge](/guides/knowledge).
 - **The plugin inventory records, it does not install.** Each machine's descriptor lists its agents' plugins; nothing is written into any agent's configuration.
 - Paths under your home directory are stored against a `${HOME}` placeholder and expanded with each machine's own home.
 
@@ -258,7 +258,7 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `join required`, nothing moves | This machine has not joined the remote. | `coffer sync join` |
-| `sign-in refused` | No usable credential (your git config and keychain helper are not consulted), the token lacks push rights, or a token for a new URL is waiting for approval. | Store a token with the right scope and set `--credential-ref`, approve it in the desktop app, or use an SSH key that needs no prompt. |
+| `sign-in refused` | No usable credential (your git config and keychain helper are not consulted), the token lacks push rights, or a token for a new URL is waiting for approval. | Store a token with the right scope and set `--secret-ref`, approve it in the desktop app, or use an SSH key that needs no prompt. |
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Move `~/.coffer` out of that folder. |
@@ -277,6 +277,6 @@ The round's steps, the breaker, joining and the reasons behind each are in [Vaul
 ## Related
 
 - [Editing the vault by hand](/guides/vault-files) · [Upgrading an existing Coffer](/guides/upgrading)
-- [Credentials](/guides/credentials) · [Secrets](/guides/secrets) · [Channels](/guides/channels) · [Knowledge](/guides/knowledge)
+- [Secret store](/guides/secret-store) · [Secrets](/guides/secrets) · [Channels](/guides/channels) · [Knowledge](/guides/knowledge)
 - [CLI reference](/reference/cli)
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) · Decisions: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)

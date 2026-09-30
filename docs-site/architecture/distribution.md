@@ -1,6 +1,6 @@
 ---
 title: Distribution and releases
-description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the credentials exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a release channel, and gated by experimental features.
+description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the secrets exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a release channel, and gated by experimental features.
 ---
 
 # Distribution and releases
@@ -61,7 +61,7 @@ bash scripts/smoke_test_bundle.sh dist
 flowchart TD
     T["push tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["build frontend (codegen + vite build)"]
-    F --> P["release_plan.py: which credentials are present"]
+    F --> P["release_plan.py: which secrets are present"]
     P --> S["stamp_channel.py stable (+ access group when signing)"]
     S --> B["build_binaries.sh (PyInstaller x3, signed when possible)"]
     B --> K["smoke_test_bundle.sh (+ verify signatures, notarise)"]
@@ -204,7 +204,7 @@ Switching a feature off never deletes, moves or rewrites what it holds; switchin
 
 ## Signing, notarisation and updates
 
-Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the credentials stays green.
+Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the secrets stays green.
 
 | Step | Runs when these are set | What it does |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ Three kinds of credential turn an unsigned release into a signed one, and each i
 
 ### The keychain access group
 
-The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py) rewrites `KEYCHAIN_ACCESS_GROUP` in `backend/coffer/infrastructure/credentials/build_identity.py` before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
+The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py) rewrites `KEYCHAIN_ACCESS_GROUP` in `backend/coffer/infrastructure/secret/build_identity.py` before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
 
 ### How the desktop app updates
 

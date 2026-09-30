@@ -79,7 +79,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # which its scan row names, and nothing of Coffer's put it there to discard.
     "scan": set(),
     # `coffer run [--secret …] -- cmd`: one command, standalone secrets set
-    # only in the child's environment (spec credentials "Resolve standalone
+    # only in the child's environment (spec secret "Resolve standalone
     # secrets into one child with coffer run").
     "run": set(),
     "adopt": {"skill", "mcp"},
@@ -93,11 +93,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # previews then applies an OpenAPI re-read; `op` manages one tool.
     "tool": {*_LIFECYCLE, "add", "scope", "reimport", "op"},
     "tool op": {"add", "edit", "rm", "enable", "disable", "scope", "test"},
-    # `get` checks presence only; no command prints a value (spec credentials
+    # `get` checks presence only; no command prints a value (spec secret
     # "Return no plaintext on any route, command or tool"). `approvals` and
     # `reject` are the terminal's half of the approvals the desktop app
     # approves; `scan` and `import` move plaintext secret files into the store.
-    "credentials": {"set", "get", "list", "rm", "approvals", "reject", "scan", "import"},
+    "secret": {"set", "get", "list", "rm", "approvals", "reject", "scan", "import"},
     # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
     # are its Coffer connection — the gateway entry and the memory hook as one
     # action (spec agent-registry "Connect an agent to Coffer in one action"),
@@ -197,7 +197,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "status",
     },
     # No `export`: a key backup is written only by the desktop app, behind a
-    # presence check (spec credentials "Release plaintext only to a present
+    # presence check (spec secret "Release plaintext only to a present
     # human in the desktop app").
     "sync key": {"import", "fingerprint"},
     # The unified reconciler's read models (spec resource-framework "Converge
@@ -240,10 +240,11 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "scan": {"--agent", "--ref", "--source", "--json"},
     "attention": {"--json"},
     "run": {"--secret", "--env-file", "--no-masking"},
-    # The usage summary's range, grouping and output form.
-    "usage": {"--range", "--from", "--to", "--by", "--json", "--csv"},
+    # The usage summary's range, grouping, filters and output form.
+    "usage": {"--range", "--from", "--to", "--by", "--agent", "--provider", "--json", "--csv"},
     # A name and a title are edited on the kinds that carry them (design D1).
-    "knowledge edit": {"--name", "--title"},
+    # A collection is named by its folder: a name and a description, no title.
+    "knowledge edit": {"--name", "--description"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
     # `model` / `effort` / `tier_models` / `wire_api` the projector reads. Its
@@ -267,7 +268,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
         "--http",
         "--env",
         "--header",
-        "--credential",
+        "--secret",
         "--spawn-timeout-seconds",
         "--request-timeout-seconds",
     },
@@ -295,8 +296,8 @@ _CONFIG_KEYS: dict[str, str] = {
     },
     "transcribe.provider": "POST /providers/{uid}/transcribe-default",
     "transcribe.model": "PUT /internal-engine-config/transcribe-model",
-    "credentials.storage": "PUT /settings/credentials",
-    # Turning it off waits for the Coffer app (spec credentials "Turn the
+    "secrets.storage": "PUT /settings/secrets",
+    # Turning it off waits for the Coffer app (spec secret "Turn the
     # protection off only through the desktop app").
     "secrets.require_approval": "PUT /settings/secret-boundary",
     "prices.refresh": "PUT /providers/price-list",
@@ -644,8 +645,8 @@ def _fake_client_returning_500(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_cli_client, "daemon_is_running", lambda: True)
 
 
-def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wire CLI to a server that returns 400 CREDENTIAL_MISSING."""
+def _fake_client_returning_secret_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wire CLI to a server that returns 400 SECRET_MISSING."""
     from datetime import UTC
     from datetime import datetime as dt
 
@@ -657,8 +658,8 @@ def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -
             status_code=400,
             content={
                 "error": {
-                    "code": "CREDENTIAL_MISSING",
-                    "message": "credential not found: MY_TOKEN",
+                    "code": "SECRET_MISSING",
+                    "message": "secret not found: MY_TOKEN",
                     "details": {},
                 }
             },
@@ -705,10 +706,10 @@ def test_cli_verbose_shows_trace(monkeypatch):
     )
 
 
-def test_cli_credential_missing_maps_to_exit_8(monkeypatch):
-    """CREDENTIAL_MISSING error code must map to exit code 8."""
-    _fake_client_returning_credential_missing(monkeypatch)
+def test_cli_secret_missing_maps_to_exit_8(monkeypatch):
+    """SECRET_MISSING error code must map to exit code 8."""
+    _fake_client_returning_secret_missing(monkeypatch)
     result = runner.invoke(app, ["daemon", "status"])
     assert result.exit_code == 8, (
-        f"expected exit code 8 (CREDENTIAL_ISSUE), got {result.exit_code}:\n{result.output}"
+        f"expected exit code 8 (SECRET_ISSUE), got {result.exit_code}:\n{result.output}"
     )

@@ -1,6 +1,6 @@
 """A feature pinned by the environment refused through `coffer config`, and the
 CLI's one line for ``FEATURE_DISABLED``. Listing and switching features is
-covered with `coffer config` in test_config_features_credentials.py.
+covered with `coffer config` in test_config_features_secrets.py.
 
 The CLI talks to an in-process app through a ``TestClient`` under a throwaway
 HOME, so the switches land in ``tmp_path`` and nothing reaches ``~/.coffer``.

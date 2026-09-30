@@ -19,7 +19,7 @@ from starlette.testclient import TestClient
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import get_credential_store
+from coffer.surfaces.http.secret_composition import get_secret_store
 from tests.fixtures.keyring import install_in_memory_keyring
 
 TOKEN = "test-token-provider-requirements"
@@ -107,17 +107,17 @@ def test_a_connection_is_a_provider_resource_addressed_by_its_uid(env: pathlib.P
 def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path) -> None:
     with _daemon() as c:
         uid = _new(c, _anthropic("acme", secret="sk-before-rotation"))
-        ref = c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
-        assert get_credential_store().get(ref) == "sk-before-rotation"
+        ref = c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
+        assert get_secret_store().get(ref) == "sk-before-rotation"
 
         r = c.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-after-rotation"})
         assert r.status_code == 200, r.text
-        assert r.json()["credential_ref"] == ref
+        assert r.json()["secret_ref"] == ref
         assert "sk-after-rotation" not in r.text
 
-        assert c.get(f"/api/v1/providers/{uid}").json()["credential_ref"] == ref
-        # No credential route returns a value; read the daemon's own store.
-        assert get_credential_store().get(ref) == "sk-after-rotation"
+        assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == ref
+        # No secret route returns a value; read the daemon's own store.
+        assert get_secret_store().get(ref) == "sk-after-rotation"
 
 
 @pytest.mark.acceptance(

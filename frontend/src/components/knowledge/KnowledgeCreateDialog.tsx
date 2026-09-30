@@ -1,8 +1,10 @@
 // frontend/src/components/knowledge/KnowledgeCreateDialog.tsx
-// New collection: a name (its folder under ~/.coffer/knowledge/) and what
-// belongs in it (the folder's README, which the coffer-guide skill carries to
-// every agent). The hook toasts a failure; the dialog closes on success and
-// opens the new collection.
+// New collection (board 5.1.15): a name (its folder under the knowledge
+// root) and what belongs in it — both required. A collection has no title: it
+// is shown by its folder name, and what belongs in it is the opening paragraph
+// of the folder's README, which the coffer-guide skill carries to every agent.
+// The hook toasts a failure; on success the dialog closes, says so, and opens
+// the new collection.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -19,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { useCreateCollection } from "@/lib/hooks/useKnowledge";
 import { collectionPath } from "@/lib/knowledge/routes";
 
@@ -31,6 +34,7 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const create = useCreateCollection();
+  const { toast } = useToast();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -43,10 +47,11 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
 
   const submit = () =>
     create.mutate(
-      { name: name.trim(), description: description.trim() || null },
+      { name: name.trim(), description: description.trim() },
       {
         onSuccess: (created) => {
           onOpenChange(false);
+          toast.success(t("knowledge.create.created", { name: created.name }));
           navigate(collectionPath(created.uid));
         },
       },
@@ -75,7 +80,7 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="knowledge-collection-description">
+            <Label htmlFor="knowledge-collection-description" required>
               {t("knowledge.create.description")}
             </Label>
             <Textarea
@@ -89,10 +94,13 @@ export function KnowledgeCreateDialog({ open, onOpenChange }: Props) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={submit} disabled={!name.trim() || create.isPending}>
+          <Button
+            onClick={submit}
+            disabled={!name.trim() || !description.trim() || create.isPending}
+          >
             {t("knowledge.create.submit")}
           </Button>
         </DialogFooter>

@@ -4,7 +4,7 @@
 // folded into a single row.
 //
 // A timer-driven history repeats itself. Most rounds find nothing to do, and
-// when something breaks it repeats harder: an expired credential is the same
+// when something breaks it repeats harder: an expired secret is the same
 // failure every pass until morning. One row each, they bury the rounds that
 // said something. They are not dropped, because they carry one thing nothing
 // else does: a vault that STOPPED syncing on Tuesday looks exactly like one

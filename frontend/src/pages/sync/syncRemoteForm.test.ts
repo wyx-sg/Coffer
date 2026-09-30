@@ -6,7 +6,7 @@ import { isDirty, isGitRemoteUrl, validateRemote, type FormState } from "./syncR
 const base: FormState = {
   url: "https://git.example.com/me/vault.git",
   branch: "main",
-  credentialRef: "",
+  secretRef: "",
   includeSecret: false,
   intervalSeconds: 3600,
 };

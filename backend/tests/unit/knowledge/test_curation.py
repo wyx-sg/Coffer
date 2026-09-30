@@ -106,7 +106,7 @@ class _Loop:
         tools,
         system_prompt,
         user_prompt,
-        credential_resolver,
+        secret_resolver,
         recursion_limit,
         timeout=None,
     ):  # type: ignore[no-untyped-def]
@@ -167,7 +167,7 @@ async def _run(loop: _Loop, models: Any = None, **kwargs: Any) -> dict[str, Any]
         _SHOPEE_UID,
         agent=loop,
         models=models or _Model(),
-        credential_resolver=lambda ref: "key",
+        secret_resolver=lambda ref: "key",
         **kwargs,
     )
 
@@ -759,7 +759,7 @@ async def test_a_cut_off_pass_that_wrote_documents_still_rerenders_the_catalogue
             [("write_document", {"title": "Session", "description": "d", "body": "b"})]
         ),
         models=_Model(),
-        credential_resolver=lambda ref: "key",
+        secret_resolver=lambda ref: "key",
         on_corpus_changed=on_changed,
     )
     outcome = await pass_(_service(), _SHOPEE_UID, item=Pending(material=name))
@@ -775,7 +775,7 @@ async def test_a_cut_off_pass_that_wrote_documents_still_rerenders_the_catalogue
 def _cut_off_pass(loop: _Loop) -> Any:
     from coffer.application.knowledge.curate import CurationPass
 
-    return CurationPass(agent=loop, models=_Model(), credential_resolver=lambda ref: "key")
+    return CurationPass(agent=loop, models=_Model(), secret_resolver=lambda ref: "key")
 
 
 @pytest.mark.acceptance(

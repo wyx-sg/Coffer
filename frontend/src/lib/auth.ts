@@ -70,7 +70,7 @@ export function getCofferBaseUrl(): string | null {
 export function getCofferToken(): string | null {
   // Empty counts as absent: a page that was served before the daemon published
   // a token carries no script at all, and tests blank the global to stand in
-  // for that. Either way the answer is "this page has no credential".
+  // for that. Either way the answer is "this page has no secret".
   return injectedGlobals().__COFFER_TOKEN__ || null;
 }
 

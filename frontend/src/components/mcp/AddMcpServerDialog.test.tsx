@@ -137,7 +137,7 @@ describe("AddMcpServerDialog — paste box", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add 3 servers" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const order = calls
-      .filter((c) => c[0] === "/resources" || c[0] === "/credentials")
+      .filter((c) => c[0] === "/resources" || c[0] === "/secrets")
       .map((c) => (c[0] === "/resources" ? `register ${c[1]?.body?.name}` : "secret"));
     expect(order).toEqual(["register notion", "secret", "register figma", "register docs-search"]);
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(3));
@@ -167,7 +167,7 @@ describe("AddMcpServerDialog — paste box", () => {
       config: { transport: Record<string, unknown> };
     };
     expect(register.config.transport.args).toEqual(["-y", "@modelcontextprotocol/server-github"]);
-    expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/resources", "/credentials"]);
+    expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/resources", "/secrets"]);
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(1));
   });
 
@@ -382,13 +382,13 @@ describe("AddMcpServerDialog — form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     await waitFor(() => expect(screen.getByTestId("detail-page")).toHaveTextContent("api"));
 
-    type Http = { headers: unknown; credential_refs: Record<string, string> };
+    type Http = { headers: unknown; secret_refs: Record<string, string> };
     const transport = (posts("/resources")[0][1]?.body as { config: { transport: Http } }).config
       .transport;
     expect(transport.headers).toEqual({ "X-Region": "us-east" });
-    const ref = transport.credential_refs.Authorization;
+    const ref = transport.secret_refs.Authorization;
     expect(ref).toMatch(/^mcp_server\/[0-9a-f]{32}\/Authorization$/);
-    expect(posts("/credentials")[0][1]?.body).toEqual({ ref, value: "Bearer abc" });
+    expect(posts("/secrets")[0][1]?.body).toEqual({ ref, value: "Bearer abc" });
   });
 
   test("a bearer_token_env_var header asks for its value and sends no empty secret", async () => {
@@ -407,13 +407,13 @@ describe("AddMcpServerDialog — form", () => {
       target: { value: "Bearer t0k" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add server" }));
-    await waitFor(() => expect(posts("/credentials")).toHaveLength(1));
-    expect(posts("/credentials")[0][1]?.body?.value).toBe("Bearer t0k");
+    await waitFor(() => expect(posts("/secrets")).toHaveLength(1));
+    expect(posts("/secrets")[0][1]?.body?.value).toBe("Bearer t0k");
   });
 
   test("a secret held for approval (202) is said before the dialog lets go", async () => {
     postOverride = (path) =>
-      path === "/credentials"
+      path === "/secrets"
         ? { data: { approval: { id: "ap-1" } }, error: undefined }
         : undefined;
     renderDialog();
@@ -506,6 +506,6 @@ acceptance("web-ui", "the add form tests the unsaved server before Add server", 
     secret_values: { GITHUB_TOKEN: "ghp_x" },
   });
   // Testing saved nothing: no registration and no secret written.
-  expect(calls.some(([path]) => path === "/resources" || path === "/credentials")).toBe(false);
+  expect(calls.some(([path]) => path === "/resources" || path === "/secrets")).toBe(false);
   expect(screen.getByRole("button", { name: "Test again" })).toBeInTheDocument();
 });

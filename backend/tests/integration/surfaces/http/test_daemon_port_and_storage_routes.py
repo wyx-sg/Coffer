@@ -16,7 +16,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_port_routes import router as port_router
@@ -50,7 +50,7 @@ def audit() -> _Audit:
 
 @pytest.fixture
 def client(home, audit, monkeypatch):
-    monkeypatch.setattr(daemon_routes, "_PORT", 8000)
+    monkeypatch.setattr(daemon_port, "_PORT", 8000)
     set_active_token(TOKEN)
     app = FastAPI()
     err_handlers.register(app)
@@ -83,7 +83,7 @@ async def test_the_port_reads_the_default_and_the_bound_port(client):
 async def test_nothing_is_pending_while_no_port_is_saved(client, monkeypatch):
     # A daemon started in a test port range answers elsewhere than 8000 with
     # nothing saved: there is nothing to apply at the next start.
-    monkeypatch.setattr(daemon_routes, "_PORT", 18300)
+    monkeypatch.setattr(daemon_port, "_PORT", 18300)
     async with client:
         r = await client.get("/api/v1/daemon/port")
     assert r.json() == {"port": 8000, "bound_port": 18300, "pending": False}
@@ -142,7 +142,7 @@ async def test_the_port_the_daemon_answers_on_counts_as_free(client, home, monke
     holder.bind(("127.0.0.1", 0))
     holder.listen(1)
     own = holder.getsockname()[1]
-    monkeypatch.setattr(daemon_routes, "_PORT", own)
+    monkeypatch.setattr(daemon_port, "_PORT", own)
     try:
         async with client:
             r = await client.put("/api/v1/daemon/port", json={"port": own})

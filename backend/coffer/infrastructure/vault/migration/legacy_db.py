@@ -1,4 +1,4 @@
-"""Reading ``coffer.db`` once, at revision 0116, for the upgrade.
+"""Reading ``coffer.db`` once, at revision 0135, for the upgrade.
 
 This is the only code in the build that reads the tables whose state moves
 into files (the upgrade step itself; plan q9 D15). It reads the database
@@ -43,7 +43,7 @@ class LegacyState:
     """Every row the upgrade carries, and every one it could not."""
 
     resources: list[OldResource] = field(default_factory=list)
-    credentials: list[Row] = field(default_factory=list)
+    secrets: list[Row] = field(default_factory=list)
     secret_bindings: list[Row] = field(default_factory=list)
     secret_approvals: list[Row] = field(default_factory=list)
     secret_settings: dict[str, str] = field(default_factory=dict)
@@ -129,7 +129,7 @@ def _rekey(rows: list[Row], column: str, uids: dict[int, str], skipped: list[str
 
 
 def read_legacy(db: Path) -> LegacyState:
-    """Everything in ``db`` (at revision 0116) that moves out of it."""
+    """Everything in ``db`` (at revision 0135) that moves out of it."""
     state = LegacyState()
     with _open(db) as conn:
         tables = _tables(conn)
@@ -139,7 +139,7 @@ def read_legacy(db: Path) -> LegacyState:
             if found is not None:
                 state.resources.append(found)
                 uids[int(row["id"])] = found.uid
-        state.credentials = _rows(conn, tables, "credentials")
+        state.secrets = _rows(conn, tables, "secrets")
         state.secret_bindings = _rows(conn, tables, "secret_bindings")
         state.secret_approvals = _rows(conn, tables, "secret_approvals")
         state.secret_settings = {

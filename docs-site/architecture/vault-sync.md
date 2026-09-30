@@ -45,7 +45,7 @@ Everything committed in the vault repository, and nothing else:
 
 **Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered. See [Resource framework](/architecture/resource-framework).
 
-**Channels** travel with a `runs_on` field naming the one machine whose daemon starts the adapter. The document, its credential references and its pairings travel, so moving a bot to another machine is a rebind. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
+**Channels** travel with a `runs_on` field naming the one machine whose daemon starts the adapter. The document, its secret references and its pairings travel, so moving a bot to another machine is a rebind. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
 
 **Secrets.** `secret/` is listed in the repository's `.git/info/exclude` until the remote's `include_secret` is on; then the ciphertext files are committed like any other. Ciphertext that has entered a pushed commit cannot be withdrawn: revocation is rotation.
 
@@ -163,13 +163,14 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 - **Identity.** The machine id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux) and hashed before it is published, so it survives reinstalling Coffer. Only where neither exists is a random id stored in `~/.coffer/machine-id`, which does not survive deleting `~/.coffer`.
 - **Name.** A label. Renaming is free, nothing keys on it, and the new name is committed at once.
 - **Retire.** Deleting another machine's descriptor is an ordinary commit of yours that the next round pushes. A machine that syncs again comes back.
+- **The master key.** Secrets whose ciphertext arrived but whose key did not are reported as locked, rather than failing at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and `coffer sync key import` (or **Settings › Security › Import a master key**) installs it on the other machine after showing whose key the file holds beside this machine's (`POST /api/v1/sync/key/import/preview`). The key it replaces is kept as a backup, and the running daemon seals every secret stored afterwards under the imported key.
 
 ## Problems a round reports
 
 | Problem | Round status | What it means | What to do |
 | --- | --- | --- | --- |
 | Unreachable | `unreachable` | Git could not reach the repository. | Nothing is lost; changes wait and go up with the next round that gets through. |
-| Sign-in failed | `auth_failed` | The remote refused the credential, or a token pointed at a new URL is waiting for approval. | Check the token, or approve it in the desktop app. |
+| Sign-in failed | `auth_failed` | The remote refused the secret, or a token pointed at a new URL is waiting for approval. | Check the token, or approve it in the desktop app. |
 | Push rejected | `push_failed` | Applied here; the remote refused the push. | Check the branch's protection and the token's rights. |
 | Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder. |
 | Layout | `remote_too_new`, `remote_too_old` | The remote was written with another vault layout. | Newer: upgrade this machine. Older: rebuild the remote. |
@@ -225,5 +226,5 @@ The cost is real: a genuine conflict stops sync on this machine until you answer
 ## Related
 
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
-- Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Credentials Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
+- Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Secrets Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
 - [Vault sync guide](/guides/vault-sync) · [Persistence](/architecture/persistence) · [Knowledge architecture](/architecture/knowledge) · [Security model](/architecture/security)

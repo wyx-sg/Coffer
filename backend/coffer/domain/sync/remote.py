@@ -5,7 +5,7 @@ stays complete, so the remote can be deleted and rebuilt from any one machine.
 It is machine-local configuration (``local/sync/remote.json``) — which remote
 this machine converges with is a fact about this machine.
 
-``credential_ref`` names a secret in the credential store; the secret itself
+``secret_ref`` names a secret in the credential store; the secret itself
 is never on this object, so a remote can be logged or returned by the API
 without redaction. ``include_secret`` decides whether ``secret/``
 is committed at all (ADR credentials-across-machines).
@@ -75,7 +75,7 @@ def validate_url(url: str) -> str:
 class SyncRemote:
     url: str
     branch: str = DEFAULT_BRANCH
-    credential_ref: str | None = None
+    secret_ref: str | None = None
     username: str = DEFAULT_USERNAME
     include_secret: bool = False
     interval_seconds: int = DEFAULT_INTERVAL_SECONDS

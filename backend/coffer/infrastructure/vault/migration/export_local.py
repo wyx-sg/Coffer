@@ -2,10 +2,12 @@
 of the old tables (plan q9 §3 step 3; D10, D11).
 
 - **Ciphertext** goes to ``vault/secret/<ref>.enc`` (machine-local refs to
-  ``local/secret/``) exactly as the credential store files a token it
+  ``local/secret/``) exactly as the secret store files a token it
   encrypted itself: the token, a newline, ``0600`` in ``0700`` directories.
   It is copied, never decrypted, so the upgrade needs no key. When this
-  machine first stored each ref goes into the store's ``times.json``.
+  machine first stored each ref goes into the store's ``times.json``, and
+  when it was last used here (revision 0135's ``last_used_at``) into its
+  ``last-used.json``.
 - **The secret boundary's** bindings, approvals and switches go through the
   boundary store itself.
 - **Retention**, **skill source status** and **the sync remote** go to their
@@ -36,15 +38,15 @@ from coffer.domain.skill.source_status import SourceStatus
 from coffer.domain.sync.remote import SyncRemote, SyncRemoteInvalid
 from coffer.domain.vault.layout import SECRET
 from coffer.domain.vault.writes import Expect
-from coffer.infrastructure.credentials.boundary_store import FileBoundaryStore
-from coffer.infrastructure.credentials.encrypted_store import _make_dirs as secret_dirs
-from coffer.infrastructure.credentials.ref_paths import is_local_ref, ref_to_relpath
 from coffer.infrastructure.persistence.derived_db import (
     DerivedBase,
     derived_db_path,
     prepare_derived_db,
 )
 from coffer.infrastructure.persistence.retention_repo import retention_path
+from coffer.infrastructure.secret.boundary_store import FileBoundaryStore
+from coffer.infrastructure.secret.encrypted_store import _make_dirs as secret_dirs
+from coffer.infrastructure.secret.ref_paths import is_local_ref, ref_to_relpath
 from coffer.infrastructure.skill.source_status_repo import SkillSourceStatusRepo
 from coffer.infrastructure.sync.local_state import JsonRemoteStore
 from coffer.infrastructure.vault.atomic import atomic_write
@@ -62,10 +64,11 @@ def _iso(raw: Any) -> str | None:
 
 
 def write_secrets(txn: LayoutCommit, home: Path, state: LegacyState) -> int:
-    """Every ref's ciphertext file, and when this machine first stored it."""
+    """Every ref's ciphertext file, and when this machine first stored and last used it."""
     times: dict[str, str] = {}
+    used: dict[str, str] = {}
     carried = 0
-    for row in state.credentials:
+    for row in state.secrets:
         ref = str(row["ref"])
         try:
             rel = ref_to_relpath(ref)
@@ -83,9 +86,13 @@ def write_secrets(txn: LayoutCommit, home: Path, state: LegacyState) -> int:
             txn.write(f"{SECRET}/{rel}", token, Expect.ABSENT)
             os.chmod(root / SECRET / rel, _FILE_MODE)
         times[ref] = str(row["created_at"])
+        if row.get("last_used_at"):
+            used[ref] = str(row["last_used_at"])
         carried += 1
     if times:
         JsonStore(local_root(home) / "secret-boundary" / "times.json").write(times)
+    if used:
+        JsonStore(local_root(home) / "secret-boundary" / "last-used.json").write(used)
     return carried
 
 
@@ -152,8 +159,8 @@ def write_sync_remote(state: LegacyState) -> SyncRemote | None:
         remote = SyncRemote(
             url=str(row["url"]),
             branch=str(row.get("branch") or "main"),
-            credential_ref=row.get("credential_ref"),
-            include_secret=bool(row.get("include_credentials")),
+            secret_ref=row.get("secret_ref"),
+            include_secret=bool(row.get("include_secrets")),
             interval_seconds=int(row.get("interval_seconds") or 3600),
             enabled=bool(row.get("enabled", 1)),
         )

@@ -30,8 +30,8 @@ from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.usage.bundled_prices import load_bundled_prices
 from coffer.infrastructure.usage.price_refresh import PriceListSource, refresh_pinned_off
 from coffer.surfaces.http.engine_config_composition import (
@@ -82,7 +82,7 @@ def wire_provider_kind(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     agent_service: AgentService,
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
@@ -94,7 +94,7 @@ def wire_provider_kind(
     app.state.kinds["provider"] = make_provider_kind(resource_svc)
     provider_svc = ProviderService(
         resources=resource_svc,
-        credentials=credential_store,
+        secrets=secret_store,
         config_store=ConfigFileStore(),
         agents=agent_service,
         audit=audit,
@@ -113,7 +113,7 @@ def wire_provider_kind(
     )
     set_provider_service(provider_svc)
     # A key goes only to a base URL a person approved, and a key in use is
-    # replaced only after approval (spec credentials "Hold a secret for a new
+    # replaced only after approval (spec secret "Hold a secret for a new
     # destination until a person approves it").
     provider_svc.set_secret_boundary(get_secret_boundary())
     register_resource_destination("provider", _provider_secret_destination)
@@ -148,7 +148,7 @@ def wire_provider_kind(
         if refresh_pinned_off()
         else asyncio.get_running_loop().create_task(price_list.run(), name="price-refresh")
     )
-    proxy = wire_model_proxy(provider_svc, credential_store, reconciler)
+    proxy = wire_model_proxy(provider_svc, secret_store, reconciler)
     # An approved key reaches the proxy on the next state push, not before.
     on_approval_applied(proxy.schedule_refresh)
     return ProviderWiring(
@@ -167,6 +167,6 @@ def _provider_secret_destination(
     resource: Resource,
 ) -> tuple[SecretDestination, dict[str, str]] | None:
     cfg = ProviderConfig.model_validate(resource.config)
-    if cfg.credential_ref is None:
+    if cfg.secret_ref is None:
         return None
-    return provider_destination(resource.uid, resource.name, cfg), {"key": cfg.credential_ref}
+    return provider_destination(resource.uid, resource.name, cfg), {"key": cfg.secret_ref}

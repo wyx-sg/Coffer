@@ -27,8 +27,12 @@ def _many(m: Machine, n: int, prefix: str = "knowledge/team/doc") -> None:
             txn.write(f"{prefix}-{i}.md", f"document {i}\n".encode(), Expect.ABSENT)
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a wiped area is held although rename pairings are consulted")
-@pytest.mark.acceptance(spec="vault-sync", scenario="a returning machine with an empty vault does not publish the loss")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a wiped area is held although rename pairings are consulted"
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a returning machine with an empty vault does not publish the loss"
+)
 def test_a_local_mass_deletion_is_held_before_it_is_pushed(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
     _many(mac, 25)
@@ -45,7 +49,9 @@ def test_a_local_mass_deletion_is_held_before_it_is_pushed(pair: tuple[Machine, 
     assert resume(mac.engine, mac.remote, None).status is RoundStatus.PUSHED
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an oversized deletion is held for confirmation")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
+)
 def test_an_incoming_mass_deletion_is_held_and_can_be_restored(
     pair: tuple[Machine, Machine],
 ) -> None:
@@ -96,7 +102,9 @@ def test_a_round_can_be_rolled_back_keeping_later_edits(pair: tuple[Machine, Mac
     assert mac.disk("knowledge/team/a.md") is None
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a round that applied nothing has nothing to roll back")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round that applied nothing has nothing to roll back"
+)
 def test_a_round_that_applied_nothing_has_nothing_to_roll_back(
     pair: tuple[Machine, Machine],
 ) -> None:
@@ -113,8 +121,10 @@ def _fernet(when: int, payload: bytes = b"x" * 32) -> bytes:
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="the fresher credential ciphertext wins")
-@pytest.mark.acceptance(spec="vault-sync", scenario="ciphertext travels only when the remote carries it")
-def test_credentials_travel_only_when_carried_and_the_fresher_ciphertext_wins(
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
+)
+def test_secrets_travel_only_when_carried_and_the_fresher_ciphertext_wins(
     tmp_path: Path,
 ) -> None:
     url = str(bare_remote(tmp_path))
@@ -136,7 +146,9 @@ def test_credentials_travel_only_when_carried_and_the_fresher_ciphertext_wins(
     assert mini.disk("secret/provider/p1/key.enc") == _fernet(2000)
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="ciphertext travels only when the remote carries it")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
+)
 def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(
     pair: tuple[Machine, Machine],
 ) -> None:
@@ -172,7 +184,9 @@ def test_a_remote_at_an_older_layout_is_refused_until_rebuilt(
     assert mini.repo.head() == head
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="remote failures are reported by what a person can do")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="remote failures are reported by what a person can do"
+)
 def test_an_unreachable_remote_is_reported_and_nothing_changes(tmp_path: Path) -> None:
     gone = SyncRemote(url=str(tmp_path / "no-such-remote.git"))
     m = Machine(tmp_path / "m", "Mac", gone)
@@ -183,7 +197,9 @@ def test_an_unreachable_remote_is_reported_and_nothing_changes(tmp_path: Path) -
     assert m.repo.head() == head
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="remote failures are reported by what a person can do")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="remote failures are reported by what a person can do"
+)
 @pytest.mark.parametrize(
     ("stderr", "problem"),
     [

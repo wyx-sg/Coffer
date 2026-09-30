@@ -5,7 +5,7 @@ process. Two boundaries matter, and both fail silently if they regress: the
 child must not inherit the daemon's own environment (which holds the daemon
 token and every secret the user's shell exported), and a failure to start must
 not echo the exception text back up (argv and URLs at that point routinely
-embed credentials, and the message ends up in an API response and the log).
+embed secrets, and the message ends up in an API response and the log).
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ async def test_a_spawned_upstream_does_not_inherit_the_daemons_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only the SDK's safe base (PATH/HOME/…), the server's own static env, and
-    its materialised credentials reach the child. A daemon-side secret env var
+    its materialised secrets reach the child. A daemon-side secret env var
     must be absent, so an untrusted upstream cannot read it — while the env the
-    server was configured with, and the credentials resolved for it, must still
+    server was configured with, and the secrets resolved for it, must still
     arrive or the server cannot authenticate at all.
     """
     from coffer.domain.errors import UpstreamUnavailable
@@ -64,7 +64,7 @@ async def test_a_failed_spawn_reports_the_exception_type_and_not_its_text(
 ) -> None:
     """The raised `UpstreamUnavailable` names the exception TYPE only.
 
-    The underlying exception text at spawn time can embed credential-bearing
+    The underlying exception text at spawn time can embed secret-bearing
     argv and URLs, and this message travels into an HTTP response body and the
     daemon log. The type is enough to diagnose; the text is a leak.
     """

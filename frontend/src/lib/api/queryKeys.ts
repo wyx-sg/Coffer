@@ -38,6 +38,8 @@ export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
 /** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
+/** The install hand-off the types read carries while no agent is installed. */
+export const agentInstallHandoffKey = ["agents", "types", "install-handoff"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
@@ -184,6 +186,8 @@ export const knowledgeChangeKey = (version: string) =>
 export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
+export const knowledgeVersionBodyKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "body", version] as const;
 
 // --- memory — partitions, their memories, what is delivered ---------------
 
@@ -198,6 +202,7 @@ export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "
 export const memoryDeliveredKey = (uid: string) =>
   ["memory", "partitions", uid, "delivered"] as const;
 export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
+export const memoryReadingKey = ["memory", "reading"] as const;
 
 // --- upkeep — the long rewrites (memory organise, knowledge curation) in flight ---
 
@@ -221,14 +226,14 @@ export const agentConfigKey = (conversationId: string) =>
  *  would clobber the partial the turn hooks are writing into this key. */
 export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
 
-// --- credentials — the secret boundary's approvals -------------------------
+// --- secrets — the secret boundary's approvals -------------------------
 
-export const credentialsKey = ["credentials"] as const;
+export const secretsKey = ["secrets"] as const;
 /** The approvals still waiting for a present human. */
-export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
-export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
-export const credentialsListKey = ["credentials", "list"] as const;
-export const credentialScanKey = ["credentials", "scan"] as const;
+export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
+export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
+export const secretsListKey = ["secrets", "list"] as const;
+export const secretScanKey = ["secrets", "scan"] as const;
 
 // ---------------------------------------------------------------------------
 // clis — the commands managed skills require (/clis)
@@ -241,7 +246,7 @@ export const cliKey = (command: string) => ["clis", command] as const;
 
 // --- settings — daemon-side settings the Settings pages edit ---------------
 
-export const credentialSettingsKey = ["settings", "credentials"] as const;
+export const secretSettingsKey = ["settings", "secrets"] as const;
 export const internalEngineKey = ["settings", "internalEngine"] as const;
 
 // --- cross-kind helpers ----------------------------------------------------

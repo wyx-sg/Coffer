@@ -103,7 +103,7 @@ def test_to_transport_config_moves_secrets_to_refs() -> None:
         "command": "uvx",
         "args": ["mcp-jira"],
         "env": {"JIRA_URL": "https://j"},
-        "credential_refs": {"JIRA_API_TOKEN": "mcp/codex/jira/JIRA_API_TOKEN"},
+        "secret_refs": {"JIRA_API_TOKEN": "mcp/codex/jira/JIRA_API_TOKEN"},
     }
 
 
@@ -115,7 +115,7 @@ def test_to_transport_config_http() -> None:
         "type": "http",
         "url": "https://gas.example/mcp",
         "headers": {},
-        "credential_refs": {"Authorization": "mcp/gas/Authorization"},
+        "secret_refs": {"Authorization": "mcp/gas/Authorization"},
     }
 
 

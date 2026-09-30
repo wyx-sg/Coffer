@@ -1,12 +1,21 @@
 // src/components/ui/toast.tsx
-// A minimal, dependency-free toast/notification system. There was no toast or
-// notification surface before, so failed mutations (delete / enable-disable /
-// bulk / install) reverted or got stuck silently. This provides:
-//   • ToastProvider — context owning the toast queue (mount once, high in the tree)
+// The toast queue (Shell · Toasts, Foundations · Feedback):
+//   • ToastProvider — context owning the queue and its timers (mount once, high in the tree)
 //   • useToast()    — { toast: { error, success, info }, dismiss } for call sites
-//   • Toaster       — the fixed-position stack of toast cards (rendered by the provider)
-// Toasts auto-dismiss after a timeout (errors linger longer) and are dismissible
-// by hand. Each card is role="alert"/"status" so failures are announced.
+//   • the stack itself lives in toast-card.tsx
+//
+// The rules the stack keeps (Shell-Behaviour):
+//   • success and info leave after 5s; a toast carrying Undo stays 8s, so the
+//     undo is reachable. Hovering or focusing a card pauses its clock.
+//   • an error stays until the user dismisses it, and always offers a next
+//     step: the caller's action (Retry, View log) or a Details toggle that
+//     shows the whole message and any `details` text.
+//   • newest at the bottom, at most three shown; older ones fold into a
+//     "N more" chip that unfolds them.
+//
+// `toast.x(message)` is the whole API for most call sites; the optional second
+// argument adds the one action a toast may carry. Each call returns the
+// toast's id so a caller can `dismiss` it early.
 import {
   createContext,
   useCallback,
@@ -17,23 +26,46 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "@/lib/utils";
+import { Toaster } from "./toast-card";
 
-type ToastVariant = "error" | "success" | "info";
+export type ToastVariant = "error" | "success" | "info";
 
-interface ToastItem {
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface ToastOptions {
+  /** The one action beside the message ("Open", "View log"). Clicking it also
+   *  dismisses the toast. */
+  action?: ToastAction;
+  /** Shorthand for an Undo action; keeps the toast on screen 8s instead of 5s. */
+  undo?: () => void;
+  /** Shorthand for a Retry action (meant for errors). */
+  retry?: () => void;
+  /** Longer text revealed by the card's Details toggle (the daemon's message,
+   *  a log line). */
+  details?: string;
+}
+
+export interface ToastItem {
   id: number;
   variant: ToastVariant;
   message: string;
+  action?: ToastAction;
+  details?: string;
+  /** Milliseconds on screen; `null` stays until dismissed (errors). */
+  duration: number | null;
 }
 
+type Show = (message: string, options?: ToastOptions) => number;
+
 interface ToastApi {
-  error: (message: string) => void;
-  success: (message: string) => void;
-  info: (message: string) => void;
+  error: Show;
+  success: Show;
+  info: Show;
 }
 
 interface ToastContextValue {
@@ -41,52 +73,91 @@ interface ToastContextValue {
   dismiss: (id: number) => void;
 }
 
+export const TOAST_DURATION_MS = 5000;
+export const UNDO_TOAST_DURATION_MS = 8000;
+
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-// Errors linger so the user can read the failure; transient confirmations clear faster.
-const AUTO_DISMISS_MS: Record<ToastVariant, number> = {
-  error: 8000,
-  success: 4000,
-  info: 5000,
-};
+interface Clock {
+  timer?: ReturnType<typeof setTimeout>;
+  remaining: number;
+  startedAt: number;
+}
+
+function toItem(
+  id: number,
+  variant: ToastVariant,
+  message: string,
+  o: ToastOptions,
+  t: (k: string) => string,
+): ToastItem {
+  const action =
+    o.action ??
+    (o.undo ? { label: t("common.undo"), onClick: o.undo } : undefined) ??
+    (o.retry ? { label: t("common.retry"), onClick: o.retry } : undefined);
+  const duration =
+    variant === "error" ? null : o.undo ? UNDO_TOAST_DURATION_MS : TOAST_DURATION_MS;
+  return { id, variant, message, action, details: o.details, duration };
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(0);
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const clocks = useRef(new Map<number, Clock>());
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((tn) => tn.id !== id));
-    const timer = timers.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timers.current.delete(id);
-    }
+    const clock = clocks.current.get(id);
+    if (clock?.timer) clearTimeout(clock.timer);
+    clocks.current.delete(id);
   }, []);
 
-  const push = useCallback(
-    (variant: ToastVariant, message: string) => {
-      const id = nextId.current++;
-      setToasts((prev) => [...prev, { id, variant, message }]);
-      const timer = setTimeout(() => dismiss(id), AUTO_DISMISS_MS[variant]);
-      timers.current.set(id, timer);
+  const run = useCallback(
+    (id: number) => {
+      const clock = clocks.current.get(id);
+      if (!clock || clock.timer) return;
+      clock.startedAt = Date.now();
+      clock.timer = setTimeout(() => dismiss(id), clock.remaining);
     },
     [dismiss],
   );
 
-  // Snapshot the timers map for cleanup so the lint rule that flags a possibly
+  const pause = useCallback((id: number) => {
+    const clock = clocks.current.get(id);
+    if (!clock?.timer) return;
+    clearTimeout(clock.timer);
+    clock.timer = undefined;
+    clock.remaining = Math.max(0, clock.remaining - (Date.now() - clock.startedAt));
+  }, []);
+
+  const push = useCallback(
+    (variant: ToastVariant, message: string, options: ToastOptions = {}) => {
+      const id = nextId.current++;
+      const item = toItem(id, variant, message, options, t);
+      setToasts((prev) => [...prev, item]);
+      if (item.duration !== null) {
+        clocks.current.set(id, { remaining: item.duration, startedAt: Date.now() });
+        run(id);
+      }
+      return id;
+    },
+    [run, t],
+  );
+
+  // Snapshot the map for cleanup so the lint rule that flags a possibly
   // changed ref at cleanup time is satisfied.
   useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach((t) => clearTimeout(t));
+    const pending = clocks.current;
+    return () => pending.forEach((c) => c.timer && clearTimeout(c.timer));
   }, []);
 
   const value = useMemo<ToastContextValue>(
     () => ({
       toast: {
-        error: (m) => push("error", m),
-        success: (m) => push("success", m),
-        info: (m) => push("info", m),
+        error: (m, o) => push("error", m, o),
+        success: (m, o) => push("success", m, o),
+        info: (m, o) => push("info", m, o),
       },
       dismiss,
     }),
@@ -96,7 +167,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <Toaster toasts={toasts} onDismiss={dismiss} />
+      <Toaster toasts={toasts} onDismiss={dismiss} onPause={pause} onResume={run} />
     </ToastContext.Provider>
   );
 }
@@ -106,59 +177,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 // callable everywhere without forcing every test to wrap in a provider; real
 // app code always has the provider mounted in App.tsx.
 const NOOP_TOAST: ToastContextValue = {
-  toast: { error: () => {}, success: () => {}, info: () => {} },
+  toast: { error: () => -1, success: () => -1, info: () => -1 },
   dismiss: () => {},
 };
 
 export function useToast(): ToastContextValue {
   return useContext(ToastContext) ?? NOOP_TOAST;
-}
-
-const VARIANT_ICON: Record<ToastVariant, typeof Info> = {
-  error: XCircle,
-  success: CheckCircle2,
-  info: Info,
-};
-
-// Icon carries the status; the card itself is the same raised surface for every variant.
-const VARIANT_ICON_CLS: Record<ToastVariant, string> = {
-  error: "text-danger",
-  success: "text-success",
-  info: "text-accent-text",
-};
-
-function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
-  const { t } = useTranslation();
-  if (toasts.length === 0) return null;
-  return (
-    <div
-      className="pointer-events-none fixed bottom-6 right-6 z-toast flex max-w-[calc(100vw-3rem)] flex-col items-end gap-2"
-      aria-live="polite"
-    >
-      {toasts.map((tn) => {
-        const Icon = VARIANT_ICON[tn.variant];
-        return (
-          <div
-            key={tn.id}
-            role={tn.variant === "error" ? "alert" : "status"}
-            className={cn(
-              "pointer-events-auto flex min-w-[280px] max-w-[420px] items-center gap-2.5 rounded-xl bg-surface-raised px-3.5 py-2.5 text-sm text-text shadow-overlay",
-              "animate-in fade-in-0 slide-in-from-bottom-2 duration-slow ease-out",
-            )}
-          >
-            <Icon className={cn("size-[15px] shrink-0", VARIANT_ICON_CLS[tn.variant])} />
-            <span className="flex-1 break-words">{tn.message}</span>
-            <button
-              type="button"
-              onClick={() => onDismiss(tn.id)}
-              className="-mr-1.5 ml-1 inline-flex size-6 shrink-0 items-center justify-center rounded-item text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-              aria-label={t("common.dismiss")}
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
 }

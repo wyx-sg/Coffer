@@ -9,8 +9,8 @@
 // which flips the STORED remote the moment it moves — and only once a remote
 // is stored, because before that there is nothing for it to switch.
 //
-// Nothing here ever holds the push credential: the field is a REFERENCE — a
-// name in Coffer's credential store — which the daemon resolves at push time
+// Nothing here ever holds the push secret: the field is a REFERENCE — a
+// name in Coffer's secret store — which the daemon resolves at push time
 // and nowhere else, so a configured remote renders with nothing to redact.
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,7 +44,7 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   // rather than on the identity of the object a refetch happens to hand back.
   const savedUrl = saved?.url ?? "";
   const savedBranch = saved?.branch ?? DEFAULT_BRANCH;
-  const savedCredentialRef = saved?.credential_ref ?? "";
+  const savedSecretRef = saved?.secret_ref ?? "";
   const savedIncludeSecret = saved?.include_secret ?? false;
   const savedInterval = saved?.interval_seconds ?? DEFAULT_INTERVAL_SECONDS;
   const savedEnabled = saved?.enabled ?? true;
@@ -53,11 +53,11 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
     () => ({
       url: savedUrl,
       branch: savedBranch,
-      credentialRef: savedCredentialRef,
+      secretRef: savedSecretRef,
       includeSecret: savedIncludeSecret,
       intervalSeconds: savedInterval,
     }),
-    [savedUrl, savedBranch, savedCredentialRef, savedIncludeSecret, savedInterval],
+    [savedUrl, savedBranch, savedSecretRef, savedIncludeSecret, savedInterval],
   );
   const [form, setForm] = useState<FormState>(savedForm);
   // Re-sync once the daemon's answer lands (and after every save round-trip).
@@ -77,7 +77,7 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
       {
         url: next.url.trim(),
         branch: next.branch.trim() || DEFAULT_BRANCH,
-        credential_ref: next.credentialRef.trim() || null,
+        secret_ref: next.secretRef.trim() || null,
         // Not on this form (set with `coffer sync remote set --username`): kept.
         ...(saved?.username ? { username: saved.username } : {}),
         include_secret: next.includeSecret,

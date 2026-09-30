@@ -216,7 +216,7 @@ def _problem(last: RoundRecord, remote: SyncRemote) -> Problem | None:
     return Problem(
         kind=kind,
         message=last.detail or last.status.value.replace("_", " "),
-        credential_ref=remote.credential_ref if kind == "auth_failed" else None,
+        secret_ref=remote.secret_ref if kind == "auth_failed" else None,
         since=last.finished_at,
     )
 

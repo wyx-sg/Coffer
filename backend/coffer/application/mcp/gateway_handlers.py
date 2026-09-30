@@ -63,7 +63,7 @@ def _safe_error_summary(e: BaseException) -> str:
     inside their error messages (e.g., an auth failure that echoes the API
     key back). Persisting ``str(e)`` for arbitrary exceptions would leak
     those into the invocation log, defeating the rule that no secret value
-    appears in any invocation record (spec credentials "Hold plaintext only in
+    appears in any invocation record (spec secret "Hold plaintext only in
     memory at the moment of use").
 
     Rule: for Coffer-internal exceptions (CofferError subclasses) the message

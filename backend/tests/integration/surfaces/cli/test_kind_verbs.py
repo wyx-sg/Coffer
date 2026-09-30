@@ -136,7 +136,7 @@ def test_every_group_offers_the_same_verbs_and_disable_takes_name_or_uid(
         ("agent", False),
         ("provider", True),
         ("channel", True),
-        ("knowledge", True),
+        ("knowledge", False),
         ("memory", True),
     ):
         edit = real.commands[group].commands["edit"]  # type: ignore[attr-defined]

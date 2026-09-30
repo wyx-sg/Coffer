@@ -29,7 +29,7 @@ export function SyncRemoteCheck({ form, disabled }: { form: FormState; disabled:
           check.mutate({
             url: form.url.trim(),
             branch: form.branch.trim() || DEFAULT_BRANCH,
-            credential_ref: form.credentialRef.trim() || null,
+            secret_ref: form.secretRef.trim() || null,
           })
         }
       >

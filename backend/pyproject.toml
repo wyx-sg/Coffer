@@ -226,7 +226,7 @@ forbidden_modules = [
 
 # Contract 4: keyring is confined to infrastructure. Only the (future)
 # infrastructure keyring adapter may import it; surfaces and application
-# must use credential refs and ask infrastructure to resolve them.
+# must use secret refs and ask infrastructure to resolve them.
 # (Domain already cannot import keyring via Contract 3.)
 [[tool.importlinter.contracts]]
 name = "keyring confined to infrastructure"
@@ -248,7 +248,7 @@ allow_indirect_imports = "True"
 name = "CLI does not access the keychain directly"
 type = "forbidden"
 source_modules = ["coffer.surfaces.cli"]
-forbidden_modules = ["coffer.infrastructure.credentials"]
+forbidden_modules = ["coffer.infrastructure.secret"]
 ignore_imports = [
     # The one-time upgrade copies ciphertext files; it never reads the key.
     "coffer.surfaces.cli.migrate_cmd -> coffer.infrastructure.vault.migration.**",
@@ -1391,7 +1391,7 @@ source_modules = [
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
     "coffer.infrastructure.persistence",
-    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.secret",
     "coffer.infrastructure.daemon",
     "coffer.infrastructure.logging",
 ]
@@ -1421,7 +1421,7 @@ source_modules = [
     "coffer.infrastructure.channel",
     "coffer.infrastructure.knowledge",
     "coffer.infrastructure.persistence",
-    "coffer.infrastructure.credentials",
+    "coffer.infrastructure.secret",
     "coffer.infrastructure.daemon",
     "coffer.infrastructure.logging",
 ]

@@ -1,77 +1,82 @@
 // frontend/src/components/knowledge/KnowledgeUndoPassDialog.tsx
 //
-// Undo this pass — asked first, then the whole pass at once (spec knowledge
-// "Keep every document's history and undo a pass as a whole"): every document
-// it changed goes back to how it was before, each as a new version by you, and
-// the inbox items it curated are not queued again. When a document it wrote
-// has changed since, the daemon refuses the whole undo and writes nothing; the
-// dialog stays open and names that document.
-import type { TFunction } from "i18next";
+// Undo this pass — asked first, then the whole pass at once (boards 5.1.11,
+// 5.1.22; spec knowledge "Keep every document's history and undo a pass as a
+// whole"): every document it changed goes back to how it was before, each as
+// a new version by you, and the inbox items it curated are not queued again.
+// All or nothing: when a document it wrote has changed since, the daemon
+// refuses the whole undo and writes nothing. The dialog then closes and the
+// pass's page says so, naming that document (KnowledgeChangeView reads the
+// refusal off the same mutation).
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { ChangeOut } from "@/lib/api/knowledge";
-import { useUndoPass } from "@/lib/hooks/useKnowledgeHistory";
+import type { useUndoPass } from "@/lib/hooks/useKnowledgeHistory";
 import { useToast } from "@/components/ui/toast";
-import { formatDateTime } from "@/lib/utils";
+import { whenLabel } from "@/lib/knowledge/changes";
+import { cn } from "@/lib/utils";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   change: ChangeOut;
+  undo: ReturnType<typeof useUndoPass>;
 }
 
-/** The refusal in words: which document changed since, when the daemon names it. */
-function refusalText(t: TFunction, error: unknown): string {
-  if (error instanceof ApiError && error.code === "KNOWLEDGE_UNDO_CONFLICT") {
-    const document = (error.details as { document?: unknown } | undefined)?.document;
-    if (typeof document === "string") return t("knowledge.pass.undoRefused", { document });
-  }
-  return translateApiError(t, error);
-}
+const SIGN = { added: "−", modified: "~", removed: "+" } as const;
 
-export function KnowledgeUndoPassDialog({ open, onOpenChange, change }: Props) {
-  const { t } = useTranslation();
+export function KnowledgeUndoPassDialog({ open, onOpenChange, change, undo }: Props) {
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const undo = useUndoPass();
+  const time = new Date(change.time).toLocaleTimeString(i18n.language, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 
   return (
     <ConfirmDialog
       open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) undo.reset();
-      }}
+      onOpenChange={onOpenChange}
       title={t("knowledge.pass.undoTitle")}
-      description={t("knowledge.pass.undoBody", { when: formatDateTime(change.time) })}
+      description={t("knowledge.pass.undoBody", { when: time })}
       confirmLabel={undo.isPending ? t("knowledge.pass.undoing") : t("knowledge.pass.undoConfirm")}
       pending={undo.isPending}
-      onConfirm={() =>
+      onConfirm={() => {
+        undo.reset();
         undo.mutate(change.version, {
           onSuccess: () => {
             onOpenChange(false);
             toast.success(t("knowledge.pass.undoneToast"));
           },
-        })
-      }
+          // The refusal is the pass page's to show; the dialog steps aside.
+          onError: () => onOpenChange(false),
+        });
+      }}
     >
-      <ul className="space-y-1 text-sm">
+      <ul className="flex flex-col gap-1.5 text-sm">
         {change.documents.map((d) => (
           <li key={d.path} className="flex items-baseline gap-2">
-            <span className="font-mono text-xs">{d.path}</span>
-            <span className="text-xs text-text-subtle">
-              {t(`knowledge.pass.undoEffect.${d.status}`)}
+            <span
+              className={cn(
+                "w-3 shrink-0 font-mono text-xs",
+                d.status === "added" ? "text-danger" : "text-text-subtle",
+              )}
+              aria-hidden
+            >
+              {SIGN[d.status]}
+            </span>
+            <span className="min-w-0 truncate font-mono text-xs">{d.path}</span>
+            <span className="ml-auto shrink-0 text-xs text-text-subtle">
+              {t(`knowledge.pass.undoEffect.${d.status}`, {
+                when: whenLabel(t, change.time, i18n.language),
+              })}
             </span>
           </li>
         ))}
       </ul>
       <p className="text-xs text-text-subtle">{t("knowledge.pass.undoNote")}</p>
-      {undo.error ? (
-        <p role="alert" className="text-sm text-danger">
-          {refusalText(t, undo.error)}
-        </p>
-      ) : null}
     </ConfirmDialog>
   );
 }

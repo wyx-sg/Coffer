@@ -26,7 +26,7 @@ export function SyncProblemBanner({ problem, vaultPath, synchroniser }: Props) {
       <AlertDescription className="space-y-1">
         <p>
           {t(`sync.problem.${problem.kind}.body`, {
-            ref: problem.credential_ref ?? t("sync.problem.noCredential"),
+            ref: problem.secret_ref ?? t("sync.problem.noSecret"),
             path: vaultPath,
             tool: synchroniser ?? t("sync.problem.cloudTool"),
           })}

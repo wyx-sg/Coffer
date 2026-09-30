@@ -49,7 +49,9 @@ def test_an_owner_the_registry_holds_reads_as_another_machine() -> None:
     assert _config(OTHER).curation_owner(SELF, [SELF, OTHER]) is CurationOwner.OTHER
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an owner naming a machine that is gone is reported, not silent")
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an owner naming a machine that is gone is reported, not silent"
+)
 def test_an_owner_no_registry_entry_claims_is_the_fault() -> None:
     """The state this whole predicate exists for.
 

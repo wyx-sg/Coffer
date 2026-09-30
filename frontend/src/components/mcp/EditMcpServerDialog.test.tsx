@@ -9,10 +9,10 @@ import { EditMcpServerDialog } from "./EditMcpServerDialog";
 import type { components } from "@/lib/api/types";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-vi.mock("@/lib/api/credentials", () => ({ credentialsApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/secret", () => ({ secretsApi: { list: vi.fn() } }));
 
 const { getApiClient } = await import("@/lib/api/client");
-const { credentialsApi } = await import("@/lib/api/credentials");
+const { secretsApi } = await import("@/lib/api/secret");
 const getApiClientMock = vi.mocked(getApiClient);
 
 type ResourceOut = components["schemas"]["ResourceOut"];
@@ -33,7 +33,7 @@ const stdioResource: ResourceOut = {
       args: ["-y", "@modelcontextprotocol/server-github"],
       env: { LOG_LEVEL: "debug" },
       cwd: "/tmp/gh",
-      credential_refs: { GITHUB_TOKEN: OWN },
+      secret_refs: { GITHUB_TOKEN: OWN },
     },
   },
   enabled: true,
@@ -115,7 +115,7 @@ const save = () => fireEvent.click(screen.getByRole("button", { name: /^save$/i 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(credentialsApi.list).mockResolvedValue({
+  vi.mocked(secretsApi.list).mockResolvedValue({
     refs: [
       { ref: OWN, present: true },
       { ref: "secret/GITHUB_PAT", present: true },
@@ -165,7 +165,7 @@ describe("EditMcpServerDialog", () => {
       command: "npx",
       args: ["-y", "a b"],
       env: { LOG_LEVEL: "debug" },
-      credential_refs: { GITHUB_TOKEN: OWN },
+      secret_refs: { GITHUB_TOKEN: OWN },
     });
     expect(body.config.transport).not.toHaveProperty("cwd");
     expect(body.config.request_timeout_seconds).toBe(45);
@@ -203,13 +203,13 @@ describe("EditMcpServerDialog", () => {
     fireEvent.change(input, { target: { value: "new-secret-token" } });
     save();
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
-    expect(api.order).toEqual(["POST:/credentials", "PATCH:/resources/{uid}"]);
+    expect(api.order).toEqual(["POST:/secrets", "PATCH:/resources/{uid}"]);
     expect(api.POST.mock.calls[0][1].body).toEqual({ ref: OWN, value: "new-secret-token" });
     expect(api.PATCH).toHaveBeenCalledWith(
       "/resources/{uid}",
       expect.objectContaining({ params: { path: { uid: "u-github" } } }),
     );
-    expect(patchBody(api.PATCH).config.transport.credential_refs).toEqual({ GITHUB_TOKEN: OWN });
+    expect(patchBody(api.PATCH).config.transport.secret_refs).toEqual({ GITHUB_TOKEN: OWN });
   });
 
   test("picking a Secrets-page secret cites secret/<name> and writes no value", async () => {
@@ -221,7 +221,7 @@ describe("EditMcpServerDialog", () => {
     save();
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     expect(api.POST).not.toHaveBeenCalled();
-    expect(patchBody(api.PATCH).config.transport.credential_refs).toEqual({
+    expect(patchBody(api.PATCH).config.transport.secret_refs).toEqual({
       GITHUB_TOKEN: "secret/GITHUB_PAT",
     });
   });
@@ -238,7 +238,7 @@ describe("EditMcpServerDialog", () => {
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     const transport = patchBody(api.PATCH).config.transport;
     expect(transport.env).toEqual({ GITHUB_TOKEN: "public", LOG_LEVEL: "debug" });
-    expect(transport.credential_refs).toEqual({});
+    expect(transport.secret_refs).toEqual({});
   });
 
   test("Add variable adds a Plain row; the trash removes one", () => {
@@ -273,7 +273,7 @@ describe("EditMcpServerDialog", () => {
     const [path, opts] = testCall(api) as [string, { body: Record<string, unknown> }];
     expect(path).toBe("/resources/mcp_server/test-config");
     expect(opts.body.secret_values).toEqual({ GITHUB_TOKEN: "typed" });
-    expect(opts.body.transport).not.toHaveProperty("credential_refs");
+    expect(opts.body.transport).not.toHaveProperty("secret_refs");
     expect(opts.body.transport).not.toHaveProperty("secret_refs");
     expect(opts.body.transport).toMatchObject({ command: "npx", env: { LOG_LEVEL: "debug" } });
   });

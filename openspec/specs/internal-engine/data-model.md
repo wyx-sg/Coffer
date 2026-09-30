@@ -74,7 +74,7 @@ satisfies both.
 | Port | Method | Answer |
 |---|---|---|
 | `ModelSelectorPort` | `get_default()` | the engine's `ResolvedConnection`, or `None` |
-| `LlmCompletionPort` | `complete(system, user, model, credential_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
+| `LlmCompletionPort` | `complete(system, user, model, secret_resolver)` | one shot of a model, for the small jobs that are not an agentic loop |
 
 `ResolvedConnection` is spec provider-switching's value object — a
 `ProviderConfig` paired with the `model` to run on it. The ports name it in
@@ -213,7 +213,7 @@ takes effect on the next read; the vault's history is its record. Deleting the
 document — here, by hand, or on another machine — resets this machine to the
 defaults (see "Reset to the defaults when the document is deleted"). In the
 one-time upgrade to the vault layout the `internal_engine_config` row became
-this document and revision 0117 dropped the table.
+this document and revision 0136 dropped the table.
 
 ## Constraints summary
 

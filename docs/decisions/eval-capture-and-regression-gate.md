@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations without content", spec credentials "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
+**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations without content", spec secret "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
 
 ## Context
 

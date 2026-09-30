@@ -102,21 +102,36 @@ def machine_remove(ctx: typer.Context, machine_id: str = typer.Argument(...)) ->
 @key_app.command("import")
 def key_import(
     ctx: typer.Context,
-    path: str = typer.Argument(..., help="File holding key material from another machine"),
+    path: str = typer.Argument(
+        ...,
+        help="The key backup (coffer-master-key.cfk) exported from another machine, or a bare key",
+    ),
 ) -> None:
-    """Install a master key brought from another machine."""
-    source = pathlib.Path(path).expanduser()
+    """Install a master key brought from another machine.
+
+    A ``.cfk`` backup asks for the passphrase it was exported with, without
+    echoing it.
+    """
+    material = pathlib.Path(path).expanduser().read_text(encoding="utf-8")
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/sync/key/import", json={"material": source.read_text(encoding="utf-8")})
+        r = c.post("/sync/key/import/preview", json={"material": material})
+        _cli_client.check(r, verbose=verbose)
+        preview = r.json()
+        passphrase = None
+        if preview.get("protected"):
+            passphrase = typer.prompt("Passphrase", hide_input=True)
+        r = c.post("/sync/key/import", json={"material": material, "passphrase": passphrase})
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
+    verb = "replaced" if payload.get("replaced") else "installed"
+    _console.print(f"[green]{verb}[/green] — this machine now uses key {payload['fingerprint']}")
     locked = payload.get("locked_refs") or []
     if locked:
         _console.print(f"[yellow]still locked[/yellow]: {', '.join(locked)}")
     else:
-        _console.print("[green]installed[/green] — every secret decrypts here")
+        _console.print(f"every secret decrypts here ({payload.get('readable', 0)} stored)")
 
 
 @key_app.command("fingerprint")

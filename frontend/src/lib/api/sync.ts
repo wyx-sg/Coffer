@@ -9,8 +9,8 @@
 // each answers the one situation the daemon is holding rather than a round
 // named in the request, except rollback, which names the round it undoes.
 //
-// Nothing here ever carries the push credential or the master key into a
-// stored shape: a remote names its credential by REFERENCE, which the daemon
+// Nothing here ever carries the push secret or the master key into a
+// stored shape: a remote names its secret by REFERENCE, which the daemon
 // resolves at push time and nowhere else, so a fully configured remote is safe
 // to render in a browser. Import is the one transient exception — the material
 // the user picked crosses the loopback origin in a request body, into the
@@ -45,7 +45,7 @@ export type WaitingCommit = Schemas["WaitingCommitOut"];
 /** Why sync is not working right now, when it is not. */
 export type SyncProblem = Schemas["ProblemOut"];
 
-/** The one remote this vault syncs with. `credential_ref` is a NAME. */
+/** The one remote this vault syncs with. `secret_ref` is a NAME. */
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
 /** The remote as it is written: every field but the URL carries a default. */
