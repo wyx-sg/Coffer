@@ -24,11 +24,11 @@ from coffer.application.memory.turn_retrieval import (
     TurnRetrieval,
     conversation_session,
 )
-from coffer.domain.memory.delivery import USER_PROMPT_SUBMIT
+from coffer.domain.memory.delivery import SESSION_START, USER_PROMPT_SUBMIT
 from coffer.domain.memory.hook_output import RETRIEVAL_HEADER
 from coffer.infrastructure.chat.prompt_memory import bind_prompt_memory, prompt_with_memory
 from coffer.infrastructure.memory import paths
-from tests.unit.memory._delivery_corpus import corpus, node20_note
+from tests.unit.memory._delivery_corpus import FakeMemory, corpus, node20_note
 from tests.unit.memory.conftest import FakeAudit
 
 _PROMPT = "why does make verify fail with undici AbortSignal under node"
@@ -75,7 +75,7 @@ def rig(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
     retrieval = RetrievalService(memory, ledger, signature=lambda _p: ())
     delivery = _Delivery()
     agents = _Agents([_agent("u-codex", "codex"), _agent("u-claude", "claude_code")])
-    turns = TurnRetrieval(retrieval, delivery, agents)  # type: ignore[arg-type]
+    turns = TurnRetrieval(retrieval, delivery, agents, memory)  # type: ignore[arg-type]
     hook = MemoryHookService(
         memory=memory,
         delivery=delivery,  # type: ignore[arg-type]
@@ -154,3 +154,44 @@ async def test_a_failing_retrieval_costs_the_turn_nothing_but_its_notes() -> Non
 
     assert await prompt_with_memory("hello", broken) == "hello"
     assert await prompt_with_memory("", broken) == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
+)
+async def test_a_channel_turn_index_is_the_hooks_and_audited_once(rig: _Rig) -> None:
+    """The turn owns its index as it owns its notes: the text the
+    ``SessionStart`` hook would add, audited as the one ``session_start`` fire
+    of the answering agent, keyed on the conversation."""
+    text = await rig.turns.index_for_turn(
+        agent_key="codex", cwd=str(rig.repo), conversation_id="c1"
+    )
+
+    assert text is not None
+    out = await rig.hook.handle(
+        "u-other", HookEvent(event=SESSION_START, session_id="s-hook", cwd=str(rig.repo))
+    )
+    assert out is not None and out["hookSpecificOutput"]["additionalContext"] == text
+    agent_uid, details = rig.delivery.fired[0]
+    assert agent_uid == "u-codex"
+    assert details == {
+        "moment": "session_start",
+        "session_id": conversation_session("c1"),
+        "event": CHANNEL_TURN_EVENT,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_channel_turn_with_no_index_gets_no_header_and_no_fire() -> None:
+    memory = FakeMemory()
+    delivery = _Delivery()
+    turns = TurnRetrieval(
+        RetrievalService(memory, SessionLedger(), signature=lambda _p: ()),  # type: ignore[arg-type]
+        delivery,
+        _Agents([_agent("u-codex", "codex")]),  # type: ignore[arg-type]
+        memory,  # type: ignore[arg-type]
+    )
+    got = await turns.index_for_turn(agent_key="codex", cwd="/nowhere", conversation_id="c")
+    assert got is None
+    assert delivery.fired == []

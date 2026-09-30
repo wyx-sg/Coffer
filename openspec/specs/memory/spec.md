@@ -314,13 +314,21 @@ When the index does not fit, the trim MUST drop the oldest lines, MUST state how
 - **AND** only repository lines are included, and one line names how many `global` lines were dropped and the `global` notes directory, and another does the same for the repository
 
 ### Requirement: Deliver to channel turns through the system prompt
-A **channel-driven turn** MUST receive the same payload through the system-prompt append the turn platform already composes ([channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself.
+A **channel-driven turn** MUST receive the same payload through the system-prompt append the turn platform already composes ([channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself, and the delivery MUST be audited as a `session_start` fire of the answering agent with the conversation as the session (see "Audit every delivery fire").
+
+The agent process Coffer spawns for a channel turn still loads the agent's own settings, so an installed delivery hook fires inside it as well. Coffer MUST mark that process's environment, and in a marked process the hook MUST answer nothing, and record nothing, on `SessionStart` and `UserPromptSubmit`: those two moments belong to the turn, so the index and the prompt's notes each arrive once and are counted once. The hook's `PreToolUse` and `PostToolUse` entries MUST still answer in a marked process, because the turn delivers neither. A turn the developer drives MUST NOT be marked.
 
 #### Scenario: a channel turn carries the index without a hook
 - **GIVEN** a channel-driven conversation on a registered agent with a working directory, and no delivery hook installed anywhere
 - **WHEN** a turn is taken
 - **THEN** the index arrives in the **system-prompt append** the turn platform already composes, resolved once per turn from that agent's key and the conversation's own cwd
 - **AND** when there is nothing to deliver the turn carries no memory header at all, rather than an empty one (see "Deliver to channel turns through the system prompt")
+
+#### Scenario: a channel turn's own hook leaves the index and the notes to the turn
+- **GIVEN** a connected agent whose delivery hook is installed and trusted, a channel-driven conversation on it, and a conversation the developer drives on the same agent
+- **WHEN** the channel turn's agent process fires the hook on `SessionStart`, `UserPromptSubmit` and a `PreToolUse` that an armed trigger matches
+- **THEN** the hook answers the `PreToolUse` only, and the index and the prompt's notes reach the agent once, from the turn, each audited as one fire with event `ChannelTurn` (`session_start` and `prompt`)
+- **AND** the developer-driven conversation's process is not marked, and its hook answers all three
 
 ### Requirement: Install delivery hooks explicitly and removably
 For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI **by absolute path**. An agent runs its hooks under a shell that need not have `~/.coffer/bin` on its `PATH`: Codex runs them under `/bin/zsh` without the user's rc files, and Claude Code started from the Dock does not inherit the login shell's `PATH`. The bare name is used only when the build cannot locate its own CLI.
@@ -634,7 +642,7 @@ Memory delivery MUST NOT be presented as the place for a rule about **every** tu
 - **THEN** both instructions files are byte-identical afterwards
 
 ### Requirement: Retrieve the notes a prompt names for a channel turn
-A **channel-driven turn** runs no hook of Coffer's, so Coffer MUST retrieve for each of its prompts itself: the prompt MUST be ranked by the same retrieval "Retrieve the notes a prompt names" defines — the same partitions, ranker, relevance floor, top three, 1,500-byte ceiling and trivial-prompt rule — with the conversation as the session, so a note is given once per conversation. What it finds MUST be added after the user's text in the prompt the agent receives, where a `UserPromptSubmit` hook's context would land; the message stored in the conversation MUST stay the user's own text. Each delivery MUST be audited as a `prompt` fire of the answering agent (see "Audit every delivery fire"). A turn the developer drives from the web page MUST NOT be ranked here, since its agent's own hook does that, and a retrieval that fails MUST cost the turn only its notes.
+A **channel-driven turn** gets its prompt's notes from Coffer rather than from its hook (see "Deliver to channel turns through the system prompt"), so Coffer MUST retrieve for each of its prompts itself: the prompt MUST be ranked by the same retrieval "Retrieve the notes a prompt names" defines — the same partitions, ranker, relevance floor, top three, 1,500-byte ceiling and trivial-prompt rule — with the conversation as the session, so a note is given once per conversation. What it finds MUST be added after the user's text in the prompt the agent receives, where a `UserPromptSubmit` hook's context would land; the message stored in the conversation MUST stay the user's own text. Each delivery MUST be audited as a `prompt` fire of the answering agent (see "Audit every delivery fire"). A turn the developer drives from the web page MUST NOT be ranked here, since its agent's own hook does that, and a retrieval that fails MUST cost the turn only its notes.
 
 #### Scenario: a channel turn's prompt brings in the notes it names
 - **GIVEN** a channel-driven conversation on a registered agent in a repository whose partition holds a note about running `make verify` under Node 20, and a conversation the developer drives in the same repository

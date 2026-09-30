@@ -17,6 +17,7 @@ from typing import Any
 
 from coffer.application.chat.ports import AgentAdapter, QuotaObserver
 from coffer.application.chat.service import ConversationRepo
+from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
@@ -141,12 +142,17 @@ class CodexAppServerProvider:
         # No provider key rides the environment: an API-key connection is
         # reached through Coffer's model proxy, which injects the real key
         # upstream, and Codex authenticates to the proxy with its own ``auth``
-        # command. CODEX_HOME is the one override, when the agent has its own
-        # config dir — MERGED with os.environ, because create_subprocess_exec
-        # REPLACES the environment; with none the env stays None (inherit).
+        # command. The overrides are CODEX_HOME, when the agent has its own
+        # config dir, and the channel-turn mark — MERGED with os.environ,
+        # because create_subprocess_exec REPLACES the environment; with none
+        # the env stays None (inherit).
         overrides: dict[str, str] = (
             dict(await self._resolve_home_env()) if self._resolve_home_env else {}
         )
+        # A channel turn's process is marked, so the memory hook Codex runs
+        # inside it leaves to this turn the index and notes it already carries
+        # (spec memory "Deliver to channel turns through the system prompt").
+        overrides.update(channel_turn_env(conv.channel_uid or ""))
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,
